@@ -1,0 +1,9 @@
+carolwood_certified:
+  verification_levels:
+    bronze: "Parameters within spec (geometry gates pass)"
+    silver: "Temporal protocol verified (t* selection evidenced)"
+    gold: "Full disruption set + consent chain, signed manifest"
+  benefits:
+    qr_link: "https://verify.carolwood/presence/{manifest_id}"
+    registry_inclusion: true
+    analytics_access: true

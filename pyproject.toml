@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "picacho-lane-luts"
+version = "0.1.0"
+description = "Luxury image and video processing toolkit with LUT collections."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "RC219805" }]
+dependencies = [
+    "numpy>=1.24,<3",
+    "Pillow>=10.0.0,<12",
+    "scipy>=1.10,<2",
+    "typer>=0.12,<1",
+    "torch>=2.0,<3",
+    "diffusers>=0.20,<1",
+    "controlnet-aux>=0.0.6,<1",
+    "realesrgan>=0.3.0,<1",
+    "tifffile>=2023.7.18,<2025",
+    "tqdm>=4.65,<5",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "input_images", "processed_images"]
+
+[tool.pylint.main]
+# Increase limits for complex image/video processing functions
+max-args = 8
+max-locals = 20
+max-branches = 15
+max-statements = 60
+max-line-length = 127
+max-module-lines = 1500
+
+[tool.pylint.messages_control]
+# Disable specific checks that are overly strict for this codebase
+disable = [
+    "too-few-public-methods",  # Many dataclasses and simple classes
+    "missing-module-docstring",  # Some modules are self-explanatory
+    "missing-function-docstring",  # Some simple functions are self-explanatory
+    "missing-class-docstring",  # Some simple classes are self-explanatory
+    "duplicate-code",  # Acceptable for similar processing patterns
+    "fixme",  # TODOs are tracked elsewhere
+]

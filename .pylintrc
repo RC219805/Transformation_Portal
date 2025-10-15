@@ -1,0 +1,14 @@
+[MASTER]
+ignore=build,dist,.venv,.eggs
+jobs=0
+persistent=no
+
+[MESSAGES CONTROL]
+disable=
+    C0114, C0115, C0116,  # missing-docstring family
+    R0902, R0903, R0913,  # class/method arg counts
+    W0511,                # TODO comments
+    E0401, E0611          # import errors (optional deps)
+
+[TYPECHECK]
+ignored-modules=realesrgan,diffusers,controlnet_aux,torch,tifffile

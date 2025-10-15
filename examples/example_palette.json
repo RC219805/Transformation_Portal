@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "assignments": {
+    "0": "plaster",
+    "1": "stone",
+    "2": "roof",
+    "3": "equitone",
+    "4": "screens",
+    "5": "cladding",
+    "6": "bronze",
+    "7": "shade"
+  }
+}

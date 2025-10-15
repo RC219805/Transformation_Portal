@@ -1,0 +1,20 @@
+{
+  "name": "Presence Overlay Guides",
+  "id": "com.carolwood.presence.overlay",
+  "api": "1.0.0",
+  "main": "code.ts",
+  "editorType": [
+    "figma",
+    "figjam"
+  ],
+  "relaunchButtons": [
+    {
+      "command": "add-guides-4x5",
+      "name": "Add Presence Guides (4\u00d75)"
+    },
+    {
+      "command": "add-guides-2x3",
+      "name": "Add Presence Guides (2\u00d73)"
+    }
+  ]
+}

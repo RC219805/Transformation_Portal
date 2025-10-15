@@ -1,0 +1,14 @@
+# Lean deps for unit tests & linting (no GPU / diffusion stacks)
+numpy>=1.24,<3
+Pillow>=10,<12
+scipy<2,>=1.15
+tifffile>=2023.7.18,<2025
+imagecodecs>=2023.9.18,<2025
+tqdm>=4.66,<5
+pytest>=8,<9
+
+# Optional CPU-only torch (if your tests need it). The +cpu builds are on a separate index:
+# If you don't need torch in CI, delete these three lines.
+torch==2.9.0+cpu
+torchvision==0.24.0+cpu
+-f https://download.pytorch.org/whl/cpu
