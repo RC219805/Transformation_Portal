@@ -1,0 +1,98 @@
+{
+  "version": "1.0",
+  "spec_version": "1.1",
+  "compiler_version": "carolwood_presence_v1.2.0",
+  "subject": {
+    "id": "cw-427",
+    "name": "Jordan Reyes",
+    "role": "Managing Partner",
+    "locale_declared": "US_EN",
+    "consent": {
+      "compile": "granted",
+      "detect": "granted",
+      "timestamp": "2025-01-14T18:22:05Z"
+    }
+  },
+  "session": {
+    "datetime": "2025-01-14T20:05:18Z",
+    "location": "Carolwood Studio A",
+    "operator": "M. Chen",
+    "context_vector": {
+      "scenario": "board",
+      "risk": "medium"
+    }
+  },
+  "intent": {
+    "competence": 0.60,
+    "warmth": 0.40,
+    "mode": "balance",
+    "lambda": 0.20,
+    "notes": "Investor deck hero"
+  },
+  "locale": {
+    "profile": "US_EN",
+    "source": "subject",
+    "overrides": []
+  },
+  "primitives": {
+    "eye_line_pct": 0.27,
+    "side_gutters_pct": 0.14,
+    "brand_band_pct": 0.12,
+    "chest_band_pct": [0.69, 0.78],
+    "mouth_delta_deg": 2.4,
+    "lower_lid_tension": "micro",
+    "chin_translation_mm": {"out": 7.0, "down": 7.0},
+    "lean_cm": 3.0,
+    "key_angle_deg": 33.0,
+    "fill_relative_stops": -1.35,
+    "rim_level": "subtle",
+    "background_hex": ["#4a4c48", "#8c8e8a"]
+  },
+  "temporal": {
+    "cadence_fps": 12,
+    "t0_index": 6,
+    "t_star_offset_s": 0.30,
+    "selection_rule": "corners_settle_and_eyes_hold_intent",
+    "median_stack": {
+      "enabled": true,
+      "window": 3,
+      "weights": [0.7, 1.0, 0.7]
+    }
+  },
+  "governance": {
+    "detection_policy": "consent-gated",
+    "presence_budget_allocation": {
+      "authority_pct": 0.45,
+      "warmth_pct": 0.35
+    },
+    "adaptation_metrics": {
+      "drift_index": 0.57,
+      "scarcity_index": 15.2
+    }
+  },
+  "disruption": {
+    "frames": [
+      {"label": "t_minus_0.20", "timestamp": -0.20, "uri": "s3://carolwood/presence/cw-427/frame_a.jpg"},
+      {"label": "t_star", "timestamp": 0.30, "uri": "s3://carolwood/presence/cw-427/frame_b.jpg"},
+      {"label": "t_plus_0.25", "timestamp": 0.55, "uri": "s3://carolwood/presence/cw-427/frame_c.jpg"},
+      {"label": "mid_gesture", "timestamp": 0.62, "uri": "s3://carolwood/presence/cw-427/frame_d.jpg"},
+      {"label": "reset", "timestamp": 0.90, "uri": "s3://carolwood/presence/cw-427/frame_e.jpg"}
+    ],
+    "hash": "9f1cb3a2c6ae4f3fb0d1efb730a21c44"
+  },
+  "decompilation": {
+    "patterns": [
+      {
+        "name": "deliberate_breath",
+        "rationale": "Subject requested visible contemplation",
+        "approved_by": "Creative Director"
+      }
+    ]
+  },
+  "signatures": {
+    "subject": "Jordan Reyes",
+    "operator": "M. Chen",
+    "compiler": "Presence Compiler 1.2",
+    "timestamp": "2025-01-14T21:02:11Z"
+  }
+}

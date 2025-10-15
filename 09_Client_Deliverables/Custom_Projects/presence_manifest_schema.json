@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Presence Compiler Manifest",
+  "type": "object",
+  "required": [
+    "version",
+    "spec_version",
+    "subject",
+    "session",
+    "intent",
+    "locale",
+    "primitives",
+    "temporal",
+    "governance",
+    "disruption",
+    "signatures"
+  ],
+  "properties": {
+    "version": {"type": "string"},
+    "spec_version": {"type": "string"},
+    "compiler_version": {"type": "string"},
+    "subject": {
+      "type": "object",
+      "required": ["id", "name", "consent"],
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "role": {"type": "string"},
+        "locale_declared": {"type": "string"},
+        "consent": {
+          "type": "object",
+          "required": ["compile", "detect"],
+          "properties": {
+            "compile": {"type": "string", "enum": ["granted", "revoked"]},
+            "detect": {"type": "string", "enum": ["granted", "revoked"]},
+            "timestamp": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "required": ["datetime", "location", "operator"],
+      "properties": {
+        "datetime": {"type": "string", "format": "date-time"},
+        "location": {"type": "string"},
+        "operator": {"type": "string"},
+        "context_vector": {
+          "type": "object",
+          "required": ["scenario", "risk"],
+          "properties": {
+            "scenario": {"type": "string", "enum": ["board", "seller", "concierge"]},
+            "risk": {"type": "string", "enum": ["low", "medium", "high"]}
+          }
+        }
+      }
+    },
+    "intent": {
+      "type": "object",
+      "required": ["competence", "warmth", "mode", "lambda"],
+      "properties": {
+        "competence": {"type": "number", "minimum": 0, "maximum": 1},
+        "warmth": {"type": "number", "minimum": 0, "maximum": 1},
+        "mode": {"type": "string", "enum": ["balance", "faithful"]},
+        "lambda": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "notes": {"type": "string"}
+      }
+    },
+    "locale": {
+      "type": "object",
+      "required": ["profile", "source"],
+      "properties": {
+        "profile": {"type": "string"},
+        "source": {"type": "string", "enum": ["subject", "organization", "default"]},
+        "overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["parameter", "value"],
+            "properties": {
+              "parameter": {"type": "string"},
+              "value": {
+                "oneOf": [
+                  { "type": "string" },
+                  { "type": "number" },
+                  { "type": "boolean" },
+                  { "type": "object" },
+                  { "type": "array" }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "primitives": {
+      "type": "object",
+      "required": ["eye_line_pct", "side_gutters_pct", "brand_band_pct", "mouth_delta_deg", "fill_relative_stops", "lean_cm"],
+      "properties": {
+        "eye_line_pct": {"type": "number"},
+        "side_gutters_pct": {"type": "number"},
+        "brand_band_pct": {"type": "number"},
+        "chest_band_pct": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+        "mouth_delta_deg": {"type": "number"},
+        "lower_lid_tension": {"type": "string"},
+        "chin_translation_mm": {
+          "type": "object",
+          "required": ["out", "down"],
+          "properties": {
+            "out": {"type": "number"},
+            "down": {"type": "number"}
+          }
+        },
+        "lean_cm": {"type": "number"},
+        "key_angle_deg": {"type": "number"},
+        "fill_relative_stops": {"type": "number"},
+        "rim_level": {"type": "string"},
+        "background_hex": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2}
+      }
+    },
+    "temporal": {
+      "type": "object",
+      "required": ["cadence_fps", "t0_index", "t_star_offset_s", "selection_rule"],
+      "properties": {
+        "cadence_fps": {"type": "number"},
+        "t0_index": {"type": "integer"},
+        "t_star_offset_s": {"type": "number"},
+        "selection_rule": {"type": "string"},
+        "median_stack": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "window": {"type": "integer"},
+            "weights": {
+              "type": "array",
+              "items": {"type": "number"},
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "required": ["detection_policy", "presence_budget_allocation"],
+      "properties": {
+        "detection_policy": {"type": "string"},
+        "presence_budget_allocation": {
+          "type": "object",
+          "required": ["authority_pct", "warmth_pct"],
+          "properties": {
+            "authority_pct": {"type": "number"},
+            "warmth_pct": {"type": "number"}
+          }
+        },
+        "adaptation_metrics": {
+          "type": "object",
+          "properties": {
+            "drift_index": {"type": "number"},
+            "scarcity_index": {"type": "number"}
+          }
+        }
+      }
+    },
+    "disruption": {
+      "type": "object",
+      "required": ["frames", "hash"],
+      "properties": {
+        "frames": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "timestamp", "uri"],
+            "properties": {
+              "label": {"type": "string"},
+              "timestamp": {"type": "number"},
+              "uri": {"type": "string"}
+            }
+          },
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "hash": {"type": "string"}
+      }
+    },
+    "decompilation": {
+      "type": "object",
+      "properties": {
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "rationale"],
+            "properties": {
+              "name": {"type": "string"},
+              "rationale": {"type": "string"},
+              "approved_by": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "signatures": {
+      "type": "object",
+      "required": ["subject", "operator", "compiler"],
+      "properties": {
+        "subject": {"type": "string"},
+        "operator": {"type": "string"},
+        "compiler": {"type": "string"},
+        "timestamp": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

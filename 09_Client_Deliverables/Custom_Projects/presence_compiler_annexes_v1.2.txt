@@ -1,0 +1,68 @@
+     1	# Presence Compiler Annexes v1.2
+     2	Supplemental directives extending the v1.1 core spec with localization, governance, adaptation, subject-first compilation, platform APIs, and constructive imperfection grammars.
+     3	
+     4	ANNEX A · LOCALE ADAPTATION FRAMEWORK
+     5	- Purpose: adjust expression and lighting primitives for cultural perception without breaking core geometry gates.
+     6	- Locale profiles: reference `presence_compiler_locales.yml` for declared or default locales; never infer sensitive traits.
+     7	- Overrides permitted:
+     8	  * `mouth_corners_delta_deg`
+     9	  * `lower_lid_tension`
+    10	  * `fill_relative_stops`
+    11	  * `lean_forward_cm`
+    12	  * prompt lexicon (`expression_prompts`)
+    13	- Non-negotiable constants: aspect ratio 4:5, eye-line 0.27H ±0.02, gutters 0.12–0.16 each, brand band 0.10–0.18.
+    14	- Locale selection order:
+    15	  1. Subject-declared locale.
+    16	  2. Organizationally mandated locale.
+    17	  3. Default `US_EN` baseline if neither is provided.
+    18	- Audit requirement: log locale selection and any manual overrides into manifest `locale` and `overrides` blocks.
+    19	- Cultural review: run annual feedback loops with local leads to confirm prompts and micro-expression cues remain resonant.
+    20	
+    21	ANNEX B · DETECTION GOVERNANCE AND CONSENT
+    22	- Detection mode can only run when a manifest signed by the subject (or authorized rep) is present and `consent.detect == "granted"`.
+    23	- Detection output must be quantized into ranges (e.g., C within [0.55, 0.60]) rather than exact floats to prevent misuse.
+    24	- Revocation: subjects can flip `consent.detect` to `revoked`; detection clients must poll manifests before analysis and purge cached results.
+    25	- Provenance binding: embed invisible watermark or manifest hash to cross-check image authenticity without storing raw faces.
+    26	- Access control: detection API requires signed requests with rotating keys and audit logging; unauthorized calls trigger governance alerts.
+    27	
+    28	ANNEX C · ADAPTATION LOOP AND COMPETENCE-INFLATION DEFENSE
+    29	- Metrics:
+    30	  * `drift_index` := rolling mean of compiled competence scores.
+    31	  * `scarcity_index` := 1 / variance of delivered credibility scores.
+    32	- Rules:
+    33	  * If `drift_index > 0.58`, adjust warmth target by +0.03 for the next sprint or inject sanctioned micro-imperfections.
+    34	  * If `scarcity_index < 12`, expand scenario diversity or reweight prompts to restore variance.
+    35	- Presence budget: campaigns must distribute at least 30% of portraits toward warmth-led mixes and 30% toward authority-led mixes per quarter.
+    36	- Review cadence: evaluate metrics quarterly; document adjustments and rationale in governance log.
+    37	
+    38	ANNEX D · SUBJECT-FIRST COMPILATION MODES
+    39	- Introduce blend parameter λ ∈ [0.2, 0.5] balancing institutional consistency against subject fidelity: maximize `(geo_mean(C, W))^(1-λ) * F^λ`, where `C` = competence and `W` = warmth.
+    40	
+    41	- Modes:
+    42	  * `balance` (λ = 0.2): institutional target takes precedence.
+    43	  * `faithful` (λ = 0.5): prioritize subject-specific cues (e.g., natural warmth).
+    44	- Context vector: {scenario ∈ [board, seller, concierge], risk ∈ [low, medium, high]} influences recommended λ and primitive nudges.
+    45	- Deliverable policy: provide both balance and faithful renders when λ differs by ≥0.15; subject selects final asset.
+    46	- Manifest requirement: log λ, context vector, fidelity score, and subject approval decision.
+    47	
+    48	ANNEX E · PLATFORM AND API SPECIFICATION
+    49	- Endpoints:
+    50	  * `POST /v1/compile` — inputs: intent, locale, mode, capture metadata; returns manifest, crop guides, and telemetry targets.
+    51	  * `POST /v1/validate` — inputs: manifest, metrics; returns pass/fail and remediation tips.
+    52	  * `POST /v1/detect` — inputs: manifest pointer, consent token; returns quantized C/W/K ranges and anomaly flags.
+    53	- Headers: all requests signed with `X-Presence-Signature`; include `X-Presence-Version: 1.2`.
+    54	- Rate limits: 60 compile ops/hour/team, 120 validation ops/hour/team, 30 detection ops/hour/team.
+    55	- Storage: manifests stored append-only, encrypted at rest; disruption sets referenced via hashed URIs.
+    56	- Telemetry: all API responses include `trace_id` for governance review.
+    57	
+    58	ANNEX F · INTENTIONAL DECOMPILATION GRAMMAR
+    59	- Purpose: codify constructive imperfection patterns that read as vulnerability, humility, or immediacy.
+    60	- Approved patterns (one per campaign unless otherwise justified):
+    61	  * `deliberate_breath` — allow micro asymmetry between lip corners (~1.5% differential); signal ongoing thought.
+    62	  * `sleeve_crease` — retain sleeve texture to avoid over-sanitization; signal real work.
+    63	  * `brand_offset_9pct` — shift brand band down to 9% ±0.5 when story favors person over institution.
+    64	  * `timed_eye_avert` — in disruption set, include frame with 0.2 s off-lens glance tagged as contemplation.
+    65	  * `desk_reflection_keep` — preserve mild desk reflection or fingerprint; signal lived environment.
+    66	- Logging: every decompilation pattern must record trigger rationale and reviewer approval in manifest.
+    67	- Guardrail: patterns never compromise geometry gates; any failure reverts to compliant compile.
+    68	- Training: run quarterly review comparing standard vs. decompiled sets to ensure audiences read cues as intended.

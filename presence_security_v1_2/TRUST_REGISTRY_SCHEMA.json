@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Carolwood Trust Registry Entry",
+  "type": "object",
+  "required": [
+    "manifest_id",
+    "org",
+    "subject",
+    "level",
+    "verification_url",
+    "timestamp"
+  ],
+  "properties": {
+    "manifest_id": {"type": "string"},
+    "org": {"type": "string"},
+    "subject": {"type": "string"},
+    "level": {"type": "string", "enum": ["bronze", "silver", "gold"]},
+    "verification_url": {"type": "string"},
+    "timestamp": {"type": "string", "format": "date-time"}
+  }
+}

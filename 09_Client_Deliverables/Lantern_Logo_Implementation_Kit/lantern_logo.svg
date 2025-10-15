@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="lanternTitle"
+  fill="none" stroke="var(--lantern-stroke, currentColor)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title id="lanternTitle">Lantern brand mark</title>
+  <defs>
+    <linearGradient id="lantern-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="var(--brand-azure, #56CCF2)" />
+      <stop offset="100%" stop-color="var(--brand-cyan, #2AC7FF)" />
+    </linearGradient>
+  </defs>
+  <path d="M128 28c-24.3 0-44 19.7-44 44v8H92c-12.2 0-22 9.8-22 22v46c0 9.3 6 17.6 14.9 20.6l16.1 5.4V196c0 21.5 17.5 39 39 39h8c21.5 0 39-17.5 39-39v-22.9l16.1-5.4c8.9-3 14.9-11.3 14.9-20.6V102c0-12.2-9.8-22-22-22h-8v-8c0-24.3-19.7-44-44-44h-8Z" />
+  <path d="M104 56h48M104 212h48" />
+  <path d="M128 112c-18 0-32 14-32 32 0 12.2 7 24.1 18.1 29.6 3.1 1.5 6.7 1.4 9.6-0.5 1.8-1.2 3.2-2.8 4.2-4.7a36 36 0 0 1-6.9-20.4c0-11.3 5.7-21.3 14.2-26.9 2.7-1.7 6.2-1.7 8.9 0 8.5 5.6 14.2 15.6 14.2 26.9a36 36 0 0 1-6.9 20.4c1 1.9 2.4 3.5 4.2 4.7 2.9 1.9 6.5 2 9.6 0.5 11.1-5.5 18.1-17.4 18.1-29.6 0-18-14-32-32-32h-19.2Z" />
+  <path d="M128 88s12-10.3 12-24c0-13-12-20-12-20s-12 7-12 20c0 13.7 12 24 12 24Z" />
+</svg>

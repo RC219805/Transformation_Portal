@@ -1,0 +1,11 @@
+randomization:
+  micro_median_weights: [0.65-0.75, 0.95-1.00, 0.65-0.75]
+  eye_line_pct_bounds:
+    US_EN: [0.26, 0.28]
+    JP_JA: [0.27, 0.29]
+    DE_DE: [0.26, 0.28]
+    CN_ZH: [0.265, 0.285]
+    IN_EN: [0.26, 0.28]
+    GCC_AR: [0.265, 0.285]
+  prompt_order: sessionized_shuffle
+  dither_sigma: 0.002-0.0045

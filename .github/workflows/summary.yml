@@ -1,0 +1,93 @@
+# .github/workflows/summary.yml
+name: Summarize new issues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir openai
+
+      - name: Generate summary with OpenAI
+        id: summarize
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
+        run: |
+          python - <<'PY'
+          import os, textwrap, json, sys
+          # If no key present, skip gracefully
+          if not os.getenv("OPENAI_API_KEY"):
+              open(os.environ["RESPONSE_FILE"], "w", encoding="utf-8").write("")
+              sys.exit(0)
+
+          from openai import OpenAI
+          client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+          title = (os.getenv("ISSUE_TITLE") or "").strip()
+          body  = (os.getenv("ISSUE_BODY") or "").strip()
+          # Prevent overlong inputs; GitHub comments cap ~65k but keep it tiny
+          body  = body[:4000]
+
+          prompt = textwrap.dedent(f"""
+          Summarize this GitHub issue in one concise paragraph (neutral tone).
+          Title: {title}
+          Body:
+          {body}
+          """)
+
+          completion = client.chat.completions.create(
+              model="gpt-4o-mini",
+              messages=[{"role":"user","content":prompt}],
+              max_tokens=160,
+              temperature=0.2,
+          )
+          summary = (completion.choices[0].message.content or "").strip()
+
+          # Write to step summary (for logs) and to a temp file (for next step)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "w", encoding="utf-8") as f:
+              f.write(summary or "No summary generated.")
+          with open(os.environ["RESPONSE_FILE"], "w", encoding="utf-8") as f:
+              f.write(summary)
+          PY
+
+      - name: Post summary as comment (if any)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
+        run: |
+          if [ -s "$RESPONSE_FILE" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "$(cat "$RESPONSE_FILE")"
+          else
+            echo "No summary to post."
+          fi
+
+      - name: Fallback notice on failure
+        if: failure() || steps.summarize.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "⚠️ AI summarization was unavailable. Check workflow logs or configure OPENAI_API_KEY."

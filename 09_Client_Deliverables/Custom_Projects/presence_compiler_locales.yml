@@ -1,0 +1,72 @@
+version: 1.2
+profiles:
+  US_EN:
+    description: "Baseline North American executive tone"
+    overrides:
+      mouth_corners_delta_deg: {target: 2.5, range: [2.0, 3.0]}
+      lower_lid_tension: micro
+      fill_relative_stops: -1.25
+      lean_forward_cm: 3
+    expression_prompts:
+      - "Say a silent 'yes' as the plan clicks."
+      - "Think through the first three steps." 
+      - "Breathe out softly, eyes stay with me."
+  JP_JA:
+    description: "Japan leadership context favoring modest warmth"
+    overrides:
+      mouth_corners_delta_deg: {target: 1.5, range: [1.0, 2.0]}
+      lower_lid_tension: micro_soft
+      fill_relative_stops: -0.9
+      lean_forward_cm: 2
+    expression_prompts:
+      - "Imagine approving the plan with quiet confidence."
+      - "Hold the gaze gently; allow the smile to just appear."
+      - "Inhale through the nose, soft exhale to relax the jaw."
+  DE_DE:
+    description: "German market emphasizing clarity and steadiness"
+    overrides:
+      mouth_corners_delta_deg: {target: 2.0, range: [1.5, 2.5]}
+      lower_lid_tension: micro
+      fill_relative_stops: -1.35
+      lean_forward_cm: 2.5
+    expression_prompts:
+      - "Picture the decision already implemented and steady the gaze."
+      - "Lift the mouth corners just enough to signal engagement."
+      - "Hold shoulders open; lean into the conversation slightly."
+  CN_ZH:
+    description: "China leadership tone balancing authority with relational warmth"
+    overrides:
+      mouth_corners_delta_deg: {target: 2.8, range: [2.0, 3.5]}
+      lower_lid_tension: micro_firm
+      fill_relative_stops: -1.1
+      lean_forward_cm: 3.5
+    expression_prompts:
+      - "Welcome the partner into the discussion with your eyes."
+      - "Let the agreement land, keep the smile contained."
+      - "Breath in through the nose, exhale softly while staying focused."
+  IN_EN:
+    description: "India executive cadence highlighting approachability"
+    overrides:
+      mouth_corners_delta_deg: {target: 3.2, range: [2.5, 3.8]}
+      lower_lid_tension: micro
+      fill_relative_stops: -1.0
+      lean_forward_cm: 3.5
+    expression_prompts:
+      - "Picture the client nodding with you; respond with a confident yes."
+      - "Let the warmth rise through the cheeks while eyes stay decisive."
+      - "Ease the shoulders; keep the chin articulated."
+  GCC_AR:
+    description: "Gulf region leadership framing authority with hospitality"
+    overrides:
+      mouth_corners_delta_deg: {target: 2.3, range: [1.5, 3.0]}
+      lower_lid_tension: micro_firm
+      fill_relative_stops: -1.4
+      lean_forward_cm: 2.5
+    expression_prompts:
+      - "Greet your guest with assurance in the eyes."
+      - "Allow the smile to stay restrained but genuine."
+      - "Breathe out slowly; let the posture invite conversation."
+notes:
+  - "Locale overrides must be recorded in the manifest `locale` block."
+  - "Geometry tolerances from the core spec always apply."
+  - "Teams must review locale prompts annually with local partners."

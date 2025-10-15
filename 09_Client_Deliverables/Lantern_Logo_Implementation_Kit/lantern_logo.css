@@ -1,0 +1,54 @@
+:root {
+  --brand-navy: #0B1220;
+  --brand-cyan: #2AC7FF;
+  --brand-azure: #56CCF2;
+  --brand-ice: #E5F6FF;
+  --brand-white: #FFFFFF;
+  --brand-gradient: linear-gradient(
+    160deg,
+    var(--brand-azure) 0%,
+    var(--brand-cyan) 100%
+  );
+  --lantern-stroke: var(--brand-cyan);
+  --lantern-hover-glow: 0 0 24px rgba(42, 199, 255, 0.45);
+  --lantern-reveal-duration: 150ms;
+  --lantern-reveal-easing: ease;
+}
+
+body {
+  background: var(--brand-navy);
+  color: var(--brand-white);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.lantern-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-navy);
+  color: var(--brand-white);
+  border-radius: 12px;
+  padding: clamp(12px, 2vw, 20px);
+}
+
+.lantern-logo svg {
+  width: 100%;
+  height: auto;
+  stroke: var(--lantern-stroke, currentColor);
+  transition:
+    stroke var(--lantern-reveal-duration, 150ms) var(--lantern-reveal-easing, ease),
+    filter var(--lantern-reveal-duration, 150ms) var(--lantern-reveal-easing, ease);
+}
+
+.lantern-logo[data-variant="glyph"] {
+  background: var(--brand-ice);
+  --lantern-stroke: var(--brand-navy);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lantern-logo:hover svg,
+  .lantern-logo:focus-visible svg {
+    filter: drop-shadow(var(--lantern-hover-glow));
+    stroke: url(#lantern-gradient);
+  }
+}
