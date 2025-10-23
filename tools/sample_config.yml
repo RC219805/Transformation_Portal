@@ -1,0 +1,157 @@
+# Sample Configuration for AD Editorial Post-Production Pipeline
+# Copy this file and customize for your project
+
+# ============================================================================
+# PROJECT IDENTIFICATION
+# ============================================================================
+project_name: "SmithResidence"
+project_root: "~/Photography/SmithResidence_2025-10-18"
+
+# ============================================================================
+# INPUT/OUTPUT PATHS
+# ============================================================================
+# Where to find RAW files (e.g., from memory card)
+input_raw_dir: "~/Photography/Card/DCIM"
+
+# Optional: Where to backup RAW files (comment out to disable)
+backup_raw_dir: "/Volumes/RAID/Backups/SmithResidence"
+
+# ============================================================================
+# RENAMING (Optional)
+# ============================================================================
+rename:
+  enabled: true
+  pattern: "{project}_{room}_{seq:03d}"  # e.g., SmithResidence_LivingRoom_001.CR3
+  rooms_by_folder:
+    "RAW/Originals/LivingRoom": "LivingRoom"
+    "RAW/Originals/Kitchen": "Kitchen"
+    "RAW/Originals/MasterBedroom": "Bedroom"
+    "RAW/Originals/Bathroom": "Bath"
+
+# ============================================================================
+# SELECTS (Choose which images to process)
+# ============================================================================
+selects:
+  use_csv: true
+  csv_path: "DOCS/selects.csv"  # Will be auto-generated on first run
+
+# ============================================================================
+# COLOR PROFILES (ICC Profiles)
+# ============================================================================
+# Adjust paths based on your system:
+# - macOS: /Library/ColorSync/Profiles/ or ~/Library/ColorSync/Profiles/
+# - Linux: /usr/share/color/icc/ or ~/.local/share/icc/
+# - Windows: C:\Windows\System32\spool\drivers\color\
+icc:
+  prophoto_path: "/Library/ColorSync/Profiles/ProPhoto.icc"
+  srgb_path: "/Library/ColorSync/Profiles/sRGB Profile.icc"
+
+# ============================================================================
+# PROCESSING OPTIONS
+# ============================================================================
+processing:
+  workers: 4  # Number of parallel workers (1-64)
+  denoise_strength: 0  # 0-10 (future feature, currently unused)
+
+  # HDR Merge (Debevec algorithm)
+  enable_hdr: false
+  hdr_group_gap_sec: 2.0  # Group images within 2 seconds as HDR brackets
+
+  # Panorama Stitching
+  enable_pano: false
+  pano_groups: []  # Example: [["IMG_0001.CR3", "IMG_0002.CR3", "IMG_0003.CR3"]]
+
+  # Auto-upright (small angle corrections only)
+  auto_upright: true
+  upright_max_deg: 3.0  # Maximum rotation in degrees (0-15)
+
+# ============================================================================
+# STYLE DEFINITIONS
+# ============================================================================
+# Define your grading styles here. Each image will be exported in all styles.
+styles:
+  # Natural: Minimal processing, true-to-life
+  natural:
+    exposure: 0.0        # EV adjustment (-3.0 to +3.0)
+    contrast: 6          # Contrast boost (-50 to +50)
+    saturation: 0        # Saturation adjustment (-100 to +100)
+    split_tone:
+      shadows_hue_deg: null
+      shadows_sat: 0.0
+      highs_hue_deg: null
+      highs_sat: 0.0
+
+  # Minimal: Bright, airy, desaturated Scandinavian aesthetic
+  minimal:
+    exposure: +0.15
+    contrast: -12
+    saturation: -8
+    split_tone:
+      shadows_hue_deg: null
+      shadows_sat: 0.0
+      highs_hue_deg: null
+      highs_sat: 0.0
+
+  # Cinematic: Moody with warm highlights and cool shadows
+  cinematic:
+    exposure: -0.05
+    contrast: +14
+    saturation: +4
+    split_tone:
+      shadows_hue_deg: 210    # Blue shadows (0-360)
+      shadows_sat: 0.06       # Subtle blue tint (0.0-1.0)
+      highs_hue_deg: 38       # Warm highlights
+      highs_sat: 0.04         # Subtle warmth
+
+  # Add your custom styles here:
+  # moody:
+  #   exposure: -0.3
+  #   contrast: +20
+  #   saturation: -10
+  #   split_tone:
+  #     shadows_hue_deg: 240
+  #     shadows_sat: 0.1
+  #     highs_hue_deg: 30
+  #     highs_sat: 0.05
+
+# ============================================================================
+# CONSISTENCY (Set-wide normalization)
+# ============================================================================
+consistency:
+  target_median: 0.42      # Target median luminance (0.1-0.9)
+  wb_neutralize: true      # Auto-neutralize white balance in highlights
+
+# ============================================================================
+# AUTOMATED RETOUCH (Conservative, opt-in)
+# ============================================================================
+retouch:
+  dust_remove: false       # Automated dust spot removal
+  hotspot_reduce: false    # Tame blown highlights
+
+# ============================================================================
+# EXPORT SETTINGS
+# ============================================================================
+export:
+  # Web JPEG settings
+  web_long_edge_px: 2500   # Resize long edge to this (100-10000)
+  jpeg_quality: 96         # JPEG quality (1-100)
+  sharpen_web_amount: 0.35 # Output sharpening for web (0-2.0)
+
+  # Print TIFF settings
+  sharpen_print_amount: 0.10  # Output sharpening for print (0-2.0)
+
+# ============================================================================
+# METADATA (IPTC/XMP)
+# ============================================================================
+metadata:
+  csv_path: "DOCS/metadata.csv"
+  # CSV should have columns: filename, title, description, keywords, creator, copyright, credit, location
+  # Example:
+  # filename,title,description,keywords,creator,copyright,credit,location
+  # SmithResidence_LivingRoom_001.jpg,"Modern Living Room","Spacious living area with natural light","interior;modern;living room","Jane Doe","© 2025 Jane Doe","Jane Doe Photography","New York, NY"
+
+# ============================================================================
+# DELIVERY
+# ============================================================================
+deliver:
+  zip: true  # Create final deliverable ZIP file
