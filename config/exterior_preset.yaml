@@ -1,0 +1,41 @@
+# Exterior/Aerial Rendering Preset
+# Optimized for exterior and aerial architectural shots
+
+depth_model:
+  variant: "small"
+  backend: "pytorch_mps"
+  cache_size: 100
+
+processing:
+  depth_aware_denoise:
+    enabled: true
+    sigma_spatial: 3.5  # More smoothing for large-scale scenes
+    preserve_strength: 0.75
+
+  zone_tone_mapping:
+    enabled: true
+    num_zones: 3
+    method: "agx"
+    zone_params:
+      - {contrast: 1.25, saturation: 1.2, exposure: 0.0}   # Foreground building
+      - {contrast: 1.0, saturation: 1.0, exposure: 0.0}    # Midground
+      - {contrast: 0.85, saturation: 0.75, exposure: -0.15}  # Sky/distant
+
+  atmospheric_effects:
+    enabled: true  # Critical for realistic depth
+    haze_density: 0.02  # Moderate atmospheric haze
+    haze_color: [0.7, 0.8, 0.92]  # Slightly more blue for sky
+    desaturation_strength: 0.4
+    depth_scale: 200.0  # Larger scale for exteriors
+    enable_color_shift: true
+
+  depth_guided_filters:
+    enabled: true
+    clarity_strength: 0.4  # Gentler for large scenes
+
+  depth_of_field:
+    enabled: false  # Can enable for hero shots
+
+optimization:
+  production_resolution: 1024
+  batch_size: 2  # Larger scenes use more memory

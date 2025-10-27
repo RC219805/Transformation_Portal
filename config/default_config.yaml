@@ -1,0 +1,89 @@
+# Depth Anything V2 Pipeline Configuration
+# Default settings for architectural rendering enhancement
+
+# Depth Model Configuration
+depth_model:
+  variant: "small"  # small | base | large
+  backend: "pytorch_mps"  # pytorch_cpu | pytorch_mps | coreml
+  precision: "fp16"
+  cache_size: 100
+  enable_disk_cache: true
+
+# Processing Pipeline Configuration
+processing:
+  # Depth-Aware Denoising
+  depth_aware_denoise:
+    enabled: true
+    sigma_spatial: 3.0
+    sigma_range: 0.1
+    edge_threshold: 0.05
+    preserve_strength: 0.8
+
+  # Zone-Based Tone Mapping
+  zone_tone_mapping:
+    enabled: true
+    num_zones: 3
+    method: "agx"  # agx | reinhard | filmic
+    transition_sigma: 2.0
+    zone_params:
+      - # Foreground
+        contrast: 1.2
+        saturation: 1.1
+        exposure: 0.0
+        gamma: 1.0
+      - # Midground
+        contrast: 1.0
+        saturation: 1.0
+        exposure: 0.0
+        gamma: 1.0
+      - # Background
+        contrast: 0.9
+        saturation: 0.85
+        exposure: -0.1
+        gamma: 1.0
+
+  # Atmospheric Effects
+  atmospheric_effects:
+    enabled: false  # Enable for exterior/aerial shots
+    haze_density: 0.015
+    haze_color: [0.7, 0.8, 0.9]  # RGB [0-1]
+    desaturation_strength: 0.3
+    depth_scale: 100.0  # Meters
+    enable_color_shift: true
+
+  # Depth-Guided Filters
+  depth_guided_filters:
+    enabled: true
+    clarity_strength: 0.5
+    edge_preserve_threshold: 0.05
+    scale_count: 3
+    adaptive_to_depth: true
+
+  # Depth-of-Field (Optional)
+  depth_of_field:
+    enabled: false
+    focus_distance: 0.5  # [0-1]
+    aperture: 2.8  # f-number
+    focal_length: 50.0  # mm
+    blur_quality: "high"  # low | medium | high
+
+# Optimization Settings
+optimization:
+  preview_resolution: 512  # For interactive preview
+  production_resolution: 1024  # For final output
+  batch_size: 4
+  memory_limit_gb: 27  # 75% of 36GB M4 Max base
+  enable_profiling: false
+
+# Output Settings
+output:
+  save_depth_map: true
+  save_visualization: true
+  depth_colormap: "turbo"  # matplotlib colormap
+  output_format: "png"  # png | jpg | tiff
+  jpeg_quality: 95
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG | INFO | WARNING | ERROR
+  log_file: null  # Path to log file (null = console only)
