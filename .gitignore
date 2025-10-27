@@ -43,3 +43,22 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Depth Pipeline
+# Model cache
+.cache/
+*.mlpackage
+*.mlmodel
+
+# Depth maps and outputs
+*_depth.npy
+*_depth_viz.png
+*_enhanced.png
+*_enhanced.jpg
+processed_output/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
