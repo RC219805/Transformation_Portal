@@ -86,7 +86,7 @@ jobs:
 
       - name: Upload manifest artifact
         if: ${{ steps.manifest.outputs.manifest_path != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: montecito-manifest
           path: ${{ steps.manifest.outputs.manifest_path }}
