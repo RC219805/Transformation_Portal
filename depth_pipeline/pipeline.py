@@ -25,7 +25,6 @@ from .utils import (
     DepthCache,
     load_image,
     save_image,
-    compute_image_hash,
     visualize_depth,
     depth_statistics,
 )
@@ -386,7 +385,7 @@ class ArchitecturalDepthPipeline:
 
         # Cache stats
         cache_stats = self.cache.get_stats()
-        logger.info(f"\nCache statistics:")
+        logger.info("\nCache statistics:")
         logger.info(f"  Hit rate: {cache_stats['hit_rate']:.2%}")
         logger.info(f"  Entries: {cache_stats['size']}/{cache_stats['max_size']}")
 

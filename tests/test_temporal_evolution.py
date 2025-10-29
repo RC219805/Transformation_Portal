@@ -82,4 +82,3 @@ def test_from_mapping_validates_discipline_names(invalid_name) -> None:
 
     with pytest.raises(TypeError):
         TemporalEvolutionRoadmap.from_mapping(payload)
-

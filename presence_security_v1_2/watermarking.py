@@ -73,12 +73,12 @@ def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, st
         for x in range(0, w, 8):
             if y + 8 > h or x + 8 > w or bi >= bits.size:
                 continue
-            block = outY[y : y + 8, x : x + 8]
+            block = outY[y: y + 8, x: x + 8]
             D = _dct2(block)
             bit = 1 if bits[bi] else -1
             D[3, 2] += strength * bit
             block2 = _idct2(D)
-            outY[y : y + 8, x : x + 8] = block2
+            outY[y: y + 8, x: x + 8] = block2
             bi += 1
     X[:, :, 0] = np.clip(outY, 16, 235).astype(np.uint8)
     return Image.fromarray(X.astype(np.uint8), mode="YCbCr").convert("RGB")

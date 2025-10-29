@@ -8,25 +8,24 @@ Usage:
     python examples/custom_pipeline.py input.jpg output.jpg
 """
 
-import sys
-from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from depth_pipeline.models import DepthAnythingV2Model, ModelVariant
-from depth_pipeline.processors import (
-    DepthAwareDenoise,
-    ZoneToneMapping,
-    AtmosphericEffects,
-    DepthGuidedFilters,
-)
 from depth_pipeline.utils import (
     load_image,
     save_image,
     visualize_depth,
     depth_statistics,
 )
+from depth_pipeline.processors import (
+    DepthAwareDenoise,
+    ZoneToneMapping,
+    AtmosphericEffects,
+    DepthGuidedFilters,
+)
+from depth_pipeline.models import DepthAnythingV2Model, ModelVariant
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def main():
@@ -37,9 +36,9 @@ def main():
     input_path = sys.argv[1]
     output_path = sys.argv[2]
 
-    print("="*60)
+    print("=" * 60)
     print("CUSTOM DEPTH PIPELINE")
-    print("="*60)
+    print("=" * 60)
 
     # 1. Initialize depth model
     print("\n[1/6] Initializing depth model...")
@@ -113,7 +112,7 @@ def main():
     result = filters(result, depth)
 
     # 5. Save results
-    print(f"\n[5/6] Saving results...")
+    print("\n[5/6] Saving results...")
     output_dir = Path(output_path).parent
     stem = Path(output_path).stem
 
@@ -128,7 +127,7 @@ def main():
 
     # 6. Done
     print("\n[6/6] Complete!")
-    print("="*60)
+    print("=" * 60)
 
 
 if __name__ == '__main__':
