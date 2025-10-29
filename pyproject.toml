@@ -3,9 +3,9 @@ requires = ["setuptools>=65"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "picacho-lane-luts"
+name = "transformation-portal"
 version = "0.1.0"
-description = "Luxury image and video processing toolkit with LUT collections."
+description = "Professional image and video processing toolkit for luxury real estate rendering and architectural visualization."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "RC219805" }]
@@ -51,12 +51,22 @@ dev = [
     "pylint>=3.2.0",
 ]
 all = [
-    "picacho-lane-luts[tiff,ml,dev]",
+    "transformation-portal[tiff,ml,dev]",
 ]
 
+[project.scripts]
+# Main CLI entry points
+transform-render = "transformation_portal.cli:render_cli"
+transform-process = "transformation_portal.cli:process_cli"
+transform-analyze = "transformation_portal.cli:analyze_cli"
+
+# Legacy compatibility (can be removed in future versions)
+luxury_video_grader = "transformation_portal.processors.luxury_video_master_grader:main"
+lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
+
 [tool.setuptools.packages.find]
-where = ["."]
-exclude = ["tests*", "input_images", "processed_images"]
+where = ["src"]
+exclude = ["tests*", "data*", "docs*", "scripts"]
 
 [tool.pylint.main]
 # Increase limits for complex image/video processing functions
