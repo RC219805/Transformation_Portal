@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover
             raise RuntimeError(
                 "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
             )
-from __future__ import
+
 import glob
 import math
 import random
@@ -254,7 +254,6 @@ def add_vignette(rgb: np.ndarray, strength: float = 0.2) -> np.ndarray:
     r /= r.max() + 1e-6
     mask = 1.0 - strength * (r ** 2)
     return np.clip(rgb * mask[..., None], 0.0, 1.0)
-
 
 
 def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.ndarray:
@@ -561,6 +560,7 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
 
     return rgb
 
+
 def adjust_contrast_saturation(
     rgb: np.ndarray,
     contrast: float = 1.08,
@@ -572,9 +572,6 @@ def adjust_contrast_saturation(
     gray = rgb.mean(axis=2, keepdims=True)
     rgb = (rgb - gray) * contrast + gray
     # Saturation in HSV-like space (simple)
-    maxc = rgb.max(axis=2, keepdims=True)
-    minc = rgb.min(axis=2, keepdims=True)
-    sat = (maxc - minc) + 1e-6
     mean = rgb.mean(axis=2, keepdims=True)
     rgb = (rgb - mean) * saturation + mean
     return np.clip(rgb, 0.0, 1.0)
@@ -582,6 +579,8 @@ def adjust_contrast_saturation(
 # --------------------------
 # Branding (logo + caption)
 # --------------------------
+
+
 def overlay_logo_caption(  # pylint: disable=too-many-locals
     img: Image.Image,
     logo_path: Optional[str],
@@ -960,6 +959,8 @@ class LuxuryRenderPipeline:
 # --------------------------
 # CLI
 # --------------------------
+
+
 app = typer.Typer(add_completion=False)
 
 
