@@ -740,7 +740,7 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
                 progress(done, total, base)
 
     _log.info("Batch complete: %d processed, %d errors", total - len(errors), len(errors))
-    
+
     # Print comprehensive error summary for debugging
     if errors:
         print("\n" + "=" * 80)
@@ -750,7 +750,7 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
             print(f"{idx}. {base}:")
             print(f"   {err}")
         print("=" * 80 + "\n")
-    
+
     return len(errors)
 
 # ----- CLI -----
@@ -847,7 +847,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     try:
         error_count = process_batch(opts, progress=_cli_progress)
-        
+
         # Determine exit code based on error handling policy
         if error_count == 0:
             # No errors - success
