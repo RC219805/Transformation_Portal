@@ -9,6 +9,6 @@ pytest>=8,<9
 
 # Optional CPU-only torch (if your tests need it). The +cpu builds are on a separate index:
 # If you don't need torch in CI, delete these three lines.
-torch==2.9.0+cpu
-torchvision==0.24.0+cpu
--f https://download.pytorch.org/whl/cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+torchvision==0.20.1+cpu
