@@ -337,5 +337,5 @@ class TestWorkflowBug:
         
         bug_str = str(bug)
         assert "/path/to/workflow.yml" in bug_str
-        assert ":42" not in bug_str  # Should not have line number
+        assert ":" not in bug_str.split("/path/to/workflow.yml")[1]  # Should not have any line number
         assert "WARNING" in bug_str
