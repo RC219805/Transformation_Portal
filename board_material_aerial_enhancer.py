@@ -567,7 +567,6 @@ def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
 
     stats = _cluster_stats(base_array, labels)
     rules = build_material_rules(validated)
-    
     # Use palette assignments if provided, otherwise compute via heuristics
     if palette_path is not None:
         assignments = load_palette_assignments(palette_path, rules)
