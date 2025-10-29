@@ -1,6 +1,9 @@
-# Dev tooling for CI / static analysis / formatting
-mypy>=1.10        # static type checker
-flake8>=7         # linter
-pylint>=3         # code quality analyzer
-black>=24.8       # code formatter
-isort>=6.0        # optional import sorter
+-r requirements-ci.txt
+
+# Linting
+flake8>=7,<8
+pylint>=3,<4
+black>=24.8,<25
+
+# Type checking
+mypy>=1.10,<2
