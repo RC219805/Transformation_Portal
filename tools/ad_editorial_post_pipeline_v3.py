@@ -408,16 +408,16 @@ class PipelineConfig:
 
         # Processing validation
         workers = self.processing.get("workers", 4)
-        if not isinstance(workers, int) or not (1 <= workers <= 64):
+        if not isinstance(workers, int) or not 1 <= workers <= 64:
             errors.append(f"processing.workers must be 1-64, got {workers}")
 
         upright_max = self.processing.get("upright_max_deg", 3.0)
-        if not isinstance(upright_max, (int, float)) or not (0 <= upright_max <= 15):
+        if not isinstance(upright_max, (int, float)) or not 0 <= upright_max <= 15:
             errors.append(f"processing.upright_max_deg must be 0-15, got {upright_max}")
 
         # Export validation
         web_edge = self.export.get("web_long_edge_px", 2500)
-        if not isinstance(web_edge, int) or not (100 <= web_edge <= 10000):
+        if not isinstance(web_edge, int) or not 100 <= web_edge <= 10000:
             errors.append(f"export.web_long_edge_px must be 100-10000, got {web_edge}")
 
         jpeg_quality = self.export.get("jpeg_quality", 96)
@@ -657,7 +657,12 @@ def decode_raws_parallel(
         len(raws),
         os.cpu_count() or 1
     )
-    LOG.info("Decoding %d RAW files with %d workers (requested: %d)", len(raws), max_workers, workers)
+    LOG.info(
+        "Decoding %d RAW files with %d workers (requested: %d)",
+        len(raws),
+        max_workers,
+        workers
+    )
 
     # Filter out already-completed files (v2 fine-grained tracking)
     if tracker:
