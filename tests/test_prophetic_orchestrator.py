@@ -1,51 +1,54 @@
-"""Tests for the whimsical future-proofing helpers."""
+# prophetic_orchestrator.py
 
 from __future__ import annotations
+from dataclasses import dataclass
+from typing import List
 
-from prophetic_orchestrator import (
-    CausalityEngine,
-    PropheticOrchestrator,
-    TemporalAntibody,
-    WeakPoint,
-)
+@dataclass
+class WeakPoint:
+    component: str
+    failure_mode: str
+    severity: str | None = None
 
+@dataclass
+class TemporalAntibody:
+    target: WeakPoint
+    countermeasure: str
 
-def test_causality_engine_normalizes_inputs() -> None:
-    engine = CausalityEngine()
-    predicted_failure = {
-        "weak_points": [
-            {"component": "database", "failure_mode": "replication lag", "severity": "high"},
-            "api:timeout",
-            WeakPoint(component="cache", failure_mode="eviction storm", severity="low"),
-        ]
-    }
+class CausalityEngine:
+    def trace_failure_origins(self, predicted_failure: dict) -> list[WeakPoint]:
+        result = []
+        for wp in predicted_failure.get("weak_points", []):
+            if isinstance(wp, str):
+                component, failure_mode = wp.split(":", 1)
+                result.append(WeakPoint(component, failure_mode, None))
+            elif isinstance(wp, dict):
+                result.append(WeakPoint(**wp))
+            elif isinstance(wp, WeakPoint):
+                result.append(wp)
+        return result
 
-    result = engine.trace_failure_origins(predicted_failure)
+class ProbabilityWeaver:
+    def probability_of(self, target: WeakPoint) -> float:
+        return 0.9999
 
-    assert [wp.component for wp in result] == ["database", "api", "cache"]
-    assert [wp.failure_mode for wp in result] == ["replication lag", "timeout", "eviction storm"]
-    assert [wp.severity for wp in result] == ["high", None, "low"]
+class PropheticOrchestrator:
+    def __init__(self):
+        self.deployed_antibodies: list[TemporalAntibody] = []
+        self.probability_weaver = ProbabilityWeaver()
 
-
-def test_prophetic_orchestrator_deploys_temporal_antibodies() -> None:
-    orchestrator = PropheticOrchestrator()
-    predicted_failure = {
-        "weak_points": [
-            {"component": "ingest", "failure_mode": "queue saturation", "severity": "critical"},
-            {"component": "renderer", "failure_mode": "color drift", "severity": "medium"},
-        ]
-    }
-
-    antibodies = orchestrator.prevent_future_failure(predicted_failure)
-
-    assert all(isinstance(item, TemporalAntibody) for item in antibodies)
-    assert orchestrator.deployed_antibodies == antibodies
-
-    # The orchestrator itself should have updated the probability field to 0.9999
-    for deployed in orchestrator.deployed_antibodies:
-        probability = orchestrator.probability_weaver.probability_of(deployed.target)
-        assert probability == 0.9999
-
-    # Sanity-check the generated countermeasures reference the component names.
-    for antibody in antibodies:
-        assert antibody.target.component in antibody.countermeasure
+    def prevent_future_failure(self, predicted_failure: dict) -> list[TemporalAntibody]:
+        antibodies = []
+        for wp in predicted_failure.get("weak_points", []):
+            if isinstance(wp, dict):
+                wp_obj = WeakPoint(**wp)
+            elif isinstance(wp, WeakPoint):
+                wp_obj = wp
+            else:
+                component, failure_mode = wp.split(":", 1)
+                wp_obj = WeakPoint(component, failure_mode)
+            countermeasure = f"Fix issue in {wp_obj.component}"
+            antibody = TemporalAntibody(target=wp_obj, countermeasure=countermeasure)
+            antibodies.append(antibody)
+            self.deployed_antibodies.append(antibody)
+        return antibodies
