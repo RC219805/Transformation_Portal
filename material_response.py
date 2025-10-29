@@ -834,6 +834,39 @@ class MaterialResponseValidator:
         dimension = max(-slope, 0.0)
         return float(dimension)
 
+    @staticmethod
+    def _boxcount(binary: Sequence[Sequence[bool]], size: int) -> int:
+        """Count non-empty boxes of the given ``size`` for ``binary`` data."""
+
+        if size <= 0:
+            raise ValueError("size must be positive")
+
+        rows = len(binary)
+        cols = len(binary[0]) if rows else 0
+        if rows == 0 or cols == 0:
+            return 0
+
+        trimmed_rows = rows - (rows % size)
+        trimmed_cols = cols - (cols % size)
+        if trimmed_rows == 0 or trimmed_cols == 0:
+            return 0
+
+        count = 0
+        for row in range(0, trimmed_rows, size):
+            for col in range(0, trimmed_cols, size):
+                occupied = False
+                for dr in range(size):
+                    if occupied:
+                        break
+                    for dc in range(size):
+                        if binary[row + dr][col + dc]:
+                            occupied = True
+                            break
+                if occupied:
+                    count += 1
+
+        return count
+
 
 OperationLike = Any
 
@@ -1004,39 +1037,6 @@ def apply_transformation_tensor(
     if clip:
         return np.clip(transformed, 0.0, 1.0)
     return transformed
-
-    @staticmethod
-    def _boxcount(binary: Sequence[Sequence[bool]], size: int) -> int:
-        """Count non-empty boxes of the given ``size`` for ``binary`` data."""
-
-        if size <= 0:
-            raise ValueError("size must be positive")
-
-        rows = len(binary)
-        cols = len(binary[0]) if rows else 0
-        if rows == 0 or cols == 0:
-            return 0
-
-        trimmed_rows = rows - (rows % size)
-        trimmed_cols = cols - (cols % size)
-        if trimmed_rows == 0 or trimmed_cols == 0:
-            return 0
-
-        count = 0
-        for row in range(0, trimmed_rows, size):
-            for col in range(0, trimmed_cols, size):
-                occupied = False
-                for dr in range(size):
-                    if occupied:
-                        break
-                    for dc in range(size):
-                        if binary[row + dr][col + dc]:
-                            occupied = True
-                            break
-                if occupied:
-                    count += 1
-
-        return count
 
 
 class QuantumMaterialResponse:
