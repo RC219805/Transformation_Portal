@@ -66,9 +66,7 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 import sys
-import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,9 +76,6 @@ import numpy as np
 import rawpy
 import yaml
 from PIL import Image, ImageOps
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
-from reportlab.pdfgen import canvas
 from tqdm import tqdm
 
 # tifffile for better 16-bit TIFF handling
@@ -94,18 +89,8 @@ except ImportError:
 # Optional deps
 try:
     import cv2
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     cv2 = None
-
-try:
-    import exifread
-except Exception:  # pragma: no cover
-    exifread = None
-
-try:
-    import piexif
-except Exception:  # pragma: no cover
-    piexif = None
 
 
 # ----------------------------- logging ------------------------------------- #
@@ -195,7 +180,7 @@ class ProgressTracker:
                 self.completed = set(data.get("completed", []))
                 self.checksums = data.get("checksums", {})
                 LOG.info("Loaded progress: %d items completed", len(self.completed))
-        except Exception as e:
+        except (IOError, OSError, json.JSONDecodeError) as e:
             LOG.warning("Could not load progress state: %s", e)
 
     def _save(self) -> None:
@@ -211,7 +196,7 @@ class ProgressTracker:
                     f,
                     indent=2,
                 )
-        except Exception as e:
+        except (IOError, OSError) as e:
             LOG.warning("Could not save progress state: %s", e)
 
     def is_completed(self, item: str, checksum: Optional[str] = None) -> bool:
@@ -436,14 +421,12 @@ class PipelineConfig:
             errors.append(f"export.web_long_edge_px must be 100-10000, got {web_edge}")
 
         jpeg_quality = self.export.get("jpeg_quality", 96)
-        if not isinstance(jpeg_quality, int) or not (1 <= jpeg_quality <= 100):
+        if not isinstance(jpeg_quality, int) or not 1 <= jpeg_quality <= 100:
             errors.append(f"export.jpeg_quality must be 1-100, got {jpeg_quality}")
 
         # Consistency validation
         target_median = self.consistency.get("target_median", 0.42)
-        if not isinstance(target_median, (int, float)) or not (
-            0.1 <= target_median <= 0.9
-        ):
+        if not isinstance(target_median, (int, float)) or not 0.1 <= target_median <= 0.9:
             errors.append(
                 f"consistency.target_median must be 0.1-0.9, got {target_median}"
             )
@@ -458,19 +441,19 @@ class PipelineConfig:
                 continue
 
             exposure = style_params.get("exposure", 0.0)
-            if not isinstance(exposure, (int, float)) or not (-3.0 <= exposure <= 3.0):
+            if not isinstance(exposure, (int, float)) or not -3.0 <= exposure <= 3.0:
                 errors.append(
                     f"Style '{style_name}' exposure must be -3.0 to 3.0, got {exposure}"
                 )
 
             contrast = style_params.get("contrast", 0)
-            if not isinstance(contrast, (int, float)) or not (-50 <= contrast <= 50):
+            if not isinstance(contrast, (int, float)) or not -50 <= contrast <= 50:
                 errors.append(
                     f"Style '{style_name}' contrast must be -50 to 50, got {contrast}"
                 )
 
             saturation = style_params.get("saturation", 0)
-            if not isinstance(saturation, (int, float)) or not (-100 <= saturation <= 100):
+            if not isinstance(saturation, (int, float)) or not -100 <= saturation <= 100:
                 errors.append(
                     f"Style '{style_name}' saturation must be -100 to 100, got {saturation}"
                 )
@@ -496,19 +479,19 @@ def _read_yaml(path: Path) -> dict:
 class Layout:
     """Project directory layout."""
 
-    RAW_ORIG: Path
-    RAW_BACKUP: Optional[Path]
-    WORK_BASE: Path
-    WORK_HDR: Path
-    WORK_PANO: Path
-    WORK_ALIGN: Path
-    WORK_VARIANTS: Dict[str, Path]
-    EXPORT_PRINT: Dict[str, Path]
-    EXPORT_WEB: Dict[str, Path]
-    DOCS: Path
-    DOCS_CONTACTS: Path
-    DOCS_MANIFESTS: Path
-    STATE: Path  # For progress tracking
+    raw_orig: Path
+    raw_backup: Optional[Path]
+    work_base: Path
+    work_hdr: Path
+    work_pano: Path
+    work_align: Path
+    work_variants: Dict[str, Path]
+    export_print: Dict[str, Path]
+    export_web: Dict[str, Path]
+    docs: Path
+    docs_contacts: Path
+    docs_manifests: Path
+    state: Path  # For progress tracking
 
     @staticmethod
     def build(cfg: PipelineConfig) -> "Layout":
@@ -517,38 +500,38 @@ class Layout:
         variants = list(cfg.styles.keys())
 
         return Layout(
-            RAW_ORIG=root / "RAW" / "Originals",
-            RAW_BACKUP=cfg.backup_raw_dir / cfg.project_name if cfg.backup_raw_dir else None,
-            WORK_BASE=root / "WORK" / "BaseTIFF",
-            WORK_HDR=root / "WORK" / "HDR",
-            WORK_PANO=root / "WORK" / "Pano",
-            WORK_ALIGN=root / "WORK" / "Aligned",
-            WORK_VARIANTS={v: root / "WORK" / "Variants" / v for v in variants},
-            EXPORT_PRINT={v: root / "EXPORT" / "Print_TIFF" / v for v in variants},
-            EXPORT_WEB={v: root / "EXPORT" / "Web_JPEG" / v for v in variants},
-            DOCS=root / "DOCS",
-            DOCS_CONTACTS=root / "DOCS" / "ContactSheets",
-            DOCS_MANIFESTS=root / "DOCS" / "Manifests",
-            STATE=root / "DOCS" / ".progress_state.json",
+            raw_orig=root / "RAW" / "Originals",
+            raw_backup=cfg.backup_raw_dir / cfg.project_name if cfg.backup_raw_dir else None,
+            work_base=root / "WORK" / "BaseTIFF",
+            work_hdr=root / "WORK" / "HDR",
+            work_pano=root / "WORK" / "Pano",
+            work_align=root / "WORK" / "Aligned",
+            work_variants={v: root / "WORK" / "Variants" / v for v in variants},
+            export_print={v: root / "EXPORT" / "Print_TIFF" / v for v in variants},
+            export_web={v: root / "EXPORT" / "Web_JPEG" / v for v in variants},
+            docs=root / "DOCS",
+            docs_contacts=root / "DOCS" / "ContactSheets",
+            docs_manifests=root / "DOCS" / "Manifests",
+            state=root / "DOCS" / ".progress_state.json",
         )
 
     def all_dirs(self) -> List[Path]:
         """Get all directories that need to be created."""
         dirs = [
-            self.RAW_ORIG,
-            self.WORK_BASE,
-            self.WORK_HDR,
-            self.WORK_PANO,
-            self.WORK_ALIGN,
-            self.DOCS,
-            self.DOCS_CONTACTS,
-            self.DOCS_MANIFESTS,
+            self.raw_orig,
+            self.work_base,
+            self.work_hdr,
+            self.work_pano,
+            self.work_align,
+            self.docs,
+            self.docs_contacts,
+            self.docs_manifests,
         ]
-        if self.RAW_BACKUP:
-            dirs.append(self.RAW_BACKUP)
-        dirs.extend(self.WORK_VARIANTS.values())
-        dirs.extend(self.EXPORT_PRINT.values())
-        dirs.extend(self.EXPORT_WEB.values())
+        if self.raw_backup:
+            dirs.append(self.raw_backup)
+        dirs.extend(self.work_variants.values())
+        dirs.extend(self.export_print.values())
+        dirs.extend(self.export_web.values())
         return dirs
 
 
@@ -603,9 +586,9 @@ def load_tiff16(path: Path) -> np.ndarray:
     if tifffile is not None:
         img = tifffile.imread(str(path))
         return img.astype(np.float32) / 65535.0
-    else:
-        im = Image.open(path)
-        return np.array(im).astype(np.float32) / 65535.0
+
+    im = Image.open(path)
+    return np.array(im).astype(np.float32) / 65535.0
 
 
 def load_icc_profile(path: Optional[Path]) -> Optional[bytes]:
@@ -615,7 +598,7 @@ def load_icc_profile(path: Optional[Path]) -> Optional[bytes]:
     try:
         with path.open("rb") as f:
             return f.read()
-    except Exception as e:
+    except (IOError, OSError) as e:
         LOG.warning("Could not load ICC profile %s: %s", path, e)
         return None
 
@@ -652,7 +635,7 @@ def process_raw_file(args: Tuple[Path, Path, Optional[bytes]]) -> Tuple[Path, Op
         del img
         gc.collect()
         return raw_path, out
-    except Exception as e:
+    except (IOError, OSError, RuntimeError) as e:
         LOG.error("RAW decode failed %s: %s", raw_path, e)
         return raw_path, None
 
@@ -693,7 +676,10 @@ def decode_raws_parallel(
     results = []
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_raw_file, args): args[0] for args in args_list}
+        futures = {
+            executor.submit(process_raw_file, args): args[0]
+            for args in args_list
+        }
 
         for future in tqdm(
             as_completed(futures), total=len(futures), desc="RAW→TIFF (parallel)"
@@ -746,7 +732,7 @@ def auto_upright_downsampled(img: np.ndarray, max_deg: float = 3.0) -> np.ndarra
 
     # Compute rotation angle
     angles = []
-    for rho, theta in lines[:, 0]:
+    for _, theta in lines[:, 0]:
         deg = (theta * 180.0 / np.pi) - 90.0
         if -max_deg <= deg <= max_deg:
             angles.append(deg)
@@ -761,13 +747,13 @@ def auto_upright_downsampled(img: np.ndarray, max_deg: float = 3.0) -> np.ndarra
     LOG.debug("Auto-upright: rotating by %.2f degrees", rot)
 
     # Apply rotation to ORIGINAL full-resolution image in linear space
-    H, W = img.shape[:2]
-    M = cv2.getRotationMatrix2D((W / 2, H / 2), rot, 1.0)
+    height, width = img.shape[:2]
+    rotation_matrix = cv2.getRotationMatrix2D((width / 2, height / 2), rot, 1.0)
 
     out = cv2.warpAffine(
         (img * 65535).astype(np.uint16),
-        M,
-        (W, H),
+        rotation_matrix,
+        (width, height),
         flags=cv2.INTER_LANCZOS4,
         borderMode=cv2.BORDER_REPLICATE,
     )
@@ -906,7 +892,10 @@ def split_tone(
             0.5 + 0.5 * np.cos(sh_h + 4 * np.pi / 3),
         ])
         for c in range(3):
-            result[:, :, c] = result[:, :, c] * (1 - sh_s * shadow_mask) + sh_color[c] * sh_s * shadow_mask
+            result[:, :, c] = (
+                result[:, :, c] * (1 - sh_s * shadow_mask)
+                + sh_color[c] * sh_s * shadow_mask
+            )
 
     # Apply highlight tone
     if hl_h is not None and hl_s > 0:
@@ -916,13 +905,18 @@ def split_tone(
             0.5 + 0.5 * np.cos(hl_h + 4 * np.pi / 3),
         ])
         for c in range(3):
-            result[:, :, c] = result[:, :, c] * (1 - hl_s * highlight_mask) + hl_color[c] * hl_s * highlight_mask
+            result[:, :, c] = (
+                result[:, :, c] * (1 - hl_s * highlight_mask)
+                + hl_color[c] * hl_s * highlight_mask
+            )
 
     result = np.clip(result, 0, 1)
     return srgb_to_linear(result)
 
 
-def apply_vignette(img: np.ndarray, strength: float = 0.3) -> np.ndarray:
+def apply_vignette(
+    img: np.ndarray, strength: float = 0.3
+) -> np.ndarray:
     """Apply subtle vignette in sRGB space."""
     if strength < 1e-6:
         return img
@@ -1073,7 +1067,9 @@ def style_cinematic(img: np.ndarray, params: Dict) -> np.ndarray:
 # ----------------------------- stage-based pipeline (optimized) ------------ #
 
 
-def stage_1_offload_and_backup(cfg: PipelineConfig, layout: Layout, dry_run: bool = False) -> List[Path]:
+def stage_1_offload_and_backup(
+    cfg: PipelineConfig, layout: Layout, dry_run: bool = False
+) -> List[Path]:
     """
     Stage 1: Offload RAWs and create backup.
     Returns list of RAW files to process.
@@ -1085,7 +1081,9 @@ def stage_1_offload_and_backup(cfg: PipelineConfig, layout: Layout, dry_run: boo
         return []
 
     # Find RAW files
-    raw_exts = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"}
+    raw_exts = {
+        ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"
+    }
     raws = [
         p for p in cfg.input_raw_dir.iterdir()
         if p.suffix.lower() in raw_exts
@@ -1098,16 +1096,16 @@ def stage_1_offload_and_backup(cfg: PipelineConfig, layout: Layout, dry_run: boo
     LOG.info("Found %d RAW files", len(raws))
 
     # Copy to originals
-    ensure_dirs([layout.RAW_ORIG])
+    ensure_dirs([layout.raw_orig])
     for raw in tqdm(raws, desc="Offload RAWs"):
-        dst = layout.RAW_ORIG / raw.name
+        dst = layout.raw_orig / raw.name
         copy_and_verify(raw, dst)
 
     # Backup if configured
-    if cfg.backup_raw_dir and layout.RAW_BACKUP:
-        ensure_dirs([layout.RAW_BACKUP])
+    if cfg.backup_raw_dir and layout.raw_backup:
+        ensure_dirs([layout.raw_backup])
         for raw in tqdm(raws, desc="Backup RAWs"):
-            dst = layout.RAW_BACKUP / raw.name
+            dst = layout.raw_backup / raw.name
             copy_and_verify(raw, dst)
 
     return raws
@@ -1128,16 +1126,22 @@ def stage_2_decode_raws(
     LOG.info("=== Stage 2: RAW Decoding ===")
 
     if dry_run:
-        LOG.info("[DRY-RUN] Would decode %d RAWs with %d workers", len(raws), cfg.processing.get("workers", 4))
+        LOG.info(
+            "[DRY-RUN] Would decode %d RAWs with %d workers",
+            len(raws),
+            cfg.processing.get("workers", 4)
+        )
         return []
 
-    ensure_dirs([layout.WORK_BASE])
+    ensure_dirs([layout.work_base])
 
     # Use offloaded RAWs
-    raw_paths = [layout.RAW_ORIG / r.name for r in raws]
+    raw_paths = [layout.raw_orig / r.name for r in raws]
 
     workers = cfg.processing.get("workers", 4)
-    tiff_paths = decode_raws_parallel(raw_paths, layout.WORK_BASE, icc_prophoto, workers, tracker)
+    tiff_paths = decode_raws_parallel(
+        raw_paths, layout.work_base, icc_prophoto, workers, tracker
+    )
 
     LOG.info("Decoded %d RAWs to TIFFs", len(tiff_paths))
     return tiff_paths
@@ -1165,14 +1169,14 @@ def stage_3_align(
         LOG.info("[DRY-RUN] Would auto-upright %d images", len(tiff_paths))
         return []
 
-    ensure_dirs([layout.WORK_ALIGN])
+    ensure_dirs([layout.work_align])
 
     max_deg = cfg.processing.get("upright_max_deg", 3.0)
     aligned_paths = []
 
     for src in tqdm(tiff_paths, desc="Auto-upright"):
         # Check if already completed
-        out = layout.WORK_ALIGN / src.name
+        out = layout.work_align / src.name
         if tracker and tracker.is_completed(f"align:{src.name}"):
             aligned_paths.append(out)
             continue
@@ -1218,7 +1222,11 @@ def stage_4_grade_and_export(
 
     # Ensure all output directories exist
     for style in style_names:
-        ensure_dirs([layout.WORK_VARIANTS[style], layout.EXPORT_PRINT[style], layout.EXPORT_WEB[style]])
+        ensure_dirs([
+            layout.work_variants[style],
+            layout.export_print[style],
+            layout.export_web[style]
+        ])
 
     # Process each image
     for src in tqdm(aligned_paths, desc="Grade+Export"):
@@ -1228,10 +1236,14 @@ def stage_4_grade_and_export(
         img_srgb_base = linear_to_srgb(img_lin)
 
         if cfg.retouch.get("dust_remove", False):
-            img_srgb_base = linear_to_srgb(remove_dust_spots(srgb_to_linear(img_srgb_base)))
+            img_srgb_base = linear_to_srgb(
+                remove_dust_spots(srgb_to_linear(img_srgb_base))
+            )
 
         if cfg.retouch.get("hotspot_reduce", False):
-            img_srgb_base = linear_to_srgb(reduce_hotspots(srgb_to_linear(img_srgb_base)))
+            img_srgb_base = linear_to_srgb(
+                reduce_hotspots(srgb_to_linear(img_srgb_base))
+            )
 
         # Convert back to linear for grading
         img_lin_retouched = srgb_to_linear(img_srgb_base)
@@ -1239,7 +1251,7 @@ def stage_4_grade_and_export(
         # Apply each style
         for style in style_names:
             # Check if already completed
-            export_print = layout.EXPORT_PRINT[style] / src.name
+            export_print = layout.export_print[style] / src.name
             if tracker and tracker.is_completed(f"export:{style}:{src.name}"):
                 continue
 
@@ -1261,7 +1273,7 @@ def stage_4_grade_and_export(
                 styled = neutralize_wb(styled)
 
             # Save variant
-            variant_out = layout.WORK_VARIANTS[style] / src.name
+            variant_out = layout.work_variants[style] / src.name
             save_tiff16_prophoto(styled, variant_out, icc_prophoto)
 
             # Export print TIFF
@@ -1270,7 +1282,7 @@ def stage_4_grade_and_export(
             else:
                 print_img = styled
 
-            export_print = layout.EXPORT_PRINT[style] / src.name
+            export_print = layout.export_print[style] / src.name
             save_tiff16_prophoto(print_img, export_print, icc_prophoto)
 
             # Export web JPEG
@@ -1278,7 +1290,7 @@ def stage_4_grade_and_export(
             if cfg.export.get("sharpen_web_amount", 0.35) > 0:
                 web_img = sharpen_image(web_img, cfg.export["sharpen_web_amount"])
 
-            web_out = layout.EXPORT_WEB[style] / (src.stem + ".jpg")
+            web_out = layout.export_web[style] / (src.stem + ".jpg")
             save_jpeg_srgb(web_img, web_out, icc_srgb, cfg.export.get("jpeg_quality", 96))
 
             if tracker:
@@ -1295,7 +1307,6 @@ def stage_4_grade_and_export(
 
 
 def stage_5_documentation(
-    cfg: PipelineConfig,
     layout: Layout,
     dry_run: bool = False,
 ) -> None:
@@ -1308,12 +1319,16 @@ def stage_5_documentation(
         LOG.info("[DRY-RUN] Would generate documentation")
         return
 
-    ensure_dirs([layout.DOCS_CONTACTS, layout.DOCS_MANIFESTS])
+    ensure_dirs([layout.docs_contacts, layout.docs_manifests])
 
     # Create selects CSV
-    selects_csv = layout.DOCS / "selects.csv"
+    selects_csv = layout.docs / "selects.csv"
     if not selects_csv.exists():
-        web_images = list(layout.EXPORT_WEB.values())[0].glob("*.jpg") if layout.EXPORT_WEB else []
+        web_images = (
+            list(layout.export_web.values())[0].glob("*.jpg")
+            if layout.export_web
+            else []
+        )
         with selects_csv.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["filename", "keep", "rating", "notes"])
@@ -1322,7 +1337,7 @@ def stage_5_documentation(
         LOG.info("Created selects.csv")
 
     # Create metadata CSV template
-    metadata_csv = layout.DOCS / "metadata.csv"
+    metadata_csv = layout.docs / "metadata.csv"
     if not metadata_csv.exists():
         with metadata_csv.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -1360,17 +1375,21 @@ def stage_6_deliver(
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # Add all exports
-        for style, export_dir in layout.EXPORT_PRINT.items():
+        for style, export_dir in layout.export_print.items():
             for img in export_dir.glob("*.tif"):
                 arcname = f"Print_TIFF/{style}/{img.name}"
                 zf.write(img, arcname)
 
-        for style, export_dir in layout.EXPORT_WEB.items():
+        for style, export_dir in layout.export_web.items():
             for img in export_dir.glob("*.jpg"):
                 arcname = f"Web_JPEG/{style}/{img.name}"
                 zf.write(img, arcname)
 
-    LOG.info("Deliverable ZIP created: %s (%.1f MB)", zip_path, zip_path.stat().st_size / 1024 / 1024)
+    LOG.info(
+        "Deliverable ZIP created: %s (%.1f MB)",
+        zip_path,
+        zip_path.stat().st_size / 1024 / 1024
+    )
 
 
 # ----------------------------- main pipeline ------------------------------- #
@@ -1388,11 +1407,19 @@ def run_pipeline(cfg: PipelineConfig) -> int:
     ensure_dirs(layout.all_dirs())
 
     # Initialize progress tracker
-    tracker = ProgressTracker(layout.STATE) if cfg.resume else None
+    tracker = ProgressTracker(layout.state) if cfg.resume else None
 
     # Load ICC profiles
-    icc_prophoto = load_icc_profile(Path(cfg.icc.get("prophoto_path", ""))) if cfg.icc.get("prophoto_path") else None
-    icc_srgb = load_icc_profile(Path(cfg.icc.get("srgb_path", ""))) if cfg.icc.get("srgb_path") else None
+    icc_prophoto = (
+        load_icc_profile(Path(cfg.icc.get("prophoto_path", "")))
+        if cfg.icc.get("prophoto_path")
+        else None
+    )
+    icc_srgb = (
+        load_icc_profile(Path(cfg.icc.get("srgb_path", "")))
+        if cfg.icc.get("srgb_path")
+        else None
+    )
 
     if not icc_prophoto:
         LOG.warning("ProPhoto ICC profile not loaded, output may lack proper color space metadata")
@@ -1406,16 +1433,22 @@ def run_pipeline(cfg: PipelineConfig) -> int:
         return 1
 
     # Stage 2: Decode RAWs
-    tiff_paths = stage_2_decode_raws(raws, cfg, layout, icc_prophoto, tracker, cfg.dry_run)
+    tiff_paths = stage_2_decode_raws(
+        raws, cfg, layout, icc_prophoto, tracker, cfg.dry_run
+    )
 
     # Stage 3: Align
-    aligned_paths = stage_3_align(tiff_paths, cfg, layout, icc_prophoto, tracker, cfg.dry_run)
+    aligned_paths = stage_3_align(
+        tiff_paths, cfg, layout, icc_prophoto, tracker, cfg.dry_run
+    )
 
     # Stage 4: Grade & Export
-    stage_4_grade_and_export(aligned_paths, cfg, layout, icc_prophoto, icc_srgb, tracker, cfg.dry_run)
+    stage_4_grade_and_export(
+        aligned_paths, cfg, layout, icc_prophoto, icc_srgb, tracker, cfg.dry_run
+    )
 
     # Stage 5: Documentation
-    stage_5_documentation(cfg, layout, cfg.dry_run)
+    stage_5_documentation(layout, cfg.dry_run)
 
     # Stage 6: Deliver
     stage_6_deliver(cfg, layout, cfg.dry_run)
@@ -1435,17 +1468,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
 
     parser.add_argument("command", choices=["run"], help="Command to execute")
-    parser.add_argument("--config", "-c", type=Path, required=True, help="Configuration YAML file")
-    parser.add_argument("--resume", "-r", action="store_true", help="Resume from previous run")
-    parser.add_argument("--dry-run", "-n", action="store_true", help="Dry-run mode (show what would be done)")
-    parser.add_argument("--verbose", "-v", action="count", default=0, help="Increase verbosity")
+    parser.add_argument(
+        "--config", "-c", type=Path, required=True, help="Configuration YAML file"
+    )
+    parser.add_argument(
+        "--resume", "-r", action="store_true", help="Resume from previous run"
+    )
+    parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Dry-run mode (show what would be done)"
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="count", default=0, help="Increase verbosity"
+    )
 
     args = parser.parse_args(argv)
 
     setup_logging(args.verbose)
 
     try:
-        cfg = PipelineConfig.from_yaml(args.config, resume=args.resume, dry_run=args.dry_run)
+        cfg = PipelineConfig.from_yaml(
+            args.config, resume=args.resume, dry_run=args.dry_run
+        )
         return run_pipeline(cfg)
     except Exception as e:
         LOG.error("Pipeline failed: %s", e, exc_info=True)
