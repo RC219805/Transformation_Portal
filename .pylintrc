@@ -1,5 +1,5 @@
 [MASTER]
-ignore=build,dist,.venv,.eggs
+ignore=build,dist,.venv,.eggs,tools/deprecated,src/transformation_portal,scripts
 jobs=0
 persistent=no
 
