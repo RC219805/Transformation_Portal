@@ -1,4 +1,4 @@
-name: CI (Lint & Tests)
+name: CI (Lint, Tests & Montecito Manifest)
 
 on:
   push:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [ "3.10", "3.11", "3.12" ]
+        python-version: ["3.10", "3.11", "3.12"]
         task: [lint, test]
 
     steps:
@@ -20,40 +20,92 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      # Lint stage
+      # Fast lint gate
       - name: flake8 (errors only)
         if: matrix.task == 'lint'
         run: |
+          python -m pip install --upgrade pip
           pip install flake8
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-      # Test stage
+      # Free disk space before heavy installs
       - name: Free disk space
         if: matrix.task == 'test'
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
           df -h
 
-      - name: Install dependencies
+      # Install pinned dependencies for tests
+      - name: Install test dependencies
         if: matrix.task == 'test'
-        env:
-          PIP_NO_CACHE_DIR: "1"
         run: |
-          pip install -r requirements-ci.txt
+          python -m venv venv
+          source venv/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          case "${{ matrix.python-version }}" in
+            3.10) REQ=requirements-ci-py310.txt ;;
+            3.11) REQ=requirements-ci-py311.txt ;;
+            3.12) REQ=requirements-ci-py312.txt ;;
+          esac
+          pip install -r $REQ
           pip install -e .
-          pip install pytest pytest-cov
+          pip install pytest
 
-      - name: Run tests with coverage
+      # Run tests
+      - name: Run tests
         if: matrix.task == 'test'
         run: |
-          pytest -v --cov=. --cov-report=term-missing --cov-report=xml tests/
+          source venv/bin/activate
+          pytest -v tests/
 
-      - name: Upload coverage artifact
-        if: matrix.task == 'test'
+  build-manifest:
+    name: Build Montecito Manifest
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Setup Python 3.12 for consistency
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements-ci-py312.txt
+          pip install -e .
+
+      - name: Run Montecito Manifest Tool
+        id: manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          source venv/bin/activate
+          OUT="montecito_manifest.json"
+
+          # Use --out if available
+          if python tools/montecito_manifest.py --help 2>/dev/null | grep -qi -- '--out'; then
+            python tools/montecito_manifest.py --out "$OUT"
+          else
+            python tools/montecito_manifest.py
+          fi
+
+          # Detect JSON if produced under another name
+          if [ ! -f "$OUT" ]; then
+            CANDIDATE="$(ls -1t tools/*.json *.json 2>/dev/null | head -n1 || true)"
+            [ -n "$CANDIDATE" ] && OUT="$CANDIDATE" || OUT=""
+          fi
+
+          echo "manifest_path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload manifest artifact
+        if: ${{ steps.manifest.outputs.manifest_path != '' }}
         uses: actions/upload-artifact@v5
         with:
-          name: coverage-${{ matrix.python-version }}
-          path: coverage.xml
+          name: montecito-manifest
+          path: ${{ steps.manifest.outputs.manifest_path }}
+          if-no-files-found: error
