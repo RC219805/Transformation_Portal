@@ -10,6 +10,7 @@ Run with:
 Install dependencies:
     pip install pytest pytest-cov
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import tempfile
 from pathlib import Path

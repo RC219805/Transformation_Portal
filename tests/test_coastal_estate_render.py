@@ -6,6 +6,8 @@ import pytest
 
 import coastal_estate_render as cer
 
+# pylint: disable=redefined-outer-name  # pytest fixtures
+
 
 class StubPipeline(types.SimpleNamespace):
     def __init__(self) -> None:
