@@ -9,6 +9,8 @@ import pytest
 
 from .documentation import documents
 
+# pylint: disable=redefined-outer-name  # pytest fixtures
+
 
 def load_module() -> ModuleType:
     module_path = Path(__file__).resolve().parent.parent / "luxury_video_master_grader.py"
