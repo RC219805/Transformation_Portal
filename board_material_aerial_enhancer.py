@@ -570,7 +570,6 @@ def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
         assignments = load_palette_assignments(palette_path, rules)
     else:
         assignments = assign_materials(stats, rules)
-    
     # Optionally save the assignments for future use
     if save_palette is not None:
         save_palette_assignments(assignments, save_palette)
