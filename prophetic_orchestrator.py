@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List
+
 
 @dataclass
 class WeakPoint:
@@ -10,10 +10,12 @@ class WeakPoint:
     failure_mode: str
     severity: str | None = None
 
+
 @dataclass
 class TemporalAntibody:
     target: WeakPoint
     countermeasure: str
+
 
 class CausalityEngine:
     def trace_failure_origins(self, predicted_failure: dict) -> list[WeakPoint]:
@@ -28,9 +30,11 @@ class CausalityEngine:
                 result.append(wp)
         return result
 
+
 class ProbabilityWeaver:
     def probability_of(self, target: WeakPoint) -> float:
         return 0.9999
+
 
 class PropheticOrchestrator:
     def __init__(self):

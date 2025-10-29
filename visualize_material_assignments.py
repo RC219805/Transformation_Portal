@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 from board_material_aerial_enhancer import (
     _downsample_image,
@@ -112,7 +112,7 @@ for label, rule in assignments.items():
         fill=colors[label],
         outline=(0, 0, 0),
     )
-    
+
     # Draw material name
     text = f"{rule.name.upper()} (Cluster {label})"
     draw.text((x_offset + box_size + 15, y_offset + 5), text, fill=(0, 0, 0))
@@ -138,7 +138,7 @@ output_path = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picac
 legend_img.save(output_path, quality=95)
 
 print(f"✅ Material assignment map saved to: {output_path}")
-print(f"\nMaterial Assignments:")
+print("\nMaterial Assignments:")
 for label, rule in sorted(assignments.items(), key=lambda x: str(x[0])):
     cluster_pixels = (labels == label).sum()
     percentage = (cluster_pixels / labels.size) * 100

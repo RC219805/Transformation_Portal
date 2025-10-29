@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import sys
 from datetime import date, timedelta
 
 import pytest
@@ -28,11 +27,13 @@ except ImportError as e:
 # tests for documents
 # -------------------------
 
+
 def test_documents_appends_docstring():
     @documents("Test note")
     def func():
         pass
     assert func.__doc__ == "Test note"
+
 
 def test_documents_preserves_existing_docstring():
     @documents("Prefix note")
@@ -45,6 +46,7 @@ def test_documents_preserves_existing_docstring():
 # tests for demonstrates
 # -------------------------
 
+
 def test_demonstrates_single_string():
     @demonstrates("ConceptA")
     def func():
@@ -52,14 +54,17 @@ def test_demonstrates_single_string():
     assert func.__demonstrates__ == ("ConceptA",)
     assert func.__doc__.startswith("Demonstrates: ConceptA")
 
+
 def test_demonstrates_class():
     class Dummy:
         pass
+
     @demonstrates(Dummy)
     def func():
         return True
     assert func.__demonstrates__ == (Dummy,)
     assert "Dummy" in func.__doc__
+
 
 def test_demonstrates_existing_docstring():
     @demonstrates("ConceptB")
@@ -72,6 +77,7 @@ def test_demonstrates_existing_docstring():
 # -------------------------
 # property-based demonstrates tests
 # -------------------------
+
 
 @given(
     st.one_of(
@@ -86,6 +92,7 @@ def test_demonstrates_with_various_concepts(concept):
         return True
     assert dummy.__demonstrates__[0] == concept
     assert dummy.__doc__.startswith("Demonstrates:")
+
 
 @given(
     st.lists(
@@ -116,16 +123,20 @@ def test_demonstrates_with_multiple_various_concepts(concepts):
 # tests for valid_until
 # -------------------------
 
+
 def test_valid_until_future_allows_execution():
     future_date = (date.today() + timedelta(days=1)).isoformat()
+
     @valid_until(future_date, reason="future test")
     def func():
         return 42
     assert func() == 42
     assert func.__doc__.startswith(f"Valid until {future_date}")
 
+
 def test_valid_until_past_raises():
     past_date = (date.today() - timedelta(days=1)).isoformat()
+
     @valid_until(past_date, reason="expired test")
     def func():
         return 42
@@ -137,6 +148,7 @@ def test_valid_until_past_raises():
 # -------------------------
 # test suite sanity
 # -------------------------
+
 
 def test_basic_callable_property():
     """Sanity check: decorated functions are still callable."""

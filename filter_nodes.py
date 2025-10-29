@@ -100,4 +100,3 @@ class FilterNode:
 
 
 __all__ = ["FilterNode"]
-

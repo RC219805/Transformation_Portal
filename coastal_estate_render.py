@@ -140,4 +140,3 @@ def render_coastal_estate(
 
 
 __all__ = ["COASTAL_ESTATE_PROMPT", "render_coastal_estate"]
-

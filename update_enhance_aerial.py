@@ -23,12 +23,13 @@ Author: Richie Cheetham
 Date: October 2025
 """
 
-import argparse
-import collections
-import json
-import math
 import sys
+import math
+import json
+import argparse
 import threading
+import collections
+from math import ceil
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Sequence, Mapping, Callable, Dict, Optional
@@ -41,6 +42,7 @@ from PIL import Image, ImageFilter
 # Data Classes
 # ------------------------------
 
+
 @dataclass(frozen=True)
 class ClusterStats:
     label: int
@@ -49,6 +51,7 @@ class ClusterStats:
     mean_hsv: np.ndarray
     std_rgb: np.ndarray
 
+
 @dataclass(frozen=True)
 class MaterialRule:
     name: str
@@ -56,7 +59,7 @@ class MaterialRule:
     blend: float
     score_fn: Callable[[ClusterStats], float]
     min_score: float = 0.0
-    tint: Optional[tuple[float,float,float]] = None
+    tint: Optional[tuple[float, float, float]] = None
     tint_strength: float = 0.0
     blend_mode: Optional[str] = "normal"
     texture_gamma: float = 1.0
@@ -96,40 +99,45 @@ def save_palette_assignments(
 # Utilities
 # ------------------------------
 
+
 def _srgb_to_linear(srgb: np.ndarray) -> np.ndarray:
-    srgb = np.clip(srgb,0.0,1.0)
-    return np.where(srgb <= 0.04045, srgb/12.92, ((srgb+0.055)/1.055)**2.4)
+    srgb = np.clip(srgb, 0.0, 1.0)
+    return np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055)**2.4)
+
 
 def _linear_to_srgb(lin: np.ndarray) -> np.ndarray:
-    lin = np.clip(lin,0.0,1.0)
-    return np.where(lin <= 0.0031308, lin*12.92, 1.055*np.power(lin,1/2.4)-0.055)
+    lin = np.clip(lin, 0.0, 1.0)
+    return np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(lin, 1 / 2.4) - 0.055)
+
 
 def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
-    rgb = np.clip(rgb,0.0,1.0)
+    rgb = np.clip(rgb, 0.0, 1.0)
     maxc = rgb.max(axis=-1)
     minc = rgb.min(axis=-1)
     delta = maxc - minc
 
     hue = np.zeros_like(maxc)
-    mask = delta>1e-5
-    r,g,b = rgb[...,0], rgb[...,1], rgb[...,2]
+    mask = delta > 1e-5
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
 
-    idx=(maxc==r)&mask
-    hue[idx]=(g[idx]-b[idx])/delta[idx]
-    idx=(maxc==g)&mask
-    hue[idx]=2.0 + (b[idx]-r[idx])/delta[idx]
-    idx=(maxc==b)&mask
-    hue[idx]=4.0 + (r[idx]-g[idx])/delta[idx]
-    hue=(hue/6.0)%1.0
+    idx = (maxc == r) & mask
+    hue[idx] = (g[idx] - b[idx]) / delta[idx]
+    idx = (maxc == g) & mask
+    hue[idx] = 2.0 + (b[idx] - r[idx]) / delta[idx]
+    idx = (maxc == b) & mask
+    hue[idx] = 4.0 + (r[idx] - g[idx]) / delta[idx]
+    hue = (hue / 6.0) % 1.0
 
     saturation = np.zeros_like(maxc)
-    nonzero = maxc>1e-5
-    saturation[nonzero]=delta[nonzero]/maxc[nonzero]
+    nonzero = maxc > 1e-5
+    saturation[nonzero] = delta[nonzero] / maxc[nonzero]
 
-    return np.stack([hue,saturation,maxc],axis=-1)
+    return np.stack([hue, saturation, maxc], axis=-1)
+
 
 def _gaussian(x: float, mu: float, sigma: float) -> float:
-    return math.exp(-((x-mu)**2)/(2.0*sigma**2))
+    return math.exp(-((x - mu)**2) / (2.0 * sigma**2))
+
 
 def _initial_centroids(data: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
     if k > len(data):
@@ -153,10 +161,12 @@ def _kmeans(
         centroids = new_centroids
     return centroids
 
+
 def _assign_full_image(image: np.ndarray, centroids: np.ndarray) -> np.ndarray:
-    pixels=image.reshape(-1,3)
-    distances=np.sum((pixels[:,None]-centroids[None,:])**2,axis=2)
-    return np.argmin(distances,axis=1).reshape(image.shape[:2])
+    pixels = image.reshape(-1, 3)
+    distances = np.sum((pixels[:, None] - centroids[None, :])**2, axis=2)
+    return np.argmin(distances, axis=1).reshape(image.shape[:2])
+
 
 def _cluster_stats(image: np.ndarray, labels: np.ndarray) -> Sequence[ClusterStats]:
     stats=[]
@@ -179,16 +189,18 @@ def _cluster_stats(image: np.ndarray, labels: np.ndarray) -> Sequence[ClusterSta
 # Material Rules
 # ------------------------------
 
+
 def build_material_rules(textures: Mapping[str, Path]) -> Sequence[MaterialRule]:
     def plaster_score(s: ClusterStats) -> float:
-        _,s_,v=s.mean_hsv
-        return max(0.0,(1.0-s_)*v)
+        _, s_, v = s.mean_hsv
+        return max(0.0, (1.0 - s_) * v)
+
     def stone_score(s: ClusterStats) -> float:
-        h,s_,v=s.mean_hsv
-        return _gaussian(h,0.09,0.05)*max(0.0,1-abs(v-0.62)/0.4)*max(0.0,1-abs(s_-0.22)/0.4)
+        h, s_, v = s.mean_hsv
+        return _gaussian(h, 0.09, 0.05) * max(0.0, 1 - abs(v - 0.62) / 0.4) * max(0.0, 1 - abs(s_ - 0.22) / 0.4)
     return (
-        MaterialRule("plaster", str(textures["plaster"]),0.6,plaster_score,0.45),
-        MaterialRule("stone", str(textures["stone"]),0.65,stone_score,0.2)
+        MaterialRule("plaster", str(textures["plaster"]), 0.6, plaster_score, 0.45),
+        MaterialRule("stone", str(textures["stone"]), 0.65, stone_score, 0.2)
     )
 
 
@@ -206,13 +218,14 @@ def assign_materials(
             if score > best_score:
                 best_label, best_score = stat.label, score
         if best_label is not None:
-            assignments[best_label]=rule
+            assignments[best_label] = rule
             used.add(best_label)
     return assignments
 
 # ------------------------------
 # Tiling and Material Application
 # ------------------------------
+
 
 def apply_materials_tiled(
     base: np.ndarray,
@@ -423,6 +436,7 @@ def apply_materials_tiled(
 # ------------------------------
 # CLI
 # ------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(description="MBAR Aerial Material Enhancer")

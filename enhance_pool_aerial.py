@@ -39,7 +39,7 @@ result = enhance_aerial(
 
 print(f"\n✓ Enhancement complete: {output_path}")
 print(f"  Size: {output_path.stat().st_size / 1024 / 1024:.1f} MB")
-print(f"  Resolution: 4096px width")
+print("  Resolution: 4096px width")
 
 # Create material assignment visualization
 image = Image.open(input_path).convert("RGB")
@@ -92,7 +92,7 @@ for idx, (label, rule) in enumerate(assignments.items()):
     stat = next(s for s in stats if s.label == label)
     coverage = (stat.count / labels.size) * 100
     color = colors[label % len(colors)]
-    
+
     # Draw color swatch
     draw.rectangle(
         [legend_x, legend_y + idx * 40, legend_x + 30, legend_y + idx * 40 + 25],
@@ -100,7 +100,7 @@ for idx, (label, rule) in enumerate(assignments.items()):
         outline=(255, 255, 255),
         width=2,
     )
-    
+
     # Draw text
     text = f"{rule.name.upper()}: {coverage:.1f}%"
     draw.text(
@@ -122,15 +122,15 @@ with open(report_path, "w") as f:
     f.write("## Processing Parameters\n\n")
     f.write(f"- **Input**: `{input_path.name}`\n")
     f.write(f"- **Output**: `{output_path.name}`\n")
-    f.write(f"- **Analysis Resolution**: 1280px max dimension\n")
-    f.write(f"- **Clusters**: 8\n")
-    f.write(f"- **Target Width**: 4096px (4K)\n")
-    f.write(f"- **Random Seed**: 22\n\n")
-    
+    f.write("- **Analysis Resolution**: 1280px max dimension\n")
+    f.write("- **Clusters**: 8\n")
+    f.write("- **Target Width**: 4096px (4K)\n")
+    f.write("- **Random Seed**: 22\n\n")
+
     f.write("## Material Assignments\n\n")
     f.write("| Material | Coverage | Mean RGB | Mean HSV |\n")
     f.write("|----------|----------|----------|----------|\n")
-    
+
     total_assigned = 0
     for label, rule in sorted(assignments.items(), key=lambda x: str(x[0])):
         stat = next(s for s in stats if s.label == label)
@@ -139,14 +139,14 @@ with open(report_path, "w") as f:
         rgb = f"({stat.mean_rgb[0]:.2f}, {stat.mean_rgb[1]:.2f}, {stat.mean_rgb[2]:.2f})"
         hsv = f"({stat.mean_hsv[0]:.2f}, {stat.mean_hsv[1]:.2f}, {stat.mean_hsv[2]:.2f})"
         f.write(f"| **{rule.name.title()}** | {coverage:.1f}% | {rgb} | {hsv} |\n")
-    
+
     unassigned = 100 - total_assigned
     if unassigned > 0.1:
         f.write(f"| *Unassigned* | {unassigned:.1f}% | - | - |\n")
-    
+
     f.write("\n## MBAR Material Specifications\n\n")
     f.write("### Applied Materials\n\n")
-    
+
     materials_specs = {
         "plaster": "Marmorino Palladino Plaster - Westwood Beige",
         "stone": "Eco Outdoor Bokara Stone - Coastal",
@@ -157,21 +157,21 @@ with open(report_path, "w") as f:
         "bronze": "Dark Bronze Anodized Metal",
         "shade": "Louvretec Powder Coated White",
     }
-    
+
     for label, rule in assignments.items():
         if rule.name in materials_specs:
             f.write(f"- **{rule.name.title()}**: {materials_specs[rule.name]}\n")
             f.write(f"  - Blend: {rule.blend * 100:.0f}%\n")
             if rule.tint:
                 f.write(f"  - Tint: RGB{rule.tint} @ {rule.tint_strength * 100:.0f}%\n")
-    
+
     f.write("\n## Pool Area Specific Notes\n\n")
     f.write("This enhancement focuses on the pool and surrounding hardscape:\n\n")
     f.write("- **Pool Deck**: Likely identified as stone or roof material (Bokara/Ipe pavers)\n")
     f.write("- **Pool Water**: May be assigned to equitone or screens (blue-grey tones)\n")
     f.write("- **Landscaping**: Vegetation typically unassigned or low-confidence clusters\n")
     f.write("- **Structures**: Plaster walls, bronze details, shade elements\n\n")
-    
+
     f.write("## Recommendations\n\n")
     f.write("- For more pool-specific material detection, consider increasing `k` to 10-12 clusters\n")
     f.write("- Water reflections may benefit from custom water material rule\n")
@@ -179,6 +179,6 @@ with open(report_path, "w") as f:
     f.write("- Consider masking vegetation areas before processing for cleaner results\n")
 
 print(f"\n✓ Report saved: {report_path}")
-print(f"\n{'='*60}")
+print(f"\n{'=' * 60}")
 print("Pool aerial enhancement complete!")
-print(f"{'='*60}")
+print(f"{'=' * 60}")

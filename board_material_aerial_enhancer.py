@@ -16,6 +16,8 @@ DEFAULT_TEXTURES = {
 # ==========================
 # Material Rule
 # ==========================
+
+
 class MaterialRule:
     def __init__(
         self,
@@ -24,7 +26,7 @@ class MaterialRule:
         blend: float,
         score_fn: Callable[[np.ndarray], float],
         min_score: float = 0.0,
-        tint: Optional[tuple[int,int,int]] = None,
+        tint: Optional[tuple[int, int, int]] = None,
         tint_strength: float = 0.0
     ):
         self.name = name
@@ -38,6 +40,8 @@ class MaterialRule:
 # ==========================
 # Cluster Stats
 # ==========================
+
+
 class ClusterStats:
     def __init__(self, centroid: np.ndarray, points: Optional[np.ndarray] = None):
         self.centroid = np.array(centroid)
@@ -46,6 +50,8 @@ class ClusterStats:
 # ==========================
 # K-means
 # ==========================
+
+
 def _kmeans(x: np.ndarray, k: int, seed: int = None, max_iter: int = 100):
     kmeans = KMeans(n_clusters=k, random_state=seed, max_iter=max_iter)
     kmeans.fit(x)
@@ -54,6 +60,8 @@ def _kmeans(x: np.ndarray, k: int, seed: int = None, max_iter: int = 100):
 # ==========================
 # Compute cluster stats
 # ==========================
+
+
 def compute_cluster_stats(labels: np.ndarray, data: np.ndarray) -> List[ClusterStats]:
     stats = []
     for i in np.unique(labels):
@@ -65,26 +73,31 @@ def compute_cluster_stats(labels: np.ndarray, data: np.ndarray) -> List[ClusterS
 # ==========================
 # Relabel clusters consecutively
 # ==========================
+
+
 def relabel(assignments: dict[int, MaterialRule], labels: np.ndarray) -> np.ndarray:
     label_map = {old: new for new, old in enumerate(sorted(assignments.keys()))}
     return np.vectorize(lambda x: label_map.get(x, x))(labels)
 
+
 def relabel_safe(assignments: dict[int, MaterialRule], labels: np.ndarray, mode="warn", strict=True, verbose=False):
     # Ensure all label indices in assignments
     all_labels = np.unique(labels)
-    missing = [l for l in all_labels if l not in assignments]
+    missing = [lbl for lbl in all_labels if lbl not in assignments]
     if missing:
         if strict:
             raise ValueError(f"Missing assignments for labels: {missing}")
         elif verbose and mode != "none":
             print(f"Warning: missing assignments for {missing}")
-        for l in missing:
-            assignments[l] = MaterialRule(name="unknown", texture="", blend=0.5, score_fn=lambda x: 0.5)
+        for lbl in missing:
+            assignments[lbl] = MaterialRule(name="unknown", texture="", blend=0.5, score_fn=lambda x: 0.5)
     return relabel(assignments, labels)
 
 # ==========================
 # Build material rules from textures
 # ==========================
+
+
 def build_material_rules(textures: dict[str, str]) -> List[MaterialRule]:
     rules = []
     for name, path in textures.items():
@@ -102,10 +115,13 @@ def build_material_rules(textures: dict[str, str]) -> List[MaterialRule]:
 # ==========================
 # Save/load palette assignments
 # ==========================
+
+
 def save_palette_assignments(assignments: dict[int, MaterialRule], out_path: Path):
     data = {k: vars(v) for k, v in assignments.items()}
     with open(out_path, "w") as f:
         json.dump(data, f)
+
 
 def load_palette_assignments(in_path: Path) -> dict[int, MaterialRule]:
     with open(in_path) as f:
@@ -126,6 +142,8 @@ def load_palette_assignments(in_path: Path) -> dict[int, MaterialRule]:
 # ==========================
 # Auto-assign by cluster stats
 # ==========================
+
+
 def auto_assign_materials_by_stats(labels: np.ndarray, img: np.ndarray, tex_map: dict) -> dict[int, MaterialRule]:
     stats = compute_cluster_stats(labels, img.reshape(-1, img.shape[-1]))
     rules = build_material_rules(tex_map)
@@ -137,6 +155,8 @@ def auto_assign_materials_by_stats(labels: np.ndarray, img: np.ndarray, tex_map:
 # ==========================
 # Enhance aerial image
 # ==========================
+
+
 def enhance_aerial(image: np.ndarray, out_path: Optional[str] = None, k: int = 3, textures: Optional[dict] = None):
     h, w, c = image.shape
     pixels = image.reshape(-1, c).astype(np.float32)
