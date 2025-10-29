@@ -27,6 +27,7 @@ print(f"Processing: {input_path}")
 print(f"Output: {output_path}")
 print()
 
+# pylint: disable=duplicate-code  # Similar enhance_aerial call in run_aerial_enhancement.py
 # Run enhancement
 result = enhance_aerial(
     input_path,
@@ -36,6 +37,7 @@ result = enhance_aerial(
     seed=22,                 # Reproducibility
     target_width=4096,       # 4K output
 )
+# pylint: enable=duplicate-code
 
 print(f"\n✓ Enhancement complete: {output_path}")
 print(f"  Size: {output_path.stat().st_size / 1024 / 1024:.1f} MB")
@@ -43,6 +45,7 @@ print("  Resolution: 4096px width")
 
 # Create material assignment visualization
 image = Image.open(input_path).convert("RGB")
+# pylint: disable=duplicate-code  # Similar clustering logic used in visualize_material_assignments.py
 analysis_image = _downsample_image(image, 1280)
 analysis_array = np.asarray(analysis_image, dtype=np.float32) / 255.0
 pixels = analysis_array.reshape(-1, 3)
@@ -57,6 +60,7 @@ else:
 
 centroids = _kmeans(sample, 8, rng)
 labels_small = _assign_full_image(analysis_array, centroids)
+# pylint: enable=duplicate-code
 labels_small_img = Image.fromarray(labels_small.astype("uint8")).convert("L")
 labels_full = labels_small_img.resize(image.size, Image.Resampling.NEAREST)
 labels = np.asarray(labels_full, dtype=np.uint8)
