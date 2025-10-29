@@ -7,9 +7,3 @@ imagecodecs>=2023.9.18,<2025
 tqdm>=4.66,<5
 pytest>=8,<9
 typer>=0.10.0
-
-# Optional CPU-only torch (if your tests need it). The +cpu builds are on a separate index:
-# If you don't need torch in CI, delete these three lines.
-torch==2.9.0
-torchvision==0.24.0
--f https://download.pytorch.org/whl/cpu
