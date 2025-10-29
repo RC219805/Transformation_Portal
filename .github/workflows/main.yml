@@ -1,5 +1,4 @@
-# .github/workflows/python-app.yml
-name: build
+name: CI (Lint & Tests)
 
 on:
   push:
@@ -11,35 +10,43 @@ jobs:
     strategy:
       matrix:
         python-version: [ "3.10", "3.11", "3.12" ]
+        task: [lint, test]
+
     steps:
       - uses: actions/checkout@v5
 
-      # Fast lint gate: no heavy deps
+      # Setup Python
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+
+      # Fast lint gate
       - name: flake8 (errors only)
+        if: matrix.task == 'lint'
         run: |
           python -m pip install --upgrade pip
           pip install flake8
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-      # Free space BEFORE installing anything heavy (saves ~20–30 GB)
+      # Free disk space before heavy installs
       - name: Free disk space
+        if: matrix.task == 'test'
         run: |
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf /usr/local/lib/android || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
           df -h
 
-      # Install minimal deps for unit tests (CPU only)
+      # Install lean deps for tests
       - name: Install lean deps
+        if: matrix.task == 'test'
         env:
           PIP_NO_CACHE_DIR: "1"
         run: |
+          pip install --upgrade pip
           pip install -r requirements-ci.txt
           pip install -e .
+          pip install pytest
 
+      # Run unit tests + end-to-end
       - name: Run tests
-        run: pytest -v
+        if: matrix.task == 'test'
+        run: pytest -v tests/
