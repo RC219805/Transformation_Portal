@@ -29,13 +29,11 @@ jobs:
         run: |
           echo "Generating AI summary..."
           # Escape for JSON using jq to prevent injection
-          TITLE_JSON=$(printf '%s' "$ISSUE_TITLE" | jq -Rs .)
-          BODY_JSON=$(printf '%s' "$BODY" | jq -Rs .)
           USER_CONTENT=$(jq -nc --arg title "$ISSUE_TITLE" --arg body "$BODY" ' "Title: \($title)\n\nBody: \($body)" ')
           JSON_PAYLOAD=$(jq -nc \
             --arg model "gpt-4o-mini" \
             --arg system "You are an assistant that summarizes GitHub issues concisely." \
-            --arg user_content "$(jq -r <<<"$USER_CONTENT")" \
+            --arg user_content "$USER_CONTENT" \
             '{
               model: $model,
               messages: [
