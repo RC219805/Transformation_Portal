@@ -290,7 +290,9 @@ class WorkflowParser:
             'gpt-3.5-turbo', 'gpt-3.5-turbo-16k',
         }
         
-        # Valid model prefixes (for date-stamped versions like gpt-4-turbo-2024-04-09)
+        # Valid model prefixes for date-stamped versions.
+        # These prefixes allow models like 'gpt-4-turbo-2024-04-09' (e.g., gpt-4-turbo-YYYY-MM-DD).
+        # Any suffix after these prefixes is accepted, so use with caution.
         valid_prefixes = {
             'gpt-4-turbo-', 'gpt-4o-', 'gpt-3.5-turbo-'
         }
