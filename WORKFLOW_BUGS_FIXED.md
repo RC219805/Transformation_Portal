@@ -110,8 +110,8 @@ strategy:
 ```
 
 This created **12 total jobs**:
-- 6 lint jobs (3 Python versions × 2 devices) - 3 unnecessary
-- 6 test jobs (3 Python versions × 2 devices) - all needed
+- 6 lint jobs (3 Python versions x 2 devices) - 3 unnecessary
+- 6 test jobs (3 Python versions x 2 devices) - all needed
 
 **After:**
 ```yaml
@@ -127,8 +127,8 @@ strategy:
 ```
 
 This creates **9 total jobs**:
-- 3 lint jobs (3 Python versions × cpu only)
-- 6 test jobs (3 Python versions × 2 devices)
+- 3 lint jobs (3 Python versions x cpu only)
+- 6 test jobs (3 Python versions x 2 devices)
 
 **Impact:** Reduces CI runtime and resource usage by eliminating 3 unnecessary jobs (25% reduction).
 
@@ -209,7 +209,7 @@ $ pytest tests/test_parse_workflows.py -v
 ## Files Modified
 
 1. `.github/workflows/build.yml` - Fixed conditional, optimized matrix
-2. `.github/workflows/summary.yml` - Added step ID, fixed model name
+2. `.github/workflows/summary.yml` - Added step ID (generate-summary), fixed model name (gpt-4.1-mini → gpt-4o-mini)
 3. `parse_workflows.py` - Created new parser tool
 4. `tests/test_parse_workflows.py` - Created comprehensive test suite
 5. `parse_workflows_README.md` - Created documentation
@@ -223,7 +223,9 @@ $ pytest tests/test_parse_workflows.py -v
 1. **Integrate Parser into CI**
    ```yaml
    - name: Validate workflows
-     run: python parse_workflows.py
+     run: |
+       set -e
+       python parse_workflows.py
    ```
 
 2. **Run Parser Before Workflow Changes**
