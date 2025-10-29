@@ -1,3 +1,15 @@
+"""Board Material Aerial Enhancer - Apply MBAR materials to aerial imagery."""
+
+import argparse
+import json
+import math
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Dict, Mapping, MutableMapping, Optional, Sequence
+
+import numpy as np
+from PIL import Image, ImageFilter
+
 # Palette helpers: use real ones if available; otherwise provide simple JSON fallbacks.
 try:
     from .palette_assignments import (  # type: ignore
@@ -7,8 +19,8 @@ try:
 except Exception:
     def load_palette_assignments(
         path: str | Path,
-        rules: Sequence[MaterialRule] | Mapping[str, MaterialRule] | None = None,
-    ) -> dict[int, MaterialRule]:
+        rules: "Sequence[MaterialRule] | Mapping[str, MaterialRule] | None" = None,
+    ) -> "dict[int, MaterialRule]":
         """Load a palette JSON of { "<label>": "<rule_name>" } and map back to MaterialRule."""
         p = Path(path)
         if not p.exists():
@@ -16,14 +28,14 @@ except Exception:
         data = json.loads(p.read_text())
 
         # Build lookup: rule name -> MaterialRule
-        lookup: dict[str, MaterialRule] = {}
+        lookup: "dict[str, MaterialRule]" = {}
         if isinstance(rules, Mapping):
             lookup.update(rules)  # assume already name->rule
         elif isinstance(rules, Sequence):
             lookup.update({r.name: r for r in rules})
         # else: rules None => leave lookup empty
 
-        assignments: dict[int, MaterialRule] = {}
+        assignments: "dict[int, MaterialRule]" = {}
         for k, v in data.items():
             try:
                 label = int(k)
@@ -35,12 +47,13 @@ except Exception:
                 assignments[label] = rule
         return assignments
 
-    def save_palette_assignments(assignments: Mapping[int, MaterialRule], path: str | Path) -> None:
+    def save_palette_assignments(assignments: "Mapping[int, MaterialRule]", path: str | Path) -> None:
         """Save palette as { "<label>": "<rule_name>" } for portability."""
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         serializable = {str(label): rule.name for label, rule in assignments.items()}
         p.write_text(json.dumps(serializable, indent=2, sort_keys=True))
+
 
 @dataclass(frozen=True)
 class ClusterStats:
@@ -559,17 +572,17 @@ def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
 
     stats = _cluster_stats(base_array, labels)
     rules = build_material_rules(validated)
-    
+
     # Use palette assignments if provided, otherwise compute via heuristics
     if palette_path is not None:
         assignments = load_palette_assignments(palette_path, rules)
     else:
         assignments = assign_materials(stats, rules)
-    
+
     # Optionally save the assignments for future use
     if save_palette is not None:
         save_palette_assignments(assignments, save_palette)
-    
+
     enhanced = apply_materials(base_array, labels, assignments)
 
     enhanced_image = Image.fromarray((np.clip(enhanced, 0.0, 1.0) * 255.0 + 0.5).astype("uint8"))
