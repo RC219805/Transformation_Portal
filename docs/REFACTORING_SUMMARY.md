@@ -101,13 +101,17 @@ tools/deprecated/             # Archived versions (NEW)
 - Added to `.gitignore`
 - Maintained structure with `.gitkeep`
 
-**Created LUT Symlinks:**
+**Created LUT Directory Copies:**
 ```
 data/luts/
-├── film_emulation → ../../01_Film_Emulation
-├── location → ../../02_Location_Aesthetic
-└── material_response → ../../03_Material_Response
+├── film_emulation/ (copy of 01_Film_Emulation)
+├── location/ (copy of 02_Location_Aesthetic)
+└── material_response/ (copy of 03_Material_Response)
 ```
+
+Note: These directories were initially created as symlinks but have been converted
+to actual directory copies to ensure compatibility with CI/CD tools and code analysis
+tools that don't properly handle symlinks.
 
 **Benefits:**
 - 92% reduction in git repository size
