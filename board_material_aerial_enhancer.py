@@ -1,4 +1,9 @@
 # Palette helpers: use real ones if available; otherwise provide simple JSON fallbacks.
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Sequence, Mapping, Callable
+import numpy as np
 try:
     from .palette_assignments import (  # type: ignore
         load_palette_assignments,
