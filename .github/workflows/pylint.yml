@@ -1,18 +1,74 @@
-# .github/workflows/pylint.yml
-name: pylint
+name: CI (Lint & Tests)
+
 on:
   pull_request:
     paths: [ "**/*.py" ]
 
 jobs:
+  setup:
+    name: Setup Python & Cache
+    runs-on: ubuntu-24.04
+    outputs:
+      cache-key: ${{ steps.cache.outputs.cache-hit }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Cache pip packages
+      - id: cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-ci.txt') }}
+      
+      # Install shared dependencies
+      - run: pip install --no-cache-dir -r requirements-ci.txt
+      - run: pip install --no-cache-dir pylint pytest
+
   lint:
+    name: Lint Changed Files
+    needs: setup
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python -m pip install --upgrade pip
-      - run: pip install --no-cache-dir -r requirements-ci.txt
-      - run: pip install --no-cache-dir pylint
-      - run: pylint $(git ls-files '*.py')
+
+      # Reuse pip cache
+      - uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-ci.txt') }}
+
+      - name: Lint only changed Python files
+        run: |
+          files=$(git diff --name-only origin/main...HEAD | grep '\.py$' || true)
+          if [ -n "$files" ]; then
+            echo "Linting the following files:"
+            echo "$files"
+            echo "$files" | xargs python -m pylint
+          else
+            echo "No Python files changed, skipping lint."
+
+  tests:
+    name: Run Unit Tests
+    needs: setup
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Reuse pip cache
+      - uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-ci.txt') }}
+
+      - name: Run all unit tests
+        run: pytest -v
