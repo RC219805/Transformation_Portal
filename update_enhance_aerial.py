@@ -29,7 +29,6 @@ import json
 import math
 import sys
 import threading
-from math import ceil
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Sequence, Mapping, Callable, Dict, Optional
@@ -339,8 +338,8 @@ def apply_materials_tiled(
             return result
         return tex_l
 
-    tiles_x = ceil(width / tile_size)
-    tiles_y = ceil(height / tile_size)
+    tiles_x = math.ceil(width / tile_size)
+    tiles_y = math.ceil(height / tile_size)
     jobs = [
         (ty * tile_size, min(height, (ty + 1) * tile_size),
          tx * tile_size, min(width, (tx + 1) * tile_size))
@@ -442,10 +441,10 @@ def main():
     print(f"[info] image size: {width}x{height}")
 
     rng = np.random.default_rng(42)
-    pixels = arr.reshape(-1,3)
-    centroids = _kmeans(pixels,args.clusters,rng)
-    labels = _assign_full_image(arr,centroids)
-    stats = _cluster_stats(arr,labels)
+    pixels = arr.reshape(-1, 3)
+    centroids = _kmeans(pixels, args.clusters, rng)
+    labels = _assign_full_image(arr, centroids)
+    stats = _cluster_stats(arr, labels)
 
     # example textures
     textures = {
@@ -453,7 +452,7 @@ def main():
         "stone": Path("textures/stone.jpg")
     }
     rules = build_material_rules(textures)
-    assignments = assign_materials(stats,rules)
+    assignments = assign_materials(stats, rules)
 
     out = apply_materials_tiled(
         arr,
@@ -465,8 +464,9 @@ def main():
         progress=args.progress
     )
 
-    Image.fromarray((out*255).astype("uint8")).save(args.output)
+    Image.fromarray((out * 255).astype("uint8")).save(args.output)
     print(f"[done] saved to {args.output}")
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()
