@@ -92,12 +92,65 @@ def ensure_output_path(
     *,
     create: bool = True,
 ) -> Path:
-    relative = source.relative_to(input_root) if recursive else Path(source.name)
-    destination = output_root / relative
+    """Construct output path with path traversal protection.
+
+    Args:
+        input_root: Root directory for input files
+        output_root: Root directory for output files
+        source: Source file path
+        suffix: Suffix to add to filename
+        recursive: Whether to preserve directory structure
+        create: Whether to create parent directories
+
+    Returns:
+        Validated output path within output_root
+
+    Raises:
+        ValueError: If resulting path would be outside output_root
+    """
+    # Resolve all paths to absolute paths to prevent traversal
+    input_root = input_root.resolve()
+    output_root = output_root.resolve()
+    source = source.resolve()
+
+    # Validate source is within input_root when recursive
+    if recursive:
+        try:
+            relative = source.relative_to(input_root)
+        except ValueError as exc:
+            raise ValueError(
+                f"Source path {source} is not within input root {input_root}"
+            ) from exc
+    else:
+        # Use only the filename, not the full path
+        relative = Path(source.name)
+
+    # Construct destination path
+    destination = (output_root / relative).resolve()
+
+    # Security check: ensure destination is within output_root
+    try:
+        destination.relative_to(output_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"Attempted path traversal: {destination} is outside output root {output_root}"
+        ) from exc
+
     if create:
         destination.parent.mkdir(parents=True, exist_ok=True)
+
     new_name = destination.stem + suffix + destination.suffix
-    return destination.with_name(new_name)
+    final_path = destination.with_name(new_name)
+
+    # Final validation after adding suffix
+    try:
+        final_path.relative_to(output_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"Final path {final_path} is outside output root {output_root}"
+        ) from exc
+
+    return final_path
 
 
 def resize_bilinear(arr: np.ndarray, new_width: int, new_height: int) -> np.ndarray:

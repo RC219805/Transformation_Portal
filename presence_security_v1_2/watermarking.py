@@ -1,10 +1,11 @@
-# watermarking.py — LSB and DCT-based watermarking (educational reference, v1.2)
-# Notes: This is a simple demonstrator for concept and testing; tune thresholds for production.
+# watermarking.py — LSB and DCT-based watermarking (production-ready, v1.3)
+# Notes: Uses scipy for efficient DCT/IDCT operations. Tune thresholds for production.
 
 import hashlib
 
 import numpy as np
 from PIL import Image
+from scipy.fft import dct, idct
 
 
 def _bytes_from_ids(manifest_hash_hex: str, session_id: str):
@@ -27,40 +28,31 @@ def embed_lsb_rgb(img: Image.Image, manifest_hash_hex: str, session_id: str) -> 
     return Image.fromarray(out)
 
 
-# 8x8 DCT helpers (JPEG-like) — naive implementation.
-# WARNING: These DCT/IDCT functions use nested loops and have O(N²) time complexity.
-# They are suitable for educational/reference use only and are inefficient for large data or production.
-# For production or performance-critical code, use scipy.fft.dct and scipy.fft.idct instead.
-def _dct_1d(x):
-    N = x.shape[0]
-    X = np.zeros_like(x, dtype=np.float64)
-    for k in range(N):
-        s = 0.0
-        for n in range(N):
-            s += x[n] * np.cos(np.pi * (n + 0.5) * k / N)
-        c = np.sqrt(1 / N) if k == 0 else np.sqrt(2 / N)
-        X[k] = c * s
-    return X
+# 8x8 DCT helpers (JPEG-like) — production implementation using scipy.
+# Uses scipy.fft.dct/idct for O(N log N) performance instead of O(N²) naive loops.
+# Type-2 DCT with orthonormal normalization matches JPEG standard.
+def _dct2(block: np.ndarray) -> np.ndarray:
+    """Compute 2D DCT-II of an 8x8 block using scipy.
+
+    Args:
+        block: 8x8 numpy array
+
+    Returns:
+        8x8 DCT coefficients array
+    """
+    return dct(dct(block.T, type=2, norm='ortho').T, type=2, norm='ortho')
 
 
-def _idct_1d(X):
-    N = X.shape[0]
-    x = np.zeros_like(X, dtype=np.float64)
-    for n in range(N):
-        s = 0.0
-        for k in range(N):
-            c = np.sqrt(1 / N) if k == 0 else np.sqrt(2 / N)
-            s += c * X[k] * np.cos(np.pi * (n + 0.5) * k / N)
-        x[n] = s
-    return x
+def _idct2(block: np.ndarray) -> np.ndarray:
+    """Compute 2D inverse DCT-II of an 8x8 block using scipy.
 
+    Args:
+        block: 8x8 DCT coefficients array
 
-def _dct2(block):
-    return np.apply_along_axis(_dct_1d, 0, np.apply_along_axis(_dct_1d, 1, block))
-
-
-def _idct2(block):
-    return np.apply_along_axis(_idct_1d, 0, np.apply_along_axis(_idct_1d, 1, block))
+    Returns:
+        8x8 reconstructed block
+    """
+    return idct(idct(block.T, type=2, norm='ortho').T, type=2, norm='ortho')
 
 
 def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, strength=2.0) -> Image.Image:
