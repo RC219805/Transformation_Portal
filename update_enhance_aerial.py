@@ -68,16 +68,18 @@ class MaterialRule:
 # Palette Loading / Saving
 # ------------------------------
 
-
-def load_palette_assignments(path: Path | str,
-                             rules: Sequence[MaterialRule] | Mapping[str,
-                                                                     MaterialRule] | None = None) -> dict[int,
-                                                                                                          MaterialRule]:
+def load_palette_assignments(
+    path: Path | str,
+    rules: Sequence[MaterialRule] | Mapping[str, MaterialRule] | None = None
+) -> dict[int, MaterialRule]:
     p = Path(path)
     if not p.exists():
         return {}
-    data = json.loads(p.read_text())
-    lookup = {r.name: r for r in rules} if isinstance(rules, Sequence) else dict(rules or {})
+    data = json.loads(p.read_text(encoding="utf-8"))
+    lookup = (
+        {r.name: r for r in rules} if isinstance(rules, Sequence)
+        else dict(rules or {})
+    )
     assignments = {}
     for k, v in data.items():
         label = int(k)
@@ -85,12 +87,13 @@ def load_palette_assignments(path: Path | str,
             assignments[label] = lookup[v]
     return assignments
 
-
-def save_palette_assignments(assignments: Mapping[int, MaterialRule], path: Path | str) -> None:
+def save_palette_assignments(
+    assignments: Mapping[int, MaterialRule], path: Path | str
+) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     serializable = {str(k): v.name for k, v in assignments.items()}
-    p.write_text(json.dumps(serializable, indent=2, sort_keys=True))
+    p.write_text(json.dumps(serializable, indent=2, sort_keys=True), encoding="utf-8")
 
 # ------------------------------
 # Utilities
@@ -142,12 +145,17 @@ def _initial_centroids(data: np.ndarray, k: int, rng: np.random.Generator) -> np
     return data[rng.choice(len(data), size=k, replace=False)]
 
 
-def _kmeans(data: np.ndarray, k: int, rng: np.random.Generator, iterations: int = 20) -> np.ndarray:
+def _kmeans(
+    data: np.ndarray, k: int, rng: np.random.Generator, iterations: int = 20
+) -> np.ndarray:
     centroids = _initial_centroids(data, k, rng)
     for _ in range(iterations):
-        distances = np.sum((data[:, None] - centroids[None, :])**2, axis=2)
+        distances = np.sum((data[:, None] - centroids[None, :]) ** 2, axis=2)
         labels = np.argmin(distances, axis=1)
-        new_centroids = np.array([data[labels == i].mean(axis=0) if np.any(labels == i) else centroids[i] for i in range(k)])
+        new_centroids = np.array([
+            data[labels == i].mean(axis=0) if np.any(labels == i) else centroids[i]
+            for i in range(k)
+        ])
         if np.allclose(new_centroids, centroids):
             break
         centroids = new_centroids
@@ -161,8 +169,8 @@ def _assign_full_image(image: np.ndarray, centroids: np.ndarray) -> np.ndarray:
 
 
 def _cluster_stats(image: np.ndarray, labels: np.ndarray) -> Sequence[ClusterStats]:
-    stats = []
-    hsv = _rgb_to_hsv(image)
+    stats=[]
+    hsv=_rgb_to_hsv(image)
     for label in range(labels.max() + 1):
         mask = labels == label
         count = int(mask.sum())
@@ -196,7 +204,9 @@ def build_material_rules(textures: Mapping[str, Path]) -> Sequence[MaterialRule]
     )
 
 
-def assign_materials(stats: Sequence[ClusterStats], rules: Sequence[MaterialRule]) -> Dict[int, MaterialRule]:
+def assign_materials(
+    stats: Sequence[ClusterStats], rules: Sequence[MaterialRule]
+) -> Dict[int, MaterialRule]:
     assignments: Dict[int, MaterialRule] = {}
     used: set[int] = set()
     for rule in rules:
@@ -231,10 +241,12 @@ def apply_materials_tiled(
     eviction_callback: Optional[Callable[[str, dict], None]] = None
 ) -> np.ndarray:
 
-    H, W, C = base.shape
+    height, width, _channels = base.shape
     out_linear = _srgb_to_linear(base.copy())
 
-    TextureCache: "collections.OrderedDict[str,Optional[Image.Image]]" = collections.OrderedDict()
+    texture_cache: "collections.OrderedDict[str, Optional[Image.Image]]" = (
+        collections.OrderedDict()
+    )
     cache_lock = threading.Lock()
     cache_stats: dict[str, dict] = {}
 
@@ -244,45 +256,50 @@ def apply_materials_tiled(
 
     def _evict_one_if_needed():
         with cache_lock:
-            while len(TextureCache) > max(1, int(texture_cache_limit)):
-                old_path, _ = TextureCache.popitem(last=False)
+            while len(texture_cache) > max(1, int(texture_cache_limit)):
+                old_path, _ = texture_cache.popitem(last=False)
                 _ensure_stats(old_path)
                 cache_stats[old_path]["evictions"] += 1
                 if eviction_callback:
                     try:
                         eviction_callback(old_path, dict(cache_stats.get(old_path, {})))
-                    except Exception:
+                    except (IOError, OSError):
                         if verbose:
-                            print(f"[cache] eviction callback failed for {old_path}", file=sys.stderr)
+                            print(
+                                f"[cache] eviction callback failed for {old_path}",
+                                file=sys.stderr
+                            )
                 if verbose:
                     print(f"[cache] evicted {old_path}", file=sys.stderr)
 
     def _cache_get_image(path: str) -> Optional[Image.Image]:
         with cache_lock:
-            if path in TextureCache:
-                TextureCache.move_to_end(path)
+            if path in texture_cache:
+                texture_cache.move_to_end(path)
                 _ensure_stats(path)
                 cache_stats[path]["hits"] += 1
-                return TextureCache[path]
+                return texture_cache[path]
             _ensure_stats(path)
             cache_stats[path]["misses"] += 1
         try:
             pil = Image.open(path).convert("RGB")
-        except Exception:
+        except (IOError, OSError):
             with cache_lock:
-                TextureCache[path] = None
+                texture_cache[path] = None
                 _ensure_stats(path)
                 cache_stats[path]["opens"] += 1
                 _evict_one_if_needed()
             return None
         with cache_lock:
-            TextureCache[path] = pil
+            texture_cache[path] = pil
             _ensure_stats(path)
             cache_stats[path]["opens"] += 1
             _evict_one_if_needed()
         return pil
 
-    def _make_texture_patch(pil_img: Image.Image, tile_w: int, tile_h: int, gamma: float = 1.0) -> np.ndarray:
+    def _make_texture_patch(
+        pil_img: Image.Image, tile_w: int, tile_h: int, gamma: float = 1.0
+    ) -> np.ndarray:
         tw, th = pil_img.size
         src_pixels = tw * th
         if src_pixels * 3 <= stream_large_texture_threshold or src_pixels <= tile_w * tile_h:
@@ -293,50 +310,54 @@ def apply_materials_tiled(
             reps_x = (tile_w + tw - 1) // tw
             tiled = np.tile(tex_arr, (reps_y, reps_x, 1))
             return tiled[:tile_h, :tile_w, :]
-        else:
-            patch = np.empty((tile_h, tile_w, 3), dtype=np.float32)
-            reps_y = (tile_h + th - 1) // th
-            reps_x = (tile_w + tw - 1) // tw
-            y = 0
-            for ry in range(reps_y):
-                ph = min(th, tile_h - y)
-                x = 0
-                for rx in range(reps_x):
-                    pw = min(tw, tile_w - x)
-                    crop = pil_img.crop((0, 0, pw, ph))
-                    arr = np.asarray(crop, dtype=np.float32) / 255.0
-                    if gamma != 1.0:
-                        arr = np.clip(arr**gamma, 0.0, 1.0)
-                    patch[y:y + ph, x:x + pw, :] = arr[:ph, :pw, :]
-                    x += pw
-                y += ph
-            return patch
+
+        patch = np.empty((tile_h, tile_w, 3), dtype=np.float32)
+        reps_y = (tile_h + th - 1) // th
+        reps_x = (tile_w + tw - 1) // tw
+        y = 0
+        for _ in range(reps_y):
+            ph = min(th, tile_h - y)
+            x = 0
+            for _ in range(reps_x):
+                pw = min(tw, tile_w - x)
+                crop = pil_img.crop((0, 0, pw, ph))
+                arr = np.asarray(crop, dtype=np.float32) / 255.0
+                if gamma != 1.0:
+                    arr = np.clip(arr**gamma, 0.0, 1.0)
+                patch[y:y+ph, x:x+pw, :] = arr[:ph, :pw, :]
+                x += pw
+            y += ph
+        return patch
 
     def _soft_mask(mask: np.ndarray, radius: float = 1.5) -> np.ndarray:
         img = Image.fromarray((mask * 255).astype("uint8")).convert("L")
         img = img.filter(ImageFilter.GaussianBlur(radius))
         return np.asarray(img, dtype=np.float32) / 255.0
 
-    def _blend_linear(base_L: np.ndarray, tex_L: np.ndarray, mode: str = "normal") -> np.ndarray:
+    def _blend_linear(
+        base_l: np.ndarray, tex_l: np.ndarray, mode: str = "normal"
+    ) -> np.ndarray:
         if mode == "normal":
-            return tex_L
-        elif mode == "multiply":
-            return base_L * tex_L
-        elif mode == "screen":
-            return 1.0 - (1.0 - base_L) * (1.0 - tex_L)
-        elif mode == "overlay":
-            mask = base_L <= 0.5
-            result = np.empty_like(base_L)
-            result[mask] = 2 * base_L[mask] * tex_L[mask]
-            result[~mask] = 1 - 2 * (1 - base_L[~mask]) * (1 - tex_L[~mask])
+            return tex_l
+        if mode == "multiply":
+            return base_l * tex_l
+        if mode == "screen":
+            return 1.0 - (1.0 - base_l) * (1.0 - tex_l)
+        if mode == "overlay":
+            mask = base_l <= 0.5
+            result = np.empty_like(base_l)
+            result[mask] = 2 * base_l[mask] * tex_l[mask]
+            result[~mask] = 1 - 2 * (1 - base_l[~mask]) * (1 - tex_l[~mask])
             return result
-        return tex_L
+        return tex_l
 
-    tiles_x = ceil(W / tile_size)
-    tiles_y = ceil(H / tile_size)
-    jobs = [(ty * tile_size, min(H, (ty + 1) * tile_size),
-             tx * tile_size, min(W, (tx + 1) * tile_size))
-            for ty in range(tiles_y) for tx in range(tiles_x)]
+    tiles_x = math.ceil(width / tile_size)
+    tiles_y = math.ceil(height / tile_size)
+    jobs = [
+        (ty * tile_size, min(height, (ty + 1) * tile_size),
+         tx * tile_size, min(width, (tx + 1) * tile_size))
+        for ty in range(tiles_y) for tx in range(tiles_x)
+    ]
     results = []
 
     try:
@@ -366,8 +387,8 @@ def apply_materials_tiled(
                 tint_rgb = np.asarray(rule.tint, dtype=np.float32)
                 if tint_rgb.max() > 1.5:
                     tint_rgb /= 255.0
-                tint_L = _srgb_to_linear(tint_rgb[None, :])
-                base_masked = (1.0 - tstrength) * base_masked + tstrength * tint_L
+                tint_l = _srgb_to_linear(tint_rgb[None, :])
+                base_masked = (1.0 - tstrength) * base_masked + tstrength * tint_l
 
             blend_val = getattr(rule, "blend", 0.0) or 0.0
             tex_path = getattr(rule, "texture", None)
@@ -376,10 +397,17 @@ def apply_materials_tiled(
                 if pil_img is None:
                     tile_base[mask] = base_masked
                     continue
-                tex_patch = _make_texture_patch(pil_img, x1 - x0, y1 - y0, gamma=getattr(rule, "texture_gamma", 1.0))
-                tex_patch_L = _srgb_to_linear(tex_patch)
-                tex_masked = tex_patch_L[mask]
-                blended = _blend_linear(base_masked, tex_masked, getattr(rule, "blend_mode", "normal"))
+                tex_patch = _make_texture_patch(
+                    pil_img,
+                    x1 - x0,
+                    y1 - y0,
+                    gamma=getattr(rule, "texture_gamma", 1.0)
+                )
+                tex_patch_l = _srgb_to_linear(tex_patch)
+                tex_masked = tex_patch_l[mask]
+                blended = _blend_linear(
+                    base_masked, tex_masked, getattr(rule, "blend_mode", "normal")
+                )
                 tile_base[mask] = (1.0 - blend_val) * base_masked + blend_val * blended
             else:
                 tile_base[mask] = base_masked
@@ -423,8 +451,8 @@ def main():
 
     img = Image.open(args.input).convert("RGB")
     arr = np.asarray(img, dtype=np.float32) / 255.0
-    H, W, _ = arr.shape
-    print(f"[info] image size: {W}x{H}")
+    height, width, _ = arr.shape
+    print(f"[info] image size: {width}x{height}")
 
     rng = np.random.default_rng(42)
     pixels = arr.reshape(-1, 3)
