@@ -2,8 +2,11 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence, Mapping, Callable
+from typing import Sequence, Mapping, Callable, Dict, MutableMapping
 import numpy as np
+import argparse
+import math
+from PIL import Image, ImageFilter
 try:
     from .palette_assignments import (  # type: ignore
         load_palette_assignments,
