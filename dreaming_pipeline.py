@@ -199,10 +199,12 @@ class QuantumOptimizer:
             return True
         return self._iteration >= self.max_iterations
 
-    async def evolve_pipeline(
-        self,
-        performance_metrics: Callable[[ArchitecturalHypothesis], float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]],
-    ) -> None:
+    async def evolve_pipeline(self,
+                              performance_metrics: Callable[[ArchitecturalHypothesis],
+                                                            float | Awaitable[float] | Dict[str,
+                                                                                            float] | Awaitable[Dict[str,
+                                                                                                                    float]]],
+                              ) -> None:
         """Continuously optimise the pipeline until convergence."""
 
         while not self.convergence_achieved():
@@ -242,7 +244,8 @@ class QuantumOptimizer:
     async def test_parallel_realities(
         self,
         hypotheses: Sequence[ArchitecturalHypothesis],
-        performance_metrics: Callable[[ArchitecturalHypothesis], float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]],
+        performance_metrics: Callable[[ArchitecturalHypothesis],
+                                      float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]],
     ) -> List[EvaluationResult]:
         """Evaluate hypotheses concurrently."""
 
@@ -293,5 +296,3 @@ class QuantumOptimizer:
 
         dream = self._best_result.hypothesis.originating_dream
         self.pipeline.boundary_knowledge.expand(dream.failure_modes)
-
-

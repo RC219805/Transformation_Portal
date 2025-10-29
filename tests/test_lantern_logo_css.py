@@ -1,14 +1,13 @@
 """Tests guarding Lantern logo CSS architectural decisions."""
 
 from __future__ import annotations
+from .documentation import documents, valid_until
 
 from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parent.parent
 CSS_PATH = ROOT / "09_Client_Deliverables" / "Lantern_Logo_Implementation_Kit" / "lantern_logo.css"
-
-from .documentation import documents, valid_until
 
 
 def _extract_hover_block(css: str) -> str:

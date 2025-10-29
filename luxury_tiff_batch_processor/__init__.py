@@ -36,10 +36,7 @@ from .io_utils import (
 )
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 from .pipeline import (
-    _PROGRESS_WRAPPER,
-    _wrap_with_progress,
     collect_images,
-    ensure_output_path,
     process_image,
     process_single_image,
 )

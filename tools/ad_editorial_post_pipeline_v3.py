@@ -66,9 +66,7 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 import sys
-import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,9 +76,6 @@ import numpy as np
 import rawpy
 import yaml
 from PIL import Image, ImageOps
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
-from reportlab.pdfgen import canvas
 from tqdm import tqdm
 
 # tifffile for better 16-bit TIFF handling

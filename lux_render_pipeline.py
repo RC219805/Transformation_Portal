@@ -255,7 +255,6 @@ def add_vignette(rgb: np.ndarray, strength: float = 0.2) -> np.ndarray:
     return np.clip(rgb * mask[..., None], 0.0, 1.0)
 
 
-
 def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.ndarray:
     """Blend Gaussian noise into ``rgb`` for a subtle film grain look."""
 
@@ -264,38 +263,40 @@ def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.n
     return np.clip(rgb + noise, 0.0, 1.0)
 
 
-def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements,unused-argument
-    rgb: np.ndarray,
-    texture_boost: float = 0.25,
-    ambient_occlusion: float = 0.12,
-    highlight_warmth: float = 0.08,
-    haze_strength: float = 0.06,
-    haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96),
-    floor_plank_contrast: float = 0.12,
-    floor_specular: float = 0.18,
-    floor_contact_shadow: float = 0.05,
-    floor_texture_path: Optional[str] = None,
-    floor_texture_strength: float = 0.0,
-    floor_texture_scale: float = 1.0,
-    textile_contrast: float = 0.18,
-    leather_sheen: float = 0.16,
-    fireplace_glow: float = 0.18,
-    fireplace_glow_radius: float = 45.0,
-    window_reflection: float = 0.12,
-    bedding_relief: float = 0.16,
-    wall_texture_path: Optional[str] = None,
-    wall_texture_strength: float = 0.0,
-    wall_texture_scale: float = 1.0,
-    wall_texture: float = 0.1,
-    painting_integration: float = 0.1,
-    window_light_wrap: float = 0.14,
-    pool_texture_path: Optional[str] = None,
-    pool_texture_strength: float = 0.0,
-    pool_texture_scale: float = 1.0,
-    exterior_atmosphere: float = 0.12,
-    sky_environment_path: Optional[str] = None,
-    sky_environment_strength: float = 0.0,
-    sky_environment_scale: float = 1.0,
+def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+                                      # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+                                      # pylint: disable=unused-argument
+        rgb: np.ndarray,
+        texture_boost: float = 0.25,
+        ambient_occlusion: float = 0.12,
+        highlight_warmth: float = 0.08,
+        haze_strength: float = 0.06,
+        haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96),
+        floor_plank_contrast: float = 0.12,
+        floor_specular: float = 0.18,
+        floor_contact_shadow: float = 0.05,
+        floor_texture_path: Optional[str] = None,
+        floor_texture_strength: float = 0.0,
+        floor_texture_scale: float = 1.0,
+        textile_contrast: float = 0.18,
+        leather_sheen: float = 0.16,
+        fireplace_glow: float = 0.18,
+        fireplace_glow_radius: float = 45.0,
+        window_reflection: float = 0.12,
+        bedding_relief: float = 0.16,
+        wall_texture_path: Optional[str] = None,
+        wall_texture_strength: float = 0.0,
+        wall_texture_scale: float = 1.0,
+        wall_texture: float = 0.1,
+        painting_integration: float = 0.1,
+        window_light_wrap: float = 0.14,
+        pool_texture_path: Optional[str] = None,
+        pool_texture_strength: float = 0.0,
+        pool_texture_scale: float = 1.0,
+        exterior_atmosphere: float = 0.12,
+        sky_environment_path: Optional[str] = None,
+        sky_environment_strength: float = 0.0,
+        sky_environment_scale: float = 1.0,
 ) -> np.ndarray:
     """Empirical material response layer.
 
@@ -560,6 +561,7 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
 
     return rgb
 
+
 def adjust_contrast_saturation(
     rgb: np.ndarray,
     contrast: float = 1.08,
@@ -578,6 +580,8 @@ def adjust_contrast_saturation(
 # --------------------------
 # Branding (logo + caption)
 # --------------------------
+
+
 def overlay_logo_caption(  # pylint: disable=too-many-locals
     img: Image.Image,
     logo_path: Optional[str],
@@ -952,6 +956,7 @@ class LuxuryRenderPipeline:
         out = overlay_logo_caption(out, brand_logo, brand_text)
 
         return out
+
 
 # --------------------------
 # CLI

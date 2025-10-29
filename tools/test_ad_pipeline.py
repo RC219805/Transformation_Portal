@@ -11,10 +11,8 @@ Install dependencies:
     pip install pytest pytest-cov
 """
 
-import json
 import tempfile
 from pathlib import Path
-from typing import Dict
 
 import numpy as np
 import pytest

@@ -22,11 +22,11 @@ MATERIAL_COLORS = {
 
 def create_texture(base_color: tuple[int, int, int], size: int = 512) -> Image.Image:
     """Create a subtle procedural texture with color variation.
-    
+
     Args:
         base_color: Base RGB color (0-255).
         size: Texture dimension in pixels.
-    
+
     Returns:
         PIL Image with subtle noise and variation.
     """
@@ -35,18 +35,18 @@ def create_texture(base_color: tuple[int, int, int], size: int = 512) -> Image.I
     img[..., 0] = base_color[0]
     img[..., 1] = base_color[1]
     img[..., 2] = base_color[2]
-    
+
     # Add subtle noise for texture variation
     rng = np.random.default_rng(42)
     noise = rng.normal(0, 8, (size, size, 3))
     img = img + noise
-    
+
     # Add subtle gradient for depth
     y_gradient = np.linspace(-5, 5, size)
     x_gradient = np.linspace(-5, 5, size)
     gradient = y_gradient[:, None] + x_gradient[None, :]
     img = img + gradient[..., None]
-    
+
     # Clip and convert to uint8
     img = np.clip(img, 0, 255).astype(np.uint8)
     return Image.fromarray(img, mode="RGB")
@@ -56,13 +56,13 @@ def main():
     """Generate all MBAR material textures."""
     output_dir = Path(__file__).parent / "textures" / "board_materials"
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     for name, color in MATERIAL_COLORS.items():
         output_path = output_dir / f"{name}.png"
         texture = create_texture(color, size=512)
         texture.save(output_path)
         print(f"Created: {output_path}")
-    
+
     print(f"\nAll {len(MATERIAL_COLORS)} textures created in {output_dir}")
 
 
