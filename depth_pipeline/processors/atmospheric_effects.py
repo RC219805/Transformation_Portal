@@ -208,7 +208,7 @@ class AtmosphericEffects(DepthProcessorMixin):
             'desaturation_strength': self.desaturation_strength,
             'enable_color_shift': self.enable_color_shift,
         }
-    
+
     def _apply_config_override(self, key: str, value):
         """Apply configuration override with special handling for haze_color."""
         if key == 'haze_color':
