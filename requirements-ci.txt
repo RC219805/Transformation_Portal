@@ -1,6 +1,6 @@
 # Lean deps for unit tests & linting (no GPU / diffusion stacks)
 numpy>=1.24,<3
-Pillow>=10,<12
+Pillow>=10,<13
 scipy<2,>=1.15
 tifffile>=2023.7.18,<2025
 imagecodecs>=2023.9.18,<2025

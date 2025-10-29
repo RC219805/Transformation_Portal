@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 authors = [{ name = "RC219805" }]
 dependencies = [
     "numpy>=1.24,<3",
-    "Pillow>=10.0.0,<12",
+    "Pillow>=10.0.0,<13",
     "scipy>=1.10,<2",
     "typer>=0.12,<1",
     "torch>=2.0,<3",
