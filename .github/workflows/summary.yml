@@ -24,18 +24,29 @@ jobs:
         id: generate-summary
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
         run: |
           echo "Generating AI summary..."
+          # Escape for JSON using jq to prevent injection
+          TITLE_JSON=$(printf '%s' "$ISSUE_TITLE" | jq -Rs .)
+          BODY_JSON=$(printf '%s' "$BODY" | jq -Rs .)
+          USER_CONTENT=$(jq -nc --arg title "$ISSUE_TITLE" --arg body "$BODY" ' "Title: \($title)\n\nBody: \($body)" ')
+          JSON_PAYLOAD=$(jq -nc \
+            --arg model "gpt-4o-mini" \
+            --arg system "You are an assistant that summarizes GitHub issues concisely." \
+            --arg user_content "$(jq -r <<<"$USER_CONTENT")" \
+            '{
+              model: $model,
+              messages: [
+                {role: "system", content: $system},
+                {role: "user", content: $user_content}
+              ]
+            }')
           SUMMARY=$(curl -s https://api.openai.com/v1/chat/completions \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -d "{
-              \"model\": \"gpt-4o-mini\",
-              \"messages\": [
-                {\"role\": \"system\", \"content\": \"You are an assistant that summarizes GitHub issues concisely.\"},
-                {\"role\": \"user\", \"content\": \"Title: ${{ github.event.issue.title }}\n\nBody: ${{ github.event.issue.body }}\"}
-              ]
-            }" | jq -r '.choices[0].message.content')
+            -d "$JSON_PAYLOAD" | jq -r '.choices[0].message.content')
 
           if [ -z "$SUMMARY" ]; then
             SUMMARY="⚠️ Failed to generate summary."
