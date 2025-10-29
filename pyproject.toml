@@ -36,6 +36,7 @@ ml = [
     "huggingface-hub>=0.19.0",
     "torchvision>=0.15.0",
     "opencv-python>=4.8.0",
+    "scikit-learn>=1.0",
     "scikit-image>=0.21.0",
     "PyYAML>=6.0",
     "colour-science>=0.4.2",
