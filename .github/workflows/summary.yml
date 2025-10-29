@@ -24,18 +24,28 @@ jobs:
         id: generate-summary
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
         run: |
           echo "Generating AI summary..."
+          # Escape for JSON using jq to prevent injection
+          # Compose JSON payload directly, passing title and body as args
+          JSON_PAYLOAD=$(jq -nc \
+            --arg model "gpt-4o-mini" \
+            --arg system "You are an assistant that summarizes GitHub issues concisely." \
+            --arg title "$ISSUE_TITLE" \
+            --arg body "$BODY" \
+            '{
+              model: $model,
+              messages: [
+                {role: "system", content: $system},
+                {role: "user", content: ("Title: \($title)\n\nBody: \($body)")}
+              ]
+            }')
           SUMMARY=$(curl -s https://api.openai.com/v1/chat/completions \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -d "{
-              \"model\": \"gpt-4o-mini\",
-              \"messages\": [
-                {\"role\": \"system\", \"content\": \"You are an assistant that summarizes GitHub issues concisely.\"},
-                {\"role\": \"user\", \"content\": \"Title: ${{ github.event.issue.title }}\n\nBody: ${{ github.event.issue.body }}\"}
-              ]
-            }" | jq -r '.choices[0].message.content')
+            -d "$JSON_PAYLOAD" | jq -r '.choices[0].message.content')
 
           if [ -z "$SUMMARY" ]; then
             SUMMARY="⚠️ Failed to generate summary."
