@@ -9,11 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print issue info
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          BODY: ${{ github.event.issue.body }}
         run: |
-          echo "Issue #${{ github.event.issue.number }}"
-          echo "Title: ${{ github.event.issue.title }}"
-          echo "Author: ${{ github.event.issue.user.login }}"
-          echo "Body: ${{ github.event.issue.body }}"
+          echo "Issue #$ISSUE_NUMBER"
+          echo "Title: $ISSUE_TITLE"
+          echo "Author: $ISSUE_AUTHOR"
+          echo "Body: $BODY"
 
       - name: Generate summary with OpenAI
         id: generate-summary
