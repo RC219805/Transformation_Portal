@@ -85,10 +85,13 @@ All large image files moved here and excluded from git:
 - `processed/` - Processed outputs
 
 #### LUTs (`data/luts/`)
-Symlinks to existing LUT directories for easier access:
-- `film_emulation` → `01_Film_Emulation/`
-- `location` → `02_Location_Aesthetic/`
-- `material_response` → `03_Material_Response/`
+Copies of existing LUT directories for easier access and tool compatibility:
+- `film_emulation` - Copy of `01_Film_Emulation/`
+- `location` - Copy of `02_Location_Aesthetic/`
+- `material_response` - Copy of `03_Material_Response/`
+
+Note: These were previously symlinks but have been converted to actual directories
+to ensure compatibility with CI/CD tools that don't properly handle symlinks.
 
 ### Documentation (`docs/`)
 - `depth_pipeline/` - Depth processing documentation
