@@ -9,6 +9,7 @@ Provides common operations for depth processing including:
 - Statistics
 """
 
+import matplotlib.pyplot as plt
 import logging
 from typing import List, Optional, Tuple
 
@@ -17,7 +18,6 @@ import numpy as np
 from scipy.ndimage import gaussian_filter, sobel
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
-import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 

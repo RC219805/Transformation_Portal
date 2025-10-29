@@ -1,1 +1,96 @@
-"""Tests for the CognitiveMaterialResponse orchestration layer.\n\nfrom material_response import (\n    CognitiveMaterialResponse,\n    EmotionalResonance,\n    GlobalLuxurySemantics,\n    LightingProfile,\n    MaterialAestheticProfile,\n    NeuroAestheticEngine,\n    ViewerProfile,\n)\n\ndef test_perception_model_generates_clamped_scores() -> None:    \n    engine = NeuroAestheticEngine()\n\n    resonance = engine.predict_limbic_response(\n        texture="Velvet chaise with polished brass inlay",\n        warmth=0.72,\n        cultural_background="Mediterranean",\n    )\n\n    assert isinstance(resonance, EmotionalResonance)\n    assert 0.0 <= resonance.awe <= 1.0\n    assert 0.0 <= resonance.comfort <= 1.0\n    assert 0.0 <= resonance.focus <= 1.0\n    assert resonance.cultural_background == "mediterranean"\n\ndef test_global_luxury_semantics_reacts_to_culture() -> None:    \n    material = MaterialAestheticProfile(\n        name="Polished Travertine",\n        texture="polished stone",\n        rarity=0.8,\n        craftsmanship=0.7,\n        innovation=0.35,\n    )\n    resonance = EmotionalResonance(\n        awe=0.55,\n        comfort=0.48,\n        focus=0.52,\n        cultural_background="Scandinavian",\n    )\n\n    semantics = GlobalLuxurySemantics()\n    contextualized = semantics.recontextualize(material, resonance)\n\n    assert contextualized.scores["focus"] >= contextualized.scores["comfort"]\n    assert "scandinavian" in contextualized.narrative\n\ndef test_global_luxury_semantics_alias_normalization() -> None:    \n    material = MaterialAestheticProfile(\n        name="Lacquered Shoji",\n        texture="lacquer and rice paper",\n        rarity=0.65,\n        craftsmanship=0.85,\n        innovation=0.42,\n    )\n    resonance = EmotionalResonance(\n        awe=0.62,\n        comfort=0.51,\n        focus=0.58,\n        cultural_background="Nordic",\n    )\n\n    semantics = GlobalLuxurySemantics()\n    contextualized = semantics.recontextualize(material, resonance)\n\n    assert "scandinavian" in contextualized.narrative\n    assert contextualized.scores["focus"] >= contextualized.scores["comfort"]\n\ndef test_cognitive_material_response_pipeline() -> None:    \n    material = MaterialAestheticProfile(\n        name="Midnight Velvet Chaise",\n        texture="handcrafted velvet",\n        rarity=0.72,\n        craftsmanship=0.9,\n        innovation=0.58,\n    )\n    lighting = LightingProfile(warmth=0.63, intensity=0.55, diffusion=0.68)\n    viewer = ViewerProfile(\n        cultural_background="Mediterranean",\n        novelty_preference=0.6,\n        heritage_affinity=0.55,\n    )\n\n    cognitive_response = CognitiveMaterialResponse()\n    result = cognitive_response.process(material, lighting, viewer)\n\n    assert 0.0 <= result["luxury_index"] <= 1.0\n    assert result["future_alignment"] >= 0.5\n    assert result["emotional_resonance"]["comfort"] >= result["emotional_resonance"]["focus"]\n    assert result["recommendations"]\n"""
+"""Tests for the CognitiveMaterialResponse orchestration layer."""
+
+from material_response import (
+    CognitiveMaterialResponse,
+    EmotionalResonance,
+    GlobalLuxurySemantics,
+    LightingProfile,
+    MaterialAestheticProfile,
+    NeuroAestheticEngine,
+    ViewerProfile,
+)
+
+
+def test_perception_model_generates_clamped_scores() -> None:
+    engine = NeuroAestheticEngine()
+
+    resonance = engine.predict_limbic_response(
+        texture="Velvet chaise with polished brass inlay",
+        warmth=0.72,
+        cultural_background="Mediterranean",
+    )
+
+    assert isinstance(resonance, EmotionalResonance)
+    assert 0.0 <= resonance.awe <= 1.0
+    assert 0.0 <= resonance.comfort <= 1.0
+    assert 0.0 <= resonance.focus <= 1.0
+    assert resonance.cultural_background == "mediterranean"
+
+
+def test_global_luxury_semantics_reacts_to_culture() -> None:
+    material = MaterialAestheticProfile(
+        name="Polished Travertine",
+        texture="polished stone",
+        rarity=0.8,
+        craftsmanship=0.7,
+        innovation=0.35,
+    )
+    resonance = EmotionalResonance(
+        awe=0.55,
+        comfort=0.48,
+        focus=0.52,
+        cultural_background="Scandinavian",
+    )
+
+    semantics = GlobalLuxurySemantics()
+    contextualized = semantics.recontextualize(material, resonance)
+
+    assert contextualized.scores["focus"] >= contextualized.scores["comfort"]
+    assert "scandinavian" in contextualized.narrative
+
+
+def test_global_luxury_semantics_alias_normalization() -> None:
+    material = MaterialAestheticProfile(
+        name="Lacquered Shoji",
+        texture="lacquer and rice paper",
+        rarity=0.65,
+        craftsmanship=0.85,
+        innovation=0.42,
+    )
+    resonance = EmotionalResonance(
+        awe=0.62,
+        comfort=0.51,
+        focus=0.58,
+        cultural_background="Nordic",
+    )
+
+    semantics = GlobalLuxurySemantics()
+    contextualized = semantics.recontextualize(material, resonance)
+
+    assert "scandinavian" in contextualized.narrative
+    assert contextualized.scores["focus"] >= contextualized.scores["comfort"]
+
+
+def test_cognitive_material_response_pipeline() -> None:
+    material = MaterialAestheticProfile(
+        name="Midnight Velvet Chaise",
+        texture="handcrafted velvet",
+        rarity=0.72,
+        craftsmanship=0.9,
+        innovation=0.58,
+    )
+    lighting = LightingProfile(warmth=0.63, intensity=0.55, diffusion=0.68)
+    viewer = ViewerProfile(
+        cultural_background="Mediterranean",
+        novelty_preference=0.6,
+        heritage_affinity=0.55,
+    )
+
+    cognitive_response = CognitiveMaterialResponse()
+    result = cognitive_response.process(material, lighting, viewer)
+
+    assert 0.0 <= result["luxury_index"] <= 1.0
+    assert result["future_alignment"] >= 0.5
+    assert (result["emotional_resonance"]["comfort"] >=
+            result["emotional_resonance"]["focus"])
+    assert result["recommendations"]

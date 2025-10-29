@@ -7,7 +7,7 @@ Expected performance: 24ms @ 518x518, 65ms @ 1024x1024
 
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 from PIL import Image

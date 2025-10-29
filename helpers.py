@@ -10,6 +10,7 @@ from typing import Any, Callable, Sequence, Type, Union
 # documents decorator
 # -------------------------
 
+
 def documents(note: str) -> Callable[[Callable], Callable]:
     """Attach a docstring note to a function, preserving existing doc."""
     def decorator(func: Callable) -> Callable:
@@ -24,7 +25,9 @@ def documents(note: str) -> Callable[[Callable], Callable]:
 # demonstrates decorator
 # -------------------------
 
+
 ConceptType = Union[str, int, Type]
+
 
 def demonstrates(concepts: Union[ConceptType, Sequence[ConceptType]]) -> Callable[[Callable], Callable]:
     """Annotate a function as demonstrating one or more concepts."""
@@ -53,6 +56,7 @@ def demonstrates(concepts: Union[ConceptType, Sequence[ConceptType]]) -> Callabl
 # -------------------------
 # valid_until decorator
 # -------------------------
+
 
 def valid_until(expiration: str, reason: str = "expired") -> Callable[[Callable], Callable]:
     """Ensure the decorated function can only be executed until a given ISO date."""

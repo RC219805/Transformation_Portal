@@ -7,6 +7,7 @@ from prophetic_orchestrator import (
     WeakPoint,
 )
 
+
 def test_causality_engine_normalizes_inputs() -> None:
     engine = CausalityEngine()
     predicted_failure = {
@@ -22,6 +23,7 @@ def test_causality_engine_normalizes_inputs() -> None:
     assert [wp.component for wp in result] == ["database", "api", "cache"]
     assert [wp.failure_mode for wp in result] == ["replication lag", "timeout", "eviction storm"]
     assert [wp.severity for wp in result] == ["high", None, "low"]
+
 
 def test_prophetic_orchestrator_deploys_temporal_antibodies() -> None:
     orchestrator = PropheticOrchestrator()
