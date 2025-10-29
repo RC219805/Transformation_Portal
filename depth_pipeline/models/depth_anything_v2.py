@@ -82,6 +82,7 @@ class DepthAnythingV2Model:
         backend: Optional[ModelBackend] = None,
         model_path: Optional[Union[str, Path]] = None,
         device: Optional[str] = None,
+        *,
         precision: str = "fp16",
     ):
         """
@@ -114,8 +115,10 @@ class DepthAnythingV2Model:
         self._load_model()
 
         logger.info(
-            f"Initialized Depth Anything V2 "
-            f"(variant={variant.name}, backend={backend.name}, device={device})"
+            "Initialized Depth Anything V2 (variant=%s, backend=%s, device=%s)",
+            variant.name,
+            backend.name,
+            device,
         )
 
     def _auto_detect_backend(self) -> ModelBackend:
@@ -135,12 +138,11 @@ class DepthAnythingV2Model:
         """Auto-detect optimal device for PyTorch."""
         if self.backend == ModelBackend.COREML:
             return "coreml"
-        elif self.backend == ModelBackend.PYTORCH_MPS:
+        if self.backend == ModelBackend.PYTORCH_MPS:
             return "mps"
-        elif torch.cuda.is_available():
+        if torch.cuda.is_available():
             return "cuda"
-        else:
-            return "cpu"
+        return "cpu"
 
     def _load_model(self):
         """Load model based on backend."""
@@ -166,20 +168,22 @@ class DepthAnythingV2Model:
                 model=self.variant.value,
                 device=self.device if self.device != "mps" else 0,  # MPS uses device 0
             )
-            logger.info(f"Loaded PyTorch model: {self.variant.value}")
+            logger.info("Loaded PyTorch model: %s", self.variant.value)
 
-        except Exception as e:
-            logger.error(f"Failed to load PyTorch model: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to load PyTorch model: %s", e)
             # Fallback: manual loading
             self.processor = AutoImageProcessor.from_pretrained(self.variant.value)
-            self.model = AutoModelForDepthEstimation.from_pretrained(self.variant.value)
+            self.model = AutoModelForDepthEstimation.from_pretrained(
+                self.variant.value
+            )
 
             if self.device == "mps":
                 self.model = self.model.to("mps")
             elif self.device == "cuda":
                 self.model = self.model.to("cuda")
 
-            logger.info(f"Loaded PyTorch model manually: {self.variant.value}")
+            logger.info("Loaded PyTorch model manually: %s", self.variant.value)
 
     def _load_coreml_model(self):
         """Load CoreML model for Apple Neural Engine."""
@@ -198,9 +202,9 @@ class DepthAnythingV2Model:
 
         try:
             self.model = ct.models.MLModel(str(model_path))
-            logger.info(f"Loaded CoreML model: {model_path}")
-        except Exception as e:
-            logger.error(f"Failed to load CoreML model: {e}")
+            logger.info("Loaded CoreML model: %s", model_path)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to load CoreML model: %s", e)
             logger.info("Falling back to PyTorch MPS backend")
             self.backend = ModelBackend.PYTORCH_MPS
             self.device = "mps"
@@ -208,7 +212,9 @@ class DepthAnythingV2Model:
 
     def _download_coreml_model(self) -> Path:
         """Download CoreML model from HuggingFace Hub."""
-        from huggingface_hub import hf_hub_download
+        from huggingface_hub import (  # pylint: disable=import-outside-toplevel
+            hf_hub_download,
+        )
 
         # Map variant to CoreML repo
         coreml_variant = {
@@ -256,7 +262,7 @@ class DepthAnythingV2Model:
             image = Image.open(image).convert("RGB")
         elif isinstance(image, np.ndarray):
             # Convert numpy to PIL
-            if image.dtype == np.float32 or image.dtype == np.float64:
+            if image.dtype in (np.float32, np.float64):
                 image = (image * 255).astype(np.uint8)
             image = Image.fromarray(image)
 
@@ -268,7 +274,10 @@ class DepthAnythingV2Model:
 
         # Resize output if requested
         if output_size is not None:
-            from skimage.transform import resize
+            from skimage.transform import (  # pylint: disable=import-outside-toplevel
+                resize,
+            )
+
             result['depth'] = resize(
                 result['depth'],
                 output_size,
@@ -281,7 +290,7 @@ class DepthAnythingV2Model:
 
     def _estimate_depth_pytorch(self, image: Image.Image) -> dict:
         """Estimate depth using PyTorch backend."""
-        import time
+        import time  # pylint: disable=import-outside-toplevel
 
         start_time = time.time()
 
@@ -331,7 +340,7 @@ class DepthAnythingV2Model:
 
     def _estimate_depth_coreml(self, image: Image.Image) -> dict:
         """Estimate depth using CoreML backend."""
-        import time
+        import time  # pylint: disable=import-outside-toplevel
 
         start_time = time.time()
 
@@ -423,7 +432,7 @@ def safe_depth_estimation(
     except RuntimeError as e:
         if "out of memory" in str(e).lower():
             logger.warning(
-                f"OOM error, falling back to {fallback_size}px resolution"
+                "OOM error, falling back to %spx resolution", fallback_size
             )
 
             # Downscale image
@@ -432,14 +441,23 @@ def safe_depth_estimation(
             else:
                 image_pil = image
 
-            image_pil.thumbnail((fallback_size, fallback_size), Image.Resampling.LANCZOS)
+            image_pil.thumbnail(
+                (fallback_size, fallback_size), Image.Resampling.LANCZOS
+            )
 
             # Retry with smaller size
             result = model.estimate_depth(image_pil)
 
             # Upscale depth map to original size
-            original_size = image.shape[:2] if isinstance(image, np.ndarray) else image.size[::-1]
-            from skimage.transform import resize
+            original_size = (
+                image.shape[:2]
+                if isinstance(image, np.ndarray)
+                else image.size[::-1]
+            )
+            from skimage.transform import (  # pylint: disable=import-outside-toplevel
+                resize,
+            )
+
             result['depth'] = resize(
                 result['depth'],
                 original_size,
@@ -450,5 +468,4 @@ def safe_depth_estimation(
 
             result['metadata']['fallback_resolution'] = fallback_size
             return result
-        else:
-            raise
+        raise

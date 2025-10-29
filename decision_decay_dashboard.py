@@ -436,7 +436,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.tokens is not None:
         tokens_path = args.tokens.resolve()
     else:
-        tokens_path = root / "09_Client_Deliverables" / "Lantern_Logo_Implementation_Kit" / "lantern_tokens.json"
+        tokens_path = (
+            root / "09_Client_Deliverables"
+            / "Lantern_Logo_Implementation_Kit"
+            / "lantern_tokens.json"
+        )
 
     valid_until_records = collect_valid_until_records(tests_root)
     principle_summaries = collect_philosophy_violations([root])

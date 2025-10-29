@@ -48,7 +48,8 @@ stats = _cluster_stats(base_array, labels)
 rules = build_material_rules(DEFAULT_TEXTURES)
 
 # Support optional palette file via command line argument
-# Usage: python visualize_material_assignments.py [--palette path/to/palette.json] [--save-palette path/to/save.json]
+# Usage: python visualize_material_assignments.py
+#   [--palette path/to/palette.json] [--save-palette path/to/save.json]
 palette_path = None
 save_palette_path = None
 if "--palette" in sys.argv:
@@ -63,7 +64,7 @@ if "--save-palette" in sys.argv:
 # Load or compute assignments
 if palette_path and palette_path.exists():
     print(f"Loading palette from: {palette_path}")
-    assignments = load_palette_assignments(palette_path, rules)
+    assignments = load_palette_assignments(palette_path)
 else:
     assignments = assign_materials(stats, rules)
 
@@ -93,50 +94,55 @@ for label in range(8):
 viz_img = Image.fromarray(viz_array)
 
 # Add legend
-legend_height = 400
-legend_img = Image.new("RGB", (viz_img.width, viz_img.height + legend_height), (255, 255, 255))
+LEGEND_HEIGHT = 400
+legend_img = Image.new(
+    "RGB", (viz_img.width, viz_img.height + LEGEND_HEIGHT), (255, 255, 255)
+)
 legend_img.paste(viz_img, (0, 0))
 
 draw = ImageDraw.Draw(legend_img)
 
 # Draw legend
 y_offset = viz_img.height + 20
-x_offset = 40
+X_OFFSET = 40
 
-draw.text((x_offset, y_offset), "MBAR MATERIAL ASSIGNMENTS:", fill=(0, 0, 0))
+draw.text((X_OFFSET, y_offset), "MBAR MATERIAL ASSIGNMENTS:", fill=(0, 0, 0))
 y_offset += 40
 
 for label, rule in assignments.items():
     # Draw color box
     box_size = 30
     draw.rectangle(
-        [x_offset, y_offset, x_offset + box_size, y_offset + box_size],
+        [X_OFFSET, y_offset, X_OFFSET + box_size, y_offset + box_size],
         fill=colors[label],
         outline=(0, 0, 0),
     )
 
     # Draw material name
     text = f"{rule.name.upper()} (Cluster {label})"
-    draw.text((x_offset + box_size + 15, y_offset + 5), text, fill=(0, 0, 0))
+    draw.text((X_OFFSET + box_size + 15, y_offset + 5), text, fill=(0, 0, 0))
     y_offset += 45
 
 # Add unassigned clusters
 unassigned = [i for i in range(8) if i not in assignments]
 if unassigned:
-    draw.text((x_offset, y_offset), "UNASSIGNED CLUSTERS:", fill=(128, 128, 128))
+    draw.text((X_OFFSET, y_offset), "UNASSIGNED CLUSTERS:", fill=(128, 128, 128))
     y_offset += 35
     for label in unassigned:
         draw.rectangle(
-            [x_offset, y_offset, x_offset + box_size, y_offset + box_size],
+            [X_OFFSET, y_offset, X_OFFSET + box_size, y_offset + box_size],
             fill=colors[label],
             outline=(0, 0, 0),
         )
         text = f"Cluster {label} (no material match)"
-        draw.text((x_offset + box_size + 15, y_offset + 5), text, fill=(128, 128, 128))
+        draw.text((X_OFFSET + box_size + 15, y_offset + 5), text, fill=(128, 128, 128))
         y_offset += 45
 
 # Save visualization
-output_path = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picacho_Material_Assignment_Map.jpg")
+output_path = Path(
+    "/workspaces/800-Picacho-Lane-LUTs/processed_images/"
+    "750_Picacho_Material_Assignment_Map.jpg"
+)
 legend_img.save(output_path, quality=95)
 
 print(f"✅ Material assignment map saved to: {output_path}")
