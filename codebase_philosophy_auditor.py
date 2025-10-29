@@ -123,13 +123,18 @@ def _check_wildcard_imports(tree: ast.Module, context: _AuditContext) -> List[Vi
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if alias.name == "*":
-                    decision = context.decision_for_line("allow_wildcard_import", node.lineno)
+                    decision = context.decision_for_line(
+                        "allow_wildcard_import", node.lineno
+                    )
                     if decision:
                         continue
                     violations.append(
                         Violation(
                             principle="no_wildcard_imports",
-                            message=f"Wildcard import from '{node.module or ''}' violates import policy",
+                            message=(
+                                f"Wildcard import from '{node.module or ''}' "
+                                "violates import policy"
+                            ),
                             line=node.lineno,
                         )
                     )
