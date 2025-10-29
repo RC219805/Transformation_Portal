@@ -1,6 +1,7 @@
 """Tests for texture and sky environment integration in material response finishing."""
 
 from __future__ import annotations
+from lux_render_pipeline import apply_material_response_finishing
 
 from pathlib import Path
 import sys
@@ -97,8 +98,6 @@ controlnet_aux_stub.CannyDetector = _CannyDetector
 controlnet_aux_stub.MidasDetector = _MidasDetector
 
 sys.modules.setdefault("controlnet_aux", controlnet_aux_stub)
-
-from lux_render_pipeline import apply_material_response_finishing
 
 
 def _make_texture(path: Path, color: tuple[int, int, int]) -> None:

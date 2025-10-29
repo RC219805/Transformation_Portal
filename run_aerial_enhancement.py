@@ -8,8 +8,8 @@ output_path = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picac
 
 print(f"Processing: {input_path.name}")
 print(f"Output: {output_path.name}")
-print(f"Resolution: 4K (4096px width)")
-print(f"Materials: MBAR-approved palette (8 materials)")
+print("Resolution: 4K (4096px width)")
+print("Materials: MBAR-approved palette (8 materials)")
 print()
 
 # Enhance with MBAR board materials
