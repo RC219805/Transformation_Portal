@@ -1,64 +1,99 @@
 [build-system]
-requires = ["setuptools>=65"]
+requires = ["setuptools>=65", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "picacho-lane-luts"
 version = "0.1.0"
-description = "Luxury image and video processing toolkit with LUT collections."
+description = "Luxury image and video processing toolkit for Montecito architectural visualization and LUT workflows."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "RC219805" }]
+authors = [
+    { name = "RC219805", email = "richie@cheetham.dev" }
+]
+license = { text = "Proprietary" }
+
 dependencies = [
+    # Core numeric + imaging stack
     "numpy>=1.24,<3",
     "Pillow>=10.0.0,<12",
     "scipy>=1.10,<2",
+
+    # CLI + progress utilities
     "typer>=0.12,<1",
+    "tqdm>=4.65,<5",
+
+    # Core ML and diffusion stack
     "torch>=2.0,<3",
+    "torchvision>=0.15.0",
+    "torchaudio>=2.0,<3",
     "diffusers>=0.20,<1",
     "controlnet-aux>=0.0.6,<1",
     "realesrgan>=0.3.0,<1",
-    "tqdm>=4.65,<5",
-]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: Other/Proprietary License",
-    "Operating System :: OS Independent",
-]
 
-[project.optional-dependencies]
-tiff = [
-    "tifffile>=2023.7.18,<2025",
-    "imagecodecs>=2023.1.23",
-]
-ml = [
-    "transformers>=4.35.0",
-    "huggingface-hub>=0.19.0",
-    "torchvision>=0.15.0",
+    # Local image enhancement & depth pipelines
     "opencv-python>=4.8.0",
     "scikit-image>=0.21.0",
     "PyYAML>=6.0",
     "colour-science>=0.4.2",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "License :: Other/Proprietary License",
+    "Operating System :: MacOS :: MacOS X",
+]
+
+[project.optional-dependencies]
+# High-bit TIFF support
+tiff = [
+    "tifffile>=2023.7.18,<2025",
+    "imagecodecs>=2023.1.23",
+]
+
+# Advanced ML / GPU pipeline support
+ml = [
+    "transformers>=4.35.0",
+    "huggingface-hub>=0.19.0",
     "coremltools>=7.0",
     "psutil>=5.9.0",
     "memory-profiler>=0.61.0",
 ]
+
+# Developer + testing dependencies
 dev = [
     "pytest>=7.0",
+    "pytest-cov>=4.0",
     "flake8>=6.0",
     "pylint>=2.17",
-    "pytest-cov>=4.0",
+    "black>=24.0",
+    "isort>=5.12",
 ]
+
+# Install everything
 all = [
     "picacho-lane-luts[tiff,ml,dev]",
 ]
 
+[project.urls]
+Homepage = "https://github.com/RC219805/picacho-lane-luts"
+Issues = "https://github.com/RC219805/picacho-lane-luts/issues"
+
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["tests*", "input_images", "processed_images"]
+exclude = ["tests*", "input_images", "processed_images", "experiments", "notebooks"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--verbose -ra --disable-warnings"
+filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.pylint.main]
-# Increase limits for complex image/video processing functions
 max-args = 8
 max-locals = 20
 max-branches = 15
@@ -67,12 +102,33 @@ max-line-length = 127
 max-module-lines = 1500
 
 [tool.pylint.messages_control]
-# Disable specific checks that are overly strict for this codebase
 disable = [
-    "too-few-public-methods",  # Many dataclasses and simple classes
-    "missing-module-docstring",  # Some modules are self-explanatory
-    "missing-function-docstring",  # Some simple functions are self-explanatory
-    "missing-class-docstring",  # Some simple classes are self-explanatory
-    "duplicate-code",  # Acceptable for similar processing patterns
-    "fixme",  # TODOs are tracked elsewhere
+    "too-few-public-methods",
+    "missing-module-docstring",
+    "missing-function-docstring",
+    "missing-class-docstring",
+    "duplicate-code",
+    "fixme",
+]
+
+[tool.black]
+line-length = 127
+target-version = ["py311", "py312", "py313", "py314"]
+
+[tool.isort]
+profile = "black"
+line_length = 127
+known_first_party = ["picacho_lane_luts", "detectron2"]
+default_section = "THIRDPARTY"
+
+[tool.coverage.run]
+branch = true
+source = ["picacho_lane_luts"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
 ]
