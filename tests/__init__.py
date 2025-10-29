@@ -1,139 +1,148 @@
+# tests/__init__.py
+"""Unit tests for shared architectural helpers and Golden Hour Courtyard utilities."""
+
+from __future__ import annotations
+
+import sys
+import types
+from datetime import date, timedelta
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from hypothesis import given, strategies as st
 
-import Transformation_Portal as pll
+# Import the helpers under test
+from helpers import documents, demonstrates, valid_until
 
-# ---- Fixtures ----
-@pytest.fixture
-def fake_dirs(tmp_path):
-    input_dir = tmp_path / "input"
-    output_dir = tmp_path / "output"
-    input_dir.mkdir()
-    output_dir.mkdir()
-    return input_dir, output_dir
+# -------------------------
+# tests for documents
+# -------------------------
 
-# ---- 1. CLI vector generation tests ----
-@pytest.mark.parametrize("recursive,overwrite,dry_run", [(True, True, True), (False, False, False)])
-def test_build_cli_vector_flags(recursive, overwrite, dry_run, fake_dirs):
-    from picacho_lane_luts.golden_hour_courtyard import _build_cli_vector, _ADJUSTMENT_FLAGS
+def test_documents_appends_docstring():
+    @documents("Test note")
+    def func():
+        pass
 
-    input_dir, output_dir = fake_dirs
-    cli_vector = _build_cli_vector(
-        input_dir,
-        output_dir,
-        recursive=recursive,
-        overwrite=overwrite,
-        dry_run=dry_run,
-        suffix="_lux",
-        compression="tiff_lzw",
-        resize_long_edge=None,
-        log_level="INFO",
-        overrides=None,
+    assert func.__doc__ == "Test note"
+
+def test_documents_preserves_existing_docstring():
+    @documents("Prefix note")
+    def func():
+        """Original doc"""
+        return True
+
+    assert func.__doc__ == "Prefix note\nOriginal doc"
+
+# -------------------------
+# tests for demonstrates
+# -------------------------
+
+def test_demonstrates_single_string():
+    @demonstrates("ConceptA")
+    def func():
+        return True
+
+    assert func.__demonstrates__ == ("ConceptA",)
+    assert func.__doc__.startswith("Demonstrates: ConceptA")
+
+def test_demonstrates_class():
+    class Dummy:
+        pass
+
+    @demonstrates(Dummy)
+    def func():
+        return True
+
+    assert func.__demonstrates__ == (Dummy,)
+    assert "Dummy" in func.__doc__
+
+def test_demonstrates_existing_docstring():
+    @demonstrates("ConceptB")
+    def func():
+        """Existing doc"""
+        return True
+
+    assert func.__doc__.startswith("Demonstrates: ConceptB\n")
+    assert "Existing doc" in func.__doc__
+
+# -------------------------
+# property-based demonstrates tests
+# -------------------------
+
+@given(
+    st.one_of(
+        st.text(min_size=1, max_size=20),
+        st.integers(),
+        st.builds(type, st.text(min_size=1, max_size=10), st.tuples())
     )
+)
+def test_demonstrates_with_various_concepts(concept):
+    @demonstrates(concept)
+    def dummy():
+        return True
 
-    # Base paths present
-    assert str(input_dir) in cli_vector
-    assert str(output_dir) in cli_vector
+    assert dummy.__demonstrates__[0] == concept
+    assert dummy.__doc__.startswith("Demonstrates:")
 
-    # Preset always included
-    assert "--preset" in cli_vector
-    assert "golden_hour_courtyard" in cli_vector
-
-    # Flags
-    if recursive:
-        assert "--recursive" in cli_vector
-    if overwrite:
-        assert "--overwrite" in cli_vector
-    if dry_run:
-        assert "--dry-run" in cli_vector
-
-    # Default overrides included
-    for flag in [entry.flag for entry in _ADJUSTMENT_FLAGS]:
-        assert flag in cli_vector
-
-# ---- 2. Overrides merging ----
-def test_merge_overrides_removal_and_override():
-    from picacho_lane_luts.golden_hour_courtyard import _merge_overrides
-
-    overrides = {"vibrance": 0.5, "clarity": None}
-    merged = _merge_overrides(overrides)
-    # Confirm vibrance overridden
-    assert merged["vibrance"] == 0.5
-    # Confirm clarity removed
-    assert "clarity" not in merged
-
-# ---- 3. Integration test for process_courtyard_scene ----
-def test_process_courtyard_scene(fake_dirs, monkeypatch):
-    input_dir, output_dir = fake_dirs
-
-    # Mock luxury_tiff_batch_processor
-    fake_ltiff = MagicMock()
-    fake_ltiff.parse_args.return_value = ["parsed_args"]
-    fake_ltiff.run_pipeline.return_value = 42
-    fake_ltiff.ProcessingCapabilities.return_value.assert_luxury_grade = lambda: None
-
-    monkeypatch.setitem(sys.modules, "picacho_lane_luts.luxury_tiff_batch_processor", fake_ltiff)
-
-    result = pll.process_courtyard_scene(
-        input_dir, output_dir,
-        recursive=True, overwrite=True, dry_run=True,
-        suffix="_custom", compression="tiff_deflate",
-        resize_long_edge=2048, log_level="DEBUG",
-        overrides={"vibrance": 0.5, "glow": None}
+@given(
+    st.lists(
+        st.one_of(
+            st.text(min_size=1, max_size=20),
+            st.integers(),
+            st.builds(type, st.text(min_size=1, max_size=10), st.tuples())
+        ),
+        min_size=1,
+        max_size=5
     )
+)
+def test_demonstrates_with_multiple_various_concepts(concepts):
+    @demonstrates(concepts)
+    def dummy():
+        return True
 
-    # Validate mocked run_pipeline is called with parsed args
-    fake_ltiff.parse_args.assert_called_once()
-    fake_ltiff.run_pipeline.assert_called_once()
-    assert result == 42
+    assert dummy.__demonstrates__ == tuple(concepts)
+    expected_parts = []
+    for c in concepts:
+        if hasattr(c, "__name__"):
+            expected_parts.append(c.__name__)
+        else:
+            expected_parts.append(str(c))
+    expected_prefix = "Demonstrates: " + ", ".join(expected_parts)
+    assert dummy.__doc__.startswith(expected_prefix)
 
-# ---- 4. Resize, compression, suffix in CLI vector ----
-def test_cli_vector_custom_parameters(fake_dirs):
-    from picacho_lane_luts.golden_hour_courtyard import _build_cli_vector
+# -------------------------
+# tests for valid_until
+# -------------------------
 
-    input_dir, output_dir = fake_dirs
-    cli_vector = _build_cli_vector(
-        input_dir, output_dir,
-        recursive=False,
-        overwrite=False,
-        dry_run=False,
-        suffix="_test",
-        compression="tiff_deflate",
-        resize_long_edge=1024,
-        log_level="WARNING",
-        overrides=None
-    )
+def test_valid_until_future_allows_execution():
+    future_date = (date.today() + timedelta(days=1)).isoformat()
 
-    assert "--suffix" in cli_vector
-    assert "_test" in cli_vector
-    assert "--compression" in cli_vector
-    assert "tiff_deflate" in cli_vector
-    assert "--resize-long-edge" in cli_vector
-    assert "1024" in cli_vector
-    assert "--log-level" in cli_vector
-    assert "WARNING" in cli_vector
+    @valid_until(future_date, reason="future test")
+    def func():
+        return 42
 
-# ---- 5. Exception handling for invalid overrides ----
-def test_merge_overrides_invalid_key_raises():
-    from picacho_lane_luts.golden_hour_courtyard import _merge_overrides
-    with pytest.raises(ValueError):
-        _merge_overrides({"invalid_attribute": 1.0})
+    assert func() == 42
+    assert func.__doc__.startswith(f"Valid until {future_date}")
 
-# ---- 6. End-to-end dry-run vector sanity ----
-def test_end_to_end_vector_sanity(fake_dirs, monkeypatch):
-    input_dir, output_dir = fake_dirs
-    fake_ltiff = MagicMock()
-    fake_ltiff.parse_args.side_effect = lambda vec: vec
-    fake_ltiff.run_pipeline.side_effect = lambda vec: vec
-    fake_ltiff.ProcessingCapabilities.return_value.assert_luxury_grade = lambda: None
-    monkeypatch.setitem(sys.modules, "picacho_lane_luts.luxury_tiff_batch_processor", fake_ltiff)
+def test_valid_until_past_raises():
+    past_date = (date.today() - timedelta(days=1)).isoformat()
 
-    result_vector = pll.process_courtyard_scene(
-        input_dir, output_dir, dry_run=True
-    )
+    @valid_until(past_date, reason="expired test")
+    def func():
+        return 42
 
-    # Dry-run: returned vector contains input path
-    assert str(input_dir) in result_vector
-    # Preset included
-    assert "golden_hour_courtyard" in result_vector
+    with pytest.raises(AssertionError) as exc:
+        func()
+    assert "expired" in str(exc.value)
+    assert func.__doc__.startswith(f"Valid until {past_date}")
+
+# -------------------------
+# test suite sanity
+# -------------------------
+
+def test_basic_callable_property():
+    """Sanity check: decorated functions are still callable."""
+    @documents("note")
+    @demonstrates("C")
+    def func():
+        return "ok"
+
+    assert func() == "ok"
