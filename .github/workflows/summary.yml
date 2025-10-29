@@ -29,16 +29,17 @@ jobs:
         run: |
           echo "Generating AI summary..."
           # Escape for JSON using jq to prevent injection
-          USER_CONTENT=$(jq -nc --arg title "$ISSUE_TITLE" --arg body "$BODY" ' "Title: \($title)\n\nBody: \($body)" ')
+          # Compose JSON payload directly, passing title and body as args
           JSON_PAYLOAD=$(jq -nc \
             --arg model "gpt-4o-mini" \
             --arg system "You are an assistant that summarizes GitHub issues concisely." \
-            --arg user_content "$USER_CONTENT" \
+            --arg title "$ISSUE_TITLE" \
+            --arg body "$BODY" \
             '{
               model: $model,
               messages: [
                 {role: "system", content: $system},
-                {role: "user", content: $user_content}
+                {role: "user", content: ("Title: \($title)\n\nBody: \($body)")}
               ]
             }')
           SUMMARY=$(curl -s https://api.openai.com/v1/chat/completions \
