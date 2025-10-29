@@ -1,6 +1,7 @@
 """
 Tests for the workflow parser that detects bugs in GitHub Actions workflows.
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import pytest
 import tempfile

@@ -19,11 +19,11 @@ except ImportError:  # pragma: no cover - fallback for direct execution
 np = pytest.importorskip("numpy")
 pytest.importorskip("PIL.Image")
 pytest.importorskip("PIL.TiffImagePlugin")
-from PIL import Image, TiffImagePlugin  # noqa: E402
+from PIL import Image, TiffImagePlugin  # noqa: E402  # pylint: disable=wrong-import-position
 
-import luxury_tiff_batch_processor as ltiff  # noqa: E402
-import luxury_tiff_batch_processor.pipeline as pipeline  # noqa: E402
-import luxury_tiff_batch_processor.io_utils as io_utils  # noqa: E402
+import luxury_tiff_batch_processor as ltiff  # noqa: E402  # pylint: disable=wrong-import-position,consider-using-from-import
+from luxury_tiff_batch_processor import pipeline  # noqa: E402  # pylint: disable=wrong-import-position
+from luxury_tiff_batch_processor import io_utils  # noqa: E402  # pylint: disable=wrong-import-position
 
 
 def test_run_pipeline_exposed_in_dunder_all():
@@ -229,7 +229,7 @@ def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: py
     assert dest_path.exists()
     assert dest_path.read_bytes() == original_bytes
     temp_artifacts = list(dest_path.parent.glob(f".{dest_path.name}.tmp*"))
-    assert temp_artifacts == []
+    assert not temp_artifacts
 
 
 def test_save_image_round_trip_la_mode_pillow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
