@@ -49,8 +49,6 @@ class WorkflowParser:
                         list(self.workflow_dir.glob("*.yaml"))
         
         for workflow_file in workflow_files:
-            if workflow_file.name == "README.md":
-                continue
             print(f"Parsing {workflow_file.name}...")
             self._parse_workflow(workflow_file)
         
