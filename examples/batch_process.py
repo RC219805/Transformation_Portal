@@ -8,14 +8,13 @@ Usage:
     python examples/batch_process.py input_dir/ output_dir/ [--preset interior|exterior]
 """
 
+from depth_pipeline import ArchitecturalDepthPipeline
 import sys
 import argparse
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from depth_pipeline import ArchitecturalDepthPipeline
 
 
 def main():
@@ -74,7 +73,7 @@ def main():
     pipeline = ArchitecturalDepthPipeline.from_config(config_path)
 
     # Process batch
-    results = pipeline.batch_process(
+    _results = pipeline.batch_process(  # noqa: F841
         image_paths,
         args.output_dir,
         save_depth=not args.no_depth,

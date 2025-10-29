@@ -147,7 +147,7 @@ class DepthAwareDenoise:
         # Compute adaptive sigma based on depth
         # Closer objects (low depth) get less smoothing
         depth_normalized = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
-        adaptive_sigma = self.sigma_spatial * (0.5 + 0.5 * depth_normalized)
+        _adaptive_sigma = self.sigma_spatial * (0.5 + 0.5 * depth_normalized)  # noqa: F841
 
         # Apply bilateral filter
         # Note: OpenCV bilateral doesn't support per-pixel sigma,
@@ -284,10 +284,10 @@ class FastDepthDenoise:
         # Convert to 8-bit
         if image.max() <= 1.0:
             image_8bit = (image * 255).astype(np.uint8)
-            depth_8bit = (depth * 255).astype(np.uint8)
+            _depth_8bit = (depth * 255).astype(np.uint8)  # noqa: F841
         else:
             image_8bit = image.astype(np.uint8)
-            depth_8bit = (depth * 255 / depth.max()).astype(np.uint8)
+            _depth_8bit = (depth * 255 / depth.max()).astype(np.uint8)  # noqa: F841
 
         # Non-local means with depth guidance
         denoised = cv2.fastNlMeansDenoisingColored(

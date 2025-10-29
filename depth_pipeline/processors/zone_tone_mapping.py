@@ -9,7 +9,7 @@ Performance: ~170ms for 4K image
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 from scipy.ndimage import gaussian_filter

@@ -154,4 +154,3 @@ __all__ = [
     "ColorSpace",
     "ColorSpaceContract",
 ]
-

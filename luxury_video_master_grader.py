@@ -254,12 +254,12 @@ def summarize_probe(data: Dict[str, object]) -> str:
         )
         codec = video.get("codec_name")
         pix_fmt = video.get("pix_fmt")
-        
+
         # Build video info string
         video_info = f"video {codec} {w}x{h} @ {fps}"
         if pix_fmt:
             video_info += f" {pix_fmt}"
-        
+
         # Add bit depth if available
         bits_per_raw_sample = video.get("bits_per_raw_sample")
         if bits_per_raw_sample:
@@ -288,7 +288,7 @@ def summarize_probe(data: Dict[str, object]) -> str:
 
         if color_parts:
             video_info += f" ({', '.join(color_parts)})"
-        
+
         pieces.append(video_info)
     if audio:
         codec = audio.get("codec_name")
@@ -693,7 +693,8 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
         tint_label = next_label()
         nodes.append(
-            f"[{blur_label}]colorbalance=rm={intensity * 0.55:.4f}:gm={intensity * 0.25:.4f}:bm={-intensity * 0.15:.4f}[{tint_label}]"
+            f"[{blur_label}]colorbalance=rm={intensity * 0.55:.4f}:gm={intensity * 0.25:.4f}:"
+            f"bm={-intensity * 0.15:.4f}[{tint_label}]"
         )
 
         blend_label = next_label()
@@ -713,7 +714,11 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     return graph, "vout"
 
 
-def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def determine_color_metadata(args: argparse.Namespace,
+                             probe: Dict[str,
+                                         object]) -> tuple[Optional[str],
+                                                           Optional[str],
+                                                           Optional[str]]:
     """Determine color metadata based on priority: explicit > color-from-source > none."""
 
     # Priority 1: Explicit overrides
@@ -1091,7 +1096,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         # Convert semicolon-separated filter chain to multi-line format
         filter_nodes = filter_graph.split(";")
         for i, node in enumerate(filter_nodes):
-            print(f"  {i+1:2d}. {node}")
+            print(f"  {i + 1:2d}. {node}")
         print()
 
     # Determine color metadata based on priority system

@@ -864,8 +864,8 @@ def style_grade(img: np.ndarray, style: str, params: Dict) -> np.ndarray:
 
 def median_luma(img: np.ndarray) -> float:
     """Calculate median luminance in linear space."""
-    l = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
-    return float(np.median(l))
+    luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
+    return float(np.median(luma))
 
 
 def normalize_exposure_inplace(imgs: List[np.ndarray], target_median: float = 0.42) -> None:
@@ -1092,7 +1092,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
     # Note: renaming not shown here for brevity - use from v1
 
     # Selects
-    ensure_selects_csv(cfg, lay, raws_copied)
+    _selects_csv = ensure_selects_csv(cfg, lay, raws_copied)  # noqa: F841
     raws = filter_selects(cfg, raws_copied)
 
     # Parallel RAW decode
