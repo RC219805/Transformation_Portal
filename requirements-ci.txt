@@ -5,6 +5,9 @@ scipy>=1.15,<2
 tifffile>=2023.7.18,<2025
 imagecodecs>=2023.9.18,<2025
 
+# Machine learning / clustering
+scikit-learn>=1.3.2,<1.4
+
 # Progress bars & CLI
 tqdm>=4.66,<5
 typer>=0.10.0
