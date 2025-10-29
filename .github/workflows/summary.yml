@@ -16,6 +16,7 @@ jobs:
           echo "Body: ${{ github.event.issue.body }}"
 
       - name: Generate summary with OpenAI
+        id: generate-summary
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -24,7 +25,7 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
             -d "{
-              \"model\": \"gpt-4.1-mini\",
+              \"model\": \"gpt-4o-mini\",
               \"messages\": [
                 {\"role\": \"system\", \"content\": \"You are an assistant that summarizes GitHub issues concisely.\"},
                 {\"role\": \"user\", \"content\": \"Title: ${{ github.event.issue.title }}\n\nBody: ${{ github.event.issue.body }}\"}
