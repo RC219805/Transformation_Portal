@@ -1,4 +1,3 @@
-````markdown
 [![CI](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions/workflows/python-app.yml/badge.svg)](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
@@ -134,7 +133,16 @@ make test-full
 
 [`luxury_tiff_batch_processor.py`](./luxury_tiff_batch_processor.py) is a high-end workflow for polishing large-format TIFF photography prior to digital launch. It preserves metadata, honors 16-bit source files (via [`tifffile`](https://pypi.org/project/tifffile/)), and layers tonal and chroma refinements tuned for luxury real-estate storytelling.
 
-*(existing TIFF section content continues unchanged)*
+**Features:**
+- 16-bit TIFF support with metadata preservation
+- Multiple processing presets (Signature, Vivid, Natural, Moody)
+- Batch processing with progress tracking
+- Non-destructive workflow
+
+**Usage:**
+```bash
+python luxury_tiff_batch_processor.py input_folder output_folder --preset signature
+```
 
 ---
 
@@ -142,7 +150,16 @@ make test-full
 
 [`luxury_video_master_grader.py`](./luxury_video_master_grader.py) brings the same curated aesthetic to motion content using FFmpeg.
 
-*(existing video section continues unchanged)*
+**Features:**
+- FFmpeg-based video color grading
+- LUT application for consistent look
+- Support for multiple video formats
+- Batch processing capabilities
+
+**Usage:**
+```bash
+python luxury_video_master_grader.py input_video.mp4 output_video.mp4 --lut path/to/lut.cube
+```
 
 ---
 
@@ -150,7 +167,16 @@ make test-full
 
 [`hdr_production_pipeline.sh`](./hdr_production_pipeline.sh) orchestrates a full HDR finishing pass, combining ACES tone mapping, adaptive debanding, and halation.
 
-*(existing HDR section continues unchanged)*
+**Features:**
+- ACES color space workflow
+- Adaptive debanding and grain
+- Halation and bloom effects
+- Production-grade HDR output
+
+**Usage:**
+```bash
+./hdr_production_pipeline.sh input.exr output.mp4
+```
 
 ---
 
@@ -158,9 +184,18 @@ make test-full
 
 [`board_material_aerial_enhancer.py`](./board_material_aerial_enhancer.py) applies MBAR-approved material palettes to aerials using clustering and texture blending.
 
+**Features:**
+- K-means clustering for material segmentation
+- Material-aware palette assignment
+- Texture-based enhancement
+- Board-approved aesthetic compliance
+
 For full documentation, see [Palette Assignment Guide](./08_Documentation/Palette_Assignment_Guide.md).
 
-*(existing aerial enhancer section continues unchanged)*
+**Usage:**
+```bash
+python board_material_aerial_enhancer.py aerial_image.jpg output_enhanced.jpg
+```
 
 ---
 
@@ -168,7 +203,16 @@ For full documentation, see [Palette Assignment Guide](./08_Documentation/Palett
 
 [`decision_decay_dashboard.py`](./decision_decay_dashboard.py) surfaces temporal contracts, codebase philosophy violations, and brand color token drift in one terminal dashboard.
 
-*(existing dashboard section continues unchanged)*
+**Features:**
+- Codebase philosophy auditing
+- Temporal contract monitoring
+- Brand consistency checking
+- Terminal-based dashboard interface
+
+**Usage:**
+```bash
+python decision_decay_dashboard.py
+```
 
 ---
 
@@ -181,17 +225,3 @@ Professional use permitted with attribution.
 **Author:** Richard Cheetham
 **Brand:** Carolwood Estates · RACLuxe Division
 **Contact:** [info@racluxe.com](mailto:info@racluxe.com)
-
-```
-
----
-
-### ✅ Summary of improvements
-- **Badges** (CI, Python, License) → instant credibility and visual hierarchy  
-- **Quickstart** → immediate “time to first success” for users  
-- **ML Prerequisite note** → prevents environment confusion  
-- **Cross-linked scripts** → improved navigation inside the repo  
-- **Author footer** → professional, portfolio-grade presentation  
-
-Once you commit this file, your GitHub README will display as a **polished, release-ready document** suitable for internal stakeholders or public viewing.
-```
