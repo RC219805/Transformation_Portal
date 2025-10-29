@@ -103,7 +103,7 @@ def relabel_safe(
                 name="unknown",
                 texture="",
                 blend=0.5,
-                score_fn=lambda x: 0.5
+                score_fn=lambda _: 0.5
             )
             assignments[lbl] = default_rule
     return relabel(assignments, labels)
