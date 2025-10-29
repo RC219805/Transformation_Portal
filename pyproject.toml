@@ -28,7 +28,7 @@ classifiers = [
 
 [project.optional-dependencies]
 tiff = [
-    "tifffile>=2023.7.18,<2025",
+    "tifffile>=2023.7.18,<2026",
     "imagecodecs>=2023.1.23",
 ]
 ml = [
