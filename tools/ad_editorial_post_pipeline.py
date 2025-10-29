@@ -1339,13 +1339,13 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         try:
             base = np.array(Image.open(p)).astype(np.float32) / 255.0
 
-            for style in lay.WORK_VARIANTS.keys():
+            for style, style_path in lay.WORK_VARIANTS.items():
                 graded = style_grade(base, style, cfg.styles)
 
                 if cfg.consistency.get("wb_neutralize", True):
                     graded = neutralize_wb_near_white(graded)
 
-                out = lay.WORK_VARIANTS[style] / p.name
+                out = style_path / p.name
                 save_tiff16_prophoto(graded, out, icc_prophoto)
                 variant_map[style].append(out)
 

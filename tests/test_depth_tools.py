@@ -4,6 +4,7 @@
 """
 Tests for depth_tools.py batch processing and error handling
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import tempfile
 from pathlib import Path

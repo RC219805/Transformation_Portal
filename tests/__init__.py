@@ -10,10 +10,10 @@ import pytest
 # Hypothesis for property-based testing
 try:
     from hypothesis import given, strategies as st
-except ImportError:
+except ImportError as exc:
     raise ImportError(
         "Hypothesis is required for these tests. Install via `pip install hypothesis`."
-    )
+    ) from exc
 
 # Import the helpers under test
 try:
@@ -63,7 +63,9 @@ def test_demonstrates_class():
     def func():
         return True
     assert func.__demonstrates__ == (Dummy,)
-    assert "Dummy" in func.__doc__
+    doc = func.__doc__
+    assert doc is not None
+    assert "Dummy" in doc  # pylint: disable=unsupported-membership-test
 
 
 def test_demonstrates_existing_docstring():
