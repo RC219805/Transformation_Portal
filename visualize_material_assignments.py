@@ -22,6 +22,7 @@ image = Image.open(input_path).convert("RGB")
 base_array = np.asarray(image, dtype=np.float32) / 255.0
 
 # Perform clustering (same as enhancement)
+# pylint: disable=duplicate-code  # Similar clustering logic used in enhance_pool_aerial.py
 analysis_image = _downsample_image(image, 1280)
 analysis_array = np.asarray(analysis_image, dtype=np.float32) / 255.0
 pixels = analysis_array.reshape(-1, 3)
@@ -36,6 +37,7 @@ else:
 
 centroids = _kmeans(sample, 8, rng)
 labels_small = _assign_full_image(analysis_array, centroids)
+# pylint: enable=duplicate-code
 labels_small_img = Image.fromarray(labels_small.astype("uint8"))
 labels_small_img = labels_small_img.convert("L")
 labels_full = labels_small_img.resize(image.size, Image.Resampling.NEAREST)

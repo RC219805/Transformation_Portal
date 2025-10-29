@@ -13,10 +13,12 @@ from typing import Optional, Tuple
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
+from .base import DepthProcessorMixin
+
 logger = logging.getLogger(__name__)
 
 
-class AtmosphericEffects:
+class AtmosphericEffects(DepthProcessorMixin):
     """
     Depth-based atmospheric effects processor.
 
@@ -198,37 +200,21 @@ class AtmosphericEffects:
 
         return np.clip(result, 0, 1)
 
-    def __call__(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray,
-        config: Optional[dict] = None,
-    ) -> np.ndarray:
-        """Callable interface for pipeline integration."""
-        if config:
-            # Temporarily override parameters
-            old_params = {
-                'haze_density': self.haze_density,
-                'haze_color': self.haze_color.copy(),
-                'desaturation_strength': self.desaturation_strength,
-                'enable_color_shift': self.enable_color_shift,
-            }
-
-            for key, value in config.items():
-                if key == 'haze_color':
-                    self.haze_color = np.array(value, dtype=np.float32)
-                elif hasattr(self, key):
-                    setattr(self, key, value)
-
-            result = self.process(image, depth)
-
-            # Restore
-            for key, value in old_params.items():
-                setattr(self, key, value)
-
-            return result
-        else:
-            return self.process(image, depth)
+    def _get_config_params(self) -> dict:
+        """Get configuration parameters that can be overridden."""
+        return {
+            'haze_density': self.haze_density,
+            'haze_color': self.haze_color.copy(),
+            'desaturation_strength': self.desaturation_strength,
+            'enable_color_shift': self.enable_color_shift,
+        }
+    
+    def _apply_config_override(self, key: str, value):
+        """Apply configuration override with special handling for haze_color."""
+        if key == 'haze_color':
+            self.haze_color = np.array(value, dtype=np.float32)
+        elif hasattr(self, key):
+            setattr(self, key, value)
 
 
 class DepthFog:
