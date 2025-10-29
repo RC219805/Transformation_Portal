@@ -1,73 +1,46 @@
-# GitHub Actions Workflows
+name: issue-summary
 
-This directory contains GitHub Actions workflow definitions for the 800 Picacho Lane LUTs repository.
+on:
+  issues:
+    types: [opened]
 
-## Workflows
+jobs:
+  summarize-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print issue info
+        run: |
+          echo "Issue #${{ github.event.issue.number }}"
+          echo "Title: ${{ github.event.issue.title }}"
+          echo "Author: ${{ github.event.issue.user.login }}"
+          echo "Body: ${{ github.event.issue.body }}"
 
-### python-app.yml
-Main CI workflow for Python testing and linting.
-- Runs on push to main and pull requests
-- Tests with Python 3.10
-- Linting with flake8
-- Testing with pytest
+      - name: Generate summary with OpenAI
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "Generating AI summary..."
+          SUMMARY=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -d "{
+              \"model\": \"gpt-4.1-mini\",
+              \"messages\": [
+                {\"role\": \"system\", \"content\": \"You are an assistant that summarizes GitHub issues concisely.\"},
+                {\"role\": \"user\", \"content\": \"Title: ${{ github.event.issue.title }}\n\nBody: ${{ github.event.issue.body }}\"}
+              ]
+            }" | jq -r '.choices[0].message.content')
 
-### pylint.yml
-Pylint code quality checks.
+          if [ -z "$SUMMARY" ]; then
+            SUMMARY="⚠️ Failed to generate summary."
+          fi
+          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
 
-### codeql.yml
-Security analysis with CodeQL.
-
-### summary.yml
-**Status**: Experimental - Debugging Required
-
-This workflow attempts to use AI to automatically summarize new GitHub issues when they are opened.
-
-#### Current Implementation
-- Triggers on issue open events
-- Attempts to use `actions/ai-inference@v2` (non-existent action)
-- Posts AI-generated summary as a comment on the issue
-
-#### Known Issues
-⚠️ **The `actions/ai-inference@v2` action does not exist in the GitHub Actions marketplace.**
-
-This workflow will fail at the AI inference step. The debug logging has been added to help diagnose issues and provide visibility into the failure.
-
-#### Debug Features
-The workflow now includes comprehensive debugging:
-- Prints issue details (number, title, author, body)
-- Reports inference step outcome and status
-- Checks for response output
-- Provides fallback notification when AI summarization fails
-
-#### Possible Solutions
-To make this workflow functional, consider one of these alternatives:
-
-1. **Use GitHub Copilot API** (if available to your organization)
-   - Replace with actual GitHub AI/Copilot API endpoints
-   
-2. **Use OpenAI API**
-   ```yaml
-   - name: Generate summary with OpenAI
-     env:
-       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-     run: |
-       # Call OpenAI API to generate summary
-   ```
-
-3. **Use GitHub Actions marketplace alternatives**
-   - Search for community-maintained AI summary actions
-   
-4. **Disable the workflow**
-   - Comment out or remove if AI summarization is not critical
-
-#### Testing
-Since the AI inference action doesn't exist, this workflow will:
-- Print debug information about the issue
-- Fail gracefully at the inference step (with `continue-on-error: true`)
-- Post a notification comment that summarization failed
-- Not block other workflows or issue creation
-
-#### Maintenance Notes
-- Added debug logging in commit 6ca3996
-- Error handling ensures workflow doesn't block issue creation
-- Requires action implementation or replacement before production use
+      - name: Post summary comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            **AI-generated summary:**
+            ${{ steps.generate-summary.outputs.summary }}
