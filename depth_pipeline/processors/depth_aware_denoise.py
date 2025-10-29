@@ -14,10 +14,12 @@ import cv2
 import numpy as np
 from scipy.ndimage import gaussian_filter, sobel
 
+from .base import DepthProcessorMixin
+
 logger = logging.getLogger(__name__)
 
 
-class DepthAwareDenoise:
+class DepthAwareDenoise(DepthProcessorMixin):
     """
     Depth-aware denoising processor.
 
@@ -203,45 +205,14 @@ class DepthAwareDenoise:
 
         return result
 
-    def __call__(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray,
-        config: Optional[dict] = None,
-    ) -> np.ndarray:
-        """
-        Callable interface for pipeline integration.
-
-        Args:
-            image: Input image
-            depth: Depth map
-            config: Optional configuration override
-
-        Returns:
-            Processed image
-        """
-        if config:
-            # Temporarily override parameters
-            old_params = {
-                'sigma_spatial': self.sigma_spatial,
-                'sigma_range': self.sigma_range,
-                'edge_threshold': self.edge_threshold,
-                'preserve_strength': self.preserve_strength,
-            }
-
-            for key, value in config.items():
-                if hasattr(self, key):
-                    setattr(self, key, value)
-
-            result = self.process(image, depth)
-
-            # Restore parameters
-            for key, value in old_params.items():
-                setattr(self, key, value)
-
-            return result
-        else:
-            return self.process(image, depth)
+    def _get_config_params(self) -> dict:
+        """Get configuration parameters that can be overridden."""
+        return {
+            'sigma_spatial': self.sigma_spatial,
+            'sigma_range': self.sigma_range,
+            'edge_threshold': self.edge_threshold,
+            'preserve_strength': self.preserve_strength,
+        }
 
 
 class FastDepthDenoise:
