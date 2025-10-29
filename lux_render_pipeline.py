@@ -571,9 +571,6 @@ def adjust_contrast_saturation(
     gray = rgb.mean(axis=2, keepdims=True)
     rgb = (rgb - gray) * contrast + gray
     # Saturation in HSV-like space (simple)
-    maxc = rgb.max(axis=2, keepdims=True)
-    minc = rgb.min(axis=2, keepdims=True)
-    sat = (maxc - minc) + 1e-6
     mean = rgb.mean(axis=2, keepdims=True)
     rgb = (rgb - mean) * saturation + mean
     return np.clip(rgb, 0.0, 1.0)
