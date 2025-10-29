@@ -1,4 +1,3 @@
-# .github/workflows/python-app.yml
 name: build
 
 on:
@@ -8,13 +7,13 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  lint-and-test:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: [ "3.10", "3.11", "3.12" ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -42,15 +41,15 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
       - name: Run tests
-        run: pytest -q
+        run: pytest -v tests/
 
   generate-manifest:
     name: Build Montecito Manifest
-    needs: [build]
+    needs: [lint-and-test]
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -69,7 +68,7 @@ jobs:
           set -euo pipefail
           OUT="montecito_manifest.json"
 
-          # Try using --out if supported; fallback otherwise.
+          # Attempt --out flag first
           if python tools/montecito_manifest.py --help 2>/dev/null | grep -qi -- '--out'; then
             python tools/montecito_manifest.py --out "$OUT"
           else
