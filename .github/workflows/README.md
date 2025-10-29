@@ -1,46 +1,61 @@
-name: issue-summary
+# Transofrmation Portal Repository
 
-on:
-  issues:
-    types: [opened]
+This repository contains tools, scripts, and workflows for managing LUTs, aerial image enhancements, and Montecito manifest generation.
 
-jobs:
-  summarize-issue:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Print issue info
-        run: |
-          echo "Issue #${{ github.event.issue.number }}"
-          echo "Title: ${{ github.event.issue.title }}"
-          echo "Author: ${{ github.event.issue.user.login }}"
-          echo "Body: ${{ github.event.issue.body }}"
+---
 
-      - name: Generate summary with OpenAI
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          echo "Generating AI summary..."
-          SUMMARY=$(curl -s https://api.openai.com/v1/chat/completions \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -d "{
-              \"model\": \"gpt-4.1-mini\",
-              \"messages\": [
-                {\"role\": \"system\", \"content\": \"You are an assistant that summarizes GitHub issues concisely.\"},
-                {\"role\": \"user\", \"content\": \"Title: ${{ github.event.issue.title }}\n\nBody: ${{ github.event.issue.body }}\"}
-              ]
-            }" | jq -r '.choices[0].message.content')
+## GitHub Actions Workflows
 
-          if [ -z "$SUMMARY" ]; then
-            SUMMARY="⚠️ Failed to generate summary."
-          fi
-          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+The repository includes multiple CI/CD and automation workflows to ensure code quality, security, and productivity.
 
-      - name: Post summary comment
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          body: |
-            **AI-generated summary:**
-            ${{ steps.generate-summary.outputs.summary }}
+### 1. `python-app.yml`
+**Purpose:** Main CI workflow for Python testing and linting.  
+**Triggers:** `push` and `pull_request` on `main`.  
+**Features:**
+- Multi-Python testing matrix (3.10–3.12).  
+- Lean CPU-only dependency installation (`requirements-ci.txt`) for fast CI.  
+- Linting via `flake8` (critical errors only).  
+- Unit testing and end-to-end tests with `pytest`.  
+- Montecito manifest generation with artifact upload.  
+
+### 2. `pylint.yml`
+**Purpose:** Static code analysis using `pylint`.  
+**Triggers:** Pull requests affecting `.py` files.  
+**Features:**
+- Multi-Python matrix (3.10–3.12) ensures cross-version consistency.  
+- Selective linting of changed files to reduce runtime.  
+
+### 3. `codeql.yml`
+**Purpose:** Security scanning using GitHub CodeQL.  
+**Features:**
+- Automated analysis for security vulnerabilities.  
+- Runs on pushes to main and pull requests.  
+
+### 4. `summary.yml` (AI Issue Summarization)
+**Purpose:** Automatically generates a summary of newly opened GitHub issues.  
+**Status:** Fully functional with OpenAI API integration.  
+
+**Features:**
+- Triggered on `issues.opened`.  
+- Uses OpenAI `gpt-4.1-mini` model to summarize issue title and body.  
+- Posts the summary as a comment on the issue.  
+- Includes graceful fallback if API call fails.  
+- Requires `OPENAI_API_KEY` in repository secrets.  
+
+---
+
+## Unit Tests
+
+Unit tests are provided for:
+
+- `_kmeans` – clustering reproducibility.  
+- `_cluster_stats` – cluster statistics correctness.  
+- `assign_materials` – assignment logic.  
+- `_soft_mask` – Gaussian blending of masks.  
+- `enhance_aerial` – end-to-end test using small sample images.  
+
+Run tests locally:
+
+```bash
+pip install -r requirements-ci.txt
+pytest -v tests/
