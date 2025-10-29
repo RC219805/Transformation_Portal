@@ -81,6 +81,7 @@ class WorkflowParser:
             self._check_shell_scripts(workflow_file, workflow, lines)
             self._check_job_dependencies(workflow_file, workflow)
             self._check_matrix_usage(workflow_file, workflow, lines)
+            self._check_openai_models(workflow_file, workflow, lines)
             
         except Exception as e:
             self.bugs.append(WorkflowBug(
@@ -102,7 +103,8 @@ class WorkflowParser:
             return
         
         # Check for required fields
-        if 'on' not in workflow and 'true' not in workflow:
+        # Note: YAML parsers interpret 'on:' as boolean True
+        if 'on' not in workflow and True not in workflow:
             self.bugs.append(WorkflowBug(
                 str(workflow_file),
                 None,
@@ -197,8 +199,8 @@ class WorkflowParser:
             if re.search(r'\bif\s+', statement) and not re.search(r'\belif\s+', statement):
                 if_count += 1
             
-            # Count fi statements
-            if re.search(r'\bfi\b', statement):
+            # Count fi statements - must be at start or after whitespace, and must be end of command
+            if re.search(r'(^|\s)fi(\s|$)', statement):
                 fi_count += 1
         
         if if_count != fi_count:
@@ -251,13 +253,22 @@ class WorkflowParser:
             if not matrix:
                 continue
             
+            # Check for exclusions
+            exclusions = matrix.get('exclude', [])
+            
             # Check for task/device matrix combinations that don't make sense
             if 'task' in matrix and 'device' in matrix:
                 tasks = matrix.get('task', [])
                 devices = matrix.get('device', [])
                 
                 if isinstance(tasks, list) and isinstance(devices, list):
-                    if 'lint' in tasks and len(devices) > 1:
+                    # Check if lint+gpu is excluded
+                    lint_gpu_excluded = any(
+                        exc.get('task') == 'lint' and exc.get('device') == 'gpu'
+                        for exc in exclusions
+                    ) if exclusions else False
+                    
+                    if 'lint' in tasks and len(devices) > 1 and not lint_gpu_excluded:
                         line_num = self._find_line_number(lines, "device:")
                         self.bugs.append(WorkflowBug(
                             str(workflow_file),
@@ -272,6 +283,53 @@ class WorkflowParser:
             if search_text in line:
                 return idx
         return None
+    
+    def _check_openai_models(self, workflow_file: Path, workflow: Dict, lines: List[str]):
+        """Check for invalid OpenAI model names."""
+        valid_models = {
+            'gpt-4', 'gpt-4-turbo', 'gpt-4-turbo-preview', 
+            'gpt-4o', 'gpt-4o-mini',
+            'gpt-3.5-turbo', 'gpt-3.5-turbo-16k',
+        }
+        
+        # Valid model prefixes (for date-stamped versions like gpt-4-turbo-2024-04-09)
+        valid_prefixes = {
+            'gpt-4-turbo-', 'gpt-4o-', 'gpt-3.5-turbo-'
+        }
+        
+        if 'jobs' not in workflow:
+            return
+        
+        for job_name, job_config in workflow.get('jobs', {}).items():
+            if not isinstance(job_config, dict):
+                continue
+            
+            for idx, step in enumerate(job_config.get('steps', [])):
+                if not isinstance(step, dict):
+                    continue
+                
+                run_script = step.get('run')
+                if not run_script:
+                    continue
+                
+                # Search for OpenAI model references (handle both quoted and escaped quotes)
+                model_matches = re.findall(r'"model":\s*"([^"]+)"', run_script)
+                model_matches += re.findall(r'\\"model\\":\s*\\"([^"\\]+)\\"', run_script)
+                
+                for model in model_matches:
+                    # Check if it looks like a GPT model but isn't valid
+                    if model.startswith('gpt-') and model not in valid_models:
+                        # Check if it's a date-stamped version with valid prefix
+                        is_versioned = any(model.startswith(vp) for vp in valid_prefixes)
+                        
+                        if not is_versioned:
+                            line_num = self._find_line_number(lines, model)
+                            self.bugs.append(WorkflowBug(
+                                str(workflow_file),
+                                line_num,
+                                'warning',
+                                f"Potentially invalid OpenAI model name '{model}' in job '{job_name}'"
+                            ))
 
 
 def main():
