@@ -48,12 +48,10 @@ import gc
 import hashlib
 import json
 import logging
-import os
 import shutil
 import subprocess
-import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Set
 
@@ -69,18 +67,8 @@ from tqdm import tqdm
 # Optional deps
 try:
     import cv2
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     cv2 = None
-
-try:
-    import exifread
-except Exception:  # pragma: no cover
-    exifread = None
-
-try:
-    import piexif
-except Exception:  # pragma: no cover
-    piexif = None
 
 
 # ----------------------------- logging ------------------------------------- #
@@ -154,7 +142,7 @@ class ProgressTracker:
                 self.completed = set(data.get("completed", []))
                 self.checksums = data.get("checksums", {})
                 LOG.info("Loaded progress: %d items completed", len(self.completed))
-        except Exception as e:
+        except (IOError, OSError, json.JSONDecodeError) as e:
             LOG.warning("Could not load progress state: %s", e)
 
     def _save(self) -> None:
@@ -170,7 +158,7 @@ class ProgressTracker:
                     f,
                     indent=2,
                 )
-        except Exception as e:
+        except (IOError, OSError) as e:
             LOG.warning("Could not save progress state: %s", e)
 
     def is_completed(self, item: str, checksum: Optional[str] = None) -> bool:
@@ -245,7 +233,7 @@ def has_exiftool() -> bool:
             check=False,
         )
         return True
-    except Exception:
+    except (FileNotFoundError, subprocess.SubprocessError):
         return False
 
 
@@ -279,7 +267,7 @@ def copy_and_verify(src: Path, dst: Path) -> None:
     if src_hash != dst_hash:
         try:
             dst.unlink()
-        except Exception:
+        except (OSError, FileNotFoundError):
             pass
         raise RuntimeError(f"Hash mismatch copying {src} -> {dst}")
 
@@ -290,11 +278,11 @@ def atomic_write(path: Path, writer_func, *args, **kwargs) -> None:
     try:
         writer_func(temp_path, *args, **kwargs)
         temp_path.replace(path)
-    except Exception:
+    except (IOError, OSError):
         if temp_path.exists():
             try:
                 temp_path.unlink()
-            except Exception:
+            except (OSError, FileNotFoundError):
                 pass
         raise
 
@@ -380,19 +368,19 @@ class PipelineConfig:
             errors.append(f"input_raw_dir does not exist: {self.input_raw_dir}")
 
         workers = self.processing.get("workers", 4)
-        if not isinstance(workers, int) or not (1 <= workers <= 64):
+        if not isinstance(workers, int) or not 1 <= workers <= 64:
             errors.append(f"processing.workers must be 1-64, got {workers}")
 
         upright_max = self.processing.get("upright_max_deg", 3.0)
-        if not isinstance(upright_max, (int, float)) or not (0 <= upright_max <= 15):
+        if not isinstance(upright_max, (int, float)) or not 0 <= upright_max <= 15:
             errors.append(f"processing.upright_max_deg must be 0-15, got {upright_max}")
 
         web_edge = self.export.get("web_long_edge_px", 2500)
-        if not isinstance(web_edge, int) or not (100 <= web_edge <= 10000):
+        if not isinstance(web_edge, int) or not 100 <= web_edge <= 10000:
             errors.append(f"export.web_long_edge_px must be 100-10000, got {web_edge}")
 
         jpeg_quality = self.export.get("jpeg_quality", 96)
-        if not isinstance(jpeg_quality, int) or not (1 <= jpeg_quality <= 100):
+        if not isinstance(jpeg_quality, int) or not 1 <= jpeg_quality <= 100:
             errors.append(f"export.jpeg_quality must be 1-100, got {jpeg_quality}")
 
         target_median = self.consistency.get("target_median", 0.42)
@@ -412,7 +400,7 @@ class PipelineConfig:
                 continue
 
             exposure = style_params.get("exposure", 0.0)
-            if not isinstance(exposure, (int, float)) or not (-3.0 <= exposure <= 3.0):
+            if not isinstance(exposure, (int, float)) or not -3.0 <= exposure <= 3.0:
                 errors.append(
                     f"Style '{style_name}' exposure must be -3.0 to 3.0, got {exposure}"
                 )
@@ -435,19 +423,19 @@ def _read_yaml(path: Path) -> dict:
 
 @dataclass
 class Layout:
-    RAW_ORIG: Path
-    RAW_BACKUP: Optional[Path]
-    WORK_BASE: Path
-    WORK_HDR: Path
-    WORK_PANO: Path
-    WORK_ALIGN: Path
-    WORK_VARIANTS: Dict[str, Path]
-    EXPORT_PRINT: Dict[str, Path]
-    EXPORT_WEB: Dict[str, Path]
-    DOCS: Path
-    DOCS_CONTACTS: Path
-    DOCS_MANIFESTS: Path
-    STATE: Path  # For progress tracking
+    raw_orig: Path
+    raw_backup: Optional[Path]
+    work_base: Path
+    work_hdr: Path
+    work_pano: Path
+    work_align: Path
+    work_variants: Dict[str, Path]
+    export_print: Dict[str, Path]
+    export_web: Dict[str, Path]
+    docs: Path
+    docs_contacts: Path
+    docs_manifests: Path
+    state: Path  # For progress tracking
 
     @staticmethod
     def build(cfg: PipelineConfig) -> "Layout":
@@ -458,40 +446,40 @@ class Layout:
         export_web = {v: root / "EXPORT" / "Web_JPEG" / v for v in variants}
 
         return Layout(
-            RAW_ORIG=root / "RAW" / "Originals",
-            RAW_BACKUP=cfg.backup_raw_dir if cfg.backup_raw_dir else None,
-            WORK_BASE=root / "WORK" / "BaseTIFF",
-            WORK_HDR=root / "WORK" / "HDR",
-            WORK_PANO=root / "WORK" / "Pano",
-            WORK_ALIGN=root / "WORK" / "Aligned",
-            WORK_VARIANTS=work_variants,
-            EXPORT_PRINT=export_print,
-            EXPORT_WEB=export_web,
-            DOCS=root / "DOCS",
-            DOCS_CONTACTS=root / "DOCS" / "ContactSheets",
-            DOCS_MANIFESTS=root / "DOCS" / "Manifests",
-            STATE=root / "DOCS" / ".progress_state.json",
+            raw_orig=root / "RAW" / "Originals",
+            raw_backup=cfg.backup_raw_dir if cfg.backup_raw_dir else None,
+            work_base=root / "WORK" / "BaseTIFF",
+            work_hdr=root / "WORK" / "HDR",
+            work_pano=root / "WORK" / "Pano",
+            work_align=root / "WORK" / "Aligned",
+            work_variants=work_variants,
+            export_print=export_print,
+            export_web=export_web,
+            docs=root / "DOCS",
+            docs_contacts=root / "DOCS" / "ContactSheets",
+            docs_manifests=root / "DOCS" / "Manifests",
+            state=root / "DOCS" / ".progress_state.json",
         )
 
     def create(self) -> None:
         dirs = [
-            self.RAW_ORIG,
-            self.WORK_BASE,
-            self.WORK_HDR,
-            self.WORK_PANO,
-            self.WORK_ALIGN,
-            self.DOCS,
-            self.DOCS_CONTACTS,
-            self.DOCS_MANIFESTS,
+            self.raw_orig,
+            self.work_base,
+            self.work_hdr,
+            self.work_pano,
+            self.work_align,
+            self.docs,
+            self.docs_contacts,
+            self.docs_manifests,
         ]
         dirs += (
-            list(self.WORK_VARIANTS.values())
-            + list(self.EXPORT_PRINT.values())
-            + list(self.EXPORT_WEB.values())
+            list(self.work_variants.values())
+            + list(self.export_print.values())
+            + list(self.export_web.values())
         )
         ensure_dirs(dirs)
-        if self.RAW_BACKUP:
-            self.RAW_BACKUP.mkdir(parents=True, exist_ok=True)
+        if self.raw_backup:
+            self.raw_backup.mkdir(parents=True, exist_ok=True)
 
 
 # ----------------------------- I/O utils ----------------------------------- #
@@ -520,23 +508,23 @@ def find_raws(folder: Path) -> List[Path]:
 
 
 def mirror_offload(cfg: PipelineConfig, lay: Layout) -> List[Path]:
-    LOG.info("Offloading RAW from %s -> %s", cfg.input_raw_dir, lay.RAW_ORIG)
+    LOG.info("Offloading RAW from %s -> %s", cfg.input_raw_dir, lay.raw_orig)
     raws = find_raws(cfg.input_raw_dir)
     if not raws:
         raise SystemExit("No RAW files found in input_raw_dir.")
 
-    ensure_dirs([lay.RAW_ORIG])
+    ensure_dirs([lay.raw_orig])
     out_paths = []
     for src in tqdm(raws, desc="Copy RAW"):
         rel = src.name
-        dst = lay.RAW_ORIG / rel
+        dst = lay.raw_orig / rel
         copy_and_verify(src, dst)
         out_paths.append(dst)
 
-    if lay.RAW_BACKUP:
-        LOG.info("Backing up RAW to %s", lay.RAW_BACKUP)
+    if lay.raw_backup:
+        LOG.info("Backing up RAW to %s", lay.raw_backup)
         for p in tqdm(out_paths, desc="Backup RAW"):
-            bdst = lay.RAW_BACKUP / p.name
+            bdst = lay.raw_backup / p.name
             copy_and_verify(p, bdst)
 
     return out_paths
@@ -575,7 +563,7 @@ def process_raw_file(args: Tuple[Path, Path, Optional[bytes]]) -> Tuple[Path, Op
         del img
         gc.collect()
         return raw_path, out
-    except Exception as e:
+    except (IOError, OSError, RuntimeError) as e:
         LOG.error("RAW decode failed %s: %s", raw_path, e)
         return raw_path, None
 
@@ -702,7 +690,7 @@ def auto_upright_small(img: np.ndarray, max_deg: float = 3.0) -> np.ndarray:
         return img
 
     angles = []
-    for rho, theta in lines[:, 0]:
+    for _, theta in lines[:, 0]:
         deg = (theta * 180.0 / np.pi) - 90.0
         if -max_deg <= deg <= max_deg:
             angles.append(deg)
@@ -715,12 +703,12 @@ def auto_upright_small(img: np.ndarray, max_deg: float = 3.0) -> np.ndarray:
         return img
 
     h, w = img.shape[:2]
-    M = cv2.getRotationMatrix2D((w / 2, h / 2), rot, 1.0)
+    rotation_matrix = cv2.getRotationMatrix2D((w / 2, h / 2), rot, 1.0)
 
     # Rotate in linear space
     out = cv2.warpAffine(
         (img * 65535).astype(np.uint16),
-        M,
+        rotation_matrix,
         (w, h),
         flags=cv2.INTER_LANCZOS4,
         borderMode=cv2.BORDER_REPLICATE,
@@ -796,27 +784,27 @@ def split_tone(
     # Work in sRGB
     img_srgb = linear_to_srgb(img)
     hsv = Image.fromarray((img_srgb * 255).astype(np.uint8), "RGB").convert("HSV")
-    H, S, V = [np.array(c, dtype=np.float32) / 255.0 for c in hsv.split()]
+    hue, saturation, value = [np.array(c, dtype=np.float32) / 255.0 for c in hsv.split()]
 
     luma = 0.2126 * img_srgb[..., 0] + 0.7152 * img_srgb[..., 1] + 0.0722 * img_srgb[..., 2]
     mask_sh = np.clip(1.0 - (luma * 2.0), 0.0, 1.0)
     mask_hi = np.clip((luma * 2.0) - 1.0, 0.0, 1.0)
 
     if sh_h is not None and sh_s > 0:
-        H = (H * (1 - mask_sh)) + ((sh_h / 360.0) * mask_sh)
-        S = np.clip(S + sh_s * mask_sh, 0, 1)
+        hue = (hue * (1 - mask_sh)) + ((sh_h / 360.0) * mask_sh)
+        saturation = np.clip(saturation + sh_s * mask_sh, 0, 1)
 
     if hi_h is not None and hi_s > 0:
-        H = (H * (1 - mask_hi)) + ((hi_h / 360.0) * mask_hi)
-        S = np.clip(S + hi_s * mask_hi, 0, 1)
+        hue = (hue * (1 - mask_hi)) + ((hi_h / 360.0) * mask_hi)
+        saturation = np.clip(saturation + hi_s * mask_hi, 0, 1)
 
     out = (
         Image.merge(
             "HSV",
             [
-                Image.fromarray((H * 255).astype(np.uint8)),
-                Image.fromarray((S * 255).astype(np.uint8)),
-                Image.fromarray((V * 255).astype(np.uint8)),
+                Image.fromarray((hue * 255).astype(np.uint8)),
+                Image.fromarray((saturation * 255).astype(np.uint8)),
+                Image.fromarray((value * 255).astype(np.uint8)),
             ],
         ).convert("RGB")
     )
@@ -973,12 +961,12 @@ def build_contact_sheet(
 ) -> None:
     """Generate PDF contact sheet."""
     c = canvas.Canvas(str(out_pdf), pagesize=page_size)
-    W, H = page_size
+    page_width, page_height = page_size
     margin = 36
-    cell_w = (W - 2 * margin) / thumbs_per_row
+    cell_w = (page_width - 2 * margin) / thumbs_per_row
     cell_h = cell_w * 0.75
 
-    x, y = margin, H - margin
+    x, y = margin, page_height - margin
 
     if caption:
         c.setFont("Helvetica", 10)
@@ -992,13 +980,13 @@ def build_contact_sheet(
             bio = ImageOps.exif_transpose(im)
             iw, ih = bio.size
 
-            if x + cell_w > W - margin:
+            if x + cell_w > page_width - margin:
                 x = margin
                 y -= cell_h + 28
 
             if y < margin + cell_h:
                 c.showPage()
-                y = H - margin
+                y = page_height - margin
                 x = margin
 
             c.drawImage(ImageReader(bio), x, y - ih, iw, ih)
@@ -1006,7 +994,7 @@ def build_contact_sheet(
             c.drawString(x, y - ih - 10, img.name)
             x += cell_w
 
-        except Exception as e:
+        except (IOError, OSError) as e:
             LOG.warning("Contact sheet skip %s: %s", img, e)
 
     c.showPage()
@@ -1058,25 +1046,25 @@ def embed_iptc_exiftool(img_path: Path, row: Dict[str, str]) -> None:
     """Embed IPTC/XMP using exiftool."""
     args = ["exiftool", "-overwrite_original", "-charset", "iptc=UTF8"]
 
-    def add(tag: str, value: Optional[str], key: str) -> None:
+    def add(tag: str, value: Optional[str]) -> None:
         if not value:
             return
         args.extend([f"-{tag}={value}"])
 
-    add("XMP-dc:Title", row.get("title"), "title")
-    add("IPTC:ObjectName", row.get("title"), "title")
-    add("IPTC:Caption-Abstract", row.get("description"), "description")
-    add("XMP-dc:Description", row.get("description"), "description")
-    add("XMP-photoshop:Credit", row.get("credit"), "credit")
-    add("XMP-dc:Creator", row.get("creator"), "creator")
-    add("IPTC:CopyrightNotice", row.get("copyright"), "copyright")
+    add("XMP-dc:Title", row.get("title"))
+    add("IPTC:ObjectName", row.get("title"))
+    add("IPTC:Caption-Abstract", row.get("description"))
+    add("XMP-dc:Description", row.get("description"))
+    add("XMP-photoshop:Credit", row.get("credit"))
+    add("XMP-dc:Creator", row.get("creator"))
+    add("IPTC:CopyrightNotice", row.get("copyright"))
 
     kw = row.get("keywords")
     if kw:
         for k in [k.strip() for k in kw.replace(";", ",").split(",") if k.strip()]:
             args.extend([f"-IPTC:Keywords={k}"])
 
-    add("XMP-iptcCore:Location", row.get("location"), "location")
+    add("XMP-iptcCore:Location", row.get("location"))
 
     args.append(str(img_path))
     subprocess.run(
@@ -1095,7 +1083,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
     lay.create()
 
     # Progress tracker
-    tracker = ProgressTracker(lay.STATE) if resume else None
+    tracker = ProgressTracker(lay.state) if resume else None
     if tracker:
         LOG.info("Resume mode enabled")
 
@@ -1104,7 +1092,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
     # Note: renaming not shown here for brevity - use from v1
 
     # Selects
-    selects_csv = ensure_selects_csv(cfg, lay, raws_copied)
+    ensure_selects_csv(cfg, lay, raws_copied)
     raws = filter_selects(cfg, raws_copied)
 
     # Parallel RAW decode
@@ -1115,7 +1103,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
     )
 
     workers = int(cfg.processing.get("workers", 4))
-    base_outputs = decode_raws_parallel(raws, lay.WORK_BASE, icc_prophoto, workers, tracker)
+    base_outputs = decode_raws_parallel(raws, lay.work_base, icc_prophoto, workers, tracker)
 
     # Auto-upright (can be parallelized similarly)
     aligned_paths = []
@@ -1123,7 +1111,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
         LOG.info("Auto-upright correction")
         for p in tqdm(base_outputs, desc="Upright"):
             if tracker and tracker.is_completed(f"upright:{p.name}"):
-                aligned_paths.append(lay.WORK_ALIGN / p.name)
+                aligned_paths.append(lay.work_align / p.name)
                 continue
 
             try:
@@ -1131,7 +1119,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
                 img = auto_upright_small(
                     img, float(cfg.processing.get("upright_max_deg", 3.0))
                 )
-                out = lay.WORK_ALIGN / p.name
+                out = lay.work_align / p.name
                 save_tiff16_prophoto(img, out, icc_prophoto)
                 aligned_paths.append(out)
 
@@ -1140,22 +1128,22 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
 
                 del img
                 gc.collect()
-            except Exception as e:
+            except (IOError, OSError, RuntimeError) as e:
                 LOG.warning("Upright failed %s: %s", p, e)
     else:
         aligned_paths = base_outputs
 
     # Style variants
     LOG.info("Creating style variants")
-    variant_map: Dict[str, List[Path]] = {k: [] for k in lay.WORK_VARIANTS}
+    variant_map: Dict[str, List[Path]] = {k: [] for k in lay.work_variants}
 
     for p in tqdm(aligned_paths, desc="Variants"):
         try:
             base = np.array(Image.open(p)).astype(np.float32) / 65535.0
 
-            for style in lay.WORK_VARIANTS.keys():
+            for style, style_path in lay.work_variants.items():
                 if tracker and tracker.is_completed(f"variant:{style}:{p.name}"):
-                    variant_map[style].append(lay.WORK_VARIANTS[style] / p.name)
+                    variant_map[style].append(style_path / p.name)
                     continue
 
                 graded = style_grade(base, style, cfg.styles)
@@ -1163,7 +1151,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
                 if cfg.consistency.get("wb_neutralize", True):
                     graded = neutralize_wb_near_white(graded)
 
-                out = lay.WORK_VARIANTS[style] / p.name
+                out = style_path / p.name
                 save_tiff16_prophoto(graded, out, icc_prophoto)
                 variant_map[style].append(out)
 
@@ -1173,7 +1161,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
             del base
             gc.collect()
 
-        except Exception as e:
+        except (IOError, OSError, RuntimeError) as e:
             LOG.warning("Variants failed %s: %s", p, e)
 
     # Consistency normalization (in-place for memory efficiency)
@@ -1204,8 +1192,8 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
 
             im = np.array(Image.open(pt)).astype(np.float32) / 65535.0
 
-            print_out = lay.EXPORT_PRINT[style] / pt.name
-            web_out = lay.EXPORT_WEB[style] / (pt.stem + ".jpg")
+            print_out = lay.export_print[style] / pt.name
+            web_out = lay.export_web[style] / (pt.stem + ".jpg")
 
             export_assets(
                 im,
@@ -1234,26 +1222,26 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
             gc.collect()
 
     # Contact sheets
-    for style in lay.EXPORT_WEB:
-        imgs = sorted(list(lay.EXPORT_WEB[style].glob("*.jpg")), key=human_sort_key)
+    for style in lay.export_web:
+        imgs = sorted(list(lay.export_web[style].glob("*.jpg")), key=human_sort_key)
         if not imgs:
             continue
 
-        out_pdf = lay.DOCS_CONTACTS / f"contact_{style}.pdf"
+        out_pdf = lay.docs_contacts / f"contact_{style}.pdf"
         build_contact_sheet(imgs, out_pdf, caption=f"{cfg.project_name} — {style}")
 
     # Metadata (simplified)
     meta_map = read_metadata_csv(Path(cfg.metadata.get("csv_path", "")))
     if meta_map and has_exiftool():
         LOG.info("Embedding metadata")
-        for style in lay.EXPORT_WEB:
-            for img in list(lay.EXPORT_WEB[style].glob("*.jpg")):
+        for style in lay.export_web:
+            for img in list(lay.export_web[style].glob("*.jpg")):
                 row = meta_map.get(img.name) or meta_map.get(img.stem + ".tif")
                 if row:
                     embed_iptc_exiftool(img, row)
 
     # Manifest
-    manifest_path = lay.DOCS_MANIFESTS / "manifest.json"
+    manifest_path = lay.docs_manifests / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2))
 
     # ZIP
