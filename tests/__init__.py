@@ -4,13 +4,25 @@
 from __future__ import annotations
 
 import sys
-import types
 from datetime import date, timedelta
+
 import pytest
-from hypothesis import given, strategies as st
+
+# Hypothesis for property-based testing
+try:
+    from hypothesis import given, strategies as st
+except ImportError:
+    raise ImportError(
+        "Hypothesis is required for these tests. Install via `pip install hypothesis`."
+    )
 
 # Import the helpers under test
-from helpers import documents, demonstrates, valid_until
+try:
+    from helpers import documents, demonstrates, valid_until
+except ImportError as e:
+    raise ImportError(
+        "Failed to import 'helpers' module. Ensure 'helpers' is in PYTHONPATH or installed."
+    ) from e
 
 # -------------------------
 # tests for documents
@@ -20,7 +32,6 @@ def test_documents_appends_docstring():
     @documents("Test note")
     def func():
         pass
-
     assert func.__doc__ == "Test note"
 
 def test_documents_preserves_existing_docstring():
@@ -28,7 +39,6 @@ def test_documents_preserves_existing_docstring():
     def func():
         """Original doc"""
         return True
-
     assert func.__doc__ == "Prefix note\nOriginal doc"
 
 # -------------------------
@@ -39,18 +49,15 @@ def test_demonstrates_single_string():
     @demonstrates("ConceptA")
     def func():
         return True
-
     assert func.__demonstrates__ == ("ConceptA",)
     assert func.__doc__.startswith("Demonstrates: ConceptA")
 
 def test_demonstrates_class():
     class Dummy:
         pass
-
     @demonstrates(Dummy)
     def func():
         return True
-
     assert func.__demonstrates__ == (Dummy,)
     assert "Dummy" in func.__doc__
 
@@ -59,7 +66,6 @@ def test_demonstrates_existing_docstring():
     def func():
         """Existing doc"""
         return True
-
     assert func.__doc__.startswith("Demonstrates: ConceptB\n")
     assert "Existing doc" in func.__doc__
 
@@ -78,7 +84,6 @@ def test_demonstrates_with_various_concepts(concept):
     @demonstrates(concept)
     def dummy():
         return True
-
     assert dummy.__demonstrates__[0] == concept
     assert dummy.__doc__.startswith("Demonstrates:")
 
@@ -97,7 +102,6 @@ def test_demonstrates_with_multiple_various_concepts(concepts):
     @demonstrates(concepts)
     def dummy():
         return True
-
     assert dummy.__demonstrates__ == tuple(concepts)
     expected_parts = []
     for c in concepts:
@@ -114,21 +118,17 @@ def test_demonstrates_with_multiple_various_concepts(concepts):
 
 def test_valid_until_future_allows_execution():
     future_date = (date.today() + timedelta(days=1)).isoformat()
-
     @valid_until(future_date, reason="future test")
     def func():
         return 42
-
     assert func() == 42
     assert func.__doc__.startswith(f"Valid until {future_date}")
 
 def test_valid_until_past_raises():
     past_date = (date.today() - timedelta(days=1)).isoformat()
-
     @valid_until(past_date, reason="expired test")
     def func():
         return 42
-
     with pytest.raises(AssertionError) as exc:
         func()
     assert "expired" in str(exc.value)
@@ -144,5 +144,4 @@ def test_basic_callable_property():
     @demonstrates("C")
     def func():
         return "ok"
-
     assert func() == "ok"
