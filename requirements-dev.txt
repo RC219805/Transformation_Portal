@@ -1,9 +1,22 @@
--r requirements-ci.txt
+# Core deps for testing
+pytest>=8,<9
+hypothesis>=6,<7
 
-# Linting
-flake8>=7,<8
-pylint>=3,<4
-black>=24.8,<25
+# Image / array processing
+numpy>=1.24,<3
+Pillow>=10,<12
+scipy>=1.15,<2
 
-# Type checking
-mypy>=1.10,<2
+# Optional utilities
+tifffile>=2023.7.18,<2025
+imagecodecs>=2023.9.18,<2025
+tqdm>=4.66,<5
+typer>=0.10.0
+
+# ------------------------
+# Dev / linting / type checking
+# ------------------------
+mypy>=1.10
+flake8>=7
+pylint>=3
+black>=24.8
