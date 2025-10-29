@@ -62,3 +62,11 @@ processed_output/
 
 # macOS
 .DS_Store
+
+# Large data files (keep directory structure, ignore large images)
+data/sample_images/**/*.jpg
+data/sample_images/**/*.jpeg
+data/sample_images/**/*.png
+data/sample_images/**/*.tif
+data/sample_images/**/*.tiff
+!data/sample_images/.gitkeep

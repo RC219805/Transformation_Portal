@@ -596,25 +596,50 @@ GitHub Actions workflows automatically:
 
 ## Project Structure
 
+> **Note:** As of v0.1.0 (October 2025), the repository has been restructured for better organization and maintainability. See [docs/REFACTORING_2025.md](docs/REFACTORING_2025.md) for details.
+
 ```
 Transformation_Portal/
-├── depth_pipeline/              # Depth Anything V2 processing
-│   ├── models/                  # Depth estimation models
-│   ├── processors/              # Image processors
-│   └── utils/                   # Utilities and caching
-├── luxury_tiff_batch_processor/ # TIFF processing module
-├── presence_security_v1_2/      # Security and watermarking
-├── tools/                       # Editorial and pipeline tools
-├── tests/                       # Comprehensive test suite
-├── config/                      # YAML configurations
-├── 01_Film_Emulation/          # Film emulation LUTs
-├── 02_Location_Aesthetic/      # Location LUTs
-├── 03_Material_Response/       # Material Response LUTs
-├── 08_Documentation/           # Guides and documentation
-├── 09_Client_Deliverables/     # Client-specific projects
-├── examples/                    # Usage examples
-└── textures/                    # Material textures
+├── src/transformation_portal/    # Main package (NEW)
+│   ├── pipelines/                # Processing pipelines (lux_render, depth_tools)
+│   ├── processors/               # Core processors (video, TIFF, material response)
+│   ├── enhancers/                # Enhancement tools (aerial, board material)
+│   ├── analyzers/                # Analysis tools (decision decay, workflow parser)
+│   ├── rendering/                # Rendering workflows
+│   ├── utils/                    # Shared utilities
+│   └── cli/                      # Command-line interfaces
+├── scripts/                      # Standalone utility scripts (NEW)
+├── data/                         # Data files - excluded from git (NEW)
+│   ├── sample_images/            # Sample images organized by type
+│   └── luts/                     # Symlinks to LUT directories
+├── docs/                         # Documentation (NEW)
+│   ├── depth_pipeline/
+│   ├── workflow/
+│   └── processing/
+├── depth_pipeline/               # Depth Anything V2 processing
+│   ├── models/                   # Depth estimation models
+│   ├── processors/               # Image processors
+│   └── utils/                    # Utilities and caching
+├── luxury_tiff_batch_processor/  # TIFF processing module
+├── presence_security_v1_2/       # Security and watermarking
+├── tools/                        # Editorial and pipeline tools
+├── tests/                        # Comprehensive test suite
+├── config/                       # YAML configurations
+├── 01_Film_Emulation/           # Film emulation LUTs
+├── 02_Location_Aesthetic/       # Location LUTs
+├── 03_Material_Response/        # Material Response LUTs
+├── 08_Documentation/            # Guides and documentation
+├── 09_Client_Deliverables/      # Client-specific projects
+├── examples/                     # Usage examples
+└── textures/                     # Material textures
 ```
+
+**Key Changes:**
+- **Organized module structure** in `src/transformation_portal/` for better maintainability
+- **Data separation** - large files excluded from git, stored in `data/`
+- **Centralized documentation** in `docs/` directory
+- **Utility scripts** collected in `scripts/` directory
+- **Backward compatibility** - original root files maintained for smooth migration
 
 ---
 
