@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 import sys
+import warnings
 from typing import Any, Dict
 
 import pytest
@@ -116,7 +117,6 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
 
     arr = np.linspace(0, 255, 4 * 4 * 3, dtype=np.uint8).reshape((4, 4, 3))
     # Suppress deprecated mode parameter warning for cleaner test output
-    import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         image = Image.fromarray(arr, mode="RGB")
@@ -196,7 +196,6 @@ def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: py
     output_dir.mkdir()
 
     arr = np.linspace(0, 255, 4 * 4 * 3, dtype=np.uint8).reshape((4, 4, 3))
-    import warnings
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
@@ -555,7 +554,6 @@ def test_image_roundtrip_uint16_with_alpha():
     # Note: PIL automatically converts uint16 RGBA images to uint8
     # This is the expected behavior, not a bug
     # We need to specify mode="RGBA" for uint16 data, though it's deprecated
-    import warnings
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         image = Image.fromarray(data, mode="RGBA")
