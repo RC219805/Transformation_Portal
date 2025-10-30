@@ -79,8 +79,16 @@ jobs:
           pip install -r requirements-ci.txt
           pip install -e .
           pip install pytest
-          # Fix numpy/scikit-learn ABI compatibility by reinstalling scikit-learn
-          # after all other dependencies are in place, respecting version constraints
+          # Workaround for numpy/scikit-learn ABI incompatibility:
+          # Recent versions of numpy (>=1.26) and scikit-learn (<1.4) can result in
+          # runtime ImportError due to ABI mismatch, especially when other dependencies
+          # (e.g., pandas, scipy) are installed first and may pull in conflicting wheels.
+          # See: https://github.com/scikit-learn/scikit-learn/issues/25896
+          #      https://github.com/numpy/numpy/issues/25605
+          # This step force-reinstalls scikit-learn after all other dependencies to ensure
+          # it is built/linked against the correct numpy version. Remove this workaround
+          # once all dependencies are compatible with scikit-learn >=1.4 or the upstream
+          # issues are resolved.
           # Extract scikit-learn version constraint from requirements-ci.txt and reinstall
           SKLEARN_CONSTRAINT=$(grep -E '^scikit-learn([<>=!]=?[^ ]*)?' requirements-ci.txt | head -n1)
           if [ -n "$SKLEARN_CONSTRAINT" ]; then
