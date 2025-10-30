@@ -32,7 +32,7 @@ class CausalityEngine:
 
 
 class ProbabilityWeaver:
-    def probability_of(self, target: WeakPoint) -> float:
+    def probability_of(self, _target: WeakPoint) -> float:
         return 0.9999
 
 

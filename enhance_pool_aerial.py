@@ -90,8 +90,8 @@ vis = Image.fromarray(colored)
 draw = ImageDraw.Draw(vis)
 
 # Add legend
-legend_y = 30
-legend_x = 30
+LEGEND_Y = 30
+LEGEND_X = 30
 for idx, (label, rule) in enumerate(assignments.items()):
     stat = next(s for s in stats if s.label == label)
     coverage = (stat.count / labels.size) * 100
@@ -99,7 +99,7 @@ for idx, (label, rule) in enumerate(assignments.items()):
 
     # Draw color swatch
     draw.rectangle(
-        [legend_x, legend_y + idx * 40, legend_x + 30, legend_y + idx * 40 + 25],
+        [LEGEND_X, LEGEND_Y + idx * 40, LEGEND_X + 30, LEGEND_Y + idx * 40 + 25],
         fill=color,
         outline=(255, 255, 255),
         width=2,
@@ -108,7 +108,7 @@ for idx, (label, rule) in enumerate(assignments.items()):
     # Draw text
     text = f"{rule.name.upper()}: {coverage:.1f}%"
     draw.text(
-        (legend_x + 40, legend_y + idx * 40 + 5),
+        (LEGEND_X + 40, LEGEND_Y + idx * 40 + 5),
         text,
         fill=(255, 255, 255),
         stroke_width=2,

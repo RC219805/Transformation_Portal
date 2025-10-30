@@ -55,14 +55,12 @@ except ImportError:
 # Annotators
 from controlnet_aux import CannyDetector, MidasDetector
 
-# Optional Real-ESRGAN
+# Optional Real-ESRGAN (RealESRGANer is imported lazily in LuxRenderPipeline.__init__)
 try:
-    from realesrgan import RealESRGAN
-except (ImportError, OSError):
-    RealESRGAN = None
-    _HAS_REALESRGAN = False
-else:
+    import realesrgan  # noqa: F401
     _HAS_REALESRGAN = True
+except (ImportError, OSError):
+    _HAS_REALESRGAN = False
 
 # --------------------------
 
