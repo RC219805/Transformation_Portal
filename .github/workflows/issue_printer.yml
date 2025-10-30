@@ -1,0 +1,18 @@
+name: Print Issue Info
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  print-info:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Print issue info
+        env:
+          BODY: ${{ github.event.issue.body }}
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "Body: \"$BODY\""
+          echo "Title: \"$TITLE\""
