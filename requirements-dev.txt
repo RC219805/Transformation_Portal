@@ -6,6 +6,7 @@ hypothesis>=6,<7
 numpy>=1.24,<3
 Pillow>=10,<12
 scipy>=1.15,<2
+scikit-learn>=1.0,<2
 
 # Optional utilities
 tifffile>=2023.7.18,<2025

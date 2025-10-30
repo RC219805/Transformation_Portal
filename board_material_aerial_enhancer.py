@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
-import numpy as np
-from sklearn.cluster import KMeans
 from typing import Callable, Optional, List
+
+import numpy as np
+from PIL import Image
+from sklearn.cluster import KMeans
 
 # ==========================
 # Default Textures (placeholder)
@@ -25,6 +27,7 @@ class MaterialRule:
         texture: str,
         blend: float,
         score_fn: Callable[[np.ndarray], float],
+        *,
         min_score: float = 0.0,
         tint: Optional[tuple[int, int, int]] = None,
         tint_strength: float = 0.0
@@ -80,17 +83,29 @@ def relabel(assignments: dict[int, MaterialRule], labels: np.ndarray) -> np.ndar
     return np.vectorize(lambda x: label_map.get(x, x))(labels)
 
 
-def relabel_safe(assignments: dict[int, MaterialRule], labels: np.ndarray, mode="warn", strict=True, verbose=False):
+def relabel_safe(
+    assignments: dict[int, MaterialRule],
+    labels: np.ndarray,
+    mode="warn",
+    strict=True,
+    verbose=False
+):
     # Ensure all label indices in assignments
     all_labels = np.unique(labels)
     missing = [lbl for lbl in all_labels if lbl not in assignments]
     if missing:
         if strict:
             raise ValueError(f"Missing assignments for labels: {missing}")
-        elif verbose and mode != "none":
+        if verbose and mode != "none":
             print(f"Warning: missing assignments for {missing}")
         for lbl in missing:
-            assignments[lbl] = MaterialRule(name="unknown", texture="", blend=0.5, score_fn=lambda x: 0.5)
+            default_rule = MaterialRule(
+                name="unknown",
+                texture="",
+                blend=0.5,
+                score_fn=lambda _: 0.5
+            )
+            assignments[lbl] = default_rule
     return relabel(assignments, labels)
 
 # ==========================
@@ -118,21 +133,34 @@ def build_material_rules(textures: dict[str, str]) -> List[MaterialRule]:
 
 
 def save_palette_assignments(assignments: dict[int, MaterialRule], out_path: Path):
-    data = {k: vars(v) for k, v in assignments.items()}
-    with open(out_path, "w") as f:
+    data = {}
+    for k, v in assignments.items():
+        # Exclude score_fn as it's not JSON serializable
+        rule_dict = {
+            "name": v.name,
+            "texture": v.texture,
+            "blend": v.blend,
+            "min_score": v.min_score,
+            "tint": v.tint,
+            "tint_strength": v.tint_strength
+        }
+        data[k] = rule_dict
+    with open(out_path, "w", encoding="utf-8") as f:
         json.dump(data, f)
 
 
 def load_palette_assignments(in_path: Path) -> dict[int, MaterialRule]:
-    with open(in_path) as f:
+    with open(in_path, encoding="utf-8") as f:
         data = json.load(f)
     assignments = {}
     for k, v in data.items():
+        # Fix cell-var-from-loop: capture v's blend value in default arg
+        blend_val = v.get("blend", 0.5)
         assignments[int(k)] = MaterialRule(
             name=v["name"],
             texture=v["texture"],
             blend=v["blend"],
-            score_fn=lambda x: v.get("blend", 0.5),
+            score_fn=lambda x, b=blend_val: b,
             min_score=v.get("min_score", 0.0),
             tint=tuple(v["tint"]) if v.get("tint") else None,
             tint_strength=v.get("tint_strength", 0.0)
@@ -144,11 +172,13 @@ def load_palette_assignments(in_path: Path) -> dict[int, MaterialRule]:
 # ==========================
 
 
-def auto_assign_materials_by_stats(labels: np.ndarray, img: np.ndarray, tex_map: dict) -> dict[int, MaterialRule]:
+def auto_assign_materials_by_stats(
+    labels: np.ndarray, img: np.ndarray, tex_map: dict
+) -> dict[int, MaterialRule]:
     stats = compute_cluster_stats(labels, img.reshape(-1, img.shape[-1]))
     rules = build_material_rules(tex_map)
     assignments = {}
-    for i, s in enumerate(stats):
+    for i, _ in enumerate(stats):
         assignments[i] = rules[i % len(rules)]
     return assignments
 
@@ -157,12 +187,19 @@ def auto_assign_materials_by_stats(labels: np.ndarray, img: np.ndarray, tex_map:
 # ==========================
 
 
-def enhance_aerial(image: np.ndarray, out_path: Optional[str] = None, k: int = 3, textures: Optional[dict] = None):
+def enhance_aerial(
+    image: np.ndarray,
+    out_path: Optional[str] = None,
+    k: int = 3,
+    textures: Optional[dict] = None
+):
+    # pylint: disable=too-many-locals
     h, w, c = image.shape
     pixels = image.reshape(-1, c).astype(np.float32)
 
     labels = _kmeans(pixels, k=k, seed=42)
-    assignments = auto_assign_materials_by_stats(labels, image, textures or DEFAULT_TEXTURES)
+    tex = textures or DEFAULT_TEXTURES
+    assignments = auto_assign_materials_by_stats(labels, image, tex)
     labels = relabel(assignments, labels)
 
     output = np.zeros_like(pixels)
@@ -172,7 +209,6 @@ def enhance_aerial(image: np.ndarray, out_path: Optional[str] = None, k: int = 3
     output = output.reshape(h, w, c)
 
     if out_path:
-        from PIL import Image
         im = (np.clip(output, 0, 1) * 255).astype(np.uint8)
         Image.fromarray(im).save(out_path)
 

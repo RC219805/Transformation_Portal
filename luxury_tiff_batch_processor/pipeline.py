@@ -289,6 +289,7 @@ def process_single_image(
 ) -> None:
     """Public wrapper around :func:`_process_image_worker`."""
 
+    # pylint: disable=duplicate-code  # Similar call in cli.py with same params
     _process_image_worker(
         source,
         destination,
@@ -299,6 +300,7 @@ def process_single_image(
         dry_run=dry_run,
         profile=_ensure_profile(profile),
     )
+    # pylint: enable=duplicate-code
 
 
 # Backwards compatibility shim for older integrations expecting the previous helper name.

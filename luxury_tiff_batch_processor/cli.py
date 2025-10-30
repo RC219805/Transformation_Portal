@@ -381,6 +381,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 continue
             if args.dry_run:
                 LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
+            # pylint: disable=duplicate-code  # Similar call in pipeline.py with same params
             process_single_image(
                 image_path,
                 destination,
@@ -391,6 +392,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 dry_run=args.dry_run,
                 profile=profile,
             )
+            # pylint: enable=duplicate-code
             if not args.dry_run:
                 processed += 1
     else:

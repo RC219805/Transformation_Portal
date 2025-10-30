@@ -1,52 +1,119 @@
-name: issue-summary
+name: Issue Summarizer
 
 on:
+  issue_comment:
+  pull_request:
   issues:
-    types: [opened]
+    types: [opened, edited]
 
 jobs:
-  summarize-issue:
+  summarize:
     runs-on: ubuntu-latest
+    env:
+      RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
+      GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+      ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      # marker used to detect previously-posted diagnostic comments
+      DIAGNOSTIC_MARKER: "<!-- ai-summarizer-missing-key -->"
+      # short, non-sensitive message to post when key is missing
+      DIAGNOSTIC_MSG: |
+        AI summarizer skipped: OPENAI_API_KEY is not configured in CI.
+        Repository maintainers can enable automated summaries by configuring the `OPENAI_API_KEY` secret.
+        ${DIAGNOSTIC_MARKER}
     steps:
-      - name: Print issue info
-        env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-        run: |
-          printf 'Issue #%s\n' "$ISSUE_NUMBER"
-          printf 'Title: %s\n' "$ISSUE_TITLE"
-          printf 'Author: %s\n' "$ISSUE_AUTHOR"
-          printf 'Body: %s\n' "$ISSUE_BODY"
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Generate summary with OpenAI
-        id: generate-summary
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Run summarizer (safe Option B)
+        id: summarizer
         run: |
-          echo "Generating AI summary..."
-          SUMMARY=$(curl -s https://api.openai.com/v1/chat/completions \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -d "{
-              \"model\": \"gpt-4o-mini\",
-              \"messages\": [
-                {\"role\": \"system\", \"content\": \"You are an assistant that summarizes GitHub issues concisely.\"},
-                {\"role\": \"user\", \"content\": \"Title: ${{ github.event.issue.title }}\n\nBody: ${{ github.event.issue.body }}\"}
-              ]
-            }" | jq -r '.choices[0].message.content')
+          python - <<'PY'
+          import os, sys, textwrap
+          RESPONSE_FILE = os.environ["RESPONSE_FILE"]
+          OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-          if [ -z "$SUMMARY" ]; then
-            SUMMARY="⚠️ Failed to generate summary."
+          # When the key is missing, write only a short, safe message and exit 0
+          if not OPENAI_API_KEY:
+              msg = os.environ["DIAGNOSTIC_MSG"]
+              with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
+                  f.write(msg)
+              # DEBUG: print only the non-sensitive message to runner logs
+              print("AI summarizer skipped; diagnostic message written to RESPONSE_FILE.")
+              sys.exit(0)
+
+          # If key present: perform summarization (example; keep minimal)
+          from openai import OpenAI
+          client = OpenAI(api_key=OPENAI_API_KEY)
+
+          title = (os.getenv("ISSUE_TITLE") or "").strip()
+          body  = (os.getenv("ISSUE_BODY") or "").strip()[:4000]
+          prompt = textwrap.dedent(f"""
+          Summarize this GitHub issue in one concise paragraph (neutral tone).
+          Title: {title}
+          Body:
+          {body}
+          """)
+          try:
+              completion = client.chat.completions.create(
+                  model="gpt-4o-mini",
+                  messages=[{"role":"user","content":prompt}],
+                  max_tokens=160, temperature=0.2
+              )
+              summary = (completion.choices[0].message.content or "").strip()
+          except Exception as e:
+              # Write a short friendly failure message (no secrets) and log detailed error to stderr
+              summary = "AI summarization failed: an internal error occurred. See CI logs for details."
+              print("Detailed error (redacted for posting):", file=sys.stderr)
+              print(repr(e), file=sys.stderr)
+
+          with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
+              f.write(summary)
+          PY
+        env:
+          ISSUE_TITLE: ${{ github.event.pull_request.title || github.event.head_commit.message || '' }}
+          ISSUE_BODY: ${{ github.event.pull_request.body || github.event.head_commit.message || '' }}
+
+      - name: Debug RESPONSE_FILE (safe)
+        run: |
+          echo "RESPONSE_FILE size:"
+          stat -c "%s bytes" "$RESPONSE_FILE" || true
+          echo "First 5 lines of RESPONSE_FILE:"
+          head -n 5 "$RESPONSE_FILE" || true
+
+      - name: Post comment only if present and not previously posted
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          RESPONSE_FILE: ${{ env.RESPONSE_FILE }}
+          MARKER: ${{ env.DIAGNOSTIC_MARKER }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "No ISSUE_NUMBER detected; skipping comment post."
+            exit 0
           fi
-          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
 
-      - name: Post summary comment
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          body: |
-            **AI-generated summary:**
-            ${{ steps.generate-summary.outputs.summary }}
+          if [ ! -s "$RESPONSE_FILE" ]; then
+            echo "No response to post."
+            exit 0
+          fi
+
+          # Read the candidate comment body
+          BODY="$(cat "$RESPONSE_FILE")"
+
+          # Check existing comments for the marker so we only post once
+          echo "Checking existing comments for diagnostic marker..."
+          EXISTING=$(gh api repos/$REPO/issues/$ISSUE_NUMBER/comments --jq '.[].body' 2>/dev/null || echo "")
+          if echo "$EXISTING" | grep -Fq "$MARKER"; then
+            echo "A diagnostic comment has already been posted; skipping to avoid duplicates."
+            exit 0
+          fi
+
+          # Post the comment using --body-file to avoid quoting issues.
+          # NOTE: use GH_TOKEN with minimal scope (issues:write)
+          echo "Posting comment to issue/PR #$ISSUE_NUMBER"
+          gh issue comment "$ISSUE_NUMBER" --body-file "$RESPONSE_FILE"
