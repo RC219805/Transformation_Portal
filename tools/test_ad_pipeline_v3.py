@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 
 # Import from v3
 from ad_editorial_post_pipeline_v3 import (
@@ -117,7 +118,6 @@ def sample_config(temp_dir, sample_config_dict):
     (temp_dir / "project").mkdir()
 
     # Write config
-    import yaml
     with config_path.open("w") as f:
         yaml.dump(sample_config_dict, f)
 
@@ -322,7 +322,6 @@ class TestConfiguration:
         sample_config_dict["processing"]["workers"] = 100  # Too high
         config_path = temp_dir / "bad_config.yml"
 
-        import yaml
         (temp_dir / "input").mkdir(exist_ok=True)
         (temp_dir / "project").mkdir(exist_ok=True)
         with config_path.open("w") as f:
@@ -336,7 +335,6 @@ class TestConfiguration:
         sample_config_dict["export"]["jpeg_quality"] = 101  # Too high
         config_path = temp_dir / "bad_config.yml"
 
-        import yaml
         (temp_dir / "input").mkdir(exist_ok=True)
         (temp_dir / "project").mkdir(exist_ok=True)
         with config_path.open("w") as f:
@@ -350,7 +348,6 @@ class TestConfiguration:
         sample_config_dict["styles"] = {}
         config_path = temp_dir / "bad_config.yml"
 
-        import yaml
         (temp_dir / "input").mkdir(exist_ok=True)
         (temp_dir / "project").mkdir(exist_ok=True)
         with config_path.open("w") as f:
@@ -364,7 +361,6 @@ class TestConfiguration:
         sample_config_dict["styles"]["test"] = {"exposure": 5.0}  # Too high
         config_path = temp_dir / "bad_config.yml"
 
-        import yaml
         (temp_dir / "input").mkdir(exist_ok=True)
         (temp_dir / "project").mkdir(exist_ok=True)
         with config_path.open("w") as f:
