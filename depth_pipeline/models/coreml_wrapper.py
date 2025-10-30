@@ -7,7 +7,7 @@ Expected performance: 24ms @ 518x518, 65ms @ 1024x1024
 
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 from PIL import Image
@@ -70,7 +70,9 @@ class CoreMLDepthModel:
         # Load model
         self.model = self._load_model()
 
-        logger.info(f"Loaded CoreML model from {model_path} (compute={compute_units})")
+        logger.info(
+            "Loaded CoreML model from %s (compute=%s)", model_path, compute_units
+        )
 
     def _load_model(self):
         """Load CoreML model with error handling."""
@@ -81,7 +83,7 @@ class CoreMLDepthModel:
             )
             return model
         except Exception as e:
-            logger.error(f"Failed to load CoreML model: {e}")
+            logger.error("Failed to load CoreML model: %s", e)
             raise
 
     def predict(
@@ -125,7 +127,7 @@ class CoreMLDepthModel:
             return depth.astype(np.float32)
 
         except Exception as e:
-            logger.error(f"CoreML prediction failed: {e}")
+            logger.error("CoreML prediction failed: %s", e)
             raise
 
     def predict_batch(

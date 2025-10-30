@@ -1,6 +1,4 @@
-"""Tests for the whimsical future-proofing helpers."""
-
-from __future__ import annotations
+# test_prophetic_orchestrator.py
 
 from prophetic_orchestrator import (
     CausalityEngine,
@@ -41,11 +39,9 @@ def test_prophetic_orchestrator_deploys_temporal_antibodies() -> None:
     assert all(isinstance(item, TemporalAntibody) for item in antibodies)
     assert orchestrator.deployed_antibodies == antibodies
 
-    # The orchestrator itself should have updated the probability field to 0.9999
     for deployed in orchestrator.deployed_antibodies:
         probability = orchestrator.probability_weaver.probability_of(deployed.target)
         assert probability == 0.9999
 
-    # Sanity-check the generated countermeasures reference the component names.
     for antibody in antibodies:
         assert antibody.target.component in antibody.countermeasure

@@ -53,7 +53,7 @@ _MANAGED_OPTION_PARAMS: Mapping[str, str] = {
 }
 
 
-def render_coastal_estate(
+def render_coastal_estate(  # pylint: disable=too-many-locals
     input_image: str,
     output_dir: str = "./transcended",
     *,
@@ -140,4 +140,3 @@ def render_coastal_estate(
 
 
 __all__ = ["COASTAL_ESTATE_PROMPT", "render_coastal_estate"]
-
