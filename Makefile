@@ -47,7 +47,7 @@ lint:
 	@echo "Running flake8 critical checks..."
 	@$(PY) -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
 	@echo "Running pylint (non-blocking)..."
-	@$(PY) -m pylint $(shell git ls-files '*.py' || echo '') || true
+	@$(PY) -m pylint $(shell git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' || echo '') || true
 
 ci: lint test-fast
 	@echo "✅ Local CI checks completed successfully."

@@ -5,6 +5,8 @@ import pytest
 
 from codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
+# pylint: disable=redefined-outer-name  # pytest fixtures
+
 
 @pytest.fixture()
 def auditor() -> CodebasePhilosophyAuditor:

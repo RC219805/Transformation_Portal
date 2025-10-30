@@ -96,7 +96,7 @@ def test_process_courtyard_scene_allows_override_removal(monkeypatch, tmp_path):
 
     monkeypatch.setattr(ghc.ltiff, "parse_args", fake_parse_args)
     monkeypatch.setattr(ghc.ltiff, "run_pipeline", lambda args: 0)
-    monkeypatch.setattr(ghc.ltiff, "ProcessingCapabilities", lambda: _SpyCapabilities())
+    monkeypatch.setattr(ghc.ltiff, "ProcessingCapabilities", _SpyCapabilities)
 
     ghc.process_courtyard_scene(tmp_path / "input", overrides={"vibrance": None})
 

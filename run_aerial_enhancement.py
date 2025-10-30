@@ -12,6 +12,7 @@ print("Resolution: 4K (4096px width)")
 print("Materials: MBAR-approved palette (8 materials)")
 print()
 
+# pylint: disable=duplicate-code  # Similar enhance_aerial call in enhance_pool_aerial.py
 # Enhance with MBAR board materials
 result = enhance_aerial(
     input_path,
@@ -21,6 +22,7 @@ result = enhance_aerial(
     seed=22,                 # Reproducible results
     target_width=4096,       # 4K deliverable
 )
+# pylint: enable=duplicate-code
 
 print(f"✅ Enhanced aerial saved to: {result}")
-print(f"✅ File size: {result.stat().st_size / (1024**2):.2f} MB")
+print(f"✅ File size: {result.stat().st_size / (1024**2):.2f} MB")  # pylint: disable=no-member

@@ -107,6 +107,7 @@ def test_threshold_failure(tmp_path: Path) -> None:
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     assert completed.returncode == 1

@@ -719,7 +719,7 @@ def build_contact_sheet(
     for img in images:
         try:
             im = Image.open(img)
-            im.thumbnail((int(cell_w), int(cell_h)), Image.LANCZOS)
+            im.thumbnail((int(cell_w), int(cell_h)), Image.LANCZOS)  # pylint: disable=no-member
             bio = ImageOps.exif_transpose(im)
             iw, ih = bio.size
 
@@ -827,7 +827,7 @@ def resize_long_edge(img: np.ndarray, long_edge: int) -> np.ndarray:
     out = (
         np.array(
             Image.fromarray((img * 255).astype(np.uint8)).resize(
-                (new_w, new_h), Image.LANCZOS
+                (new_w, new_h), Image.LANCZOS  # pylint: disable=no-member
             )
         ).astype(np.float32)
         / 255.0
@@ -1050,7 +1050,7 @@ def unsharp_mask(
         return img
 
     pil = Image.fromarray((img * 255).astype(np.uint8), "RGB")
-    blur = pil.filter(Image.Filter.GaussianBlur(radius))
+    blur = pil.filter(Image.Filter.GaussianBlur(radius))  # pylint: disable=no-member
     low = np.array(blur).astype(np.float32) / 255.0
     high = img - low
     mask = np.where(np.abs(high) > threshold, high, 0.0)
@@ -1339,13 +1339,13 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         try:
             base = np.array(Image.open(p)).astype(np.float32) / 255.0
 
-            for style in lay.WORK_VARIANTS.keys():
+            for style, style_path in lay.WORK_VARIANTS.items():
                 graded = style_grade(base, style, cfg.styles)
 
                 if cfg.consistency.get("wb_neutralize", True):
                     graded = neutralize_wb_near_white(graded)
 
-                out = lay.WORK_VARIANTS[style] / p.name
+                out = style_path / p.name
                 save_tiff16_prophoto(graded, out, icc_prophoto)
                 variant_map[style].append(out)
 

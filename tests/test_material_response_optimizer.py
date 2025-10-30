@@ -1,4 +1,5 @@
 """Tests for :mod:`material_response_optimizer`."""
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 from __future__ import annotations
 
