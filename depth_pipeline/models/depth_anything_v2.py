@@ -459,9 +459,7 @@ def safe_depth_estimation(
                 else image.size[::-1]
             )
             if not SKIMAGE_AVAILABLE:
-                raise ImportError(
-                    "scikit-image is required for resizing. Install with: pip install scikit-image"
-                ) from None
+                raise ImportError("scikit-image is required for resizing. Install with: pip install scikit-image") from None
 
             result['depth'] = resize(
                 result['depth'],

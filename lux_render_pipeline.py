@@ -25,6 +25,7 @@ except Exception:  # pragma: no cover
                 "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
             )
 import glob
+import importlib.util
 import math
 import random
 from functools import lru_cache
@@ -35,6 +36,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import typer
 from PIL import Image, ImageDraw, ImageFont
+from scipy.ndimage import gaussian_filter, sobel
 
 import torch
 from torch import Generator
@@ -55,14 +57,8 @@ except ImportError:
 # Annotators
 from controlnet_aux import CannyDetector, MidasDetector
 
-# Optional Real-ESRGAN
-try:
-    from realesrgan import RealESRGAN
-except (ImportError, OSError):
-    RealESRGAN = None
-    _HAS_REALESRGAN = False
-else:
-    _HAS_REALESRGAN = True
+# Optional Real-ESRGAN (RealESRGANer is imported lazily in LuxRenderPipeline.__init__)
+_HAS_REALESRGAN = importlib.util.find_spec("realesrgan") is not None
 
 # --------------------------
 
@@ -234,9 +230,6 @@ def add_bloom(
     intensity: float = 0.25,
 ) -> np.ndarray:
     """Add a soft bloom based on bright pixels exceeding ``threshold``."""
-
-    from scipy.ndimage import gaussian_filter
-
     lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
     mask = (lum > threshold).astype(np.float32)
     glow = np.stack([gaussian_filter(rgb[..., i] * mask, blur_radius) for i in range(3)], axis=-1)
@@ -304,7 +297,7 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
     """
 
     # Lazy import: only load SciPy filters when finishing is requested.
-    from scipy.ndimage import sobel
+    from scipy.ndimage import sobel, gaussian_filter
 
     rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
 

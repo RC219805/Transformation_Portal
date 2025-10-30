@@ -16,6 +16,7 @@ import argparse
 import json
 import math
 import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -197,9 +198,7 @@ def ensure_tools_available() -> None:
 
 
 def shutil_which(binary: str) -> Optional[str]:
-    from shutil import which
-
-    return which(binary)
+    return shutil.which(binary)
 
 
 def probe_source(path: Path) -> Dict[str, object]:
@@ -1067,7 +1066,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         if tone_map_peak is not None and float(tone_map_peak) <= 0.0:
             raise ValueError("tone_map_peak must be greater than 0")
         tone_map_desat = config.get("tone_map_desat")
-        if tone_map_desat is not None and not (0.0 <= float(tone_map_desat) <= 1.0):
+        if tone_map_desat is not None and not 0.0 <= float(tone_map_desat) <= 1.0:
             raise ValueError("tone_map_desat must be within [0.0, 1.0]")
         halation_intensity = float(config.get("halation_intensity", 0.0))
         if halation_intensity < 0.0:

@@ -89,7 +89,7 @@ class WorkflowParser:
                 f"Failed to parse file: {e}"
             ))
 
-    def _validate_workflow_structure(self, workflow_file: Path, workflow: Dict, lines: List[str]):
+    def _validate_workflow_structure(self, workflow_file: Path, workflow: Dict, _lines: List[str]):
         """Validate basic workflow structure."""
         if not workflow:
             self.bugs.append(WorkflowBug(
