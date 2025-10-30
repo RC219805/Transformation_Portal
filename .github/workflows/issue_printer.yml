@@ -7,8 +7,6 @@ on:
 jobs:
   print-info:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
 
       - name: Print issue info
