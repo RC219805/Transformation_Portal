@@ -81,7 +81,14 @@ jobs:
           pip install pytest
           # Fix numpy/scikit-learn ABI compatibility by reinstalling scikit-learn
           # after all other dependencies are in place, respecting version constraints
-          pip install --no-cache-dir --force-reinstall --no-deps "scikit-learn>=1.3.2,<1.4"
+          # Extract scikit-learn version constraint from requirements-ci.txt and reinstall
+          SKLEARN_CONSTRAINT=$(grep -E '^scikit-learn([<>=!]=?[^ ]*)?' requirements-ci.txt | head -n1)
+          if [ -n "$SKLEARN_CONSTRAINT" ]; then
+            pip install --no-cache-dir --force-reinstall --no-deps "$SKLEARN_CONSTRAINT"
+          else
+            echo "scikit-learn constraint not found in requirements-ci.txt" >&2
+            exit 1
+          fi
 
       - name: Run tests
         if: matrix.task == 'test'
