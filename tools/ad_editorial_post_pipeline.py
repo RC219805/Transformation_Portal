@@ -157,11 +157,8 @@ import csv
 import hashlib
 import json
 import logging
-import math
-import os
 import shutil
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -722,7 +719,7 @@ def build_contact_sheet(
     for img in images:
         try:
             im = Image.open(img)
-            im.thumbnail((int(cell_w), int(cell_h)), Image.LANCZOS)
+            im.thumbnail((int(cell_w), int(cell_h)), Image.LANCZOS)  # pylint: disable=no-member
             bio = ImageOps.exif_transpose(im)
             iw, ih = bio.size
 
@@ -830,7 +827,7 @@ def resize_long_edge(img: np.ndarray, long_edge: int) -> np.ndarray:
     out = (
         np.array(
             Image.fromarray((img * 255).astype(np.uint8)).resize(
-                (new_w, new_h), Image.LANCZOS
+                (new_w, new_h), Image.LANCZOS  # pylint: disable=no-member
             )
         ).astype(np.float32)
         / 255.0
@@ -991,8 +988,8 @@ def style_grade(img: np.ndarray, style: str, params: Dict) -> np.ndarray:
 
 
 def median_luma(img: np.ndarray) -> float:
-    l = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
-    return float(np.median(l))
+    luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
+    return float(np.median(luma))
 
 
 def normalize_exposure(
@@ -1040,8 +1037,8 @@ def remove_dust_spots(img: np.ndarray) -> np.ndarray:
 
 
 def reduce_hotspots(img: np.ndarray) -> np.ndarray:
-    l = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
-    mask = (l > 0.95).astype(np.float32)[..., None]
+    luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
+    mask = (luma > 0.95).astype(np.float32)[..., None]
     softened = np.clip(img * (1 - 0.2 * mask), 0, 1)
     return softened
 
@@ -1053,7 +1050,7 @@ def unsharp_mask(
         return img
 
     pil = Image.fromarray((img * 255).astype(np.uint8), "RGB")
-    blur = pil.filter(Image.Filter.GaussianBlur(radius))
+    blur = pil.filter(Image.Filter.GaussianBlur(radius))  # pylint: disable=no-member
     low = np.array(blur).astype(np.float32) / 255.0
     high = img - low
     mask = np.where(np.abs(high) > threshold, high, 0.0)
@@ -1258,7 +1255,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
     raws = rename_raws(cfg, lay, raws_copied)
 
     # Selects template + contact sheet from embedded previews (fast)
-    selects_csv = ensure_selects_csv(cfg, lay, raws)
+    _selects_csv = ensure_selects_csv(cfg, lay, raws)  # noqa: F841
     raws = filter_selects(cfg, raws)
 
     # Decode RAW → BaseTIFF
@@ -1342,13 +1339,13 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         try:
             base = np.array(Image.open(p)).astype(np.float32) / 255.0
 
-            for style in lay.WORK_VARIANTS.keys():
+            for style, style_path in lay.WORK_VARIANTS.items():
                 graded = style_grade(base, style, cfg.styles)
 
                 if cfg.consistency.get("wb_neutralize", True):
                     graded = neutralize_wb_near_white(graded)
 
-                out = lay.WORK_VARIANTS[style] / p.name
+                out = style_path / p.name
                 save_tiff16_prophoto(graded, out, icc_prophoto)
                 variant_map[style].append(out)
 

@@ -10,11 +10,10 @@ Run with:
 Install dependencies:
     pip install pytest pytest-cov
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest

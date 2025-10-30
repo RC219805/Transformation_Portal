@@ -1,4 +1,5 @@
 from __future__ import annotations
+from PIL import Image
 
 import json
 import subprocess
@@ -8,7 +9,6 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("PIL.Image")
-from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -107,6 +107,7 @@ def test_threshold_failure(tmp_path: Path) -> None:
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     assert completed.returncode == 1

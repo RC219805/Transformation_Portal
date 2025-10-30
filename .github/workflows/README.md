@@ -1,73 +1,61 @@
-# GitHub Actions Workflows
+# Transofrmation Portal Repository
 
-This directory contains GitHub Actions workflow definitions for the 800 Picacho Lane LUTs repository.
+This repository contains tools, scripts, and workflows for managing LUTs, aerial image enhancements, and Montecito manifest generation.
 
-## Workflows
+---
 
-### python-app.yml
-Main CI workflow for Python testing and linting.
-- Runs on push to main and pull requests
-- Tests with Python 3.10
-- Linting with flake8
-- Testing with pytest
+## GitHub Actions Workflows
 
-### pylint.yml
-Pylint code quality checks.
+The repository includes multiple CI/CD and automation workflows to ensure code quality, security, and productivity.
 
-### codeql.yml
-Security analysis with CodeQL.
+### 1. `python-app.yml`
+**Purpose:** Main CI workflow for Python testing and linting.  
+**Triggers:** `push` and `pull_request` on `main`.  
+**Features:**
+- Multi-Python testing matrix (3.10–3.12).  
+- Lean CPU-only dependency installation (`requirements-ci.txt`) for fast CI.  
+- Linting via `flake8` (critical errors only).  
+- Unit testing and end-to-end tests with `pytest`.  
+- Montecito manifest generation with artifact upload.  
 
-### summary.yml
-**Status**: Experimental - Debugging Required
+### 2. `pylint.yml`
+**Purpose:** Static code analysis using `pylint`.  
+**Triggers:** Pull requests affecting `.py` files.  
+**Features:**
+- Multi-Python matrix (3.10–3.12) ensures cross-version consistency.  
+- Selective linting of changed files to reduce runtime.  
 
-This workflow attempts to use AI to automatically summarize new GitHub issues when they are opened.
+### 3. `codeql.yml`
+**Purpose:** Security scanning using GitHub CodeQL.  
+**Features:**
+- Automated analysis for security vulnerabilities.  
+- Runs on pushes to main and pull requests.  
 
-#### Current Implementation
-- Triggers on issue open events
-- Attempts to use `actions/ai-inference@v2` (non-existent action)
-- Posts AI-generated summary as a comment on the issue
+### 4. `summary.yml` (AI Issue Summarization)
+**Purpose:** Automatically generates a summary of newly opened GitHub issues.  
+**Status:** Fully functional with OpenAI API integration.  
 
-#### Known Issues
-⚠️ **The `actions/ai-inference@v2` action does not exist in the GitHub Actions marketplace.**
+**Features:**
+- Triggered on `issues.opened`.  
+- Uses OpenAI `gpt-4.1-mini` model to summarize issue title and body.  
+- Posts the summary as a comment on the issue.  
+- Includes graceful fallback if API call fails.  
+- Requires `OPENAI_API_KEY` in repository secrets.  
 
-This workflow will fail at the AI inference step. The debug logging has been added to help diagnose issues and provide visibility into the failure.
+---
 
-#### Debug Features
-The workflow now includes comprehensive debugging:
-- Prints issue details (number, title, author, body)
-- Reports inference step outcome and status
-- Checks for response output
-- Provides fallback notification when AI summarization fails
+## Unit Tests
 
-#### Possible Solutions
-To make this workflow functional, consider one of these alternatives:
+Unit tests are provided for:
 
-1. **Use GitHub Copilot API** (if available to your organization)
-   - Replace with actual GitHub AI/Copilot API endpoints
-   
-2. **Use OpenAI API**
-   ```yaml
-   - name: Generate summary with OpenAI
-     env:
-       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-     run: |
-       # Call OpenAI API to generate summary
-   ```
+- `_kmeans` – clustering reproducibility.  
+- `_cluster_stats` – cluster statistics correctness.  
+- `assign_materials` – assignment logic.  
+- `_soft_mask` – Gaussian blending of masks.  
+- `enhance_aerial` – end-to-end test using small sample images.  
 
-3. **Use GitHub Actions marketplace alternatives**
-   - Search for community-maintained AI summary actions
-   
-4. **Disable the workflow**
-   - Comment out or remove if AI summarization is not critical
+Run tests locally:
 
-#### Testing
-Since the AI inference action doesn't exist, this workflow will:
-- Print debug information about the issue
-- Fail gracefully at the inference step (with `continue-on-error: true`)
-- Post a notification comment that summarization failed
-- Not block other workflows or issue creation
-
-#### Maintenance Notes
-- Added debug logging in commit 6ca3996
-- Error handling ensures workflow doesn't block issue creation
-- Requires action implementation or replacement before production use
+```bash
+pip install -r requirements-ci.txt
+pytest -v tests/

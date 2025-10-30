@@ -6,13 +6,12 @@ Usage:
     python examples/simple_process.py input.jpg output/
 """
 
+from depth_pipeline import ArchitecturalDepthPipeline
 import sys
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from depth_pipeline import ArchitecturalDepthPipeline
 
 
 def main():
@@ -42,12 +41,12 @@ def main():
     )
 
     # Print statistics
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("Processing complete!")
     print(f"  Processing time: {result['metadata']['processing_time_sec']:.2f}s")
     print(f"  Depth inference: {result['metadata']['depth_inference_time_ms']:.1f}ms")
     print(f"  Input shape: {result['metadata']['input_shape']}")
-    print("="*50)
+    print("=" * 50)
 
 
 if __name__ == '__main__':

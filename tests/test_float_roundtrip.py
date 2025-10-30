@@ -1,3 +1,13 @@
+from luxury_tiff_batch_processor.io_utils import (
+    float_to_dtype_array,
+    image_to_float,
+    save_image,
+)
+from luxury_tiff_batch_processor.adjustments import (
+    gaussian_blur,
+    gaussian_kernel_cached,
+)
+import luxury_tiff_batch_processor as ltiff
 from pathlib import Path
 import sys
 from typing import Optional
@@ -13,18 +23,6 @@ except Exception:  # pragma: no cover - optional dependency
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-
-import luxury_tiff_batch_processor as ltiff
-from luxury_tiff_batch_processor.adjustments import (
-    gaussian_blur,
-    gaussian_kernel,
-    gaussian_kernel_cached,
-)
-from luxury_tiff_batch_processor.io_utils import (
-    float_to_dtype_array,
-    image_to_float,
-    save_image,
-)
 
 
 def test_float_to_dtype_array_preserves_float_values():
@@ -125,13 +123,13 @@ def _reference_gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float
     padded = np.pad(working, ((pad, pad), (0, 0), (0, 0)), mode="reflect")
     vertical = np.empty_like(working, dtype=np.float32)
     for y in range(working.shape[0]):
-        window = padded[y : y + kernel.size]
+        window = padded[y: y + kernel.size]
         vertical[y] = np.tensordot(kernel, window, axes=(0, 0))
 
     padded_h = np.pad(vertical, ((0, 0), (pad, pad), (0, 0)), mode="reflect")
     blurred = np.empty_like(working, dtype=np.float32)
     for x in range(working.shape[1]):
-        window = padded_h[:, x : x + kernel.size]
+        window = padded_h[:, x: x + kernel.size]
         blurred[:, x] = np.tensordot(kernel, window, axes=(0, 1))
 
     if squeeze:

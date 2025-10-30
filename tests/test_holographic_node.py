@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 
-import pytest
 
 from holographic_node import (
     EntanglementField,
@@ -72,4 +71,3 @@ def test_requires_expansion_when_transforms_added():
     node.add_transform(lambda value: value * 2)
 
     assert node.requires_expansion() is True
-

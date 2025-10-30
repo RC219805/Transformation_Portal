@@ -443,7 +443,8 @@ def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int,
     return None
 
 
-def save_image(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements
+def save_image(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+                 # pylint: disable=too-many-branches,too-many-statements
     destination: Path,
     arr_int: np.ndarray,
     dtype: np.dtype,
