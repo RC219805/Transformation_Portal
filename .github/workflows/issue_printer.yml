@@ -10,8 +10,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Print issue info
         env:
