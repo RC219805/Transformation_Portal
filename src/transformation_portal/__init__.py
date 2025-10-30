@@ -31,7 +31,7 @@ def _lazy_import(module_path, attr_name):
 _lux_render = None
 _depth_tools = None
 
-# Processors (lazy loaded)  
+# Processors (lazy loaded)
 _material_response = None
 _video_grader = None
 
