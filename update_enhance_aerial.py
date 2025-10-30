@@ -36,6 +36,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 from PIL import Image, ImageFilter
+from tqdm import tqdm
 
 # ------------------------------
 # Data Classes
@@ -361,13 +362,7 @@ def apply_materials_tiled(
     ]
     results = []
 
-    try:
-        from tqdm import tqdm
-        use_tqdm = progress
-    except ImportError:
-        use_tqdm = False
-
-    iterator = tqdm(jobs, desc="[tiles]") if use_tqdm else jobs
+    iterator = tqdm(jobs, desc="[tiles]") if progress else jobs
 
     def _process_tile(job):
         y0, y1, x0, x1 = job

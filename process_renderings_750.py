@@ -62,15 +62,15 @@ def _require_module(module_name: str):
 def _convert_exr_to_jpg(exr_path: Path, jpg_path: Path) -> None:
     """Convert an OpenEXR image to JPEG with simple tone mapping."""
 
-    OpenEXR = _require_module("OpenEXR")
-    Imath = _require_module("Imath")
-    exr_file = OpenEXR.InputFile(str(exr_path))
+    openexr = _require_module("OpenEXR")
+    imath = _require_module("Imath")
+    exr_file = openexr.InputFile(str(exr_path))
     header = exr_file.header()
     data_window = header["dataWindow"]
     width = data_window.max.x - data_window.min.x + 1
     height = data_window.max.y - data_window.min.y + 1
 
-    pixel_type = Imath.PixelType(Imath.PixelType.FLOAT)
+    pixel_type = imath.PixelType(imath.PixelType.FLOAT)
     channels = [
         np.frombuffer(exr_file.channel(channel, pixel_type), dtype=np.float32)
         for channel in ("R", "G", "B")

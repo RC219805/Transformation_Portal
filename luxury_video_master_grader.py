@@ -16,6 +16,7 @@ import argparse
 import json
 import math
 import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -197,9 +198,7 @@ def ensure_tools_available() -> None:
 
 
 def shutil_which(binary: str) -> Optional[str]:
-    from shutil import which
-
-    return which(binary)
+    return shutil.which(binary)
 
 
 def probe_source(path: Path) -> Dict[str, object]:
