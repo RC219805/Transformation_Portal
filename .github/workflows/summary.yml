@@ -21,7 +21,7 @@ jobs:
       DIAGNOSTIC_MSG: |
         AI summarizer skipped: OPENAI_API_KEY is not configured in CI.
         Repository maintainers can enable automated summaries by configuring the `OPENAI_API_KEY` secret.
-        ${DIAGNOSTIC_MARKER}
+        <!-- ai-summarizer-missing-key -->
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,8 +72,8 @@ jobs:
               f.write(summary)
           PY
         env:
-          ISSUE_TITLE: ${{ github.event.pull_request.title || github.event.head_commit.message || '' }}
-          ISSUE_BODY: ${{ github.event.pull_request.body || github.event.head_commit.message || '' }}
+          ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.head_commit.message || '' }}
 
       - name: Debug RESPONSE_FILE (safe)
         run: |
@@ -107,7 +107,7 @@ jobs:
 
           # Check existing comments for the marker so we only post once
           echo "Checking existing comments for diagnostic marker..."
-          EXISTING=$(gh api repos/$REPO/issues/$ISSUE_NUMBER/comments --jq '.[].body' 2>/dev/null || echo "")
+          EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
           if echo "$EXISTING" | grep -Fq "$MARKER"; then
             echo "A diagnostic comment has already been posted; skipping to avoid duplicates."
             exit 0
