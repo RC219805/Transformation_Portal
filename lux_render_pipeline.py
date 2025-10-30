@@ -35,6 +35,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import typer
 from PIL import Image, ImageDraw, ImageFont
+from scipy.ndimage import gaussian_filter, sobel
 
 import torch
 from torch import Generator
@@ -232,9 +233,6 @@ def add_bloom(
     intensity: float = 0.25,
 ) -> np.ndarray:
     """Add a soft bloom based on bright pixels exceeding ``threshold``."""
-
-    from scipy.ndimage import gaussian_filter
-
     lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
     mask = (lum > threshold).astype(np.float32)
     glow = np.stack([gaussian_filter(rgb[..., i] * mask, blur_radius) for i in range(3)], axis=-1)
@@ -300,10 +298,6 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
 
     Emphasizes texture, shadowing, atmosphere, and sky plates.
     """
-
-    # Lazy import: only load SciPy filters when finishing is requested.
-    from scipy.ndimage import sobel
-
     rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
 
     floor_texture_strength = float(np.clip(floor_texture_strength, 0.0, 1.0))
