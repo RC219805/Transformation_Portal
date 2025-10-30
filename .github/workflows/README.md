@@ -1,4 +1,4 @@
-# Transofrmation Portal Repository
+# Transformation Portal Repository
 
 This repository contains tools, scripts, and workflows for managing LUTs, aerial image enhancements, and Montecito manifest generation.
 
