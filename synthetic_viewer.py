@@ -322,6 +322,6 @@ class SyntheticViewer:
             self.clone(archetype="futurist_tech_executive"),
         ]
 
-        perspective_scores = [viewer._score_from_journey(journey) for viewer in perspectives]
+        perspective_scores = [viewer._score_from_journey(journey) for viewer in perspectives]  # pylint: disable=protected-access
 
         return self.reach_aesthetic_consensus([primary_score, *perspective_scores])

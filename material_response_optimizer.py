@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
@@ -521,9 +522,6 @@ class MaterialAwareEnhancementPlanner(RenderEnhancementPlanner):
 
     def _calculate_ev_adjustment(self, current: float, target: float) -> float:
         """Calculate exposure value adjustment in stops."""
-
-        import math
-
         if current <= 0:
             return 0.0
         return round(math.log2(target / current), 2)
