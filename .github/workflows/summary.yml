@@ -15,10 +15,10 @@ jobs:
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
-          echo "Issue #$ISSUE_NUMBER"
-          echo "Title: $ISSUE_TITLE"
-          echo "Author: $ISSUE_AUTHOR"
-          echo "Body: $ISSUE_BODY"
+          printf 'Issue #%s\n' "$ISSUE_NUMBER"
+          printf 'Title: %s\n' "$ISSUE_TITLE"
+          printf 'Author: %s\n' "$ISSUE_AUTHOR"
+          printf 'Body: %s\n' "$ISSUE_BODY"
 
       - name: Generate summary with OpenAI
         id: generate-summary
