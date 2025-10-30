@@ -275,7 +275,8 @@ class WorkflowParser:
                                 str(workflow_file),
                                 line_num,
                                 'warning',
-                                f"Job '{job_name}' has device matrix [{device_list}] but includes 'lint' task which doesn't require multiple devices"))
+                                f"Job '{job_name}' has device matrix [{device_list}] but includes "
+                                f"'lint' task which doesn't require multiple devices"))
 
     def _find_line_number(self, lines: List[str], search_text: str) -> Optional[int]:
         """Find the line number containing the search text."""
