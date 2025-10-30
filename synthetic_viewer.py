@@ -293,7 +293,7 @@ class SyntheticViewer:
 
         return SyntheticViewer(archetype)
 
-    def _score_from_journey(self, journey: EmotionalJourney) -> ACUScore:
+    def score_from_journey(self, journey: EmotionalJourney) -> ACUScore:
         self.memory.remember(journey)
         return self.aesthetic_cortex.score(journey, self.archetype)
 
@@ -314,7 +314,7 @@ class SyntheticViewer:
         """Experience a video stream and return the consensus ``ACUScore``."""
 
         journey = self.consciousness.traverse(video_stream)
-        primary_score = self._score_from_journey(journey)
+        primary_score = self.score_from_journey(journey)
 
         perspectives = [
             self.clone(archetype="minimalist_millennial"),
@@ -322,6 +322,6 @@ class SyntheticViewer:
             self.clone(archetype="futurist_tech_executive"),
         ]
 
-        perspective_scores = [viewer._score_from_journey(journey) for viewer in perspectives]
+        perspective_scores = [viewer.score_from_journey(journey) for viewer in perspectives]
 
         return self.reach_aesthetic_consensus([primary_score, *perspective_scores])
