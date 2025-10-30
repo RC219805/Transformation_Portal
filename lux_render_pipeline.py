@@ -304,7 +304,7 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
     """
 
     # Lazy import: only load SciPy filters when finishing is requested.
-    from scipy.ndimage import sobel
+    from scipy.ndimage import sobel, gaussian_filter
 
     rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
 
