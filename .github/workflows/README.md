@@ -1,4 +1,4 @@
-# Transofrmation Portal Repository
+# Transformation Portal Repository
 
 This repository contains tools, scripts, and workflows for managing LUTs, aerial image enhancements, and Montecito manifest generation.
 
@@ -33,14 +33,32 @@ The repository includes multiple CI/CD and automation workflows to ensure code q
 
 ### 4. `summary.yml` (AI Issue Summarization)
 **Purpose:** Automatically generates a summary of newly opened GitHub issues.  
-**Status:** Fully functional with OpenAI API integration.  
+**Status:** Fully functional with OpenAI API integration.
 
 **Features:**
 - Triggered on `issues.opened`.  
 - Uses OpenAI `gpt-4.1-mini` model to summarize issue title and body.  
 - Posts the summary as a comment on the issue.  
 - Includes graceful fallback if API call fails.  
-- Requires `OPENAI_API_KEY` in repository secrets.  
+- Requires `OPENAI_API_KEY` in repository secrets.
+
+---
+
+## GitHub Copilot Firewall Configuration
+
+The repository includes a `copilot-firewall.yml` configuration file that specifies allowed external URLs and hosts for GitHub Copilot agents during execution.
+
+**Configuration file:** `.github/copilot-firewall.yml`
+
+**Allowed domains include:**
+- Python Package Index (PyPI) for dependency installation
+- PyTorch download servers for ML/AI dependencies
+- GitHub resources for repository access
+- Hugging Face for ML models and datasets
+- OpenAI API for AI summarization
+- Common CDNs and NVIDIA toolkit for GPU support
+
+This configuration ensures that Copilot agents can access necessary external resources while maintaining security through explicit allowlisting.
 
 ---
 

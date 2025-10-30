@@ -1,0 +1,40 @@
+# GitHub Copilot Firewall Configuration
+# This file specifies URLs and hosts that GitHub Copilot agents are allowed to access
+# during execution to download dependencies and access external resources.
+
+version: 1
+
+# Allowlist of domains and URLs that Copilot agents can access
+allow:
+  # Python Package Index (PyPI) - for pip installs
+  - pypi.org
+  - files.pythonhosted.org
+  - pypi.python.org
+  
+  # PyTorch downloads - for ML/AI dependencies
+  - download.pytorch.org
+  
+  # GitHub resources
+  - github.com
+  - api.github.com
+  - raw.githubusercontent.com
+  - objects.githubusercontent.com
+  
+  # Hugging Face - for ML models and datasets
+  - huggingface.co
+  - cdn.huggingface.co
+  - cdn-lfs.huggingface.co
+  
+  # OpenAI API - for AI summarization workflow
+  - api.openai.com
+  
+  # Common CDNs and mirrors
+  - cdn.jsdelivr.net
+  - unpkg.com
+  
+  # NVIDIA CUDA toolkit (for GPU support)
+  - developer.download.nvidia.com
+  
+  # Anaconda/Conda packages
+  - repo.anaconda.com
+  - conda.anaconda.org
