@@ -14,5 +14,5 @@ jobs:
           BODY: ${{ github.event.issue.body }}
           TITLE: ${{ github.event.issue.title }}
         run: |
-          echo "Body: $BODY"
-          echo "Title: $TITLE"
+          echo "Body: \"$BODY\""
+          echo "Title: \"$TITLE\""
