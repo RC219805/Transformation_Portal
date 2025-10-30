@@ -719,7 +719,7 @@ def build_contact_sheet(
     for img in images:
         try:
             im = Image.open(img)
-            im.thumbnail((int(cell_w), int(cell_h)), Image.LANCZOS)
+            im.thumbnail((int(cell_w), int(cell_h)), Image.LANCZOS)  # pylint: disable=no-member
             bio = ImageOps.exif_transpose(im)
             iw, ih = bio.size
 
@@ -827,7 +827,7 @@ def resize_long_edge(img: np.ndarray, long_edge: int) -> np.ndarray:
     out = (
         np.array(
             Image.fromarray((img * 255).astype(np.uint8)).resize(
-                (new_w, new_h), Image.LANCZOS
+                (new_w, new_h), Image.LANCZOS  # pylint: disable=no-member
             )
         ).astype(np.float32)
         / 255.0
@@ -1050,7 +1050,7 @@ def unsharp_mask(
         return img
 
     pil = Image.fromarray((img * 255).astype(np.uint8), "RGB")
-    blur = pil.filter(Image.Filter.GaussianBlur(radius))
+    blur = pil.filter(Image.Filter.GaussianBlur(radius))  # pylint: disable=no-member
     low = np.array(blur).astype(np.float32) / 255.0
     high = img - low
     mask = np.where(np.abs(high) > threshold, high, 0.0)

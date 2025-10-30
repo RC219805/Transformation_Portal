@@ -25,4 +25,4 @@ result = enhance_aerial(
 # pylint: enable=duplicate-code
 
 print(f"✅ Enhanced aerial saved to: {result}")
-print(f"✅ File size: {result.stat().st_size / (1024**2):.2f} MB")
+print(f"✅ File size: {result.stat().st_size / (1024**2):.2f} MB")  # pylint: disable=no-member
