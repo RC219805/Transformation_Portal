@@ -32,4 +32,4 @@ disable=
 max-line-length=127
 
 [TYPECHECK]
-ignored-modules=realesrgan,diffusers,controlnet_aux,torch,tifffile
+ignored-modules=realesrgan,diffusers,controlnet_aux,torch,tifffile,luxury_tiff_batch_processor
