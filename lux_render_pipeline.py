@@ -58,7 +58,7 @@ from controlnet_aux import CannyDetector, MidasDetector
 
 # Optional Real-ESRGAN (RealESRGANer is imported lazily in LuxRenderPipeline.__init__)
 try:
-    import realesrgan  # noqa: F401
+    import realesrgan  # noqa: F401  # pylint: disable=unused-import
     _HAS_REALESRGAN = True
 except (ImportError, OSError):
     _HAS_REALESRGAN = False
@@ -795,7 +795,7 @@ class LuxuryRenderPipeline:
             print("[Load] Real-ESRGAN x4...")
             # RealESRGANer expects model_path parameter
             # If weights don't exist locally, the package will download them
-            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
+            from realesrgan.archs.srvgg_arch import SRVGGNetCompact  # pylint: disable=import-outside-toplevel
             model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
             self.realesrgan = RealESRGANer(
                 scale=4,
