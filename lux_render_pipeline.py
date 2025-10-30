@@ -25,6 +25,7 @@ except Exception:  # pragma: no cover
                 "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
             )
 import glob
+import importlib.util
 import math
 import random
 from functools import lru_cache
@@ -57,11 +58,7 @@ except ImportError:
 from controlnet_aux import CannyDetector, MidasDetector
 
 # Optional Real-ESRGAN (RealESRGANer is imported lazily in LuxRenderPipeline.__init__)
-try:
-    import realesrgan  # noqa: F401
-    _HAS_REALESRGAN = True
-except (ImportError, OSError):
-    _HAS_REALESRGAN = False
+_HAS_REALESRGAN = importlib.util.find_spec("realesrgan") is not None
 
 # --------------------------
 
