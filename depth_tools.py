@@ -400,7 +400,7 @@ def load_depth_normalized(depth_path: str,
     if target_size is not None:
         H, W = target_size
         u8 = (np.clip(norm, 0.0, 1.0) * 255.0).astype(np.uint8)
-        norm = np.asarray(Image.fromarray(u8).resize((W, H), Image.BILINEAR)).astype(np.float32) / 255.0
+        norm = np.asarray(Image.fromarray(u8).resize((W, H), Image.BILINEAR)).astype(np.float32) / 255.0  # pylint: disable=no-member
 
     if use_cache:
         _depth_cache.put(cache_key, norm)
@@ -444,7 +444,7 @@ def load_mask(mask_path: Optional[str], kind: str, target_size: Tuple[int, int],
             img = img.convert("L")
 
         if img.size != (W, H):
-            img = img.resize((W, H), Image.BILINEAR)
+            img = img.resize((W, H), Image.BILINEAR)  # pylint: disable=no-member
         arr = np.asarray(img).astype(np.float32) / 255.0
         if arr.ndim == 3:
             arr = arr[..., 0]

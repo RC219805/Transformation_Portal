@@ -40,7 +40,7 @@ def _dct2(block: np.ndarray) -> np.ndarray:
     Returns:
         8x8 DCT coefficients array
     """
-    return dct(dct(block.T, type=2, norm='ortho').T, type=2, norm='ortho')
+    return dct(dct(block.T, type=2, norm='ortho').T, type=2, norm='ortho')  # pylint: disable=no-member
 
 
 def _idct2(block: np.ndarray) -> np.ndarray:
@@ -52,7 +52,7 @@ def _idct2(block: np.ndarray) -> np.ndarray:
     Returns:
         8x8 reconstructed block
     """
-    return idct(idct(block.T, type=2, norm='ortho').T, type=2, norm='ortho')
+    return idct(idct(block.T, type=2, norm='ortho').T, type=2, norm='ortho')  # pylint: disable=no-member
 
 
 def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, strength=2.0) -> Image.Image:
@@ -76,7 +76,7 @@ def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, st
             block = outY[y: y + 8, x: x + 8]
             D = _dct2(block)
             bit = 1 if bits[bi] else -1
-            D[3, 2] += strength * bit
+            D[3, 2] += strength * bit  # pylint: disable=unsupported-assignment-operation
             block2 = _idct2(D)
             outY[y: y + 8, x: x + 8] = block2
             bi += 1
