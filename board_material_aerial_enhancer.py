@@ -206,7 +206,7 @@ def enhance_aerial(
     for idx, rule in assignments.items():
         mask = labels == idx
         output[mask] = rule.blend  # simplistic coloring by blend
-    output = output.reshape(h, w, c)  # pylint: disable=too-many-function-args
+    output = output.reshape(h, w, c)
 
     if out_path:
         im = (np.clip(output, 0, 1) * 255).astype(np.uint8)
