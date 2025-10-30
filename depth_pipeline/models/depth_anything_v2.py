@@ -13,6 +13,7 @@ Model Variants:
 """
 
 import logging
+import time
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Tuple, Union
@@ -34,6 +35,14 @@ try:
 except ImportError:
     COREML_AVAILABLE = False
     logging.warning("coremltools not available, install with: pip install coremltools")
+
+try:
+    from skimage.transform import resize
+    SKIMAGE_AVAILABLE = True
+except ImportError:
+    SKIMAGE_AVAILABLE = False
+    resize = None  # type: ignore
+    logging.warning("scikit-image not available, install with: pip install scikit-image")
 
 
 logger = logging.getLogger(__name__)
@@ -274,9 +283,8 @@ class DepthAnythingV2Model:
 
         # Resize output if requested
         if output_size is not None:
-            from skimage.transform import (  # pylint: disable=import-outside-toplevel
-                resize,
-            )
+            if not SKIMAGE_AVAILABLE:
+                raise ImportError("scikit-image is required for resizing. Install with: pip install scikit-image")
 
             result['depth'] = resize(
                 result['depth'],
@@ -290,8 +298,6 @@ class DepthAnythingV2Model:
 
     def _estimate_depth_pytorch(self, image: Image.Image) -> dict:
         """Estimate depth using PyTorch backend."""
-        import time  # pylint: disable=import-outside-toplevel
-
         start_time = time.time()
 
         # Run inference
@@ -340,8 +346,6 @@ class DepthAnythingV2Model:
 
     def _estimate_depth_coreml(self, image: Image.Image) -> dict:
         """Estimate depth using CoreML backend."""
-        import time  # pylint: disable=import-outside-toplevel
-
         start_time = time.time()
 
         # Prepare input
@@ -454,9 +458,8 @@ def safe_depth_estimation(
                 if isinstance(image, np.ndarray)
                 else image.size[::-1]
             )
-            from skimage.transform import (  # pylint: disable=import-outside-toplevel
-                resize,
-            )
+            if not SKIMAGE_AVAILABLE:
+                raise ImportError("scikit-image is required for resizing. Install with: pip install scikit-image")
 
             result['depth'] = resize(
                 result['depth'],
