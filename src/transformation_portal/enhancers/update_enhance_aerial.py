@@ -29,7 +29,6 @@ import json
 import argparse
 import threading
 import collections
-from math import ceil
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Sequence, Mapping, Callable, Dict, Optional
@@ -68,6 +67,7 @@ class MaterialRule:
 # Palette Loading / Saving
 # ------------------------------
 
+
 def load_palette_assignments(
     path: Path | str,
     rules: Sequence[MaterialRule] | Mapping[str, MaterialRule] | None = None
@@ -86,6 +86,7 @@ def load_palette_assignments(
         if v in lookup:
             assignments[label] = lookup[v]
     return assignments
+
 
 def save_palette_assignments(
     assignments: Mapping[int, MaterialRule], path: Path | str
@@ -169,8 +170,8 @@ def _assign_full_image(image: np.ndarray, centroids: np.ndarray) -> np.ndarray:
 
 
 def _cluster_stats(image: np.ndarray, labels: np.ndarray) -> Sequence[ClusterStats]:
-    stats=[]
-    hsv=_rgb_to_hsv(image)
+    stats = []
+    hsv = _rgb_to_hsv(image)
     for label in range(labels.max() + 1):
         mask = labels == label
         count = int(mask.sum())
