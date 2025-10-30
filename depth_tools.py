@@ -400,8 +400,7 @@ def load_depth_normalized(depth_path: str,
     if target_size is not None:
         H, W = target_size
         u8 = (np.clip(norm, 0.0, 1.0) * 255.0).astype(np.uint8)
-        # pylint: disable=no-member
-        resized = Image.fromarray(u8).resize((W, H), Image.BILINEAR)
+        resized = Image.fromarray(u8).resize((W, H), Image.BILINEAR)  # pylint: disable=no-member
         norm = np.asarray(resized).astype(np.float32) / 255.0
 
     if use_cache:
