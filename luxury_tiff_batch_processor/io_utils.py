@@ -1,4 +1,36 @@
-"""I/O primitives and capability helpers for the luxury TIFF pipeline."""
+"""I/O primitives and capability detection for high-fidelity TIFF processing.
+
+This module handles image loading, saving, and format conversion with support for
+16-bit precision, HDR workflows, and comprehensive metadata preservation. It provides
+capability detection for optional dependencies and falls back gracefully when needed.
+
+Key Components
+--------------
+
+ProcessingCapabilities
+    Detects available I/O capabilities (16-bit support, HDR, compression formats).
+
+FloatDynamicRange
+    Tracks normalization parameters for float image data to preserve dynamic range.
+
+ImageToFloatResult
+    Container for image conversion results with metadata and alpha channel info.
+
+ProcessingContext
+    Context manager for atomic file operations with staged writes.
+
+Functions
+---------
+
+image_to_float
+    Convert PIL Image to normalized float32 RGB array.
+
+float_to_dtype_array
+    Convert float array back to target dtype with proper scaling.
+
+save_image
+    Save image with comprehensive TIFF metadata and compression support.
+"""
 from __future__ import annotations
 
 import contextlib
@@ -31,13 +63,21 @@ class LuxuryGradeException(RuntimeError):
 
 
 class ProcessingCapabilities:
-    """Introspects optional dependencies to describe processing fidelity."""
+    """Detects available image processing capabilities based on installed dependencies.
+
+    Attributes:
+        bit_depth: Maximum supported bit depth (8 or 16).
+        hdr_capable: Whether HDR workflows are supported.
+    """
 
     _SENTINEL = object()
 
     def __init__(self, tifffile_module: Any | None | object = _SENTINEL) -> None:
-        """Initialise capability detection."""
+        """Initialize capability detection.
 
+        Args:
+            tifffile_module: Optional tifffile module for testing, defaults to global import.
+        """
         if tifffile_module is self._SENTINEL:
             self._tifffile = tifffile
         else:
@@ -63,8 +103,11 @@ class ProcessingCapabilities:
             return False
 
     def assert_luxury_grade(self) -> None:
-        """Validate that the environment meets luxury-grade requirements."""
+        """Validate that the environment meets luxury-grade requirements.
 
+        Raises:
+            LuxuryGradeException: If 16-bit support or HDR capability is missing.
+        """
         if self.bit_depth < 16:
             raise LuxuryGradeException(
                 "Material Response requires 16-bit precision. "
@@ -79,7 +122,16 @@ class ProcessingCapabilities:
 
 @dataclasses.dataclass
 class ProcessingContext:
-    """Context manager staging output beside the destination."""
+    """Context manager for atomic file writes using staged temporary files.
+
+    Writes to a temporary file in the same directory as the destination, then
+    atomically moves it to the final location on success. Cleans up temporary
+    files on failure.
+
+    Attributes:
+        destination: Final output file path.
+        suffix: Temporary file suffix (default: ".tmp").
+    """
 
     destination: Path
     suffix: str = ".tmp"
@@ -119,7 +171,16 @@ class ProcessingContext:
 
 @dataclasses.dataclass(frozen=True)
 class FloatDynamicRange:
-    """Describes how floating point image data was normalised."""
+    """Tracks normalization parameters for floating-point image data.
+
+    Preserves per-channel offset and scale to enable reversible normalization
+    of floating-point images that may exceed the [0, 1] range.
+
+    Attributes:
+        offset: Per-channel minimum values.
+        scale: Per-channel range (max - min).
+        scale_recip: Reciprocal of scale for efficient normalization.
+    """
 
     offset: np.ndarray
     scale: np.ndarray
@@ -127,8 +188,14 @@ class FloatDynamicRange:
 
     @classmethod
     def from_array(cls, arr: np.ndarray) -> Optional["FloatDynamicRange"]:
-        """Create a descriptor capturing per-channel offset and scale."""
+        """Analyze array to create normalization descriptor.
 
+        Args:
+            arr: Input array to analyze.
+
+        Returns:
+            FloatDynamicRange instance, or None if array is empty or has no finite values.
+        """
         if arr.size == 0:
             return None
 
@@ -178,7 +245,14 @@ class FloatDynamicRange:
         return working, squeezed
 
     def normalise(self, arr: np.ndarray) -> np.ndarray:
-        """Normalize array values using stored offset and scale."""
+        """Normalize array values to [0, 1] range using stored parameters.
+
+        Args:
+            arr: Input array to normalize.
+
+        Returns:
+            Normalized array with values in [0, 1] range.
+        """
         working, squeezed = self._prepare(arr)
         offset = self.offset.reshape((1, 1, -1))
         scale = self.scale_recip.reshape((1, 1, -1))
@@ -188,7 +262,14 @@ class FloatDynamicRange:
         return normalised
 
     def denormalise(self, arr: np.ndarray) -> np.ndarray:
-        """Denormalize array values using stored scale and offset."""
+        """Restore array to original dynamic range using stored parameters.
+
+        Args:
+            arr: Normalized array in [0, 1] range.
+
+        Returns:
+            Array restored to original scale and offset.
+        """
         working, squeezed = self._prepare(arr)
         offset = self.offset.reshape((1, 1, -1))
         scale = self.scale.reshape((1, 1, -1))
@@ -200,7 +281,15 @@ class FloatDynamicRange:
 
 @dataclasses.dataclass(frozen=True)
 class ImageToFloatResult:
-    """Container for :func:`image_to_float` results with metadata."""
+    """Results from image_to_float with metadata for reversible conversion.
+
+    Attributes:
+        array: RGB float32 array in [0, 1] range.
+        dtype: Original image dtype for round-trip conversion.
+        alpha: Optional alpha channel as float32 array.
+        base_channels: Number of color channels in original image.
+        float_normalisation: Dynamic range info for floating-point sources.
+    """
 
     array: np.ndarray
     dtype: np.dtype
@@ -367,7 +456,14 @@ def float_to_dtype_array(  # pylint: disable=too-many-branches
 
 
 def compression_for_tifffile(compression: str) -> Optional[str]:
-    """Map compression identifier to tifffile-compatible format name."""
+    """Map Pillow compression names to tifffile-compatible format names.
+
+    Args:
+        compression: Compression identifier (e.g., "tiff_lzw", "deflate").
+
+    Returns:
+        Tifffile compression name, or None for uncompressed output.
+    """
     comp = compression.lower()
     mapping = {
         "tiff_lzw": "lzw",
@@ -387,7 +483,14 @@ def compression_for_tifffile(compression: str) -> Optional[str]:
 
 
 def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, Any]]:
-    """Remove forbidden TIFF tags that conflict with image dimensions and encoding."""
+    """Remove TIFF tags that conflict with image dimensions and encoding.
+
+    Args:
+        raw_metadata: Raw TIFF metadata dictionary.
+
+    Returns:
+        Sanitized metadata dictionary with forbidden tags removed, or None.
+    """
     if raw_metadata is None:
         return None
     safe: Dict[int, Any] = {}
