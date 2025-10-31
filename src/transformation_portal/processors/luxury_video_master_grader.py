@@ -16,6 +16,7 @@ import argparse
 import json
 import math
 import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -179,6 +180,7 @@ class ToneMapPlan:
 
 
 def list_presets() -> str:
+    """Return formatted string listing all available grading presets."""
     lines = []
     for key, preset in PRESETS.items():
         lines.append(f"- {key}: {preset.description}")
@@ -186,10 +188,12 @@ def list_presets() -> str:
 
 
 def clamp(value: float, low: float, high: float) -> float:
+    """Constrain value to the range [low, high]."""
     return max(low, min(high, value))
 
 
 def ensure_tools_available() -> None:
+    """Verify FFmpeg tools are available on PATH, exit with error if not."""
     for tool in ("ffmpeg", "ffprobe"):
         if not shutil_which(tool):
             raise SystemExit(
@@ -200,9 +204,7 @@ def ensure_tools_available() -> None:
 @lru_cache(maxsize=32)
 def shutil_which(binary: str) -> Optional[str]:
     """Cache binary path lookups for performance."""
-    from shutil import which
-
-    return which(binary)
+    return shutil.which(binary)
 
 
 def probe_source(path: Path) -> Dict[str, object]:
@@ -532,10 +534,17 @@ def assess_frame_rate(
 
 
 def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
+    """
+    Build FFmpeg filter graph string from configuration.
+    
+    Returns:
+        Tuple of (filter_graph, output_label)
+    """
     nodes: List[str] = []
     label_index = 0
 
     def next_label() -> str:
+        """Generate unique label for filter nodes."""
         nonlocal label_index
         label_index += 1
         return f"v{label_index}"
@@ -1070,7 +1079,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         if tone_map_peak is not None and float(tone_map_peak) <= 0.0:
             raise ValueError("tone_map_peak must be greater than 0")
         tone_map_desat = config.get("tone_map_desat")
-        if tone_map_desat is not None and not (0.0 <= float(tone_map_desat) <= 1.0):
+        if tone_map_desat is not None and not 0.0 <= float(tone_map_desat) <= 1.0:
             raise ValueError("tone_map_desat must be within [0.0, 1.0]")
         halation_intensity = float(config.get("halation_intensity", 0.0))
         if halation_intensity < 0.0:

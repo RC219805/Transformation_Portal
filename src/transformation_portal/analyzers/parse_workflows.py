@@ -17,6 +17,16 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Precompiled regex patterns for performance
+_NEWLINE_SEMICOLON = re.compile(r'[\n;]')
+_COMMENT_PATTERN = re.compile(r'#.*$')
+_IF_PATTERN = re.compile(r'\bif\s+')
+_ELIF_PATTERN = re.compile(r'\belif\s+')
+_FI_PATTERN = re.compile(r'(^|\s)fi(\s|$)')
+_STEP_OUTPUT_REF = re.compile(r'\$\{\{\s*steps\.([a-zA-Z0-9_-]+)\.outputs')
+_MODEL_PATTERN1 = re.compile(r'"model":\s*"([^"]+)"')
+_MODEL_PATTERN2 = re.compile(r'\\"model\\":\s*\\"([^"\\]+)\\"')
+
 
 class WorkflowBug:
     """Represents a bug found in a workflow file."""
@@ -89,7 +99,7 @@ class WorkflowParser:
                 f"Failed to parse file: {e}"
             ))
 
-    def _validate_workflow_structure(self, workflow_file: Path, workflow: Dict, lines: List[str]):
+    def _validate_workflow_structure(self, workflow_file: Path, workflow: Dict, _lines: List[str]):
         """Validate basic workflow structure."""
         if not workflow:
             self.bugs.append(WorkflowBug(
@@ -148,7 +158,7 @@ class WorkflowParser:
                 step_str = yaml.dump(step)
 
                 # Find step output references
-                references = re.findall(r'\$\{\{\s*steps\.([a-zA-Z0-9_-]+)\.outputs', step_str)
+                references = _STEP_OUTPUT_REF.findall(step_str)
 
                 for ref_id in references:
                     if ref_id not in step_ids:
@@ -188,18 +198,18 @@ class WorkflowParser:
         fi_count = 0
 
         # Split by newlines and semicolons
-        statements = re.split(r'[\n;]', script)
+        statements = _NEWLINE_SEMICOLON.split(script)
 
         for statement in statements:
             # Remove comments
-            statement = re.sub(r'#.*$', '', statement).strip()
+            statement = _COMMENT_PATTERN.sub('', statement).strip()
 
             # Count if statements (excluding elif)
-            if re.search(r'\bif\s+', statement) and not re.search(r'\belif\s+', statement):
+            if _IF_PATTERN.search(statement) and not _ELIF_PATTERN.search(statement):
                 if_count += 1
 
             # Count fi statements - must be at start or after whitespace, and must be end of command
-            if re.search(r'(^|\s)fi(\s|$)', statement):
+            if _FI_PATTERN.search(statement):
                 fi_count += 1
 
         if if_count != fi_count:
@@ -316,8 +326,8 @@ class WorkflowParser:
                     continue
 
                 # Search for OpenAI model references (handle both quoted and escaped quotes)
-                model_matches = re.findall(r'"model":\s*"([^"]+)"', run_script)
-                model_matches += re.findall(r'\\"model\\":\s*\\"([^"\\]+)\\"', run_script)
+                model_matches = _MODEL_PATTERN1.findall(run_script)
+                model_matches += _MODEL_PATTERN2.findall(run_script)
 
                 for model in model_matches:
                     # Check if it looks like a GPT model but isn't valid
