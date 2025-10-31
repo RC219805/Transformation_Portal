@@ -1,9 +1,9 @@
 name: Issue Summarizer
 
 on:
-  issue_comment:
-  pull_request:
-  pull_request_review:
+  issue_comment: {}
+  pull_request: {}
+  pull_request_review: {}
   issues:
     types: [opened, edited]
 
