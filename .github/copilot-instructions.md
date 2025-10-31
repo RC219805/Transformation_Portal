@@ -218,7 +218,7 @@ make lint
 - CoreML variants provide 3-5x speedup on Apple Silicon (M1/M2/M3/M4)
 - Depth maps are normalized and cached for iterative workflows
 - Zone-based processing applies different enhancements to foreground/midground/background
-- See `DEPTH_PIPELINE_README.md` for detailed documentation
+- See `docs/depth_pipeline/DEPTH_PIPELINE_README.md` for detailed documentation
 
 ### HDR Handling
 - Automatically detect HDR transfer functions (PQ, HLG) from video metadata
