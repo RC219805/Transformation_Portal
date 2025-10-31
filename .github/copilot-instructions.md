@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This repository contains a professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production. The project includes:
+This repository contains a professional image and video processing toolkit for luxury real estate rendering and architectural visualization. The project includes:
 
 - **LUT Collection**: 16 professional color grading LUTs featuring Material Response technology for Kodak film emulation, location aesthetics, and material-aware rendering
 - **Python Processing Tools**: Batch processors for TIFF images and video master grading
