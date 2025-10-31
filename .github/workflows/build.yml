@@ -92,7 +92,7 @@ jobs:
           # Extract scikit-learn version constraint from requirements-ci.txt and reinstall
           SKLEARN_CONSTRAINT=$(grep -E '^scikit-learn[^#]*' requirements-ci.txt | head -n1)
           if [ -n "$SKLEARN_CONSTRAINT" ]; then
-            pip install --no-cache-dir --force-reinstall --no-deps "$SKLEARN_CONSTRAINT"
+            pip install --no-cache-dir --force-reinstall "$SKLEARN_CONSTRAINT"
           else
             echo "scikit-learn constraint not found in requirements-ci.txt" >&2
             exit 1
