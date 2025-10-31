@@ -194,12 +194,78 @@ $ pytest tests/test_parse_workflows.py -v
 
 ---
 
+### 5. False Positive: Heredoc Detection in parse_workflows.py
+
+**Severity:** 🟡 Warning/False Positive
+
+**Issue:** The workflow parser was incorrectly flagging Python `if` statements inside heredoc blocks (e.g., `python - <<'PY' ... PY`) as unclosed shell conditionals.
+
+**Location:** `parse_workflows.py:194-222`, `.github/workflows/summary.yml:32-73`
+
+**Before:**
+```python
+def _check_conditionals(self, workflow_file: Path, job_name: str,
+                        script: str, lines: List[str]):
+    # ... directly counted if/fi statements without filtering heredocs
+    for statement in statements:
+        if _IF_PATTERN.search(statement):
+            if_count += 1
+```
+
+This would incorrectly detect Python `if not OPENAI_API_KEY:` inside the heredoc as a shell conditional.
+
+**After:**
+```python
+def _check_conditionals(self, workflow_file: Path, job_name: str,
+                        script: str, lines: List[str]):
+    # Remove heredocs to avoid false positives
+    script_cleaned = self._remove_heredocs(script)
+    # ... then count if/fi statements
+
+def _remove_heredocs(self, script: str) -> str:
+    """Remove heredoc content to avoid false positives from embedded code."""
+    heredoc_pattern = re.compile(
+        r'<<[\'"]?(\w+)[\'"]?.*?^\s*\1\s*$',
+        re.MULTILINE | re.DOTALL
+    )
+    # Replace heredoc content with newlines to preserve line numbers
+    return heredoc_pattern.sub(replace_heredoc, script)
+```
+
+**Impact:** This improvement prevents false positives when workflows contain embedded Python, Ruby, or other language code within heredoc blocks, making the parser more robust and accurate.
+
+---
+
+### 6. Pylint False Positive in board_material_aerial_enhancer.py (Line 209)
+
+**Severity:** 🟡 Warning/False Positive
+
+**Issue:** Pylint incorrectly flagged `output.reshape(h, w, c)` as having too many arguments, not recognizing it as a NumPy array method.
+
+**Location:** `board_material_aerial_enhancer.py:209`
+
+**Before:**
+```python
+output = output.reshape(h, w, c)  # Pylint error: E1121
+```
+
+**After:**
+```python
+output = output.reshape(h, w, c)  # pylint: disable=too-many-function-args
+```
+
+**Impact:** This suppresses the false positive, allowing the code to pass linting checks while maintaining correct NumPy array reshaping functionality.
+
+---
+
 ## Impact Summary
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
 | Critical Errors | 3 | 0 | ✅ 100% fixed |
 | Warnings | 1 | 0 | ✅ 100% fixed |
+| Parser False Positives | 1 | 0 | ✅ Fixed with heredoc handling |
+| Pylint False Positives | 2 | 0 | ✅ Suppressed with comments |
 | Matrix Jobs (lint+test) | 12 | 9 | 🎯 25% reduction |
 | Workflow Validation | Manual | Automated | 🚀 Parser tool |
 | Test Coverage | 0% | 100% | ✅ 13 tests |
@@ -210,9 +276,11 @@ $ pytest tests/test_parse_workflows.py -v
 
 1. `.github/workflows/build.yml` - Fixed conditional, optimized matrix
 2. `.github/workflows/summary.yml` - Added step ID (generate-summary), fixed model name (gpt-4.1-mini → gpt-4o-mini)
-3. `parse_workflows.py` - Created new parser tool
+3. `parse_workflows.py` - Created new parser tool, enhanced with heredoc detection
 4. `tests/test_parse_workflows.py` - Created comprehensive test suite
 5. `parse_workflows_README.md` - Created documentation
+6. `board_material_aerial_enhancer.py` - Fixed pylint false positive (numpy reshape)
+7. `presence_security_v1_2/watermarking.py` - Fixed pylint false positive (numpy array assignment)
 
 ---
 
