@@ -564,6 +564,19 @@ def apply_glow(arr: np.ndarray, amount: float) -> np.ndarray:
 def apply_adjustments(
     arr: np.ndarray, adjustments: AdjustmentSettings, *, profile: ProcessingProfile | None = None
 ) -> np.ndarray:
+    """Apply complete adjustment pipeline to image array.
+
+    Applies adjustments in optimal order: white balance, exposure, tone curves,
+    denoising, color adjustments, clarity, and finishing effects.
+
+    Args:
+        arr: Input RGB image array in float32 format, values in [0, 1].
+        adjustments: Complete set of adjustment parameters.
+        profile: Optional processing profile to modulate expensive operations.
+
+    Returns:
+        Adjusted image array, clipped to [0, 1] range.
+    """
     arr = apply_white_balance(arr, adjustments.white_balance_temp, adjustments.white_balance_tint)
     arr = apply_exposure(arr, adjustments.exposure)
     arr = apply_shadow_lift(arr, adjustments.shadow_lift)
