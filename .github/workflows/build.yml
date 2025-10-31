@@ -125,19 +125,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          OUT="montecito_manifest.json"
+          OUT="montecito_manifest.csv"
 
-          # Attempt --out flag first
-          if python tools/montecito_manifest.py --help 2>/dev/null | grep -qi -- '--out'; then
-            python tools/montecito_manifest.py --out "$OUT"
-          else
-            python tools/montecito_manifest.py
-          fi
+          # Generate manifest for the repository root
+          python tools/montecito_manifest.py . "$OUT"
 
-          # Detect JSON if produced under another name
+          # Verify the manifest was created
           if [ ! -f "$OUT" ]; then
-            CANDIDATE="$(ls -1t tools/*.json *.json 2>/dev/null | head -n1 || true)"
-            [ -n "$CANDIDATE" ] && OUT="$CANDIDATE" || OUT=""
+            echo "Error: Manifest file was not created at $OUT"
+            exit 1
           fi
 
           echo "manifest_path=$OUT" >> "$GITHUB_OUTPUT"
