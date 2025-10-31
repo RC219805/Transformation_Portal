@@ -6,11 +6,15 @@ PY := $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else comma
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \
 	tests/test_material_response.py \
-	tests/test_adjustments.py \
-	tests/test_geometry.py \
-	tests/test_io.py \
-	tests/test_pipeline.py \
-	tests/test_presets.py
+	tests/test_board_material_aerial_enhancer.py \
+	tests/test_coastal_estate_render.py \
+	tests/test_codebase_philosophy_auditor.py \
+	tests/test_cognitive_material_response.py \
+	tests/test_decision_decay_dashboard.py \
+	tests/test_depth_tools.py \
+	tests/test_evolutionary_checkpoint.py \
+	tests/test_float_roundtrip.py \
+	tests/test_golden_hour_courtyard_workflow.py
 
 .PHONY: help test-fast test-novideo test-full venv
 

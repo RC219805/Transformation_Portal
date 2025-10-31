@@ -21,6 +21,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from fractions import Fraction
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -179,6 +180,7 @@ class ToneMapPlan:
 
 
 def list_presets() -> str:
+    """Return formatted string listing all available grading presets."""
     lines = []
     for key, preset in PRESETS.items():
         lines.append(f"- {key}: {preset.description}")
@@ -186,10 +188,12 @@ def list_presets() -> str:
 
 
 def clamp(value: float, low: float, high: float) -> float:
+    """Constrain value to the range [low, high]."""
     return max(low, min(high, value))
 
 
 def ensure_tools_available() -> None:
+    """Verify FFmpeg tools are available on PATH, exit with error if not."""
     for tool in ("ffmpeg", "ffprobe"):
         if not shutil_which(tool):
             raise SystemExit(
@@ -197,7 +201,9 @@ def ensure_tools_available() -> None:
             )
 
 
+@lru_cache(maxsize=32)
 def shutil_which(binary: str) -> Optional[str]:
+    """Cache binary path lookups for performance."""
     return shutil.which(binary)
 
 
@@ -528,10 +534,17 @@ def assess_frame_rate(
 
 
 def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
+    """
+    Build FFmpeg filter graph string from configuration.
+    
+    Returns:
+        Tuple of (filter_graph, output_label)
+    """
     nodes: List[str] = []
     label_index = 0
 
     def next_label() -> str:
+        """Generate unique label for filter nodes."""
         nonlocal label_index
         label_index += 1
         return f"v{label_index}"
