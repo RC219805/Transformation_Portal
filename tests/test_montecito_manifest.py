@@ -67,15 +67,15 @@ def test_write_manifest_creates_parent_directories(tmp_path: Path) -> None:
     assert destination.parent.exists()
 
 
-def test_iter_files_preserves_file_path_separators(tmp_path: Path) -> None:
-    """Test that iter_files uses forward slashes in relative paths."""
+def test_iter_files_handles_nested_directories(tmp_path: Path) -> None:
+    """Test that iter_files correctly handles files in deeply nested directories."""
     nested = tmp_path / "level1" / "level2"
     nested.mkdir(parents=True)
     (nested / "file.txt").write_text("test", encoding="utf-8")
 
     results = list(iter_files(tmp_path))
 
-    # Path objects will use appropriate separators, but str() should normalize them
+    # Should find the file in nested directories with correct relative path
     assert len(results) == 1
     relative_path = results[0][0]
     assert relative_path == Path("level1/level2/file.txt")
