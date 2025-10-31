@@ -22,7 +22,7 @@ pytest.importorskip("PIL.Image")
 pytest.importorskip("PIL.TiffImagePlugin")
 from PIL import Image, TiffImagePlugin  # noqa: E402  # pylint: disable=wrong-import-position
 
-import luxury_tiff_batch_processor as ltiff  # noqa: E402  # pylint: disable=wrong-import-position,consider-using-from-import
+import luxury_tiff_batch_processor as ltiff  # noqa: E402  # pylint: disable=wrong-import-position,consider-using-from-import,no-member
 from luxury_tiff_batch_processor import pipeline  # noqa: E402  # pylint: disable=wrong-import-position
 from luxury_tiff_batch_processor import io_utils  # noqa: E402  # pylint: disable=wrong-import-position
 
