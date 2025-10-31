@@ -265,7 +265,7 @@ output = output.reshape(h, w, c)  # pylint: disable=too-many-function-args
 | Critical Errors | 3 | 0 | ✅ 100% fixed |
 | Warnings | 1 | 0 | ✅ 100% fixed |
 | Parser False Positives | 1 | 0 | ✅ Fixed with heredoc handling |
-| Pylint False Positives | 1 | 0 | ✅ Suppressed with comment |
+| Pylint False Positives | 2 | 0 | ✅ Suppressed with comments |
 | Matrix Jobs (lint+test) | 12 | 9 | 🎯 25% reduction |
 | Workflow Validation | Manual | Automated | 🚀 Parser tool |
 | Test Coverage | 0% | 100% | ✅ 13 tests |
@@ -279,7 +279,8 @@ output = output.reshape(h, w, c)  # pylint: disable=too-many-function-args
 3. `parse_workflows.py` - Created new parser tool, enhanced with heredoc detection
 4. `tests/test_parse_workflows.py` - Created comprehensive test suite
 5. `parse_workflows_README.md` - Created documentation
-6. `board_material_aerial_enhancer.py` - Fixed pylint false positive
+6. `board_material_aerial_enhancer.py` - Fixed pylint false positive (numpy reshape)
+7. `presence_security_v1_2/watermarking.py` - Fixed pylint false positive (numpy array assignment)
 
 ---
 
