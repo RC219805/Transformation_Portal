@@ -30,7 +30,7 @@ def iter_files(root: Path) -> Iterable[Tuple[Path, int, str]]:
 
 
 def _md5(path: Path) -> str:
-    digest = hashlib.md5()
+    digest = hashlib.md5(usedforsecurity=False)
     with path.open("rb") as file_obj:
         for chunk in iter(lambda: file_obj.read(8192), b""):
             digest.update(chunk)
