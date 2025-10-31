@@ -1,7 +1,6 @@
 # GitHub Copilot Firewall Configuration
-# This file specifies URLs and hosts that GitHub Copilot agents are allowed to access
-# during execution to download dependencies and access external resources.
-
+# This file defines an allowlist of URLs and hosts that GitHub Copilot agents are permitted to access during execution.
+# The allowlist enables agents to download dependencies and access external resources required by the Transformation Portal project.
 version: 1
 
 # Allowlist of domains and URLs that Copilot agents can access
