@@ -133,7 +133,7 @@ make lint
 ### LUT Processing
 - LUTs are stored in `.cube` format in categorized directories:
   - `01_Film_Emulation/` - Kodak and FilmConvert emulations
-  - `02_Location_Aesthetic/` - Location-specific color profiles  
+  - `02_Location_Aesthetic/` - Location-specific color profiles
   - `03_Material_Response/` - Physics-based surface enhancement
 - LUT strength is typically applied at 60-80% opacity
 - LUTs can be stacked for complex material interactions
