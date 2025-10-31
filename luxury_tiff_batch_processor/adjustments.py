@@ -111,6 +111,14 @@ LUXURY_PRESETS = {
 
 
 def kelvin_to_rgb(temperature: float) -> np.ndarray:
+    """Convert color temperature in Kelvin to RGB multipliers.
+
+    Args:
+        temperature: Color temperature in Kelvin (typically 1500-20000K).
+
+    Returns:
+        RGB multiplier array as float32 with values in [0, 1] range.
+    """
     temp = temperature / 100.0
     if temp <= 0:
         temp = 0.1
@@ -127,6 +135,15 @@ def kelvin_to_rgb(temperature: float) -> np.ndarray:
 
 
 def apply_exposure(arr: np.ndarray, stops: float) -> np.ndarray:
+    """Apply exposure adjustment to image array.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        stops: Exposure adjustment in photographic stops (typically -5 to +5).
+
+    Returns:
+        Exposure-adjusted array with same shape as input.
+    """
     if stops == 0:
         return arr
     factor = float(2.0 ** stops)
@@ -135,6 +152,16 @@ def apply_exposure(arr: np.ndarray, stops: float) -> np.ndarray:
 
 
 def apply_white_balance(arr: np.ndarray, temperature: Optional[float], tint: float) -> np.ndarray:
+    """Apply white balance adjustment using color temperature and tint.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        temperature: Target color temperature in Kelvin (1500-20000K), or None to skip.
+        tint: Green-magenta tint adjustment (-150 to +150, positive shifts magenta).
+
+    Returns:
+        White-balanced array with same shape as input.
+    """
     result = arr
     if temperature is not None:
         ref = kelvin_to_rgb(6500.0)
@@ -150,10 +177,29 @@ def apply_white_balance(arr: np.ndarray, temperature: Optional[float], tint: flo
 
 
 def luminance(arr: np.ndarray) -> np.ndarray:
+    """Calculate perceptual luminance from RGB values.
+
+    Uses Rec. 709 luma coefficients for accurate perceptual brightness.
+
+    Args:
+        arr: Input RGB image array.
+
+    Returns:
+        2D luminance array with same height and width as input.
+    """
     return arr[:, :, 0] * 0.2126 + arr[:, :, 1] * 0.7152 + arr[:, :, 2] * 0.0722
 
 
 def apply_shadow_lift(arr: np.ndarray, amount: float) -> np.ndarray:
+    """Lift shadows while preserving highlights.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        amount: Shadow lift strength (0.0 to 1.0).
+
+    Returns:
+        Shadow-lifted array with same shape as input.
+    """
     if amount <= 0:
         return arr
     gamma = 1.0 / (1.0 + amount * 3.0)
@@ -164,6 +210,15 @@ def apply_shadow_lift(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 def apply_highlight_recovery(arr: np.ndarray, amount: float) -> np.ndarray:
+    """Recover detail in highlights by compressing bright regions.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        amount: Highlight recovery strength (0.0 to 1.0).
+
+    Returns:
+        Highlight-recovered array with same shape as input.
+    """
     if amount <= 0:
         return arr
     gamma = 1.0 + amount * 2.0
@@ -174,6 +229,15 @@ def apply_highlight_recovery(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 def apply_midtone_contrast(arr: np.ndarray, amount: float) -> np.ndarray:
+    """Adjust contrast in midtone regions.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        amount: Contrast adjustment (-1.0 to +1.0, negative reduces contrast).
+
+    Returns:
+        Contrast-adjusted array with same shape as input.
+    """
     if amount == 0:
         return arr
     lum = luminance(arr)
@@ -183,6 +247,14 @@ def apply_midtone_contrast(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 def rgb_to_hsv(arr: np.ndarray) -> np.ndarray:
+    """Convert RGB color space to HSV (Hue, Saturation, Value).
+
+    Args:
+        arr: Input RGB image array in float32 format.
+
+    Returns:
+        HSV array with same shape, values in [0, 1] range.
+    """
     r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
     maxc = np.max(arr, axis=-1)
     minc = np.min(arr, axis=-1)
@@ -226,6 +298,14 @@ def rgb_to_hsv(arr: np.ndarray) -> np.ndarray:
 
 
 def hsv_to_rgb(arr: np.ndarray) -> np.ndarray:
+    """Convert HSV color space to RGB.
+
+    Args:
+        arr: Input HSV image array in float32 format with values in [0, 1].
+
+    Returns:
+        RGB array with same shape as input.
+    """
     h, s, v = arr[..., 0], arr[..., 1], arr[..., 2]
     i = np.floor(h * 6.0).astype(int)
     f = h * 6.0 - i
@@ -251,6 +331,15 @@ def hsv_to_rgb(arr: np.ndarray) -> np.ndarray:
 
 
 def apply_vibrance(arr: np.ndarray, amount: float) -> np.ndarray:
+    """Apply intelligent saturation boost that protects already saturated colors.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        amount: Vibrance strength (-1.0 to +1.0).
+
+    Returns:
+        Vibrance-adjusted array with same shape as input.
+    """
     if amount == 0:
         return arr
     hsv = rgb_to_hsv(arr)
@@ -265,6 +354,15 @@ def apply_vibrance(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 def apply_saturation(arr: np.ndarray, amount: float) -> np.ndarray:
+    """Apply uniform saturation adjustment to all colors.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        amount: Saturation multiplier delta (-1.0 to +1.0).
+
+    Returns:
+        Saturation-adjusted array with same shape as input.
+    """
     if amount == 0:
         return arr
     hsv = rgb_to_hsv(arr)
@@ -287,18 +385,40 @@ def _gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.nd
 
 
 def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
-    """Return a Gaussian kernel while protecting cached values from mutation.
+    """Generate a 1D Gaussian convolution kernel with mutable copy.
 
-    The internal cached kernel is stored in a read-only array.  This function
+    The internal cached kernel is stored in a read-only array. This function
     provides callers with a writable copy so that downstream code can safely
-    adjust the kernel without corrupting the cached value that other callers
-    may rely on.
-    """
+    adjust the kernel without corrupting the cached value.
 
+    Most callers will not need to modify the kernel. Mutability is provided defensively
+    to prevent accidental modification of the cached kernel. However, if you need to
+    adjust the kernel (e.g., for custom edge handling or normalization), you can safely
+    do so on the returned array:
+
+        kernel = gaussian_kernel(3)
+        kernel[0] = 0.0  # Example: zero out the first weight
+
+    Args:
+        radius: Kernel radius in pixels (half-width).
+        sigma: Standard deviation for Gaussian distribution, defaults to radius/3.
+
+    Returns:
+        1D numpy array containing normalized Gaussian weights (writable).
+    """
     return _gaussian_kernel_cached(radius, sigma).copy()
 
 
 def gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.ndarray:
+    """Return cached immutable Gaussian kernel for efficient reuse.
+
+    Args:
+        radius: Kernel radius in pixels (half-width).
+        sigma: Standard deviation for Gaussian distribution, defaults to radius/3.
+
+    Returns:
+        Read-only 1D numpy array containing normalized Gaussian weights.
+    """
     return _gaussian_kernel_cached(radius, sigma)
 
 
@@ -308,6 +428,16 @@ gaussian_kernel.cache_info = _gaussian_kernel_cached.cache_info  # type: ignore[
 
 
 def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.ndarray:
+    """Apply 1D convolution along specified axis with reflection padding.
+
+    Args:
+        arr: Input array to convolve.
+        kernel: 1D convolution kernel.
+        axis: Axis along which to apply convolution.
+
+    Returns:
+        Convolved array with same shape as input.
+    """
     pad_width = [(0, 0)] * arr.ndim
     k = kernel.size // 2
     pad_width[axis] = (k, k)
@@ -319,6 +449,16 @@ def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.nda
 
 
 def gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -> np.ndarray:
+    """Apply Gaussian blur using separable 2D convolution.
+
+    Args:
+        arr: Input image array.
+        radius: Blur radius in pixels.
+        sigma: Standard deviation for Gaussian kernel, defaults to radius/3.
+
+    Returns:
+        Blurred array with same shape as input.
+    """
     kernel = gaussian_kernel_cached(radius, sigma)
     blurred = separable_convolve(arr, kernel, axis=0)
     blurred = separable_convolve(blurred, kernel, axis=1)
@@ -326,6 +466,15 @@ def gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -
 
 
 def apply_clarity(arr: np.ndarray, amount: float) -> np.ndarray:
+    """Enhance local contrast using high-pass filtering.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        amount: Clarity strength (-1.0 to +1.0).
+
+    Returns:
+        Clarity-enhanced array, clipped to [0, 1] range.
+    """
     if amount <= 0:
         return arr
     radius = max(1, int(round(1 + amount * 5)))
@@ -336,6 +485,14 @@ def apply_clarity(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 def rgb_to_yuv(arr: np.ndarray) -> np.ndarray:
+    """Convert RGB to YUV color space for chrominance processing.
+
+    Args:
+        arr: Input RGB image array.
+
+    Returns:
+        YUV array with Y in [0, 1] and U,V centered at 0.5.
+    """
     matrix = np.array(
         [
             [0.2126, 0.7152, 0.0722],
@@ -350,6 +507,14 @@ def rgb_to_yuv(arr: np.ndarray) -> np.ndarray:
 
 
 def yuv_to_rgb(arr: np.ndarray) -> np.ndarray:
+    """Convert YUV color space back to RGB.
+
+    Args:
+        arr: Input YUV array with U,V centered at 0.5.
+
+    Returns:
+        RGB array with same shape as input.
+    """
     matrix = np.array(
         [
             [1.0, 0.0, 1.28033],
@@ -365,6 +530,15 @@ def yuv_to_rgb(arr: np.ndarray) -> np.ndarray:
 
 
 def apply_chroma_denoise(arr: np.ndarray, amount: float) -> np.ndarray:
+    """Reduce color noise by blurring chrominance channels.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        amount: Denoising strength (0.0 to 1.0).
+
+    Returns:
+        Denoised array, clipped to [0, 1] range.
+    """
     if amount <= 0:
         return arr
     yuv = rgb_to_yuv(arr)
@@ -378,6 +552,15 @@ def apply_chroma_denoise(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 def apply_glow(arr: np.ndarray, amount: float) -> np.ndarray:
+    """Apply diffusion glow effect for luxury aesthetic.
+
+    Args:
+        arr: Input RGB image array in float32 format.
+        amount: Glow strength (0.0 to 1.0).
+
+    Returns:
+        Glowed array, clipped to [0, 1] range.
+    """
     if amount <= 0:
         return arr
     radius = max(2, int(round(6 + amount * 20)))
@@ -389,6 +572,19 @@ def apply_glow(arr: np.ndarray, amount: float) -> np.ndarray:
 def apply_adjustments(
     arr: np.ndarray, adjustments: AdjustmentSettings, *, profile: ProcessingProfile | None = None
 ) -> np.ndarray:
+    """Apply complete adjustment pipeline to image array.
+
+    Applies adjustments in optimal order: white balance, exposure, tone curves,
+    denoising, color adjustments, clarity, and finishing effects.
+
+    Args:
+        arr: Input RGB image array in float32 format, values in [0, 1].
+        adjustments: Complete set of adjustment parameters.
+        profile: Optional processing profile to modulate expensive operations.
+
+    Returns:
+        Adjusted image array, clipped to [0, 1] range.
+    """
     arr = apply_white_balance(arr, adjustments.white_balance_temp, adjustments.white_balance_tint)
     arr = apply_exposure(arr, adjustments.exposure)
     arr = apply_shadow_lift(arr, adjustments.shadow_lift)
