@@ -29,8 +29,19 @@ LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
 
 def _load_config_data(path: Path) -> Mapping[str, Any]:
-    """Return the mapping contained in the configuration file at *path*."""
+    """Load configuration from JSON or YAML file.
 
+    Args:
+        path: Path to configuration file (.json, .yaml, or .yml).
+
+    Returns:
+        Dictionary mapping configuration keys to values.
+
+    Raises:
+        FileNotFoundError: If configuration file doesn't exist.
+        RuntimeError: If YAML file requested but pyyaml not installed.
+        ValueError: If file content is not a valid mapping.
+    """
     if not path.exists():
         raise FileNotFoundError(f"Configuration file not found: {path}")
 
@@ -53,8 +64,17 @@ def _load_config_data(path: Path) -> Mapping[str, Any]:
 
 
 def _normalise_config_keys(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalise mapping keys to CLI-compatible names (underscored)."""
+    """Convert configuration keys to CLI-compatible underscore format.
 
+    Args:
+        raw: Raw configuration dictionary with potentially hyphenated keys.
+
+    Returns:
+        Dictionary with keys normalized to underscore format.
+
+    Raises:
+        ValueError: If any key is not a string.
+    """
     normalised: dict[str, Any] = {}
     for key, value in raw.items():
         if not isinstance(key, str):
@@ -64,8 +84,15 @@ def _normalise_config_keys(raw: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _build_parser_aliases(parser: argparse.ArgumentParser) -> tuple[dict[str, argparse.Action], dict[str, str]]:
-    """Return lookup tables for actions and their normalised aliases."""
+    """Build lookup tables mapping argument names to parser actions.
 
+    Args:
+        parser: Configured ArgumentParser instance.
+
+    Returns:
+        Tuple of (dest_to_action, alias_to_dest) dictionaries for resolving
+        configuration file keys to parser actions.
+    """
     dest_to_action: dict[str, argparse.Action] = {}
     alias_to_dest: dict[str, str] = {}
     # Use public methods to get all actions
@@ -291,6 +318,14 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 
 
 def build_adjustments(args: argparse.Namespace) -> AdjustmentSettings:
+    """Construct adjustment settings from preset and CLI overrides.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        AdjustmentSettings with preset values overridden by CLI arguments.
+    """
     base = dataclasses.replace(LUXURY_PRESETS[args.preset])
     for field in dataclasses.fields(base):
         value = getattr(args, field.name, None)
