@@ -108,7 +108,7 @@ jobs:
           PY
         env:
           ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
-          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.head_commit.message || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.comment.body || github.event.head_commit.message || '' }}
           REVIEW_STATE: ${{ github.event.review.state || '' }}
           EVENT_NAME: ${{ github.event_name }}
 
