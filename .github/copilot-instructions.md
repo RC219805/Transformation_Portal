@@ -277,7 +277,7 @@ make lint
 2. **Test with real files**: Use sample images from `data/sample_images/` when available
 3. **Validate FFmpeg commands**: Use `--dry-run` to inspect generated commands before execution
 4. **Consider backward compatibility**: Existing scripts may be in production use by clients
-5. **Update documentation**: Keep README, DEPTH_PIPELINE_README.md, and examples current
+5. **Update documentation**: Keep README, docs/depth_pipeline/DEPTH_PIPELINE_README.md, and examples current
 6. **Preserve metadata**: IPTC, XMP, and GPS data should survive processing
    - Use `Pillow.Image.info` for metadata preservation
    - Consider `tifffile` for 16-bit TIFF with full metadata support
