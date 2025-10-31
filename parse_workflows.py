@@ -197,8 +197,12 @@ class WorkflowParser:
         if_count = 0
         fi_count = 0
 
+        # Remove heredocs (e.g., python - <<'PY' ... PY) to avoid false positives
+        # from Python/other language if statements
+        script_cleaned = self._remove_heredocs(script)
+
         # Split by newlines and semicolons
-        statements = _NEWLINE_SEMICOLON.split(script)
+        statements = _NEWLINE_SEMICOLON.split(script_cleaned)
 
         for statement in statements:
             # Remove comments
@@ -287,6 +291,29 @@ class WorkflowParser:
                                 'warning',
                                 f"Job '{job_name}' has device matrix [{device_list}] but includes "
                                 f"'lint' task which doesn't require multiple devices"))
+
+    def _remove_heredocs(self, script: str) -> str:
+        """Remove heredoc content to avoid false positives from embedded code.
+
+        Detects heredocs like:
+        - python - <<'PY' ... PY
+        - cat <<EOF ... EOF
+        - sh <<'SCRIPT' ... SCRIPT
+        """
+        # Pattern to match heredocs: <<['"]?DELIMITER['"]? ... DELIMITER
+        # This is a simplified version that handles common cases
+        heredoc_pattern = re.compile(
+            r'<<[\'"]?(\w+)[\'"]?.*?^\s*\1\s*$',
+            re.MULTILINE | re.DOTALL
+        )
+
+        # Replace heredoc content with a placeholder to preserve line structure
+        def replace_heredoc(match):
+            # Count newlines in the heredoc to preserve line numbers
+            lines_in_heredoc = match.group(0).count('\n')
+            return '\n' * lines_in_heredoc
+
+        return heredoc_pattern.sub(replace_heredoc, script)
 
     def _find_line_number(self, lines: List[str], search_text: str) -> Optional[int]:
         """Find the line number containing the search text."""
