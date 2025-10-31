@@ -1,4 +1,24 @@
-"""Core processing helpers shared between the CLI and integrations."""
+"""Processing orchestration for batch and single-image operations.
+
+This module provides the core processing pipeline used by both CLI and programmatic
+interfaces. It handles image collection, progress tracking, parallel execution,
+and atomic file operations.
+
+Key Functions
+-------------
+
+process_single_image
+    Process a single image with specified adjustments and output parameters.
+
+collect_images
+    Find TIFF files in a directory, optionally recursing into subdirectories.
+
+ensure_output_path
+    Compute safe output paths with directory structure preservation.
+
+resize_long_edge_array
+    Resize images while maintaining aspect ratio.
+"""
 from __future__ import annotations
 
 import contextlib
@@ -74,6 +94,15 @@ def _wrap_with_progress(
 
 
 def collect_images(folder: Path, recursive: bool) -> Iterator[Path]:
+    """Find TIFF files in directory.
+
+    Args:
+        folder: Directory to search.
+        recursive: Whether to search subdirectories.
+
+    Yields:
+        Path objects for each TIFF file found.
+    """
     patterns: List[str] = ["*.tif", "*.tiff", "*.TIF", "*.TIFF"]
     if recursive:
         for pattern in patterns:
@@ -154,6 +183,16 @@ def ensure_output_path(
 
 
 def resize_bilinear(arr: np.ndarray, new_width: int, new_height: int) -> np.ndarray:
+    """Resize array using bilinear interpolation.
+
+    Args:
+        arr: Input array to resize.
+        new_width: Target width in pixels.
+        new_height: Target height in pixels.
+
+    Returns:
+        Resized array as float32.
+    """
     height, width = arr.shape[:2]
     if width == new_width and height == new_height:
         return arr
@@ -177,6 +216,19 @@ def resize_bilinear(arr: np.ndarray, new_width: int, new_height: int) -> np.ndar
 
 
 def resize_array(arr: np.ndarray, new_width: int, new_height: int) -> np.ndarray:
+    """Resize 2D or 3D array with automatic dimension handling.
+
+    Args:
+        arr: Input array (2D grayscale or 3D color).
+        new_width: Target width in pixels.
+        new_height: Target height in pixels.
+
+    Returns:
+        Resized array maintaining original dimensionality.
+
+    Raises:
+        ValueError: If array has unsupported shape.
+    """
     if arr.ndim == 2:
         expanded = arr[:, :, None]
         resized = resize_bilinear(expanded, new_width, new_height)
@@ -187,6 +239,15 @@ def resize_array(arr: np.ndarray, new_width: int, new_height: int) -> np.ndarray
 
 
 def resize_long_edge_array(arr: np.ndarray, target: int) -> np.ndarray:
+    """Resize array so longest edge matches target, preserving aspect ratio.
+
+    Args:
+        arr: Input array to resize.
+        target: Target length for longest edge in pixels.
+
+    Returns:
+        Resized array, or original if already smaller than target.
+    """
     height, width = arr.shape[:2]
     long_edge = max(width, height)
     if long_edge <= target:
@@ -287,8 +348,18 @@ def process_single_image(
     dry_run: bool = False,
     profile: ProcessingProfile | None = None,
 ) -> None:
-    """Public wrapper around :func:`_process_image_worker`."""
+    """Process a single TIFF image with specified adjustments.
 
+    Args:
+        source: Path to input TIFF file.
+        destination: Path for output file.
+        adjustments: Color and tone adjustment settings.
+        compression: TIFF compression method (e.g., "tiff_lzw").
+        resize_long_edge: Optional target for longest edge in pixels.
+        resize_target: Legacy resize parameter (use resize_long_edge instead).
+        dry_run: If True, skip actual file writing.
+        profile: Processing profile for quality/performance trade-offs.
+    """
     # pylint: disable=duplicate-code  # Similar call in cli.py with same params
     _process_image_worker(
         source,
