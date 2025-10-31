@@ -11,8 +11,6 @@ jobs:
   summarize:
     runs-on: ubuntu-latest
     env:
-      RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
-      GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
       ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -29,6 +27,12 @@ jobs:
 
       - name: Run summarizer (safe Option B)
         id: summarizer
+        env:
+          RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
+          ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.comment.body || github.event.head_commit.message || '' }}
+          REVIEW_STATE: ${{ github.event.review.state || '' }}
+          EVENT_NAME: '${{ github.event_name }}'
         run: |
           python - <<'PY'
           import os, sys, textwrap
@@ -106,13 +110,10 @@ jobs:
           with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
               f.write(summary)
           PY
-        env:
-          ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
-          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.comment.body || github.event.head_commit.message || '' }}
-          REVIEW_STATE: ${{ github.event.review.state || '' }}
-          EVENT_NAME: '${{ github.event_name }}'
 
       - name: Debug RESPONSE_FILE (safe)
+        env:
+          RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
         run: |
           echo "RESPONSE_FILE size:"
           stat -c "%s bytes" "$RESPONSE_FILE" || true
@@ -121,10 +122,10 @@ jobs:
 
       - name: Post comment only if present and not previously posted
         env:
+          RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
-          RESPONSE_FILE: ${{ env.RESPONSE_FILE }}
           MARKER: ${{ env.DIAGNOSTIC_MARKER }}
         run: |
           set -euo pipefail
@@ -138,9 +139,6 @@ jobs:
             echo "No response to post."
             exit 0
           fi
-
-          # Read the candidate comment body
-          BODY="$(cat "$RESPONSE_FILE")"
 
           # Check existing comments for the marker so we only post once
           echo "Checking existing comments for diagnostic marker..."
