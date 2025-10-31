@@ -335,7 +335,7 @@ make lint
 ## Additional Resources
 
 - **Main README**: `README.md` - Feature overview, installation, usage examples
-- **Depth Pipeline**: `DEPTH_PIPELINE_README.md` - Comprehensive depth processing guide
+- **Depth Pipeline**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md` - Comprehensive depth processing guide
 - **Architecture**: `docs/ARCHITECTURE.md` - System design and component relationships
 - **Performance**: `docs/PERFORMANCE_OPTIMIZATION.md` - Optimization strategies and benchmarks
 - **Refactoring**: `docs/REFACTORING_SUMMARY.md` - Recent changes and improvements (Oct 2025)
