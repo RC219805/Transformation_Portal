@@ -250,7 +250,7 @@ make lint
 - Architecture documentation in `docs/ARCHITECTURE.md`
 - Refactoring notes in `docs/REFACTORING_SUMMARY.md` and `docs/REFACTORING_2025.md`
 - Performance optimization guidance in `docs/PERFORMANCE_OPTIMIZATION.md`
-- Depth pipeline specifics in `DEPTH_PIPELINE_README.md`
+- Depth pipeline specifics in `docs/depth_pipeline/DEPTH_PIPELINE_README.md`
 - Include usage examples with common parameter combinations in README
 - Document all presets with their intended use cases and parameter rationale
 - Add inline comments for complex algorithms (depth processing, tone mapping, material detection)
