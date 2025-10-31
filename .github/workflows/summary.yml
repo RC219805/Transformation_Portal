@@ -62,9 +62,30 @@ jobs:
               Review comment:
               {body}
               """)
-          else:
+          elif event_name == "issue_comment":
+              prompt = textwrap.dedent(f"""
+              Summarize this GitHub issue comment in one concise paragraph (neutral tone).
+              Issue title: {title}
+              Comment:
+              {body}
+              """)
+          elif event_name == "pull_request":
+              prompt = textwrap.dedent(f"""
+              Summarize this pull request in one concise paragraph (neutral tone).
+              PR title: {title}
+              Description:
+              {body}
+              """)
+          elif event_name == "issues":
               prompt = textwrap.dedent(f"""
               Summarize this GitHub issue in one concise paragraph (neutral tone).
+              Issue title: {title}
+              Description:
+              {body}
+              """)
+          else:
+              prompt = textwrap.dedent(f"""
+              Summarize this GitHub event in one concise paragraph (neutral tone).
               Title: {title}
               Body:
               {body}
