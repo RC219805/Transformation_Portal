@@ -31,14 +31,14 @@ The repository includes multiple CI/CD and automation workflows to ensure code q
 - Automated analysis for security vulnerabilities.  
 - Runs on pushes to main and pull requests.  
 
-### 4. `summary.yml` (AI Issue Summarization)
-**Purpose:** Automatically generates a summary of newly opened GitHub issues.  
+### 4. `summary.yml` (AI Issue and PR Review Summarization)
+**Purpose:** Automatically generates a summary of newly opened GitHub issues, pull requests, and pull request reviews.  
 **Status:** Fully functional with OpenAI API integration.
 
 **Features:**
-- Triggered on `issues.opened`.  
-- Uses OpenAI `gpt-4.1-mini` model to summarize issue title and body.  
-- Posts the summary as a comment on the issue.  
+- Triggered on `issues.opened`, `issues.edited`, `pull_request`, `pull_request_review`, and `issue_comment`.  
+- Uses OpenAI `gpt-4o-mini` model to summarize issue/PR/review content.  
+- Posts the summary as a comment on the issue or pull request.  
 - Includes graceful fallback if API call fails.  
 - Requires `OPENAI_API_KEY` in repository secrets.
 
