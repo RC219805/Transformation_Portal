@@ -262,7 +262,7 @@ output = output.reshape(h, w, c)  # pylint: disable=too-many-function-args
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
-| Critical Errors | 3 | 0 | ✅ 100% fixed |
+| Critical Errors | 4 | 0 | ✅ 100% fixed |
 | Warnings | 1 | 0 | ✅ 100% fixed |
 | Parser False Positives | 1 | 0 | ✅ Fixed with heredoc handling |
 | Pylint False Positives | 2 | 0 | ✅ Suppressed with comments |
