@@ -26,6 +26,7 @@ See [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) for details.
 * [Features](#features)
 * [Quick Start](#quick-start)
 * [Installation](#installation)
+* [Supported File Formats](#supported-file-formats)
 * [Core Components](#core-components)
   * [Depth Pipeline](#depth-pipeline)
   * [Lux Render Pipeline](#lux-render-pipeline)
@@ -118,6 +119,58 @@ python luxury_tiff_batch_processor.py input_folder/ output_folder/ --preset sign
 # AI render refinement
 python lux_render_pipeline.py --input bedroom.jpg --out ./enhanced --prompt "luxury bedroom interior" --material-response
 ```
+
+---
+
+## Supported File Formats
+
+Transformation Portal supports a wide range of image and video formats across its pipelines:
+
+### Image Formats
+
+**Universal Support** (All image pipelines):
+- **PNG** (`.png`) - Lossless, alpha channel support
+- **JPEG** (`.jpg`, `.jpeg`) - Lossy, widely compatible  
+- **TIFF** (`.tif`, `.tiff`) - 16-bit precision with metadata preservation
+- **WebP** (`.webp`) - Modern compression
+- **BMP** (`.bmp`) - Uncompressed bitmap
+
+All formats are **case-insensitive** (`.PNG`, `.Png`, `.png` all accepted).
+
+### Video Formats
+
+**Luxury Video Master Grader**:
+- **MP4** (`.mp4`) - H.264, H.265/HEVC
+- **MOV** (`.mov`) - ProRes, QuickTime
+- **AVI** (`.avi`) - Various codecs
+- **MKV** (`.mkv`) - Matroska container
+- HDR support: PQ (HDR10), HLG (Hybrid Log-Gamma)
+
+### Pipeline-Specific Recommendations
+
+| Pipeline | Best Format | Notes |
+|----------|-------------|-------|
+| **TIFF Batch Processor** | 16-bit TIFF | Requires `tifffile` for full precision |
+| **Depth Pipeline** | PNG, TIFF | Lossless for architectural rendering |
+| **Lux Render Pipeline** | PNG, TIFF | AI enhancement works with any PIL format |
+| **Material Response** | TIFF, PNG | High-res input recommended (4K+) |
+| **Video Grading** | ProRes MOV | Master format for color grading |
+
+### Installation for Full Format Support
+
+```bash
+# Install base image support (included in requirements.txt)
+pip install Pillow
+
+# Install high-fidelity TIFF support (16-bit precision)
+pip install -e ".[tiff]"  # Includes tifffile + imagecodecs
+
+# FFmpeg required for video (system package)
+# Ubuntu/Debian: sudo apt install ffmpeg
+# macOS: brew install ffmpeg
+```
+
+📖 **[Complete Format Documentation](SUPPORTED_FILE_FORMATS.md)** - Detailed format specifications, constraints, and examples
 
 ---
 
