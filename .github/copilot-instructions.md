@@ -1,13 +1,14 @@
-# Copilot Instructions for 800 Picacho Lane LUTs
+# Copilot Instructions for Transformation Portal
 
 ## Project Overview
 
-This repository contains a professional LUT (Look-Up Table) collection and video/image processing toolchain for luxury real estate cinematography and photography. The project includes:
+This repository contains a professional image and video processing toolkit for luxury real estate rendering and architectural visualization. The project includes:
 
 - **LUT Collection**: 16 professional color grading LUTs featuring Material Response technology for Kodak film emulation, location aesthetics, and material-aware rendering
 - **Python Processing Tools**: Batch processors for TIFF images and video master grading
 - **Shell Scripts**: HDR production pipeline for broadcast-ready masters
 - **Machine Learning Pipeline**: AI-powered render refinement using Stable Diffusion and ControlNet
+- **Depth Pipeline**: Depth Anything V2 for architectural depth-aware processing
 
 ## Repository Structure
 
@@ -37,8 +38,8 @@ This repository contains a professional LUT (Look-Up Table) collection and video
 ### Setup
 ```bash
 # Clone and navigate to repository
-git clone https://github.com/RC219805/800-Picacho-Lane-LUTs.git
-cd 800-Picacho-Lane-LUTs
+git clone https://github.com/RC219805/Transformation_Portal.git
+cd Transformation_Portal
 
 # Install Python dependencies (installs project metadata requirements)
 pip install .
