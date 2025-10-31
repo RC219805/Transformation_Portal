@@ -17,6 +17,10 @@ from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 import numpy as np
 
+# Precompiled regex patterns for performance
+_KEYWORD_PATTERN = re.compile(r"[a-z0-9]+")
+_TEXTURE_PATTERN = re.compile(r"[a-z]+")
+
 
 def _is_sequence(value: object) -> bool:
     """Return ``True`` when ``value`` should be treated as a sequence."""
@@ -281,7 +285,7 @@ _STOP_WORDS = {
 def _extract_keywords(text: str) -> List[str]:
     """Return a list of meaningful lowercase keywords from ``text``."""
 
-    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    tokens = _KEYWORD_PATTERN.findall(text.lower())
     return [token for token in tokens if token not in _STOP_WORDS and len(token) > 2]
 
 
@@ -431,7 +435,7 @@ class NeuroAestheticEngine:
         if not 0.0 <= warmth <= 1.0:
             raise ValueError("warmth must be between 0.0 and 1.0 inclusive")
 
-        tokens = re.findall(r"[a-z]+", texture.lower())
+        tokens = _TEXTURE_PATTERN.findall(texture.lower())
         awe = 0.45
         comfort = 0.45
         focus = 0.45

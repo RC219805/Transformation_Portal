@@ -21,6 +21,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from fractions import Fraction
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -197,7 +198,9 @@ def ensure_tools_available() -> None:
             )
 
 
+@lru_cache(maxsize=32)
 def shutil_which(binary: str) -> Optional[str]:
+    """Cache binary path lookups for performance."""
     return shutil.which(binary)
 
 
