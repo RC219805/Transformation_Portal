@@ -87,6 +87,7 @@ from .io_utils import (
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 from .pipeline import (
     collect_images,
+    ensure_output_path,
     process_image,
     process_single_image,
 )
@@ -106,6 +107,7 @@ __all__ = [
     "build_adjustments",
     "collect_images",
     "default_output_folder",
+    "ensure_output_path",
     "float_to_dtype_array",
     "gaussian_blur",
     "gaussian_kernel",
