@@ -3,6 +3,7 @@ name: Issue Summarizer
 on:
   issue_comment:
   pull_request:
+  pull_request_review:
   issues:
     types: [opened, edited]
 
@@ -49,12 +50,24 @@ jobs:
 
           title = (os.getenv("ISSUE_TITLE") or "").strip()
           body  = (os.getenv("ISSUE_BODY") or "").strip()[:4000]
-          prompt = textwrap.dedent(f"""
-          Summarize this GitHub issue in one concise paragraph (neutral tone).
-          Title: {title}
-          Body:
-          {body}
-          """)
+          review_state = (os.getenv("REVIEW_STATE") or "").strip()
+          
+          # Adjust prompt based on whether this is a review or issue/PR
+          if review_state:
+              prompt = textwrap.dedent(f"""
+              Summarize this pull request review in one concise paragraph (neutral tone).
+              Review state: {review_state}
+              PR title: {title}
+              Review comment:
+              {body}
+              """)
+          else:
+              prompt = textwrap.dedent(f"""
+              Summarize this GitHub issue in one concise paragraph (neutral tone).
+              Title: {title}
+              Body:
+              {body}
+              """)
           try:
               completion = client.chat.completions.create(
                   model="gpt-4o-mini",
@@ -73,7 +86,8 @@ jobs:
           PY
         env:
           ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
-          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.head_commit.message || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.head_commit.message || '' }}
+          REVIEW_STATE: ${{ github.event.review.state || '' }}
 
       - name: Debug RESPONSE_FILE (safe)
         run: |
