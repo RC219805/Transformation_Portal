@@ -262,7 +262,7 @@ output = output.reshape(h, w, c)  # pylint: disable=too-many-function-args
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
-| Critical Errors | 3 | 0 | ✅ 100% fixed |
+| Critical Errors | 4 | 0 | ✅ 100% fixed |
 | Warnings | 1 | 0 | ✅ 100% fixed |
 | Parser False Positives | 1 | 0 | ✅ Fixed with heredoc handling |
 | Pylint False Positives | 2 | 0 | ✅ Suppressed with comments |
@@ -316,10 +316,52 @@ To prevent similar bugs in the future:
 
 ---
 
+---
+
+### 5. Null Event Triggers in summary.yml (Lines 4-6)
+
+**Severity:** 🔴 Critical Error
+
+**Issue:** Event triggers (`issue_comment`, `pull_request`, `pull_request_review`) had no values after the colon, causing YAML parsers to interpret them as `null`. This prevented the workflow from triggering on these events.
+
+**Location:** `.github/workflows/summary.yml:4-6`
+
+**Before:**
+```yaml
+on:
+  issue_comment:
+  pull_request:
+  pull_request_review:
+  issues:
+    types: [opened, edited]
+```
+
+**After:**
+```yaml
+on:
+  issue_comment: {}
+  pull_request: {}
+  pull_request_review: {}
+  issues:
+    types: [opened, edited]
+```
+
+**Impact:** Without this fix, the workflow would only trigger on `issues` events with types `[opened, edited]`. The three other event types would not trigger the workflow at all because they were parsed as `null` values.
+
+**Technical Details:** In YAML, when a key is followed by a colon and no value (or only whitespace/newline), it's interpreted as having a `null` value. GitHub Actions requires event triggers to have either:
+- An empty object `{}` (triggers on all activity types for that event)
+- A specific configuration object (e.g., `types: [opened, edited]`)
+
+Note: The YAML 1.1 specification treats `on` as a reserved word (boolean), so YAML parsers represent it as the boolean `True` key in parsed output. GitHub Actions handles this correctly by looking for either the `'on'` string key or the boolean `True` key.
+
+**Fixed:** 2025-10-31
+
+---
+
 ## Conclusion
 
 All identified workflow bugs have been successfully fixed:
-- ✅ 3 critical errors resolved
+- ✅ 4 critical errors resolved
 - ✅ 1 optimization applied
 - ✅ New validation tool created
 - ✅ Full test coverage achieved
