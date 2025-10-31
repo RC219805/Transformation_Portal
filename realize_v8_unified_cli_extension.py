@@ -61,6 +61,12 @@ except ImportError:
     _warn("Material Response not available - install with pip install -e .[ml]")
 
 
+# ==================== Constants ====================
+
+# Default depth pipeline configuration
+DEFAULT_DEPTH_CONFIG = "config/interior_preset.yaml"
+
+
 # ==================== VFX Presets (Optimized for your workflow) ====================
 
 VFX_PRESETS = {
@@ -105,14 +111,14 @@ VFX_PRESETS = {
 
 def estimate_depth_fast(
     img_array: np.ndarray,
-    config_path: str = "config/interior_preset.yaml"
+    config_path: str = None
 ) -> np.ndarray:
     """
     Use your optimized ArchitecturalDepthPipeline (24ms on M4 Max).
     
     Args:
         img_array: RGB image (H, W, 3) in [0, 1]
-        config_path: Path to depth pipeline config
+        config_path: Path to depth pipeline config (defaults to DEFAULT_DEPTH_CONFIG)
         
     Returns:
         Depth map (H, W) normalized to [0, 1]
@@ -125,10 +131,13 @@ def estimate_depth_fast(
         depth = np.tile(y[:, None], (1, w))
         return depth.astype(np.float32)
     
+    if config_path is None:
+        config_path = DEFAULT_DEPTH_CONFIG
+    
     config_path = Path(config_path)
     if not config_path.exists():
         _warn(f"Config not found: {config_path}, using default")
-        config_path = Path("config/interior_preset.yaml")
+        config_path = Path(DEFAULT_DEPTH_CONFIG)
     
     try:
         pipeline = ArchitecturalDepthPipeline.from_config(str(config_path))
@@ -234,9 +243,24 @@ def apply_lut_with_depth(
             lines = [l.strip() for l in f if l.strip() and not l.startswith('#')]
         
         data_lines = [l for l in lines if l[0].isdigit() or l[0] == '-']
+        
+        if not data_lines:
+            raise ValueError("No valid LUT data found in file (expected numeric values)")
+        
         size = int(len(data_lines) ** (1/3) + 0.5)
+        expected_lines = size ** 3
+        
+        if len(data_lines) != expected_lines:
+            raise ValueError(
+                f"Invalid CUBE LUT size: expected {expected_lines} lines for {size}³ LUT, "
+                f"got {len(data_lines)} lines"
+            )
         
         lut_data = np.array([list(map(float, l.split())) for l in data_lines])
+        
+        if lut_data.shape[1] != 3:
+            raise ValueError(f"Invalid LUT data: expected 3 columns (RGB), got {lut_data.shape[1]}")
+        
         lut_cube = lut_data.reshape((size, size, size, 3))
         
         # Apply LUT
@@ -254,8 +278,11 @@ def apply_lut_with_depth(
         
         return np.clip(graded, 0.0, 1.0).astype(np.float32)
         
+    except ValueError as e:
+        _error(f"Invalid LUT format in {lut_path}: {e}")
+        return img
     except Exception as e:
-        _error(f"LUT failed: {e}")
+        _error(f"LUT processing failed for {lut_path}: {e}")
         return img
 
 
@@ -445,9 +472,16 @@ def batch_process_vfx(
         vfx_preset: VFX preset
         material_response: Enable material response
         pattern: File pattern to match
-        jobs: Number of parallel jobs (currently unused)
+        jobs: Number of parallel jobs (NOT YET IMPLEMENTED - processing is sequential)
         out_bitdepth: Output bit depth
+    
+    Note:
+        Parallel processing via the 'jobs' parameter is planned but not yet implemented.
+        All processing is currently sequential. This parameter is accepted for forward
+        compatibility but has no effect on performance.
     """
+    if jobs > 1:
+        _warn(f"Parallel processing not yet implemented. Requested {jobs} jobs, using 1 (sequential).")
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
