@@ -391,12 +391,20 @@ def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
     provides callers with a writable copy so that downstream code can safely
     adjust the kernel without corrupting the cached value.
 
+    Most callers will not need to modify the kernel. Mutability is provided defensively
+    to prevent accidental modification of the cached kernel. However, if you need to
+    adjust the kernel (e.g., for custom edge handling or normalization), you can safely
+    do so on the returned array:
+
+        kernel = gaussian_kernel(3)
+        kernel[0] = 0.0  # Example: zero out the first weight
+
     Args:
         radius: Kernel radius in pixels (half-width).
         sigma: Standard deviation for Gaussian distribution, defaults to radius/3.
 
     Returns:
-        1D numpy array containing normalized Gaussian weights.
+        1D numpy array containing normalized Gaussian weights (writable).
     """
     return _gaussian_kernel_cached(radius, sigma).copy()
 
