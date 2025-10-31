@@ -54,6 +54,11 @@ def write_manifest(root: Path, destination: Path) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build and configure the command-line argument parser.
+
+    Returns:
+        Configured ArgumentParser for the manifest generation tool.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "Generate a CSV manifest (filename, bytes, md5) for an output directory."
@@ -75,6 +80,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Entry point for the manifest generation CLI.
+
+    Parses command-line arguments and generates a CSV manifest for the
+    specified directory, writing it to the destination path.
+
+    Raises:
+        SystemExit: If the root path does not exist or is not a directory.
+    """
     parser = build_parser()
     args = parser.parse_args()
 

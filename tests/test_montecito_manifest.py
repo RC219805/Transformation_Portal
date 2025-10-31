@@ -33,3 +33,49 @@ def test_write_manifest_creates_csv(tmp_path: Path) -> None:
     assert parts[0] == "file.txt"
     assert parts[1] == "7"  # "content" is 7 bytes
     assert len(parts[2]) == 32  # MD5 hash
+
+
+def test_iter_files_handles_empty_directory(tmp_path: Path) -> None:
+    """Test that iter_files handles an empty directory without errors."""
+    results = list(iter_files(tmp_path))
+    assert not results
+
+
+def test_iter_files_ignores_directories(tmp_path: Path) -> None:
+    """Test that iter_files only yields files, not directories."""
+    (tmp_path / "file.txt").write_text("test", encoding="utf-8")
+    (tmp_path / "subdir").mkdir()
+    (tmp_path / "subdir" / "file2.txt").write_text("test2", encoding="utf-8")
+
+    results = list(iter_files(tmp_path))
+
+    # Should only include files, not the directory itself
+    paths = [entry[0] for entry in results]
+    assert Path("subdir") not in paths
+    assert Path("file.txt") in paths
+    assert Path("subdir/file2.txt") in paths
+
+
+def test_write_manifest_creates_parent_directories(tmp_path: Path) -> None:
+    """Test that write_manifest creates parent directories if needed."""
+    (tmp_path / "file.txt").write_text("content", encoding="utf-8")
+    destination = tmp_path / "nested" / "dir" / "manifest.csv"
+
+    write_manifest(tmp_path, destination)
+
+    assert destination.exists()
+    assert destination.parent.exists()
+
+
+def test_iter_files_handles_nested_directories(tmp_path: Path) -> None:
+    """Test that iter_files correctly handles files in deeply nested directories."""
+    nested = tmp_path / "level1" / "level2"
+    nested.mkdir(parents=True)
+    (nested / "file.txt").write_text("test", encoding="utf-8")
+
+    results = list(iter_files(tmp_path))
+
+    # Should find the file in nested directories with correct relative path
+    assert len(results) == 1
+    relative_path = results[0][0]
+    assert relative_path == Path("level1/level2/file.txt")
