@@ -64,6 +64,9 @@ processed_output/
 # macOS
 .DS_Store
 
+# Tools
+actionlint
+
 # Large data files (keep directory structure, ignore large images)
 data/sample_images/**/*.jpg
 data/sample_images/**/*.jpeg
