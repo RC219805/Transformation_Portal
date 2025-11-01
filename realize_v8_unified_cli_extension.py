@@ -521,16 +521,19 @@ def batch_process_vfx(
         vfx_preset: VFX preset
         material_response: Enable material response
         pattern: File pattern to match
-        jobs: Number of parallel jobs (NOT YET IMPLEMENTED - processing is sequential)
+        jobs: Number of parallel jobs (NOT YET IMPLEMENTED - raises NotImplementedError if >1)
         out_bitdepth: Output bit depth
 
     Note:
         Parallel processing via the 'jobs' parameter is planned but not yet implemented.
-        All processing is currently sequential. This parameter is accepted for forward
-        compatibility but has no effect on performance.
+        If jobs > 1, a NotImplementedError is raised to prevent confusion.
+        All processing is currently sequential.
     """
     if jobs > 1:
-        _warn(f"Parallel processing not yet implemented. Requested {jobs} jobs, using 1 (sequential).")
+        raise NotImplementedError(
+            f"Parallel processing is not yet implemented. Requested jobs={jobs}. "
+            "Please set jobs=1 (default) for sequential processing."
+        )
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
