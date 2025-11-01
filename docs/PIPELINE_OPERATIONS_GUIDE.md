@@ -2,6 +2,20 @@
 
 **Complete step-by-step guide to operating the Transformation Portal pipelines**
 
+---
+
+## Pipeline Quick Overview
+
+| Pipeline | Best For | Input | Output | Command |
+|----------|----------|-------|--------|---------|
+| **Depth Pipeline** | Architectural renders with depth awareness | JPG/PNG images | Enhanced + depth maps | `python examples/simple_process.py` |
+| **Lux Render** | AI-powered photorealistic refinement | Renders/photos | AI-enhanced images | `python lux_render_pipeline.py` |
+| **TIFF Processor** | High-end photography batch processing | TIFF images | Enhanced TIFFs | `python luxury_tiff_batch_processor.py` |
+| **Video Grader** | Professional video color grading | MP4/MOV videos | Graded videos | `python luxury_video_master_grader.py` |
+| **Material Response** | Surface-aware enhancement | Images | Material-enhanced | Python API |
+
+---
+
 ## Table of Contents
 
 1. [Prerequisites & Setup](#prerequisites--setup)
