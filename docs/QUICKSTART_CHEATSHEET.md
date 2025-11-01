@@ -344,7 +344,7 @@ python luxury_video_master_grader.py tour.mp4 graded.mp4 --preset signature_esta
 
 **Documentation:**
 - [README.md](../README.md) - Project overview
-- [DEPTH_PIPELINE_README.md](../DEPTH_PIPELINE_README.md) - Depth pipeline details
+- [DEPTH_PIPELINE_README.md](depth_pipeline/DEPTH_PIPELINE_README.md) - Depth pipeline details
 
 **Examples:** [examples/](../examples/) - Code samples
 
