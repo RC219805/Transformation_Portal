@@ -216,7 +216,7 @@ def apply_depth_of_field(
     
     # Calculate blur amount based on distance from focus
     blur_amount = np.abs(depth - focus_depth)
-    blur_amount = blur_amount / blur_amount.max()
+    blur_amount = blur_amount / (blur_amount.max() + 1e-8)
     
     # Apply varying blur
     result = img.copy()
