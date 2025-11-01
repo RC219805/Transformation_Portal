@@ -7,7 +7,9 @@ and write results to the depth output folder, matching the pattern:
     *_depth8_vis.png  (8-bit visualization)
 """
 
-import os, glob, numpy as np
+import os
+import glob
+import numpy as np
 from PIL import Image
 import coremltools as ct
 
