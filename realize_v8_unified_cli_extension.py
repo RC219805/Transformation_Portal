@@ -169,13 +169,14 @@ def apply_depth_bloom(
     img: np.ndarray,
     depth: np.ndarray,
     intensity: float = 0.25,
-    radius: int = 15
+    radius: int = 15,
+    highlight_threshold: float = 0.7
 ) -> np.ndarray:
     """Depth-aware bloom using your depth pipeline."""
     from scipy.ndimage import gaussian_filter
     
     # Extract highlights
-    threshold = 0.7
+    threshold = highlight_threshold
     bright = np.maximum(img - threshold, 0.0)
     
     # Blur
