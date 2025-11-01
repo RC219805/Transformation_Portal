@@ -67,8 +67,9 @@ jobs:
           # Pylint exit codes are bitwise flags: 1=fatal, 2=error, 4=warning, 8=refactor, 16=convention, 32=usage error
           # Exit codes can be combined (e.g., 6 = 2+4 means both error and warning)
           # Only fail on fatal (1), error (2), or usage error (32)
-          # Use bitwise AND to check for specific flags: (exit_code & flag) != 0
-          if [ $((PYLINT_EXIT & 3)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
+          # Use bitwise AND to check for specific flags: (exit_code & flag) -ne 0
+          # Check for fatal(1) OR error(2) using (exit_code & 3) where 3 = 1 + 2
+          if [ $((PYLINT_EXIT & 1)) -ne 0 ] || [ $((PYLINT_EXIT & 2)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
             echo "Pylint found critical issues (exit code: $PYLINT_EXIT)"
             exit 1
           elif [ $PYLINT_EXIT -ne 0 ]; then
