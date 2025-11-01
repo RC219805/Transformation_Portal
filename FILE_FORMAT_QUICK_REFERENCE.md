@@ -152,6 +152,7 @@ Best for professional/commercial work:
 - **Main README**: [README.md](README.md)
 - **Depth Pipeline**: [DEPTH_PIPELINE_README.md](DEPTH_PIPELINE_README.md)
 - **Detailed Depth Pipeline Docs**: [docs/depth_pipeline/DEPTH_PIPELINE_README.md](docs/depth_pipeline/DEPTH_PIPELINE_README.md)
+- **Detailed Depth Pipeline Docs**: [docs/depth_pipeline/DEPTH_PIPELINE_README.md](docs/depth_pipeline/DEPTH_PIPELINE_README.md)
 
 ---
 
