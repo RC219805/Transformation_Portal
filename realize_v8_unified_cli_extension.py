@@ -39,8 +39,8 @@ from PIL import Image
 
 # Your existing infrastructure
 from realize_v8_unified import (
-    enhance, _open_any, _save_with_meta, _image_to_float_array,
-    _info, _warn, _error, PRESETS, Preset
+    enhance, _open_any, _save_with_meta,
+    _info, _warn, _error, PRESETS
 )
 
 # Your depth pipeline (optimized for M4 Max)
