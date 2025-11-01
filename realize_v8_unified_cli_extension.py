@@ -64,6 +64,17 @@ except ImportError:
 # Default depth pipeline configuration
 DEFAULT_DEPTH_CONFIG = "config/interior_preset.yaml"
 
+# VFX operator constants
+BLOOM_HIGHLIGHT_THRESHOLD = 0.7  # Threshold for extracting highlights
+BLOOM_RADIUS_TO_SIGMA = 3.0  # Relationship between bloom radius and Gaussian sigma
+DEPTH_BLOOM_FALLOFF = 0.7  # Exponent for depth-based bloom weighting curve
+
+FOG_FALLOFF_EXPONENT = 2.0  # Exponent for exponential fog falloff curve
+
+# LUT depth masking constants
+DEPTH_LUT_BASE_STRENGTH = 0.7  # Base LUT strength
+DEPTH_LUT_DEPTH_INFLUENCE = 0.3  # Additional strength for foreground
+
 
 # ==================== VFX Presets (Optimized for your workflow) ====================
 
@@ -168,7 +179,7 @@ def apply_depth_bloom(
     depth: np.ndarray,
     intensity: float = 0.25,
     radius: int = 15,
-    highlight_threshold: float = 0.7
+    highlight_threshold: float = BLOOM_HIGHLIGHT_THRESHOLD
 ) -> np.ndarray:
     """Depth-aware bloom using your depth pipeline."""
     from scipy.ndimage import gaussian_filter
@@ -178,10 +189,10 @@ def apply_depth_bloom(
     bright = np.maximum(img - threshold, 0.0)
     
     # Blur
-    bloom = gaussian_filter(bright, sigma=radius/3.0, mode='reflect')
+    bloom = gaussian_filter(bright, sigma=radius/BLOOM_RADIUS_TO_SIGMA, mode='reflect')
     
     # Depth weighting (near objects bloom more)
-    depth_weight = 1.0 - (depth ** 0.7)
+    depth_weight = 1.0 - (depth ** DEPTH_BLOOM_FALLOFF)
     bloom = bloom * depth_weight[..., None]
     
     result = img + bloom * intensity
@@ -193,7 +204,7 @@ def apply_depth_fog(
     depth: np.ndarray,
     fog_color: tuple = (0.8, 0.85, 0.9),
     density: float = 0.5,
-    falloff_exponent: float = 2.0
+    falloff_exponent: float = FOG_FALLOFF_EXPONENT
 ) -> np.ndarray:
     """
     Atmospheric fog with exponential falloff.
@@ -282,7 +293,7 @@ def apply_lut_with_depth(
         
         # Optional depth masking (stronger on foreground)
         if depth is not None:
-            blend = 0.7 + 0.3 * (1 - depth[..., None])
+            blend = DEPTH_LUT_BASE_STRENGTH + DEPTH_LUT_DEPTH_INFLUENCE * (1 - depth[..., None])
             graded = img * (1 - blend) + graded * blend
         
         return np.clip(graded, 0.0, 1.0).astype(np.float32)
