@@ -317,6 +317,9 @@ def suggest_output_format(
     if preserve_quality:
         return '.png'
 
+    # For TIFF input, even if not preserving full quality, PNG is preferable to avoid excessive loss
+    if ext in TIFF_EXTENSIONS:
+        return '.png'
     # For other formats without special properties, use JPEG for web
     return '.jpg'
 
