@@ -38,16 +38,16 @@ from realize_v8_unified_cli_extension import (
 @pytest.fixture
 def sample_image():
     """Create a sample RGB image."""
-    np.random.seed(42)  # Set seed for reproducibility
-    arr = np.random.rand(100, 100, 3).astype(np.float32)
+    rng = np.random.default_rng(42)  # Use isolated RNG for reproducibility
+    arr = rng.random((100, 100, 3)).astype(np.float32)
     return Image.fromarray((arr * 255).astype(np.uint8))
 
 
 @pytest.fixture
 def sample_array():
     """Create a sample numpy array."""
-    np.random.seed(42)  # Set seed for reproducibility
-    return np.random.rand(100, 100, 3).astype(np.float32)
+    rng = np.random.default_rng(42)  # Use isolated RNG for reproducibility
+    return rng.random((100, 100, 3)).astype(np.float32)
 
 
 @pytest.fixture
