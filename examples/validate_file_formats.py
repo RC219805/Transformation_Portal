@@ -193,9 +193,6 @@ def scan_directory(directory: Path) -> None:
             print(f"     python luxury_video_master_grader.py --input {directory}/ --output graded/")
 
 
-
-
-
 def show_format_summary() -> None:
     """Display summary of all supported formats."""
     summary = get_supported_formats_summary()
