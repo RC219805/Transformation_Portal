@@ -285,7 +285,7 @@ def apply_lut_with_depth(
         if not data_lines:
             raise ValueError("No valid LUT data found in file (expected numeric values)")
 
-        size = round(len(data_lines) ** (1/3))
+        size = int(len(data_lines) ** (1/3) + 0.5)
         expected_lines = size ** 3
 
         if len(data_lines) != expected_lines:
@@ -543,7 +543,7 @@ def batch_process_vfx(
     vfx_preset: str = "subtle_estate",
     material_response: bool = False,
     pattern: str = "*.jpg",
-    jobs: int = 4,
+    jobs: int = 1,
     out_bitdepth: int = 16
 ) -> None:
     """
