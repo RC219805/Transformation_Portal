@@ -14,7 +14,7 @@ Functions:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 # Supported image extensions (case-insensitive)
 SUPPORTED_IMAGE_EXTENSIONS = {
@@ -314,11 +314,16 @@ def suggest_output_format(
     if ext in TIFF_EXTENSIONS and preserve_quality:
         return '.tiff'
     
-    # PNG is good lossless format
+    # PNG is good lossless format or has special properties (transparency, 16-bit)
     if preserve_quality:
         return '.png'
     
-    # For web/fast delivery, use JPEG
+    # For web/fast delivery, prefer PNG for formats with transparency or special properties
+    if ext == '.png':
+        # PNG likely has transparency or is already optimized
+        return '.png'
+    
+    # For other formats without special properties, use JPEG for web
     return '.jpg'
 
 

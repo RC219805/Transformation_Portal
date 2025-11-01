@@ -22,6 +22,7 @@ from format_utils import (
     get_format_info,
     suggest_output_format,
     get_supported_formats_summary,
+    is_supported_tiff_format,
     UnsupportedFormatError,
 )
 
@@ -177,12 +178,12 @@ def scan_directory(directory: Path) -> None:
     if supported_images:
         print(f"\n🚀 Batch Processing Recommendations:")
         
-        tiff_files = [f for f in supported_images if is_tiff_format(f)]
+        tiff_files = [f for f in supported_images if is_supported_tiff_format(f)]
         if tiff_files:
             print(f"   • {len(tiff_files)} TIFF files → Luxury TIFF Batch Processor")
             print(f"     python luxury_tiff_batch_processor.py {directory}/ output/ --recursive")
         
-        other_images = [f for f in supported_images if not is_tiff_format(f)]
+        other_images = [f for f in supported_images if not is_supported_tiff_format(f)]
         if other_images:
             print(f"   • {len(other_images)} other images → Depth Pipeline / Lux Render")
             print(f"     python depth_pipeline/pipeline.py --input {directory}/ --output enhanced/")
@@ -192,9 +193,7 @@ def scan_directory(directory: Path) -> None:
             print(f"     python luxury_video_master_grader.py --input {directory}/ --output graded/")
 
 
-def is_tiff_format(path: Path) -> bool:
-    """Check if file is TIFF format."""
-    return path.suffix.lower() in {'.tif', '.tiff'}
+
 
 
 def show_format_summary() -> None:
