@@ -31,7 +31,6 @@ import glob
 import logging
 import math
 import os
-import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor, as_completed
