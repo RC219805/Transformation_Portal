@@ -340,7 +340,7 @@ python luxury_video_master_grader.py tour.mp4 graded.mp4 --preset signature_esta
 
 ## Getting Help
 
-**Full Guide:** [docs/PIPELINE_OPERATIONS_GUIDE.md](PIPELINE_OPERATIONS_GUIDE.md)
+**Full Guide:** [PIPELINE_OPERATIONS_GUIDE.md](PIPELINE_OPERATIONS_GUIDE.md)
 
 **Documentation:**
 - [README.md](../README.md) - Project overview
