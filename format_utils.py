@@ -186,13 +186,13 @@ def validate_format(
     path_obj = Path(path) if isinstance(path, str) else path
     ext = normalize_extension(path_obj)
 
-    is_valid = False
+    format_is_valid = False
     if allowed_types in {'image', 'both'}:
-        is_valid = is_valid or is_supported_image_format(path_obj)
+        format_is_valid = format_is_valid or is_supported_image_format(path_obj)
     if allowed_types in {'video', 'both'}:
-        is_valid = is_valid or is_supported_video_format(path_obj)
+        format_is_valid = format_is_valid or is_supported_video_format(path_obj)
 
-    if not is_valid and raise_error:
+    if not format_is_valid and raise_error:
         if allowed_types == 'image':
             supported = SUPPORTED_IMAGE_EXTENSIONS
         elif allowed_types == 'video':
@@ -207,7 +207,7 @@ def validate_format(
             f"See SUPPORTED_FILE_FORMATS.md for details."
         )
 
-    return is_valid
+    return format_is_valid
 
 
 def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[str]]]:
@@ -356,16 +356,16 @@ def format_help_text(format_type: str = 'image') -> str:
         >>> print(format_help_text('image'))
         Supported image formats: .bmp, .gif, .ico, .jpg, ...
     """
-    summary = get_supported_formats_summary()
+    formats_summary = get_supported_formats_summary()
 
     if format_type == 'image':
-        return f"Supported image formats: {', '.join(summary['image'])}"
+        return f"Supported image formats: {', '.join(formats_summary['image'])}"
     elif format_type == 'video':
-        return f"Supported video formats: {', '.join(summary['video'])}"
+        return f"Supported video formats: {', '.join(formats_summary['video'])}"
     elif format_type == 'both':
         return (
-            f"Supported image formats: {', '.join(summary['image'])}\n"
-            f"Supported video formats: {', '.join(summary['video'])}"
+            f"Supported image formats: {', '.join(formats_summary['image'])}\n"
+            f"Supported video formats: {', '.join(formats_summary['video'])}"
         )
     else:
         raise ValueError(f"Invalid format_type: {format_type}")
