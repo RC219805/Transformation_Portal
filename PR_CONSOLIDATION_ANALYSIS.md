@@ -14,9 +14,9 @@ After comprehensive analysis of all open and draft PRs, the repository has 5 PRs
 |------|-------|--------|----------|-----------------|
 | #103 | Restore process_batch() error count return value | ✅ Complete | HIGH | Ready to merge |
 | #101 | Fix CI: fetch base branch for git diff | ✅ Complete | HIGH | Ready to merge |
-| #98 | Document file format support | ✅ Complete | MEDIUM | Ready to merge |
-| #100 | Add depth-guided VFX extension | ✅ Complete | MEDIUM | Ready to merge |
-| #102 | Reference files | ⚠️ Needs Work | LOW | Rebase required |
+| #98 | Document file format support | ⚠️ CI Blocked | MEDIUM | Fix CI, get approvals |
+| #100 | Add depth-guided VFX extension | ⚠️ CI Failing | MEDIUM | Debug and fix failures |
+| #102 | Reference files | ❌ Needs Work | LOW | Major rework required |
 
 ---
 
@@ -128,7 +128,7 @@ Addresses the question "Are we ready to enhance image files? What are the constr
 - RAW formats require TIFF conversion
 
 #### Recommendation
-**MERGE AFTER #101** - Excellent documentation addition with comprehensive testing. No conflicts expected.
+**FIX CI BLOCKS FIRST, THEN MERGE** - Excellent documentation addition with comprehensive testing, but CI checks must pass and approvals obtained before merge.
 
 ---
 
@@ -173,7 +173,7 @@ Adds depth-guided visual effects (VFX) extension integrating with existing depth
 - ✅ Test reproducibility added
 
 #### Recommendation
-**MERGE AFTER #98** - Feature-complete with all review feedback addressed. Well-tested and documented.
+**FIX CI FAILURES FIRST, THEN MERGE** - Feature-complete with all review feedback addressed, but CI failures must be debugged and resolved before merge. Likely import/dependency issues.
 
 ---
 
@@ -247,14 +247,16 @@ Adds new reference files for potential enhancements and integration. However, th
 
 ## Integration Issues Found
 
-### None Critical
-After analysis, no critical integration issues found between PRs #103, #101, #98, and #100. They modify different areas of the codebase:
+### Code-Level Integration
+After analysis, no code-level integration conflicts found between PRs #103, #101, #98, and #100. They modify different areas of the codebase:
 
 - **PR #103**: `depth_tools.py` only
 - **PR #101**: `.github/workflows/build.yml` only
 - **PR #98**: Documentation and new `format_utils.py`
 - **PR #100**: New VFX modules and extensions
 - **PR #102**: Large changes across multiple files (needs isolation)
+
+**Note:** While there are no code conflicts, PRs #98 and #100 have CI failures that must be resolved before merging.
 
 ### Potential Conflicts
 PR #102 may have conflicts due to:
@@ -309,8 +311,8 @@ python examples/vfx_extension_example.py --help
 2. ✅ **Merge PR #101** (CI fix) - Developer experience improvement
 
 ### Short-term Actions (1-2 weeks)
-3. ✅ **Merge PR #98** (documentation) - After verifying no conflicts
-4. ✅ **Merge PR #100** (VFX extension) - After #98 merges
+3. ⚠️ **Fix and Merge PR #98** (documentation) - Debug CI blocks, get approvals, then merge
+4. ⚠️ **Fix and Merge PR #100** (VFX extension) - Debug CI failures, fix issues, then merge
 
 ### Deferred Actions
 5. ⚠️ **Rework PR #102** (reference files)
