@@ -231,7 +231,7 @@ def enhance(
         clarity: Local contrast enhancement (0 to 1.0)
         grain: Film grain amount (0 to 1.0)
         vignette: Vignette strength (0 to 1.0)
-        random_seed: Optional random seed for reproducible grain (None for random)
+        random_seed: Optional random seed for reproducible grain (None for non-deterministic)
         **kwargs: Additional parameters (ignored)
 
     Returns:
