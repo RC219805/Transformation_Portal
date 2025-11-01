@@ -525,7 +525,6 @@ def apply_depth_clarity(img: np.ndarray,
     detail = img - blurred
 
     mask_strength = (1.0 - sky) * (0.6 + 0.4 * building)
-    mask_strength = mask_strength[..., None]
 
     enhanced = img + detail * (amount * w * mask_strength)
     return np.clip(enhanced, 0.0, 1.0)
@@ -602,7 +601,7 @@ def apply_depth_dof(img: np.ndarray,
     # protector reduces blur on buildings and slightly reduces extreme sky blur
     reduce_on_building = (1.0 - BUILDING_BLUR_REDUCTION * building)  # building=1 -> factor ~0.12
     slight_sky_protect = (1.0 - SKY_BLUR_REDUCTION * sky)            # sky=1 -> factor ~0.7
-    protector = (reduce_on_building * slight_sky_protect)[..., None]
+    protector = reduce_on_building * slight_sky_protect
 
     w_protected = w_soft * protector
     out = img * (1 - w_protected) + blended * w_protected
@@ -741,15 +740,16 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
 
     _log.info("Batch complete: %d processed, %d errors", total - len(errors), len(errors))
 
-    # Print comprehensive error summary for debugging
+    # Log comprehensive error summary for debugging
     if errors:
-        print("\n" + "=" * 80)
-        print(f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing")
-        print("=" * 80)
+        error_lines = ["\n" + "=" * 80]
+        error_lines.append(f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing")
+        error_lines.append("=" * 80)
         for idx, (base, err) in enumerate(errors, 1):
-            print(f"{idx}. {base}:")
-            print(f"   {err}")
-        print("=" * 80 + "\n")
+            error_lines.append(f"{idx}. {base}:")
+            error_lines.append(f"   {err}")
+        error_lines.append("=" * 80 + "\n")
+        _log.error("\n".join(error_lines))
 
     return len(errors)
 
