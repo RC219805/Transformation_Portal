@@ -271,16 +271,16 @@ def apply_lut_with_depth(
         # More robust: check if the line can be split into 3 floats
         data_lines = []
         for line in lines:
-            if line and (line[0].isdigit() or line[0] == '-'):
-                try:
-                    parts = line.split()
-                    if len(parts) == 3:
-                        # Validate that all parts are floats
-                        [float(p) for p in parts]
-                        data_lines.append(line)
-                except (ValueError, IndexError):
-                    # Skip malformed lines
-                    continue
+            # Defensive: lines should already be non-empty, but check anyway
+            try:
+                parts = line.split()
+                if len(parts) == 3:
+                    # Validate that all parts are floats
+                    [float(p) for p in parts]
+                    data_lines.append(line)
+            except (ValueError, IndexError):
+                # Skip malformed lines
+                continue
 
         if not data_lines:
             raise ValueError("No valid LUT data found in file (expected numeric values)")
