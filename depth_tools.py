@@ -600,10 +600,11 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
         _log.exception("Failed processing base %s: %s", base, exc)
         return base, None, str(exc)
 
-def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None) -> None:
+def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None) -> int:
     """
     Process a directory of depth maps. If workers > 1, uses ProcessPoolExecutor.
     progress callback signature: (done:int, total:int, message:str)
+    Returns the number of errors encountered.
     """
     os.makedirs(opts.out_root, exist_ok=True)
     depth_maps = sorted(glob.glob(os.path.join(opts.depths_root, "*_depth16.*")))
@@ -643,8 +644,18 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
                 progress(done, total, base)
 
     _log.info("Batch complete: %d processed, %d errors", total - len(errors), len(errors))
+
+    # Print comprehensive error summary for debugging
     if errors:
-        _log.info("Errors (sample): %s", errors[:8])
+        print("\n" + "=" * 80)
+        print(f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing")
+        print("=" * 80)
+        for idx, (base, err) in enumerate(errors, 1):
+            print(f"{idx}. {base}:")
+            print(f"   {err}")
+        print("=" * 80 + "\n")
+
+    return len(errors)
 
 # ----- CLI -----
 
@@ -731,11 +742,16 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         opts.falloff = float(getattr(args, "falloff", 1.4))
 
     try:
-        process_batch(opts, progress=_cli_progress)
+        error_count = process_batch(opts, progress=_cli_progress)
+        
+        # Return non-zero exit code if errors occurred
+        if error_count > 0:
+            _log.error("Batch processing completed with %d error(s)", error_count)
+            return 1
+        return 0
     except Exception as exc:
         _log.exception("Fatal error running batch: %s", exc)
         return 2
-    return 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
