@@ -107,7 +107,8 @@ def _save_with_meta(
             if arr.ndim == 3 and arr.shape[2] == 3:
                 # RGB image - convert to 8-bit for PIL since PIL doesn't support 16-bit RGB natively
                 # For true 16-bit RGB, use tifffile library (not a dependency here)
-                _warn("16-bit RGB not fully supported by PIL - saving as 8-bit RGB instead")
+                _warn("16-bit RGB not fully supported by PIL - saving as 8-bit RGB instead. "
+                      "For true 16-bit RGB support, install tifffile: pip install tifffile")
                 arr_uint = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
                 img = Image.fromarray(arr_uint, mode='RGB')
                 actual_bitdepth = 8  # Downgraded
