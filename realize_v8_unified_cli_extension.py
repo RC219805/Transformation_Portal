@@ -352,6 +352,19 @@ def apply_color_grade_zones(
     return np.clip(result, 0.0, 1.0).astype(np.float32)
 
 
+def _save_depth_map(depth: np.ndarray, path: Path) -> None:
+    """
+    Helper function to save depth map as 16-bit PNG.
+    
+    Args:
+        depth: Normalized depth map (H, W) in [0, 1]
+        path: Output path
+    """
+    depth_img = (depth * 65535).astype(np.uint16)
+    Image.fromarray(depth_img, mode='I;16').save(path)
+    _info(f"Saved depth map: {path}")
+
+
 # ==================== Material Response Integration ====================
 
 def apply_material_response(
@@ -573,8 +586,7 @@ def batch_process_vfx(
             # Save depth map if requested
             if result["depth"] is not None:
                 depth_path = output_dir / f"{img_path.stem}_depth.png"
-                depth_img = (result["depth"] * 65535).astype(np.uint16)
-                Image.fromarray(depth_img, mode='I;16').save(depth_path)
+                _save_depth_map(result["depth"], depth_path)
             
             _info(f"  Completed in {result['metrics']['total_ms']}ms")
             
@@ -648,8 +660,7 @@ def handle_enhance_vfx(args):
     # Save depth if requested
     if result["depth"] is not None:
         depth_path = args.output.with_name(f"{args.output.stem}_depth.png")
-        depth_img = (result["depth"] * 65535).astype(np.uint16)
-        Image.fromarray(depth_img, mode='I;16').save(depth_path)
+        _save_depth_map(result["depth"], depth_path)
     
     # Print metrics
     _info(f"✓ Completed in {result['metrics']['total_ms']}ms")
