@@ -194,8 +194,6 @@ def scan_directory(directory: Path) -> None:
 
 
 
-
-
 def show_format_summary() -> None:
     """Display summary of all supported formats."""
     summary = get_supported_formats_summary()
