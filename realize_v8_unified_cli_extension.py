@@ -242,7 +242,7 @@ def apply_lut_with_depth(
         with open(lut_path, 'r', encoding='utf-8') as f:
             lines = [l.strip() for l in f if l.strip() and not l.startswith('#')]
         
-        data_lines = [l for l in lines if l[0].isdigit() or l[0] == '-']
+        data_lines = [l for l in lines if l and (l[0].isdigit() or l[0] == '-')]
         
         if not data_lines:
             raise ValueError("No valid LUT data found in file (expected numeric values)")
