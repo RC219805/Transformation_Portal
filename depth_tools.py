@@ -469,7 +469,6 @@ def apply_depth_clarity(img: np.ndarray, depth: np.ndarray, amount: float = 0.14
     detail = img - blurred
 
     mask_strength = (1.0 - sky) * (0.6 + 0.4 * building)
-    mask_strength = mask_strength[..., None]
 
     enhanced = img + detail * (amount * w * mask_strength)
     return np.clip(enhanced, 0.0, 1.0)
@@ -512,7 +511,7 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
     # protector reduces blur on buildings and slightly reduces extreme sky blur
     reduce_on_building = (1.0 - BUILDING_BLUR_REDUCTION * building)  # building=1 -> factor ~0.12
     slight_sky_protect = (1.0 - SKY_BLUR_REDUCTION * sky)            # sky=1 -> factor ~0.7
-    protector = (reduce_on_building * slight_sky_protect)[..., None]
+    protector = reduce_on_building * slight_sky_protect
 
     w_protected = w_soft * protector
     out = img * (1 - w_protected) + blended * w_protected
@@ -600,10 +599,11 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
         _log.exception("Failed processing base %s: %s", base, exc)
         return base, None, str(exc)
 
-def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None) -> None:
+def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None) -> int:
     """
     Process a directory of depth maps. If workers > 1, uses ProcessPoolExecutor.
     progress callback signature: (done:int, total:int, message:str)
+    Returns the number of errors encountered.
     """
     os.makedirs(opts.out_root, exist_ok=True)
     depth_maps = sorted(glob.glob(os.path.join(opts.depths_root, "*_depth16.*")))
@@ -643,8 +643,19 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
                 progress(done, total, base)
 
     _log.info("Batch complete: %d processed, %d errors", total - len(errors), len(errors))
+
+    # Log comprehensive error summary for debugging
     if errors:
-        _log.info("Errors (sample): %s", errors[:8])
+        error_lines = ["\n" + "=" * 80]
+        error_lines.append(f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing")
+        error_lines.append("=" * 80)
+        for idx, (base, err) in enumerate(errors, 1):
+            error_lines.append(f"{idx}. {base}:")
+            error_lines.append(f"   {err}")
+        error_lines.append("=" * 80 + "\n")
+        _log.error("\n".join(error_lines))
+
+    return len(errors)
 
 # ----- CLI -----
 
@@ -731,11 +742,15 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         opts.falloff = float(getattr(args, "falloff", 1.4))
 
     try:
-        process_batch(opts, progress=_cli_progress)
+        error_count = process_batch(opts, progress=_cli_progress)
+        # Return non-zero exit code if errors occurred
+        if error_count > 0:
+            _log.error("Batch processing completed with %d error(s)", error_count)
+            return 1
+        return 0
     except Exception as exc:
         _log.exception("Fatal error running batch: %s", exc)
         return 2
-    return 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
