@@ -92,14 +92,17 @@ def _save_with_meta(
     # Convert array to appropriate bit depth if provided
     if arr is not None:
         if out_bitdepth == 16:
-            # Mode 'I;16' only supports 2D (grayscale) arrays in PIL
-            # For RGB 16-bit, use 'RGB' mode with uint16 but note PIL may convert to uint8
-            arr_uint = (np.clip(arr, 0, 1) * 65535).astype(np.uint16)
+            # For 16-bit images, we need to handle RGB and grayscale differently
+            # PIL's native 16-bit support is limited, so we use a workaround
             if arr.ndim == 3 and arr.shape[2] == 3:
-                # RGB image - PIL will save as RGB mode
+                # RGB image - convert to 8-bit for PIL since PIL doesn't support 16-bit RGB natively
+                # For true 16-bit RGB, use tifffile library (not a dependency here)
+                _warn("16-bit RGB not fully supported by PIL - saving as 8-bit RGB instead")
+                arr_uint = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
                 img = Image.fromarray(arr_uint, mode='RGB')
             elif arr.ndim == 2:
-                # Grayscale image
+                # Grayscale image - PIL supports 16-bit grayscale
+                arr_uint = (np.clip(arr, 0, 1) * 65535).astype(np.uint16)
                 img = Image.fromarray(arr_uint, mode='I;16')
             else:
                 raise ValueError(f"Unsupported array shape for 16-bit image: {arr.shape}")
@@ -111,7 +114,7 @@ def _save_with_meta(
                 raise ValueError(
                     "Cannot save 32-bit float RGB images with PIL. "
                     "Mode 'F' only supports 2D (grayscale) float32 arrays. "
-                    "Use out_bitdepth=16 or 8 for RGB images."
+                    "Use out_bitdepth=8 for RGB images, or install tifffile for 16-bit support."
                 )
             else:
                 raise ValueError(f"Unsupported array shape for 32-bit float image: {arr.shape}")
