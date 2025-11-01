@@ -324,8 +324,8 @@ def _open_any(path: Path, icc_policy: str = "convert") -> Tuple[Union[Image.Imag
     
     try:
         im = ImageOps.exif_transpose(im)
-    except Exception:
-        pass
+    except Exception as e:
+        _LOG.debug(f"EXIF transpose failed for {path}: {e}")
     
     if "exif" in im.info:
         meta["exif"] = im.info["exif"]
