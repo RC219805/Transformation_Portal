@@ -317,11 +317,6 @@ def suggest_output_format(
     if preserve_quality:
         return '.png'
 
-    # For web/fast delivery, prefer PNG for formats with transparency or special properties
-    if ext == '.png':
-        # PNG likely has transparency or is already optimized
-        return '.png'
-
     # For other formats without special properties, use JPEG for web
     return '.jpg'
 
