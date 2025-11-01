@@ -285,7 +285,7 @@ def apply_lut_with_depth(
         if not data_lines:
             raise ValueError("No valid LUT data found in file (expected numeric values)")
 
-        size = int(len(data_lines) ** (1/3) + 0.5)
+        size = round(len(data_lines) ** (1/3))
         expected_lines = size ** 3
 
         if len(data_lines) != expected_lines:
