@@ -508,10 +508,15 @@ def enhance_with_vfx(
         )
 
     # LUT
-    if lut_path or vfx_cfg.get("lut_default"):
-        lut = lut_path or Path(vfx_cfg["lut_default"])
-        if lut.exists():
-            result = apply_lut_with_depth(result, lut, depth)
+    lut = None
+    if lut_path and isinstance(lut_path, Path) and lut_path.exists():
+        lut = lut_path
+    elif vfx_cfg.get("lut_default"):
+        default_lut = Path(vfx_cfg["lut_default"])
+        if default_lut.exists():
+            lut = default_lut
+    if lut is not None:
+        result = apply_lut_with_depth(result, lut, depth)
 
     base_metrics["vfx_ms"] = int((time.perf_counter() - t0) * 1000)
     base_metrics["total_ms"] = int((time.perf_counter() - t_start) * 1000)
