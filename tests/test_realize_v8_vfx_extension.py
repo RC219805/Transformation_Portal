@@ -259,7 +259,7 @@ class TestVFXExtension:
 
     def test_enhance_with_vfx_all_presets(self, sample_image):
         """Test VFX enhancement with all presets."""
-        for vfx_preset in VFX_PRESETS.keys():
+        for vfx_preset in VFX_PRESETS:
             result = enhance_with_vfx(
                 sample_image,
                 base_preset="natural",
