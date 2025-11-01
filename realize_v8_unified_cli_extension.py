@@ -285,12 +285,40 @@ def apply_lut_with_depth(
         
         # Apply LUT
         h, w = img.shape[:2]
-        coords = (img * (size - 1)).reshape(-1, 3)
-        coords = np.clip(coords, 0, size - 1).astype(int)
-        
-        graded = lut_cube[coords[:, 0], coords[:, 1], coords[:, 2]]
+        coords = img.reshape(-1, 3) * (size - 1)
+        coords = np.clip(coords, 0, size - 1)
+
+        # Trilinear interpolation
+        c0 = np.floor(coords).astype(int)
+        c1 = np.clip(c0 + 1, 0, size - 1)
+        d = coords - c0
+
+        # Get LUT values at the 8 corners
+        def lut_at(ix, iy, iz):
+            return lut_cube[ix, iy, iz]
+
+        v000 = lut_at(c0[:, 0], c0[:, 1], c0[:, 2])
+        v100 = lut_at(c1[:, 0], c0[:, 1], c0[:, 2])
+        v010 = lut_at(c0[:, 0], c1[:, 1], c0[:, 2])
+        v110 = lut_at(c1[:, 0], c1[:, 1], c0[:, 2])
+        v001 = lut_at(c0[:, 0], c0[:, 1], c1[:, 2])
+        v101 = lut_at(c1[:, 0], c0[:, 1], c1[:, 2])
+        v011 = lut_at(c0[:, 0], c1[:, 1], c1[:, 2])
+        v111 = lut_at(c1[:, 0], c1[:, 1], c1[:, 2])
+
+        wx, wy, wz = d[:, 0:1], d[:, 1:2], d[:, 2:3]
+
+        graded = (
+            v000 * (1 - wx) * (1 - wy) * (1 - wz) +
+            v100 * wx * (1 - wy) * (1 - wz) +
+            v010 * (1 - wx) * wy * (1 - wz) +
+            v110 * wx * wy * (1 - wz) +
+            v001 * (1 - wx) * (1 - wy) * wz +
+            v101 * wx * (1 - wy) * wz +
+            v011 * (1 - wx) * wy * wz +
+            v111 * wx * wy * wz
+        )
         graded = graded.reshape(h, w, 3)
-        
         # Optional depth masking (stronger on foreground)
         if depth is not None:
             blend = DEPTH_LUT_BASE_STRENGTH + DEPTH_LUT_DEPTH_INFLUENCE * (1 - depth[..., None])
