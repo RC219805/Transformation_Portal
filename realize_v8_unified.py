@@ -242,9 +242,8 @@ def enhance(
     
     # Grain
     if grain > 0.0:
-        if random_seed is not None:
-            np.random.seed(random_seed)
-        noise = np.random.normal(0, grain * 0.05, result.shape).astype(np.float32)
+        rng = np.random.default_rng(random_seed) if random_seed is not None else np.random.default_rng()
+        noise = rng.normal(0, grain * 0.05, result.shape).astype(np.float32)
         result = result + noise
     
     # Vignette
