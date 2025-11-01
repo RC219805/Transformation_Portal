@@ -22,6 +22,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Fetch all history so git diff can compare with base branch
 
       # Setup Python for matrix
       - uses: actions/setup-python@v6
