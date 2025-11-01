@@ -21,6 +21,10 @@ from PIL import Image
 
 # ==================== Logging Utilities ====================
 
+# Track if we've already warned about 16-bit RGB limitation
+_warned_16bit_rgb = False
+
+
 def _info(msg: str) -> None:
     """Print info message."""
     print(f"[INFO] {msg}")
@@ -29,6 +33,14 @@ def _info(msg: str) -> None:
 def _warn(msg: str) -> None:
     """Print warning message."""
     print(f"[WARN] {msg}")
+
+
+def _warn_once(msg: str, flag_name: str) -> None:
+    """Print warning message only once per session."""
+    global _warned_16bit_rgb
+    if flag_name == "16bit_rgb" and not _warned_16bit_rgb:
+        _warned_16bit_rgb = True
+        _warn(msg)
 
 
 def _error(msg: str) -> None:
@@ -107,8 +119,9 @@ def _save_with_meta(
             if arr.ndim == 3 and arr.shape[2] == 3:
                 # RGB image - convert to 8-bit for PIL since PIL doesn't support 16-bit RGB natively
                 # For true 16-bit RGB, use tifffile library (not a dependency here)
-                _warn("16-bit RGB not fully supported by PIL - saving as 8-bit RGB instead. "
-                      "For true 16-bit RGB support, install tifffile: pip install tifffile")
+                _warn_once("16-bit RGB not fully supported by PIL - saving as 8-bit RGB instead. "
+                           "For true 16-bit RGB support, install tifffile: pip install tifffile",
+                           "16bit_rgb")
                 arr_uint = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
                 img = Image.fromarray(arr_uint, mode='RGB')
                 actual_bitdepth = 8  # Downgraded
