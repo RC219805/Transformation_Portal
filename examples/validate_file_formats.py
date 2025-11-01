@@ -54,9 +54,9 @@ def validate_single_file(filepath: Path) -> None:
     # Get detailed format information
     info = get_format_info(filepath)
 
-    print(f"\nFormat Details:")
+    print("\nFormat Details:")
     print(f"  Extension: {info['extension']}")
-    print(f"  Type: ", end='')
+    print("  Type: ", end='')
 
     if info['is_image']:
         print("Image", end='')
@@ -72,7 +72,7 @@ def validate_single_file(filepath: Path) -> None:
 
     # Show recommendations
     if info['recommendations']:
-        print(f"\n📋 Recommendations:")
+        print("\n📋 Recommendations:")
         for rec in info['recommendations']:
             print(f"   • {rec}")
 
@@ -81,12 +81,12 @@ def validate_single_file(filepath: Path) -> None:
         quality_output = suggest_output_format(filepath, preserve_quality=True)
         web_output = suggest_output_format(filepath, preserve_quality=False)
 
-        print(f"\n💡 Output Format Suggestions:")
+        print("\n💡 Output Format Suggestions:")
         print(f"   • For maximum quality: {quality_output}")
         print(f"   • For web/delivery: {web_output}")
 
     # Suggest appropriate pipeline
-    print(f"\n🔧 Recommended Pipeline:")
+    print("\n🔧 Recommended Pipeline:")
     if info['is_tiff']:
         print("   → Luxury TIFF Batch Processor")
         print("     python luxury_tiff_batch_processor.py input/ output/ --preset signature")
@@ -134,7 +134,7 @@ def scan_directory(directory: Path) -> None:
             unsupported.append(file)
 
     # Display summary
-    print(f"\n📊 Format Summary:")
+    print("\n📊 Format Summary:")
     print(f"   ✅ Supported Images: {len(supported_images)}")
     print(f"   ✅ Supported Videos: {len(supported_videos)}")
     print(f"   ❌ Unsupported: {len(unsupported)}")
@@ -176,7 +176,7 @@ def scan_directory(directory: Path) -> None:
 
     # Batch processing recommendations
     if supported_images:
-        print(f"\n🚀 Batch Processing Recommendations:")
+        print("\n🚀 Batch Processing Recommendations:")
 
         tiff_files = [f for f in supported_images if is_supported_tiff_format(f)]
         if tiff_files:
