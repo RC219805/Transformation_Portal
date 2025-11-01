@@ -24,14 +24,13 @@
 ## To Complete
 From a terminal with git access to the repository:
 
-\`\`\`bash
+```bash
 # Push the fix commit
 git checkout copilot/file-candidate-draft
 git push origin copilot/file-candidate-draft
 
 # This will trigger CI to run with the fix
 # Expected result: CI should now pass
-\`\`\`
 
 ## Why Manual Push Needed
 The fix was completed in a GitHub Actions context for a different PR branch.
