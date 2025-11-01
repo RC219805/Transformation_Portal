@@ -75,7 +75,7 @@ def _save_with_meta(
     path: Union[str, Path],
     meta: Dict[str, Any],
     out_bitdepth: int = 16
-) -> None:
+) -> int:
     """
     Save image with metadata preservation.
 
@@ -85,9 +85,19 @@ def _save_with_meta(
         path: Output path
         meta: Metadata dictionary to preserve
         out_bitdepth: Output bit depth (8, 16, or 32)
+
+    Returns:
+        Actual bit depth used (may differ from requested if not supported)
+
+    Note:
+        16-bit RGB is not supported by PIL and will be saved as 8-bit with a warning.
+        For true 16-bit RGB support, use a library like tifffile.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Track actual bit depth used
+    actual_bitdepth = out_bitdepth
 
     # Convert array to appropriate bit depth if provided
     if arr is not None:
@@ -100,6 +110,7 @@ def _save_with_meta(
                 _warn("16-bit RGB not fully supported by PIL - saving as 8-bit RGB instead")
                 arr_uint = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
                 img = Image.fromarray(arr_uint, mode='RGB')
+                actual_bitdepth = 8  # Downgraded
             elif arr.ndim == 2:
                 # Grayscale image - PIL supports 16-bit grayscale
                 arr_uint = (np.clip(arr, 0, 1) * 65535).astype(np.uint16)
@@ -127,6 +138,7 @@ def _save_with_meta(
     img.save(path, **info)
 
     _info(f"Saved: {path}")
+    return actual_bitdepth
 
 
 def _image_to_float_array(img: Image.Image) -> np.ndarray:
