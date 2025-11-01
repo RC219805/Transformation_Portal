@@ -103,11 +103,15 @@ After analyzing all 5 open/draft PRs, here are the key findings:
 
 **Investigation Needed:**
 ```bash
-# Check the actual failure reason
+# Check the actual failure reason - view all logs
 gh run view 18991636175 --log
-# OR
-# View specific job logs
-gh run view 18991636175 --job=<job-id>
+
+# OR view logs for the first failed job
+gh run view 18991636175 --log-failed
+
+# OR list all jobs and view a specific one
+gh run view 18991636175 --json jobs --jq '.jobs[] | "\(.id): \(.name) - \(.conclusion)"'
+# Then view specific job: gh run view 18991636175 --job=<job-id-from-above>
 ```
 
 **Likely Causes:**
