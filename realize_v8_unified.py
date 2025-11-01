@@ -182,6 +182,7 @@ def enhance(
     clarity: float = 0.0,
     grain: float = 0.0,
     vignette: float = 0.0,
+    random_seed: Optional[int] = None,
     **kwargs
 ) -> Tuple[Image.Image, np.ndarray, Dict[str, Any]]:
     """
@@ -195,6 +196,7 @@ def enhance(
         clarity: Local contrast enhancement (0 to 1.0)
         grain: Film grain amount (0 to 1.0)
         vignette: Vignette strength (0 to 1.0)
+        random_seed: Optional random seed for reproducible grain (None for random)
         **kwargs: Additional parameters (ignored)
         
     Returns:
@@ -240,6 +242,8 @@ def enhance(
     
     # Grain
     if grain > 0.0:
+        if random_seed is not None:
+            np.random.seed(random_seed)
         noise = np.random.normal(0, grain * 0.05, result.shape).astype(np.float32)
         result = result + noise
     
