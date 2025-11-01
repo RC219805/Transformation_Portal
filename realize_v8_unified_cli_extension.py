@@ -194,13 +194,23 @@ def apply_depth_fog(
     img: np.ndarray,
     depth: np.ndarray,
     fog_color: tuple = (0.8, 0.85, 0.9),
-    density: float = 0.5
+    density: float = 0.5,
+    falloff_exponent: float = 2.0
 ) -> np.ndarray:
-    """Atmospheric fog with exponential falloff."""
+    """
+    Atmospheric fog with exponential falloff.
+
+    Parameters:
+        img: Input image as float32 array.
+        depth: Normalized depth map (0=near, 1=far).
+        fog_color: RGB tuple for fog color.
+        density: Fog density scalar.
+        falloff_exponent: Exponent for fog falloff curve (default 2.0).
+    """
     fog_array = np.array(fog_color, dtype=np.float32)
     
     # Exponential fog
-    fog_amount = 1.0 - np.exp(-density * (depth ** 2.0))
+    fog_amount = 1.0 - np.exp(-density * (depth ** falloff_exponent))
     
     result = img * (1.0 - fog_amount[..., None]) + fog_array * fog_amount[..., None]
     return np.clip(result, 0.0, 1.0).astype(np.float32)
