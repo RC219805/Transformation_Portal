@@ -53,6 +53,7 @@ except ImportError:
 
 # Optional: Your Material Response
 try:
+    from material_response import MaterialResponse
     _HAVE_MR = True
 except ImportError:
     _HAVE_MR = False
