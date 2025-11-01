@@ -30,6 +30,40 @@
 
 ---
 
+## How Pipelines Work Together
+
+```
+RAW INPUT
+    ↓
+┌───────────────────────────────────────────────┐
+│  Choose Your Pipeline Based on Input Type    │
+└───────────────────────────────────────────────┘
+    ↓
+    ├─→ [Architectural Render] → Depth Pipeline → Depth-aware enhancement
+    │
+    ├─→ [Low-res Render] → Lux Render → AI enhancement + Material Response
+    │
+    ├─→ [TIFF Photos] → TIFF Processor → Batch color grading
+    │
+    ├─→ [Video] → Video Grader → LUT application + tone mapping
+    │
+    └─→ [Any Image] → Material Response → Surface-aware enhancement
+         ↓
+    ┌──────────────────────────┐
+    │  ENHANCED OUTPUT         │
+    │  ✓ Polished visuals      │
+    │  ✓ Marketing-ready       │
+    │  ✓ Brand-consistent      │
+    └──────────────────────────┘
+```
+
+**Pipeline Chaining Example:**
+```
+Render.jpg → Depth Pipeline → depth_enhanced.png → Material Response → final.png
+```
+
+---
+
 ## Prerequisites & Setup
 
 ### System Requirements
