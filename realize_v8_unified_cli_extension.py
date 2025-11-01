@@ -259,11 +259,28 @@ def apply_lut_with_depth(
         return img
 
     try:
-        # Parse CUBE LUT
+        # Parse CUBE LUT - strip whitespace and filter comments/empty lines
         with open(lut_path, 'r', encoding='utf-8') as f:
-            lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+            lines = []
+            for line in f:
+                stripped = line.strip()
+                if stripped and not stripped.startswith('#'):
+                    lines.append(stripped)
 
-        data_lines = [line for line in lines if line and (line[0].isdigit() or line[0] == '-')]
+        # Extract data lines (lines starting with digit or minus sign)
+        # More robust: check if the line can be split into 3 floats
+        data_lines = []
+        for line in lines:
+            if line and (line[0].isdigit() or line[0] == '-'):
+                try:
+                    parts = line.split()
+                    if len(parts) == 3:
+                        # Validate that all parts are floats
+                        [float(p) for p in parts]
+                        data_lines.append(line)
+                except (ValueError, IndexError):
+                    # Skip malformed lines
+                    continue
 
         if not data_lines:
             raise ValueError("No valid LUT data found in file (expected numeric values)")
