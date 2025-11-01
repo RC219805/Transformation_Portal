@@ -740,15 +740,16 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
 
     _log.info("Batch complete: %d processed, %d errors", total - len(errors), len(errors))
 
-    # Print comprehensive error summary for debugging
+    # Log comprehensive error summary for debugging
     if errors:
-        print("\n" + "=" * 80)
-        print(f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing")
-        print("=" * 80)
+        error_lines = ["\n" + "=" * 80]
+        error_lines.append(f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing")
+        error_lines.append("=" * 80)
         for idx, (base, err) in enumerate(errors, 1):
-            print(f"{idx}. {base}:")
-            print(f"   {err}")
-        print("=" * 80 + "\n")
+            error_lines.append(f"{idx}. {base}:")
+            error_lines.append(f"   {err}")
+        error_lines.append("=" * 80 + "\n")
+        _log.error("\n".join(error_lines))
 
     return len(errors)
 
