@@ -7,8 +7,13 @@ from pathlib import Path
 
 import pytest
 
+# Add project root to path
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
 # Format validation functions
-from format_utils import (
+from format_utils import (  # noqa: E402  # pylint: disable=wrong-import-position
     normalize_extension,
     is_supported_image_format,
     is_supported_video_format,
@@ -23,11 +28,6 @@ from format_utils import (
     SUPPORTED_IMAGE_EXTENSIONS,
     SUPPORTED_VIDEO_EXTENSIONS,
 )
-
-# Add project root to path
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
 
 
 class TestNormalizeExtension:
