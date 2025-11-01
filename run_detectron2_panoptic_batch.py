@@ -11,7 +11,8 @@ Usage:
       --mask-root   "/Users/rc/Desktop/my_project/outputs/seg/750_Picacho" \
       --device cpu --save-panoptic
 """
-import os, glob
+import os
+import glob
 import numpy as np
 from PIL import Image
 import torch
