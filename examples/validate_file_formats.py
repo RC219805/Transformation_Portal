@@ -17,6 +17,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# pylint: disable=wrong-import-position
 from format_utils import (
     validate_format,
     get_format_info,
@@ -191,7 +192,6 @@ def scan_directory(directory: Path) -> None:
         if supported_videos:
             print(f"   • {len(supported_videos)} videos → Luxury Video Master Grader")
             print(f"     python luxury_video_master_grader.py --input {directory}/ --output graded/")
-
 
 
 def show_format_summary() -> None:
