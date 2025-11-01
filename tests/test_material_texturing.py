@@ -98,7 +98,8 @@ controlnet_aux_stub.MidasDetector = _MidasDetector
 
 sys.modules.setdefault("controlnet_aux", controlnet_aux_stub)
 
-# Import after stubs are in place to prevent lux_render_pipeline from loading heavy ML dependencies during test setup
+# Import after stubs are in place to prevent lux_render_pipeline from loading
+# heavy ML dependencies during test setup
 from lux_render_pipeline import apply_material_response_finishing  # pylint: disable=wrong-import-position
 
 
