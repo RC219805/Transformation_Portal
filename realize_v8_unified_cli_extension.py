@@ -94,7 +94,7 @@ VFX_PRESETS = {
         "fog_density": 0.25,
         "fog_color": (0.95, 0.88, 0.75),  # Warm golden
         "material_boost": 0.22,
-        "lut_default": "02_Location_Aesthetic/California/Montecito_Golden_Hour_HDR.cube",
+        "lut_default": "02_Location_Aesthetic/Montecito_Golden_Hour_HDR.cube",
     },
     "cinematic_fog": {
         "description": "Atmospheric fog with gentle bloom",
