@@ -26,6 +26,7 @@ See [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) for details.
 * [Features](#features)
 * [Quick Start](#quick-start)
 * [Installation](#installation)
+* [**📖 Pipeline Operations Guide**](docs/PIPELINE_OPERATIONS_GUIDE.md) ⬅️ **How to Operate**
 * [Core Components](#core-components)
   * [Depth Pipeline](#depth-pipeline)
   * [Lux Render Pipeline](#lux-render-pipeline)
@@ -71,6 +72,8 @@ See [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) for details.
 ---
 
 ## Quick Start
+
+> **📖 New to the pipelines?** Check out the complete **[Pipeline Operations Guide](docs/PIPELINE_OPERATIONS_GUIDE.md)** for step-by-step instructions on how to operate each pipeline, or see the **[Quick Start Cheat Sheet](docs/QUICKSTART_CHEATSHEET.md)** for common commands.
 
 ### Installation
 
@@ -744,9 +747,11 @@ If you use Depth Anything V2 in research, please cite:
 
 ### Documentation
 
+- 🚀 **[Pipeline Operations Guide](docs/PIPELINE_OPERATIONS_GUIDE.md)** - **Complete step-by-step guide to operate all pipelines**
+- ⚡ [Quick Start Cheat Sheet](docs/QUICKSTART_CHEATSHEET.md) - Commands and common tasks at a glance
 - 📘 [Refactoring Summary](docs/REFACTORING_SUMMARY.md) - Repository reorganization details
 - 🏗️ [Architecture Guide](docs/ARCHITECTURE.md) - Design principles and module organization
-- ⚡ [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md) - Benchmarks and best practices
+- 🔧 [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md) - Benchmarks and best practices
 - 🔄 [Migration Guide](docs/REFACTORING_2025.md) - How to update your code
 - 🛠️ [Depth Pipeline](docs/depth_pipeline/DEPTH_PIPELINE_README.md) - Depth processing documentation
 
