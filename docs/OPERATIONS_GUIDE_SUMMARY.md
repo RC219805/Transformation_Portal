@@ -400,7 +400,7 @@
 
 **Related Documentation:**
 - Main README: `README.md`
-- Depth Pipeline: `DEPTH_PIPELINE_README.md`
+- Depth Pipeline: `docs/depth_pipeline/DEPTH_PIPELINE_README.md`
 - Architecture: `docs/ARCHITECTURE.md`
 - Performance: `docs/PERFORMANCE_OPTIMIZATION.md`
 
