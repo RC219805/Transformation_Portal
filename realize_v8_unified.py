@@ -93,7 +93,12 @@ def _save_with_meta(
     if arr is not None:
         if out_bitdepth == 16:
             arr_uint = (np.clip(arr, 0, 1) * 65535).astype(np.uint16)
-            img = Image.fromarray(arr_uint, mode='I;16')
+            if arr_uint.ndim == 3 and arr_uint.shape[2] == 3:
+                img = Image.fromarray(arr_uint, mode='RGB')
+            elif arr_uint.ndim == 2:
+                img = Image.fromarray(arr_uint, mode='I;16')
+            else:
+                raise ValueError(f"Unsupported array shape for 16-bit image: {arr_uint.shape}")
         elif out_bitdepth == 32:
             img = Image.fromarray(arr.astype(np.float32), mode='F')
         else:  # 8-bit
