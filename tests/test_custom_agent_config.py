@@ -104,7 +104,7 @@ def test_agent_has_expertise_sections():
 def test_agent_mentions_key_technologies():
     """Verify the agent mentions key repository technologies."""
     agent_file = Path(__file__).parents[1] / ".github" / "agents" / "transformation-portal-specialist.md"
-    content = content_lower = agent_file.read_text().lower()
+    content_lower = agent_file.read_text().lower()
     
     # Key technologies that should be mentioned
     key_techs = [
