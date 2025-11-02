@@ -85,6 +85,11 @@ def _save_with_meta(
         path: Output path
         meta: Metadata dictionary to preserve
         out_bitdepth: Output bit depth (8, 16, or 32)
+    
+    Note:
+        16-bit RGB images require TIFF format with tifffile library.
+        Other formats will automatically fall back to 8-bit.
+        For 16-bit grayscale, PNG is supported.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -93,13 +98,32 @@ def _save_with_meta(
     if arr is not None:
         if out_bitdepth == 16:
             arr_uint = (np.clip(arr, 0, 1) * 65535).astype(np.uint16)
+            
             if arr_uint.ndim == 3 and arr_uint.shape[2] == 3:
-                img = Image.fromarray(arr_uint, mode='RGB')
+                # 16-bit RGB - requires tifffile for TIFF
+                ext = path.suffix.lower()
+                if ext in ['.tif', '.tiff']:
+                    try:
+                        import tifffile
+                        tifffile.imwrite(path, arr_uint, photometric='rgb')
+                        _info(f"Saved: {path} (16-bit TIFF via tifffile)")
+                        return
+                    except ImportError:
+                        _warn("tifffile not available for 16-bit TIFF. Install: pip install tifffile")
+                        _warn("Falling back to 8-bit")
+                else:
+                    _warn(f"Format {ext} doesn't support 16-bit RGB, falling back to 8-bit")
+                
+                # Fall back to 8-bit
+                out_bitdepth = 8
+            
             elif arr_uint.ndim == 2:
+                # Grayscale 16-bit - PNG and TIFF supported
                 img = Image.fromarray(arr_uint, mode='I;16')
             else:
                 raise ValueError(f"Unsupported array shape for 16-bit image: {arr_uint.shape}")
-        elif out_bitdepth == 32:
+        
+        if out_bitdepth == 32:
             # Mode 'F' only supports 2D (grayscale) float32 arrays in PIL.
             if arr.ndim == 2:
                 img = Image.fromarray(arr.astype(np.float32), mode='F')
@@ -107,19 +131,28 @@ def _save_with_meta(
                 raise ValueError(
                     "Cannot save 32-bit float RGB images with PIL. "
                     "Mode 'F' only supports 2D (grayscale) float32 arrays. "
-                    "Use out_bitdepth=16 or 8 for RGB images."
+                    "Use out_bitdepth=8 for RGB images."
                 )
             else:
                 raise ValueError(f"Unsupported array shape for 32-bit float image: {arr.shape}")
-        else:  # 8-bit
+        
+        if out_bitdepth == 8 or out_bitdepth not in [16, 32]:
+            # 8-bit (default fallback)
             arr_uint = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
             img = Image.fromarray(arr_uint, mode='RGB')
     
     # Preserve metadata
     info = meta.get('info', {})
-    img.save(path, **info)
     
-    _info(f"Saved: {path}")
+    # Save the image
+    try:
+        img.save(path, **info)
+        _info(f"Saved: {path}")
+    except Exception as e:
+        # Fallback: save without metadata
+        _warn(f"Failed to save with metadata, trying without: {e}")
+        img.save(path)
+        _info(f"Saved: {path} (without metadata)")
 
 
 def _image_to_float_array(img: Image.Image) -> np.ndarray:
