@@ -32,20 +32,25 @@ python -c "import hypothesis; print(hypothesis.__version__)"
 
 Run tests to confirm:
 ```bash
-# Run fast test suite
+# Run fast test suite (recommended)
 make test-fast
 
-# Run specific test with hypothesis
+# Run all tests
+pytest tests/ -v
+
+# Run specific test file that uses hypothesis
 pytest tests/__init__.py -v
 ```
 
 ## Dependencies Configuration
 The `hypothesis` package is configured in:
-- `pyproject.toml` - Under `[project.optional-dependencies.dev]`
-- `requirements-dev.txt` - For development environments
-- `requirements-ci.txt` - For CI/CD pipelines
+- `pyproject.toml` - Under `[project.optional-dependencies.dev]` (use `pip install -e ".[dev]"` to install)
+- `requirements-dev.txt` - For development environments (version: `hypothesis>=6,<7`)
+- `requirements-ci.txt` - For CI/CD pipelines (version: `hypothesis>=6,<7`)
 
 ## Additional Notes
 - The fast test suite requires additional dependencies like `numpy`, `Pillow`, `scipy`, etc.
 - For complete functionality, install: `pip install -r requirements-ci.txt`
-- Version required: `hypothesis>=6,<7` (currently 6.143.1)
+- Version specified in pyproject.toml: `hypothesis>=6.115.0`
+- Version specified in requirements files: `hypothesis>=6,<7`
+- Currently installed: hypothesis 6.143.1
