@@ -345,11 +345,9 @@ def suggest_output_format(
     
     # PNG is good lossless format for quality preservation
     if preserve_quality:
-        return '.png'
-    
-    # For web/fast delivery with PNG input, preserve PNG to avoid losing transparency
-    if ext == '.png':
-        # PNG likely has transparency or special properties that shouldn't be lost
+        if ext == '.png':
+            return '.png'
+        # For other image formats, use PNG as a high-quality default
         return '.png'
     
     # For other image formats without special properties, use JPEG for web delivery
