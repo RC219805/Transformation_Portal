@@ -125,11 +125,11 @@ def estimate_depth_fast(
 ) -> np.ndarray:
     """
     Use your optimized ArchitecturalDepthPipeline (24ms on M4 Max).
-
+    
     Args:
         img_array: RGB image (H, W, 3) in [0, 1]
         config_path: Path to depth pipeline config (defaults to DEFAULT_DEPTH_CONFIG)
-
+        
     Returns:
         Depth map (H, W) normalized to [0, 1]
     """
@@ -140,29 +140,29 @@ def estimate_depth_fast(
         y = np.linspace(0, 1, h)
         depth = np.tile(y[:, None], (1, w))
         return depth.astype(np.float32)
-
+    
     if config_path is None:
         config_path = DEFAULT_DEPTH_CONFIG
-
+    
     config_path = Path(config_path)
     if not config_path.exists():
         _warn(f"Config not found: {config_path}, using default")
         config_path = Path(DEFAULT_DEPTH_CONFIG)
-
+    
     try:
         pipeline = ArchitecturalDepthPipeline.from_config(str(config_path))
-
+        
         # Estimate depth (uses CoreML backend on M4 Max)
         # Convert to uint8 for model
         img_uint8 = (np.clip(img_array, 0, 1) * 255).astype(np.uint8)
         pil_img = Image.fromarray(img_uint8)
-
+        
         result = pipeline.depth_model.estimate_depth(pil_img)
         depth = result['depth']
-
+        
         # Normalize
         depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
-
+        
         return depth.astype(np.float32)
     except Exception as e:
         _error(f"Depth estimation failed: {e}")
@@ -184,18 +184,18 @@ def apply_depth_bloom(
 ) -> np.ndarray:
     """Depth-aware bloom using your depth pipeline."""
     from scipy.ndimage import gaussian_filter
-
+    
     # Extract highlights
     threshold = highlight_threshold
     bright = np.maximum(img - threshold, 0.0)
-
+    
     # Blur
     bloom = gaussian_filter(bright, sigma=radius/BLOOM_RADIUS_TO_SIGMA, mode='reflect')
-
+    
     # Depth weighting (near objects bloom more)
     depth_weight = 1.0 - (depth ** DEPTH_BLOOM_FALLOFF)
     bloom = bloom * depth_weight[..., None]
-
+    
     result = img + bloom * intensity
     return np.clip(result, 0.0, 1.0).astype(np.float32)
 
@@ -218,10 +218,10 @@ def apply_depth_fog(
         falloff_exponent: Exponent for fog falloff curve (default 2.0).
     """
     fog_array = np.array(fog_color, dtype=np.float32)
-
+    
     # Exponential fog
     fog_amount = 1.0 - np.exp(-density * (depth ** falloff_exponent))
-
+    
     result = img * (1.0 - fog_amount[..., None]) + fog_array * fog_amount[..., None]
     return np.clip(result, 0.0, 1.0).astype(np.float32)
 
@@ -234,17 +234,17 @@ def apply_depth_of_field(
 ) -> np.ndarray:
     """Simple depth of field effect."""
     from scipy.ndimage import gaussian_filter
-
+    
     # Calculate blur amount based on distance from focus
     blur_amount = np.abs(depth - focus_depth)
     blur_amount = blur_amount / (blur_amount.max() + 1e-8)
-
+    
     # Apply varying blur
     result = img.copy()
     for i in range(3):  # Process each channel
         blurred_channel = gaussian_filter(img[..., i], sigma=blur_strength, mode='reflect')
         result[..., i] = img[..., i] * (1 - blur_amount) + blurred_channel * blur_amount
-
+    
     return np.clip(result, 0.0, 1.0).astype(np.float32)
 
 
@@ -257,33 +257,43 @@ def apply_lut_with_depth(
     if not lut_path.exists():
         _warn(f"LUT not found: {lut_path}")
         return img
-
+    
     try:
         # Parse CUBE LUT
         with open(lut_path, 'r', encoding='utf-8') as f:
             lines = [l.strip() for l in f if l.strip() and not l.startswith('#')]
-
-        data_lines = [l for l in lines if l and len(l) > 0 and (l[0].isdigit() or l[0] == '-')]
-
+        
+        data_lines = [l for l in lines if l and (l[0].isdigit() or l[0] == '-')]
+        
         if not data_lines:
             raise ValueError("No valid LUT data found in file (expected numeric values)")
-
-        size = int(len(data_lines) ** (1/3) + 0.5)
+        
+        # Parse LUT_3D_SIZE from header if present, else fallback to cube root
+        size = None
+        for l in lines:
+            if l.upper().startswith("LUT_3D_SIZE"):
+                try:
+                    size = int(l.split()[1])
+                except (IndexError, ValueError):
+                    raise ValueError(f"Malformed LUT_3D_SIZE directive: '{l}'")
+                break
+        if size is None:
+            size = round(len(data_lines) ** (1/3))
         expected_lines = size ** 3
-
+        
         if len(data_lines) != expected_lines:
             raise ValueError(
                 f"Invalid CUBE LUT size: expected {expected_lines} lines for {size}³ LUT, "
                 f"got {len(data_lines)} lines"
             )
-
+        
         lut_data = np.array([list(map(float, l.split())) for l in data_lines])
-
+        
         if lut_data.shape[1] != 3:
             raise ValueError(f"Invalid LUT data: expected 3 columns (RGB), got {lut_data.shape[1]}")
-
+        
         lut_cube = lut_data.reshape((size, size, size, 3))
-
+        
         # Apply LUT
         h, w = img.shape[:2]
         coords = img.reshape(-1, 3) * (size - 1)
@@ -324,9 +334,9 @@ def apply_lut_with_depth(
         if depth is not None:
             blend = DEPTH_LUT_BASE_STRENGTH + DEPTH_LUT_DEPTH_INFLUENCE * (1 - depth[..., None])
             graded = img * (1 - blend) + graded * blend
-
+        
         return np.clip(graded, 0.0, 1.0).astype(np.float32)
-
+        
     except ValueError as e:
         _error(f"Invalid LUT format in {lut_path}: {e}")
         return img
@@ -344,10 +354,10 @@ def apply_color_grade_zones(
     """Apply color grading based on depth zones."""
     near_array = np.array(near_color, dtype=np.float32)
     far_array = np.array(far_color, dtype=np.float32)
-
+    
     # Blend between near and far colors based on depth
     color_shift = near_array * (1 - depth[..., None]) + far_array * depth[..., None]
-
+    
     result = img * color_shift
     return np.clip(result, 0.0, 1.0).astype(np.float32)
 
@@ -360,20 +370,20 @@ def apply_material_response(
 ) -> np.ndarray:
     """
     Apply Material Response principles to enhance surface characteristics.
-
+    
     This is a simplified version that respects the Material Response principle
     without requiring the full ML implementation.
     """
     if not _HAVE_MR:
         # Simplified fallback: enhance local contrast
         from scipy.ndimage import gaussian_filter
-
+        
         # Enhance micro-contrast
         blurred = gaussian_filter(img, sigma=1.5, mode='reflect')
         enhanced = img + (img - blurred) * strength * 2.0
-
+        
         return np.clip(enhanced, 0.0, 1.0).astype(np.float32)
-
+    
     # Use actual Material Response if available
     _info("Using Material Response system")
     # Note: This is a placeholder - actual implementation would need
@@ -394,7 +404,7 @@ def enhance_with_vfx(
 ) -> Dict[str, Any]:
     """
     Complete enhancement pipeline: base enhance + Material Response + depth VFX.
-
+    
     Args:
         img_or_arr: Input PIL Image or numpy array
         base_preset: realize_v8 base preset
@@ -403,48 +413,48 @@ def enhance_with_vfx(
         lut_path: Optional LUT path
         save_depth: Include depth map in output
         **base_overrides: Override base preset parameters
-
+        
     Returns:
         Dict with keys: 'image', 'array', 'depth', 'metrics'
     """
     t_start = time.perf_counter()
-
+    
     # Step 1: Base enhancement (your realize_v8 pipeline)
     _info(f"Applying base preset: {base_preset}")
-
+    
     base_params = PRESETS[base_preset].to_dict()
     base_params.update(base_overrides)
-
+    
     preview, working, base_metrics = enhance(img_or_arr, **base_params)
     working_array = working.copy()
-
+    
     # Step 2: Material Response (optional)
     if material_response:
         t0 = time.perf_counter()
         _info("Applying Material Response")
-
+        
         vfx_cfg = VFX_PRESETS[vfx_preset]
         working_array = apply_material_response(
             working_array,
             strength=vfx_cfg.get("material_boost", 0.2)
         )
-
+        
         base_metrics["material_response_ms"] = int((time.perf_counter() - t0) * 1000)
-
+    
     # Step 3: Depth estimation (using your fast pipeline)
     t0 = time.perf_counter()
     _info("Estimating depth with ArchitecturalDepthPipeline")
-
+    
     depth = estimate_depth_fast(working_array)
     base_metrics["depth_estimation_ms"] = int((time.perf_counter() - t0) * 1000)
-
+    
     # Step 4: Depth-guided VFX
     t0 = time.perf_counter()
     _info(f"Applying VFX preset: {vfx_preset}")
-
+    
     vfx_cfg = VFX_PRESETS[vfx_preset]
     result = working_array.copy()
-
+    
     # Bloom
     if vfx_cfg.get("bloom_intensity", 0) > 0:
         result = apply_depth_bloom(
@@ -452,7 +462,7 @@ def enhance_with_vfx(
             intensity=vfx_cfg["bloom_intensity"],
             radius=vfx_cfg.get("bloom_radius", 15)
         )
-
+    
     # Fog
     if vfx_cfg.get("fog_density", 0) > 0:
         result = apply_depth_fog(
@@ -460,7 +470,7 @@ def enhance_with_vfx(
             fog_color=vfx_cfg.get("fog_color", (0.8, 0.85, 0.9)),
             density=vfx_cfg["fog_density"]
         )
-
+    
     # Depth of Field
     if vfx_cfg.get("dof_enabled", False):
         result = apply_depth_of_field(
@@ -468,7 +478,7 @@ def enhance_with_vfx(
             focus_depth=vfx_cfg.get("dof_focus", 0.35),
             blur_strength=vfx_cfg.get("dof_blur", 6.0)
         )
-
+    
     # Color grading zones
     if "color_grade_near" in vfx_cfg or "color_grade_far" in vfx_cfg:
         result = apply_color_grade_zones(
@@ -476,26 +486,26 @@ def enhance_with_vfx(
             near_color=vfx_cfg.get("color_grade_near", (1.0, 1.0, 1.0)),
             far_color=vfx_cfg.get("color_grade_far", (1.0, 1.0, 1.0))
         )
-
+    
     # LUT
     if lut_path or vfx_cfg.get("lut_default"):
         lut = lut_path or Path(vfx_cfg["lut_default"])
         if lut.exists():
             result = apply_lut_with_depth(result, lut, depth)
-
+    
     base_metrics["vfx_ms"] = int((time.perf_counter() - t0) * 1000)
     base_metrics["total_ms"] = int((time.perf_counter() - t_start) * 1000)
-
+    
     # Create final image
     final_img = Image.fromarray((np.clip(result, 0, 1) * 255).astype(np.uint8))
-
+    
     output = {
         "image": final_img,
         "array": result,
         "depth": depth if save_depth else None,
         "metrics": base_metrics
     }
-
+    
     return output
 
 
@@ -513,7 +523,7 @@ def batch_process_vfx(
 ) -> None:
     """
     Batch process images with VFX.
-
+    
     Args:
         input_dir: Input directory
         output_dir: Output directory
@@ -521,39 +531,36 @@ def batch_process_vfx(
         vfx_preset: VFX preset
         material_response: Enable material response
         pattern: File pattern to match
-        jobs: Number of parallel jobs (NOT YET IMPLEMENTED - raises NotImplementedError if >1)
+        jobs: Number of parallel jobs (NOT YET IMPLEMENTED - processing is sequential)
         out_bitdepth: Output bit depth
-
+    
     Note:
         Parallel processing via the 'jobs' parameter is planned but not yet implemented.
-        If jobs > 1, a NotImplementedError is raised to prevent confusion.
-        All processing is currently sequential.
+        All processing is currently sequential. This parameter is accepted for forward
+        compatibility but has no effect on performance.
     """
     if jobs > 1:
-        raise NotImplementedError(
-            f"Parallel processing is not yet implemented. Requested jobs={jobs}. "
-            "Please set jobs=1 (default) for sequential processing."
-        )
+        _warn(f"Parallel processing not yet implemented. Requested {jobs} jobs, using 1 (sequential).")
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
+    
     # Find all matching files
     image_files = list(input_dir.glob(pattern))
-
+    
     if not image_files:
         _error(f"No images found matching {pattern} in {input_dir}")
         return
-
+    
     _info(f"Processing {len(image_files)} images...")
-
+    
     for i, img_path in enumerate(image_files, 1):
         _info(f"[{i}/{len(image_files)}] Processing {img_path.name}")
-
+        
         try:
             # Open image
             img, meta = _open_any(img_path)
-
+            
             # Process with VFX
             result = enhance_with_vfx(
                 img,
@@ -562,7 +569,7 @@ def batch_process_vfx(
                 material_response=material_response,
                 save_depth=False
             )
-
+            
             # Save
             output_path = output_dir / f"{img_path.stem}_{vfx_preset}{img_path.suffix}"
             _save_with_meta(
@@ -572,19 +579,19 @@ def batch_process_vfx(
                 meta,
                 out_bitdepth=out_bitdepth
             )
-
+            
             # Save depth map if requested
             if result["depth"] is not None:
                 depth_path = output_dir / f"{img_path.stem}_depth.png"
                 depth_img = (result["depth"] * 65535).astype(np.uint16)
                 Image.fromarray(depth_img, mode='I;16').save(depth_path)
-
+            
             _info(f"  Completed in {result['metrics']['total_ms']}ms")
-
+            
         except Exception as e:
             _error(f"Failed to process {img_path.name}: {e}")
             continue
-
+    
     _info("Batch processing complete!")
 
 
@@ -592,7 +599,7 @@ def batch_process_vfx(
 
 def add_vfx_commands(subparsers):
     """Add VFX commands to realize_v8_unified CLI."""
-
+    
     # Single image with VFX
     p_vfx = subparsers.add_parser("enhance-vfx", help="Enhance with depth VFX")
     p_vfx.add_argument("--input", type=Path, required=True)
@@ -606,7 +613,7 @@ def add_vfx_commands(subparsers):
     p_vfx.add_argument("--save-depth", action="store_true")
     p_vfx.add_argument("--out-bitdepth", type=int, choices=[8, 16, 32], default=16)
     p_vfx.set_defaults(func=handle_enhance_vfx)
-
+    
     # Batch with VFX
     p_batch_vfx = subparsers.add_parser("batch-vfx", help="Batch process with VFX")
     p_batch_vfx.add_argument("--input", type=Path, required=True)
@@ -620,7 +627,7 @@ def add_vfx_commands(subparsers):
     p_batch_vfx.add_argument("--jobs", type=int, default=4)
     p_batch_vfx.add_argument("--out-bitdepth", type=int, choices=[8, 16, 32], default=16)
     p_batch_vfx.set_defaults(func=handle_batch_vfx)
-
+    
     return subparsers
 
 
@@ -628,7 +635,7 @@ def handle_enhance_vfx(args):
     """Handle single image VFX enhancement."""
     # Open image
     img, meta = _open_any(args.input)
-
+    
     # Process
     result = enhance_with_vfx(
         img,
@@ -638,7 +645,7 @@ def handle_enhance_vfx(args):
         lut_path=args.lut,
         save_depth=args.save_depth
     )
-
+    
     # Save
     _save_with_meta(
         result["image"],
@@ -647,13 +654,13 @@ def handle_enhance_vfx(args):
         meta,
         out_bitdepth=args.out_bitdepth
     )
-
+    
     # Save depth if requested
     if result["depth"] is not None:
         depth_path = args.output.with_name(f"{args.output.stem}_depth.png")
         depth_img = (result["depth"] * 65535).astype(np.uint16)
         Image.fromarray(depth_img, mode='I;16').save(depth_path)
-
+    
     # Print metrics
     _info(f"✓ Completed in {result['metrics']['total_ms']}ms")
     _info(f"  Base enhance: {result['metrics']['total_time_ms']}ms")
@@ -680,16 +687,16 @@ def main():
     parser = argparse.ArgumentParser(
         description="Realize V8 VFX Extension - Depth-guided visual effects"
     )
-
+    
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     add_vfx_commands(subparsers)
-
+    
     args = parser.parse_args()
-
+    
     if not hasattr(args, 'func'):
         parser.print_help()
         return 1
-
+    
     args.func(args)
     return 0
 
