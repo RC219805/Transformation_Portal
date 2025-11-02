@@ -413,7 +413,7 @@ python examples/validate_file_formats.py --scan ./test_images/
 - [SUPPORTED_FILE_FORMATS.md](../SUPPORTED_FILE_FORMATS.md) - Complete format specification
 - [FILE_FORMAT_QUICK_REFERENCE.md](../FILE_FORMAT_QUICK_REFERENCE.md) - Printable quick reference
 - [README.md](../README.md) - Project overview
-- [DEPTH_PIPELINE_README.md](../DEPTH_PIPELINE_README.md) - Depth pipeline specifics
+- [DEPTH_PIPELINE_README.md](depth_pipeline/DEPTH_PIPELINE_README.md) - Depth pipeline specifics
 
 ### External Resources
 
