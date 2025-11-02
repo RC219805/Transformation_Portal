@@ -383,7 +383,7 @@ def main():
         subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
 
         # Basic enhance command
-        # Note: Basic enhance only supports 8/16-bit (RGB images only)
+        # Note: Basic enhance outputs only 8/16-bit RGB images (input images of any type are supported; conversion to RGB is automatic)
         # VFX commands support 32-bit for depth maps (grayscale)
         p_enhance = subparsers.add_parser('enhance', help='Basic enhancement')
         p_enhance.add_argument('--input', type=Path, required=True)
