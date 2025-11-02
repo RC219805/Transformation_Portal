@@ -347,7 +347,7 @@ def main():
 
     # Use subparsers if VFX is available, otherwise simple args
     if has_vfx:
-        subparsers = parser.add_subparsers(dest='command', help='Available commands')
+        subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
 
         # Basic enhance command
         p_enhance = subparsers.add_parser('enhance', help='Basic enhancement')
@@ -362,22 +362,14 @@ def main():
 
         args = parser.parse_args()
 
-        # If no command specified, show help
-        if not args.command:
-            parser.print_help()
-            return 1
-
-        # Execute command
-        if hasattr(args, 'func'):
-            return args.func(args) or 0
-        else:
-            parser.print_help()
-            return 1
+        # Execute command (func is always set by set_defaults)
+        return args.func(args) or 0
     else:
         # Fallback to simple CLI without VFX
         parser.add_argument('--input', type=Path, required=True)
         parser.add_argument('--output', type=Path, required=True)
         parser.add_argument('--preset', choices=list(PRESETS.keys()), default='signature_estate')
+        parser.add_argument('--out-bitdepth', type=int, choices=[8, 16], default=8)
 
         args = parser.parse_args()
 
@@ -389,7 +381,7 @@ def main():
         preview, arr, metrics = enhance(img, **preset.to_dict())
 
         # Save
-        _save_with_meta(preview, arr, args.output, meta)
+        _save_with_meta(preview, arr, args.output, meta, out_bitdepth=args.out_bitdepth)
 
         _info(f"Processing complete: {metrics['total_time_ms']}ms")
         return 0
