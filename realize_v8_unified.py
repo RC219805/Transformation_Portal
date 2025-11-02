@@ -111,9 +111,13 @@ def _save_with_meta(
                 ext = path.suffix.lower()
                 if ext in ['.tif', '.tiff']:
                     if HAS_TIFFFILE:
-                        tifffile.imwrite(path, arr_uint, photometric='rgb')
-                        _info(f"Saved: {path} (16-bit TIFF via tifffile)")
-                        return
+                        try:
+                            tifffile.imwrite(path, arr_uint, photometric='rgb')
+                            _info(f"Saved: {path} (16-bit TIFF via tifffile)")
+                            return
+                        except Exception as e:
+                            _warn(f"Failed to write 16-bit TIFF: {e}")
+                            _warn("Falling back to 8-bit")
                     else:
                         _warn("tifffile not available for 16-bit TIFF. Install: pip install tifffile")
                         _warn("Falling back to 8-bit")
@@ -137,7 +141,7 @@ def _save_with_meta(
                 raise ValueError(
                     "Cannot save 32-bit float RGB images with PIL. "
                     "Mode 'F' only supports 2D (grayscale) float32 arrays. "
-                    "Use out_bitdepth=8 for RGB images."
+                    "Use out_bitdepth=8 or 16 for RGB images."
                 )
             else:
                 raise ValueError(f"Unsupported array shape for 32-bit float image: {arr.shape}")
@@ -350,6 +354,8 @@ def main():
         subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
 
         # Basic enhance command
+        # Note: Basic enhance only supports 8/16-bit (RGB images only)
+        # VFX commands support 32-bit for depth maps (grayscale)
         p_enhance = subparsers.add_parser('enhance', help='Basic enhancement')
         p_enhance.add_argument('--input', type=Path, required=True)
         p_enhance.add_argument('--output', type=Path, required=True)
