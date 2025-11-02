@@ -108,13 +108,13 @@ def test_agent_mentions_key_technologies():
     
     # Key technologies that should be mentioned
     key_techs = [
-        ("pytorch" or "torch"),
-        ("ffmpeg"),
-        ("numpy"),
-        ("pillow" or "pil"),
+        ["pytorch", "torch"],
+        ["ffmpeg"],
+        ["numpy"],
+        ["pillow", "pil"],
     ]
     
-    mentioned_count = sum(1 for tech in key_techs if tech in content_lower)
+    mentioned_count = sum(1 for group in key_techs if any(variant in content_lower for variant in group))
     assert mentioned_count >= 3, f"Agent should mention at least 3 key technologies, found {mentioned_count}"
 
 
