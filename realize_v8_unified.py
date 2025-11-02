@@ -41,19 +41,19 @@ def _error(msg: str) -> None:
 def _open_any(path: Union[str, Path]) -> Tuple[Image.Image, Dict[str, Any]]:
     """
     Open an image and extract metadata.
-    
+
     Args:
         path: Path to image file
-        
+
     Returns:
         Tuple of (PIL Image, metadata dict)
     """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Image not found: {path}")
-    
+
     img = Image.open(path)
-    
+
     # Extract metadata
     meta = {
         'format': img.format,
@@ -61,11 +61,11 @@ def _open_any(path: Union[str, Path]) -> Tuple[Image.Image, Dict[str, Any]]:
         'size': img.size,
         'info': img.info.copy() if hasattr(img, 'info') else {},
     }
-    
+
     # Convert to RGB
     if img.mode != 'RGB':
         img = img.convert('RGB')
-    
+
     return img, meta
 
 
@@ -78,14 +78,14 @@ def _save_with_meta(
 ) -> None:
     """
     Save image with metadata preservation.
-    
+
     Args:
         img: PIL Image to save
         arr: Optional numpy array (for bit depth conversion)
         path: Output path
         meta: Metadata dictionary to preserve
         out_bitdepth: Output bit depth (8, 16, or 32)
-    
+
     Note:
         16-bit RGB images require TIFF format with tifffile library.
         Other formats will automatically fall back to 8-bit.
@@ -93,12 +93,12 @@ def _save_with_meta(
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Convert array to appropriate bit depth if provided
     if arr is not None:
         if out_bitdepth == 16:
             arr_uint = (np.clip(arr, 0, 1) * 65535).astype(np.uint16)
-            
+
             if arr_uint.ndim == 3 and arr_uint.shape[2] == 3:
                 # 16-bit RGB - requires tifffile for TIFF
                 ext = path.suffix.lower()
@@ -113,16 +113,16 @@ def _save_with_meta(
                         _warn("Falling back to 8-bit")
                 else:
                     _warn(f"Format {ext} doesn't support 16-bit RGB, falling back to 8-bit")
-                
+
                 # Fall back to 8-bit
                 out_bitdepth = 8
-            
+
             elif arr_uint.ndim == 2:
                 # Grayscale 16-bit - PNG and TIFF supported
                 img = Image.fromarray(arr_uint, mode='I;16')
             else:
                 raise ValueError(f"Unsupported array shape for 16-bit image: {arr_uint.shape}")
-        
+
         if out_bitdepth == 32:
             # Mode 'F' only supports 2D (grayscale) float32 arrays in PIL.
             if arr.ndim == 2:
@@ -135,15 +135,15 @@ def _save_with_meta(
                 )
             else:
                 raise ValueError(f"Unsupported array shape for 32-bit float image: {arr.shape}")
-        
+
         if out_bitdepth == 8 or out_bitdepth not in [16, 32]:
             # 8-bit (default fallback)
             arr_uint = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
             img = Image.fromarray(arr_uint, mode='RGB')
-    
+
     # Preserve metadata
     info = meta.get('info', {})
-    
+
     # Save the image
     try:
         img.save(path, **info)
@@ -158,16 +158,16 @@ def _save_with_meta(
 def _image_to_float_array(img: Image.Image) -> np.ndarray:
     """
     Convert PIL Image to float32 numpy array in [0, 1] range.
-    
+
     Args:
         img: PIL Image
-        
+
     Returns:
         Float32 numpy array (H, W, 3)
     """
     if img.mode != 'RGB':
         img = img.convert('RGB')
-    
+
     arr = np.array(img, dtype=np.float32) / 255.0
     return arr
 
@@ -185,7 +185,7 @@ class Preset:
     clarity: float = 0.0
     grain: float = 0.0
     vignette: float = 0.0
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert preset to dictionary."""
         return asdict(self)
@@ -235,7 +235,7 @@ def enhance(
 ) -> Tuple[Image.Image, np.ndarray, Dict[str, Any]]:
     """
     Apply basic enhancement to an image.
-    
+
     Args:
         img_or_arr: Input image (PIL Image, numpy array, or path)
         exposure: Exposure adjustment in stops (-2 to +2)
@@ -246,13 +246,13 @@ def enhance(
         vignette: Vignette strength (0 to 1.0)
         random_seed: Optional random seed for reproducible grain (None for random)
         **kwargs: Additional parameters (ignored)
-        
+
     Returns:
         Tuple of (preview PIL Image, working numpy array, metrics dict)
     """
     import time
     t_start = time.perf_counter()
-    
+
     # Load image
     if isinstance(img_or_arr, (str, Path)):
         img, _ = _open_any(img_or_arr)
@@ -263,37 +263,37 @@ def enhance(
         arr = img_or_arr.copy()
     else:
         raise TypeError(f"Unsupported input type: {type(img_or_arr)}")
-    
+
     # Apply adjustments
     result = arr.copy()
-    
+
     # Exposure
     if exposure != 0.0:
         result = result * (2.0 ** exposure)
-    
+
     # Contrast (around middle gray)
     if contrast != 1.0:
         result = (result - 0.5) * contrast + 0.5
-    
+
     # Saturation
     if saturation != 1.0:
         # Convert to HSV-like saturation adjustment
         gray = 0.299 * result[..., 0] + 0.587 * result[..., 1] + 0.114 * result[..., 2]
         gray = gray[..., None]
         result = gray + (result - gray) * saturation
-    
+
     # Clarity (local contrast via unsharp mask)
     if clarity > 0.0:
         from scipy.ndimage import gaussian_filter
         blurred = gaussian_filter(result, sigma=5.0, mode='reflect')
         result = result + (result - blurred) * clarity
-    
+
     # Grain
     if grain > 0.0:
         rng = np.random.default_rng(random_seed) if random_seed is not None else np.random.default_rng()
         noise = rng.normal(0, grain * 0.05, result.shape).astype(np.float32)
         result = result + noise
-    
+
     # Vignette
     if vignette > 0.0:
         h, w = result.shape[:2]
@@ -304,13 +304,13 @@ def enhance(
         vignette_mask = 1.0 - (dist / max_dist) * vignette
         vignette_mask = np.clip(vignette_mask, 0, 1)
         result = result * vignette_mask[..., None]
-    
+
     # Clip to valid range
     result = np.clip(result, 0.0, 1.0)
-    
+
     # Convert to PIL Image for preview
     preview = Image.fromarray((result * 255).astype(np.uint8))
-    
+
     # Metrics
     elapsed_ms = int((time.perf_counter() - t_start) * 1000)
     metrics = {
@@ -320,35 +320,92 @@ def enhance(
         'saturation': saturation,
         'clarity': clarity,
     }
-    
+
     return preview, result, metrics
 
 
 # ==================== CLI Entry Point ====================
 
 def main():
-    """Basic CLI for testing - actual CLI should be in separate module."""
+    """CLI for Realize V8 with VFX extension support."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Realize V8 Unified Enhancement")
-    parser.add_argument('--input', type=Path, required=True)
-    parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--preset', choices=list(PRESETS.keys()), default='signature_estate')
-    
-    args = parser.parse_args()
-    
+
+    # Check if VFX extension is available
+    try:
+        from realize_v8_unified_cli_extension import add_vfx_commands
+        has_vfx = True
+    except ImportError:
+        has_vfx = False
+
+    # Use subparsers if VFX is available, otherwise simple args
+    if has_vfx:
+        subparsers = parser.add_subparsers(dest='command', help='Available commands')
+
+        # Basic enhance command
+        p_enhance = subparsers.add_parser('enhance', help='Basic enhancement')
+        p_enhance.add_argument('--input', type=Path, required=True)
+        p_enhance.add_argument('--output', type=Path, required=True)
+        p_enhance.add_argument('--preset', choices=list(PRESETS.keys()), default='signature_estate')
+        p_enhance.add_argument('--out-bitdepth', type=int, choices=[8, 16], default=8)
+        p_enhance.set_defaults(func=_handle_basic_enhance)
+
+        # Add VFX commands
+        add_vfx_commands(subparsers)
+
+        args = parser.parse_args()
+
+        # If no command specified, show help
+        if not args.command:
+            parser.print_help()
+            return 1
+
+        # Execute command
+        if hasattr(args, 'func'):
+            return args.func(args) or 0
+        else:
+            parser.print_help()
+            return 1
+    else:
+        # Fallback to simple CLI without VFX
+        parser.add_argument('--input', type=Path, required=True)
+        parser.add_argument('--output', type=Path, required=True)
+        parser.add_argument('--preset', choices=list(PRESETS.keys()), default='signature_estate')
+
+        args = parser.parse_args()
+
+        # Load preset
+        preset = PRESETS[args.preset]
+
+        # Enhance
+        img, meta = _open_any(args.input)
+        preview, arr, metrics = enhance(img, **preset.to_dict())
+
+        # Save
+        _save_with_meta(preview, arr, args.output, meta)
+
+        _info(f"Processing complete: {metrics['total_time_ms']}ms")
+        return 0
+
+
+def _handle_basic_enhance(args):
+    """Handle basic enhancement command."""
     # Load preset
     preset = PRESETS[args.preset]
-    
+
     # Enhance
     img, meta = _open_any(args.input)
     preview, arr, metrics = enhance(img, **preset.to_dict())
-    
+
     # Save
-    _save_with_meta(preview, arr, args.output, meta)
-    
+    out_bitdepth = getattr(args, 'out_bitdepth', 8)
+    _save_with_meta(preview, arr, args.output, meta, out_bitdepth=out_bitdepth)
+
     _info(f"Processing complete: {metrics['total_time_ms']}ms")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())
