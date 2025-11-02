@@ -4,11 +4,30 @@ This module provides utilities for validating and working with supported
 image and video file formats across all pipelines.
 
 Functions:
+    normalize_extension: Normalize file extension to lowercase with leading dot
     is_supported_image_format: Check if a file has a supported image extension
     is_supported_video_format: Check if a file has a supported video extension
     is_supported_tiff_format: Check if a file is a TIFF format
+    is_luxury_format: Check if file is in a luxury/high-quality format
     validate_format: Validate format and raise error if unsupported
     get_format_info: Get detailed information about a file format
+    suggest_output_format: Suggest appropriate output format based on input
+    get_supported_formats_summary: Get summary of all supported formats
+    format_help_text: Generate help text for supported formats
+
+Exceptions:
+    UnsupportedFormatError: Raised when a file format is not supported
+
+Constants:
+    SUPPORTED_IMAGE_EXTENSIONS: Set of supported image file extensions
+    SUPPORTED_VIDEO_EXTENSIONS: Set of supported video file extensions
+    LUXURY_IMAGE_EXTENSIONS: Set of luxury/high-quality image formats
+    TIFF_EXTENSIONS: Set of TIFF-specific extensions
+
+Note:
+    This module may be relocated to src/transformation_portal/utils/ in a future
+    refactoring to support the new CLI structure. For now, it remains at the
+    project root for backward compatibility with existing scripts.
 """
 
 from __future__ import annotations

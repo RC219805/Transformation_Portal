@@ -1,0 +1,193 @@
+# Transformation Portal Custom Agents
+
+This directory contains specialized GitHub Copilot agents tailored for the Transformation Portal repository.
+
+## Available Agents
+
+### 🎨 Transformation Portal Specialist
+
+**File**: `transformation-portal-specialist.md`
+
+**Purpose**: Expert agent for luxury real estate rendering, architectural visualization, and professional image/video processing pipelines.
+
+**Best Used For**:
+- Implementing or modifying depth-aware processing pipelines
+- Working with AI/ML models (Stable Diffusion, ControlNet, Depth Anything V2)
+- Creating or optimizing Material Response enhancements
+- Developing FFmpeg-based video processing workflows
+- Optimizing batch processing performance
+- Writing tests for complex processing pipelines
+- Troubleshooting hardware acceleration (CoreML, CUDA, MPS)
+- Adding new LUT presets and color grading workflows
+- Ensuring metadata preservation (IPTC/XMP/GPS)
+
+**Key Capabilities**:
+- Deep understanding of all core pipelines (Depth, Lux Render, Material Response, Video Grader)
+- Expertise in PyTorch, FFmpeg, NumPy, Pillow, and color science
+- Knowledge of Apple Silicon optimization (CoreML, MPS)
+- Performance profiling and optimization strategies
+- Professional color grading and HDR workflows
+- Comprehensive testing strategies (pytest, hypothesis, mocking)
+
+## How to Use Custom Agents
+
+### In GitHub Copilot Chat
+
+1. **Reference the agent in your prompt**:
+   ```
+   @transformation-portal-specialist help me optimize the depth pipeline for batch processing
+   ```
+
+2. **Ask specific questions**:
+   ```
+   @transformation-portal-specialist how do I add a new tone mapping operator to the depth pipeline?
+   ```
+
+3. **Get implementation help**:
+   ```
+   @transformation-portal-specialist implement a new atmospheric haze effect based on depth information
+   ```
+
+### Agent Selection Guidelines
+
+Use the **Transformation Portal Specialist** when:
+- Working on any image or video processing code
+- Implementing ML/AI features
+- Optimizing performance for batch operations
+- Dealing with FFmpeg filter graphs
+- Adding new pipeline features
+- Writing tests for processing code
+- Troubleshooting hardware acceleration issues
+
+Use **general Copilot** for:
+- Generic Python questions unrelated to image/video processing
+- Infrastructure and CI/CD changes (though the specialist can help with these too)
+- Basic file operations or utilities
+
+## Agent Design Philosophy
+
+The Transformation Portal Specialist agent is designed with:
+
+1. **Domain Expertise**: Deep knowledge of image/video processing, color science, and ML/AI
+2. **Repository Context**: Understanding of the specific architecture, pipelines, and coding standards
+3. **Practical Focus**: Emphasis on working code, performance, and testing
+4. **Professional Standards**: Knowledge of industry best practices (HDR, color spaces, metadata)
+5. **Hardware Awareness**: Optimization for specific accelerators (Apple Silicon, CUDA)
+
+## Creating Additional Agents
+
+To create a new custom agent for this repository:
+
+1. **Create a new `.md` file** in this directory (`.github/agents/`)
+2. **Use the frontmatter format**:
+   ```markdown
+   ---
+   name: Your Agent Name
+   description: Brief description of what your agent does
+   ---
+   
+   # Your Agent Name
+   
+   [Agent instructions and expertise...]
+   ```
+
+3. **Define clear expertise areas** and provide examples
+4. **Document use cases** and best practices
+5. **Test the agent** by asking it questions through Copilot
+
+## Agent Maintenance
+
+### When to Update Agents
+
+Update agents when:
+- New pipelines or major features are added
+- Coding standards or best practices change
+- New dependencies or tools are introduced
+- Performance characteristics change significantly
+- Common issues or FAQs emerge
+
+### How to Update
+
+1. Edit the relevant `.md` file in `.github/agents/`
+2. Update expertise areas, examples, or troubleshooting info
+3. Test the changes by asking the agent questions
+4. Commit and push the changes
+
+## Examples of Agent Usage
+
+### Example 1: Adding a New Feature
+
+**Prompt**:
+```
+@transformation-portal-specialist I need to add depth-based vignetting to the 
+ArchitecturalDepthPipeline. It should darken the background more than the foreground.
+```
+
+**Expected Response**:
+- Context about where this fits in the pipeline
+- Code implementation for the vignetting effect
+- Configuration additions to YAML presets
+- Test cases to verify the effect
+- Performance considerations
+
+### Example 2: Optimizing Performance
+
+**Prompt**:
+```
+@transformation-portal-specialist the batch processing is using too much memory 
+when processing 4K images. How can I optimize this?
+```
+
+**Expected Response**:
+- Analysis of current memory usage patterns
+- Specific optimization strategies (lazy loading, batch size reduction)
+- Code examples with memory profiling
+- Trade-offs between memory and speed
+- Testing approach to verify improvements
+
+### Example 3: Troubleshooting
+
+**Prompt**:
+```
+@transformation-portal-specialist FFmpeg is failing with "Cannot determine format 
+of input stream" when processing HDR video
+```
+
+**Expected Response**:
+- Explanation of the error
+- Common causes (codec support, format detection)
+- Diagnostic commands (ffprobe)
+- Solution with corrected filter graph
+- Prevention strategies for future
+
+## Agent Effectiveness
+
+To get the best results from custom agents:
+
+1. **Be specific**: Mention which pipeline or component you're working with
+2. **Provide context**: Share error messages, code snippets, or test output
+3. **Ask for examples**: Request concrete code rather than just explanations
+4. **Request testing**: Ask for test cases along with implementations
+5. **Clarify constraints**: Mention performance requirements or hardware limitations
+
+## Feedback and Improvements
+
+If you find the custom agents could be improved:
+
+1. Note what worked well and what didn't
+2. Identify missing expertise or incorrect information
+3. Suggest new examples or troubleshooting scenarios
+4. Update the agent file with improvements
+5. Share feedback with the team
+
+## Resources
+
+- **Repository Documentation**: `/docs/`
+- **Copilot Instructions**: `../.github/copilot-instructions.md`
+- **Architecture Guide**: `/docs/ARCHITECTURE.md`
+- **Pipeline Operations**: `/docs/PIPELINE_OPERATIONS_GUIDE.md`
+- **Performance Guide**: `/docs/PERFORMANCE_OPTIMIZATION.md`
+
+---
+
+**Note**: Custom agents are a powerful way to provide specialized assistance for domain-specific tasks. The Transformation Portal Specialist agent encapsulates years of knowledge about professional image/video processing workflows, making it easier to maintain and extend this complex codebase.
