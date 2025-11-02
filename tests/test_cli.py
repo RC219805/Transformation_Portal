@@ -12,8 +12,10 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Import CLI module
-sys.path.insert(0, str(ROOT / "src"))
+# Add src directory to path for transformation_portal imports
+SRC_PATH = str(ROOT / "src")
+if SRC_PATH not in sys.path:
+    sys.path.insert(0, SRC_PATH)
 
 
 class TestCLIImport:
@@ -27,7 +29,7 @@ class TestCLIImport:
             analyze_cli,
             main,
         )
-        
+
         # Verify functions are callable
         assert callable(render_cli)
         assert callable(process_cli)
@@ -42,7 +44,7 @@ class TestCLIImport:
             process_app,
             analyze_app,
         )
-        
+
         # Verify apps are typer instances
         assert app is not None
         assert render_app is not None
@@ -52,7 +54,7 @@ class TestCLIImport:
     def test_cli_exports(self):
         """Test that CLI module exports expected symbols."""
         from transformation_portal import cli
-        
+
         # Check __all__ exports
         assert hasattr(cli, '__all__')
         expected_exports = [
@@ -67,7 +69,7 @@ class TestCLIImport:
             'version',
             'info',
         ]
-        
+
         for export in expected_exports:
             assert export in cli.__all__, f"Missing export: {export}"
 

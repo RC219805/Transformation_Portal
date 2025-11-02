@@ -47,6 +47,33 @@ except ImportError:
     sys.exit(1)
 
 
+def check_module_availability(module_path: str, module_name: str) -> bool:
+    """Check if a module is available for import.
+
+    Args:
+        module_path: Full import path (e.g., 'transformation_portal.pipelines.lux_render_pipeline')
+        module_name: Human-readable module name for error messages
+
+    Returns:
+        True if module can be imported, False otherwise
+
+    Raises:
+        typer.Exit: If module cannot be imported
+    """
+    try:
+        # Attempt to import the module
+        parts = module_path.rsplit('.', 1)
+        if len(parts) == 2:
+            from_module, import_name = parts
+            __import__(from_module, fromlist=[import_name])
+        else:
+            __import__(module_path)
+        return True
+    except ImportError as e:
+        typer.echo(f"❌ Error loading {module_name}: {e}", err=True)
+        raise typer.Exit(code=1)
+
+
 # Main application instances
 app = typer.Typer(
     name="transformation-portal",
@@ -100,16 +127,14 @@ def render_lux(
         typer.echo(f"❌ Error: Input file not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    # Import and run pipeline
-    try:
-        from transformation_portal.pipelines import lux_render_pipeline  # noqa: F401
-        typer.echo("✅ Pipeline module loaded successfully")
-        typer.echo("⚠️  Note: Full pipeline execution requires ML dependencies")
-        typer.echo("   Install with: pip install -e '.[ml]'")
-    except ImportError as e:
-        typer.echo(f"❌ Error loading pipeline: {e}", err=True)
-        typer.echo("   Install dependencies: pip install -e '.[ml]'")
-        raise typer.Exit(code=1)
+    # Verify pipeline module is available
+    check_module_availability(
+        'transformation_portal.pipelines.lux_render_pipeline',
+        'Lux Render Pipeline'
+    )
+    typer.echo("✅ Pipeline module loaded successfully")
+    typer.echo("⚠️  Note: Full pipeline execution requires ML dependencies")
+    typer.echo("   Install with: pip install -e '.[ml]'")
 
 
 @render_app.command("depth")
@@ -132,12 +157,12 @@ def render_depth(
         typer.echo(f"❌ Error: Input file not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    try:
-        from transformation_portal.pipelines import depth_tools  # noqa: F401
-        typer.echo("✅ Depth tools module loaded successfully")
-    except ImportError as e:
-        typer.echo(f"❌ Error loading depth tools: {e}", err=True)
-        raise typer.Exit(code=1)
+    # Verify depth tools module is available
+    check_module_availability(
+        'transformation_portal.pipelines.depth_tools',
+        'Depth Tools'
+    )
+    typer.echo("✅ Depth tools module loaded successfully")
 
 
 # ============================================================================
@@ -167,12 +192,12 @@ def process_material(
         typer.echo(f"❌ Error: Input file not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    try:
-        from transformation_portal.processors.material_response import core  # noqa: F401
-        typer.echo("✅ Material Response module loaded successfully")
-    except ImportError as e:
-        typer.echo(f"❌ Error loading Material Response: {e}", err=True)
-        raise typer.Exit(code=1)
+    # Verify Material Response module is available
+    check_module_availability(
+        'transformation_portal.processors.material_response.core',
+        'Material Response'
+    )
+    typer.echo("✅ Material Response module loaded successfully")
 
 
 @process_app.command("video")
@@ -196,13 +221,13 @@ def process_video(
         typer.echo(f"❌ Error: Input file not found: {input_path}", err=True)
         raise typer.Exit(code=1)
 
-    try:
-        from transformation_portal.processors import luxury_video_master_grader  # noqa: F401
-        typer.echo("✅ Video Master Grader module loaded successfully")
-        typer.echo("⚠️  Note: FFmpeg is required for video processing")
-    except ImportError as e:
-        typer.echo(f"❌ Error loading Video Master Grader: {e}", err=True)
-        raise typer.Exit(code=1)
+    # Verify Video Master Grader module is available
+    check_module_availability(
+        'transformation_portal.processors.luxury_video_master_grader',
+        'Video Master Grader'
+    )
+    typer.echo("✅ Video Master Grader module loaded successfully")
+    typer.echo("⚠️  Note: FFmpeg is required for video processing")
 
 
 @process_app.command("tiff")
@@ -252,12 +277,12 @@ def analyze_philosophy(
         typer.echo(f"❌ Error: Path not found: {path}", err=True)
         raise typer.Exit(code=1)
 
-    try:
-        from transformation_portal.analyzers import codebase_philosophy_auditor  # noqa: F401
-        typer.echo("✅ Auditor module loaded successfully")
-    except ImportError as e:
-        typer.echo(f"❌ Error loading auditor: {e}", err=True)
-        raise typer.Exit(code=1)
+    # Verify auditor module is available
+    check_module_availability(
+        'transformation_portal.analyzers.codebase_philosophy_auditor',
+        'Codebase Philosophy Auditor'
+    )
+    typer.echo("✅ Auditor module loaded successfully")
 
 
 @analyze_app.command("decay")
@@ -278,12 +303,12 @@ def analyze_decay(
         typer.echo(f"❌ Error: Path not found: {path}", err=True)
         raise typer.Exit(code=1)
 
-    try:
-        from transformation_portal.analyzers import decision_decay_dashboard  # noqa: F401
-        typer.echo("✅ Dashboard module loaded successfully")
-    except ImportError as e:
-        typer.echo(f"❌ Error loading dashboard: {e}", err=True)
-        raise typer.Exit(code=1)
+    # Verify dashboard module is available
+    check_module_availability(
+        'transformation_portal.analyzers.decision_decay_dashboard',
+        'Decision Decay Dashboard'
+    )
+    typer.echo("✅ Dashboard module loaded successfully")
 
 
 @analyze_app.command("workflow")
@@ -302,12 +327,12 @@ def analyze_workflow(
         typer.echo(f"❌ Error: Path not found: {path}", err=True)
         raise typer.Exit(code=1)
 
-    try:
-        from transformation_portal.analyzers import parse_workflows  # noqa: F401
-        typer.echo("✅ Workflow parser module loaded successfully")
-    except ImportError as e:
-        typer.echo(f"❌ Error loading workflow parser: {e}", err=True)
-        raise typer.Exit(code=1)
+    # Verify workflow parser module is available
+    check_module_availability(
+        'transformation_portal.analyzers.parse_workflows',
+        'Workflow Parser'
+    )
+    typer.echo("✅ Workflow parser module loaded successfully")
 
 
 # ============================================================================
