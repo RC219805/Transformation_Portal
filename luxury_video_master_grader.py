@@ -536,7 +536,7 @@ def assess_frame_rate(
 def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     """
     Build FFmpeg filter graph string from configuration.
-    
+
     Returns:
         Tuple of (filter_graph, output_label)
     """
