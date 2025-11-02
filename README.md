@@ -21,6 +21,12 @@ See [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) for details.
 
 **Transformation Portal** is a comprehensive suite of AI-powered tools and pipelines designed for high-end architectural rendering, real estate photography, and video post-production. It combines cutting-edge machine learning models, professional color grading techniques, and proprietary **Material Response** technology to transform raw renders and photographs into polished marketing visuals.
 
+### 🤖 Custom AI Agent Available
+
+A specialized **Transformation Portal Specialist** GitHub Copilot agent is available to assist with development. It has deep expertise in all repository pipelines, AI/ML integration, performance optimization, and professional workflows. See [Custom Agent Guide](docs/CUSTOM_AGENT_GUIDE.md) for details.
+
+Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
+
 ## Table of Contents
 
 * [Features](#features)
