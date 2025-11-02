@@ -5,7 +5,7 @@ Test coverage for new features:
 - Option 3: Format conversion utilities  
 - Option 4: Improved 16-bit TIFF handling
 
-Run with: pytest test_format_utils_enhancements.py -v
+Run with: pytest tests/test_format_utils_enhancements.py -v
 """
 
 import pytest
