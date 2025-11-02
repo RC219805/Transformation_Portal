@@ -18,6 +18,13 @@ from typing import Dict, Any, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
+# Optional imports for 16-bit TIFF support
+try:
+    import tifffile
+    HAS_TIFFFILE = True
+except ImportError:
+    HAS_TIFFFILE = False
+
 
 # ==================== Logging Utilities ====================
 
@@ -103,12 +110,11 @@ def _save_with_meta(
                 # 16-bit RGB - requires tifffile for TIFF
                 ext = path.suffix.lower()
                 if ext in ['.tif', '.tiff']:
-                    try:
-                        import tifffile
+                    if HAS_TIFFFILE:
                         tifffile.imwrite(path, arr_uint, photometric='rgb')
                         _info(f"Saved: {path} (16-bit TIFF via tifffile)")
                         return
-                    except ImportError:
+                    else:
                         _warn("tifffile not available for 16-bit TIFF. Install: pip install tifffile")
                         _warn("Falling back to 8-bit")
                 else:
@@ -123,7 +129,7 @@ def _save_with_meta(
             else:
                 raise ValueError(f"Unsupported array shape for 16-bit image: {arr_uint.shape}")
 
-        if out_bitdepth == 32:
+        elif out_bitdepth == 32:
             # Mode 'F' only supports 2D (grayscale) float32 arrays in PIL.
             if arr.ndim == 2:
                 img = Image.fromarray(arr.astype(np.float32), mode='F')
@@ -136,8 +142,8 @@ def _save_with_meta(
             else:
                 raise ValueError(f"Unsupported array shape for 32-bit float image: {arr.shape}")
 
-        if out_bitdepth == 8 or out_bitdepth not in [16, 32]:
-            # 8-bit (default fallback)
+        else:
+            # 8-bit (default)
             arr_uint = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
             img = Image.fromarray(arr_uint, mode='RGB')
 
