@@ -112,8 +112,27 @@ def _save_with_meta(
                 if ext in ['.tif', '.tiff']:
                     if HAS_TIFFFILE:
                         try:
-                            tifffile.imwrite(path, arr_uint, photometric='rgb')
-                            _info(f"Saved: {path} (16-bit TIFF via tifffile)")
+                            # Preserve metadata if present
+                            tifffile_kwargs = {'photometric': 'rgb'}
+                            # tifffile supports 'description' (string) and 'metadata' (dict)
+                            if meta:
+                                # If 'description' is present, use it; else, serialize all meta as description
+                                description = meta.get('description')
+                                if description is None and meta:
+                                    # Fallback: serialize meta as a string for description
+                                    import json
+                                    try:
+                                        description = json.dumps(meta)
+                                    except Exception:
+                                        description = str(meta)
+                                if description is not None:
+                                    tifffile_kwargs['description'] = description
+                                # If 'metadata' is present and a dict, pass it
+                                metadata_dict = meta.get('metadata')
+                                if isinstance(metadata_dict, dict):
+                                    tifffile_kwargs['metadata'] = metadata_dict
+                            tifffile.imwrite(path, arr_uint, **tifffile_kwargs)
+                            _info(f"Saved: {path} (16-bit TIFF via tifffile, metadata preserved if possible)")
                             return
                         except Exception as e:
                             _warn(f"Failed to write 16-bit TIFF: {e}")
