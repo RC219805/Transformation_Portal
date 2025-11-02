@@ -149,8 +149,18 @@ def _save_with_meta(
             elif arr_uint.ndim == 2:
                 # Grayscale 16-bit - PNG and TIFF supported
                 img = Image.fromarray(arr_uint, mode='I;16')
-            else:
-                raise ValueError(f"Unsupported array shape for 16-bit image: {arr_uint.shape}")
+                # Try saving the 16-bit grayscale image to ensure PIL supports it
+                try:
+                    # Save to a temporary in-memory file to test support
+                    from io import BytesIO
+                    tmp = BytesIO()
+                    img.save(tmp, format=path.suffix.lstrip('.').upper() or 'PNG')
+                except Exception as e:
+                    _warn(f"Failed to save 16-bit grayscale image: {e}")
+                    _warn("Falling back to 8-bit grayscale")
+                    arr_uint_8 = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
+                    img = Image.fromarray(arr_uint_8, mode='L')
+                    out_bitdepth = 8
 
         elif out_bitdepth == 32:
             # Mode 'F' only supports 2D (grayscale) float32 arrays in PIL.
