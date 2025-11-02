@@ -144,7 +144,6 @@ def _save_with_meta(
                     _warn(f"Format {ext} doesn't support 16-bit RGB, falling back to 8-bit")
 
                 # Fall back to 8-bit
-                out_bitdepth = 8
 
             elif arr_uint.ndim == 2:
                 # Grayscale 16-bit - PNG and TIFF supported
