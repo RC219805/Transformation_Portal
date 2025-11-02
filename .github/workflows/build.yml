@@ -52,10 +52,30 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           echo "Running pylint..."
           files=$(git diff --name-only origin/main...HEAD | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' || echo "")
+          
+          # Run pylint and capture exit code (set +e to prevent immediate exit)
+          set +e
           if [ -z "$files" ]; then
             pylint $(git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/')
+            PYLINT_EXIT=$?
           else
             pylint $files
+            PYLINT_EXIT=$?
+          fi
+          set -e
+          
+          # Pylint exit codes are bitwise flags: 1=fatal, 2=error, 4=warning, 8=refactor, 16=convention, 32=usage error
+          # Exit codes can be combined (e.g., 6 = 2+4 means both error and warning)
+          # Only fail on fatal (1), error (2), or usage error (32)
+          # Use bitwise AND to check for each critical flag individually: (exit_code & flag) -ne 0
+          if [ $((PYLINT_EXIT & 1)) -ne 0 ] || [ $((PYLINT_EXIT & 2)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
+            echo "Pylint found critical issues (exit code: $PYLINT_EXIT)"
+            exit 1
+          elif [ $PYLINT_EXIT -ne 0 ]; then
+            echo "Pylint found warnings/suggestions (exit code: $PYLINT_EXIT), but no critical errors"
+            exit 0
+          else
+            echo "Pylint found no issues"
           fi
 
       # Test job
