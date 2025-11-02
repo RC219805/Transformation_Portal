@@ -292,9 +292,13 @@ def suggest_output_format(
 ) -> str:
     """Suggest an appropriate output format based on input format.
     
+    Note: This function is designed for image formats only. Video formats
+    should use their native containers (MP4, MOV, etc.) for output.
+    
     Args:
-        input_path: Input file path
-        preserve_quality: If True, suggest lossless or high-quality formats
+        input_path: Input file path (image formats only)
+        preserve_quality: If True, suggest lossless or high-quality formats.
+                         If False, suggest web-optimized formats (may be lossy).
         
     Returns:
         Recommended output extension (e.g., '.tiff', '.png', '.jpg')
@@ -305,25 +309,31 @@ def suggest_output_format(
         >>> suggest_output_format('render.tiff', preserve_quality=True)
         '.tiff'
         >>> suggest_output_format('web_image.png', preserve_quality=False)
+        '.png'
+        >>> suggest_output_format('photo.jpg', preserve_quality=False)
         '.jpg'
     """
     path_obj = Path(input_path) if isinstance(input_path, str) else input_path
     ext = normalize_extension(path_obj)
     
+    # Video formats should keep their native container
+    if ext in SUPPORTED_VIDEO_EXTENSIONS:
+        return ext
+    
     # TIFF stays TIFF for quality preservation
     if ext in TIFF_EXTENSIONS and preserve_quality:
         return '.tiff'
     
-    # PNG is good lossless format or has special properties (transparency, 16-bit)
+    # PNG is good lossless format for quality preservation
     if preserve_quality:
         return '.png'
     
-    # For web/fast delivery, prefer PNG for formats with transparency or special properties
+    # For web/fast delivery with PNG input, preserve PNG to avoid losing transparency
     if ext == '.png':
-        # PNG likely has transparency or is already optimized
+        # PNG likely has transparency or special properties that shouldn't be lost
         return '.png'
     
-    # For other formats without special properties, use JPEG for web
+    # For other image formats without special properties, use JPEG for web delivery
     return '.jpg'
 
 
