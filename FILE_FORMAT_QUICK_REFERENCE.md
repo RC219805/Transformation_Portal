@@ -162,6 +162,7 @@ from format_utils import (
     is_supported_image_format,
     get_format_info,
     validate_format,
+    UnsupportedFormatError,
 )
 
 # Check if supported
