@@ -268,7 +268,17 @@ def apply_lut_with_depth(
         if not data_lines:
             raise ValueError("No valid LUT data found in file (expected numeric values)")
         
-        size = int(len(data_lines) ** (1/3) + 0.5)
+        # Parse LUT_3D_SIZE from header if present, else fallback to cube root
+        size = None
+        for l in lines:
+            if l.upper().startswith("LUT_3D_SIZE"):
+                try:
+                    size = int(l.split()[1])
+                except (IndexError, ValueError):
+                    raise ValueError(f"Malformed LUT_3D_SIZE directive: '{l}'")
+                break
+        if size is None:
+            size = round(len(data_lines) ** (1/3))
         expected_lines = size ** 3
         
         if len(data_lines) != expected_lines:
