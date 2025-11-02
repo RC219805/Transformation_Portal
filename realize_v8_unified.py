@@ -144,6 +144,7 @@ def _save_with_meta(
                     _warn(f"Format {ext} doesn't support 16-bit RGB, falling back to 8-bit")
 
                 # Fall back to 8-bit
+                out_bitdepth = 8
 
             elif arr_uint.ndim == 2:
                 # Grayscale 16-bit - PNG and TIFF supported
@@ -382,13 +383,14 @@ def main():
         subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
 
         # Basic enhance command
-        # Note: Basic enhance outputs only 8/16-bit RGB images (input images of any type are supported; conversion to RGB is automatic)
-        # VFX commands support 32-bit for depth maps (grayscale)
+        # Note: Basic enhance outputs 8/16-bit RGB images (input images of any type are supported; conversion to RGB is automatic)
+        # 32-bit output is only supported for grayscale images (used by VFX commands for depth maps)
         p_enhance = subparsers.add_parser('enhance', help='Basic enhancement')
         p_enhance.add_argument('--input', type=Path, required=True)
         p_enhance.add_argument('--output', type=Path, required=True)
         p_enhance.add_argument('--preset', choices=list(PRESETS.keys()), default='signature_estate')
-        p_enhance.add_argument('--out-bitdepth', type=int, choices=[8, 16], default=8)
+        p_enhance.add_argument('--out-bitdepth', type=int, choices=[8, 16, 32], default=8,
+                               help='Output bit depth: 8 or 16 for RGB images, 32 for grayscale only')
         p_enhance.set_defaults(func=_handle_basic_enhance)
 
         # Add VFX commands
@@ -403,7 +405,8 @@ def main():
         parser.add_argument('--input', type=Path, required=True)
         parser.add_argument('--output', type=Path, required=True)
         parser.add_argument('--preset', choices=list(PRESETS.keys()), default='signature_estate')
-        parser.add_argument('--out-bitdepth', type=int, choices=[8, 16], default=8)
+        parser.add_argument('--out-bitdepth', type=int, choices=[8, 16, 32], default=8,
+                            help='Output bit depth: 8 or 16 for RGB images, 32 for grayscale only')
 
         args = parser.parse_args()
 
