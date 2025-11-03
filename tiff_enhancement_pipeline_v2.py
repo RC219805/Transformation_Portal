@@ -168,11 +168,32 @@ class AdaptiveSegmentationStage:
     Chooses between semantic and material-based segmentation.
     """
     
-    def __init__(self, config, mode: str = "semantic"):
+    def __init__(self, config: 'EnhancedPipelineConfig', mode: str = "semantic"):
+        """
+        Initialize adaptive segmentation stage.
+        
+        Args:
+            config: EnhancedPipelineConfig object with material_clusters and 
+                   material_textures attributes required for material-based modes.
+            mode: Segmentation mode - 'semantic', 'material', 'hybrid', or 'auto'.
+        
+        Raises:
+            AttributeError: If config lacks required attributes for material modes.
+        """
         self.config = config
         self.mode = mode  # semantic, material, hybrid, auto
         
         if mode in ["material", "hybrid", "auto"]:
+            # Validate config has required attributes
+            if not hasattr(config, 'material_clusters'):
+                raise AttributeError(
+                    f"Config must have 'material_clusters' attribute for mode '{mode}'"
+                )
+            if not hasattr(config, 'material_textures'):
+                raise AttributeError(
+                    f"Config must have 'material_textures' attribute for mode '{mode}'"
+                )
+            
             self.material_clusterer = MaterialClusterer(
                 MaterialClusterConfig(
                     n_clusters=config.material_clusters,
