@@ -243,31 +243,25 @@ class Stage2Depth(StageExecutor):
         if not script.exists():
             log.error(f"depth_predict_coreml.py not found at {script}")
             return False, 0
-        
-        # Validate model path and format
-        # Note: .mlpackage models are directories, not files
-        model_path = Path(self.config.depth_model_path)
-        if not model_path.exists():
-            log.error(f"Depth model not found: {model_path}")
-            return False, 0
-        
-        if not model_path.is_dir():
-            log.warning(f"Expected .mlpackage directory, but path is not a directory: {model_path}")
-        elif not model_path.name.endswith(".mlpackage"):
-            log.warning(f"Expected .mlpackage directory, got: {model_path.name}")
-            log.warning("Depth prediction may fail if model format is incorrect")
-        
+
+        # Build command-line arguments
+        cmd = [
+            sys.executable,
+            str(script),
+            "--in-dir", str(self.config.stage1_enhance),
+            "--out-dir", str(self.config.stage2_depth),
+        ]
+        # Optionally add model path if available in config
+        if hasattr(self.config, "depth_model_path") and self.config.depth_model_path:
+            cmd += ["--model-path", str(self.config.depth_model_path)]
+
         log.info(f"Running depth prediction on {self.config.stage1_enhance}")
-        log.info(f"Using model: {model_path.name}")
-        
+
         if self.config.dry_run:
-            log.info("[DRY RUN] Would execute depth_predict_coreml with:")
-            log.info(f"  --model-path {model_path}")
-            log.info(f"  --in-dir {self.config.stage1_enhance}")
-            log.info(f"  --out-dir {self.config.stage2_depth}")
+            log.info("[DRY RUN] Would execute: %s", " ".join(cmd))
             return True, 0
-        
-        # Execute with proper command-line arguments
+
+        # Execute
         try:
             cmd = [
                 sys.executable,
@@ -287,13 +281,12 @@ class Stage2Depth(StageExecutor):
             )
             if result.stdout:
                 log.debug(result.stdout)
-            
+
             # Count depth maps
             depth_maps = list(self.config.stage2_depth.glob("*_depth16.png"))
-            
+
             self.log_complete(time.time() - t0, len(depth_maps))
             return True, len(depth_maps)
-            
         except subprocess.CalledProcessError as e:
             log.error(f"depth_predict_coreml failed: {e}")
             if e.stderr:

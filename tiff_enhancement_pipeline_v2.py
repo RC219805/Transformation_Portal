@@ -239,7 +239,7 @@ class AdaptiveSegmentationStage:
         mask_count = 0
         for img_path in enhanced_images:
             try:
-                labels_path, stats_path = self.material_clusterer.cluster(
+                self.material_clusterer.cluster(
                     img_path, output_dir
                 )
                 # Count generated masks
