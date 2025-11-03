@@ -23,9 +23,8 @@ Usage:
 from __future__ import annotations
 
 import io
-import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 import warnings
 
 try:
@@ -166,7 +165,7 @@ def validate_image_integrity(path: Union[str, Path]) -> Tuple[bool, Optional[str
         return False, f"Unexpected error: {str(e)}"
 
 
-def get_image_metadata(path: Union[str, Path]) -> Dict[str, any]:
+def get_image_metadata(path: Union[str, Path]) -> Dict[str, Any]:
     """Extract comprehensive metadata from image file.
     
     Args:
@@ -234,8 +233,8 @@ def get_image_metadata(path: Union[str, Path]) -> Dict[str, any]:
                 exif = img.getexif()
                 if exif:
                     metadata['exif'] = {k: str(v) for k, v in exif.items()}
-            except Exception:
-                pass
+            except Exception as exif_exc:
+                warnings.warn(f"Failed to extract EXIF data from {path_obj}: {exif_exc}", RuntimeWarning)
                 
     except Exception as e:
         metadata['error'] = str(e)
@@ -440,8 +439,9 @@ def smart_convert(
     
     # Handle 16-bit preservation
     if preserve_bit_depth and metadata.get('bit_depth') == 16:
-        if output_ext in {'.tif', '.tiff', '.png'}:
-            # These formats can handle 16-bit
+        if output_ext in {'.tif', '.tiff'}:
+            # TIFF format can handle 16-bit with full metadata preservation
+            # Note: PNG can also handle 16-bit but requires different processing
             return convert_tiff_preserve_depth(input_path, output_path)
     
     return convert_image_format(input_path, output_path, quality=quality)
@@ -553,11 +553,18 @@ def load_tiff_preserve_depth(
         except Exception as e:
             warnings.warn(f"tifffile failed, falling back to PIL: {str(e)}")
     
-    # Fallback to PIL (8-bit only)
+    # Fallback to PIL
     try:
         with Image.open(path) as img:
             array = np.array(img)
-            return array, 8
+            # Determine bit depth from img.mode
+            if img.mode == "I;16":
+                bit_depth = 16
+            elif img.mode in ("I", "F"):
+                bit_depth = 32
+            else:
+                bit_depth = 8
+            return array, bit_depth
     except Exception:
         return None, None
 
