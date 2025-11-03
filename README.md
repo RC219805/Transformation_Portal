@@ -338,7 +338,7 @@ Material-aware palette assignment for aerial photography using clustering and te
 python board_material_aerial_enhancer.py aerial_image.jpg output_enhanced.jpg
 ```
 
-📖 [Palette Assignment Guide](08_Documentation/Palette_Assignment_Guide.md)
+📖 [Palette Assignment Guide](docs/Palette_Assignment_Guide.md)
 
 ---
 
@@ -363,9 +363,9 @@ Revolutionary physics-based surface enhancement LUTs that analyze material inter
 3. Stack multiple LUTs for complex material interactions
 
 **Locations:**
-- `01_Film_Emulation/` - Film stock emulation LUTs
-- `02_Location_Aesthetic/` - Location-specific color palettes
-- `03_Material_Response/` - Material-aware enhancement LUTs
+- `assets/luts/film_emulation/` - Film stock emulation LUTs
+- `assets/luts/location_aesthetic/` - Location-specific color palettes
+- `assets/luts/material_response/` - Material-aware enhancement LUTs
 
 ---
 
@@ -697,10 +697,10 @@ Transformation_Portal/
 ├── tools/                        # Editorial and pipeline tools
 ├── tests/                        # Comprehensive test suite
 ├── config/                       # YAML configurations
-├── 01_Film_Emulation/           # Film emulation LUTs
-├── 02_Location_Aesthetic/       # Location LUTs
-├── 03_Material_Response/        # Material Response LUTs
-├── 08_Documentation/            # Guides and documentation
+├── assets/luts/film_emulation/           # Film emulation LUTs
+├── assets/luts/location_aesthetic/       # Location LUTs
+├── assets/luts/material_response/        # Material Response LUTs
+├── docs/            # Guides and documentation
 ├── 09_Client_Deliverables/      # Client-specific projects
 ├── examples/                     # Usage examples
 └── textures/                     # Material textures
@@ -783,7 +783,7 @@ If you use Depth Anything V2 in research, please cite:
 
 **Resources:**
 - GitHub Issues: [Report issues](https://github.com/RC219805/Transformation_Portal/issues)
-- Documentation: See inline code documentation and `08_Documentation/`
+- Documentation: See inline code documentation and `docs/`
 - Examples: Check `examples/` directory
 
 ---

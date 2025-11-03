@@ -8,13 +8,14 @@ Usage:
     python examples/batch_process.py input_dir/ output_dir/ [--preset interior|exterior]
 """
 
-from depth_pipeline import ArchitecturalDepthPipeline
 import sys
 import argparse
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add src directory to path to allow importing from transformation_portal
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+
+from transformation_portal.depth import ArchitecturalDepthPipeline
 
 
 def main():

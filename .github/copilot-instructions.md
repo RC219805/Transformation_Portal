@@ -23,10 +23,10 @@
 ├── tests/                      # pytest test suite (70+ tests)
 ├── config/                     # YAML configuration presets
 ├── docs/                       # Architecture and performance documentation
-├── 01_Film_Emulation/          # Kodak and FilmConvert LUT emulations
-├── 02_Location_Aesthetic/      # Location-specific color profiles
-├── 03_Material_Response/       # Physics-based surface enhancement LUTs
-├── 08_Documentation/           # Version history and technical guides
+├── assets/luts/film_emulation/          # Kodak and FilmConvert LUT emulations
+├── assets/luts/location_aesthetic/      # Location-specific color profiles
+├── assets/luts/material_response/       # Physics-based surface enhancement LUTs
+├── docs/           # Version history and technical guides
 ├── 09_Client_Deliverables/     # Brand assets and production deliverables
 ├── lux_render_pipeline.py      # AI-powered render refinement
 ├── luxury_tiff_batch_processor.py  # 16-bit TIFF batch processing CLI
@@ -132,9 +132,9 @@ make lint
 
 ### LUT Processing
 - LUTs are stored in `.cube` format in categorized directories:
-  - `01_Film_Emulation/` - Kodak and FilmConvert emulations
-  - `02_Location_Aesthetic/` - Location-specific color profiles
-  - `03_Material_Response/` - Physics-based surface enhancement
+  - `assets/luts/film_emulation/` - Kodak and FilmConvert emulations
+  - `assets/luts/location_aesthetic/` - Location-specific color profiles
+  - `assets/luts/material_response/` - Physics-based surface enhancement
 - LUT strength is typically applied at 60-80% opacity
 - LUTs can be stacked for complex material interactions
 - Applied via FFmpeg for video or custom Python implementation for images
@@ -246,7 +246,7 @@ make lint
 ## Documentation
 
 - Keep README.md synchronized with tool capabilities and feature updates
-- Update `08_Documentation/Version_History/changelog.md` for significant changes
+- Update `docs/Version_History/changelog.md` for significant changes
 - Architecture documentation in `docs/ARCHITECTURE.md`
 - Refactoring notes in `docs/REFACTORING_SUMMARY.md` and `docs/REFACTORING_2025.md`
 - Performance optimization guidance in `docs/PERFORMANCE_OPTIMIZATION.md`
@@ -339,8 +339,8 @@ make lint
 - **Architecture**: `docs/ARCHITECTURE.md` - System design and component relationships
 - **Performance**: `docs/PERFORMANCE_OPTIMIZATION.md` - Optimization strategies and benchmarks
 - **Refactoring**: `docs/REFACTORING_SUMMARY.md` - Recent changes and improvements (Oct 2025)
-- **LUT Documentation**: `03_Material_Response/_Material_Response_Technical_Guide.md` (if exists)
-- **Version History**: `08_Documentation/Version_History/changelog.md` - Change tracking
+- **LUT Documentation**: `assets/luts/material_response/_Material_Response_Technical_Guide.md` (if exists)
+- **Version History**: `docs/Version_History/changelog.md` - Change tracking
 - **Test Status**: `tests/TEST_STATUS.md` - Current test coverage and known issues
 - **Brand Assets**: `09_Client_Deliverables/Lantern_Logo_Implementation_Kit/` - Logos and color tokens
 - **Workflow Fixes**: `WORKFLOW_BUGS_FIXED.md` - Documented bug fixes and solutions
@@ -386,7 +386,7 @@ result = mr.enhance(
 PRESETS = {
     "my_new_preset": PresetConfig(
         name="My New Preset",
-        lut="01_Film_Emulation/Kodak_2393.cube",
+        lut="assets/luts/film_emulation/Kodak_2393.cube",
         notes="Custom look for specific project",
         # Adjustments
         exposure=0.0,
