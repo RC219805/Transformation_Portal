@@ -9,8 +9,6 @@ Run with: pytest tests/test_format_utils_enhancements.py -v
 """
 
 import pytest
-import tempfile
-from pathlib import Path
 import numpy as np
 from PIL import Image
 

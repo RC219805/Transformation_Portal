@@ -22,10 +22,8 @@ Usage:
 
 from __future__ import annotations
 
-import io
-import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING, Union
 import warnings
 
 try:
@@ -42,11 +40,16 @@ except ImportError:
     HAS_TIFFFILE = False
     warnings.warn("tifffile not available. 16-bit TIFF support limited. Install with: pip install tifffile")
 
+if TYPE_CHECKING:
+    import numpy as np
+
 try:
     import numpy as np
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
+    if not TYPE_CHECKING:
+        np = None  # type: ignore
 
 
 # ==============================================================================
@@ -166,7 +169,7 @@ def validate_image_integrity(path: Union[str, Path]) -> Tuple[bool, Optional[str
         return False, f"Unexpected error: {str(e)}"
 
 
-def get_image_metadata(path: Union[str, Path]) -> Dict[str, any]:
+def get_image_metadata(path: Union[str, Path]) -> Dict[str, Any]:
     """Extract comprehensive metadata from image file.
     
     Args:
@@ -234,8 +237,9 @@ def get_image_metadata(path: Union[str, Path]) -> Dict[str, any]:
                 exif = img.getexif()
                 if exif:
                     metadata['exif'] = {k: str(v) for k, v in exif.items()}
-            except Exception:
-                pass
+            except Exception as exif_exc:
+                warnings.warn(f"Failed to extract EXIF data from {path_obj}: {exif_exc}")
+                metadata['exif_error'] = str(exif_exc)
                 
     except Exception as e:
         metadata['error'] = str(e)
@@ -441,7 +445,7 @@ def smart_convert(
     # Handle 16-bit preservation
     if preserve_bit_depth and metadata.get('bit_depth') == 16:
         if output_ext in {'.tif', '.tiff', '.png'}:
-            # These formats can handle 16-bit
+            # Use specialized converter for formats that support 16-bit (TIFF/PNG)
             return convert_tiff_preserve_depth(input_path, output_path)
     
     return convert_image_format(input_path, output_path, quality=quality)
@@ -461,7 +465,7 @@ def check_tifffile_available() -> bool:
 
 
 def save_tiff_16bit(
-    image_array: 'np.ndarray',
+    image_array: np.ndarray,
     output_path: Union[str, Path],
     compression: str = 'lzw',
     metadata: Optional[Dict] = None
@@ -518,7 +522,7 @@ def save_tiff_16bit(
 
 def load_tiff_preserve_depth(
     path: Union[str, Path]
-) -> Tuple[Optional['np.ndarray'], Optional[int]]:
+) -> Tuple[Optional[np.ndarray], Optional[int]]:
     """Load TIFF preserving original bit depth.
     
     Args:
@@ -553,11 +557,18 @@ def load_tiff_preserve_depth(
         except Exception as e:
             warnings.warn(f"tifffile failed, falling back to PIL: {str(e)}")
     
-    # Fallback to PIL (8-bit only)
+    # Fallback to PIL
     try:
         with Image.open(path) as img:
             array = np.array(img)
-            return array, 8
+            # Determine bit depth from img.mode
+            if img.mode == "I;16":
+                bit_depth = 16
+            elif img.mode in ("I", "F"):
+                bit_depth = 32
+            else:
+                bit_depth = 8
+            return array, bit_depth
     except Exception:
         return None, None
 
