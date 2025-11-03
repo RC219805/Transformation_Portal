@@ -26,9 +26,9 @@ Exit Codes:
     1 - Partial or complete failure (one or more files failed)
     2 - Fatal error (unable to start or complete batch processing)
 
-Note: This tool uses strict error handling. Any file processing error results in
-exit code 1, regardless of how many files were successfully processed. All errors
-are logged with detailed context for troubleshooting.
+Note: This tool uses strict error handling. Any file processing error (e.g., a single file fails) results in
+exit code 1, regardless of how many files were successfully processed. Fatal errors that prevent batch processing
+from starting or completing result in exit code 2. All errors are logged with detailed context for troubleshooting.
 
 Designed to be robust for large photography / architectural pipelines.
 """
