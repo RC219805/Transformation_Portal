@@ -28,7 +28,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Protocol, Tuple
 
 import numpy as np
 from PIL import Image
@@ -169,38 +169,38 @@ class MaterialClusterer:
             Image.fromarray(mask, mode='L').save(mask_path)
 
 
+class MaterialConfigProtocol(Protocol):
+    """
+    Protocol defining required attributes for material-based segmentation modes.
+    
+    This ensures type safety at static analysis time rather than relying on
+    runtime hasattr() checks.
+    """
+    material_clusters: int
+    material_textures: Optional[Path]
+
+
 class AdaptiveSegmentationStage:
     """
     Stage 4 replacement with adaptive segmentation strategy.
     Chooses between semantic and material-based segmentation.
     """
     
-    def __init__(self, config: 'EnhancedPipelineConfig', mode: str = "semantic"):
+    def __init__(self, config: MaterialConfigProtocol, mode: str = "semantic"):
         """
         Initialize adaptive segmentation stage.
         
         Args:
-            config: EnhancedPipelineConfig object with material_clusters and 
-                   material_textures attributes required for material-based modes.
+            config: Configuration object implementing MaterialConfigProtocol with
+                   material_clusters and material_textures attributes. Static type
+                   checking ensures these attributes are present at compile time.
             mode: Segmentation mode - 'semantic', 'material', 'hybrid', or 'auto'.
-        
-        Raises:
-            AttributeError: If config lacks required attributes for material modes.
         """
         self.config = config
         self.mode = mode  # semantic, material, hybrid, auto
         
         if mode in ["material", "hybrid", "auto"]:
-            # Validate config has required attributes
-            if not hasattr(config, 'material_clusters'):
-                raise AttributeError(
-                    f"Config must have 'material_clusters' attribute for mode '{mode}'"
-                )
-            if not hasattr(config, 'material_textures'):
-                raise AttributeError(
-                    f"Config must have 'material_textures' attribute for mode '{mode}'"
-                )
-            
+            # Type system ensures config has required attributes via Protocol
             self.material_clusterer = MaterialClusterer(
                 MaterialClusterConfig(
                     n_clusters=config.material_clusters,
