@@ -430,7 +430,17 @@ def load_mask(mask_path: Optional[str], kind: str, target_size: Tuple[int, int],
 
 # ----- effects -----
 
-def apply_depth_haze(img: np.ndarray, depth: np.ndarray, haze_color: Tuple[float, float, float] = DEFAULT_HAZE_COLOR, strength: float = 0.16, near_pct: float = 12.0, far_pct: float = 88.0, mids_gain: float = 1.02, sky_mask: Optional[np.ndarray] = None, building_mask: Optional[np.ndarray] = None) -> np.ndarray:
+def apply_depth_haze(
+    img: np.ndarray,
+    depth: np.ndarray,
+    haze_color: Tuple[float, float, float] = DEFAULT_HAZE_COLOR,
+    strength: float = 0.16,
+    near_pct: float = 12.0,
+    far_pct: float = 88.0,
+    mids_gain: float = 1.02,
+    sky_mask: Optional[np.ndarray] = None,
+    building_mask: Optional[np.ndarray] = None,
+) -> np.ndarray:
     """
     Depth-weighted atmospheric haze with mask modulation.
     Masks are 0..1 floats HxW.
