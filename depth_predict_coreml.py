@@ -41,31 +41,7 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 # --------------------------------------------------------------------------
 # Parse command-line arguments
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Run DepthAnything V2 CoreML on images in a folder"
-    )
-    parser.add_argument(
-        "--model-path",
-        type=str,
-        default="./DepthAnythingV2SmallF16.mlpackage",
-        help="Path to the CoreML model (.mlpackage)"
-    )
-    parser.add_argument(
-        "--input-dir",
-        type=str,
-        default="./images",
-        help="Input directory containing images"
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="./outputs/depth",
-        help="Output directory for depth maps"
-    )
-    return parser.parse_args()
-
-
+# (Removed duplicate parse_args() with hardcoded absolute paths for security and portability)
 # --------------------------------------------------------------------------
 # Main execution function
 def main():
