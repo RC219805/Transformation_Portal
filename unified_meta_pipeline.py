@@ -312,23 +312,12 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
         
         # Stage 1: Grading Pipeline (if preset specified)
         if self.config.grading_preset or self.config.grading_lut:
-            log.info("\n[STAGE 1/2] Grading Pipeline")
-            log.info("-" * 70)
-            
-            # Limitation: Frame-based grading not yet implemented
-            # For video grading, use luxury_video_master_grader.py on the source video
-            # before extracting frames, or use FullStackWorkflow for post-processing grading.
-            # Implementation would require either:
-            #   1. FFmpeg-based per-frame LUT application with metadata preservation, or
-            #   2. Python-based LUT interpolation matching luxury_video_master_grader.py quality
-            
-            log.warning("Grading pipeline for frame-based workflows is not yet implemented.")
-            log.warning("For video grading: Apply LUTs before frame extraction using luxury_video_master_grader.py")
-            log.info("Proceeding with enhancement pipeline only...")
-            
-            source_dir = self.config.input_dir
-        else:
-            source_dir = self.config.input_dir
+            raise ValueError(
+                "Grading pipeline for frame-based workflows is not implemented in VideoEnhanceWorkflow. "
+                "Please use luxury_video_master_grader.py before frame extraction, or use FullStackWorkflow for post-processing grading."
+            )
+
+        source_dir = self.config.input_dir
         
         # Stage 2: Enhancement Pipeline (on frames)
         log.info("\n[STAGE 2/2] Enhancement Pipeline (Frame Processing)")
