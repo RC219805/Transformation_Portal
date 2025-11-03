@@ -72,6 +72,7 @@ class PipelineConfig:
     preset: str = "dramatic"
     tone_curve: str = "agx"
     ocio_config: Optional[str] = None
+    depth_model_path: Optional[str] = None  # Path to CoreML depth model (.mlpackage directory)
     depth_effects: List[str] = None  # ["haze", "clarity", "dof"]
     workers: int = 4
     device: str = "cpu"  # cpu/cuda/mps
@@ -230,6 +231,11 @@ class Stage2Depth(StageExecutor):
             log.info("Skipping Stage 2 (depth_predict_coreml)")
             return True, 0
         
+        # Check if depth model path is configured
+        if not self.config.depth_model_path:
+            log.warning("No depth model path configured, skipping Stage 2. Use --depth-model-path to enable depth prediction")
+            return True, 0
+        
         t0 = time.time()
         
         # Find depth_predict_coreml.py
@@ -257,6 +263,16 @@ class Stage2Depth(StageExecutor):
 
         # Execute
         try:
+            cmd = [
+                sys.executable,
+                str(script),
+                "--model-path", str(model_path),
+                "--in-dir", str(self.config.stage1_enhance),
+                "--out-dir", str(self.config.stage2_depth)
+            ]
+            
+            log.debug(f"Executing depth_predict_coreml.py with model: {model_path.name}")
+            
             result = subprocess.run(
                 cmd,
                 check=True,
@@ -599,7 +615,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ocio-config", type=str, default=None,
                     help="Path to OpenColorIO config for AgX")
     
-    # Depth effects
+    # Depth processing
+    ap.add_argument("--depth-model-path", type=str, default=None,
+                    help="Path to CoreML depth model directory (.mlpackage) for Stage 2. "
+                         "If not provided, Stage 2 will be skipped.")
     ap.add_argument("--depth-effects", nargs="+",
                     choices=["haze", "clarity", "dof"],
                     default=["haze", "clarity"],
@@ -646,6 +665,7 @@ def main(argv=None):
             preset=args.preset,
             tone_curve=args.tone_curve,
             ocio_config=args.ocio_config,
+            depth_model_path=args.depth_model_path,
             depth_effects=args.depth_effects,
             workers=args.workers,
             device=args.device,
