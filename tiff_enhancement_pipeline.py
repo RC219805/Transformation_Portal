@@ -430,9 +430,9 @@ class Stage5DepthEffects(StageExecutor):
         
         total_files = 0
         
+        t0 = time.time()
         for effect in self.config.depth_effects:
             log.info(f"Applying depth effect: {effect}")
-            t0 = time.time()
             
             # Build command
             cmd = [
