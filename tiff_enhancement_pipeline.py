@@ -36,7 +36,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
