@@ -6,7 +6,7 @@ You asked for improvements to **Options 2, 3, and 4** for your image format hand
 
 ### 📦 Three Complete Files
 
-1. **`format_utils_enhancements.py`** (520 lines)
+1. **`format_utils_enhancements.py`** (719 lines)
    - All new functionality for enhanced detection, conversion, and TIFF handling
    - Production-ready code with comprehensive docstrings
    - Graceful fallbacks when optional dependencies unavailable
@@ -321,7 +321,7 @@ git push origin copilot/enhance-image-file-types
 ## 📊 Stats
 
 ### Code Added
-- **520 lines** of production code
+- **719 lines** of production code
 - **400+ lines** of test code
 - **500+ lines** of documentation
 
