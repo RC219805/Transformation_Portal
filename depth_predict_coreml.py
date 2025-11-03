@@ -13,7 +13,33 @@ import argparse
 import numpy as np
 from PIL import Image
 import coremltools as ct
+import argparse
 
+# --------------------------------------------------------------------------
+# CONFIG (now via argparse)
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run DepthAnything V2 Small F16 (Core ML) on all images in a folder."
+    )
+    parser.add_argument(
+        "--model-path", type=str, required=True,
+        help="Path to the .mlpackage CoreML model (e.g., DepthAnythingV2SmallF16.mlpackage)"
+    )
+    parser.add_argument(
+        "--in-dir", type=str, required=True,
+        help="Input directory containing images"
+    )
+    parser.add_argument(
+        "--out-dir", type=str, required=True,
+        help="Output directory for depth results"
+    )
+    return parser.parse_args()
+
+args = parse_args()
+MODEL_PATH = args.model_path
+IN_DIR     = args.in_dir
+OUT_DIR    = args.out_dir
+os.makedirs(OUT_DIR, exist_ok=True)
 
 # --------------------------------------------------------------------------
 # Parse command-line arguments

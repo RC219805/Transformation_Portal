@@ -36,6 +36,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -72,6 +73,7 @@ class PipelineConfig:
     preset: str = "dramatic"
     tone_curve: str = "agx"
     ocio_config: Optional[str] = None
+    depth_model_path: Optional[str] = None  # Path to CoreML depth model (.mlpackage directory)
     depth_effects: List[str] = None  # ["haze", "clarity", "dof"]
     workers: int = 4
     device: str = "cpu"  # cpu/cuda/mps
@@ -230,6 +232,11 @@ class Stage2Depth(StageExecutor):
             log.info("Skipping Stage 2 (depth_predict_coreml)")
             return True, 0
         
+        # Check if depth model path is configured
+        if not self.config.depth_model_path:
+            log.warning("No depth model path configured, skipping Stage 2. Use --depth-model-path to enable depth prediction")
+            return True, 0
+        
         t0 = time.time()
         
         # Find depth_predict_coreml.py
@@ -237,27 +244,36 @@ class Stage2Depth(StageExecutor):
         if not script.exists():
             log.error(f"depth_predict_coreml.py not found at {script}")
             return False, 0
-        
-        log.info(f"Running depth prediction on {self.config.stage1_enhance}")
-        
-        # Build command with proper arguments
+
+        # Build command-line arguments
         cmd = [
             sys.executable,
             str(script),
-            "--input-dir", str(self.config.stage1_enhance),
-            "--output-dir", str(self.config.stage2_depth)
+            "--in-dir", str(self.config.stage1_enhance),
+            "--out-dir", str(self.config.stage2_depth),
         ]
-        
-        # Add model path if it's configured (optional)
-        if hasattr(self.config, 'depth_model_path') and self.config.depth_model_path:
-            cmd.extend(["--model-path", str(self.config.depth_model_path)])
-        
+        # Optionally add model path if available in config
+        if hasattr(self.config, "depth_model_path") and self.config.depth_model_path:
+            cmd += ["--model-path", str(self.config.depth_model_path)]
+
+        log.info(f"Running depth prediction on {self.config.stage1_enhance}")
+
         if self.config.dry_run:
-            log.info(f"[DRY RUN] Would execute: {' '.join(cmd)}")
+            log.info("[DRY RUN] Would execute: %s", " ".join(cmd))
             return True, 0
-        
+
         # Execute
         try:
+            cmd = [
+                sys.executable,
+                str(script),
+                "--model-path", str(model_path),
+                "--in-dir", str(self.config.stage1_enhance),
+                "--out-dir", str(self.config.stage2_depth)
+            ]
+            
+            log.debug(f"Executing depth_predict_coreml.py with model: {model_path.name}")
+            
             result = subprocess.run(
                 cmd,
                 check=True,
@@ -266,17 +282,18 @@ class Stage2Depth(StageExecutor):
             )
             if result.stdout:
                 log.debug(result.stdout)
-            
+
             # Count depth maps
             depth_maps = list(self.config.stage2_depth.glob("*_depth16.png"))
-            
+
             self.log_complete(time.time() - t0, len(depth_maps))
             return True, len(depth_maps)
-            
         except subprocess.CalledProcessError as e:
             log.error(f"depth_predict_coreml failed: {e}")
             if e.stderr:
                 log.error(e.stderr)
+            # Cleanup temp script on error
+            temp_script.unlink(missing_ok=True)
             return False, 0
 
 
@@ -601,7 +618,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ocio-config", type=str, default=None,
                     help="Path to OpenColorIO config for AgX")
     
-    # Depth effects
+    # Depth processing
+    ap.add_argument("--depth-model-path", type=str, default=None,
+                    help="Path to CoreML depth model directory (.mlpackage) for Stage 2. "
+                         "If not provided, Stage 2 will be skipped.")
     ap.add_argument("--depth-effects", nargs="+",
                     choices=["haze", "clarity", "dof"],
                     default=["haze", "clarity"],
@@ -648,6 +668,7 @@ def main(argv=None):
             preset=args.preset,
             tone_curve=args.tone_curve,
             ocio_config=args.ocio_config,
+            depth_model_path=args.depth_model_path,
             depth_effects=args.depth_effects,
             workers=args.workers,
             device=args.device,
