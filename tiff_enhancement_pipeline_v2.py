@@ -255,7 +255,13 @@ class AdaptiveSegmentationStage:
     
     def _run_material_clustering(self, enhanced_dir: Path, depth_dir: Path,
                                 output_dir: Path) -> Tuple[bool, int]:
-        """Run K-means material clustering (fast aerial mode)."""
+        """
+        Run K-means material clustering (fast aerial mode).
+
+        Note:
+            The `depth_dir` parameter is accepted for interface consistency with other segmentation
+            methods but is not used in material clustering, as this mode only processes enhanced images.
+        """
         log.info(f"Running material clustering (k={self.config.material_clusters})...")
         
         # Find enhanced images
