@@ -48,10 +48,6 @@ try:
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
-    if not TYPE_CHECKING:
-        np = None  # type: ignore
-
-
 # ==============================================================================
 # OPTION 2: Enhanced Format Detection
 # ==============================================================================
