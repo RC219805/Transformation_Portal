@@ -218,6 +218,8 @@ class AdaptiveSegmentationStage:
         
         try:
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            log.debug(f"Detectron2 stdout: {result.stdout.strip()}")
+            log.debug(f"Detectron2 stderr: {result.stderr.strip()}")
             masks = list(output_dir.glob("*_mask_*.png"))
             return True, len(masks)
         except subprocess.CalledProcessError as e:
