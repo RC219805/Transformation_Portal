@@ -429,4 +429,18 @@ MIT License - See individual tool licenses for dependencies.
 
 ## Support
 
-For issues or feature requests, ensure all dependencies are installed and check the troubleshooting section. The pipeline is designed to fail gracefully with informative error messages at each stage.
+**Need help or found a bug?**
+
+- **Issue Tracker:** [Submit bugs or feature requests on GitHub Issues](https://github.com/RC219805/Transformation_Portal/issues)
+- **Discussion & Q&A:** Use the [GitHub Discussions](https://github.com/RC219805/Transformation_Portal/discussions) for general questions, workflow advice, or sharing results.
+- **Contact:** For urgent or private matters, email the maintainer at [rc219805@gmail.com](mailto:rc219805@gmail.com).
+
+**What does "fail gracefully" mean?**
+
+- Each pipeline stage (e.g., HDR Enhancement, Depth Estimation, Material Response, LUT Application) validates inputs and dependencies before processing.
+- If a stage fails (e.g., missing model, corrupt TIFF, unsupported format), an informative error message is printed and processing halts for that file.
+- Batch operations continue with the next file; failed files are logged in `failed_files.log` in the output directory.
+- You can retry failed stages by re-running the pipeline; successfully completed stages do not need to be repeated unless their outputs were deleted.
+- Intermediate outputs (e.g., `*_ENH.tif`, `*_DEPTH.tif`) are preserved, so you can resume from the last successful stage.
+
+For common issues and recovery steps, see the [Troubleshooting](#troubleshooting) section above.
