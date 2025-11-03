@@ -48,7 +48,7 @@ Semantic variables (e.g., `--lantern-stroke`, `--lantern-hover-glow`) must be de
 ## 6. Governance & Delivery
 
 - Source tokens and reference assets live in [`09_Client_Deliverables/Lantern_Logo_Implementation_Kit`](../09_Client_Deliverables/Lantern_Logo_Implementation_Kit/).
-- Updates follow semantic versioning; bump the `version` key in the token file and note changes in `08_Documentation/Version_History/changelog.md`.
+- Updates follow semantic versioning; bump the `version` key in the token file and note changes in `docs/Version_History/changelog.md`.
 - Automated linting ensures SVG IDs (`lantern-gradient`) remain stable and token names map 1:1 with Figma variables.
 - Distribution happens through the `#brand-ops` channel with checksum hashes for each asset to detect drift during vendor handoff.
 

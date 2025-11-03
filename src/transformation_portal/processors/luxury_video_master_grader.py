@@ -79,7 +79,7 @@ PRESETS: Dict[str, GradePreset] = {
     "signature_estate": GradePreset(
         name="Signature Estate",
         description="Flagship Kodak 2393 emulation with gentle highlight roll-off, soft denoise and warm mid-tones.",
-        lut=REPO_ROOT / "01_Film_Emulation" / "Kodak" / "Kodak_2393_D55.cube",
+        lut=REPO_ROOT / "assets" / "luts" / "film_emulation" / "Kodak" / "Kodak_2393_D55.cube",
         lut_strength=0.85,
         denoise="soft",
         contrast=1.06,
@@ -100,7 +100,9 @@ PRESETS: Dict[str, GradePreset] = {
         name="Golden Hour Courtyard",
         description="Sunset warmth inspired by Montecito golden light with richer saturation and restrained grain.",
         lut=REPO_ROOT
-        / "02_Location_Aesthetic"
+        / "assets"
+        / "luts"
+        / "location_aesthetic"
         / "California"
         / "Montecito_Golden_Hour_HDR.cube",
         lut_strength=0.9,
@@ -122,7 +124,9 @@ PRESETS: Dict[str, GradePreset] = {
         name="Interior Neutral Luxe",
         description="Clean, neutral interior pass with FilmConvert Nitrate base, elevated clarity and no added grain.",
         lut=REPO_ROOT
-        / "01_Film_Emulation"
+        / "assets"
+        / "luts"
+        / "film_emulation"
         / "FilmConvert"
         / "FilmConvert_Nitrate_LuxuryRE.cube",
         lut_strength=0.8,
@@ -536,7 +540,7 @@ def assess_frame_rate(
 def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     """
     Build FFmpeg filter graph string from configuration.
-    
+
     Returns:
         Tuple of (filter_graph, output_label)
     """

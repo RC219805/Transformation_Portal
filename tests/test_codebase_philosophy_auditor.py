@@ -1,5 +1,9 @@
 from pathlib import Path
 from textwrap import dedent
+import sys
+
+# Add scripts directory to path for backward compatibility
+sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
 
 import pytest
 

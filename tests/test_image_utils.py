@@ -1,12 +1,16 @@
 """Tests for common image utilities module."""
 import tempfile
+import sys
 from pathlib import Path
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 import numpy as np
 import pytest
 from PIL import Image
 
-from image_utils import (
+from transformation_portal.utils.image_utils import (
     load_image,
     save_image,
     pil_to_np,
