@@ -35,8 +35,7 @@ def parse_args():
 
 
 # --------------------------------------------------------------------------
-# Parse command-line arguments
-# (Removed duplicate parse_args() with hardcoded absolute paths for security and portability)
+# Parse command-line arguments using argparse for flexible and secure configuration
 # --------------------------------------------------------------------------
 # Main execution function
 def main():
