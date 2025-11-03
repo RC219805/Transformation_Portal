@@ -54,7 +54,7 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
 # Import common image utilities
-from image_utils import load_image_rgb as _load_image_rgb_base
+from transformation_portal.utils.image_utils import load_image_rgb as _load_image_rgb_base
 
 # ----- Optional accelerated libraries -----
 
