@@ -348,7 +348,6 @@ class FullStackWorkflow(WorkflowExecutor):
             log.info("-" * 70)
             
             # Apply materials to graded/enhanced images
-            final_output = self.config.output_dir / "final"
             
             # Implementation similar to ArchHeroWorkflow
             log.info("Material application completed")
