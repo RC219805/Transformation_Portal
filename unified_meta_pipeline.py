@@ -254,7 +254,7 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
             log.info("\n[STAGE 1/2] Grading Pipeline")
             log.info("-" * 70)
             
-            graded_output = self.config.output_dir / "02_graded"
+            # graded_output = self.config.output_dir / "02_graded"  # Removed unused variable
             
             # Note: This assumes input is video frames or sequence
             # Real implementation would need frame extraction logic
@@ -340,6 +340,10 @@ class FullStackWorkflow(WorkflowExecutor):
             # This would use FFmpeg or custom LUT application
             log.info("LUT application via custom implementation")
             # Implementation details omitted for brevity
+        
+            pass  # Implementation details omitted for brevity
+        else:
+            pass  # Implementation details omitted for brevity
         
         # Stage 3: Material Application
         if self.config.material_albedo:

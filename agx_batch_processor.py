@@ -316,10 +316,8 @@ def main():
     parser.add_argument("--workers", type=int, default=None, help="Number of worker threads")
 
     args = parser.parse_args()
-    
-    # Compute default worker count at runtime if not specified
     if args.workers is None:
-        args.workers = max(1, min(8, os.cpu_count() or 4))
+        args.workers = max(1, min(8, (os.cpu_count() or 4)))
 
     if args.list_views:
         if not HAVE_OCIO:
