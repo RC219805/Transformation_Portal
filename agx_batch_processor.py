@@ -313,9 +313,11 @@ def main():
     parser.add_argument("--auto-exposure", choices=["logmean", "median", "none"], default="logmean",
                         help="Per-image auto-exposure method")
     parser.add_argument("--key", type=float, default=0.18, help="Target key luminance for auto-exposure (default 0.18)")
-    parser.add_argument("--workers", type=int, default=max(1, min(8, (os.cpu_count() or 4))), help="Number of worker threads")
+    parser.add_argument("--workers", type=int, default=None, help="Number of worker threads")
 
     args = parser.parse_args()
+    if args.workers is None:
+        args.workers = max(1, min(8, (os.cpu_count() or 4)))
 
     if args.list_views:
         if not HAVE_OCIO:
