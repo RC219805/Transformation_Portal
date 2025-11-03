@@ -288,7 +288,7 @@ class Stage2Depth(StageExecutor):
             log.error(f"depth_predict_coreml failed: {e}")
             if e.stderr:
                 log.error(e.stderr)
-            # Cleanup partial depth maps on error
+            
             try:
                 depth_maps = list(self.config.stage2_depth.glob("*_depth16.png"))
                 for f in depth_maps:
