@@ -13,7 +13,6 @@ import argparse
 import numpy as np
 from PIL import Image
 import coremltools as ct
-
 # --------------------------------------------------------------------------
 # CONFIG (now via argparse)
 def parse_args():
