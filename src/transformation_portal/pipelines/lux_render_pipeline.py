@@ -58,7 +58,7 @@ except ImportError:
 from controlnet_aux import CannyDetector, MidasDetector
 
 # Import common image utilities
-from image_utils import load_image, save_image, pil_to_np, np_to_pil
+from transformation_portal.utils.image_utils import load_image, save_image, pil_to_np, np_to_pil
 
 # Optional Real-ESRGAN (RealESRGANer is imported lazily in LuxRenderPipeline.__init__)
 _HAS_REALESRGAN = importlib.util.find_spec("realesrgan") is not None

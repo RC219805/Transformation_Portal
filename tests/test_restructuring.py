@@ -105,3 +105,20 @@ def test_specific_lut_files_exist():
     
     montecito_lut = repo_root / "assets" / "luts" / "location_aesthetic" / "California" / "Montecito_Golden_Hour_HDR.cube"
     assert montecito_lut.is_file(), f"Expected LUT file not found: {montecito_lut}"
+
+
+def test_utils_image_utils_exists():
+    """Test that image_utils is properly located in utils."""
+    repo_root = Path(__file__).parent.parent
+    
+    # Check that image_utils exists in the package
+    image_utils = repo_root / "src" / "transformation_portal" / "utils" / "image_utils.py"
+    assert image_utils.is_file(), f"Expected image_utils not found: {image_utils}"
+    
+    # Verify it contains the expected functions
+    content = image_utils.read_text()
+    assert "def load_image(" in content
+    assert "def save_image(" in content
+    assert "def pil_to_np(" in content
+    assert "def np_to_pil(" in content
+    assert "def load_image_rgb(" in content
