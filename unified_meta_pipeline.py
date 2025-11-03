@@ -291,9 +291,9 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
         
         if not self.config.dry_run:
             result = subprocess.run(cmd_enhance, check=True)
-            if result.returncode != 0:
-                log.error("Enhancement pipeline failed")
-                return False
+        
+        
+        
         
         duration = time.time() - t_start
         log.info("\n" + "=" * 70)
