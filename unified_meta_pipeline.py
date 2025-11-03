@@ -437,7 +437,17 @@ class EnhancementOnlyWorkflow(WorkflowExecutor):
         log.info(f"Command: {' '.join(cmd_enhance)}")
         
         if not self.config.dry_run:
-            subprocess.run(cmd_enhance, check=True)
+            result = subprocess.run(
+                cmd_enhance,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            log.info(f"Enhancement pipeline exited with return code: {result.returncode}")
+            if result.stdout:
+                log.info(f"Enhancement pipeline stdout:\n{result.stdout}")
+            if result.stderr:
+                log.warning(f"Enhancement pipeline stderr:\n{result.stderr}")
         
         duration = time.time() - t_start
         log.info("\n" + "=" * 70)
