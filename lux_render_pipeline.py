@@ -31,7 +31,7 @@ import random
 from functools import lru_cache
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import numpy as np
 import typer
