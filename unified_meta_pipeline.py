@@ -166,9 +166,6 @@ class ArchHeroWorkflow(WorkflowExecutor):
         
         if not self.config.dry_run:
             result = subprocess.run(cmd_enhance, check=True)
-            if result.returncode != 0:
-                log.error("Enhancement pipeline failed")
-                return False
         
         # Stage 2: PBR Material Application (if material maps provided)
         if self.config.material_albedo is not None:
