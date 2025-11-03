@@ -518,7 +518,7 @@ def save_tiff_16bit(
 
 def load_tiff_preserve_depth(
     path: Union[str, Path]
-) -> Tuple[Optional[np.ndarray], Optional[int]]:
+) -> Tuple[Optional['np.ndarray'], Optional[int]]:
     """Load TIFF preserving original bit depth.
     
     Args:
