@@ -174,7 +174,8 @@ def apply_pbr_overlays(
             alb_np = alb_np*(1-m) + v2_np*m
         if normal is not None and enable_displacement and pom_scale>1e-6:
             # POM uses height map if provided; fallback to normal Z
-            pass
+            raise NotImplementedError("Parallax Occlusion Mapping (POM) is not yet implemented in this pipeline. "
+                                      "Please disable POM or set --height-strength to 0.")
         t = float(np.clip(albedo_blend,0,1))
         base = alb_np*t + base*(1.0-t)
 
