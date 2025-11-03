@@ -22,9 +22,8 @@ Usage:
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING, Union
 import warnings
 
 try:
@@ -41,13 +40,14 @@ except ImportError:
     HAS_TIFFFILE = False
     warnings.warn("tifffile not available. 16-bit TIFF support limited. Install with: pip install tifffile")
 
+if TYPE_CHECKING:
+    import numpy as np
+
 try:
     import numpy as np
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
-
-
 # ==============================================================================
 # OPTION 2: Enhanced Format Detection
 # ==============================================================================
@@ -234,7 +234,8 @@ def get_image_metadata(path: Union[str, Path]) -> Dict[str, Any]:
                 if exif:
                     metadata['exif'] = {k: str(v) for k, v in exif.items()}
             except Exception as exif_exc:
-                warnings.warn(f"Failed to extract EXIF data from {path_obj}: {exif_exc}", RuntimeWarning)
+                warnings.warn(f"Failed to extract EXIF data from {path_obj}: {exif_exc}")
+                metadata['exif_error'] = str(exif_exc)
                 
     except Exception as e:
         metadata['error'] = str(e)
@@ -439,9 +440,8 @@ def smart_convert(
     
     # Handle 16-bit preservation
     if preserve_bit_depth and metadata.get('bit_depth') == 16:
-        if output_ext in {'.tif', '.tiff'}:
-            # TIFF format can handle 16-bit with full metadata preservation
-            # Note: PNG can also handle 16-bit but requires different processing
+        if output_ext in {'.tif', '.tiff', '.png'}:
+            # Use specialized converter for formats that support 16-bit (TIFF/PNG)
             return convert_tiff_preserve_depth(input_path, output_path)
     
     return convert_image_format(input_path, output_path, quality=quality)
@@ -518,7 +518,7 @@ def save_tiff_16bit(
 
 def load_tiff_preserve_depth(
     path: Union[str, Path]
-) -> Tuple[Optional['np.ndarray'], Optional[int]]:
+) -> Tuple[Optional[np.ndarray], Optional[int]]:
     """Load TIFF preserving original bit depth.
     
     Args:
