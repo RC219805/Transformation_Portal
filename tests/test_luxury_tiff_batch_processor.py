@@ -1,4 +1,5 @@
 from __future__ import annotations
+# pylint: disable=no-member  # False positives with package imports
 
 from pathlib import Path
 import subprocess
