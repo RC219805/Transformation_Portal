@@ -72,7 +72,7 @@ class PipelineConfig:
     preset: str = "dramatic"
     tone_curve: str = "agx"
     ocio_config: Optional[str] = None
-    depth_model_path: Optional[str] = None  # Path to CoreML depth model (.mlpackage file)
+    depth_model_path: Optional[str] = None  # Path to CoreML depth model (.mlpackage directory)
     depth_effects: List[str] = None  # ["haze", "clarity", "dof"]
     workers: int = 4
     device: str = "cpu"  # cpu/cuda/mps
@@ -245,13 +245,15 @@ class Stage2Depth(StageExecutor):
             return False, 0
         
         # Validate model path and format
+        # Note: .mlpackage models are directories, not files
         model_path = Path(self.config.depth_model_path)
         if not model_path.exists():
             log.error(f"Depth model not found: {model_path}")
             return False, 0
         
-        if model_path.suffix != ".mlpackage":
-            log.warning(f"Expected .mlpackage file, got: {model_path.name}. Proceeding anyway, but this may fail")
+        if not model_path.name.endswith(".mlpackage"):
+            log.warning(f"Expected .mlpackage directory, got: {model_path.name}")
+            log.warning("Depth prediction may fail if model format is incorrect")
         
         log.info(f"Running depth prediction on {self.config.stage1_enhance}")
         log.info(f"Using model: {model_path.name}")
@@ -618,7 +620,7 @@ def build_parser() -> argparse.ArgumentParser:
     
     # Depth processing
     ap.add_argument("--depth-model-path", type=str, default=None,
-                    help="Path to CoreML depth model (.mlpackage) for Stage 2. "
+                    help="Path to CoreML depth model directory (.mlpackage) for Stage 2. "
                          "If not provided, Stage 2 will be skipped.")
     ap.add_argument("--depth-effects", nargs="+",
                     choices=["haze", "clarity", "dof"],
