@@ -14,7 +14,7 @@ import numpy as np
 
 try:
     import tifffile
-except Exception as e:
+except ImportError:
     print("tifffile required. pip install tifffile", file=sys.stderr)
     raise
 
