@@ -36,6 +36,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -291,6 +292,8 @@ class Stage2Depth(StageExecutor):
             log.error(f"depth_predict_coreml failed: {e}")
             if e.stderr:
                 log.error(e.stderr)
+            # Cleanup temp script on error
+            temp_script.unlink(missing_ok=True)
             return False, 0
 
 
