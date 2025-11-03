@@ -223,10 +223,12 @@ class ArchHeroWorkflow(WorkflowExecutor):
             if enhanced_dir is None:
                 return False
             
-            # Collect both .tif and .tiff files efficiently
+            # Collect both .tif and .tiff files efficiently (case-insensitive)
             enhanced_images = list(itertools.chain(
                 enhanced_dir.glob("*.tif"),
-                enhanced_dir.glob("*.tiff")
+                enhanced_dir.glob("*.tiff"),
+                enhanced_dir.glob("*.TIF"),
+                enhanced_dir.glob("*.TIFF")
             ))
             
             log.info(f"Found {len(enhanced_images)} enhanced images")
