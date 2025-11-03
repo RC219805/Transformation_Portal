@@ -691,7 +691,8 @@ def build_cli() -> argparse.ArgumentParser:
             "Exit codes: 0 = success (all files processed), "
             "1 = one or more files failed, "
             "2 = fatal error. "
-            "Uses strict error handling: any processing error results in exit code 1."
+            "By default, uses strict error handling (any processing error results in exit code 1). "
+            "Use --allow-partial-success to exit 0 if at least one file succeeds."
         )
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -704,6 +705,8 @@ def build_cli() -> argparse.ArgumentParser:
         p.add_argument("--restrict-tag", type=str, default=None, help="Restrict matches to a filename tag (not strictly required)")
         p.add_argument("--fmt", type=str, default="tiff", help="Output format (tiff/png/jpg)")
         p.add_argument("--workers", type=int, default=1, help="Parallel worker count (ProcessPoolExecutor)")
+        p.add_argument("--allow-partial-success", action="store_true",
+                       help="Allow partial success: exit 0 if at least one file succeeds, even if some fail")
         p.add_argument("--verbose", action="store_true", help="Verbose logging")
 
     ph = sub.add_parser("haze", help="Apply depth-weighted atmospheric haze")
