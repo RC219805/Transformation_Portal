@@ -178,8 +178,7 @@ class MaterialConfigProtocol(Protocol):
     """
     material_clusters: int
     material_textures: Optional[Path]
-
-
+    device: str
 class AdaptiveSegmentationStage:
     """
     Stage 4 replacement with adaptive segmentation strategy.
