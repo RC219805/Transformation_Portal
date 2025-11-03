@@ -6,12 +6,13 @@ Usage:
     python examples/simple_process.py input.jpg output/
 """
 
-from depth_pipeline import ArchitecturalDepthPipeline
 import sys
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add src directory to path to allow importing from transformation_portal
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+
+from transformation_portal.depth import ArchitecturalDepthPipeline
 
 
 def main():

@@ -45,7 +45,7 @@ from realize_v8_unified import (
 
 # Your depth pipeline (optimized for M4 Max)
 try:
-    from depth_pipeline import ArchitecturalDepthPipeline
+    from transformation_portal.depth import ArchitecturalDepthPipeline
     _HAVE_DEPTH = True
 except ImportError:
     _HAVE_DEPTH = False

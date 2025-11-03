@@ -130,7 +130,7 @@ python luxury_tiff_batch_processor.py input/ output/ --preset moody
 ```bash
 # Apply LUT
 python luxury_video_master_grader.py input.mp4 output.mp4 \
-  --lut 01_Film_Emulation/Kodak_2393.cube
+  --lut assets/luts/film_emulation/Kodak_2393.cube
 
 # Apply preset
 python luxury_video_master_grader.py input.mp4 output.mp4 \
@@ -202,9 +202,9 @@ processor.batch_process('input/', 'output/', preset='signature')
 - `config/default_config.yaml` - Balanced defaults
 
 **LUT Collections:**
-- `01_Film_Emulation/` - Film stock looks (Kodak, FilmConvert)
-- `02_Location_Aesthetic/` - Location-specific (Montecito, etc.)
-- `03_Material_Response/` - Material enhancement LUTs
+- `assets/luts/film_emulation/` - Film stock looks (Kodak, FilmConvert)
+- `assets/luts/location_aesthetic/` - Location-specific (Montecito, etc.)
+- `assets/luts/material_response/` - Material enhancement LUTs
 
 ---
 

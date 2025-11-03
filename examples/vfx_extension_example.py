@@ -110,7 +110,7 @@ def example_cli_usage():
     _info("       --input interior.jpg \\")
     _info("       --output enhanced.jpg \\")
     _info("       --vfx-preset subtle_estate \\")
-    _info("       --lut 02_Location_Aesthetic/California/Montecito_Golden_Hour_HDR.cube")
+    _info("       --lut assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube")
 
 
 def main():
