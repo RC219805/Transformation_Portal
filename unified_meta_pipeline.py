@@ -37,6 +37,7 @@ python unified_meta_pipeline.py full-stack \
 
 from __future__ import annotations
 import argparse
+import itertools
 import json
 import logging
 import shutil
@@ -128,6 +129,19 @@ class WorkflowExecutor:
         """
         Read enhancement pipeline manifest to get final output directory.
         
+        This method reads the manifest file created by tiff_enhancement_pipeline.py
+        to discover the actual final output directory. The manifest is expected to
+        have the following structure:
+        
+            {
+                "pipeline_version": "1.0.0",
+                "timestamp": "...",
+                "config": {
+                    "stage5_final": "/path/to/final/output",
+                    ...
+                }
+            }
+        
         Args:
             enhanced_output: Path to enhancement pipeline output directory
             
@@ -209,8 +223,11 @@ class ArchHeroWorkflow(WorkflowExecutor):
             if enhanced_dir is None:
                 return False
             
-            enhanced_images = list(enhanced_dir.glob("*.tif")) + \
-                list(enhanced_dir.glob("*.tiff"))
+            # Collect both .tif and .tiff files efficiently
+            enhanced_images = list(itertools.chain(
+                enhanced_dir.glob("*.tif"),
+                enhanced_dir.glob("*.tiff")
+            ))
             
             log.info(f"Found {len(enhanced_images)} enhanced images")
             
