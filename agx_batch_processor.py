@@ -7,6 +7,18 @@ New features:
 - ThreadPoolExecutor batch processing (--workers)
 - Per-image auto-exposure (--auto-exposure [logmean|median])
 - Auto-exposure computed in scene-linear domain with a "key" (default 0.18)
+
+Customization:
+- AgX view name patterns can be customized by modifying the AGX_VIEW_PATTERNS
+  dictionary at module level. This allows supporting different OCIO config
+  conventions without modifying the core processing logic.
+  
+  Example:
+    import agx_batch_processor
+    agx_batch_processor.AGX_VIEW_PATTERNS["custom"] = [
+        "AgX - Custom View",
+        "AgX Custom View"
+    ]
 """
 
 import os
@@ -57,7 +69,12 @@ except ImportError:
 # ------------------------------
 # These patterns define the naming conventions for AgX views in OCIO configs.
 # Different OCIO configurations may use different naming conventions.
-# Override these constants or load from configuration as needed.
+# 
+# To add custom patterns, modify this dictionary before calling processing functions:
+#   AGX_VIEW_PATTERNS["variant_name"] = ["Pattern 1", "Pattern 2"]
+#
+# To load from a configuration file, populate this dictionary from your config parser
+# before running the batch processor.
 AGX_VIEW_PATTERNS = {
     "base": [
         "AgX - Base Contrast",
