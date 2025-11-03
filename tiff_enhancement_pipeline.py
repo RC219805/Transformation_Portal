@@ -72,7 +72,7 @@ class PipelineConfig:
     preset: str = "dramatic"
     tone_curve: str = "agx"
     ocio_config: Optional[str] = None
-    depth_model_path: Optional[str] = None  # Path to CoreML depth model
+    depth_model_path: Optional[str] = None  # Path to CoreML depth model (.mlpackage file)
     depth_effects: List[str] = None  # ["haze", "clarity", "dof"]
     workers: int = 4
     device: str = "cpu"  # cpu/cuda/mps
@@ -245,11 +245,15 @@ class Stage2Depth(StageExecutor):
             log.error(f"depth_predict_coreml.py not found at {script}")
             return False, 0
         
-        # Validate model path
+        # Validate model path and format
         model_path = Path(self.config.depth_model_path)
         if not model_path.exists():
             log.error(f"Depth model not found: {model_path}")
             return False, 0
+        
+        if not model_path.suffix == ".mlpackage" and not model_path.name.endswith(".mlpackage"):
+            log.warning(f"Expected .mlpackage file, got: {model_path.name}")
+            log.info("Proceeding anyway, but this may fail")
         
         log.info(f"Running depth prediction on {self.config.stage1_enhance}")
         log.info(f"Using model: {model_path.name}")
