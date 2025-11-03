@@ -525,6 +525,7 @@ def apply_depth_clarity(img: np.ndarray,
     detail = img - blurred
 
     mask_strength = (1.0 - sky) * (0.6 + 0.4 * building)
+    mask_strength = mask_strength[..., None]
 
     enhanced = img + detail * (amount * w * mask_strength)
     return np.clip(enhanced, 0.0, 1.0)
