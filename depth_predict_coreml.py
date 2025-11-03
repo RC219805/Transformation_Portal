@@ -29,7 +29,7 @@ def parse_args():
     )
     parser.add_argument(
         "--model-path", type=str, default="DepthAnythingV2SmallF16.mlpackage",
-        help="Path to the .mlpackage CoreML model (e.g., DepthAnythingV2SmallF16.mlpackage). Defaults to DepthAnythingV2SmallF16.mlpackage"
+        help="Path to the .mlpackage CoreML model (e.g., DepthAnythingV2SmallF16.mlpackage)"
     )
     parser.add_argument(
         "--in-dir", type=str, required=True,
