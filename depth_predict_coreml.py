@@ -49,19 +49,19 @@ def parse_args():
     parser.add_argument(
         "--model-path",
         type=str,
-        default="/Users/rc/Desktop/my_project/DepthAnythingV2SmallF16.mlpackage",
+        default="./DepthAnythingV2SmallF16.mlpackage",
         help="Path to the CoreML model (.mlpackage)"
     )
     parser.add_argument(
         "--input-dir",
         type=str,
-        default="/Users/rc/Desktop/my_project/images/750_Picacho",
+        default="./images",
         help="Input directory containing images"
     )
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="/Users/rc/Desktop/my_project/outputs/depth/750_Picacho",
+        default="./outputs/depth",
         help="Output directory for depth maps"
     )
     return parser.parse_args()
