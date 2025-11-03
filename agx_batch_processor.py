@@ -210,7 +210,7 @@ def process_image(arr: np.ndarray,
             available = list_ocio_views(ocio_config)
 
             # Use configurable view name patterns
-            view_patterns = AGX_VIEW_PATTERNS.get(variant.lower(), AGX_VIEW_PATTERNS["base"])
+            view_patterns = AGX_VIEW_PATTERNS.get(variant.lower(), DEFAULT_VIEW_PATTERNS)
             for disp, views in available.items():
                 for candidate in view_patterns:
                     if candidate in views:
