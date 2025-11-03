@@ -288,7 +288,17 @@ class Stage2Depth(StageExecutor):
             log.error(f"depth_predict_coreml failed: {e}")
             if e.stderr:
                 log.error(e.stderr)
-            # Cleanup temp script on error
+            # Cleanup partial depth maps on error
+            try:
+                depth_maps = list(self.config.stage2_depth.glob("*_depth16.png"))
+                for f in depth_maps:
+                    try:
+                        f.unlink()
+                        log.info(f"Removed partial depth map: {f}")
+                    except Exception as cleanup_err:
+                        log.warning(f"Failed to remove {f}: {cleanup_err}")
+            except Exception as outer_cleanup_err:
+                log.warning(f"Cleanup failed: {outer_cleanup_err}")
             return False, 0
 
 
