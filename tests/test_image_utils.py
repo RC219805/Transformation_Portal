@@ -22,7 +22,7 @@ def test_load_image():
         # Create a test image
         test_img = Image.new("RGB", (100, 100), color=(255, 0, 0))
         test_img.save(img_path)
-        
+
         # Load it back
         loaded = load_image(img_path)
         assert isinstance(loaded, Image.Image)
@@ -35,9 +35,9 @@ def test_save_image():
     with tempfile.TemporaryDirectory() as tmpdir:
         output_path = Path(tmpdir) / "subdir" / "test.png"
         test_img = Image.new("RGB", (50, 50), color=(0, 255, 0))
-        
+
         save_image(test_img, output_path)
-        
+
         assert output_path.exists()
         loaded = Image.open(output_path)
         assert loaded.mode == "RGB"
@@ -48,17 +48,17 @@ def test_pil_to_np_float():
     """Test converting PIL to NumPy with float normalization."""
     img = Image.new("RGB", (10, 10), color=(255, 128, 0))
     arr = pil_to_np(img, to_float=True)
-    
+
     assert arr.dtype == np.float32
     assert arr.shape == (10, 10, 3)
-    assert np.allclose(arr[0, 0], [1.0, 128/255.0, 0.0], atol=0.01)
+    assert np.allclose(arr[0, 0], [1.0, 128 / 255.0, 0.0], atol=0.01)
 
 
 def test_pil_to_np_uint8():
     """Test converting PIL to NumPy without normalization."""
     img = Image.new("RGB", (10, 10), color=(255, 128, 0))
     arr = pil_to_np(img, to_float=False)
-    
+
     assert arr.dtype == np.uint8
     assert arr.shape == (10, 10, 3)
     assert np.array_equal(arr[0, 0], [255, 128, 0])
@@ -68,7 +68,7 @@ def test_np_to_pil():
     """Test converting NumPy float array to PIL Image."""
     arr = np.ones((20, 20, 3), dtype=np.float32) * 0.5
     img = np_to_pil(arr)
-    
+
     assert isinstance(img, Image.Image)
     assert img.mode == "RGB"
     assert img.size == (20, 20)
@@ -81,7 +81,7 @@ def test_np_to_pil_clipping():
     """Test that np_to_pil clips values to [0, 1]."""
     arr = np.array([[[2.0, -0.5, 0.5]]], dtype=np.float32)
     img = np_to_pil(arr)
-    
+
     pixel = img.getpixel((0, 0))
     assert pixel[0] == 255  # 2.0 clipped to 1.0 -> 255
     assert pixel[1] == 0    # -0.5 clipped to 0.0 -> 0
@@ -94,13 +94,13 @@ def test_load_image_rgb():
         img_path = Path(tmpdir) / "test.png"
         test_img = Image.new("RGB", (30, 40), color=(200, 100, 50))
         test_img.save(img_path)
-        
+
         arr = load_image_rgb(img_path)
-        
+
         assert arr.dtype == np.float32
         assert arr.shape == (40, 30, 3)  # Note: height, width order
         # Check approximate color values
-        assert np.allclose(arr[0, 0], [200/255.0, 100/255.0, 50/255.0], atol=0.01)
+        assert np.allclose(arr[0, 0], [200 / 255.0, 100 / 255.0, 50 / 255.0], atol=0.01)
 
 
 def test_load_image_rgb_file_not_found():
@@ -112,11 +112,11 @@ def test_load_image_rgb_file_not_found():
 def test_roundtrip_conversion():
     """Test that PIL -> NumPy -> PIL roundtrip preserves data."""
     original = Image.new("RGB", (15, 15), color=(100, 150, 200))
-    
+
     # Convert to numpy and back
     arr = pil_to_np(original, to_float=True)
     reconstructed = np_to_pil(arr)
-    
+
     # Should be very close (allowing for rounding)
     orig_px = original.getpixel((0, 0))
     recon_px = reconstructed.getpixel((0, 0))
