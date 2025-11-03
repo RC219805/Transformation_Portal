@@ -21,7 +21,6 @@ from detectron2.engine import DefaultPredictor
 from detectron2.data import MetadataCatalog
 from detectron2.utils.visualizer import ColorMode, Visualizer
 
-
 def build_predictor(device="cpu"):
     cfg = get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file(
@@ -33,7 +32,6 @@ def build_predictor(device="cpu"):
     cfg.MODEL.DEVICE = device
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
     return DefaultPredictor(cfg), MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
-
 
 def extract_masks(panoptic_seg, segments_info, meta):
     """
@@ -47,7 +45,6 @@ def extract_masks(panoptic_seg, segments_info, meta):
     sky_mask = np.isin(panoptic_seg.cpu().numpy(), sky_ids).astype(np.uint8) * 255
     bld_mask = np.isin(panoptic_seg.cpu().numpy(), bld_ids).astype(np.uint8) * 255
     return sky_mask, bld_mask
-
 
 def main(images_root, depths_root, mask_root, device="cpu", save_panoptic=False):
     os.makedirs(mask_root, exist_ok=True)
@@ -83,7 +80,6 @@ def main(images_root, depths_root, mask_root, device="cpu", save_panoptic=False)
         print(f"[{i}] ✓ {base}")
 
     print(f"\nDone → {mask_root}")
-
 
 if __name__ == "__main__":
     import argparse
