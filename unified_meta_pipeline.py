@@ -189,7 +189,7 @@ class ArchHeroWorkflow(WorkflowExecutor):
                 
                 cmd_pbr = [
                     sys.executable,
-                    str(self.scripts_dir / "lux_render_pipeline_plus_v3_2.py"),
+                    str(self.scripts_dir / "lux_render_pipeline_plus_v3.py"),
                     "materialize",
                     str(img_path),
                     str(output_path),
