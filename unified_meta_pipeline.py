@@ -124,6 +124,37 @@ class WorkflowExecutor:
         log.info(f"WORKFLOW: {name}")
         log.info("=" * 70)
     
+    def get_enhancement_final_dir(self, enhanced_output: Path) -> Optional[Path]:
+        """
+        Read enhancement pipeline manifest to get final output directory.
+        
+        Args:
+            enhanced_output: Path to enhancement pipeline output directory
+            
+        Returns:
+            Path to final output directory, or None if manifest cannot be read
+        """
+        manifest_path = enhanced_output / "pipeline_manifest.json"
+        if not manifest_path.exists():
+            log.error(f"Enhancement pipeline manifest not found: {manifest_path}")
+            log.error("Cannot determine final output directory from enhancement pipeline")
+            return None
+        
+        try:
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+            
+            # Extract stage5_final path from manifest
+            stage5_final = manifest["config"]["stage5_final"]
+            enhanced_dir = Path(stage5_final)
+            log.info(f"Reading enhanced images from: {enhanced_dir}")
+            return enhanced_dir
+            
+        except (json.JSONDecodeError, KeyError) as e:
+            log.error(f"Failed to parse enhancement pipeline manifest: {e}")
+            log.error(f"Manifest path: {manifest_path}")
+            return None
+    
     def execute(self) -> bool:
         """Execute the workflow. Returns success status."""
         raise NotImplementedError
@@ -173,19 +204,10 @@ class ArchHeroWorkflow(WorkflowExecutor):
             log.info("\n[STAGE 2/2] PBR Material Application")
             log.info("-" * 70)
             
-            # Read the enhancement pipeline manifest to get final output directory
-            manifest_path = enhanced_output / "pipeline_manifest.json"
-            if not manifest_path.exists():
-                log.error(f"Enhancement pipeline manifest not found: {manifest_path}")
-                log.error("Cannot determine final output directory from enhancement pipeline")
+            # Get final output directory from enhancement pipeline manifest
+            enhanced_dir = self.get_enhancement_final_dir(enhanced_output)
+            if enhanced_dir is None:
                 return False
-            
-            with open(manifest_path, 'r') as f:
-                manifest = json.load(f)
-            
-            # Extract stage5_final path from manifest
-            enhanced_dir = Path(manifest["config"]["stage5_final"])
-            log.info(f"Reading enhanced images from: {enhanced_dir}")
             
             enhanced_images = list(enhanced_dir.glob("*.tif")) + \
                 list(enhanced_dir.glob("*.tiff"))
@@ -229,19 +251,10 @@ class ArchHeroWorkflow(WorkflowExecutor):
             # Copy enhanced results to final
             log.info("\n[STAGE 2/2] No material maps provided, using enhanced output")
             
-            # Read the enhancement pipeline manifest to get final output directory
-            manifest_path = enhanced_output / "pipeline_manifest.json"
-            if not manifest_path.exists():
-                log.error(f"Enhancement pipeline manifest not found: {manifest_path}")
-                log.error("Cannot determine final output directory from enhancement pipeline")
+            # Get final output directory from enhancement pipeline manifest
+            enhanced_dir = self.get_enhancement_final_dir(enhanced_output)
+            if enhanced_dir is None:
                 return False
-            
-            with open(manifest_path, 'r') as f:
-                manifest = json.load(f)
-            
-            # Extract stage5_final path from manifest
-            enhanced_dir = Path(manifest["config"]["stage5_final"])
-            log.info(f"Reading enhanced images from: {enhanced_dir}")
             
             final_output = self.config.output_dir / "final"
             
