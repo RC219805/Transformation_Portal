@@ -233,8 +233,7 @@ class Stage2Depth(StageExecutor):
         
         # Check if depth model path is configured
         if not self.config.depth_model_path:
-            log.warning("No depth model path configured, skipping Stage 2")
-            log.info("Use --depth-model-path to enable depth prediction")
+            log.warning("No depth model path configured, skipping Stage 2. Use --depth-model-path to enable depth prediction")
             return True, 0
         
         t0 = time.time()
@@ -251,9 +250,8 @@ class Stage2Depth(StageExecutor):
             log.error(f"Depth model not found: {model_path}")
             return False, 0
         
-        if not model_path.suffix == ".mlpackage" and not model_path.name.endswith(".mlpackage"):
-            log.warning(f"Expected .mlpackage file, got: {model_path.name}")
-            log.info("Proceeding anyway, but this may fail")
+        if model_path.suffix != ".mlpackage":
+            log.warning(f"Expected .mlpackage file, got: {model_path.name}. Proceeding anyway, but this may fail")
         
         log.info(f"Running depth prediction on {self.config.stage1_enhance}")
         log.info(f"Using model: {model_path.name}")
