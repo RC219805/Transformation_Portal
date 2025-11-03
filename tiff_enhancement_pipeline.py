@@ -539,10 +539,10 @@ class Pipeline:
         ]
         # Optional dependencies, only required if corresponding stage is enabled
         optional = [
-            ("coremltools", "coremltools", "depth prediction (Stage 2)", bool(getattr(self.config, "depth_model_path", None))),
-            ("torch", "torch", "depth prediction (Stage 2)", bool(getattr(self.config, "depth_model_path", None))),
-            ("opencv-python", "cv2", "depth effects (Stage 5)", bool(getattr(self.config, "depth_effects", None))),
-            ("detectron2", "detectron2", "panoptic segmentation (Stage 4)", bool(getattr(self.config, "enable_panoptic", False))),
+            ("coremltools", "coremltools", "depth prediction (Stage 2)", bool(self.config.depth_model_path)),
+            ("torch", "torch", "depth prediction (Stage 2)", bool(self.config.depth_model_path)),
+            ("opencv-python", "cv2", "depth effects (Stage 5)", bool(self.config.depth_effects)),
+            ("detectron2", "detectron2", "panoptic segmentation (Stage 4)", bool(self.config.enable_panoptic)),
         ]
         missing = []
         # Check always-required dependencies
