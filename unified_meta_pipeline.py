@@ -165,7 +165,7 @@ class ArchHeroWorkflow(WorkflowExecutor):
         log.info(f"Command: {' '.join(cmd_enhance)}")
         
         if not self.config.dry_run:
-            result = subprocess.run(cmd_enhance, check=True)
+            subprocess.run(cmd_enhance, check=True)
         
         # Stage 2: PBR Material Application (if material maps provided)
         if self.config.material_albedo is not None:
