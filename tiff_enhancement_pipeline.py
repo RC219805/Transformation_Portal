@@ -293,7 +293,6 @@ class Stage2Depth(StageExecutor):
             if e.stderr:
                 log.error(e.stderr)
             # Cleanup temp script on error
-            temp_script.unlink(missing_ok=True)
             return False, 0
 
 
