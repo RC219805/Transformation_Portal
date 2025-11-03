@@ -42,6 +42,13 @@ logging.basicConfig(
 log = logging.getLogger("pipeline_v2")
 
 
+# Aerial detection heuristic thresholds
+# Sky brightness threshold in aerial photos (0-255 scale, 8-bit RGB)
+AERIAL_TOP_BRIGHTNESS_THRESHOLD = 180
+# Low variance indicates aerial view with uniform perspective
+AERIAL_PERSPECTIVE_VARIANCE_THRESHOLD = 15
+
+
 @dataclass
 class MaterialClusterConfig:
     """Configuration for material clustering."""
@@ -130,8 +137,8 @@ class MaterialClusterer:
         
         return colorized
     
-    def _compute_stats(self, labels: np.ndarray, features: np.ndarray, 
-                      centroids: np.ndarray) -> Dict:
+    def _compute_stats(self, labels: np.ndarray, features: np.ndarray,
+                       centroids: np.ndarray) -> Dict:
         """Compute cluster statistics."""
         stats = {
             "n_clusters": self.config.n_clusters,
@@ -317,7 +324,8 @@ class AdaptiveSegmentationStage:
         perspective_indicator = row_means.std()
         
         # Aerial: bright top region (likely sky) AND low perspective
-        is_aerial = top_brightness > 180 and perspective_indicator < 15
+        is_aerial = (top_brightness > AERIAL_TOP_BRIGHTNESS_THRESHOLD and 
+                     perspective_indicator < AERIAL_PERSPECTIVE_VARIANCE_THRESHOLD)
         
         return is_aerial
 
