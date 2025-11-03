@@ -44,13 +44,18 @@ except ImportError as e:
     print(f"ERROR: tonemapper_agx_filmic not found: {e}")
     sys.exit(1)
 
-# Optional OCIO
 # Optional imageio for EXR
 try:
     import imageio.v3 as iio
     HAVE_IMAGEIO = True
 except ImportError:
     HAVE_IMAGEIO = False
+
+# Optional OCIO for AgX tone mapping
+try:
+    HAVE_OCIO = True
+except ImportError:
+    HAVE_OCIO = False
 
 
 # ------------------------------
