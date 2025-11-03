@@ -159,7 +159,11 @@ def clear_all_caches() -> None:
 
 # ----- retry decorator -----
 
-def retry_on_io_error(max_attempts: int = DEFAULT_IO_RETRIES, initial_delay: float = DEFAULT_IO_RETRY_DELAY, backoff_factor: float = 2.0):
+def retry_on_io_error(
+    max_attempts: int = DEFAULT_IO_RETRIES,
+    initial_delay: float = DEFAULT_IO_RETRY_DELAY,
+    backoff_factor: float = 2.0,
+):
     """Decorator for retrying IO operations with exponential backoff on OSError/IOError."""
     def decorator(func: Callable):
         @functools.wraps(func)
