@@ -5,6 +5,14 @@ depth_predict_coreml.py — run DepthAnything V2 Small F16 (Core ML) on all imag
 and write results to the depth output folder, matching the pattern:
     *_depth16.png   (16-bit normalized depth)
     *_depth8_vis.png  (8-bit visualization)
+
+Usage:
+    python depth_predict_coreml.py --in-dir INPUT_DIR --out-dir OUTPUT_DIR [--model-path MODEL_PATH]
+
+Arguments:
+    --in-dir      : Required. Input directory containing images
+    --out-dir     : Required. Output directory for depth results
+    --model-path  : Optional. Path to .mlpackage CoreML model (default: DepthAnythingV2SmallF16.mlpackage)
 """
 
 import os
