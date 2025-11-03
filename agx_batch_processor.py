@@ -53,14 +53,20 @@ except ImportError:
         print(f"ERROR: tonemapper_agx_filmic not found: {e}")
         sys.exit(1)
 
+# Optional OCIO for AgX tone mapping
+try:
+    # If apply_agx_ocio is imported, OCIO is available
+    _ = apply_agx_ocio
+    HAVE_OCIO = True
+except NameError:
+    HAVE_OCIO = False
+
 # Optional imageio for EXR
 try:
     import imageio.v3 as iio
     HAVE_IMAGEIO = True
 except ImportError:
     HAVE_IMAGEIO = False
-
-# Optional OCIO for AgX tone mapping
 # ------------------------------
 # AgX View Name Patterns
 # ------------------------------
