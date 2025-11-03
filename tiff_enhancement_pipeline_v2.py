@@ -331,7 +331,6 @@ class AdaptiveSegmentationStage:
             return self._run_semantic_segmentation(enhanced_dir, depth_dir, output_dir)
     
     def _detect_aerial(self, image: np.ndarray) -> bool:
-@dataclass
         h, w = image.shape[:2]
         
         # Check top region brightness (sky in ground photos)
