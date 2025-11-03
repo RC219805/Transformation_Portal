@@ -25,7 +25,9 @@ CLI examples:
 
 from __future__ import annotations
 from pathlib import Path
-import argparse, math, json
+import argparse
+import math
+import json
 from typing import Optional, Tuple, List, Union
 import numpy as np
 from PIL import Image, ImageEnhance
