@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+depth_predict_coreml.py — run DepthAnything V2 Small F16 (Core ML) on all images in a folder
+and write results to the depth output folder, matching the pattern:
+    *_depth16.png   (16-bit normalized depth)
+    *_depth8_vis.png  (8-bit visualization)
+
+Usage:
+    python depth_predict_coreml.py --in-dir INPUT_DIR --out-dir OUTPUT_DIR [--model-path MODEL_PATH]
+
+Arguments:
+    --in-dir      : Required. Input directory containing images
+    --out-dir     : Required. Output directory for depth results
+    --model-path  : Optional. Path to .mlpackage CoreML model (default: DepthAnythingV2SmallF16.mlpackage)
+"""
+
+import os
+import glob
+import argparse
+import numpy as np
+from PIL import Image
+import coremltools as ct
+# --------------------------------------------------------------------------
+# CONFIG (now via argparse)
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run DepthAnything V2 Small F16 (Core ML) on all images in a folder."
+    )
+    parser.add_argument(
+        "--model-path", type=str, default="DepthAnythingV2SmallF16.mlpackage",
+        help="Path to the .mlpackage CoreML model (e.g., DepthAnythingV2SmallF16.mlpackage)"
+    )
+    parser.add_argument(
+        "--in-dir", type=str, required=True,
+        help="Input directory containing images"
+    )
+    parser.add_argument(
+        "--out-dir", type=str, required=True,
+        help="Output directory for depth results"
+    )
+    return parser.parse_args()
+
+
+# --------------------------------------------------------------------------
+# Parse command-line arguments using argparse for flexible and secure configuration
+# --------------------------------------------------------------------------
+# Main execution function
+def main():
+    """Main execution function for depth prediction."""
+    args = parse_args()
+    MODEL_PATH = args.model_path
+    IN_DIR = args.in_dir
+    OUT_DIR = args.out_dir
+    os.makedirs(OUT_DIR, exist_ok=True)
+
+    # --------------------------------------------------------------------------
+    # Load model (auto-select CPU / GPU / ANE)
+    model = ct.models.MLModel(MODEL_PATH, compute_units=ct.ComputeUnit.ALL)
+    print("Loaded model:", os.path.basename(MODEL_PATH))
+
+    # Gather input files
+    exts = (".tif", ".tiff", ".jpg", ".jpeg", ".png", ".webp",
+            ".TIF", ".TIFF", ".JPG", ".JPEG", ".PNG", ".WEBP")
+    paths = sorted([p for p in glob.glob(os.path.join(IN_DIR, "*")) if p.endswith(exts)])
+    if not paths:
+        raise SystemExit(f"No input images found in {IN_DIR}")
+
+    # --------------------------------------------------------------------------
+    for i, src in enumerate(paths, 1):
+        base = os.path.splitext(os.path.basename(src))[0]
+        print(f"[{i}/{len(paths)}] {base}")
+
+        # 1️⃣ Load + preprocess
+        img = Image.open(src).convert("RGB").resize((518, 518))
+        arr = np.asarray(img, dtype=np.float32) / 255.0
+        arr = np.transpose(arr, (2, 0, 1))  # CHW order
+        inputs = {"image": arr[np.newaxis, ...]}  # add batch dim if needed
+
+        # 2️⃣ Predict
+        result = model.predict(inputs)
+        out_key = list(result.keys())[0]
+        depth = np.asarray(result[out_key][0], dtype=np.float32)
+
+        # 3️⃣ Normalize 0..1
+        depth = (depth - depth.min()) / (depth.ptp() + 1e-8)
+
+        # 4️⃣ Save 16-bit + 8-bit files
+        d16 = (depth * 65535.0 + 0.5).astype(np.uint16)
+        d8 = (depth * 255.0 + 0.5).astype(np.uint8)
+
+        out16 = os.path.join(OUT_DIR, f"{base}_depth16.png")
+        out8 = os.path.join(OUT_DIR, f"{base}_depth8_vis.png")
+
+        Image.fromarray(d16, mode="I;16").save(out16)
+        Image.fromarray(d8, mode="L").save(out8)
+
+        print("   ✓ saved:", os.path.basename(out16), "and", os.path.basename(out8))
+
+    print("\nAll done →", OUT_DIR)
+
+
+if __name__ == "__main__":
+    main()
