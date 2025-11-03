@@ -28,7 +28,6 @@ import logging
 from pathlib import Path
 import numpy as np
 from PIL import Image
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
