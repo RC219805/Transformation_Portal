@@ -251,7 +251,9 @@ class Stage2Depth(StageExecutor):
             log.error(f"Depth model not found: {model_path}")
             return False, 0
         
-        if not model_path.name.endswith(".mlpackage"):
+        if not model_path.is_dir():
+            log.warning(f"Expected .mlpackage directory, but path is not a directory: {model_path}")
+        elif not model_path.name.endswith(".mlpackage"):
             log.warning(f"Expected .mlpackage directory, got: {model_path.name}")
             log.warning("Depth prediction may fail if model format is incorrect")
         
@@ -274,6 +276,8 @@ class Stage2Depth(StageExecutor):
                 "--in-dir", str(self.config.stage1_enhance),
                 "--out-dir", str(self.config.stage2_depth)
             ]
+            
+            log.debug(f"Executing: {' '.join(cmd)}")
             
             result = subprocess.run(
                 cmd,
