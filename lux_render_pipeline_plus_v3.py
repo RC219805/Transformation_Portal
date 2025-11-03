@@ -147,9 +147,9 @@ def apply_pbr_overlays(
     # quality presets
     q = quality.lower()
     if q == "draft":
-        proc_scale = min(proc_scale, 0.5); pom_steps = min(pom_steps, 1); enable_displacement=False; disp_mm = min(disp_mm, 1.0)
+        proc_scale = min(proc_scale, 0.5); enable_displacement=False; disp_mm = min(disp_mm, 1.0)
     elif q == "preview":
-        proc_scale = min(proc_scale, 0.75); pom_steps = min(pom_steps, 4); disp_mm = min(disp_mm, 2.0)
+        proc_scale = min(proc_scale, 0.75); disp_mm = min(disp_mm, 2.0)
     elif q == "final":
         pass
 
@@ -174,7 +174,8 @@ def apply_pbr_overlays(
             alb_np = alb_np*(1-m) + v2_np*m
         if normal is not None and enable_displacement and pom_scale>1e-6:
             # POM uses height map if provided; fallback to normal Z
-            pass
+            raise NotImplementedError("Parallax Occlusion Mapping (POM) is not yet implemented in this pipeline. "
+                                      "Please disable POM or set --height-strength to 0.")
         t = float(np.clip(albedo_blend,0,1))
         base = alb_np*t + base*(1.0-t)
 

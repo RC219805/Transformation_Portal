@@ -165,7 +165,7 @@ class ArchHeroWorkflow(WorkflowExecutor):
         log.info(f"Command: {' '.join(cmd_enhance)}")
         
         if not self.config.dry_run:
-            result = subprocess.run(cmd_enhance, check=True)
+            subprocess.run(cmd_enhance, check=True)
         
         # Stage 2: PBR Material Application (if material maps provided)
         if self.config.material_albedo is not None:
@@ -239,6 +239,11 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
     
     Optimal for: Video sequences requiring LUT-based grading with
                  optional per-frame depth effects.
+    
+    Limitation: This workflow currently supports frame-based processing only.
+                For video files requiring grading, use luxury_video_master_grader.py
+                to apply LUTs before extracting frames, or use the FullStackWorkflow
+                for post-frame-processing grading integration.
     """
     
     def execute(self) -> bool:
@@ -251,15 +256,17 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
             log.info("\n[STAGE 1/2] Grading Pipeline")
             log.info("-" * 70)
             
-            # graded_output = self.config.output_dir / "02_graded"  # Removed unused variable
+            # Limitation: Frame-based grading not yet implemented
+            # For video grading, use luxury_video_master_grader.py on the source video
+            # before extracting frames, or use FullStackWorkflow for post-processing grading.
+            # Implementation would require either:
+            #   1. FFmpeg-based per-frame LUT application with metadata preservation, or
+            #   2. Python-based LUT interpolation matching luxury_video_master_grader.py quality
             
-            # Note: This assumes input is video frames or sequence
-            # Real implementation would need frame extraction logic
+            log.warning("Grading pipeline for frame-based workflows is not yet implemented.")
+            log.warning("For video grading: Apply LUTs before frame extraction using luxury_video_master_grader.py")
+            log.info("Proceeding with enhancement pipeline only...")
             
-            log.info("Grading pipeline integration requires FFmpeg")
-            log.info("Skipping for frame-based workflow")
-            
-            # Copy input to graded for now
             source_dir = self.config.input_dir
         else:
             source_dir = self.config.input_dir

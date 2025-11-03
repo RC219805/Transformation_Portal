@@ -7,6 +7,18 @@ New features:
 - ThreadPoolExecutor batch processing (--workers)
 - Per-image auto-exposure (--auto-exposure [logmean|median])
 - Auto-exposure computed in scene-linear domain with a "key" (default 0.18)
+
+Customization:
+- AgX view name patterns can be customized by modifying the AGX_VIEW_PATTERNS
+  dictionary at module level. This allows supporting different OCIO config
+  conventions without modifying the core processing logic.
+  
+  Example:
+    import agx_batch_processor
+    agx_batch_processor.AGX_VIEW_PATTERNS["custom"] = [
+        "AgX - Custom View",
+        "AgX Custom View"
+    ]
 """
 
 import os
@@ -50,6 +62,33 @@ try:
     HAVE_IMAGEIO = True
 except ImportError:
     HAVE_IMAGEIO = False
+
+
+# ------------------------------
+# AgX View Name Patterns
+# ------------------------------
+# These patterns define the naming conventions for AgX views in OCIO configs.
+# Different OCIO configurations may use different naming conventions.
+# 
+# To add custom patterns, modify this dictionary before calling processing functions:
+#   AGX_VIEW_PATTERNS["variant_name"] = ["Pattern 1", "Pattern 2"]
+#
+# To load from a configuration file, populate this dictionary from your config parser
+# before running the batch processor.
+AGX_VIEW_PATTERNS = {
+    "base": [
+        "AgX - Base Contrast",
+        "AgX Base Contrast"
+    ],
+    "medium": [
+        "AgX - Medium Contrast",
+        "AgX Medium Contrast"
+    ],
+    "high": [
+        "AgX - High Contrast",
+        "AgX High Contrast"
+    ]
+}
 
 
 # ------------------------------
@@ -170,8 +209,10 @@ def process_image(arr: np.ndarray,
             display, view = guess_agx_view(ocio_config)
             available = list_ocio_views(ocio_config)
 
+            # Use configurable view name patterns
+            view_patterns = AGX_VIEW_PATTERNS.get(variant.lower(), DEFAULT_VIEW_PATTERNS)
             for disp, views in available.items():
-                for candidate in [f"AgX - {variant.capitalize()} Contrast", f"AgX {variant.capitalize()} Contrast"]:
+                for candidate in view_patterns:
                     if candidate in views:
                         display, view = disp, candidate
                         break
