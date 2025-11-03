@@ -602,7 +602,7 @@ def apply_depth_dof(img: np.ndarray,
     # protector reduces blur on buildings and slightly reduces extreme sky blur
     reduce_on_building = (1.0 - BUILDING_BLUR_REDUCTION * building)  # building=1 -> factor ~0.12
     slight_sky_protect = (1.0 - SKY_BLUR_REDUCTION * sky)            # sky=1 -> factor ~0.7
-    protector = reduce_on_building * slight_sky_protect
+    protector = (reduce_on_building * slight_sky_protect)[..., None]
 
     w_protected = w_soft * protector
     out = img * (1 - w_protected) + blended * w_protected

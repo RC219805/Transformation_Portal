@@ -189,7 +189,7 @@ class ArchHeroWorkflow(WorkflowExecutor):
                 
                 cmd_pbr = [
                     sys.executable,
-                    str(self.scripts_dir / "lux_render_pipeline_plus_v3_2.py"),
+                    str(self.scripts_dir / "lux_render_pipeline_plus_v3.py"),
                     "materialize",
                     str(img_path),
                     str(output_path),
@@ -340,10 +340,6 @@ class FullStackWorkflow(WorkflowExecutor):
             # This would use FFmpeg or custom LUT application
             log.info("LUT application via custom implementation")
             # Implementation details omitted for brevity
-            
-            graded_source = self.config.output_dir / "02_graded"
-        else:
-            graded_source = enhanced_output / "05_final"
         
         # Stage 3: Material Application
         if self.config.material_albedo:

@@ -15,7 +15,6 @@ import os
 import glob
 import numpy as np
 from PIL import Image
-import torch
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor

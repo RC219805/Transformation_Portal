@@ -36,6 +36,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -239,26 +240,28 @@ class Stage2Depth(StageExecutor):
             return False, 0
         
         # Read and modify script to use our paths
+        # TODO: Refactor depth_predict_coreml.py to accept CLI arguments or use config file
+        # Current string replacement is brittle and depends on exact formatting
         with open(script, 'r') as f:
             script_content = f.read()
         
         # Create temporary modified script
-        temp_script = Path("/tmp/depth_predict_temp.py")
-        modified = script_content.replace(
-            'IN_DIR     = "/Users/rc/Desktop/my_project/images/750_Picacho"',
-            f'IN_DIR     = "{self.config.stage1_enhance}"'
-        ).replace(
-            'OUT_DIR    = "/Users/rc/Desktop/my_project/outputs/depth/750_Picacho"',
-            f'OUT_DIR    = "{self.config.stage2_depth}"'
-        )
-        
-        with open(temp_script, 'w') as f:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            modified = script_content.replace(
+                'IN_DIR     = "/Users/rc/Desktop/my_project/images/750_Picacho"',
+                f'IN_DIR     = "{self.config.stage1_enhance}"'
+            ).replace(
+                'OUT_DIR    = "/Users/rc/Desktop/my_project/outputs/depth/750_Picacho"',
+                f'OUT_DIR    = "{self.config.stage2_depth}"'
+            )
             f.write(modified)
+            temp_script = Path(f.name)
         
         log.info(f"Running depth prediction on {self.config.stage1_enhance}")
         
         if self.config.dry_run:
             log.info("[DRY RUN] Would execute depth_predict_coreml")
+            temp_script.unlink(missing_ok=True)
             return True, 0
         
         # Execute
@@ -276,7 +279,7 @@ class Stage2Depth(StageExecutor):
             depth_maps = list(self.config.stage2_depth.glob("*_depth16.png"))
             
             # Cleanup temp script
-            temp_script.unlink()
+            temp_script.unlink(missing_ok=True)
             
             self.log_complete(time.time() - t0, len(depth_maps))
             return True, len(depth_maps)
@@ -285,6 +288,8 @@ class Stage2Depth(StageExecutor):
             log.error(f"depth_predict_coreml failed: {e}")
             if e.stderr:
                 log.error(e.stderr)
+            # Cleanup temp script on error
+            temp_script.unlink(missing_ok=True)
             return False, 0
 
 

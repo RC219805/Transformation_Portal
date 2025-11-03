@@ -23,7 +23,7 @@ Notes
 - AgX paths & names depend on the config you load. Use list_ocio_views() to introspect.
 - Input must be scene-linear (no gamma). If your buffer is sRGB-encoded, decode it first.
 
-Author: ChatGPT (GPT-5 Pro), 2025
+Author: AI-assisted implementation, 2025
 """
 
 from __future__ import annotations
