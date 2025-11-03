@@ -292,9 +292,6 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
         if not self.config.dry_run:
             subprocess.run(cmd_enhance, check=True)
         
-        
-        
-        
         duration = time.time() - t_start
         log.info("\n" + "=" * 70)
         log.info("WORKFLOW COMPLETE")
