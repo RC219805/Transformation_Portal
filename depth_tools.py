@@ -21,6 +21,15 @@ Depth maps expected: *_depth16.png (or other high-bit-depth formats)
 Mask files (optional): _mask_sky.png, _mask_building.png, etc.
 Enhanced images: searched recursively for files matching base + priority tags.
 
+Exit Codes:
+    0 - Success (all files processed without errors)
+    1 - Partial or complete failure (one or more files failed)
+    2 - Fatal error (unable to start or complete batch processing)
+
+Note: This tool uses strict error handling. Any file processing error results in
+exit code 1, regardless of how many files were successfully processed. All errors
+are logged with detailed context for troubleshooting.
+
 Designed to be robust for large photography / architectural pipelines.
 """
 from __future__ import annotations
@@ -674,7 +683,16 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
 # ----- CLI -----
 
 def build_cli() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="depth_tools", description="Depth-driven post effects (haze|clarity|dof) with optional masks")
+    ap = argparse.ArgumentParser(
+        prog="depth_tools",
+        description="Depth-driven post effects (haze|clarity|dof) with optional masks",
+        epilog=(
+            "Exit codes: 0 = success (all files processed), "
+            "1 = one or more files failed, "
+            "2 = fatal error. "
+            "Uses strict error handling: any processing error results in exit code 1."
+        )
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def common(p):
@@ -757,7 +775,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     try:
         error_count = process_batch(opts, progress=_cli_progress)
-        # Return non-zero exit code if errors occurred
+        # Strict error handling: return exit code 1 if any files failed.
+        # This ensures CI/CD pipelines can detect partial failures.
         if error_count > 0:
             _log.error("Batch processing completed with %d error(s)", error_count)
             return 1
