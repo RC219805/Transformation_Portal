@@ -64,7 +64,7 @@ processed_output/
 # macOS
 .DS_Store
 
-# Downloaded tools
+# Tools
 actionlint
 
 # Large data files (keep directory structure, ignore large images)
