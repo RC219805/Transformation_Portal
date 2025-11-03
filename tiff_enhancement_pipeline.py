@@ -270,8 +270,6 @@ class Stage2Depth(StageExecutor):
             # Use the cmd constructed above (lines 249-257)
             if hasattr(self.config, "depth_model_path") and self.config.depth_model_path:
                 log.debug(f"Executing depth_predict_coreml.py with model: {Path(self.config.depth_model_path).name}")
-            else:
-                log.debug("Executing depth_predict_coreml.py without explicit model path")
             result = subprocess.run(
                 cmd,
                 check=True,
