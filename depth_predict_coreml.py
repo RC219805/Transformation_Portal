@@ -33,11 +33,6 @@ def parse_args():
     )
     return parser.parse_args()
 
-args = parse_args()
-MODEL_PATH = args.model_path
-IN_DIR     = args.in_dir
-OUT_DIR    = args.out_dir
-os.makedirs(OUT_DIR, exist_ok=True)
 
 # --------------------------------------------------------------------------
 # Parse command-line arguments
