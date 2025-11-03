@@ -39,7 +39,7 @@ except ImportError as e:
 
 # Optional OCIO
 try:
-    import PyOpenColorIO as ocio
+    import PyOpenColorIO
     HAVE_OCIO = True
 except ImportError:
     HAVE_OCIO = False
