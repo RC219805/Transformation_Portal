@@ -340,10 +340,10 @@ class FullStackWorkflow(WorkflowExecutor):
             # This would use FFmpeg or custom LUT application
             log.info("LUT application via custom implementation")
             # Implementation details omitted for brevity
-            
-            graded_source = self.config.output_dir / "02_graded"
-        else:
-            graded_source = enhanced_output / "05_final"
+        
+        
+        
+        
         
         # Stage 3: Material Application
         if self.config.material_albedo:
