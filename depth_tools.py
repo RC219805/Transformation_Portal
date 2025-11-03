@@ -554,6 +554,7 @@ class BatchOptions:
     workers: int = 1
     verbose: bool = False
     skip_missing: bool = True
+    allow_partial_success: bool = False
     # effect-specific
     haze_color: Tuple[float, float, float] = DEFAULT_HAZE_COLOR
     strength: float = 0.18
@@ -752,7 +753,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         restrict_tag=getattr(args, "restrict_tag", None),
         fmt=getattr(args, "fmt", "tiff"),
         workers=max(1, int(getattr(args, "workers", 1))),
-        verbose=getattr(args, "verbose", False)
+        verbose=getattr(args, "verbose", False),
+        allow_partial_success=getattr(args, "allow_partial_success", False)
     )
 
     # effect-specific mappings
@@ -775,12 +777,30 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     try:
         error_count = process_batch(opts, progress=_cli_progress)
-        # Strict error handling: return exit code 1 if any files failed.
-        # This ensures CI/CD pipelines can detect partial failures.
-        if error_count > 0:
+
+        # Determine exit code based on error handling policy
+        if error_count == 0:
+            # No errors - success
+            return 0
+        elif opts.allow_partial_success:
+            # Some errors but partial success is allowed - check if any files succeeded
+            # If all files failed, still return non-zero
+            # Note: process_batch raises SystemExit if no depth maps found, so we have at least 1 depth map
+            # error_count < total means at least one file succeeded
+            depth_maps = sorted(glob.glob(os.path.join(opts.depths_root, "*_depth16.*")))
+            total = len(depth_maps)
+            if error_count >= total:
+                # All files failed
+                _log.error("All %d file(s) failed processing", total)
+                return 1
+            else:
+                # At least one file succeeded - partial success is allowed
+                _log.info("Partial success: %d/%d files processed successfully", total - error_count, total)
+                return 0
+        else:
+            # Errors occurred and strict mode (default) - return non-zero
             _log.error("Batch processing completed with %d error(s)", error_count)
             return 1
-        return 0
     except Exception as exc:
         _log.exception("Fatal error running batch: %s", exc)
         return 2
