@@ -267,7 +267,6 @@ class Stage2Depth(StageExecutor):
 
         # Execute
         try:
-            # Use the cmd constructed above (lines 249-257)
             if self.config.depth_model_path:
                 log.debug(f"Executing depth_predict_coreml.py with model: {Path(self.config.depth_model_path).name}")
             result = subprocess.run(
