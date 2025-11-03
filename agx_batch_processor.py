@@ -40,9 +40,18 @@ try:
         guess_agx_view,
         srgb_to_linear
     )
-except ImportError as e:
-    print(f"ERROR: tonemapper_agx_filmic not found: {e}")
-    sys.exit(1)
+except ImportError:
+    try:
+        from tonemapper_agx_filmic import (
+            apply_agx_ocio,
+            apply_filmic_hable,
+            list_ocio_views,
+            guess_agx_view,
+            srgb_to_linear
+        )
+    except ImportError as e:
+        print(f"ERROR: tonemapper_agx_filmic not found: {e}")
+        sys.exit(1)
 
 # Optional imageio for EXR
 try:
