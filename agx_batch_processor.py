@@ -41,8 +41,7 @@ try:
         apply_filmic_hable,
         list_ocio_views,
         guess_agx_view,
-        srgb_to_linear,
-        linear_to_srgb
+        srgb_to_linear
     )
 except ImportError as e:
     print(f"ERROR: tonemapper_agx_filmic not found: {e}")
