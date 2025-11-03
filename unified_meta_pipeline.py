@@ -254,7 +254,7 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
             log.info("\n[STAGE 1/2] Grading Pipeline")
             log.info("-" * 70)
             
-            graded_output = self.config.output_dir / "02_graded"
+            # graded_output = self.config.output_dir / "02_graded"  # Removed unused variable
             
             # Note: This assumes input is video frames or sequence
             # Real implementation would need frame extraction logic
