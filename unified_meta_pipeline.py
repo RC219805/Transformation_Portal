@@ -37,6 +37,7 @@ python unified_meta_pipeline.py full-stack \
 
 from __future__ import annotations
 import argparse
+import json
 import logging
 import shutil
 import subprocess
@@ -172,10 +173,22 @@ class ArchHeroWorkflow(WorkflowExecutor):
             log.info("\n[STAGE 2/2] PBR Material Application")
             log.info("-" * 70)
             
-            # Find enhanced images
-            enhanced_dir = enhanced_output / "05_final"
+            # Read the enhancement pipeline manifest to get final output directory
+            manifest_path = enhanced_output / "pipeline_manifest.json"
+            if not manifest_path.exists():
+                log.error(f"Enhancement pipeline manifest not found: {manifest_path}")
+                log.error("Cannot determine final output directory from enhancement pipeline")
+                return False
+            
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+            
+            # Extract stage5_final path from manifest
+            enhanced_dir = Path(manifest["config"]["stage5_final"])
+            log.info(f"Reading enhanced images from: {enhanced_dir}")
+            
             enhanced_images = list(enhanced_dir.glob("*.tif")) + \
-                            list(enhanced_dir.glob("*.tiff"))
+                list(enhanced_dir.glob("*.tiff"))
             
             log.info(f"Found {len(enhanced_images)} enhanced images")
             
@@ -215,7 +228,21 @@ class ArchHeroWorkflow(WorkflowExecutor):
         else:
             # Copy enhanced results to final
             log.info("\n[STAGE 2/2] No material maps provided, using enhanced output")
-            enhanced_dir = enhanced_output / "05_final"
+            
+            # Read the enhancement pipeline manifest to get final output directory
+            manifest_path = enhanced_output / "pipeline_manifest.json"
+            if not manifest_path.exists():
+                log.error(f"Enhancement pipeline manifest not found: {manifest_path}")
+                log.error("Cannot determine final output directory from enhancement pipeline")
+                return False
+            
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+            
+            # Extract stage5_final path from manifest
+            enhanced_dir = Path(manifest["config"]["stage5_final"])
+            log.info(f"Reading enhanced images from: {enhanced_dir}")
+            
             final_output = self.config.output_dir / "final"
             
             for img in enhanced_dir.glob("*"):
