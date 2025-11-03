@@ -28,7 +28,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Protocol, Tuple
+from typing import Dict, Optional, Protocol, Tuple
 
 import numpy as np
 from PIL import Image
