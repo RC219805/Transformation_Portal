@@ -351,7 +351,7 @@ class AdaptiveSegmentationStage:
 
 
 # Integration with existing pipeline config
-@dataclass 
+@dataclass
 class EnhancedPipelineConfig:
     """Extended configuration with material clustering options."""
     # ... (inherit all original fields)
