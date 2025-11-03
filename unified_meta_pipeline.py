@@ -155,12 +155,12 @@ class WorkflowExecutor:
             return None
         
         try:
-            with open(manifest_path, 'r') as f:
+            with open(manifest_path, 'r', encoding='utf-8') as f:
                 manifest = json.load(f)
             
-            # Extract stage5_final path from manifest
-            stage5_final = manifest["config"]["stage5_final"]
-            enhanced_dir = Path(stage5_final)
+            # Extract final output path from manifest
+            final_output_path = manifest["config"]["stage5_final"]
+            enhanced_dir = Path(final_output_path)
             log.info(f"Reading enhanced images from: {enhanced_dir}")
             return enhanced_dir
             
