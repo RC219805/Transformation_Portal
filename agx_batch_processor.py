@@ -31,12 +31,9 @@ from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
-# Ensure module access
-sys.path.append(str(Path(__file__).parent))
-
 # Tonemapper module import
 try:
-    from tonemapper_agx_filmic import (
+    from .tonemapper_agx_filmic import (
         apply_agx_ocio,
         apply_filmic_hable,
         list_ocio_views,
