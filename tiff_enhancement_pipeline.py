@@ -237,50 +237,40 @@ class Stage2Depth(StageExecutor):
         if not script.exists():
             log.error(f"depth_predict_coreml.py not found at {script}")
             return False, 0
-        
-        # Read and modify script to use our paths
-        with open(script, 'r') as f:
-            script_content = f.read()
-        
-        # Create temporary modified script
-        temp_script = Path("/tmp/depth_predict_temp.py")
-        modified = script_content.replace(
-            'IN_DIR     = "/Users/rc/Desktop/my_project/images/750_Picacho"',
-            f'IN_DIR     = "{self.config.stage1_enhance}"'
-        ).replace(
-            'OUT_DIR    = "/Users/rc/Desktop/my_project/outputs/depth/750_Picacho"',
-            f'OUT_DIR    = "{self.config.stage2_depth}"'
-        )
-        
-        with open(temp_script, 'w') as f:
-            f.write(modified)
-        
+
+        # Build command-line arguments
+        cmd = [
+            sys.executable,
+            str(script),
+            "--in-dir", str(self.config.stage1_enhance),
+            "--out-dir", str(self.config.stage2_depth),
+        ]
+        # Optionally add model path if available in config
+        if hasattr(self.config, "depth_model_path") and self.config.depth_model_path:
+            cmd += ["--model-path", str(self.config.depth_model_path)]
+
         log.info(f"Running depth prediction on {self.config.stage1_enhance}")
-        
+
         if self.config.dry_run:
-            log.info("[DRY RUN] Would execute depth_predict_coreml")
+            log.info("[DRY RUN] Would execute: %s", " ".join(cmd))
             return True, 0
-        
+
         # Execute
         try:
             result = subprocess.run(
-                [sys.executable, str(temp_script)],
+                cmd,
                 check=True,
                 capture_output=True,
                 text=True
             )
             if result.stdout:
                 log.debug(result.stdout)
-            
+
             # Count depth maps
             depth_maps = list(self.config.stage2_depth.glob("*_depth16.png"))
-            
-            # Cleanup temp script
-            temp_script.unlink()
-            
+
             self.log_complete(time.time() - t0, len(depth_maps))
             return True, len(depth_maps)
-            
         except subprocess.CalledProcessError as e:
             log.error(f"depth_predict_coreml failed: {e}")
             if e.stderr:
