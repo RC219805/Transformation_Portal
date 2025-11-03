@@ -33,7 +33,7 @@ import numpy as np
 try:
     import PyOpenColorIO as ocio  # type: ignore
     _HAVE_OCIO = True
-except Exception:
+except ImportError:
     ocio = None  # type: ignore
     _HAVE_OCIO = False
 
