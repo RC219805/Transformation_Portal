@@ -56,7 +56,6 @@ except ImportError:
 
 # Optional OCIO for AgX tone mapping
 try:
-    import PyOpenColorIO as ocio
     HAVE_OCIO = True
 except ImportError:
     HAVE_OCIO = False
