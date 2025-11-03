@@ -256,7 +256,7 @@ class Stage2Depth(StageExecutor):
             "--out-dir", str(self.config.stage2_depth),
         ]
         # Optionally add model path if available in config
-        if hasattr(self.config, "depth_model_path") and self.config.depth_model_path:
+        if self.config.depth_model_path:
             cmd += ["--model-path", str(self.config.depth_model_path)]
 
         log.info(f"Running depth prediction on {self.config.stage1_enhance}")
@@ -268,7 +268,7 @@ class Stage2Depth(StageExecutor):
         # Execute
         try:
             # Use the cmd constructed above (lines 249-257)
-            if hasattr(self.config, "depth_model_path") and self.config.depth_model_path:
+            if self.config.depth_model_path:
                 log.debug(f"Executing depth_predict_coreml.py with model: {Path(self.config.depth_model_path).name}")
             else:
                 log.debug("Executing depth_predict_coreml.py without explicit model path")
