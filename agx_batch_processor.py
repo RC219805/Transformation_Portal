@@ -52,13 +52,6 @@ except ImportError:
     HAVE_IMAGEIO = False
 
 # Optional OCIO for AgX tone mapping
-try:
-    import PyOpenColorIO
-    HAVE_OCIO = True
-except ImportError:
-    HAVE_OCIO = False
-
-
 # ------------------------------
 # AgX View Name Patterns
 # ------------------------------
