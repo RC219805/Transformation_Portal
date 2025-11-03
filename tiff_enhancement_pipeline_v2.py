@@ -253,13 +253,13 @@ class AdaptiveSegmentationStage:
             log.error(f"Semantic segmentation failed: {e}")
             return False, 0
     
-    def _run_material_clustering(self, enhanced_dir: Path, depth_dir: Path,
+    def _run_material_clustering(self, enhanced_dir: Path, _depth_dir: Path,
                                 output_dir: Path) -> Tuple[bool, int]:
         """
         Run K-means material clustering (fast aerial mode).
 
         Note:
-            The `depth_dir` parameter is accepted for interface consistency with other segmentation
+            The `_depth_dir` parameter is accepted for interface consistency with other segmentation
             methods but is not used in material clustering, as this mode only processes enhanced images.
         """
         log.info(f"Running material clustering (k={self.config.material_clusters})...")
