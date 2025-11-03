@@ -37,6 +37,8 @@ python unified_meta_pipeline.py full-stack \
 
 from __future__ import annotations
 import argparse
+import itertools
+import json
 import logging
 import shutil
 import subprocess
@@ -123,6 +125,50 @@ class WorkflowExecutor:
         log.info(f"WORKFLOW: {name}")
         log.info("=" * 70)
     
+    def get_enhancement_final_dir(self, enhanced_output: Path) -> Optional[Path]:
+        """
+        Read enhancement pipeline manifest to get final output directory.
+        
+        This method reads the manifest file created by tiff_enhancement_pipeline.py
+        to discover the actual final output directory. The manifest is expected to
+        have the following structure:
+        
+            {
+                "pipeline_version": "1.0.0",
+                "timestamp": "...",
+                "config": {
+                    "stage5_final": "/path/to/final/output",
+                    ...
+                }
+            }
+        
+        Args:
+            enhanced_output: Path to enhancement pipeline output directory
+            
+        Returns:
+            Path to final output directory, or None if manifest cannot be read
+        """
+        manifest_path = enhanced_output / "pipeline_manifest.json"
+        if not manifest_path.exists():
+            log.error(f"Enhancement pipeline manifest not found: {manifest_path}")
+            log.error("Cannot determine final output directory from enhancement pipeline")
+            return None
+        
+        try:
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                manifest = json.load(f)
+            
+            # Extract final output path from manifest
+            final_output_path = manifest["config"]["stage5_final"]
+            enhanced_dir = Path(final_output_path)
+            log.info(f"Reading enhanced images from: {enhanced_dir}")
+            return enhanced_dir
+            
+        except (json.JSONDecodeError, KeyError) as e:
+            log.error(f"Failed to parse enhancement pipeline manifest: {e}")
+            log.error(f"Manifest path: {manifest_path}")
+            return None
+    
     def execute(self) -> bool:
         """Execute the workflow. Returns success status."""
         raise NotImplementedError
@@ -172,10 +218,16 @@ class ArchHeroWorkflow(WorkflowExecutor):
             log.info("\n[STAGE 2/2] PBR Material Application")
             log.info("-" * 70)
             
-            # Find enhanced images
-            enhanced_dir = enhanced_output / "05_final"
-            enhanced_images = list(enhanced_dir.glob("*.tif")) + \
-                            list(enhanced_dir.glob("*.tiff"))
+            # Get final output directory from enhancement pipeline manifest
+            enhanced_dir = self.get_enhancement_final_dir(enhanced_output)
+            if enhanced_dir is None:
+                return False
+            
+            # Collect both .tif and .tiff files efficiently
+            enhanced_images = list(itertools.chain(
+                enhanced_dir.glob("*.tif"),
+                enhanced_dir.glob("*.tiff")
+            ))
             
             log.info(f"Found {len(enhanced_images)} enhanced images")
             
@@ -215,7 +267,12 @@ class ArchHeroWorkflow(WorkflowExecutor):
         else:
             # Copy enhanced results to final
             log.info("\n[STAGE 2/2] No material maps provided, using enhanced output")
-            enhanced_dir = enhanced_output / "05_final"
+            
+            # Get final output directory from enhancement pipeline manifest
+            enhanced_dir = self.get_enhancement_final_dir(enhanced_output)
+            if enhanced_dir is None:
+                return False
+            
             final_output = self.config.output_dir / "final"
             
             for img in enhanced_dir.glob("*"):
