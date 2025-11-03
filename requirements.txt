@@ -13,7 +13,7 @@ pytest>=7.0
 
 # Depth Anything V2 Pipeline Dependencies
 transformers>=4.35.0,<5
-huggingface-hub>=0.19.0,<1
+huggingface-hub>=0.19.0,<2
 torchvision>=0.15.0,<1
 opencv-python>=4.8.0,<5
 scikit-learn>=1.4.0  # Updated to support numpy 2.x
