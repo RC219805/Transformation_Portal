@@ -532,35 +532,67 @@ class Pipeline:
         
         # Check required external Python dependencies
         # Note: Do not check built-in modules (argparse, pathlib, logging, etc.)
-        required = [
+        always_required = [
             ("numpy", "numpy"),
             ("Pillow", "PIL"),           # Pillow provides PIL namespace
-            ("coremltools", "coremltools"),
-            ("torch", "torch"),
-            ("opencv-python", "cv2"),
-            ("detectron2", "detectron2"),
             ("tifffile", "tifffile"),
         ]
+        # Optional dependencies, only required if corresponding stage is enabled
+        optional = [
+            ("coremltools", "coremltools", "depth prediction (Stage 2)", bool(getattr(self.config, "depth_model_path", None))),
+            ("torch", "torch", "depth prediction (Stage 2)", bool(getattr(self.config, "depth_model_path", None))),
+            ("opencv-python", "cv2", "depth effects (Stage 5)", bool(getattr(self.config, "depth_effects", None))),
+            ("detectron2", "detectron2", "panoptic segmentation (Stage 4)", bool(getattr(self.config, "enable_panoptic", False))),
+        ]
         missing = []
-        for pip_name, import_name in required:
+        # Check always-required dependencies
+        for pip_name, import_name in always_required:
             try:
                 __import__(import_name)
             except ImportError:
-                missing.append((pip_name, import_name))
+                missing.append((pip_name, import_name, "required"))
+        
+        # Check optional dependencies only if their feature is enabled
+        missing_optional = []
+        for pip_name, import_name, feature_desc, is_enabled in optional:
+            if is_enabled:
+                try:
+                    __import__(import_name)
+                except ImportError:
+                    missing.append((pip_name, import_name, feature_desc))
+            else:
+                # If not enabled, just warn if missing (not error)
+                try:
+                    __import__(import_name)
+                except ImportError:
+                    missing_optional.append((pip_name, import_name, feature_desc))
         
         if missing:
-            for pip_name, import_name in missing:
+            for pip_name, import_name, feature_desc in missing:
                 if pip_name == "Pillow":
                     log.error(
                         "Missing required package: Pillow (imported as 'PIL'). "
                         "Install with: pip install Pillow"
                     )
-                else:
+                elif feature_desc == "required":
                     log.error(
                         f"Missing required package: {pip_name} (imported as '{import_name}'). "
                         f"Install with: pip install {pip_name}"
                     )
+                else:
+                    log.error(
+                        f"Missing required package: {pip_name} (imported as '{import_name}') "
+                        f"for {feature_desc}. Install with: pip install {pip_name}"
+                    )
             return False
+        
+        # Warn about missing optional dependencies for skipped stages
+        if missing_optional:
+            for pip_name, import_name, feature_desc in missing_optional:
+                log.warning(
+                    f"Optional package {pip_name} (imported as '{import_name}') not found. "
+                    f"{feature_desc.capitalize()} will be unavailable if enabled."
+                )
         
         log.info("✓ Environment validated")
         return True
