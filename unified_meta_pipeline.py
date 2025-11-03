@@ -165,10 +165,7 @@ class ArchHeroWorkflow(WorkflowExecutor):
         log.info(f"Command: {' '.join(cmd_enhance)}")
         
         if not self.config.dry_run:
-            result = subprocess.run(cmd_enhance, check=True)
-            if result.returncode != 0:
-                log.error("Enhancement pipeline failed")
-                return False
+            subprocess.run(cmd_enhance, check=True)
         
         # Stage 2: PBR Material Application (if material maps provided)
         if self.config.material_albedo is not None:
@@ -340,10 +337,6 @@ class FullStackWorkflow(WorkflowExecutor):
             # This would use FFmpeg or custom LUT application
             log.info("LUT application via custom implementation")
             # Implementation details omitted for brevity
-        
-            pass  # Implementation details omitted for brevity
-        else:
-            pass  # Implementation details omitted for brevity
         
         # Stage 3: Material Application
         if self.config.material_albedo:
