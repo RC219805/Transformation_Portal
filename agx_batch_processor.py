@@ -265,7 +265,6 @@ def process_folder(input_dir: Path,
     output_dir.mkdir(parents=True, exist_ok=True)
     log.info(f"\nProcessing {len(images)} images from {input_dir} with {workers} workers...\n")
 
-    tasks = []
     results = []
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futures = {}
