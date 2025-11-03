@@ -4,17 +4,36 @@ This module provides utilities for validating and working with supported
 image and video file formats across all pipelines.
 
 Functions:
+    normalize_extension: Normalize file extension to lowercase with leading dot
     is_supported_image_format: Check if a file has a supported image extension
     is_supported_video_format: Check if a file has a supported video extension
     is_supported_tiff_format: Check if a file is a TIFF format
+    is_luxury_format: Check if file is in a luxury/high-quality format
     validate_format: Validate format and raise error if unsupported
     get_format_info: Get detailed information about a file format
+    suggest_output_format: Suggest appropriate output format based on input
+    get_supported_formats_summary: Get summary of all supported formats
+    format_help_text: Generate help text for supported formats
+
+Exceptions:
+    UnsupportedFormatError: Raised when a file format is not supported
+
+Constants:
+    SUPPORTED_IMAGE_EXTENSIONS: Set of supported image file extensions
+    SUPPORTED_VIDEO_EXTENSIONS: Set of supported video file extensions
+    LUXURY_IMAGE_EXTENSIONS: Set of luxury/high-quality image formats
+    TIFF_EXTENSIONS: Set of TIFF-specific extensions
+
+Note:
+    This module may be relocated to src/transformation_portal/utils/ in a future
+    refactoring to support the new CLI structure. For now, it remains at the
+    project root for backward compatibility with existing scripts.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 # Supported image extensions (case-insensitive)
 SUPPORTED_IMAGE_EXTENSIONS = {
@@ -292,9 +311,13 @@ def suggest_output_format(
 ) -> str:
     """Suggest an appropriate output format based on input format.
     
+    Note: This function is designed for image formats only. Video formats
+    should use their native containers (MP4, MOV, etc.) for output.
+    
     Args:
-        input_path: Input file path
-        preserve_quality: If True, suggest lossless or high-quality formats
+        input_path: Input file path (image formats only)
+        preserve_quality: If True, suggest lossless or high-quality formats.
+                         If False, suggest web-optimized formats (may be lossy).
         
     Returns:
         Recommended output extension (e.g., '.tiff', '.png', '.jpg')
@@ -305,20 +328,29 @@ def suggest_output_format(
         >>> suggest_output_format('render.tiff', preserve_quality=True)
         '.tiff'
         >>> suggest_output_format('web_image.png', preserve_quality=False)
+        '.png'
+        >>> suggest_output_format('photo.jpg', preserve_quality=False)
         '.jpg'
     """
     path_obj = Path(input_path) if isinstance(input_path, str) else input_path
     ext = normalize_extension(path_obj)
     
+    # Video formats should keep their native container
+    if ext in SUPPORTED_VIDEO_EXTENSIONS:
+        return ext
+    
     # TIFF stays TIFF for quality preservation
     if ext in TIFF_EXTENSIONS and preserve_quality:
         return '.tiff'
     
-    # PNG is good lossless format
+    # PNG is good lossless format for quality preservation
     if preserve_quality:
+        if ext == '.png':
+            return '.png'
+        # For other image formats, use PNG as a high-quality default
         return '.png'
     
-    # For web/fast delivery, use JPEG
+    # For other image formats without special properties, use JPEG for web delivery
     return '.jpg'
 
 

@@ -41,6 +41,9 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
+# Import common image utilities
+from image_utils import load_image_rgb as _load_image_rgb_base
+
 # ----- Optional accelerated libraries -----
 
 try:
@@ -315,8 +318,8 @@ def find_mask_for_base(mask_root: Optional[str], base: str, kind: str) -> Option
 @retry_on_io_error()
 def load_image_rgb(path: str) -> np.ndarray:
     validate_file_exists(path, "Image")
-    arr = np.asarray(Image.open(path).convert("RGB"))
-    return arr.astype(np.float32) / 255.0
+    # Use common image loading function
+    return _load_image_rgb_base(path)
 
 @retry_on_io_error()
 def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tiff", quality: int = 95) -> str:

@@ -21,13 +21,20 @@ See [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) for details.
 
 **Transformation Portal** is a comprehensive suite of AI-powered tools and pipelines designed for high-end architectural rendering, real estate photography, and video post-production. It combines cutting-edge machine learning models, professional color grading techniques, and proprietary **Material Response** technology to transform raw renders and photographs into polished marketing visuals.
 
+### 🤖 Custom AI Agent Available
+
+A specialized **Transformation Portal Specialist** GitHub Copilot agent is available to assist with development. It has deep expertise in all repository pipelines, AI/ML integration, performance optimization, and professional workflows. See [Custom Agent Guide](docs/CUSTOM_AGENT_GUIDE.md) for details.
+
+Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
+
 ## Table of Contents
 
 * [Features](#features)
 * [Quick Start](#quick-start)
 * [Installation](#installation)
 * [Supported File Formats](#supported-file-formats)
-* [Core Components](#core-components)
+* [**📖 Pipeline Operations Guide**](docs/PIPELINE_OPERATIONS_GUIDE.md) ⬅️**How to Operate**
+* [Core Components](#core-components))
   * [Depth Pipeline](#depth-pipeline)
   * [Lux Render Pipeline](#lux-render-pipeline)
   * [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
@@ -72,6 +79,8 @@ See [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) for details.
 ---
 
 ## Quick Start
+
+> **📖 New to the pipelines?** Check out the complete **[Pipeline Operations Guide](docs/PIPELINE_OPERATIONS_GUIDE.md)** for step-by-step instructions on how to operate each pipeline, or see the **[Quick Start Cheat Sheet](docs/QUICKSTART_CHEATSHEET.md)** for common commands.
 
 ### Installation
 
@@ -797,9 +806,11 @@ If you use Depth Anything V2 in research, please cite:
 
 ### Documentation
 
+- 🚀 **[Pipeline Operations Guide](docs/PIPELINE_OPERATIONS_GUIDE.md)** - **Complete step-by-step guide to operate all pipelines**
+- ⚡ [Quick Start Cheat Sheet](docs/QUICKSTART_CHEATSHEET.md) - Commands and common tasks at a glance
 - 📘 [Refactoring Summary](docs/REFACTORING_SUMMARY.md) - Repository reorganization details
 - 🏗️ [Architecture Guide](docs/ARCHITECTURE.md) - Design principles and module organization
-- ⚡ [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md) - Benchmarks and best practices
+- 🔧 [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md) - Benchmarks and best practices
 - 🔄 [Migration Guide](docs/REFACTORING_2025.md) - How to update your code
 - 🛠️ [Depth Pipeline](docs/depth_pipeline/DEPTH_PIPELINE_README.md) - Depth processing documentation
 
