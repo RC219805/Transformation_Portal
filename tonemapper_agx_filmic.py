@@ -222,10 +222,10 @@ def guess_agx_view(config_path: str | None = None) -> tuple[str, str]:
     cfg = _resolve_config(config_path)
     display = cfg.getDefaultDisplay() if hasattr(cfg, 'getDefaultDisplay') else cfg.getDefaultDisplayDeviceName()
     candidates = []
-    for disp in cfg.getDisplaysAll():
+    displays = cfg.getDisplaysAll() if hasattr(cfg, 'getDisplaysAll') else cfg.getDisplays()
+    for disp in displays:
         for v in cfg.getViews(disp):
             name = v.lower()
-            if "agx" in name:
                 candidates.append((disp, v))
     if candidates:
         # Prefer the default display if any candidate belongs to it
