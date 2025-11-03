@@ -91,6 +91,28 @@ def _hable_curve(x: np.ndarray,
     """
     John Hable's Uncharted 2 filmic curve for HDR tone mapping.
     Operates on linear scene values.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input scene-linear value(s).
+    A, B, C, D, E, F : float
+        Curve parameters controlling the shape of the tone mapping operator:
+            - A: Shoulder strength (default 0.15)
+            - B: Linear strength (default 0.50)
+            - C: Linear angle (default 0.10)
+            - D: Toe strength (default 0.20)
+            - E: Toe numerator (default 0.02)
+            - F: Toe denominator (default 0.30)
+        These values are from Hable's original formulation and rarely need to be changed.
+        For details, see:
+            - John Hable, "Filmic Tonemapping Operators", 2010.
+              http://filmicworlds.com/blog/filmic-tonemapping-operators/
+
+    Returns
+    -------
+    np.ndarray
+        Tone-mapped value(s), same shape as input.
     """
     return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - (E / F)
 
