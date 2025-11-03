@@ -451,8 +451,6 @@ class EnhancementOnlyWorkflow(WorkflowExecutor):
         
         if not self.config.dry_run:
             result = subprocess.run(cmd_enhance, check=True)
-            if result.returncode != 0:
-                return False
         
         duration = time.time() - t_start
         log.info("\n" + "=" * 70)
