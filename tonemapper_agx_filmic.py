@@ -226,6 +226,7 @@ def guess_agx_view(config_path: str | None = None) -> tuple[str, str]:
     for disp in displays:
         for v in cfg.getViews(disp):
             name = v.lower()
+            if 'agx' in name:
                 candidates.append((disp, v))
     if candidates:
         # Prefer the default display if any candidate belongs to it
