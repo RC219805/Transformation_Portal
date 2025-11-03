@@ -7,10 +7,13 @@ Comprehensive orchestration pipeline for dramatic enhancement of large 16/32-bit
 
 Pipeline Stages:
 1. HDR Enhancement (realize_v8_unified) - Initial color grading, exposure, tone curves
-2. Depth Prediction (CoreML) - Generate depth maps optimized for Apple Silicon
+2. Depth Prediction (CoreML) - OPTIONAL: Generate depth maps optimized for Apple Silicon
 3. AgX Tone Mapping - Professional tone mapping with auto-exposure
 4. Panoptic Segmentation - Generate semantic masks (sky, building)
 5. Depth Effects - Final atmospheric effects (haze, clarity, DOF)
+
+Note: Stage 2 (Depth Prediction) is optional and requires a CoreML model via --depth-model-path.
+      If not provided, the pipeline will skip depth prediction and proceed to Stage 3.
 
 Optimizations for M4 Max:
 - Memory-mapped file operations for 100-200MB TIFFs
@@ -231,9 +234,10 @@ class Stage2Depth(StageExecutor):
             log.info("Skipping Stage 2 (depth_predict_coreml)")
             return True, 0
         
-        # Check if depth model path is configured
+        # Check if depth model path is configured (optional)
         if not self.config.depth_model_path:
-            log.warning("No depth model path configured, skipping Stage 2. Use --depth-model-path to enable depth prediction")
+            log.info("Stage 2 (depth prediction) is optional and not configured. "
+                     "Skipping to Stage 3. To enable depth processing, provide --depth-model-path")
             return True, 0
         
         t0 = time.time()
@@ -611,10 +615,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ocio-config", type=str, default=None,
                     help="Path to OpenColorIO config for AgX")
     
-    # Depth processing
+    # Depth processing (optional)
     ap.add_argument("--depth-model-path", type=str, default=None,
-                    help="Path to CoreML depth model directory (.mlpackage) for Stage 2. "
-                         "If not provided, Stage 2 will be skipped.")
+                    help="[OPTIONAL] Path to CoreML depth model directory (.mlpackage) for Stage 2. "
+                         "Stage 2 (depth prediction) will be skipped if not provided, and the "
+                         "pipeline will proceed directly to Stage 3 (AgX tone mapping).")
     ap.add_argument("--depth-effects", nargs="+",
                     choices=["haze", "clarity", "dof"],
                     default=["haze", "clarity"],
