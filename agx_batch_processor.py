@@ -48,12 +48,6 @@ except ImportError as e:
     sys.exit(1)
 
 # Optional OCIO
-try:
-    import PyOpenColorIO
-    HAVE_OCIO = True
-except ImportError:
-    HAVE_OCIO = False
-
 # Optional imageio for EXR
 try:
     import imageio.v3 as iio
