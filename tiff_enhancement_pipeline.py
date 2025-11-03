@@ -530,17 +530,36 @@ class Pipeline:
         
         log.info(f"Found {len(tiff_files)} TIFF files")
         
-        # Check Python dependencies
-        required = ["numpy", "PIL", "coremltools"]
+        # Check required external Python dependencies
+        # Note: Do not check built-in modules (argparse, pathlib, logging, etc.)
+        required = [
+            ("numpy", "numpy"),
+            ("Pillow", "PIL"),           # Pillow provides PIL namespace
+            ("coremltools", "coremltools"),
+            ("torch", "torch"),
+            ("opencv-python", "cv2"),
+            ("detectron2", "detectron2"),
+            ("tifffile", "tifffile"),
+        ]
         missing = []
-        for mod in required:
+        for pip_name, import_name in required:
             try:
-                __import__(mod)
+                __import__(import_name)
             except ImportError:
-                missing.append(mod)
+                missing.append((pip_name, import_name))
         
         if missing:
-            log.error(f"Missing required Python packages: {', '.join(missing)}")
+            for pip_name, import_name in missing:
+                if pip_name == "Pillow":
+                    log.error(
+                        "Missing required package: Pillow (imported as 'PIL'). "
+                        "Install with: pip install Pillow"
+                    )
+                else:
+                    log.error(
+                        f"Missing required package: {pip_name} (imported as '{import_name}'). "
+                        f"Install with: pip install {pip_name}"
+                    )
             return False
         
         log.info("✓ Environment validated")
