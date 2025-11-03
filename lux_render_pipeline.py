@@ -57,6 +57,9 @@ except ImportError:
 # Annotators
 from controlnet_aux import CannyDetector, MidasDetector
 
+# Import common image utilities
+from image_utils import load_image, save_image, pil_to_np, np_to_pil
+
 # Optional Real-ESRGAN (RealESRGANer is imported lazily in LuxRenderPipeline.__init__)
 _HAS_REALESRGAN = importlib.util.find_spec("realesrgan") is not None
 
@@ -76,37 +79,6 @@ def seed_all(seed: int) -> Generator:
         torch.cuda.manual_seed_all(seed)
     generator = Generator(device="cuda" if torch.cuda.is_available() else "cpu")
     return generator.manual_seed(seed)
-
-
-def load_image(path: Union[str, Path]) -> Image.Image:
-    """Load ``path`` into an RGB ``Image`` instance."""
-
-    img = Image.open(path).convert("RGB")
-    return img
-
-
-def save_image(img: Image.Image, path: Union[str, Path]) -> None:
-    """Persist ``img`` to ``path``, creating parent directories when missing."""
-
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    img.save(path)
-
-
-def pil_to_np(img: Image.Image, to_float: bool = True) -> np.ndarray:
-    """Convert a PIL image to a NumPy array optionally scaled to ``[0, 1]``."""
-
-    arr = np.array(img)
-    if to_float:
-        arr = arr.astype(np.float32) / 255.0
-    return arr
-
-
-def np_to_pil(arr: np.ndarray) -> Image.Image:
-    """Convert a float array in ``[0, 1]`` back to an 8-bit ``Image``."""
-
-    arr = np.clip(arr, 0, 1)
-    arr = (arr * 255.0 + 0.5).astype(np.uint8)
-    return Image.fromarray(arr)
 
 
 @lru_cache(maxsize=16)
