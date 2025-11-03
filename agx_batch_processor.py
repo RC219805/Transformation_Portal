@@ -53,6 +53,28 @@ except ImportError:
 
 
 # ------------------------------
+# AgX View Name Patterns
+# ------------------------------
+# These patterns define the naming conventions for AgX views in OCIO configs.
+# Different OCIO configurations may use different naming conventions.
+# Override these constants or load from configuration as needed.
+AGX_VIEW_PATTERNS = {
+    "base": [
+        "AgX - Base Contrast",
+        "AgX Base Contrast"
+    ],
+    "medium": [
+        "AgX - Medium Contrast",
+        "AgX Medium Contrast"
+    ],
+    "high": [
+        "AgX - High Contrast",
+        "AgX High Contrast"
+    ]
+}
+
+
+# ------------------------------
 # Logging Setup
 # ------------------------------
 log = logging.getLogger("AgXBatch")
@@ -170,8 +192,10 @@ def process_image(arr: np.ndarray,
             display, view = guess_agx_view(ocio_config)
             available = list_ocio_views(ocio_config)
 
+            # Use configurable view name patterns
+            view_patterns = AGX_VIEW_PATTERNS.get(variant.lower(), AGX_VIEW_PATTERNS["base"])
             for disp, views in available.items():
-                for candidate in [f"AgX - {variant.capitalize()} Contrast", f"AgX {variant.capitalize()} Contrast"]:
+                for candidate in view_patterns:
                     if candidate in views:
                         display, view = disp, candidate
                         break
