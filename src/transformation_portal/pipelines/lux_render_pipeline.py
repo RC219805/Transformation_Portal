@@ -25,16 +25,18 @@ except Exception:  # pragma: no cover
                 "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
             )
 import glob
+import importlib.util
 import math
 import random
 from functools import lru_cache
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import numpy as np
 import typer
 from PIL import Image, ImageDraw, ImageFont
+from scipy.ndimage import gaussian_filter, sobel
 
 import torch
 from torch import Generator
@@ -55,14 +57,11 @@ except ImportError:
 # Annotators
 from controlnet_aux import CannyDetector, MidasDetector
 
-# Optional Real-ESRGAN
-try:
-    from realesrgan import RealESRGAN
-except (ImportError, OSError):
-    RealESRGAN = None
-    _HAS_REALESRGAN = False
-else:
-    _HAS_REALESRGAN = True
+# Import common image utilities
+from image_utils import load_image, save_image, pil_to_np, np_to_pil
+
+# Optional Real-ESRGAN (RealESRGANer is imported lazily in LuxRenderPipeline.__init__)
+_HAS_REALESRGAN = importlib.util.find_spec("realesrgan") is not None
 
 # --------------------------
 
@@ -80,37 +79,6 @@ def seed_all(seed: int) -> Generator:
         torch.cuda.manual_seed_all(seed)
     generator = Generator(device="cuda" if torch.cuda.is_available() else "cpu")
     return generator.manual_seed(seed)
-
-
-def load_image(path: Union[str, Path]) -> Image.Image:
-    """Load ``path`` into an RGB ``Image`` instance."""
-
-    img = Image.open(path).convert("RGB")
-    return img
-
-
-def save_image(img: Image.Image, path: Union[str, Path]) -> None:
-    """Persist ``img`` to ``path``, creating parent directories when missing."""
-
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    img.save(path)
-
-
-def pil_to_np(img: Image.Image, to_float: bool = True) -> np.ndarray:
-    """Convert a PIL image to a NumPy array optionally scaled to ``[0, 1]``."""
-
-    arr = np.array(img)
-    if to_float:
-        arr = arr.astype(np.float32) / 255.0
-    return arr
-
-
-def np_to_pil(arr: np.ndarray) -> Image.Image:
-    """Convert a float array in ``[0, 1]`` back to an 8-bit ``Image``."""
-
-    arr = np.clip(arr, 0, 1)
-    arr = (arr * 255.0 + 0.5).astype(np.uint8)
-    return Image.fromarray(arr)
 
 
 @lru_cache(maxsize=16)
@@ -234,9 +202,6 @@ def add_bloom(
     intensity: float = 0.25,
 ) -> np.ndarray:
     """Add a soft bloom based on bright pixels exceeding ``threshold``."""
-
-    from scipy.ndimage import gaussian_filter
-
     lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
     mask = (lum > threshold).astype(np.float32)
     glow = np.stack([gaussian_filter(rgb[..., i] * mask, blur_radius) for i in range(3)], axis=-1)
@@ -302,10 +267,6 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
 
     Emphasizes texture, shadowing, atmosphere, and sky plates.
     """
-
-    # Lazy import: only load SciPy filters when finishing is requested.
-    from scipy.ndimage import sobel, gaussian_filter
-
     rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
 
     floor_texture_strength = float(np.clip(floor_texture_strength, 0.0, 1.0))
