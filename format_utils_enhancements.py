@@ -461,7 +461,7 @@ def check_tifffile_available() -> bool:
 
 
 def save_tiff_16bit(
-    image_array: np.ndarray,
+    image_array: 'np.ndarray',
     output_path: Union[str, Path],
     compression: str = 'lzw',
     metadata: Optional[Dict] = None
