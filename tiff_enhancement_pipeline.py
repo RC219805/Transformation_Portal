@@ -277,7 +277,7 @@ class Stage2Depth(StageExecutor):
                 "--out-dir", str(self.config.stage2_depth)
             ]
             
-            log.debug(f"Executing: {' '.join(cmd)}")
+            log.debug(f"Executing depth_predict_coreml.py with model: {model_path.name}")
             
             result = subprocess.run(
                 cmd,
