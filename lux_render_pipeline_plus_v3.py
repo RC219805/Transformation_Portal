@@ -147,9 +147,9 @@ def apply_pbr_overlays(
     # quality presets
     q = quality.lower()
     if q == "draft":
-        proc_scale = min(proc_scale, 0.5); pom_steps = min(pom_steps, 1); enable_displacement=False; disp_mm = min(disp_mm, 1.0)
+        proc_scale = min(proc_scale, 0.5); enable_displacement=False; disp_mm = min(disp_mm, 1.0)
     elif q == "preview":
-        proc_scale = min(proc_scale, 0.75); pom_steps = min(pom_steps, 4); disp_mm = min(disp_mm, 2.0)
+        proc_scale = min(proc_scale, 0.75); disp_mm = min(disp_mm, 2.0)
     elif q == "final":
         pass
 
