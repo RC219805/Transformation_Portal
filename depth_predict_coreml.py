@@ -43,8 +43,8 @@ def main():
     """Main execution function for depth prediction."""
     args = parse_args()
     MODEL_PATH = args.model_path
-    IN_DIR = args.input_dir
-    OUT_DIR = args.output_dir
+    IN_DIR = args.in_dir
+    OUT_DIR = args.out_dir
     os.makedirs(OUT_DIR, exist_ok=True)
 
     # --------------------------------------------------------------------------
