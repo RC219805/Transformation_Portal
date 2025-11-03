@@ -341,9 +341,9 @@ class FullStackWorkflow(WorkflowExecutor):
             log.info("LUT application via custom implementation")
             # Implementation details omitted for brevity
         
-        
-        
-        
+            pass  # Implementation details omitted for brevity
+        else:
+            pass  # Implementation details omitted for brevity
         
         # Stage 3: Material Application
         if self.config.material_albedo:
