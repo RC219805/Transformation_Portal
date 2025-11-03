@@ -290,7 +290,7 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
         log.info(f"Command: {' '.join(cmd_enhance)}")
         
         if not self.config.dry_run:
-            result = subprocess.run(cmd_enhance, check=True)
+            subprocess.run(cmd_enhance, check=True)
         
         
         
