@@ -77,7 +77,35 @@ def _open_any(path: Union[str, Path]) -> Tuple[Image.Image, Dict[str, Any]]:
 
 
 def _prepare_tifffile_kwargs(meta: Dict[str, Any]) -> Dict[str, Any]:
-    """Prepare kwargs for tifffile with metadata."""
+    """
+    Prepare keyword arguments for tifffile.imwrite based on provided metadata.
+
+    Parameters
+    ----------
+    meta : dict
+        Metadata dictionary, typically extracted from an image file. May be empty or contain
+        special keys such as 'description' (str) and 'metadata' (dict).
+
+    Returns
+    -------
+    dict
+        Dictionary of keyword arguments suitable for passing to tifffile.imwrite.
+        Always includes 'photometric': 'rgb'. If 'description' is present in meta, it is used as
+        the 'description' argument. If not, the entire meta dict is serialized as a string and used
+        as 'description'. If 'metadata' is present and is a dict, it is passed as the 'metadata'
+        argument.
+
+    Behavior
+    --------
+    - If meta is empty or None, returns {'photometric': 'rgb'}.
+    - If meta contains a 'description' key, its value is used as the 'description' argument.
+    - If meta does not contain 'description', the entire meta dict is serialized to JSON (or str fallback)
+      and used as the 'description' argument.
+    - If meta contains a 'metadata' key and its value is a dict, it is passed as the 'metadata' argument.
+    - If serialization of meta fails, falls back to str(meta) for the description.
+
+    Parameters and return values are designed to maximize metadata preservation when saving TIFF files.
+    """
     tifffile_kwargs = {'photometric': 'rgb'}
     if not meta:
         return tifffile_kwargs
