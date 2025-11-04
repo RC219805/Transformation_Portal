@@ -152,9 +152,9 @@ Applies LUTs with depth masking:
 
 ```python
 # LUT directories
-01_Film_Emulation/          # Film stock emulations
-02_Location_Aesthetic/       # Location-specific looks
-03_Material_Response/        # Material enhancement
+assets/luts/film_emulation/          # Film stock emulations
+assets/luts/location_aesthetic/       # Location-specific looks
+assets/luts/material_response/        # Material enhancement
 
 # Depth-masked application
 blend = 0.7 + 0.3 * (1 - depth)  # Stronger on foreground

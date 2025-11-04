@@ -6,6 +6,8 @@ This script shows how to use the format_utils module to validate
 and get information about image and video file formats before
 processing them with Transformation Portal pipelines.
 
+NOTE: Requires package installation: pip install -e .
+
 Usage:
     python examples/validate_file_formats.py path/to/file.jpg
     python examples/validate_file_formats.py --scan directory/
@@ -16,7 +18,9 @@ Prerequisites:
 
 import sys
 from pathlib import Path
-from format_utils import (
+
+# pylint: disable=wrong-import-position
+from format_utils import (  # noqa: E402
     validate_format,
     get_format_info,
     suggest_output_format,

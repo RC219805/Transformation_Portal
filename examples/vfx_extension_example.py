@@ -6,11 +6,11 @@ Example usage of the VFX extension for Transformation Portal.
 This demonstrates how to use the realize_v8_unified_cli_extension to apply
 depth-guided visual effects to architectural renderings.
 
-Prerequisites:
-    pip install -e .
+NOTE: Requires package installation: pip install -e .
 """
 
 from pathlib import Path
+
 from realize_v8_unified import _info
 from realize_v8_unified_cli_extension import (
     VFX_PRESETS,
@@ -108,7 +108,7 @@ def example_cli_usage():
     _info("       --input interior.jpg \\")
     _info("       --output enhanced.jpg \\")
     _info("       --vfx-preset subtle_estate \\")
-    _info("       --lut 02_Location_Aesthetic/California/Montecito_Golden_Hour_HDR.cube")
+    _info("       --lut assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube")
 
 
 def main():
