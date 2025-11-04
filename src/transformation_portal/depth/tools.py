@@ -149,11 +149,21 @@ class BoundedCache:
 _depth_cache = BoundedCache()
 _mask_cache = BoundedCache()
 
+def _format_cache_stats(cache_name: str, stats: Dict[str, Any]) -> None:
+    """Helper function to format and log cache statistics."""
+    _log.debug(
+        "%s cache: hits=%d misses=%d size=%d hit_rate=%.2f%%",
+        cache_name,
+        stats["hits"],
+        stats["misses"],
+        stats["size"],
+        stats["hit_rate"] * 100
+    )
+
 def clear_all_caches() -> None:
-    ds = _depth_cache.stats()
-    ms = _mask_cache.stats()
-    _log.debug("Depth cache: hits=%d misses=%d size=%d hit_rate=%.2f%%", ds["hits"], ds["misses"], ds["size"], ds["hit_rate"] * 100)
-    _log.debug("Mask cache:  hits=%d misses=%d size=%d hit_rate=%.2f%%", ms["hits"], ms["misses"], ms["size"], ms["hit_rate"] * 100)
+    """Clear all caches and log statistics."""
+    _format_cache_stats("Depth", _depth_cache.stats())
+    _format_cache_stats("Mask", _mask_cache.stats())
     _depth_cache.clear()
     _mask_cache.clear()
 
