@@ -16,14 +16,7 @@ Example:
         --width 1024 --height 768 --steps 30 --strength 0.45 --gs 7.5 \
         --brand_text "The Veridian | Penthouse 21B" --logo ./brand/logo.png
 """
-try:
-    from realesrgan import RealESRGANer  # type: ignore
-except Exception:  # pragma: no cover
-    class RealESRGANer:  # minimal CI stub
-        def __init__(self, *_, **__):
-            raise RuntimeError(
-                "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
-            )
+
 import glob
 import importlib.util
 import math
@@ -47,6 +40,16 @@ from diffusers import (
     StableDiffusionLatentUpscalePipeline,
     UniPCMultistepScheduler,
 )
+
+try:
+    from realesrgan import RealESRGANer  # type: ignore
+except Exception:  # pragma: no cover
+    class RealESRGANer:  # minimal CI stub
+        def __init__(self, *_, **__):
+            raise RuntimeError(
+                "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
+            )
+
 # SDXL (optional). Imported lazily only if used.
 try:
     from diffusers import StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline
