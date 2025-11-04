@@ -1,5 +1,4 @@
 # pylint: disable=no-member  # False positives with package imports
-from pathlib import Path
 from typing import Optional
 
 import numpy as np
