@@ -207,7 +207,7 @@ def validate_format(
 
     is_valid = False
     if allowed_types in {'image', 'both'}:
-        valid = valid or is_supported_image_format(path_obj)
+        is_valid = is_valid or is_supported_image_format(path_obj)
     if allowed_types in {'video', 'both'}:
         is_valid = is_valid or is_supported_video_format(path_obj)
 
