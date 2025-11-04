@@ -7,6 +7,10 @@ This demonstrates how to use the realize_v8_unified_cli_extension to apply
 depth-guided visual effects to architectural renderings.
 
 NOTE: Requires package installation: pip install -e .
+
+All file paths in this example have been verified to exist in the repository
+after restructuring (verified 2025-11-04). Run verify_example_paths.py to
+re-validate paths.
 """
 
 from pathlib import Path
@@ -108,6 +112,7 @@ def example_cli_usage():
     _info("       --input interior.jpg \\")
     _info("       --output enhanced.jpg \\")
     _info("       --vfx-preset subtle_estate \\")
+    # Path verified to exist after restructuring (2025-11-04)
     _info("       --lut assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube")
 
 
