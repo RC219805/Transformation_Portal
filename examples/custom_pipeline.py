@@ -6,8 +6,13 @@ Demonstrates building a custom processing pipeline with specific parameters.
 
 Usage:
     python examples/custom_pipeline.py input.jpg output.jpg
+
+Prerequisites:
+    pip install -e .
 """
 
+import sys
+from pathlib import Path
 from depth_pipeline.utils import (
     load_image,
     save_image,
@@ -21,11 +26,6 @@ from depth_pipeline.processors import (
     DepthGuidedFilters,
 )
 from depth_pipeline.models import DepthAnythingV2Model, ModelVariant
-import sys
-from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def main():
