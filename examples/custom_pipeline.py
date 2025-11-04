@@ -8,6 +8,9 @@ NOTE: Requires package installation: pip install -e .
 
 Usage:
     python examples/custom_pipeline.py input.jpg output.jpg
+
+Prerequisites:
+    pip install -e .
 """
 
 import sys
