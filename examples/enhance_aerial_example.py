@@ -2,6 +2,9 @@
 
 This script demonstrates how to apply MBAR board materials to an aerial photograph
 of the Montecito estate.
+
+Prerequisites:
+    pip install -e .
 """
 from pathlib import Path
 from board_material_aerial_enhancer import enhance_aerial

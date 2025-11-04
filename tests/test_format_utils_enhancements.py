@@ -7,7 +7,6 @@ Test coverage for new features:
 
 Run with: pytest tests/test_format_utils_enhancements.py -v
 """
-# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import pytest
 import numpy as np
