@@ -269,14 +269,14 @@ def batch_with_error_handling(
         items: List of items to process
         process_func: Function to apply to each item
         skip_errors: If True, skip failed items and continue. Failed items are
-            logged at WARNING level but silently excluded from results.
+            logged at WARNING level and excluded from results.
         error_limit: Maximum number of errors before aborting (None = unlimited)
         
     Returns:
         List of successfully processed results. When skip_errors=True, the
         returned list will only contain successful results, so
-        len(results) < len(items) is possible. Failed items are silently
-        excluded after being logged.
+        len(results) < len(items) is possible. Failed items are logged at WARNING
+        level and excluded from the results.
         
     Raises:
         ProcessingError: If skip_errors=False and any item fails, or if
