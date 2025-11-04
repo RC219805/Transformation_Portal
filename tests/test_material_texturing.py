@@ -9,6 +9,10 @@ import types
 import numpy as np
 from PIL import Image
 
+# Import after stubs are in place to prevent lux_render_pipeline from loading
+# heavy ML dependencies during test setup - this will be done after stub setup
+# to avoid ImportError
+
 # ``lux_render_pipeline`` depends on heavy diffusion stacks. Provide small stubs
 # so we can import the module and exercise the finishing helpers without the
 # runtime dependencies.
@@ -98,7 +102,8 @@ controlnet_aux_stub.MidasDetector = _MidasDetector
 
 sys.modules.setdefault("controlnet_aux", controlnet_aux_stub)
 
-# Import after stubs are in place to prevent lux_render_pipeline from loading
+# pylint: disable=wrong-import-position
+# Import must be after stubs are in place to prevent lux_render_pipeline from loading
 # heavy ML dependencies during test setup
 from lux_render_pipeline import apply_material_response_finishing  # noqa: E402
 

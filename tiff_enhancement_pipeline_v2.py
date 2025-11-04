@@ -227,6 +227,8 @@ class AdaptiveSegmentationStage:
             return self._run_auto_segmentation(
                 enhanced_images_dir, depth_maps_dir, output_dir
             )
+        # Fallback for unknown mode (should not happen with proper validation)
+        return False, 0
 
     def _run_semantic_segmentation(self, enhanced_dir: Path, depth_dir: Path,
                                    output_dir: Path) -> Tuple[bool, int]:
