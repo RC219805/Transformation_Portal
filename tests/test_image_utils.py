@@ -1,4 +1,8 @@
-"""Tests for common image utilities module."""
+"""Tests for common image utilities module.
+
+Note: These tests assume the package is installed in development mode.
+Run `pip install -e .` from the repository root before running tests.
+"""
 import tempfile
 from pathlib import Path
 
@@ -6,7 +10,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from image_utils import (
+from transformation_portal.utils.image_utils import (
     load_image,
     save_image,
     pil_to_np,

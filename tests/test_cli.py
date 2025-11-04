@@ -1,21 +1,12 @@
-"""Tests for CLI module."""
+"""Tests for CLI module.
+
+Note: These tests assume the package is installed in development mode.
+Run `pip install -e .` from the repository root before running tests.
+"""
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
-
-# Add project root to path
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-# Add src directory to path for transformation_portal imports
-SRC_PATH = str(ROOT / "src")
-if SRC_PATH not in sys.path:
-    sys.path.insert(0, SRC_PATH)
 
 
 class TestCLIImport:

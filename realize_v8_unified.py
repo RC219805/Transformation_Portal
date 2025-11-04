@@ -373,6 +373,8 @@ def main():
 
     # Check if VFX extension is available
     try:
+        # pylint: disable=cyclic-import
+        # Lazy import to allow VFX extension to import from this module
         from realize_v8_unified_cli_extension import add_vfx_commands
         has_vfx = True
     except ImportError:

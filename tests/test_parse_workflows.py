@@ -7,7 +7,8 @@ import pytest
 import tempfile
 import shutil
 from pathlib import Path
-from parse_workflows import WorkflowParser, WorkflowBug
+
+from transformation_portal.analyzers.parse_workflows import WorkflowParser, WorkflowBug
 
 
 @pytest.fixture
