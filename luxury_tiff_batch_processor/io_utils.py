@@ -630,9 +630,11 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
         LOGGER.warning(
             "Falling back to Pillow for float save; output will be 8-bit. Install 'tifffile' for full float support."
         )
-        clipped = np.clip(array_to_write, 0.0, 1.0).astype(np.float32)
+        clipped = np.clip(array_to_write, 0.0, 1.0)
         converted = np.clip(np.round(clipped * 255.0), 0, 255).astype(np.uint8)
         if converted.ndim == 3 and converted.shape[2] > 3:
+            # PIL only supports up to 4 channels (RGBA). Extract first 3 RGB channels
+            # and first alpha channel (index 3), discarding any additional channels.
             rgb8 = converted[..., :3]
             alpha8 = converted[..., 3]
             converted = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
