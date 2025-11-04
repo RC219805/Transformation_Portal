@@ -9,9 +9,7 @@ from typing import Any, Dict
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
+# NOTE: Tests assume package is installed with: pip install -e .
 
 try:
     from .documentation import documents
