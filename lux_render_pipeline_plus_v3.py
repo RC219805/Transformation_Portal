@@ -48,8 +48,9 @@ def _open_L(path: Union[str, Path]) -> Image.Image:
         im = im.convert("L")
     return im
 
-def _resize(im: Image.Image, size: Tuple[int,int], res=Image.BICUBIC) -> Image.Image:
-    if im.size == size: return im
+def _resize(im: Image.Image, size: Tuple[int,int], res=Image.BICUBIC) -> Image.Image:  # pylint: disable=no-member
+    if im.size == size:
+        return im
     return im.resize(size, res)
 
 def _as_f32_rgb(im: Image.Image) -> np.ndarray:
@@ -159,11 +160,12 @@ def apply_pbr_overlays(
     # Mask (process region)
     mask_np = None
     if mask is not None:
-        m = _open_L(mask); m = _resize(m, (w,h), res=Image.BICUBIC)
+        m = _open_L(mask)
+        m = _resize(m, (w,h), res=Image.BICUBIC)  # pylint: disable=no-member
         mask_np = _as_f32_L(m)
 
     # Start from input (linear)
-    base = np.asarray(Image.fromarray((np.clip(base_hi,0,1)*255).astype(np.uint8)).resize((w,h), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+    base = np.asarray(Image.fromarray((np.clip(base_hi,0,1)*255).astype(np.uint8)).resize((w,h), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0  # pylint: disable=no-member
 
     # Albedo
     if albedo is not None:
@@ -264,11 +266,11 @@ def apply_pbr_overlays(
 
     # Upscale + detail restore
     if scale < 1.0:
-        up = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W,H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
-        hf = np.clip(base_hi - np.asarray(Image.fromarray((base_hi*255).astype(np.uint8)).resize((W,H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0, -1,1)
+        up = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W,H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0  # pylint: disable=no-member
+        hf = np.clip(base_hi - np.asarray(Image.fromarray((base_hi*255).astype(np.uint8)).resize((W,H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0, -1,1)  # pylint: disable=no-member
         shaded = np.clip(up + 0.12*hf, 0.0, 1.0)
     else:
-        shaded = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W,H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+        shaded = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W,H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0  # pylint: disable=no-member
 
     # Finishing
     # exposure/clamp
