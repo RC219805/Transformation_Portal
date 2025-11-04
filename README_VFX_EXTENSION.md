@@ -217,13 +217,13 @@ python realize_v8_unified_cli_extension.py enhance-vfx \
     --input render.jpg \
     --output enhanced.jpg \
     --vfx-preset subtle_estate \
-    --lut 02_Location_Aesthetic/California/Montecito_Golden_Hour_HDR.cube
+    --lut assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube
 ```
 
 LUT directories:
-- `01_Film_Emulation/` - Kodak and FilmConvert emulations
-- `02_Location_Aesthetic/` - Location-specific color profiles
-- `03_Material_Response/` - Physics-based surface enhancement
+- `assets/luts/film_emulation/` - Kodak and FilmConvert emulations
+- `assets/luts/location_aesthetic/` - Location-specific color profiles
+- `assets/luts/material_response/` - Physics-based surface enhancement
 
 ### Depth Pipeline Configuration
 

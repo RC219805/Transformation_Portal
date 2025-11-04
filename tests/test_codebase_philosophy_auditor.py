@@ -3,7 +3,7 @@ from textwrap import dedent
 
 import pytest
 
-from codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
+from scripts.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
