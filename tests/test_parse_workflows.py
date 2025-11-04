@@ -8,7 +8,10 @@ import tempfile
 import shutil
 from pathlib import Path
 
-from transformation_portal.analyzers.parse_workflows import WorkflowParser, WorkflowBug
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from parse_workflows import WorkflowParser, WorkflowBug
 
 
 @pytest.fixture
