@@ -1,10 +1,10 @@
-"""Tests to verify the repository restructuring is working correctly."""
+"""Tests to verify the repository restructuring is working correctly.
 
-import sys
+Note: These tests assume the package is installed in development mode.
+Run `pip install -e .` from the repository root before running tests.
+"""
+
 from pathlib import Path
-
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 
 def test_depth_module_import():
