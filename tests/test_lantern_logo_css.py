@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parent.parent
-CSS_PATH = ROOT / "09_Client_Deliverables" / "Lantern_Logo_Implementation_Kit" / "lantern_logo.css"
+CSS_PATH = ROOT / "assets" / "brand" / "lantern_logo" / "lantern_logo.css"
 
 
 def _extract_hover_block(css: str) -> str:
