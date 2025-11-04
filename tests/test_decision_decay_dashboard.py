@@ -1,20 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-# Add scripts directory to path for backward compatibility
-sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
-
-from decision_decay_dashboard import (
+from scripts.decision_decay_dashboard import (
     collect_color_token_report,
     collect_outdated_valid_until_records,
     collect_philosophy_violations,
     collect_valid_until_records,
 )
-from codebase_philosophy_auditor import Violation
+from scripts.codebase_philosophy_auditor import Violation
 
 
 def test_collect_valid_until_records_sorted(tmp_path):
