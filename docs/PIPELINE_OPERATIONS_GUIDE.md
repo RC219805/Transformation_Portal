@@ -536,7 +536,7 @@ processor.batch_process(
 # Custom preset
 custom_preset = PresetConfig(
     name="My Custom Look",
-    lut="01_Film_Emulation/Kodak_2393.cube",
+    lut="assets/luts/film_emulation/Kodak_2393.cube",
     exposure=0.2,
     contrast=1.08,
     saturation=1.05,
@@ -601,7 +601,7 @@ FFmpeg-based video color grading with:
 python luxury_video_master_grader.py \
   input_video.mp4 \
   output_video.mp4 \
-  --lut 01_Film_Emulation/Kodak_2393.cube
+  --lut assets/luts/film_emulation/Kodak_2393.cube
 ```
 
 **Default output:**
@@ -632,7 +632,7 @@ python luxury_video_master_grader.py \
   hdr_video.mp4 \
   sdr_output.mp4 \
   --tone-map hable \
-  --lut 01_Film_Emulation/FilmConvert_Nitrate.cube
+  --lut assets/luts/film_emulation/FilmConvert_Nitrate.cube
 ```
 
 **Tone mapping operators:**
@@ -662,7 +662,7 @@ python luxury_video_master_grader.py \
   source.mp4 \
   output.mp4 \
   --fps 24 \
-  --lut 01_Film_Emulation/Kodak_2393.cube
+  --lut assets/luts/film_emulation/Kodak_2393.cube
 ```
 
 #### Custom Output Codec
@@ -680,7 +680,7 @@ python luxury_video_master_grader.py \
   source.mp4 \
   archive.mov \
   --codec prores_hq \
-  --lut 02_Location_Aesthetic/Montecito_Golden_Hour.cube
+  --lut assets/luts/location_aesthetic/Montecito_Golden_Hour.cube
 ```
 
 #### Dry Run (Preview FFmpeg Command)
@@ -758,8 +758,8 @@ result = mr.enhance_with_controls(
 result = mr.enhance_with_luts(
     image,
     lut_stack=[
-        '03_Material_Response/Wood_Grain_Enhancement.cube',
-        '03_Material_Response/Metal_Specularity.cube'
+        'assets/luts/material_response/Wood_Grain_Enhancement.cube',
+        'assets/luts/material_response/Metal_Specularity.cube'
     ],
     blend_mode='multiply',
     opacity=0.75
@@ -882,7 +882,7 @@ python luxury_video_master_grader.py \
 python luxury_video_master_grader.py \
   property_tour_graded.mp4 \
   property_tour_final.mp4 \
-  --lut 02_Location_Aesthetic/Montecito_Golden_Hour.cube \
+  --lut assets/luts/location_aesthetic/Montecito_Golden_Hour.cube \
   --codec prores_hq
 
 # Expected time: Depends on video length (~1-2x real-time)
@@ -1047,7 +1047,7 @@ ffmpeg -version
 **Solution:**
 ```bash
 # Verify LUT exists
-ls -la 01_Film_Emulation/Kodak_2393.cube
+ls -la assets/luts/film_emulation/Kodak_2393.cube
 
 # Use absolute path
 python luxury_video_master_grader.py \
@@ -1055,7 +1055,7 @@ python luxury_video_master_grader.py \
   --lut /absolute/path/to/lut.cube
 
 # Verify LUT format (must be .cube format)
-file 01_Film_Emulation/Kodak_2393.cube
+file assets/luts/film_emulation/Kodak_2393.cube
 ```
 
 #### 6. "CUDA out of memory" error
@@ -1219,9 +1219,9 @@ processor.batch_process("input/", "output/", preset="signature")
 - `moody` - Dramatic shadows, muted tones
 
 **LUT Collections:**
-- `01_Film_Emulation/` - Kodak, FilmConvert LUTs
-- `02_Location_Aesthetic/` - Montecito, Spanish Colonial
-- `03_Material_Response/` - Surface-specific enhancement LUTs
+- `assets/luts/film_emulation/` - Kodak, FilmConvert LUTs
+- `assets/luts/location_aesthetic/` - Montecito, Spanish Colonial
+- `assets/luts/material_response/` - Surface-specific enhancement LUTs
 
 ---
 

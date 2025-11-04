@@ -66,6 +66,7 @@ def linear_to_srgb(lin: np.ndarray) -> np.ndarray:
 
 _LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
+
 def luminance(rgb: np.ndarray) -> np.ndarray:
     """Compute relative luminance from linear RGB."""
     return np.tensordot(rgb, _LUMA, axes=([rgb.ndim - 1], [0])).astype(np.float32)
@@ -176,7 +177,7 @@ def list_ocio_views(config_path: str | None = None) -> dict:
     out = {}
     displays = cfg.getDisplaysAll() if hasattr(cfg, 'getDisplaysAll') else cfg.getDisplays()
     for display in displays:
-        views = [v for v in cfg.getViews(display)]
+        views = list(cfg.getViews(display))
         out[display] = views
     return out
 
