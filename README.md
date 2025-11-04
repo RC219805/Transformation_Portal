@@ -14,6 +14,7 @@ The repository has been significantly reorganized for better performance and mai
 - **60% faster** imports with lazy loading
 - **Clear modular structure** with organized packages
 - **Comprehensive documentation** in docs/ directory
+- **Dual structure** for gradual migration (see [STRUCTURE.md](STRUCTURE.md))
 
 See [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) for details.
 
@@ -32,6 +33,7 @@ Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
 * [Features](#features)
 * [Quick Start](#quick-start)
 * [Installation](#installation)
+* [Repository Structure](STRUCTURE.md) - **Dual structure explained**
 * [Supported File Formats](#supported-file-formats)
 * [**📖 Pipeline Operations Guide**](docs/PIPELINE_OPERATIONS_GUIDE.md) ⬅️**How to Operate**
 * [Core Components](#core-components))
@@ -93,14 +95,18 @@ cd Transformation_Portal
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install dependencies
+# Install dependencies (for root-level scripts)
 pip install -r requirements.txt
 
-# Optional: Install extras
-pip install -e ".[tiff]"   # 16-bit TIFF processing
-pip install -e ".[ml]"     # ML extras for AI pipelines
-pip install -e ".[dev]"    # pytest, linting
-pip install -e ".[all]"    # everything
+# OR: Install as package with optional dependencies
+pip install -e .            # Core only (lightweight)
+pip install -e ".[tiff]"   # + 16-bit TIFF processing
+pip install -e ".[ai]"     # + Stable Diffusion, ControlNet
+pip install -e ".[ml]"     # + Depth pipeline, advanced ML
+pip install -e ".[dev]"    # + pytest, linting
+pip install -e ".[all]"    # Everything
+
+# See STRUCTURE.md for details on dual structure
 ```
 
 ### Verify Installation

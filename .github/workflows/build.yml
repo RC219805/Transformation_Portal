@@ -99,7 +99,9 @@ jobs:
             pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           fi
           pip install -r requirements-ci.txt
-          pip install -e .
+          # Skip package installation - tests load root-level scripts directly
+          # The package in src/ has heavy ML dependencies that aren't needed for tests
+          # To install package: pip install -e ".[ai,ml]"
           pip install pytest
           # Workaround for numpy/scikit-learn ABI incompatibility:
           # Recent versions of numpy (>=1.26) and scikit-learn (<1.4) can result in
