@@ -1,21 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Luxury Real Estate Render Refinement Pipeline.
+"""Backward-compatible wrapper for lux_render_pipeline.
 
-Transforms base renderings into polished marketing visuals by combining
-ControlNet guidance, diffusion, optional SDXL refinement, intelligent
-upscaling, and photo finishing. Branding overlays and a batch-friendly CLI
-complete the workflow.
+This wrapper preserves backward compatibility for both CLI invocation and
+module imports. The real implementation now lives in
+``src/transformation_portal/pipelines/lux_render_pipeline.py``.
 
-Example:
-    python lux_render_pipeline.py \
-        --input './drafts/*.png' --out ./final \
-        --prompt "luxury interior, natural daylight, oak wood floor" \
-        --neg "low detail, cartoon, blurry" \
-        --width 1024 --height 768 --steps 30 --strength 0.45 --gs 7.5 \
-        --brand_text "The Veridian | Penthouse 21B" --logo ./brand/logo.png
+For module imports, all functions are re-exported from the new location.
+For CLI usage, run: python lux_render_pipeline.py [options]
+
+NOTE: Requires package installation (pip install -e .) or running from
+repository root with src/ in Python path.
 """
+
+import glob
+import importlib.util
+import math
+import random
+from functools import lru_cache
+from pathlib import Path
+
+# Add src/ to path if package not installed (for development/testing)
+_repo_root = Path(__file__).parent
+if (_repo_root / "src").exists():
+    _src_path = str(_repo_root / "src")
+    if _src_path not in sys.path:
+        sys.path.insert(0, _src_path)
+
+# Re-export all public functions for backward compatibility
+from transformation_portal.pipelines.lux_render_pipeline import (  # noqa: E402
+    apply_material_response_finishing,
+    main,
+)
+
 try:
     from realesrgan import RealESRGANer  # type: ignore
 except Exception:  # pragma: no cover
@@ -24,29 +41,7 @@ except Exception:  # pragma: no cover
             raise RuntimeError(
                 "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
             )
-import glob
-import importlib.util
-import math
-import random
-from functools import lru_cache
-from pathlib import Path
-from dataclasses import dataclass, asdict
-from typing import List, Optional, Tuple
 
-import numpy as np
-import typer
-from PIL import Image, ImageDraw, ImageFont
-from scipy.ndimage import gaussian_filter, sobel
-
-import torch
-from torch import Generator
-
-from diffusers import (
-    ControlNetModel,
-    StableDiffusionControlNetImg2ImgPipeline,
-    StableDiffusionLatentUpscalePipeline,
-    UniPCMultistepScheduler,
-)
 # SDXL (optional). Imported lazily only if used.
 try:
     from diffusers import StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline
@@ -1220,6 +1215,12 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
         except Exception as e:
             print(f"[Error] {f}: {e}")
 
+# Make linting happy - these are intentionally re-exported
+__all__ = [
+    "apply_material_response_finishing",
+    "main",
+]
 
 if __name__ == "__main__":
-    app()
+    # Import and run the main CLI from the package
+    raise SystemExit(main())

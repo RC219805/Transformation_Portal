@@ -9,9 +9,7 @@ from typing import Any, Dict
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
+# NOTE: Tests assume package is installed with: pip install -e .
 
 try:
     from .documentation import documents
@@ -574,3 +572,84 @@ def test_image_roundtrip_uint16_with_alpha():
     # Since PIL downcast the data to uint8, the restored data will match the PIL conversion
     expected_uint8 = np.array(image)
     np.testing.assert_array_equal(restored, expected_uint8)
+
+
+@documents("Channel loss warnings alert users when >4 channels are discarded for Pillow compatibility")
+def test_save_image_warns_on_channel_discard_float(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog):
+    """Test that saving >4 channel float images logs a warning about channel loss."""
+    import logging
+    monkeypatch.setattr(io_utils, "tifffile", None)  # Force Pillow fallback
+
+    # Create a 5-channel float image (RGB + 2 alpha channels)
+    arr = np.random.rand(4, 4, 5).astype(np.float32)
+    destination = tmp_path / "test_5channel.tif"
+
+    with caplog.at_level(logging.WARNING):
+        io_utils.save_image(
+            destination, arr, arr.dtype, metadata=None, icc_profile=None, compression="tiff_lzw"
+        )
+
+    # Check that warning about channel discard was logged
+    warning_messages = [rec.message for rec in caplog.records if rec.levelname == "WARNING"]
+    assert any("Discarding channels 5+" in msg for msg in warning_messages), \
+        f"Expected channel discard warning, got: {warning_messages}"
+    assert any("5 channels" in msg for msg in warning_messages), \
+        f"Expected mention of 5 channels, got: {warning_messages}"
+
+    # Verify the file was saved with only 4 channels (RGBA)
+    saved_img = Image.open(destination)
+    assert saved_img.mode == "RGBA", f"Expected RGBA mode, got {saved_img.mode}"
+
+
+@documents("Channel loss warnings alert users when >4 channels are discarded for 16-bit images")
+def test_save_image_warns_on_channel_discard_uint16(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog):
+    """Test that saving >4 channel uint16 images logs a warning about channel loss."""
+    import logging
+    monkeypatch.setattr(io_utils, "tifffile", None)  # Force Pillow fallback
+
+    # Create a 6-channel uint16 image
+    arr = np.random.randint(0, 65535, size=(4, 4, 6), dtype=np.uint16)
+    destination = tmp_path / "test_6channel_uint16.tif"
+
+    with caplog.at_level(logging.WARNING):
+        io_utils.save_image(
+            destination, arr, arr.dtype, metadata=None, icc_profile=None, compression="tiff_lzw"
+        )
+
+    # Check that warning about channel discard was logged
+    warning_messages = [rec.message for rec in caplog.records if rec.levelname == "WARNING"]
+    assert any("Discarding channels 5+" in msg for msg in warning_messages), \
+        f"Expected channel discard warning, got: {warning_messages}"
+    assert any("6 channels" in msg for msg in warning_messages), \
+        f"Expected mention of 6 channels, got: {warning_messages}"
+
+    # Verify the file was saved with only 4 channels (RGBA)
+    saved_img = Image.open(destination)
+    assert saved_img.mode == "RGBA", f"Expected RGBA mode, got {saved_img.mode}"
+
+
+@documents("Channel loss warnings alert users when >4 channels are discarded for 8-bit images")
+def test_save_image_warns_on_channel_discard_uint8(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog):
+    """Test that saving >4 channel uint8 images logs a warning about channel loss."""
+    import logging
+    monkeypatch.setattr(io_utils, "tifffile", None)  # Force Pillow fallback
+
+    # Create a 5-channel uint8 image
+    arr = np.random.randint(0, 255, size=(4, 4, 5), dtype=np.uint8)
+    destination = tmp_path / "test_5channel_uint8.tif"
+
+    with caplog.at_level(logging.WARNING):
+        io_utils.save_image(
+            destination, arr, arr.dtype, metadata=None, icc_profile=None, compression="tiff_lzw"
+        )
+
+    # Check that warning about channel discard was logged
+    warning_messages = [rec.message for rec in caplog.records if rec.levelname == "WARNING"]
+    assert any("Discarding channels 5+" in msg for msg in warning_messages), \
+        f"Expected channel discard warning, got: {warning_messages}"
+    assert any("5 channels" in msg for msg in warning_messages), \
+        f"Expected mention of 5 channels, got: {warning_messages}"
+
+    # Verify the file was saved with only 4 channels (RGBA)
+    saved_img = Image.open(destination)
+    assert saved_img.mode == "RGBA", f"Expected RGBA mode, got {saved_img.mode}"
