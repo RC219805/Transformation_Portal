@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
-from codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
+from .codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 
 @dataclass
