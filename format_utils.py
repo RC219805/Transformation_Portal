@@ -391,13 +391,13 @@ def format_help_text(format_type: str = 'image') -> str:
     summary = get_supported_formats_summary()
 
     if format_type == 'image':
-        return f"Supported image formats: {', '.join(formats_summary['image'])}"
+        return f"Supported image formats: {', '.join(summary['image'])}"
     elif format_type == 'video':
-        return f"Supported video formats: {', '.join(formats_summary['video'])}"
+        return f"Supported video formats: {', '.join(summary['video'])}"
     elif format_type == 'both':
         return (
-            f"Supported image formats: {', '.join(formats_summary['image'])}\n"
-            f"Supported video formats: {', '.join(formats_summary['video'])}"
+            f"Supported image formats: {', '.join(summary['image'])}\n"
+            f"Supported video formats: {', '.join(summary['video'])}"
         )
     else:
         raise ValueError(f"Invalid format_type: {format_type}")
