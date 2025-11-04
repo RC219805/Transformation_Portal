@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Tests for performance utilities."""
-import sys
 import time
 from pathlib import Path
 
-# Add src to path for imports
-_repo_root = Path(__file__).parent.parent
-sys.path.insert(0, str(_repo_root / "src"))
-
 import pytest
+
+# Use proper package imports (assumes package is installed or PYTHONPATH is set)
+# For development: pip install -e . or set PYTHONPATH to include src/
 from transformation_portal.utils.performance import (
     timing_decorator,
     cache_result,

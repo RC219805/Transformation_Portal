@@ -177,8 +177,8 @@ def retry_on_failure(
                     current_delay *= backoff
                     attempt += 1
             
-            # This should never be reached, but makes type checker happy
-            raise RuntimeError(f"{func.__name__} exhausted all retry attempts")
+            # Should not reach here, but return for type safety
+            return None  # type: ignore
         
         return cast(F, wrapper)
     return decorator

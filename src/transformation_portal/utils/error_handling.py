@@ -146,6 +146,11 @@ def check_dependency(
     Raises:
         DependencyError: If dependency is missing or version is too old
         
+    Note:
+        Version checking requires the 'packaging' module. If not available,
+        version validation is skipped with a warning but the function still
+        returns True if the module can be imported.
+        
     Example:
         check_dependency('torch', package_name='torch', min_version='2.0.0')
     """
