@@ -48,10 +48,8 @@ def _open_L(path: Union[str, Path]) -> Image.Image:
         im = im.convert("L")
     return im
 
-
-def _resize(im: Image.Image, size: Tuple[int, int], res=Image.BICUBIC) -> Image.Image:
-    if im.size == size:
-        return im
+def _resize(im: Image.Image, size: Tuple[int,int], res=Image.Resampling.BICUBIC) -> Image.Image:
+    if im.size == size: return im
     return im.resize(size, res)
 
 
@@ -182,12 +180,11 @@ def apply_pbr_overlays(
     # Mask (process region)
     mask_np = None
     if mask is not None:
-        m = _open_L(mask)
-        m = _resize(m, (w, h), res=Image.BICUBIC)
+        m = _open_L(mask); m = _resize(m, (w,h), res=Image.Resampling.BICUBIC)
         mask_np = _as_f32_L(m)
 
     # Start from input (linear)
-    base = np.asarray(Image.fromarray((np.clip(base_hi, 0, 1)*255).astype(np.uint8)).resize((w, h), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+    base = np.asarray(Image.fromarray((np.clip(base_hi,0,1)*255).astype(np.uint8)).resize((w,h), Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
 
     # Albedo
     if albedo is not None:
@@ -296,24 +293,22 @@ def apply_pbr_overlays(
 
     # Upscale + detail restore
     if scale < 1.0:
-        up = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W, H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
-        hf = np.clip(base_hi - np.asarray(Image.fromarray((base_hi*255).astype(np.uint8)).resize((W, H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0, -1, 1)
+        up = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W,H), Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+        hf = np.clip(base_hi - np.asarray(Image.fromarray((base_hi*255).astype(np.uint8)).resize((W,H), Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0, -1,1)
         shaded = np.clip(up + 0.12*hf, 0.0, 1.0)
     else:
-        shaded = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W, H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+        shaded = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W,H), Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
 
     # Finishing
     # exposure/clamp
     if exposure != 0.0 or clamp_low > 0 or clamp_high < 1:
         def _lut_u8(exposure, lo, hi):
             x = (np.arange(256, dtype=np.float32)/255.0)
-            if exposure != 0.0:
-                x *= 2.0**float(exposure)
-            lo, hi = float(np.clip(lo, 0, 1)), float(np.clip(hi, 0, 1))
-            if hi < lo:
-                hi = lo
-            x = np.zeros_like(x) if hi == lo else (x-lo)/max(1e-6, hi-lo)
-            return (np.clip(x, 0, 1)*255.0+0.5).astype(np.uint8)
+            if exposure!=0.0: x *= 2.0**float(exposure)
+            lo,hi = float(np.clip(lo,0,1)), float(np.clip(hi,0,1))
+            hi = max(hi, lo)
+            x = np.zeros_like(x) if hi==lo else (x-lo)/max(1e-6,hi-lo)
+            return (np.clip(x,0,1)*255.0+0.5).astype(np.uint8)
         lut = _lut_u8(exposure, clamp_low, clamp_high)
         arr8 = (np.clip(shaded, 0, 1)*255.0+0.5).astype(np.uint8)
         shaded = _as_f32_rgb(Image.fromarray(lut[arr8]))
