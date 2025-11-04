@@ -618,12 +618,45 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
         clipped = np.clip(array_to_write, 0, dtype_info.max).astype(np.float32)
         converted = np.clip(np.round(clipped / scale), 0, 255).astype(np.uint8)
         if converted.ndim == 3 and converted.shape[2] > 3:
+            num_channels = converted.shape[2]
+            LOGGER.warning(
+                "Discarding channels 5+ for Pillow compatibility: "
+                "image has %d channels, keeping only RGBA (channels 1-4)", num_channels
+            )
             rgb8 = converted[..., :3]
             alpha8 = converted[..., 3]
             converted = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
         array_to_write = converted
     elif dtype_info and dtype_info.bits < 16 and array_to_write.ndim == 3 and array_to_write.shape[2] > 3:
-        array_to_write = array_to_write.astype(np.uint8)
+        num_channels = array_to_write.shape[2]
+        LOGGER.warning(
+            "Discarding channels 5+ for Pillow compatibility: "
+            "image has %d channels, keeping only RGBA (channels 1-4)", num_channels
+        )
+        converted = array_to_write.astype(np.uint8)
+        rgb8 = converted[..., :3]
+        alpha8 = converted[..., 3]
+        array_to_write = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
+    elif not dtype_info and np.issubdtype(np_dtype, np.floating):
+        # Convert floating-point arrays to uint8 for Pillow compatibility
+        # PIL doesn't support float32/float64 with multi-channel modes like RGB
+        LOGGER.warning(
+            "Falling back to Pillow for float save; output will be 8-bit. Install 'tifffile' for full float support."
+        )
+        clipped = np.clip(array_to_write, 0.0, 1.0)
+        converted = np.clip(np.round(clipped * 255.0), 0, 255).astype(np.uint8)
+        if converted.ndim == 3 and converted.shape[2] > 3:
+            # PIL only supports up to 4 channels (RGBA). Extract first 3 RGB channels
+            # and first alpha channel (index 3), discarding any additional channels.
+            num_channels = converted.shape[2]
+            LOGGER.warning(
+                "Discarding channels 5+ for Pillow compatibility: "
+                "image has %d channels, keeping only RGBA (channels 1-4)", num_channels
+            )
+            rgb8 = converted[..., :3]
+            alpha8 = converted[..., 3]
+            converted = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
+        array_to_write = converted
 
     if array_to_write.ndim == 3 and array_to_write.shape[2] == 4:
         mode = "RGBA"

@@ -133,9 +133,9 @@ Successfully implemented a complete depth-guided VFX (Visual Effects) extension 
 
 3. **LUT Collection Integration**
    - Works with all three LUT directories:
-     - `01_Film_Emulation/` - Film stock emulations
-     - `02_Location_Aesthetic/` - Location-specific looks
-     - `03_Material_Response/` - Material enhancement
+     - `assets/luts/film_emulation/` - Film stock emulations
+     - `assets/luts/location_aesthetic/` - Location-specific looks
+     - `assets/luts/material_response/` - Material enhancement
    - Depth-masked application for realistic results
 
 4. **Metadata Preservation**
@@ -315,9 +315,9 @@ realize_v8_unified_cli_extension.py (VFX Extension)
 ┌─────────────────────────────────────────┐
 │ depth_pipeline/                         │ (Depth Estimation)
 │ material_response.py                    │ (Surface Enhancement)
-│ 01_Film_Emulation/                      │ (LUT Collection)
-│ 02_Location_Aesthetic/                  │ (LUT Collection)
-│ 03_Material_Response/                   │ (LUT Collection)
+│ assets/luts/film_emulation/                      │ (LUT Collection)
+│ assets/luts/location_aesthetic/                  │ (LUT Collection)
+│ assets/luts/material_response/                   │ (LUT Collection)
 └─────────────────────────────────────────┘
 ```
 

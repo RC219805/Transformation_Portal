@@ -56,6 +56,7 @@ TIFF_EXTENSIONS = {'.tif', '.tiff'}
 
 class UnsupportedFormatError(ValueError):
     """Raised when a file format is not supported by the pipeline."""
+    pass
 
 
 def normalize_extension(path: Union[str, Path]) -> str:
@@ -204,14 +205,14 @@ def validate_format(
 
     path_obj = Path(path) if isinstance(path, str) else path
     ext = normalize_extension(path_obj)
-    
-    format_is_valid = False
+
+    is_valid = False
     if allowed_types in {'image', 'both'}:
-        format_is_valid = format_is_valid or is_supported_image_format(path_obj)
+        is_valid = is_valid or is_supported_image_format(path_obj)
     if allowed_types in {'video', 'both'}:
-        format_is_valid = format_is_valid or is_supported_video_format(path_obj)
-    
-    if not format_is_valid and raise_error:
+        is_valid = is_valid or is_supported_video_format(path_obj)
+
+    if not is_valid and raise_error:
         if allowed_types == 'image':
             supported = SUPPORTED_IMAGE_EXTENSIONS
         elif allowed_types == 'video':
@@ -225,8 +226,8 @@ def validate_format(
             f"Supported {allowed_types} formats: {supported_list}\n"
             f"See SUPPORTED_FILE_FORMATS.md for details."
         )
-    
-    return format_is_valid
+
+    return is_valid
 
 
 def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[str]]]:
@@ -388,16 +389,16 @@ def format_help_text(format_type: str = 'image') -> str:
         >>> print(format_help_text('image'))
         Supported image formats: .bmp, .gif, .ico, .jpg, ...
     """
-    fmt_summary = get_supported_formats_summary()
-    
+    summary = get_supported_formats_summary()
+
     if format_type == 'image':
-        return f"Supported image formats: {', '.join(fmt_summary['image'])}"
+        return f"Supported image formats: {', '.join(summary['image'])}"
     elif format_type == 'video':
-        return f"Supported video formats: {', '.join(fmt_summary['video'])}"
+        return f"Supported video formats: {', '.join(summary['video'])}"
     elif format_type == 'both':
         return (
-            f"Supported image formats: {', '.join(fmt_summary['image'])}\n"
-            f"Supported video formats: {', '.join(fmt_summary['video'])}"
+            f"Supported image formats: {', '.join(summary['image'])}\n"
+            f"Supported video formats: {', '.join(summary['video'])}"
         )
     else:
         raise ValueError(f"Invalid format_type: {format_type}")

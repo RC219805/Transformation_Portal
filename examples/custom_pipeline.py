@@ -4,28 +4,28 @@ Custom pipeline example.
 
 Demonstrates building a custom processing pipeline with specific parameters.
 
+NOTE: Requires package installation: pip install -e .
+
 Usage:
     python examples/custom_pipeline.py input.jpg output.jpg
 """
 
-from depth_pipeline.utils import (
+import sys
+from pathlib import Path
+
+from transformation_portal.depth.utils import (
     load_image,
     save_image,
     visualize_depth,
     depth_statistics,
 )
-from depth_pipeline.processors import (
+from transformation_portal.depth.processors import (
     DepthAwareDenoise,
     ZoneToneMapping,
     AtmosphericEffects,
     DepthGuidedFilters,
 )
-from depth_pipeline.models import DepthAnythingV2Model, ModelVariant
-import sys
-from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from transformation_portal.depth.models import DepthAnythingV2Model, ModelVariant
 
 
 def main():
