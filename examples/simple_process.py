@@ -4,14 +4,13 @@ Simple single-image processing example.
 
 Usage:
     python examples/simple_process.py input.jpg output/
+
+Prerequisites:
+    pip install -e .
 """
 
-from depth_pipeline import ArchitecturalDepthPipeline
 import sys
-from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from depth_pipeline import ArchitecturalDepthPipeline
 
 
 def main():
