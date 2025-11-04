@@ -177,7 +177,7 @@ def list_ocio_views(config_path: str | None = None) -> dict:
     out = {}
     displays = cfg.getDisplaysAll() if hasattr(cfg, 'getDisplaysAll') else cfg.getDisplays()
     for display in displays:
-        views = list(cfg.getViews(display))
+        views = [v for v in cfg.getViews(display)]
         out[display] = views
     return out
 

@@ -60,7 +60,7 @@ def sample_depth():
 
 
 @pytest.fixture
-def temp_image_file(sample_image):  # pylint: disable=redefined-outer-name
+def temp_image_file(sample_image):
     """Create a temporary image file."""
     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
         sample_image.save(f.name)
@@ -87,7 +87,7 @@ class TestRealizeV8Unified:
         assert hasattr(preset, 'exposure')
         assert hasattr(preset, 'contrast')
 
-    def test_image_to_float_array(self, sample_image):  # pylint: disable=redefined-outer-name
+    def test_image_to_float_array(self, sample_image):
         """Test image conversion to float array."""
         arr = _image_to_float_array(sample_image)
         assert arr.dtype == np.float32
@@ -95,7 +95,7 @@ class TestRealizeV8Unified:
         assert arr.min() >= 0.0
         assert arr.max() <= 1.0
 
-    def test_enhance_basic(self, sample_array):  # pylint: disable=redefined-outer-name
+    def test_enhance_basic(self, sample_array):
         """Test basic enhancement."""
         preview, working, metrics = enhance(
             sample_array,
@@ -109,7 +109,7 @@ class TestRealizeV8Unified:
         assert 'total_time_ms' in metrics
         assert metrics['exposure'] == 0.1
 
-    def test_enhance_with_preset(self, sample_image):  # pylint: disable=redefined-outer-name
+    def test_enhance_with_preset(self, sample_image):
         """Test enhancement with preset."""
         preset_params = PRESETS["signature_estate"].to_dict()
         preview, working, metrics = enhance(sample_image, **preset_params)
@@ -118,7 +118,7 @@ class TestRealizeV8Unified:
         assert working.shape == (100, 100, 3)
         assert metrics['contrast'] == preset_params['contrast']
 
-    def test_open_any(self, temp_image_file):  # pylint: disable=redefined-outer-name
+    def test_open_any(self, temp_image_file):
         """Test opening image file."""
         img, meta = _open_any(temp_image_file)
 
@@ -127,7 +127,7 @@ class TestRealizeV8Unified:
         assert 'format' in meta
         assert 'size' in meta
 
-    def test_save_with_meta(self, sample_image, sample_array):  # pylint: disable=redefined-outer-name
+    def test_save_with_meta(self, sample_image, sample_array):
         """Test saving with metadata."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "output.jpg"
@@ -158,7 +158,7 @@ class TestVFXExtension:
         assert "bloom_intensity" in preset
         assert "material_boost" in preset
 
-    def test_estimate_depth_fast(self, sample_array):  # pylint: disable=redefined-outer-name
+    def test_estimate_depth_fast(self, sample_array):
         """Test depth estimation (mock mode)."""
         depth = estimate_depth_fast(sample_array)
 
@@ -167,7 +167,7 @@ class TestVFXExtension:
         assert depth.min() >= 0.0
         assert depth.max() <= 1.0
 
-    def test_apply_depth_bloom(self, sample_array, sample_depth):  # pylint: disable=redefined-outer-name
+    def test_apply_depth_bloom(self, sample_array, sample_depth):
         """Test depth-aware bloom effect."""
         result = apply_depth_bloom(sample_array, sample_depth, intensity=0.2, radius=10)
 
@@ -176,7 +176,7 @@ class TestVFXExtension:
         assert result.min() >= 0.0
         assert result.max() <= 1.0
 
-    def test_apply_depth_fog(self, sample_array, sample_depth):  # pylint: disable=redefined-outer-name
+    def test_apply_depth_fog(self, sample_array, sample_depth):
         """Test depth-aware fog effect."""
         result = apply_depth_fog(
             sample_array,
@@ -190,7 +190,7 @@ class TestVFXExtension:
         assert result.min() >= 0.0
         assert result.max() <= 1.0
 
-    def test_apply_depth_of_field(self, sample_array, sample_depth):  # pylint: disable=redefined-outer-name
+    def test_apply_depth_of_field(self, sample_array, sample_depth):
         """Test depth of field effect."""
         result = apply_depth_of_field(
             sample_array,
@@ -204,7 +204,7 @@ class TestVFXExtension:
         assert result.min() >= 0.0
         assert result.max() <= 1.0
 
-    def test_apply_color_grade_zones(self, sample_array, sample_depth):  # pylint: disable=redefined-outer-name
+    def test_apply_color_grade_zones(self, sample_array, sample_depth):
         """Test depth-based color grading."""
         result = apply_color_grade_zones(
             sample_array,
@@ -218,7 +218,7 @@ class TestVFXExtension:
         assert result.min() >= 0.0
         assert result.max() <= 1.0
 
-    def test_apply_lut_with_depth_missing_file(self, sample_array, sample_depth):  # pylint: disable=redefined-outer-name
+    def test_apply_lut_with_depth_missing_file(self, sample_array, sample_depth):
         """Test LUT application with missing file."""
         result = apply_lut_with_depth(
             sample_array,
@@ -229,7 +229,7 @@ class TestVFXExtension:
         # Should return original image when LUT missing
         np.testing.assert_array_equal(result, sample_array)
 
-    def test_enhance_with_vfx_basic(self, sample_image):  # pylint: disable=redefined-outer-name
+    def test_enhance_with_vfx_basic(self, sample_image):
         """Test complete VFX enhancement pipeline."""
         result = enhance_with_vfx(
             sample_image,
@@ -253,9 +253,9 @@ class TestVFXExtension:
         assert "depth_estimation_ms" in result["metrics"]
         assert "vfx_ms" in result["metrics"]
 
-    def test_enhance_with_vfx_all_presets(self, sample_image):  # pylint: disable=redefined-outer-name
+    def test_enhance_with_vfx_all_presets(self, sample_image):
         """Test VFX enhancement with all presets."""
-        for vfx_preset in VFX_PRESETS:
+        for vfx_preset in VFX_PRESETS.keys():
             result = enhance_with_vfx(
                 sample_image,
                 base_preset="natural",
@@ -268,7 +268,7 @@ class TestVFXExtension:
             assert result["array"].shape == (100, 100, 3)
             assert result["metrics"]["total_ms"] > 0
 
-    def test_enhance_with_vfx_material_response(self, sample_image):  # pylint: disable=redefined-outer-name
+    def test_enhance_with_vfx_material_response(self, sample_image):
         """Test VFX with material response enabled."""
         result = enhance_with_vfx(
             sample_image,
@@ -282,7 +282,7 @@ class TestVFXExtension:
         # Material response should add timing metric
         assert "material_response_ms" in result["metrics"]
 
-    def test_enhance_with_vfx_no_depth_save(self, sample_image):  # pylint: disable=redefined-outer-name
+    def test_enhance_with_vfx_no_depth_save(self, sample_image):
         """Test VFX without saving depth."""
         result = enhance_with_vfx(
             sample_image,
@@ -293,7 +293,7 @@ class TestVFXExtension:
 
         assert result["depth"] is None
 
-    def test_enhance_with_vfx_from_array(self, sample_array):  # pylint: disable=redefined-outer-name
+    def test_enhance_with_vfx_from_array(self, sample_array):
         """Test VFX enhancement from numpy array."""
         result = enhance_with_vfx(
             sample_array,
@@ -305,7 +305,7 @@ class TestVFXExtension:
         assert result["image"] is not None
         assert result["array"].shape == sample_array.shape
 
-    def test_enhance_with_vfx_from_path(self, temp_image_file):  # pylint: disable=redefined-outer-name
+    def test_enhance_with_vfx_from_path(self, temp_image_file):
         """Test VFX enhancement from file path."""
         result = enhance_with_vfx(
             temp_image_file,
@@ -323,7 +323,7 @@ class TestVFXExtension:
 class TestIntegration:
     """Integration tests for complete workflows."""
 
-    def test_full_pipeline_single_image(self, temp_image_file):  # pylint: disable=redefined-outer-name
+    def test_full_pipeline_single_image(self, temp_image_file):
         """Test full pipeline on single image."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "output.jpg"
@@ -355,7 +355,7 @@ class TestIntegration:
             assert result["depth"] is not None
             assert result["depth"].shape == (100, 100)
 
-    def test_preset_combinations(self, sample_image):  # pylint: disable=redefined-outer-name
+    def test_preset_combinations(self, sample_image):
         """Test various preset combinations."""
         base_presets = ["signature_estate", "natural"]
         vfx_presets = ["subtle_estate", "cinematic_fog"]
@@ -379,7 +379,7 @@ class TestIntegration:
 class TestPerformance:
     """Performance and timing tests."""
 
-    def test_timing_metrics_present(self, sample_image):  # pylint: disable=redefined-outer-name
+    def test_timing_metrics_present(self, sample_image):
         """Test that all timing metrics are present."""
         result = enhance_with_vfx(
             sample_image,
@@ -396,7 +396,7 @@ class TestPerformance:
         assert "material_response_ms" in metrics
         assert "total_ms" in metrics
 
-    def test_minimal_processing_time(self, sample_array):  # pylint: disable=redefined-outer-name
+    def test_minimal_processing_time(self, sample_array):
         """Test that processing completes in reasonable time."""
         import time
 

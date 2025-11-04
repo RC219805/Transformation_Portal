@@ -1,22 +1,35 @@
 import argparse
+import importlib.util
 import re
+import sys
+from pathlib import Path
+from types import ModuleType
 
 import pytest
-
-from transformation_portal.processors import luxury_video_master_grader
 
 from .documentation import documents
 
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
-# Import functions from the module for test convenience
-assess_frame_rate = luxury_video_master_grader.assess_frame_rate
-build_command = luxury_video_master_grader.build_command
-build_filter_graph = luxury_video_master_grader.build_filter_graph
-determine_color_metadata = luxury_video_master_grader.determine_color_metadata
-plan_tone_mapping = luxury_video_master_grader.plan_tone_mapping
-summarize_probe = luxury_video_master_grader.summarize_probe
-parse_arguments = luxury_video_master_grader.parse_arguments
+
+def load_module() -> ModuleType:
+    module_path = Path(__file__).resolve().parent.parent / "src" / "transformation_portal" / "processors" / "luxury_video_master_grader.py"
+    spec = importlib.util.spec_from_file_location("luxury_video_master_grader", module_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader  # for mypy
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+MODULE = load_module()
+assess_frame_rate = MODULE.assess_frame_rate
+build_command = MODULE.build_command
+build_filter_graph = MODULE.build_filter_graph
+determine_color_metadata = MODULE.determine_color_metadata
+plan_tone_mapping = MODULE.plan_tone_mapping
+summarize_probe = MODULE.summarize_probe
+parse_arguments = MODULE.parse_arguments
 
 
 @pytest.fixture
@@ -487,5 +500,5 @@ def test_parse_arguments_list_presets_exits_early(capsys):
     assert exc.value.code == 0
     captured = capsys.readouterr()
     assert "Available presets:" in captured.out
-    for preset_key in luxury_video_master_grader.PRESETS:
+    for preset_key in MODULE.PRESETS:
         assert f"- {preset_key}:" in captured.out

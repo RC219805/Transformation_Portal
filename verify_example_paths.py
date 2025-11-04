@@ -7,14 +7,13 @@ This script validates that all file paths referenced in example files
 actually exist in the repository after restructuring.
 """
 
-import sys
 from pathlib import Path
 
 
 def verify_example_paths():
     """Verify all paths referenced in examples exist."""
     repo_root = Path(__file__).parent
-
+    
     # Paths referenced in examples/vfx_extension_example.py
     paths_to_verify = [
         "assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube",
@@ -22,11 +21,11 @@ def verify_example_paths():
         "assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube",
         "assets/luts/film_emulation/FilmConvert/FilmConvert_Nitrate_HDR.cube",
     ]
-
+    
     all_valid = True
     print("Verifying example file paths...")
     print("=" * 60)
-
+    
     for path_str in paths_to_verify:
         full_path = repo_root / path_str
         exists = full_path.exists()
@@ -37,15 +36,15 @@ def verify_example_paths():
             print(f"   Size: {size_kb:.1f} KB")
         else:
             all_valid = False
-
+    
     print("=" * 60)
     if all_valid:
         print("✓ All example paths verified successfully!")
         return 0
-
-    print("✗ Some example paths are invalid!")
-    return 1
+    else:
+        print("✗ Some example paths are invalid!")
+        return 1
 
 
 if __name__ == "__main__":
-    sys.exit(verify_example_paths())
+    exit(verify_example_paths())
