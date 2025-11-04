@@ -40,17 +40,17 @@ except ImportError:
     HAS_TIFFFILE = False
     warnings.warn("tifffile not available. 16-bit TIFF support limited. Install with: pip install tifffile")
 
-if TYPE_CHECKING:
-    import numpy as np
-
 try:
     import numpy as np
     HAS_NUMPY = True
 except ImportError:
+    if TYPE_CHECKING:
+        import numpy as np
     HAS_NUMPY = False
 # ==============================================================================
 # OPTION 2: Enhanced Format Detection
 # ==============================================================================
+
 
 def detect_format_from_content(path: Union[str, Path]) -> Optional[str]:
     """Detect image format from file content (magic numbers), not just extension.

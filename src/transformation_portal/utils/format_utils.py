@@ -56,6 +56,7 @@ TIFF_EXTENSIONS = {'.tif', '.tiff'}
 
 class UnsupportedFormatError(ValueError):
     """Raised when a file format is not supported by the pipeline."""
+    pass
 
 
 def normalize_extension(path: Union[str, Path]) -> str:
@@ -207,7 +208,7 @@ def validate_format(
 
     is_valid = False
     if allowed_types in {'image', 'both'}:
-        valid = valid or is_supported_image_format(path_obj)
+        is_valid = is_valid or is_supported_image_format(path_obj)
     if allowed_types in {'video', 'both'}:
         is_valid = is_valid or is_supported_video_format(path_obj)
 
@@ -391,13 +392,13 @@ def format_help_text(format_type: str = 'image') -> str:
     summary = get_supported_formats_summary()
 
     if format_type == 'image':
-        return f"Supported image formats: {', '.join(formats_summary['image'])}"
+        return f"Supported image formats: {', '.join(summary['image'])}"
     elif format_type == 'video':
-        return f"Supported video formats: {', '.join(formats_summary['video'])}"
+        return f"Supported video formats: {', '.join(summary['video'])}"
     elif format_type == 'both':
         return (
-            f"Supported image formats: {', '.join(formats_summary['image'])}\n"
-            f"Supported video formats: {', '.join(formats_summary['video'])}"
+            f"Supported image formats: {', '.join(summary['image'])}\n"
+            f"Supported video formats: {', '.join(summary['video'])}"
         )
     else:
         raise ValueError(f"Invalid format_type: {format_type}")

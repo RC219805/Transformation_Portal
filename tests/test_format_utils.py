@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 # Format validation functions
-from format_utils import (
+from transformation_portal.utils.format_utils import (
     normalize_extension,
     is_supported_image_format,
     is_supported_video_format,
@@ -18,7 +18,13 @@ from format_utils import (
     suggest_output_format,
     get_supported_formats_summary,
     format_help_text,
-    UnsupportedFormatError,
+)
+
+# Exceptions
+from transformation_portal.utils.format_utils import UnsupportedFormatError
+
+# Constants
+from transformation_portal.utils.format_utils import (
     SUPPORTED_IMAGE_EXTENSIONS,
     SUPPORTED_VIDEO_EXTENSIONS,
 )

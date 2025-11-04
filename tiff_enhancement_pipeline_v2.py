@@ -21,11 +21,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import shutil
 import subprocess
 import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional, Protocol, Tuple
@@ -179,6 +177,8 @@ class MaterialConfigProtocol(Protocol):
     material_clusters: int
     material_textures: Optional[Path]
     device: str
+
+
 class AdaptiveSegmentationStage:
     """
     Stage 4 replacement with adaptive segmentation strategy.
@@ -228,7 +228,9 @@ class AdaptiveSegmentationStage:
                 enhanced_images_dir, depth_maps_dir, output_dir
             )
         else:
-            raise ValueError(f"Unknown segmentation mode: {self.mode}")
+            # Fallback for unknown mode
+            log.error(f"Unknown segmentation mode: {self.mode}")
+            return (False, 0)
 
     def _run_semantic_segmentation(self, enhanced_dir: Path, depth_dir: Path,
                                    output_dir: Path) -> Tuple[bool, int]:
@@ -256,7 +258,7 @@ class AdaptiveSegmentationStage:
             return False, 0
 
     def _run_material_clustering(self, enhanced_dir: Path, _depth_dir: Path,
-                                output_dir: Path) -> Tuple[bool, int]:
+                                 output_dir: Path) -> Tuple[bool, int]:
         """
         Run K-means material clustering (fast aerial mode).
 
@@ -267,9 +269,9 @@ class AdaptiveSegmentationStage:
         log.info(f"Running material clustering (k={self.config.material_clusters})...")
 
         # Find enhanced images
-        enhanced_images = list(enhanced_dir.glob("*.tif")) + \
-                         list(enhanced_dir.glob("*.tiff")) + \
-                         list(enhanced_dir.glob("*.jpg"))
+        enhanced_images = (list(enhanced_dir.glob("*.tif")) +
+                           list(enhanced_dir.glob("*.tiff")) +
+                           list(enhanced_dir.glob("*.jpg")))
 
         mask_count = 0
         for img_path in enhanced_images:
@@ -287,7 +289,7 @@ class AdaptiveSegmentationStage:
         return True, mask_count
 
     def _run_hybrid_segmentation(self, enhanced_dir: Path, depth_dir: Path,
-                                output_dir: Path) -> Tuple[bool, int]:
+                                 output_dir: Path) -> Tuple[bool, int]:
         """Run both semantic and material segmentation."""
         log.info("Running hybrid segmentation (semantic + material)...")
 
@@ -314,13 +316,13 @@ class AdaptiveSegmentationStage:
         return success_sem and success_mat, count_sem + count_mat
 
     def _run_auto_segmentation(self, enhanced_dir: Path, depth_dir: Path,
-                              output_dir: Path) -> Tuple[bool, int]:
+                               output_dir: Path) -> Tuple[bool, int]:
         """Automatically choose segmentation method based on image analysis."""
         log.info("Auto-detecting optimal segmentation method...")
 
         # Analyze first image to determine type
-        enhanced_images = list(enhanced_dir.glob("*.tif")) + \
-                         list(enhanced_dir.glob("*.tiff"))
+        enhanced_images = (list(enhanced_dir.glob("*.tif")) +
+                           list(enhanced_dir.glob("*.tiff")))
 
         if not enhanced_images:
             log.error("No images found for analysis")
