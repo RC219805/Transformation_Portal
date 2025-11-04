@@ -108,6 +108,7 @@ if not _log.handlers:
 
 # ----- LRU cache -----
 
+
 class BoundedCache:
     """Simple LRU cache using OrderedDict. Values are stored as NumPy arrays (copied)."""
 
@@ -145,9 +146,11 @@ class BoundedCache:
         hit_rate = float(self.hits) / total if total > 0 else 0.0
         return {"hits": self.hits, "misses": self.misses, "size": len(self._cache), "hit_rate": hit_rate}
 
+
 # per-process caches (can be pickled if needed; small by default)
 _depth_cache = BoundedCache()
 _mask_cache = BoundedCache()
+
 
 def _format_cache_stats(cache_name: str, stats: Dict[str, Any]) -> None:
     """Helper function to format and log cache statistics."""
@@ -160,6 +163,7 @@ def _format_cache_stats(cache_name: str, stats: Dict[str, Any]) -> None:
         stats["hit_rate"] * 100
     )
 
+
 def clear_all_caches() -> None:
     """Clear all caches and log statistics."""
     _format_cache_stats("Depth", _depth_cache.stats())
@@ -168,6 +172,7 @@ def clear_all_caches() -> None:
     _mask_cache.clear()
 
 # ----- retry decorator -----
+
 
 def retry_on_io_error(
     max_attempts: int = DEFAULT_IO_RETRIES,
@@ -200,6 +205,7 @@ def retry_on_io_error(
 
 # ----- validators -----
 
+
 def validate_color(color: Tuple[float, float, float], name: str = "color") -> Tuple[float, float, float]:
     if len(color) != 3:
         raise ValueError(f"{name} must have 3 components, got {len(color)}")
@@ -213,6 +219,7 @@ def validate_color(color: Tuple[float, float, float], name: str = "color") -> Tu
         raise ValueError(f"{name} must be in 0..1 range after normalization, got {color}")
     return color
 
+
 def validate_file_exists(path: str, description: str = "File") -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(f"{description} not found: {path}")
@@ -222,6 +229,7 @@ def validate_file_exists(path: str, description: str = "File") -> None:
         raise PermissionError(f"{description} is not readable: {path}")
 
 # ----- blur/backends -----
+
 
 def gaussian_blur_float(img: np.ndarray, sigma: float, backend: Optional[str] = None) -> np.ndarray:
     """
@@ -267,6 +275,7 @@ def gaussian_blur_float(img: np.ndarray, sigma: float, backend: Optional[str] = 
     blurred = pil_img.filter(ImageFilter.GaussianBlur(radius=sigma))
     return np.asarray(blurred).astype(np.float32) / 255.0
 
+
 def bilateral_blur_float(img: np.ndarray, depth: np.ndarray, sigma_spatial: float, sigma_depth: float = 0.08, diameter: Optional[int] = None) -> np.ndarray:
     """
     Edge-preserving bilateral-style blur guided by depth.
@@ -293,6 +302,7 @@ def bilateral_blur_float(img: np.ndarray, depth: np.ndarray, sigma_spatial: floa
     return out
 
 # ----- file discovery -----
+
 
 def find_file_for_base(root: str, base: str, pattern_suffix: str = "*", priority_tags: Optional[Tuple[str, ...]] = None, extensions: Optional[Tuple[str, ...]] = None) -> Optional[str]:
     """
@@ -325,6 +335,7 @@ def find_file_for_base(root: str, base: str, pattern_suffix: str = "*", priority
     candidates.sort(key=score)
     return candidates[0]
 
+
 def find_mask_for_base(mask_root: Optional[str], base: str, kind: str) -> Optional[str]:
     """Look for _mask_{kind}.* under mask_root (first match)."""
     if not mask_root:
@@ -341,11 +352,13 @@ def find_mask_for_base(mask_root: Optional[str], base: str, kind: str) -> Option
 
 # ----- I/O helpers -----
 
+
 @retry_on_io_error()
 def load_image_rgb(path: str) -> np.ndarray:
     validate_file_exists(path, "Image")
     # Use common image loading function
     return load_image_rgb_base(path)
+
 
 @retry_on_io_error()
 def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tiff", quality: int = 95) -> str:
@@ -369,6 +382,7 @@ def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tiff", quality: int
     else:
         raise ValueError(f"Unsupported format: {fmt}")
     return out
+
 
 @retry_on_io_error()
 def load_depth_normalized(depth_path: str, target_size: Optional[Tuple[int, int]] = None, method: str = "percentile", use_cache: bool = True) -> np.ndarray:
@@ -405,6 +419,7 @@ def load_depth_normalized(depth_path: str, target_size: Optional[Tuple[int, int]
         _depth_cache.put(cache_key, norm)
 
     return norm
+
 
 @retry_on_io_error()
 def load_mask(mask_path: Optional[str], kind: str, target_size: Tuple[int, int], use_cache: bool = True) -> np.ndarray:
@@ -456,6 +471,7 @@ def load_mask(mask_path: Optional[str], kind: str, target_size: Tuple[int, int],
 
 # ----- effects -----
 
+
 def apply_depth_haze(
     img: np.ndarray,
     depth: np.ndarray,
@@ -490,6 +506,7 @@ def apply_depth_haze(
     enhanced = np.clip(0.5 + (blended - 0.5) * mids_gain, 0.0, 1.0)
     return enhanced
 
+
 def apply_depth_clarity(img: np.ndarray, depth: np.ndarray, amount: float = 0.14, radius_px: int = 3, near_pct: float = 18.0, far_pct: float = 82.0, sky_mask: Optional[np.ndarray] = None, building_mask: Optional[np.ndarray] = None) -> np.ndarray:
     """
     Depth-aware microcontrast enhancement. Avoids sky and favors building.
@@ -512,6 +529,7 @@ def apply_depth_clarity(img: np.ndarray, depth: np.ndarray, amount: float = 0.14
 
     enhanced = img + detail * (amount * w * mask_strength)
     return np.clip(enhanced, 0.0, 1.0)
+
 
 def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0, aperture: float = 0.20, clarity: float = 0.15, falloff: float = 1.5, edge_preserving: bool = True, bilateral_sigma_depth: float = 0.08, bilateral_diameter: Optional[int] = None, sky_mask: Optional[np.ndarray] = None, building_mask: Optional[np.ndarray] = None) -> np.ndarray:
     """
@@ -559,6 +577,7 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
 
 # ----- batch driver -----
 
+
 @dataclass
 class BatchOptions:
     images_root: str
@@ -584,6 +603,7 @@ class BatchOptions:
     aperture: float = 0.22
     clarity: float = 0.18
     falloff: float = 1.4
+
 
 def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Optional[str]]:
     """
@@ -639,6 +659,7 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
     except Exception as exc:
         _log.exception("Failed processing base %s: %s", base, exc)
         return base, None, str(exc)
+
 
 def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None) -> int:
     """
@@ -700,6 +721,7 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
 
 # ----- CLI -----
 
+
 def build_cli() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="depth_tools",
@@ -750,10 +772,12 @@ def build_cli() -> argparse.ArgumentParser:
 
     return ap
 
+
 def _cli_progress(done: int, total: int, base: str) -> None:
     print(f"\rProcessed {done}/{total}: {base}", end="", flush=True)
     if done == total:
         print("")
+
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = build_cli().parse_args(list(argv) if argv is not None else None)
@@ -824,6 +848,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     except Exception as exc:
         _log.exception("Fatal error running batch: %s", exc)
         return 2
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

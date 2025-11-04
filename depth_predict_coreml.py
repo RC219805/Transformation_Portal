@@ -23,6 +23,8 @@ from PIL import Image
 import coremltools as ct
 # --------------------------------------------------------------------------
 # CONFIG (now via argparse)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Run DepthAnything V2 Small F16 (Core ML) on all images in a folder."

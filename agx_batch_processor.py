@@ -12,7 +12,7 @@ Customization:
 - AgX view name patterns can be customized by modifying the AGX_VIEW_PATTERNS
   dictionary at module level. This allows supporting different OCIO config
   conventions without modifying the core processing logic.
-  
+
   Example:
     import agx_batch_processor
     agx_batch_processor.AGX_VIEW_PATTERNS["custom"] = [
@@ -72,7 +72,7 @@ except ImportError:
 # ------------------------------
 # These patterns define the naming conventions for AgX views in OCIO configs.
 # Different OCIO configurations may use different naming conventions.
-# 
+#
 # To add custom patterns, modify this dictionary before calling processing functions:
 #   AGX_VIEW_PATTERNS["variant_name"] = ["Pattern 1", "Pattern 2"]
 #
@@ -413,5 +413,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
