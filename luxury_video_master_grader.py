@@ -10,10 +10,10 @@ implementation now lives in ``src/transformation_portal/processors/luxury_video_
 if __name__ == "__main__":
     import sys
     from pathlib import Path
-    
+
     # Add src directory to path
     sys.path.insert(0, str(Path(__file__).parent / 'src'))
-    
+
     # Import and run the main CLI from the package
     from transformation_portal.processors.luxury_video_master_grader import main
     raise SystemExit(main())
