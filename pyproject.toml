@@ -23,6 +23,11 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+# NOTE: The [ai] extra is deprecated as of v0.1.0. Core ML/AI dependencies
+# (torch, diffusers, controlnet-aux, realesrgan) have been moved to the main
+# dependencies list and are now always installed. This extra is kept for
+# backward compatibility but will be removed in a future version.
+# See docs/version_history/changelog.md for migration information.
 ai = [
     "torch>=2.0,<3",
     "diffusers>=0.20,<1",
@@ -53,6 +58,7 @@ dev = [
     "flake8>=7.0",
     "pylint>=3.2.0",
 ]
+# Install all optional extras. Note: [ai] is deprecated but included for compatibility.
 all = [
     "transformation-portal[ai,tiff,ml,dev]",
 ]
