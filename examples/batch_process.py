@@ -4,6 +4,8 @@ Batch processing example.
 
 Processes all images in a directory with progress tracking.
 
+NOTE: Requires package installation: pip install -e .
+
 Usage:
     python examples/batch_process.py input_dir/ output_dir/ [--preset interior|exterior]
 
@@ -14,7 +16,8 @@ Prerequisites:
 import sys
 import argparse
 from pathlib import Path
-from depth_pipeline import ArchitecturalDepthPipeline
+
+from transformation_portal.depth import ArchitecturalDepthPipeline
 
 
 def main():

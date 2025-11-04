@@ -14,8 +14,9 @@ pytest.importorskip("PIL.Image")
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = (
     ROOT
-    / "09_Client_Deliverables"
-    / "Lantern_Logo_Implementation_Kit"
+    / "assets"
+    / "brand"
+    / "lantern_logo"
     / "lantern_pixel_guard.py"
 )
 

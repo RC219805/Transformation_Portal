@@ -20,7 +20,7 @@ This living specification aligns the Lantern identity across product, marketing,
 
 ## 3. Token System
 
-Primitive brand tokens are defined in [`lantern_tokens.json`](../09_Client_Deliverables/Lantern_Logo_Implementation_Kit/lantern_tokens.json) and compiled with Style Dictionary into platform layers.
+Primitive brand tokens are defined in [`lantern_tokens.json`](../../assets/brand/lantern_logo/lantern_tokens.json) and compiled with Style Dictionary into platform layers.
 
 | Token | Value | Notes |
 | --- | --- | --- |
@@ -47,8 +47,8 @@ Semantic variables (e.g., `--lantern-stroke`, `--lantern-hover-glow`) must be de
 
 ## 6. Governance & Delivery
 
-- Source tokens and reference assets live in [`09_Client_Deliverables/Lantern_Logo_Implementation_Kit`](../09_Client_Deliverables/Lantern_Logo_Implementation_Kit/).
-- Updates follow semantic versioning; bump the `version` key in the token file and note changes in `08_Documentation/Version_History/changelog.md`.
+- Source tokens and reference assets live in [`assets/brand/lantern_logo`](../../assets/brand/lantern_logo/).
+- Updates follow semantic versioning; bump the `version` key in the token file and note changes in `docs/Version_History/changelog.md`.
 - Automated linting ensures SVG IDs (`lantern-gradient`) remain stable and token names map 1:1 with Figma variables.
 - Distribution happens through the `#brand-ops` channel with checksum hashes for each asset to detect drift during vendor handoff.
 

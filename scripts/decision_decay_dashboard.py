@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
-from codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
+from scripts.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 
 @dataclass
@@ -437,8 +437,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         tokens_path = args.tokens.resolve()
     else:
         tokens_path = (
-            root / "09_Client_Deliverables"
-            / "Lantern_Logo_Implementation_Kit"
+            root / "assets"
+            / "brand"
+            / "lantern_logo"
             / "lantern_tokens.json"
         )
 

@@ -2,6 +2,8 @@
 """
 Simple single-image processing example.
 
+NOTE: Requires package installation: pip install -e .
+
 Usage:
     python examples/simple_process.py input.jpg output/
 
@@ -10,7 +12,8 @@ Prerequisites:
 """
 
 import sys
-from depth_pipeline import ArchitecturalDepthPipeline
+
+from transformation_portal.depth import ArchitecturalDepthPipeline
 
 
 def main():
