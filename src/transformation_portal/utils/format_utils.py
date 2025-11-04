@@ -61,13 +61,13 @@ class UnsupportedFormatError(ValueError):
 
 def normalize_extension(path: Union[str, Path]) -> str:
     """Normalize file extension to lowercase with leading dot.
-    
+
     Args:
         path: File path or extension string
-        
+
     Returns:
         Normalized extension (e.g., '.png', '.tiff')
-        
+
     Examples:
         >>> normalize_extension('image.PNG')
         '.png'
@@ -78,26 +78,26 @@ def normalize_extension(path: Union[str, Path]) -> str:
     """
     if isinstance(path, str):
         path = Path(path)
-    
+
     ext = path.suffix.lower()
     if not ext:
         # If no suffix, treat entire string as extension
         ext = str(path).lower()
         if not ext.startswith('.'):
             ext = '.' + ext
-    
+
     return ext
 
 
 def is_supported_image_format(path: Union[str, Path]) -> bool:
     """Check if file has a supported image extension.
-    
+
     Args:
         path: File path to check
-        
+
     Returns:
         True if format is supported, False otherwise
-        
+
     Examples:
         >>> is_supported_image_format('render.jpg')
         True
@@ -112,13 +112,13 @@ def is_supported_image_format(path: Union[str, Path]) -> bool:
 
 def is_supported_video_format(path: Union[str, Path]) -> bool:
     """Check if file has a supported video extension.
-    
+
     Args:
         path: File path to check
-        
+
     Returns:
         True if format is supported, False otherwise
-        
+
     Examples:
         >>> is_supported_video_format('tour.mp4')
         True
@@ -133,13 +133,13 @@ def is_supported_video_format(path: Union[str, Path]) -> bool:
 
 def is_supported_tiff_format(path: Union[str, Path]) -> bool:
     """Check if file is a TIFF format.
-    
+
     Args:
         path: File path to check
-        
+
     Returns:
         True if file is TIFF, False otherwise
-        
+
     Examples:
         >>> is_supported_tiff_format('photo.tif')
         True
@@ -154,13 +154,13 @@ def is_supported_tiff_format(path: Union[str, Path]) -> bool:
 
 def is_luxury_format(path: Union[str, Path]) -> bool:
     """Check if file is in a luxury/high-quality format (TIFF, PNG).
-    
+
     Args:
         path: File path to check
-        
+
     Returns:
         True if format is luxury-grade, False otherwise
-        
+
     Examples:
         >>> is_luxury_format('render.tiff')
         True
@@ -179,19 +179,19 @@ def validate_format(
     raise_error: bool = True
 ) -> bool:
     """Validate that a file format is supported.
-    
+
     Args:
         path: File path to validate
         allowed_types: 'image', 'video', or 'both'
         raise_error: If True, raise UnsupportedFormatError on invalid format
-        
+
     Returns:
         True if format is valid, False otherwise
-        
+
     Raises:
         UnsupportedFormatError: If raise_error=True and format is unsupported
         ValueError: If allowed_types is invalid
-        
+
     Examples:
         >>> validate_format('render.jpg', 'image')
         True
@@ -202,16 +202,16 @@ def validate_format(
     """
     if allowed_types not in {'image', 'video', 'both'}:
         raise ValueError(f"allowed_types must be 'image', 'video', or 'both', got '{allowed_types}'")
-    
+
     path_obj = Path(path) if isinstance(path, str) else path
     ext = normalize_extension(path_obj)
-    
+
     is_valid = False
     if allowed_types in {'image', 'both'}:
         is_valid = is_valid or is_supported_image_format(path_obj)
     if allowed_types in {'video', 'both'}:
         is_valid = is_valid or is_supported_video_format(path_obj)
-    
+
     if not is_valid and raise_error:
         if allowed_types == 'image':
             supported = SUPPORTED_IMAGE_EXTENSIONS
@@ -219,23 +219,23 @@ def validate_format(
             supported = SUPPORTED_VIDEO_EXTENSIONS
         else:
             supported = SUPPORTED_IMAGE_EXTENSIONS | SUPPORTED_VIDEO_EXTENSIONS
-        
+
         supported_list = ', '.join(sorted(supported))
         raise UnsupportedFormatError(
             f"Unsupported file format '{ext}' for file: {path_obj.name}\n"
             f"Supported {allowed_types} formats: {supported_list}\n"
             f"See SUPPORTED_FILE_FORMATS.md for details."
         )
-    
+
     return is_valid
 
 
 def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[str]]]:
     """Get detailed information about a file's format.
-    
+
     Args:
         path: File path to analyze
-        
+
     Returns:
         Dictionary with format information:
         - extension: Normalized extension
@@ -244,7 +244,7 @@ def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[s
         - is_tiff: Whether it's a TIFF format
         - is_luxury: Whether it's a luxury/high-quality format
         - recommendations: List of processing recommendations
-        
+
     Examples:
         >>> info = get_format_info('render.tiff')
         >>> info['is_luxury']
@@ -255,14 +255,14 @@ def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[s
     """
     path_obj = Path(path) if isinstance(path, str) else path
     ext = normalize_extension(path_obj)
-    
+
     is_image = is_supported_image_format(path_obj)
     is_video = is_supported_video_format(path_obj)
     is_tiff = is_supported_tiff_format(path_obj)
     is_luxury = is_luxury_format(path_obj)
-    
+
     recommendations = []
-    
+
     if is_tiff:
         recommendations.extend([
             "Best for 16-bit precision with Luxury TIFF Batch Processor",
@@ -293,7 +293,7 @@ def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[s
             "FFmpeg required: sudo apt install ffmpeg (Linux) or brew install ffmpeg (macOS)",
             "HDR support available for PQ and HLG"
         ])
-    
+
     return {
         'extension': ext,
         'is_image': is_image,
@@ -310,18 +310,18 @@ def suggest_output_format(
     preserve_quality: bool = True
 ) -> str:
     """Suggest an appropriate output format based on input format.
-    
+
     Note: This function is designed for image formats only. Video formats
     should use their native containers (MP4, MOV, etc.) for output.
-    
+
     Args:
         input_path: Input file path (image formats only)
         preserve_quality: If True, suggest lossless or high-quality formats.
                          If False, suggest web-optimized formats (may be lossy).
-        
+
     Returns:
         Recommended output extension (e.g., '.tiff', '.png', '.jpg')
-        
+
     Examples:
         >>> suggest_output_format('photo.jpg', preserve_quality=True)
         '.png'
@@ -334,32 +334,32 @@ def suggest_output_format(
     """
     path_obj = Path(input_path) if isinstance(input_path, str) else input_path
     ext = normalize_extension(path_obj)
-    
+
     # Video formats should keep their native container
     if ext in SUPPORTED_VIDEO_EXTENSIONS:
         return ext
-    
+
     # TIFF stays TIFF for quality preservation
     if ext in TIFF_EXTENSIONS and preserve_quality:
         return '.tiff'
-    
+
     # PNG is good lossless format for quality preservation
     if preserve_quality:
         if ext == '.png':
             return '.png'
         # For other image formats, use PNG as a high-quality default
         return '.png'
-    
+
     # For other image formats without special properties, use JPEG for web delivery
     return '.jpg'
 
 
 def get_supported_formats_summary() -> Dict[str, List[str]]:
     """Get a summary of all supported formats.
-    
+
     Returns:
         Dictionary with 'image' and 'video' keys containing lists of extensions
-        
+
     Examples:
         >>> summary = get_supported_formats_summary()
         >>> '.png' in summary['image']
@@ -378,19 +378,19 @@ def get_supported_formats_summary() -> Dict[str, List[str]]:
 # Convenience function for CLI help text
 def format_help_text(format_type: str = 'image') -> str:
     """Generate help text for supported formats.
-    
+
     Args:
         format_type: 'image', 'video', or 'both'
-        
+
     Returns:
         Formatted help text string
-        
+
     Examples:
         >>> print(format_help_text('image'))
         Supported image formats: .bmp, .gif, .ico, .jpg, ...
     """
     summary = get_supported_formats_summary()
-    
+
     if format_type == 'image':
         return f"Supported image formats: {', '.join(summary['image'])}"
     elif format_type == 'video':
@@ -414,17 +414,17 @@ if __name__ == '__main__':
         'document.pdf',
         'archive.WebP'
     ]
-    
+
     print("Format Validation Examples:\n")
     for file in test_files:
         try:
             is_valid = validate_format(file, 'both', raise_error=False)
             info = get_format_info(file)
-            
+
             print(f"File: {file}")
             print(f"  Valid: {is_valid}")
             print(f"  Extension: {info['extension']}")
-            print(f"  Type: ", end='')
+            print("  Type: ", end='')
             if info['is_image']:
                 print("Image", end='')
             if info['is_video']:
@@ -432,16 +432,16 @@ if __name__ == '__main__':
             if not info['is_image'] and not info['is_video']:
                 print("Unsupported", end='')
             print()
-            
+
             if info['recommendations']:
-                print(f"  Recommendations:")
+                print("  Recommendations:")
                 for rec in info['recommendations']:
                     print(f"    - {rec}")
             print()
         except UnsupportedFormatError as e:
             print(f"File: {file}")
             print(f"  Error: {e}\n")
-    
+
     print("\nSupported Formats Summary:")
     summary = get_supported_formats_summary()
     for category, formats in summary.items():
