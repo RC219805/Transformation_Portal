@@ -1,10 +1,10 @@
-"""Tests for common image utilities module."""
-import tempfile
-import sys
-from pathlib import Path
+"""Tests for common image utilities module.
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+Note: These tests assume the package is installed in development mode.
+Run `pip install -e .` from the repository root before running tests.
+"""
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import pytest

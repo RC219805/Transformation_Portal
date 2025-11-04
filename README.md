@@ -96,12 +96,17 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Install package in editable mode (required for development and testing)
+pip install -e .
+
 # Optional: Install extras
 pip install -e ".[tiff]"   # 16-bit TIFF processing
 pip install -e ".[ml]"     # ML extras for AI pipelines
 pip install -e ".[dev]"    # pytest, linting
 pip install -e ".[all]"    # everything
 ```
+
+> **Note for Developers**: Installing the package in editable mode with `pip install -e .` is required for tests that import from the `transformation_portal` package to work correctly, as it makes the package importable without modifying `sys.path`.
 
 ### Verify Installation
 
