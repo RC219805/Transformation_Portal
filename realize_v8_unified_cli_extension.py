@@ -53,7 +53,7 @@ except ImportError:
 
 # Optional: Your Material Response
 try:
-    from material_response import MaterialResponse
+    from material_response import MaterialResponse  # noqa: F401 - used for availability check
     _HAVE_MR = True
 except ImportError:
     _HAVE_MR = False
