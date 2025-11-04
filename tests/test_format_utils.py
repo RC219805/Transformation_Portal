@@ -24,7 +24,7 @@ from transformation_portal.utils.format_utils import (
 from transformation_portal.utils.format_utils import UnsupportedFormatError
 
 # Constants
-from format_utils import (
+from transformation_portal.utils.format_utils import (
     SUPPORTED_IMAGE_EXTENSIONS,
     SUPPORTED_VIDEO_EXTENSIONS,
 )
