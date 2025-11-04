@@ -16,10 +16,11 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
-.PHONY: help test-fast test-novideo test-full venv
+.PHONY: help test-fast test-novideo test-full venv setup
 
 help:
 	@echo "Targets:"
+	@echo "  setup         Install package in editable mode (pip install -e .)"
 	@echo "  test-fast     Run fast subset (no video/optional heavy paths)"
 	@echo "  test-novideo  Run all tests excluding video suite via -k filter"
 	@echo "  test-full     Run entire test suite (parallel if xdist present)"
@@ -31,6 +32,10 @@ venv:
 	else \
 		echo ".venv already present"; \
 	fi
+
+setup: venv
+	@echo "Installing package in editable mode..."
+	@"$(PY)" -m pip install -e .
 
 test-fast:
 	@"$(PY)" -m pytest -q $(FAST_TESTS)
