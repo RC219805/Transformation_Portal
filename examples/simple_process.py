@@ -2,15 +2,13 @@
 """
 Simple single-image processing example.
 
+NOTE: Requires package installation: pip install -e .
+
 Usage:
     python examples/simple_process.py input.jpg output/
 """
 
 import sys
-from pathlib import Path
-
-# Add src directory to path to allow importing from transformation_portal
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from transformation_portal.depth import ArchitecturalDepthPipeline
 

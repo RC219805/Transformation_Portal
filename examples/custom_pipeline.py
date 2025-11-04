@@ -4,15 +4,14 @@ Custom pipeline example.
 
 Demonstrates building a custom processing pipeline with specific parameters.
 
+NOTE: Requires package installation: pip install -e .
+
 Usage:
     python examples/custom_pipeline.py input.jpg output.jpg
 """
 
 import sys
 from pathlib import Path
-
-# Add src directory to path to allow importing from transformation_portal
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from transformation_portal.depth.utils import (
     load_image,
