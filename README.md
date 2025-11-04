@@ -106,7 +106,7 @@ pip install -e ".[dev]"    # pytest, linting
 pip install -e ".[all]"    # everything
 ```
 
-> **Note for Developers**: Installing the package in editable mode with `pip install -e .` is required for tests to work correctly, as it makes the `transformation_portal` package importable without modifying `sys.path`.
+> **Note for Developers**: Installing the package in editable mode with `pip install -e .` is required for tests that import from the `transformation_portal` package to work correctly, as it makes the package importable without modifying `sys.path`.
 
 ### Verify Installation
 
