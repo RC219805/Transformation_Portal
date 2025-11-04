@@ -184,64 +184,50 @@ def retry_on_failure(
     return decorator
 
 
-def batch_processor(batch_size: Optional[int] = None) -> Callable[[F], F]:
-    """Decorator to process items in batches for improved throughput.
-    
-    **IMPORTANT**: This decorator transforms the function's API signature.
-    The decorated function will accept a LIST of items instead of a single item.
-    
-    Automatically batches sequential calls to improve cache locality
-    and reduce overhead for bulk operations.
-    
+def make_batch_processor(
+    func: F, batch_size: Optional[int] = None
+) -> Callable[[list, Any], list]:
+    """Create a batch-processing version of a single-item function.
+
+    This function returns a new function that processes a list of items in batches,
+    calling the original function on each item and returning a list of results.
+
     Args:
-        batch_size: Number of items per batch (None = process all)
-        
+        func: Function that processes a single item.
+        batch_size: Number of items per batch (None = process all at once).
+
     Returns:
-        Decorator function that changes the wrapped function's signature
-        
-    Signature Transformation:
-        # Before decoration (single-item function):
-        def process_image(image_path: str) -> result
-        
-        # After decoration (list-processing function):
-        def process_image(image_paths: List[str]) -> List[result]
-    
+        A function that takes a list of items and returns a list of results.
+
     Example:
-        @batch_processor(batch_size=32)
         def process_image(image_path):
-            # Function still processes ONE image at a time
+            # ... processing ...
             return result
-        
-        # But callers must now pass a LIST:
-        results = process_image([path1, path2, path3])  # Returns list of results
-    
+
+        batch_process_images = make_batch_processor(process_image, batch_size=32)
+        results = batch_process_images([path1, path2, path3])
+
     Note:
-        This decorator changes the caller's API contract. Functions expecting
-        single items must now receive lists, and will return lists.
+        This function generator is preferred over a decorator, as it does not
+        violate the decorator pattern or change the original function's signature.
     """
-    def decorator(func: F) -> F:
-        @functools.wraps(func)
-        def wrapper(items, *args, **kwargs):
-            if not items:
-                return []
-            
-            if batch_size is None or len(items) <= batch_size:
-                return [func(item, *args, **kwargs) for item in items]
-            
-            results = []
-            for i in range(0, len(items), batch_size):
-                batch = items[i:i + batch_size]
-                logger.debug(
-                    f"Processing batch {i//batch_size + 1} "
-                    f"({len(batch)} items)"
-                )
-                batch_results = [func(item, *args, **kwargs) for item in batch]
-                results.extend(batch_results)
-            
-            return results
-        
-        return cast(F, wrapper)
-    return decorator
+    @functools.wraps(func)
+    def batch_func(items, *args, **kwargs):
+        if not items:
+            return []
+        if batch_size is None or len(items) <= batch_size:
+            return [func(item, *args, **kwargs) for item in items]
+        results = []
+        for i in range(0, len(items), batch_size):
+            batch = items[i:i + batch_size]
+            logger.debug(
+                f"Processing batch {i//batch_size + 1} "
+                f"({len(batch)} items)"
+            )
+            batch_results = [func(item, *args, **kwargs) for item in batch]
+            results.extend(batch_results)
+        return results
+    return batch_func
 
 
 class PerformanceMonitor:
