@@ -243,7 +243,18 @@ class TestNoOrphanedFiles:
                 "Root material_response.py seems to be a full duplicate. "
                 "Should be a thin wrapper."
             )
-    
+
+            # Check that the root file actually delegates to the src implementation
+            root_text = root_file.read_text(encoding="utf-8")
+            # Look for an import from transformation_portal (allow whitespace, case-insensitive)
+            import_found = (
+                "from transformation_portal" in root_text
+                or "import transformation_portal" in root_text
+            )
+            assert import_found, (
+                "Root material_response.py should import from transformation_portal "
+                "to delegate implementation, not duplicate it."
+            )
     def test_no_build_artifacts_in_root(self):
         """Test that build artifacts aren't in root."""
         # Check for common build artifacts
