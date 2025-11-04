@@ -100,8 +100,9 @@ pip install -r requirements.txt
 pip install -e .
 
 # Optional: Install extras
+pip install -e ".[ai]"     # AI/ML core (torch, diffusers, ControlNet, Real-ESRGAN)
 pip install -e ".[tiff]"   # 16-bit TIFF processing
-pip install -e ".[ml]"     # ML extras for AI pipelines
+pip install -e ".[ml]"     # ML extras (transformers, depth models, color science)
 pip install -e ".[dev]"    # pytest, linting
 pip install -e ".[all]"    # everything
 ```

@@ -273,9 +273,9 @@ def apply_lut_with_depth(
         for line in lines:
             if line.upper().startswith("LUT_3D_SIZE"):
                 try:
-                    size = int(line.split()[1])
-                except (IndexError, ValueError):
-                    raise ValueError(f"Malformed LUT_3D_SIZE directive: '{line}'")
+                    size = int(l.split()[1])
+                except (IndexError, ValueError) as exc:
+                    raise ValueError(f"Malformed LUT_3D_SIZE directive: '{l}'") from exc
                 break
         if size is None:
             size = round(len(data_lines) ** (1/3))
