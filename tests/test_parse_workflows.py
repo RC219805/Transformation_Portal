@@ -6,12 +6,11 @@ Tests for the workflow parser that detects bugs in GitHub Actions workflows.
 import pytest
 import tempfile
 import shutil
-import sys
 from pathlib import Path
 
-# Add scripts directory to path for backward compatibility
-sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
-
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from parse_workflows import WorkflowParser, WorkflowBug
 
 
