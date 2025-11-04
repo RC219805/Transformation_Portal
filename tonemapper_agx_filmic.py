@@ -66,6 +66,7 @@ def linear_to_srgb(lin: np.ndarray) -> np.ndarray:
 
 _LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
+
 def luminance(rgb: np.ndarray) -> np.ndarray:
     """Compute relative luminance from linear RGB."""
     return np.tensordot(rgb, _LUMA, axes=([rgb.ndim - 1], [0])).astype(np.float32)
