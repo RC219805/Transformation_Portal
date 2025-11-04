@@ -5,14 +5,12 @@
 These tests ensure that the repository maintains good structure and
 prevents accumulation of clutter or structural issues.
 """
-import sys
 from pathlib import Path
 
-# Add src to path for imports
-_repo_root = Path(__file__).parent.parent
-sys.path.insert(0, str(_repo_root / "src"))
-
 import pytest
+
+# Repository root for structure validation
+_repo_root = Path(__file__).parent.parent
 
 
 class TestDirectoryStructure:
