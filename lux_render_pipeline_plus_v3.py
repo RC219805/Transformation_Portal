@@ -207,8 +207,8 @@ def apply_pbr_overlays(
         t = float(np.clip(albedo_blend, 0, 1))
         base = alb_np*t + base*(1.0-t)
 
-    # Height from displacement not provided; we approximate with roughness/normal if needed
-    height = None
+    # Height map not currently supported in this pipeline
+    # TODO: Add height map support for displacement and normal perturbation
 
     # Normal
     if normal is not None:
@@ -248,13 +248,6 @@ def apply_pbr_overlays(
         ao_im = _resize(ao_im, (w, h))
         ao_np = _as_f32_rgb(ao_im).mean(axis=-1)
         base = np.clip(base * (ao_np[..., None]**float(np.clip(ao_strength, 0, 4))), 0.0, 1.0)
-
-    # Height-based shading (Sobel from height if available)
-    if height is not None and height_strength > 1e-6:
-        dx, dy = _sobel_dxdy(height)
-        z = np.full_like(dx, 1.0/max(1e-3, 1.0-0.5*height_strength))
-        n_from_h = _normalize(np.stack([-dx, -dy, z], axis=-1))
-        n_ts = _normalize(n_ts*(1.0-height_strength) + n_from_h*height_strength)
 
     # Lighting: simple multi-light lambert + specular; fresnel approx
     if lights is None:
