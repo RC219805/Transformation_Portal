@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def _trace_lineage(gradient: str) -> dict:
     script = f"""
-const GradientLineage = require('./09_Client_Deliverables/Lantern_Logo_Implementation_Kit/gradient_lineage.js');
+const GradientLineage = require('./assets/brand/lantern_logo/gradient_lineage.js');
 const lineage = new GradientLineage();
 const result = lineage.trace('{gradient}');
 process.stdout.write(JSON.stringify(result));
