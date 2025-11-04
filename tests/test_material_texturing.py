@@ -1,7 +1,7 @@
 """Tests for texture and sky environment integration in material response finishing."""
 
 from __future__ import annotations
-from lux_render_pipeline import apply_material_response_finishing  # pylint: disable=wrong-import-position
+from lux_render_pipeline import apply_material_response_finishing
 
 from pathlib import Path
 import sys
