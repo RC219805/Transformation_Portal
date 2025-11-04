@@ -150,7 +150,7 @@ def apply_pbr_overlays(
     ao_strength: float = 1.0, normal_strength: float = 1.0,
     lights: Optional[List[Tuple[np.ndarray, np.ndarray, float]]] = None,
     pom_scale: float = 0.02, pom_steps: int = 1, view_dir_xy: Tuple[float, float] = (0.0, 0.0),
-    proc_scale: float = 1.0, enable_displacement: bool = True, disp_mm: float = 4.0,
+    proc_scale: float = 1.0, enable_displacement: bool = True,
     exposure: float = 0.0, contrast: float = 1.0, saturation: float = 1.0, clamp_low: float = 0.0, clamp_high: float = 1.0,
     out_mode: str = "RGB", quality: str = "preview"
 ) -> Image.Image:
@@ -363,7 +363,6 @@ def main():
         p.add_argument("--view-dir", type=str, default="0.0,0.0")
         p.add_argument("--proc-scale", type=float, default=1.0)
         p.add_argument("--enable-displacement", action="store_true", default=False)
-        p.add_argument("--disp-mm", type=float, default=4.0)
         p.add_argument("--exposure", type=float, default=0.0)
         p.add_argument("--contrast", type=float, default=1.0)
         p.add_argument("--saturation", type=float, default=1.0)
@@ -384,7 +383,7 @@ def main():
             metallic_map=args.metallic_map, metallic=args.metallic, ao=args.ao, mask=args.mask, env_map=args.env_map,
             albedo_blend=args.albedo_blend, height_strength=args.height_strength, reflection_strength=args.reflection_strength,
             pom_scale=args.pom_scale, pom_steps=args.pom_steps, view_dir_xy=(vx, vy), proc_scale=args.proc_scale,
-            enable_displacement=args.enable_displacement, disp_mm=args.disp_mm,
+            enable_displacement=args.enable_displacement,
             exposure=args.exposure, contrast=args.contrast, saturation=args.saturation,
             clamp_low=args.clamp_low, clamp_high=args.clamp_high,
             out_mode=args.out_mode, quality=args.quality
