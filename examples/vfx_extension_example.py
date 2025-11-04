@@ -5,13 +5,15 @@ Example usage of the VFX extension for Transformation Portal.
 
 This demonstrates how to use the realize_v8_unified_cli_extension to apply
 depth-guided visual effects to architectural renderings.
+
+NOTE: Requires package installation: pip install -e .
+
+All file paths in this example have been verified to exist in the repository
+after restructuring (verified 2025-11-04). Run verify_example_paths.py to
+re-validate paths.
 """
 
 from pathlib import Path
-import sys
-
-# Add parent directory to path to import modules
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from realize_v8_unified import _info
 from realize_v8_unified_cli_extension import (
@@ -25,19 +27,19 @@ from realize_v8_unified_cli_extension import (
 def example_single_image():
     """Example: Process a single image with VFX."""
     _info("=== Example: Single Image VFX Processing ===")
-    
+
     # This is a demonstration - would need an actual image file
     img_path = Path("renders/interior.jpg")
     output_path = Path("output/interior_enhanced.jpg")
-    
+
     if not img_path.exists():
         _info(f"Note: Example file {img_path} doesn't exist")
         _info("Usage: provide your own image path")
         return
-    
+
     # Open image
     img, meta = _open_any(img_path)
-    
+
     # Process with VFX
     result = enhance_with_vfx(
         img,
@@ -46,7 +48,7 @@ def example_single_image():
         material_response=True,
         save_depth=True
     )
-    
+
     # Save result
     _save_with_meta(
         result["image"],
@@ -55,7 +57,7 @@ def example_single_image():
         meta,
         out_bitdepth=16
     )
-    
+
     # Save depth map
     if result["depth"] is not None:
         from PIL import Image
@@ -64,7 +66,7 @@ def example_single_image():
         depth_img = (result["depth"] * 65535).astype(np.uint16)
         Image.fromarray(depth_img, mode='I;16').save(depth_path)
         _info(f"Saved depth map: {depth_path}")
-    
+
     # Print metrics
     _info(f"✓ Completed in {result['metrics']['total_ms']}ms")
     _info(f"  Base enhance: {result['metrics']['total_time_ms']}ms")
@@ -75,7 +77,7 @@ def example_single_image():
 def example_list_presets():
     """Example: List all available presets."""
     _info("=== Available VFX Presets ===")
-    
+
     for name, config in VFX_PRESETS.items():
         _info(f"\n{name}:")
         _info(f"  Description: {config['description']}")
@@ -88,7 +90,7 @@ def example_list_presets():
 def example_cli_usage():
     """Example: Show CLI usage."""
     _info("=== CLI Usage Examples ===")
-    
+
     _info("\n1. Single image with VFX:")
     _info("   python realize_v8_unified_cli_extension.py enhance-vfx \\")
     _info("       --input interior.jpg \\")
@@ -96,7 +98,7 @@ def example_cli_usage():
     _info("       --base-preset signature_estate_agx \\")
     _info("       --vfx-preset cinematic_fog \\")
     _info("       --material-response")
-    
+
     _info("\n2. Batch processing:")
     _info("   python realize_v8_unified_cli_extension.py batch-vfx \\")
     _info("       --input renders/ \\")
@@ -104,25 +106,26 @@ def example_cli_usage():
     _info("       --base-preset signature_estate \\")
     _info("       --vfx-preset dramatic_dof \\")
     _info("       --jobs 4")
-    
+
     _info("\n3. With custom LUT:")
     _info("   python realize_v8_unified_cli_extension.py enhance-vfx \\")
     _info("       --input interior.jpg \\")
     _info("       --output enhanced.jpg \\")
     _info("       --vfx-preset subtle_estate \\")
-    _info("       --lut 02_Location_Aesthetic/California/Montecito_Golden_Hour_HDR.cube")
+    # Path verified to exist after restructuring (2025-11-04)
+    _info("       --lut assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube")
 
 
 def main():
     """Run examples."""
     _info("VFX Extension Examples for Transformation Portal\n")
-    
+
     example_list_presets()
     _info("\n" + "="*60 + "\n")
-    
+
     example_cli_usage()
     _info("\n" + "="*60 + "\n")
-    
+
     # Uncomment to run single image example (requires actual image file)
     # example_single_image()
 

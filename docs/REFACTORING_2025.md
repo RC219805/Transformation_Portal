@@ -86,9 +86,9 @@ All large image files moved here and excluded from git:
 
 #### LUTs (`data/luts/`)
 Copies of existing LUT directories for easier access and tool compatibility:
-- `film_emulation` - Copy of `01_Film_Emulation/`
-- `location` - Copy of `02_Location_Aesthetic/`
-- `material_response` - Copy of `03_Material_Response/`
+- `film_emulation` - Copy of `assets/luts/film_emulation/`
+- `location` - Copy of `assets/luts/location_aesthetic/`
+- `material_response` - Copy of `assets/luts/material_response/`
 
 Note: These were previously symlinks but have been converted to actual directories
 to ensure compatibility with CI/CD tools that don't properly handle symlinks.

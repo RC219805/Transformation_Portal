@@ -312,7 +312,7 @@ processor:
     strength: 0.7
     
   color_grading:
-    lut: "02_Location_Aesthetic/Montecito_Golden_Hour.cube"
+    lut: "assets/luts/location_aesthetic/Montecito_Golden_Hour.cube"
     opacity: 0.75
     
 output:
