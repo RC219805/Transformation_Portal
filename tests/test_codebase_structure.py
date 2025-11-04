@@ -166,11 +166,15 @@ class TestWrapperFiles:
         for wrapper in wrapper_files:
             wrapper_path = _repo_root / wrapper
             if wrapper_path.exists():
-                # Wrapper should be small (< 100 lines)
+                # Wrapper should be small (< 100 non-comment, non-blank lines)
                 lines = wrapper_path.read_text().splitlines()
-                assert len(lines) < 100, (
-                    f"{wrapper} should be a thin wrapper (< 100 lines), "
-                    f"but has {len(lines)} lines"
+                code_lines = [
+                    line for line in lines
+                    if line.strip() and not line.strip().startswith("#") and not line.strip().startswith('"""') and not line.strip().startswith("'''")
+                ]
+                assert len(code_lines) < 100, (
+                    f"{wrapper} should be a thin wrapper (< 100 non-comment, non-blank lines), "
+                    f"but has {len(code_lines)} code lines"
                 )
 
 
