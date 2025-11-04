@@ -131,7 +131,21 @@ def _prepare_tifffile_kwargs(meta: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _try_save_16bit_rgb_tiff(path: Path, arr_uint: np.ndarray, meta: Dict[str, Any]) -> bool:
-    """Try to save 16-bit RGB TIFF. Returns True on success, False on failure."""
+    """
+    Try to save a 16-bit RGB TIFF file using tifffile, preserving metadata if possible.
+
+    Parameters:
+        path (Path): The output file path where the TIFF image will be saved.
+        arr_uint (np.ndarray): The image data as a NumPy array. Expected shape is (H, W, 3) for RGB images,
+            with dtype 'uint16' (preferred for 16-bit TIFF) or 'uint8'. The array should contain RGB channel data.
+        meta (Dict[str, Any]): Metadata dictionary to be embedded in the TIFF file. Supported keys include:
+            - 'description' (str, optional): Description string to embed in the TIFF.
+            - 'metadata' (dict, optional): Dictionary of additional metadata to embed.
+            Other keys are serialized as a JSON string in the 'description' field if 'description' is not provided.
+
+    Returns:
+        bool: True if the file was saved successfully, False otherwise.
+    """
     if not HAS_TIFFFILE:
         _warn("tifffile not available for 16-bit TIFF. Install: pip install tifffile")
         return False
