@@ -54,7 +54,7 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
 # Import common image utilities
-from transformation_portal.utils.image_utils import load_image_rgb as _load_image_rgb_base
+from transformation_portal.utils.image_utils import load_image_rgb as load_image_rgb_base
 
 # ----- Optional accelerated libraries -----
 
@@ -345,7 +345,7 @@ def find_mask_for_base(mask_root: Optional[str], base: str, kind: str) -> Option
 def load_image_rgb(path: str) -> np.ndarray:
     validate_file_exists(path, "Image")
     # Use common image loading function
-    return _load_image_rgb_base(path)
+    return load_image_rgb_base(path)
 
 @retry_on_io_error()
 def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tiff", quality: int = 95) -> str:
