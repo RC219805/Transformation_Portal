@@ -424,7 +424,7 @@ if __name__ == '__main__':
             print(f"File: {file}")
             print(f"  Valid: {is_valid}")
             print(f"  Extension: {info['extension']}")
-            print(f"  Type: ", end='')
+            print("  Type: ", end='')
             if info['is_image']:
                 print("Image", end='')
             if info['is_video']:
@@ -434,7 +434,7 @@ if __name__ == '__main__':
             print()
 
             if info['recommendations']:
-                print(f"  Recommendations:")
+                print("  Recommendations:")
                 for rec in info['recommendations']:
                     print(f"    - {rec}")
             print()

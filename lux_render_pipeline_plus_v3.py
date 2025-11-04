@@ -93,7 +93,7 @@ def _sample_env(env: Optional[np.ndarray], dir3: np.ndarray) -> np.ndarray:
         return np.ones_like(dir3)[..., :3]
     x, y, z = dir3[..., 0], dir3[..., 1], dir3[..., 2]
     theta = np.arctan2(x, z)
-    phi   = np.arccos(np.clip(y, -1, 1))
+    phi = np.arccos(np.clip(y, -1, 1))
     u = (theta/(2*np.pi) + 0.5)
     v = phi/np.pi
     H, W, _ = env.shape
