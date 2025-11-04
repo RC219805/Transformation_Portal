@@ -2,18 +2,12 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 
-# Add project root to path
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
 # Format validation functions
-from format_utils import (
+from transformation_portal.utils.format_utils import (
     normalize_extension,
     is_supported_image_format,
     is_supported_video_format,
@@ -27,7 +21,7 @@ from format_utils import (
 )
 
 # Exceptions
-from format_utils import UnsupportedFormatError
+from transformation_portal.utils.format_utils import UnsupportedFormatError
 
 # Constants
 from format_utils import (
