@@ -171,10 +171,8 @@ def apply_pbr_overlays(
     if q == "draft":
         proc_scale = min(proc_scale, 0.5)
         enable_displacement = False
-        disp_mm = min(disp_mm, 1.0)
     elif q == "preview":
         proc_scale = min(proc_scale, 0.75)
-        disp_mm = min(disp_mm, 2.0)
     elif q == "final":
         pass
 
