@@ -20,6 +20,7 @@ except ImportError:
 
 from PIL import Image
 
+
 def normalize_float_to_uint8(arr: np.ndarray) -> np.ndarray:
     # map array to uint8 range 0..255
     amin, amax = float(np.nanmin(arr)), float(np.nanmax(arr))
@@ -28,6 +29,7 @@ def normalize_float_to_uint8(arr: np.ndarray) -> np.ndarray:
     scaled = (arr - amin) / (amax - amin)
     out = (scaled * 255.0).clip(0, 255).astype(np.uint8)
     return out
+
 
 def to_image_array(arr: np.ndarray) -> np.ndarray:
     """Normalize and reshape arr to either (H,W) or (H,W,3), dtype uint8 or uint16."""
@@ -43,10 +45,10 @@ def to_image_array(arr: np.ndarray) -> np.ndarray:
     # - (H,W,1)
     # - (H,W,3)
     # - (1,H,W) or (C,H,W)
-    if arr.ndim == 3 and arr.shape[0] in (1,3,4):  # (C,H,W) -> (H,W,C)
+    if arr.ndim == 3 and arr.shape[0] in (1, 3, 4):  # (C,H,W) -> (H,W,C)
         arr = np.moveaxis(arr, 0, -1)
     if arr.ndim == 3 and arr.shape[2] == 1:  # (H,W,1) -> (H,W)
-        arr = arr[...,0]
+        arr = arr[..., 0]
     # dtype handling
     if np.issubdtype(arr.dtype, np.floating):
         arr = normalize_float_to_uint8(arr)
@@ -65,6 +67,7 @@ def to_image_array(arr: np.ndarray) -> np.ndarray:
         arr = normalize_float_to_uint8(arr.astype('float32'))
     return arr
 
+
 def convert_file(p: Path):
     try:
         arr = tifffile.imread(p)
@@ -77,7 +80,7 @@ def convert_file(p: Path):
         if arr2.ndim == 2:
             mode = "I;16" if arr2.dtype == np.uint16 else None
             im = Image.fromarray(arr2, mode=mode) if mode else Image.fromarray(arr2)
-        elif arr2.ndim == 3 and arr2.shape[2] in (3,4):
+        elif arr2.ndim == 3 and arr2.shape[2] in (3, 4):
             # if uint16 use 'I;16' per channel isn't supported; convert to uint8 for PNG
             if arr2.dtype == np.uint16:
                 # scale down to 0..255 for RGB PNG (preserve approx)
@@ -101,6 +104,7 @@ def convert_file(p: Path):
         print(f"Failed to save {out}: {e}")
         return False
 
+
 def main(root):
     root = Path(root)
     tifs = list(root.rglob("*.tif")) + list(root.rglob("*.tiff"))
@@ -109,6 +113,7 @@ def main(root):
         return
     for p in tifs:
         convert_file(p)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

@@ -1,4 +1,9 @@
 # pylint: disable=no-member  # False positives with package imports
+from typing import Optional
+
+import numpy as np
+from PIL import Image
+
 from luxury_tiff_batch_processor.io_utils import (
     float_to_dtype_array,
     image_to_float,
@@ -9,21 +14,11 @@ from luxury_tiff_batch_processor.adjustments import (
     gaussian_kernel_cached,
 )
 import luxury_tiff_batch_processor as ltiff
-from pathlib import Path
-import sys
-from typing import Optional
-
-import numpy as np
-from PIL import Image
 
 try:
     import tifffile
 except Exception:  # pragma: no cover - optional dependency
     tifffile = None
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def test_float_to_dtype_array_preserves_float_values():
