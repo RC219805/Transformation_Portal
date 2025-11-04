@@ -6,15 +6,15 @@ Processes all images in a directory with progress tracking.
 
 Usage:
     python examples/batch_process.py input_dir/ output_dir/ [--preset interior|exterior]
+
+Prerequisites:
+    pip install -e .
 """
 
-from depth_pipeline import ArchitecturalDepthPipeline
 import sys
 import argparse
 from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from depth_pipeline import ArchitecturalDepthPipeline
 
 
 def main():
