@@ -16,10 +16,11 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
-.PHONY: help test-fast test-novideo test-full venv
+.PHONY: help test-fast test-novideo test-full venv setup
 
 help:
 	@echo "Targets:"
+	@echo "  setup         Install package in editable mode (pip install -e .)"
 	@echo "  test-fast     Run fast subset (no video/optional heavy paths)"
 	@echo "  test-novideo  Run all tests excluding video suite via -k filter"
 	@echo "  test-full     Run entire test suite (parallel if xdist present)"
@@ -31,6 +32,10 @@ venv:
 	else \
 		echo ".venv already present"; \
 	fi
+
+setup: venv
+	@echo "Installing package in editable mode..."
+	@"$(PY)" -m pip install -e .
 
 test-fast:
 	@"$(PY)" -m pytest -q $(FAST_TESTS)
@@ -49,9 +54,9 @@ test-full:
 
 lint:
 	@echo "Running flake8 critical checks..."
-	@$(PY) -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+	@$(PY) -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated,scripts,examples || true
 	@echo "Running pylint (non-blocking)..."
-	@$(PY) -m pylint $(shell git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' || echo '') || true
+	@$(PY) -m pylint $(shell git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' -e 'examples/' || echo '') || true
 
 ci: lint test-fast
 	@echo "✅ Local CI checks completed successfully."

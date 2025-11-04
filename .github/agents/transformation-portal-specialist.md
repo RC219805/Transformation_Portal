@@ -44,9 +44,9 @@ Core Scripts:
 
 Configuration:
 ├── config/             # YAML presets for pipelines
-├── 01_Film_Emulation/  # Kodak and FilmConvert LUTs
-├── 02_Location_Aesthetic/  # Location-specific profiles
-└── 03_Material_Response/   # Surface enhancement LUTs
+├── assets/luts/film_emulation/  # Kodak and FilmConvert LUTs
+├── assets/luts/location_aesthetic/  # Location-specific profiles
+└── assets/luts/material_response/   # Surface enhancement LUTs
 ```
 
 ## What You Can Do
@@ -134,7 +134,7 @@ Depth Estimation → Material Detection → Color Grading → Tone Mapping → S
 PRESETS = {
     "sunset_estate": PresetConfig(
         name="Sunset Estate",
-        lut="02_Location_Aesthetic/California_Golden_Hour.cube",
+        lut="assets/luts/location_aesthetic/California_Golden_Hour.cube",
         exposure=0.15,
         contrast=1.10,
         saturation=1.08,
