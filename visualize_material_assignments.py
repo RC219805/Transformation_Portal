@@ -1,4 +1,5 @@
 """Generate a visualization showing MBAR material assignments for the aerial."""
+# pylint: disable=cyclic-import  # False positive: no actual cyclic import in this module
 from pathlib import Path
 import sys
 import numpy as np

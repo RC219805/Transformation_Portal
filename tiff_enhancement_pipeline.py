@@ -35,7 +35,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import shutil
 import subprocess
 import sys
@@ -519,10 +518,10 @@ class Pipeline:
             return False
 
         # Check for TIFF files
-        tiff_files = list(self.config.input_dir.glob("*.tif")) + \
-                     list(self.config.input_dir.glob("*.tiff")) + \
-                     list(self.config.input_dir.glob("*.TIF")) + \
-                     list(self.config.input_dir.glob("*.TIFF"))
+        tiff_files = (list(self.config.input_dir.glob("*.tif")) +
+                      list(self.config.input_dir.glob("*.tiff")) +
+                      list(self.config.input_dir.glob("*.TIF")) +
+                      list(self.config.input_dir.glob("*.TIFF")))
 
         if not tiff_files:
             log.error(f"No TIFF files found in {self.config.input_dir}")
