@@ -9,14 +9,18 @@ processing them with Transformation Portal pipelines.
 Usage:
     python examples/validate_file_formats.py path/to/file.jpg
     python examples/validate_file_formats.py --scan directory/
-
-Prerequisites:
-    pip install -e .
 """
 
 import sys
 from pathlib import Path
-from format_utils import (
+
+# Add project root to path for imports
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+# pylint: disable=wrong-import-position
+from format_utils import (  # noqa: E402
     validate_format,
     get_format_info,
     suggest_output_format,
