@@ -241,7 +241,7 @@ make lint
 - Maintain GPS coordinates and IPTC/XMP metadata when available
 - Follow naming conventions: `{basename}_{preset}.{ext}`
 - Create timestamped output directories for productions (e.g., `output_2025-10-30_14-30/`)
-- Brand assets located in `09_Client_Deliverables/Lantern_Logo_Implementation_Kit/`
+- Brand assets located in `assets/brand/lantern_logo/`
 
 ## Documentation
 
@@ -342,7 +342,7 @@ make lint
 - **LUT Documentation**: `assets/luts/material_response/_Material_Response_Technical_Guide.md` (if exists)
 - **Version History**: `docs/Version_History/changelog.md` - Change tracking
 - **Test Status**: `tests/TEST_STATUS.md` - Current test coverage and known issues
-- **Brand Assets**: `09_Client_Deliverables/Lantern_Logo_Implementation_Kit/` - Logos and color tokens
+- **Brand Assets**: `assets/brand/lantern_logo/` - Logos and color tokens
 - **Workflow Fixes**: `WORKFLOW_BUGS_FIXED.md` - Documented bug fixes and solutions
 
 ## Code Examples
