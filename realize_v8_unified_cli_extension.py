@@ -261,21 +261,21 @@ def apply_lut_with_depth(
     try:
         # Parse CUBE LUT
         with open(lut_path, 'r', encoding='utf-8') as f:
-            lines = [l.strip() for l in f if l.strip() and not l.startswith('#')]
+            lines = [line.strip() for line in f if line.strip() and not line.startswith('#')]
 
-        data_lines = [l for l in lines if l and (l[0].isdigit() or l[0] == '-')]
+        data_lines = [line for line in lines if line and (line[0].isdigit() or line[0] == '-')]
 
         if not data_lines:
             raise ValueError("No valid LUT data found in file (expected numeric values)")
 
         # Parse LUT_3D_SIZE from header if present, else fallback to cube root
         size = None
-        for l in lines:
-            if l.upper().startswith("LUT_3D_SIZE"):
+        for line in lines:
+            if line.upper().startswith("LUT_3D_SIZE"):
                 try:
-                    size = int(l.split()[1])
+                    size = int(line.split()[1])
                 except (IndexError, ValueError):
-                    raise ValueError(f"Malformed LUT_3D_SIZE directive: '{l}'")
+                    raise ValueError(f"Malformed LUT_3D_SIZE directive: '{line}'")
                 break
         if size is None:
             size = round(len(data_lines) ** (1/3))
@@ -287,7 +287,7 @@ def apply_lut_with_depth(
                 f"got {len(data_lines)} lines"
             )
 
-        lut_data = np.array([list(map(float, l.split())) for l in data_lines])
+        lut_data = np.array([list(map(float, line.split())) for line in data_lines])
 
         if lut_data.shape[1] != 3:
             raise ValueError(f"Invalid LUT data: expected 3 columns (RGB), got {lut_data.shape[1]}")
