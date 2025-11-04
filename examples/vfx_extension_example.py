@@ -5,13 +5,11 @@ Example usage of the VFX extension for Transformation Portal.
 
 This demonstrates how to use the realize_v8_unified_cli_extension to apply
 depth-guided visual effects to architectural renderings.
+
+NOTE: Requires package installation: pip install -e .
 """
 
 from pathlib import Path
-import sys
-
-# Add parent directory to path to import modules
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from realize_v8_unified import _info
 from realize_v8_unified_cli_extension import (
