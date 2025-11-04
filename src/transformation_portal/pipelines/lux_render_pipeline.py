@@ -60,7 +60,7 @@ from controlnet_aux import CannyDetector, MidasDetector
 # Import common image utilities
 from transformation_portal.utils.image_utils import load_image, save_image, pil_to_np, np_to_pil
 
-# Optional Real-ESRGAN (model components imported lazily in LuxuryRenderPipeline.__init__)
+# Optional Real-ESRGAN (SRVGGNetCompact model architecture imported lazily in LuxuryRenderPipeline.__init__)
 _HAS_REALESRGAN = importlib.util.find_spec("realesrgan") is not None
 
 # --------------------------
