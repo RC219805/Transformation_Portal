@@ -48,8 +48,7 @@ def test_agent_frontmatter_has_name():
             if not in_frontmatter:
                 in_frontmatter = True
                 continue
-            else:
-                break
+            break
         if in_frontmatter:
             frontmatter_lines.append(line)
     
@@ -72,8 +71,7 @@ def test_agent_frontmatter_has_description():
             if not in_frontmatter:
                 in_frontmatter = True
                 continue
-            else:
-                break
+            break
         if in_frontmatter:
             frontmatter_lines.append(line)
     

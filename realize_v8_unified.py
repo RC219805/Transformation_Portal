@@ -76,6 +76,48 @@ def _open_any(path: Union[str, Path]) -> Tuple[Image.Image, Dict[str, Any]]:
     return img, meta
 
 
+def _prepare_tifffile_kwargs(meta: Dict[str, Any]) -> Dict[str, Any]:
+    """Prepare kwargs for tifffile with metadata."""
+    tifffile_kwargs = {'photometric': 'rgb'}
+    if not meta:
+        return tifffile_kwargs
+    
+    # If 'description' is present, use it; else, serialize all meta as description
+    description = meta.get('description')
+    if description is None and meta:
+        # Fallback: serialize meta as a string for description
+        import json
+        try:
+            description = json.dumps(meta)
+        except Exception:
+            description = str(meta)
+    if description is not None:
+        tifffile_kwargs['description'] = description
+    
+    # If 'metadata' is present and a dict, pass it
+    metadata_dict = meta.get('metadata')
+    if isinstance(metadata_dict, dict):
+        tifffile_kwargs['metadata'] = metadata_dict
+    
+    return tifffile_kwargs
+
+
+def _try_save_16bit_rgb_tiff(path: Path, arr_uint: np.ndarray, meta: Dict[str, Any]) -> bool:
+    """Try to save 16-bit RGB TIFF. Returns True on success, False on failure."""
+    if not HAS_TIFFFILE:
+        _warn("tifffile not available for 16-bit TIFF. Install: pip install tifffile")
+        return False
+    
+    try:
+        tifffile_kwargs = _prepare_tifffile_kwargs(meta)
+        tifffile.imwrite(path, arr_uint, **tifffile_kwargs)
+        _info(f"Saved: {path} (16-bit TIFF via tifffile, metadata preserved if possible)")
+        return True
+    except Exception as e:
+        _warn(f"Failed to write 16-bit TIFF: {e}")
+        return False
+
+
 def _save_with_meta(
     img: Image.Image,
     arr: Optional[np.ndarray],
@@ -110,36 +152,9 @@ def _save_with_meta(
                 # 16-bit RGB - requires tifffile for TIFF
                 ext = path.suffix.lower()
                 if ext in ['.tif', '.tiff']:
-                    if HAS_TIFFFILE:
-                        try:
-                            # Preserve metadata if present
-                            tifffile_kwargs = {'photometric': 'rgb'}
-                            # tifffile supports 'description' (string) and 'metadata' (dict)
-                            if meta:
-                                # If 'description' is present, use it; else, serialize all meta as description
-                                description = meta.get('description')
-                                if description is None and meta:
-                                    # Fallback: serialize meta as a string for description
-                                    import json
-                                    try:
-                                        description = json.dumps(meta)
-                                    except Exception:
-                                        description = str(meta)
-                                if description is not None:
-                                    tifffile_kwargs['description'] = description
-                                # If 'metadata' is present and a dict, pass it
-                                metadata_dict = meta.get('metadata')
-                                if isinstance(metadata_dict, dict):
-                                    tifffile_kwargs['metadata'] = metadata_dict
-                            tifffile.imwrite(path, arr_uint, **tifffile_kwargs)
-                            _info(f"Saved: {path} (16-bit TIFF via tifffile, metadata preserved if possible)")
-                            return
-                        except Exception as e:
-                            _warn(f"Failed to write 16-bit TIFF: {e}")
-                            _warn("Falling back to 8-bit")
-                    else:
-                        _warn("tifffile not available for 16-bit TIFF. Install: pip install tifffile")
-                        _warn("Falling back to 8-bit")
+                    if _try_save_16bit_rgb_tiff(path, arr_uint, meta):
+                        return
+                    _warn("Falling back to 8-bit")
                 else:
                     _warn(f"Format {ext} doesn't support 16-bit RGB, falling back to 8-bit")
 
@@ -373,7 +388,7 @@ def main():
 
     # Check if VFX extension is available
     try:
-        from realize_v8_unified_cli_extension import add_vfx_commands
+        from realize_v8_unified_cli_extension import add_vfx_commands  # pylint: disable=cyclic-import
         has_vfx = True
     except ImportError:
         has_vfx = False
