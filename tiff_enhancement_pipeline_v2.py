@@ -254,7 +254,7 @@ class AdaptiveSegmentationStage:
             return False, 0
 
     def _run_material_clustering(self, enhanced_dir: Path, _depth_dir: Path,
-                                  output_dir: Path) -> Tuple[bool, int]:
+                                 output_dir: Path) -> Tuple[bool, int]:
         """
         Run K-means material clustering (fast aerial mode).
 
@@ -285,7 +285,7 @@ class AdaptiveSegmentationStage:
         return True, mask_count
 
     def _run_hybrid_segmentation(self, enhanced_dir: Path, depth_dir: Path,
-                                  output_dir: Path) -> Tuple[bool, int]:
+                                 output_dir: Path) -> Tuple[bool, int]:
         """Run both semantic and material segmentation."""
         log.info("Running hybrid segmentation (semantic + material)...")
 
@@ -312,7 +312,7 @@ class AdaptiveSegmentationStage:
         return success_sem and success_mat, count_sem + count_mat
 
     def _run_auto_segmentation(self, enhanced_dir: Path, depth_dir: Path,
-                                output_dir: Path) -> Tuple[bool, int]:
+                               output_dir: Path) -> Tuple[bool, int]:
         """Automatically choose segmentation method based on image analysis."""
         log.info("Auto-detecting optimal segmentation method...")
 
