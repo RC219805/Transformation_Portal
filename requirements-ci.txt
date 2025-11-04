@@ -12,6 +12,9 @@ scikit-learn>=1.4.0,<1.8
 tqdm>=4.66,<5
 typer>=0.10.0
 
+# Configuration parsing
+PyYAML>=6.0,<7
+
 # Testing & fuzzing
 pytest>=8,<9
 hypothesis>=6,<7
