@@ -11,6 +11,9 @@ NOTE: Requires package installation: pip install -e .
 Usage:
     python examples/validate_file_formats.py path/to/file.jpg
     python examples/validate_file_formats.py --scan directory/
+
+Prerequisites:
+    pip install -e .
 """
 
 import sys

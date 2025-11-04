@@ -29,8 +29,8 @@ import warnings
 try:
     from PIL import Image, ImageFile
     ImageFile.LOAD_TRUNCATED_IMAGES = True  # Handle truncated images gracefully
-except ImportError as exc:
-    raise ImportError("Pillow is required. Install with: pip install Pillow") from exc
+except ImportError:
+    raise ImportError("Pillow is required. Install with: pip install Pillow")
 
 # Optional but recommended for advanced features
 try:
