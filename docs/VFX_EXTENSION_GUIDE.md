@@ -64,6 +64,6 @@ vfx_extensions:
     color: "#e0e6ef"
     depth_aware: true
   - name: "brand_overlay"
-    logo_path: "09_Client_Deliverables/Lantern_Logo_Implementation_Kit/lantern_logo.png"
+    logo_path: "assets/brand/lantern_logo/lantern_logo.png"
     position: "bottom-right"
     opacity: 0.85
