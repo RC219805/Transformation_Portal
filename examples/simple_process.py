@@ -6,6 +6,9 @@ NOTE: Requires package installation: pip install -e .
 
 Usage:
     python examples/simple_process.py input.jpg output/
+
+Prerequisites:
+    pip install -e .
 """
 
 import sys
