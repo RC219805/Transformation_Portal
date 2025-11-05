@@ -16,15 +16,20 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
-.PHONY: help test-fast test-novideo test-full venv setup
+.PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean
 
 help:
 	@echo "Targets:"
-	@echo "  setup         Install package in editable mode (pip install -e .)"
-	@echo "  test-fast     Run fast subset (no video/optional heavy paths)"
-	@echo "  test-novideo  Run all tests excluding video suite via -k filter"
-	@echo "  test-full     Run entire test suite (parallel if xdist present)"
-	@echo "  venv          Create local .venv if missing"
+	@echo "  setup           Install package in editable mode (pip install -e .)"
+	@echo "  test-fast       Run fast subset (no video/optional heavy paths)"
+	@echo "  test-novideo    Run all tests excluding video suite via -k filter"
+	@echo "  test-full       Run entire test suite (parallel if xdist present)"
+	@echo "  test-structure  Run codebase structure validation tests"
+	@echo "  test-utils      Run tests for performance and error handling utilities"
+	@echo "  venv            Create local .venv if missing"
+	@echo "  clean           Remove Python cache files and build artifacts"
+	@echo "  lint            Run linting (flake8 + pylint)"
+	@echo "  ci              Run local CI checks (lint + test-fast)"
 
 venv:
 	@if [ ! -x .venv/bin/python ]; then \
@@ -49,6 +54,23 @@ test-full:
 	else \
 		"$(PY)" -m pytest -q tests; \
 	fi
+
+test-structure:
+	@echo "Running codebase structure validation tests..."
+	@"$(PY)" -m pytest -v tests/test_codebase_structure.py
+
+test-utils:
+	@echo "Running utility tests..."
+	@"$(PY)" -m pytest -v tests/test_performance_utils.py tests/test_error_handling.py
+
+clean:
+	@echo "Cleaning Python cache files and build artifacts..."
+	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
+	@find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
+	@rm -rf build/ dist/ .pytest_cache/ .hypothesis/ 2>/dev/null || true
+	@echo "✓ Cleanup complete"
 
 # --- Additional developer + CI helpers ---
 
