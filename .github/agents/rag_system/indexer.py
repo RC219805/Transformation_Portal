@@ -230,7 +230,7 @@ class RepositoryIndexer:
                 metadata['entity_type'] = 'class'
 
         # Extract docstring if present
-        docstring_match = re.search(r'"""(.*?)"""', code, re.DOTALL)
+        docstring_match = re.search(r'(?:"""|\'\'\')(.*?)(?:"""|\'\'\')', code, re.DOTALL)
         if docstring_match:
             metadata['docstring'] = docstring_match.group(1).strip()[:200]  # First 200 chars
 
