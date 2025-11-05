@@ -34,7 +34,7 @@ def sample_chunks():
     """Create sample document chunks for testing."""
     return [
         DocumentChunk(
-            content="def process_image(img):\n    '''Process an image'''\n    return img",
+            content="def process_image(img):\n    \"\"\"Process an image\"\"\"\n    return img",
             file_path="src/processor.py",
             start_line=1,
             end_line=3,

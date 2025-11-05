@@ -125,8 +125,10 @@ class ResultReranker:
         score = 0.0
         content = result.content
 
-        # Has docstring
-        if '"""' in content or "'''" in content:
+        # Has docstring - check for docstrings at start of functions/classes
+        # Use regex to match docstrings after def/class declarations to avoid false positives
+        docstring_pattern = r'(?:def|class)\s+\w+[^:]*:\s*(?:"""|\'\'\')(.*?)(?:"""|\'\'\')'
+        if re.search(docstring_pattern, content, re.DOTALL):
             score += self.signals.code_quality_bonus * 0.5
 
         # Has type hints
