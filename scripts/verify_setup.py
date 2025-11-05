@@ -109,12 +109,17 @@ def verify_dimension_validation():
     ]
     
     try:
+        try:
+            import typer
+            validation_exception = typer.BadParameter
+        except ImportError:
+            validation_exception = ValueError  # fallback for fallback implementation
         for width, height, should_pass, description in test_cases:
             try:
                 result_w, result_h = validate_sd_dimensions(width, height, auto_correct=False)
                 status = "✓ PASS" if should_pass else "✗ FAIL (should have raised error)"
                 print(f"{status}: {description} -> {result_w}x{result_h}")
-            except Exception as e:
+            except validation_exception as e:
                 status = "✗ FAIL" if should_pass else "✓ PASS"
                 print(f"{status}: {description} -> {type(e).__name__}")
         
