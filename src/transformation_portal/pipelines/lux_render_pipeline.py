@@ -21,17 +21,21 @@ try:
     _HAS_REALESRGAN_IMPORT = True
 except ImportError:  # pragma: no cover
     _HAS_REALESRGAN_IMPORT = False
-    # Provide helpful error message if user tries to use Real-ESRGAN
+    # Provide helpful installation instructions if user tries to use Real-ESRGAN
+    # The actual fallback to Pillow happens in the pipeline code
     class RealESRGANer:  # minimal CI stub
         def __init__(self, *_, **__):
             raise RuntimeError(
                 "Real-ESRGAN not installed. To enable 4x upscaling:\n"
                 "  1. Install package: pip install realesrgan\n"
                 "  2. Download model weights:\n"
+                "     python scripts/download_depth_models.py --model realesrgan\n"
+                "     OR manually:\n"
                 "     wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-x4plus.pth\n"
                 "     mkdir -p weights && mv realesrgan-x4plus.pth weights/RealESRGAN_x4plus.pth\n"
                 "  3. Ensure GPU support (CUDA) is available for best performance\n"
-                "Falling back to Pillow's Lanczos resampling."
+                "\n"
+                "Note: Pipeline will automatically fall back to Pillow's Lanczos resampling."
             )
 except Exception as e:  # pragma: no cover - other errors
     _HAS_REALESRGAN_IMPORT = False

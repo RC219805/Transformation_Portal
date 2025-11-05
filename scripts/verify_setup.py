@@ -85,19 +85,28 @@ def verify_dimension_validation():
     print("\nTesting dimension validation:")
     print("-" * 70)
     
+    # Try to import constants from main module
+    try:
+        sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+        from transformation_portal.pipelines.lux_render_pipeline import (
+            validate_sd_dimensions, SD_DIMENSION_MULTIPLE, MIN_SD_DIMENSION
+        )
+        print(f"Using SD_DIMENSION_MULTIPLE={SD_DIMENSION_MULTIPLE}, MIN_SD_DIMENSION={MIN_SD_DIMENSION}")
+    except ImportError:
+        # Fallback to hardcoded values if import fails
+        SD_DIMENSION_MULTIPLE = 64
+        MIN_SD_DIMENSION = 512
+        print(f"Using fallback constants: SD_DIMENSION_MULTIPLE={SD_DIMENSION_MULTIPLE}, MIN_SD_DIMENSION={MIN_SD_DIMENSION}")
+    
     test_cases = [
-        (512, 512, True, "Standard 512x512"),
-        (768, 512, True, "Standard 768x512"),
+        (MIN_SD_DIMENSION, MIN_SD_DIMENSION, True, f"Minimum {MIN_SD_DIMENSION}x{MIN_SD_DIMENSION}"),
+        (768, MIN_SD_DIMENSION, True, f"Standard 768x{MIN_SD_DIMENSION}"),
         (1024, 768, True, "Standard 1024x768"),
-        (1024, 770, False, "Invalid 1024x770 (not multiple of 64)"),
-        (800, 600, False, "Invalid 800x600 (not multiple of 64)"),
+        (1024, 770, False, f"Invalid 1024x770 (not multiple of {SD_DIMENSION_MULTIPLE})"),
+        (800, 600, False, f"Invalid 800x600 (not multiple of {SD_DIMENSION_MULTIPLE})"),
     ]
     
     try:
-        # Try importing the validation function
-        sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-        from transformation_portal.pipelines.lux_render_pipeline import validate_sd_dimensions
-        
         for width, height, should_pass, description in test_cases:
             try:
                 result_w, result_h = validate_sd_dimensions(width, height, auto_correct=False)
