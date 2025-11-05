@@ -32,6 +32,9 @@ class CitationGenerator:
     - Relevance notes explaining why the citation is relevant
     """
 
+    # Maximum expected BM25 score for normalization (typical scores range 0-20)
+    MAX_EXPECTED_SCORE = 20.0
+
     def __init__(
         self,
         snippet_max_lines: int = 10,
@@ -103,8 +106,7 @@ class CitationGenerator:
         rank_confidence = 1.0 / (1.0 + rank * 0.3)
 
         # Score-based confidence (normalized to 0-1)
-        # Assume scores typically range from 0 to ~20
-        score_confidence = min(1.0, score / 20.0)
+        score_confidence = min(1.0, score / self.MAX_EXPECTED_SCORE)
 
         # Combine with weights
         confidence = (rank_confidence * 0.6 + score_confidence * 0.4)

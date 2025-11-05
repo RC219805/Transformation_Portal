@@ -28,7 +28,8 @@ class DocumentChunk:
     def __post_init__(self):
         """Generate unique chunk ID if not provided."""
         if self.chunk_id is None:
-            content_hash = hashlib.md5(
+            # Using SHA-256 for chunk IDs (non-security-critical but modern hash)
+            content_hash = hashlib.sha256(
                 f"{self.file_path}:{self.start_line}:{self.content}".encode()
             ).hexdigest()[:8]
             self.chunk_id = f"{self.file_path}:{self.start_line}:{content_hash}"

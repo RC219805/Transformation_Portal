@@ -74,7 +74,9 @@ class BM25Retriever:
             for token in unique_tokens:
                 self.doc_freqs[token] += 1
 
-        # Compute IDF scores
+        # Compute IDF scores using Robertson-Sparck Jones (RSJ) IDF formula
+        # The 0.5 smoothing constants prevent negative or undefined IDF values
+        # for very rare or very common terms
         for token, freq in self.doc_freqs.items():
             self.idf[token] = math.log((self.N - freq + 0.5) / (freq + 0.5) + 1.0)
 

@@ -198,11 +198,16 @@ class TestRAGIntegration:
             confidences = [c.confidence for c in citations]
             assert all(0.0 <= conf <= 1.0 for conf in confidences)
 
+    @pytest.mark.slow
     def test_pipeline_performance(self, rag_pipeline):
         """Test that pipeline performs reasonably fast."""
+        import os
         import time
 
         query = "image processing"
+
+        # Use more lenient thresholds in CI environments
+        ci_factor = 3.0 if os.getenv('CI') else 1.0
 
         # Time retrieval
         start = time.time()
@@ -219,13 +224,22 @@ class TestRAGIntegration:
         _ = rag_pipeline['citation_gen'].generate_citations(reranked, max_citations=5)
         citation_time = time.time() - start
 
-        # Performance expectations
-        assert retrieval_time < 1.0, f"Retrieval took {retrieval_time:.3f}s (expected < 1s)"
-        assert rerank_time < 0.5, f"Reranking took {rerank_time:.3f}s (expected < 0.5s)"
-        assert citation_time < 0.1, f"Citation took {citation_time:.3f}s (expected < 0.1s)"
+        # Performance expectations with CI tolerance
+        retrieval_threshold = 1.0 * ci_factor
+        rerank_threshold = 0.5 * ci_factor
+        citation_threshold = 0.1 * ci_factor
+        total_threshold = 2.0 * ci_factor
+
+        assert retrieval_time < retrieval_threshold, \
+            f"Retrieval took {retrieval_time:.3f}s (expected < {retrieval_threshold}s)"
+        assert rerank_time < rerank_threshold, \
+            f"Reranking took {rerank_time:.3f}s (expected < {rerank_threshold}s)"
+        assert citation_time < citation_threshold, \
+            f"Citation took {citation_time:.3f}s (expected < {citation_threshold}s)"
 
         total_time = retrieval_time + rerank_time + citation_time
-        assert total_time < 2.0, f"Total pipeline took {total_time:.3f}s (expected < 2s)"
+        assert total_time < total_threshold, \
+            f"Total pipeline took {total_time:.3f}s (expected < {total_threshold}s)"
 
 
 if __name__ == '__main__':
