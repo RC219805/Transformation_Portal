@@ -48,5 +48,6 @@ __all__ = [
     "MaterialResponseValidator",
     "compose_operations",
     "apply_transformation_tensor",
-    "QuantumMaterialResponse",
+    "violates",
+    "_clamp",
 ]
