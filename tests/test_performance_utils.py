@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """Tests for performance utilities."""
 import time
-from pathlib import Path
 
 import pytest
 
@@ -162,8 +161,10 @@ class TestPerformanceMonitor:
     
     def test_monitor_with_exception(self):
         """Test monitor handles exceptions."""
+        # Instantiate monitor outside pytest.raises so we can access it after
+        monitor = PerformanceMonitor("failing_operation")
         with pytest.raises(ValueError):
-            with PerformanceMonitor("failing_operation") as monitor:
+            with monitor:
                 raise ValueError("test error")
         
         # Should still have timing info

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Tests for error handling utilities."""
-import tempfile
-from pathlib import Path
-
 import pytest
 
 # Use proper package imports (assumes package is installed or PYTHONPATH is set)
@@ -280,13 +277,14 @@ class TestErrorSummary:
         errors = [
             ValueError("1"),
             ValueError("2"),
-            IOError("3"),
+            IOError("3"),  # Note: In Python 3, IOError is an alias for OSError
             TypeError("4")
         ]
         summary = get_error_summary(errors)
         assert "Total errors: 4" in summary
         assert "ValueError: 2" in summary
-        assert "IOError: 1" in summary
+        # In Python 3, IOError is an alias for OSError, so the type name is "OSError"
+        assert "OSError: 1" in summary
         assert "TypeError: 1" in summary
 
 
