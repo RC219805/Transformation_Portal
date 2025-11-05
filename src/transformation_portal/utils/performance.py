@@ -186,7 +186,7 @@ def retry_on_failure(
 
 def make_batch_processor(
     func: F, batch_size: Optional[int] = None
-) -> Callable[[list, Any], list]:
+) -> Callable[..., list]:
     """Create a batch-processing version of a single-item function.
 
     This function returns a new function that processes a list of items in batches,
