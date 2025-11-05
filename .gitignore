@@ -62,11 +62,29 @@ processed_output/
 # Logs
 *.log
 
+# Generated reports and artifacts
+*_report.json
+material_response_report.json
+*_summary.json
+*.tmp
+*.temp
+
 # macOS
 .DS_Store
+._*
 
 # Tools
 actionlint
+
+# Test outputs
+processed_images/
+output/
+output_*/
+test_output/
+
+# Temporary markdown files (keep permanent docs only)
+*_TEMP.md
+*_WIP.md
 
 # Large data files (keep directory structure, ignore large images)
 data/sample_images/**/*.jpg
