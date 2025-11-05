@@ -40,11 +40,14 @@ except ImportError:  # pragma: no cover - package not installed
 except Exception as e:  # pragma: no cover - other import errors (e.g., missing dependencies of realesrgan)
     # This catches cases where realesrgan is installed but its dependencies are missing
     _HAS_REALESRGAN_IMPORT = False
+    # Capture the exception message for use in the class definition
+    _REALESRGAN_IMPORT_ERROR = str(e)
     # Warning is now included in the RuntimeError below, not printed at import time.
+
     class RealESRGANer:  # minimal CI stub for type compatibility
         def __init__(self, *_, **__):
             raise RuntimeError(
-                f"RealESRGANer unavailable due to import error: {e}\n"
+                f"RealESRGANer unavailable due to import error: {_REALESRGAN_IMPORT_ERROR}\n"
                 f"This usually means realesrgan dependencies are missing.\n"
                 f"Try reinstalling: pip install --force-reinstall realesrgan"
             )
