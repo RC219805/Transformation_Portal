@@ -25,6 +25,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install OpenAI package
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir openai
+
       - name: Run summarizer (safe Option B)
         id: summarizer
         env:

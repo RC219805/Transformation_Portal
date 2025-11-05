@@ -259,6 +259,7 @@ class TestNoOrphanedFiles:
                 "Root material_response.py should import from transformation_portal "
                 "to delegate implementation, not duplicate it."
             )
+    
     def test_no_build_artifacts_in_root(self):
         """Test that build artifacts aren't in root."""
         # Check for common build artifacts

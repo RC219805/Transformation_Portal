@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 *.so
 .Python
@@ -74,3 +75,6 @@ data/sample_images/**/*.png
 data/sample_images/**/*.tif
 data/sample_images/**/*.tiff
 !data/sample_images/.gitkeep
+
+# RAG system generated files
+index_stats.json
