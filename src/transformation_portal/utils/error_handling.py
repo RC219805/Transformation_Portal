@@ -140,7 +140,7 @@ def check_dependency(
         min_version: Minimum required version (e.g., "2.0.0")
 
     Returns:
-        Always returns True if successful; raises DependencyError on failure.
+        True if dependency is available and meets version requirement
 
     Raises:
         DependencyError: If dependency is missing or version is too old
@@ -273,8 +273,10 @@ def batch_with_error_handling(
         error_limit: Maximum number of errors before aborting (None = unlimited)
 
     Returns:
-        List of successfully processed results. When skip_errors=True,
-        len(results) may be less than len(items) if some items failed.
+        List of successfully processed results. When skip_errors=True, the
+        returned list will only contain successful results, so
+        len(results) < len(items) is possible. Failed items are logged at WARNING
+        level and excluded from the results.
 
     Raises:
         ProcessingError: If skip_errors=False and any item fails, or if
