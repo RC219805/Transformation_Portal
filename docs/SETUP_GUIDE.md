@@ -408,5 +408,5 @@ After setup:
 
 ---
 
-**Last Updated**: November 5, 2025
+**Last Updated**: November 2025
 **Version**: 1.0.0

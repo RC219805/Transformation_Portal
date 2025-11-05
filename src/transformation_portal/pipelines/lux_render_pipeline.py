@@ -81,6 +81,16 @@ _HAS_REALESRGAN = _HAS_REALESRGAN_IMPORT
 
 # --------------------------
 
+# Constants
+# --------------------------
+
+# Stable Diffusion 1.5 requires dimensions to be multiples of 64 for U-Net compatibility
+SD_DIMENSION_MULTIPLE = 64
+# Minimum dimension for reasonable quality and model compatibility
+MIN_SD_DIMENSION = 512
+
+# --------------------------
+
 # Utilities
 # --------------------------
 
@@ -985,16 +995,16 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
     """
     original_width, original_height = width, height
     
-    # Check if dimensions are multiples of 64
-    if width % 64 != 0 or height % 64 != 0:
+    # Check if dimensions are multiples of SD_DIMENSION_MULTIPLE
+    if width % SD_DIMENSION_MULTIPLE != 0 or height % SD_DIMENSION_MULTIPLE != 0:
         if auto_correct:
-            # Round down to nearest multiple of 64
-            corrected_width = (width // 64) * 64
-            corrected_height = (height // 64) * 64
+            # Round down to nearest multiple of SD_DIMENSION_MULTIPLE
+            corrected_width = (width // SD_DIMENSION_MULTIPLE) * SD_DIMENSION_MULTIPLE
+            corrected_height = (height // SD_DIMENSION_MULTIPLE) * SD_DIMENSION_MULTIPLE
             
             # Ensure minimum dimensions
-            corrected_width = max(512, corrected_width)
-            corrected_height = max(512, corrected_height)
+            corrected_width = max(MIN_SD_DIMENSION, corrected_width)
+            corrected_height = max(MIN_SD_DIMENSION, corrected_height)
             
             typer.echo(
                 f"⚠ Corrected dimensions from {original_width}×{original_height} "
@@ -1004,9 +1014,9 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
             return corrected_width, corrected_height
         else:
             raise typer.BadParameter(
-                f"Dimensions must be multiples of 64 for Stable Diffusion 1.5. "
+                f"Dimensions must be multiples of {SD_DIMENSION_MULTIPLE} for Stable Diffusion 1.5. "
                 f"Got {width}×{height}. "
-                f"Recommended: 512×512, 768×512, 512×768, 768×768, 1024×768, or 1024×1024. "
+                f"Recommended: {MIN_SD_DIMENSION}×{MIN_SD_DIMENSION}, 768×512, 512×768, 768×768, 1024×768, or 1024×1024. "
                 f"Use --width and --height to specify valid dimensions."
             )
     

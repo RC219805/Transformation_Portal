@@ -423,6 +423,6 @@ top -l 1 | grep PhysMem  # macOS
 
 ---
 
-**Last Updated**: November 5, 2025  
+**Last Updated**: November 2025  
 **Version**: 1.0.0  
 **Related**: See [SETUP_GUIDE.md](SETUP_GUIDE.md) for installation details
