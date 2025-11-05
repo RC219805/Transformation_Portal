@@ -18,12 +18,27 @@ Example:
 """
 try:
     from realesrgan import RealESRGANer  # type: ignore
-except Exception:  # pragma: no cover
+    _HAS_REALESRGAN_IMPORT = True
+except ImportError:  # pragma: no cover
+    _HAS_REALESRGAN_IMPORT = False
+    # Provide helpful error message if user tries to use Real-ESRGAN
     class RealESRGANer:  # minimal CI stub
         def __init__(self, *_, **__):
             raise RuntimeError(
-                "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
+                "Real-ESRGAN not installed. To enable 4x upscaling:\n"
+                "  1. Install package: pip install realesrgan\n"
+                "  2. Download model weights:\n"
+                "     wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-x4plus.pth\n"
+                "     mkdir -p weights && mv realesrgan-x4plus.pth weights/RealESRGAN_x4plus.pth\n"
+                "  3. Ensure GPU support (CUDA) is available for best performance\n"
+                "Falling back to Pillow's Lanczos resampling."
             )
+except Exception as e:  # pragma: no cover - other errors
+    _HAS_REALESRGAN_IMPORT = False
+    print(f"⚠ Warning: Error importing realesrgan: {e}")
+    class RealESRGANer:  # minimal CI stub
+        def __init__(self, *_, **__):
+            raise RuntimeError(f"RealESRGANer unavailable due to import error: {e}")
 import glob
 import importlib.util
 import math
@@ -60,8 +75,9 @@ from controlnet_aux import CannyDetector, MidasDetector
 # Import common image utilities
 from transformation_portal.utils.image_utils import load_image, save_image, pil_to_np, np_to_pil
 
-# Optional Real-ESRGAN (SRVGGNetCompact model architecture imported lazily in LuxuryRenderPipeline.__init__)
-_HAS_REALESRGAN = importlib.util.find_spec("realesrgan") is not None
+# Optional Real-ESRGAN status (already set during import attempt above)
+# Keep backward compatibility with existing code that checks _HAS_REALESRGAN
+_HAS_REALESRGAN = _HAS_REALESRGAN_IMPORT
 
 # --------------------------
 
@@ -942,6 +958,69 @@ def parse_float_triplet(value: str) -> Tuple[float, float, float]:
     return clamped_tuple
 
 
+def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -> Tuple[int, int]:
+    """Validate and optionally auto-correct dimensions for Stable Diffusion 1.5 compatibility.
+    
+    SD 1.5 requires dimensions that are multiples of 64 for proper feature map alignment.
+    This prevents cryptic tensor dimension mismatch errors during processing.
+    
+    Args:
+        width: Desired image width in pixels
+        height: Desired image height in pixels
+        auto_correct: If True, auto-corrects to nearest valid dimensions with a warning.
+                      If False, raises an error for invalid dimensions.
+    
+    Returns:
+        Tuple of (validated_width, validated_height)
+    
+    Raises:
+        typer.BadParameter: If dimensions are invalid and auto_correct is False
+    
+    Examples:
+        >>> validate_sd_dimensions(1024, 768)  # Valid
+        (1024, 768)
+        >>> validate_sd_dimensions(1024, 770, auto_correct=True)  # Auto-corrected
+        ⚠ Corrected dimensions from 1024×770 to 1024×768 (SD 1.5 compatible)
+        (1024, 768)
+    """
+    original_width, original_height = width, height
+    
+    # Check if dimensions are multiples of 64
+    if width % 64 != 0 or height % 64 != 0:
+        if auto_correct:
+            # Round down to nearest multiple of 64
+            corrected_width = (width // 64) * 64
+            corrected_height = (height // 64) * 64
+            
+            # Ensure minimum dimensions
+            corrected_width = max(512, corrected_width)
+            corrected_height = max(512, corrected_height)
+            
+            typer.echo(
+                f"⚠ Corrected dimensions from {original_width}×{original_height} "
+                f"to {corrected_width}×{corrected_height} (SD 1.5 compatible)",
+                err=True
+            )
+            return corrected_width, corrected_height
+        else:
+            raise typer.BadParameter(
+                f"Dimensions must be multiples of 64 for Stable Diffusion 1.5. "
+                f"Got {width}×{height}. "
+                f"Recommended: 512×512, 768×512, 512×768, 768×768, 1024×768, or 1024×1024. "
+                f"Use --width and --height to specify valid dimensions."
+            )
+    
+    # Warn about extremely large dimensions that may cause OOM
+    if width * height > 1024 * 1024:
+        typer.echo(
+            f"⚠ Large dimensions ({width}×{height}) may require significant VRAM (8GB+). "
+            f"Consider using smaller dimensions or ensure sufficient GPU memory.",
+            err=True
+        )
+    
+    return width, height
+
+
 @app.command()
 def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     input_glob: str = typer.Option(..., help="Glob of input images, e.g. './drafts/*.png'"),
@@ -1130,6 +1209,9 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
 
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Validate dimensions for SD 1.5 compatibility (Issue #3: Tensor dimension incompatibility)
+    width, height = validate_sd_dimensions(width, height, auto_correct=True)
 
     model_ids = ModelIDs(
         base_model=base_model,
