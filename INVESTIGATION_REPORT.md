@@ -126,19 +126,20 @@ Once this fix is applied to PR #222:
 
 ### To Apply This Fix to PR #222:
 
-**Option 1: Cherry-pick the commit**
+**Option 1: Push the existing fix commit**
 ```bash
+# The fix is already on the branch, just needs to be pushed
 git checkout copilot/fix-pipeline-infrastructure-issues
-git cherry-pick a0d6869  # The fix commit
 git push origin copilot/fix-pipeline-infrastructure-issues
 ```
 
 **Option 2: Manual application**
 1. Checkout PR #222's branch: `copilot/fix-pipeline-infrastructure-issues`
 2. Edit `src/transformation_portal/pipelines/lux_render_pipeline.py`
-3. Add line after line 42: `_import_error_msg = str(e)`
-4. Change line 47: `{e}` → `{_import_error_msg}`
-5. Commit and push
+3. Find the `except Exception as e:` block (around line 40-50)
+4. Add a new line after `_HAS_REALESRGAN_IMPORT = False`: `_import_error_msg = str(e)`
+5. In the f-string inside `RuntimeError`, change `{e}` to `{_import_error_msg}`
+6. Commit and push
 
 **Option 3: GitHub UI**
 1. Open PR #222 in GitHub
@@ -179,7 +180,7 @@ except Exception as e:
 ## References
 
 - **PEP 3110**: Catching Exceptions in Python 3  
-  https://www.python.org/dev/peps/pep-3110/
+  https://www.python.org/dev/pep/pep-3110/
 - **Python Docs**: Exception handling scoping rules  
   https://docs.python.org/3/reference/compound_stmts.html#except-clause
 - **Flake8 Error F821**: Undefined name  
