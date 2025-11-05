@@ -262,9 +262,9 @@ class TestRecommendations:
 
     def test_recommend_low_success_rate(self, engine):
         """Test recommendation for low success rate."""
-        # Add mostly failures
+        # Add data with 80% success rate (below 90% threshold triggers recommendation)
         for i in range(15):
-            success = i % 5 != 0  # Failures every 5th iteration (i.e., 20% failure rate)
+            success = i % 5 != 0  # Success when not divisible by 5 (80% success rate)
             engine.add_feedback(
                 pipeline='failing_pipeline',
                 artifact_id=f'test{i:03d}',
