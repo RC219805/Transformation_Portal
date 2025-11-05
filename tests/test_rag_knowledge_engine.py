@@ -264,7 +264,7 @@ class TestRecommendations:
         """Test recommendation for low success rate."""
         # Add mostly failures
         for i in range(15):
-            success = i % 5 != 0  # 20% failure rate
+            success = i % 5 != 0  # Failures every 5th iteration (i.e., 20% failure rate)
             engine.add_feedback(
                 pipeline='failing_pipeline',
                 artifact_id=f'test{i:03d}',

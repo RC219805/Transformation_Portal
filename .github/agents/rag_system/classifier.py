@@ -267,6 +267,7 @@ class ArtifactClassifier:
                 date_str = timestamp_match.group(1).replace('_', '-')
                 metadata.timestamp = datetime.strptime(date_str, '%Y-%m-%d')
             except ValueError:
+                # Ignore invalid or missing date formats in filename; timestamp is optional metadata.
                 pass
 
         # Extract resolution from filename
@@ -284,6 +285,7 @@ class ArtifactClassifier:
                 metadata.gpu_utilization = data.get('gpu_utilization')
                 metadata.success = data.get('success', True)
             except json.JSONDecodeError:
+                # Content may not always be valid JSON; ignore and proceed with empty/default parameters.
                 pass
 
         # Extract error information from logs
@@ -617,8 +619,9 @@ def main():
             if file_path.suffix in {'.json', '.log', '.txt', '.md'}:
                 try:
                     content = file_path.read_text(encoding='utf-8', errors='ignore')
-                except Exception:
-                    pass
+                except Exception as e:
+                    if args.verbose:
+                        print(f"  [WARN] Could not read {file_path}: {e}")
 
             artifact = classifier.add_artifact(str(file_path), content)
 
