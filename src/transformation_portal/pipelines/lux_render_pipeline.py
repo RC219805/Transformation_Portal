@@ -19,11 +19,11 @@ Example:
 try:
     from realesrgan import RealESRGANer  # type: ignore
     _HAS_REALESRGAN_IMPORT = True
-except ImportError:  # pragma: no cover
+except ImportError:  # pragma: no cover - package not installed
     _HAS_REALESRGAN_IMPORT = False
     # Provide helpful installation instructions if user tries to use Real-ESRGAN
-    # The actual fallback to Pillow happens in the pipeline code
-    class RealESRGANer:  # minimal CI stub
+    # The actual fallback to Pillow happens in the pipeline code that checks _HAS_REALESRGAN_IMPORT
+    class RealESRGANer:  # minimal CI stub for type compatibility
         def __init__(self, *_, **__):
             raise RuntimeError(
                 "Real-ESRGAN not installed. To enable 4x upscaling:\n"
@@ -37,12 +37,17 @@ except ImportError:  # pragma: no cover
                 "\n"
                 "Note: Pipeline will automatically fall back to Pillow's Lanczos resampling."
             )
-except Exception as e:  # pragma: no cover - other errors
+except Exception as e:  # pragma: no cover - other import errors (e.g., missing dependencies of realesrgan)
+    # This catches cases where realesrgan is installed but its dependencies are missing
     _HAS_REALESRGAN_IMPORT = False
-    print(f"⚠ Warning: Error importing realesrgan: {e}")
-    class RealESRGANer:  # minimal CI stub
+    print(f"⚠ Warning: Error importing realesrgan (dependencies may be missing): {e}")
+    class RealESRGANer:  # minimal CI stub for type compatibility
         def __init__(self, *_, **__):
-            raise RuntimeError(f"RealESRGANer unavailable due to import error: {e}")
+            raise RuntimeError(
+                f"RealESRGANer unavailable due to import error: {e}\n"
+                f"This usually means realesrgan dependencies are missing.\n"
+                f"Try reinstalling: pip install --force-reinstall realesrgan"
+            )
 import glob
 import importlib.util
 import math

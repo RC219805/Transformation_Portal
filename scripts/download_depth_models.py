@@ -33,10 +33,14 @@ except ImportError:
 
 # Model configuration constants
 # Real-ESRGAN 4x upscaling model
-REALESRGAN_MODEL_URL = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/RealESRGAN_x4plus.pth"
+# NOTE: Update URL and version when new releases are available
+# Latest releases: https://github.com/xinntao/Real-ESRGAN/releases
+REALESRGAN_MODEL_VERSION = "v0.2.5.0"
+REALESRGAN_MODEL_URL = f"https://github.com/xinntao/Real-ESRGAN/releases/download/{REALESRGAN_MODEL_VERSION}/RealESRGAN_x4plus.pth"
 REALESRGAN_MODEL_FILENAME = "RealESRGAN_x4plus.pth"
 
 # Depth Anything V2 CoreML model (not yet publicly hosted)
+# Will be available once official CoreML models are released
 DEPTH_ANYTHING_V2_COREML_FILENAME = "DepthAnythingV2SmallF16.mlpackage"
 
 

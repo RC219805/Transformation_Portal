@@ -91,12 +91,16 @@ def verify_dimension_validation():
         from transformation_portal.pipelines.lux_render_pipeline import (
             validate_sd_dimensions, SD_DIMENSION_MULTIPLE, MIN_SD_DIMENSION
         )
-        print(f"Using SD_DIMENSION_MULTIPLE={SD_DIMENSION_MULTIPLE}, MIN_SD_DIMENSION={MIN_SD_DIMENSION}")
+        print(f"Using imported constants: SD_DIMENSION_MULTIPLE={SD_DIMENSION_MULTIPLE}, MIN_SD_DIMENSION={MIN_SD_DIMENSION}")
     except ImportError:
-        # Fallback to hardcoded values if import fails
+        # Fallback to hardcoded values if import fails (e.g., dependencies not installed)
+        # NOTE: These must be kept in sync with the main module values
+        # See: src/transformation_portal/pipelines/lux_render_pipeline.py
         SD_DIMENSION_MULTIPLE = 64
         MIN_SD_DIMENSION = 512
-        print(f"Using fallback constants: SD_DIMENSION_MULTIPLE={SD_DIMENSION_MULTIPLE}, MIN_SD_DIMENSION={MIN_SD_DIMENSION}")
+        print(f"⚠ Using fallback constants (dependencies not installed)")
+        print(f"  SD_DIMENSION_MULTIPLE={SD_DIMENSION_MULTIPLE}, MIN_SD_DIMENSION={MIN_SD_DIMENSION}")
+        print(f"  Install dependencies for accurate testing: pip install -r requirements.txt")
     
     test_cases = [
         (MIN_SD_DIMENSION, MIN_SD_DIMENSION, True, f"Minimum {MIN_SD_DIMENSION}x{MIN_SD_DIMENSION}"),
