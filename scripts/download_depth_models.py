@@ -72,10 +72,10 @@ class DownloadProgressBar:
                 percent = min(100, int(downloaded * 100 / total_size))
                 print(f"\rDownloading {self.desc}... {percent}%", end='', flush=True)
                 
-            if downloaded >= total_size and self.pbar:
-                if tqdm:
+            if downloaded >= total_size:
+                if tqdm and self.pbar:
                     self.pbar.close()
-                else:
+                elif not tqdm:
                     print()  # New line after completion
 
 
