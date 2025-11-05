@@ -184,7 +184,7 @@ pip install -e ".[tiff]"  # Includes tifffile + imagecodecs
 # macOS: brew install ffmpeg
 ```
 
-📖 **[Complete Format Documentation](SUPPORTED_FILE_FORMATS.md)** - Detailed format specifications, constraints, and examples
+📖 **[Complete Format Documentation](docs/guides/SUPPORTED_FILE_FORMATS.md)** - Detailed format specifications, constraints, and examples
 
 ---
 
@@ -221,7 +221,7 @@ results = pipeline.batch_process(image_paths, output_dir='output/')
 
 **Performance:** 855-950ms per 4K image | 400-600 images/hour batch throughput
 
-📖 [Full Depth Pipeline Documentation](DEPTH_PIPELINE_README.md)
+📖 [Full Depth Pipeline Documentation](docs/depth_pipeline/DEPTH_PIPELINE_README.md)
 
 ---
 
