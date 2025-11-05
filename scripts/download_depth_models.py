@@ -22,7 +22,6 @@ import argparse
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 try:
     from tqdm import tqdm
