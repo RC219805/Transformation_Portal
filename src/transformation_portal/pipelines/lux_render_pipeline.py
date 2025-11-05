@@ -97,6 +97,8 @@ _HAS_REALESRGAN = _HAS_REALESRGAN_IMPORT
 SD_DIMENSION_MULTIPLE = 64
 # Minimum dimension for reasonable quality and model compatibility
 MIN_SD_DIMENSION = 512
+# Maximum recommended pixels before warning about VRAM requirements (1MP = 1024x1024)
+MAX_RECOMMENDED_PIXELS = 1024 * 1024
 
 # --------------------------
 
@@ -1030,7 +1032,7 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
             )
     
     # Warn about extremely large dimensions that may cause OOM
-    if width * height > 1024 * 1024:
+    if width * height > MAX_RECOMMENDED_PIXELS:
         typer.echo(
             f"⚠ Large dimensions ({width}×{height}) may require significant VRAM (8GB+). "
             f"Consider using smaller dimensions or ensure sufficient GPU memory.",
