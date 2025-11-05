@@ -380,9 +380,9 @@ class FewShotExamples:
                         'tests/test_atmospheric_processor.py',
                         'tests/integration/test_depth_pipeline.py'
                     ],
-                    'explanation': 'Atmospheric haze is implemented by blending a fog color '
-                                   'proportional to depth distance. Uses depth maps to determine '
-                                   'haze intensity per-pixel.',
+                    'explanation': (
+                        """Atmospheric haze is implemented by blending a fog color proportional to depth distance. Uses depth maps to determine haze intensity per-pixel."""
+                    ),
                     'confidence': 0.85,
                 }, indent=2)
             },
