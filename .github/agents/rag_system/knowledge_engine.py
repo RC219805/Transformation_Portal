@@ -5,7 +5,7 @@ Provides pattern analysis, feedback loops, recommendations, and query interface
 for continuous improvement of image processing workflows.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
@@ -33,8 +33,8 @@ class PatternAnalysis:
     quality_trend: str = "stable"  # "improving", "degrading", "stable"
 
     # Common parameters
-    common_parameters: Dict[str, any] = field(default_factory=dict)
-    optimal_parameters: Dict[str, any] = field(default_factory=dict)
+    common_parameters: Dict[str, Any] = field(default_factory=dict)
+    optimal_parameters: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
