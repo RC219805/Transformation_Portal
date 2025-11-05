@@ -183,6 +183,99 @@ python -m .github.agents.rag_system.templates \
     --validate response.json
 ```
 
+### 6. Artifact Classifier (`classifier.py`)
+
+Automatically classifies and organizes image processing artifacts:
+
+- **Auto-classification**: Analyses, depth maps, color grades, HDR outputs, metrics, logs, profiles
+- **Metadata extraction**: Pipeline, parameters, timestamps, hardware, success/failure, timing
+- **Hierarchical organization**: By pipeline type with relational links (parent/child/related)
+- **Tag generation**: Pipeline name, AI model, error patterns, hardware, color space, resolution, processing time
+- **Version control**: Track pipeline evolution and parameter tuning
+- **Lineage tracking**: Full transformation chains with audit trails
+
+**Artifact Types**:
+- Analysis, Depth Map, Color Grade, HDR Output, Metric, Log, Profile, Render, Material Response, LUT Application
+
+**Pipeline Types**:
+- Depth Pipeline, Lux Render, Material Response, Video Grader, TIFF Processor, HDR Production, AGX Filmic
+
+**Features**:
+- Pattern-based classification from filenames
+- Content-based classification from file contents
+- Metadata extraction (resolution, color space, bit depth, AI models, timestamps)
+- Hierarchical artifact relationships (parent → child → grandchild)
+- Tag-based search and filtering
+- Statistics and export to JSON
+
+**Usage**:
+```bash
+# Classify artifacts in a directory
+python .github/agents/rag_system/classifier.py \
+    --input-dir output/ \
+    --output artifacts.json \
+    --verbose
+
+# Search by tags
+python .github/agents/rag_system/classifier.py \
+    --input-dir output/ \
+    --tags depth_map 4k_plus success \
+    --require-all-tags
+```
+
+### 7. Knowledge Integration Engine (`knowledge_engine.py`)
+
+Provides pattern analysis, feedback loops, and recommendations for continuous improvement:
+
+- **Pattern analysis**: Success rates, failure modes, performance trends, quality evolution
+- **Feedback loops**: Historical outcomes inform current decisions
+- **Recommendations**: Gap analysis (missing tests, undocumented features, regressions, optimizations)
+- **Natural language query**: Ask questions about pipeline performance, errors, and quality
+- **KPI tracking**: Track accuracy, latency, quality, and success rates over time
+
+**Analysis Features**:
+- Success rate tracking per pipeline
+- Processing time statistics (avg, median, P95)
+- Failure mode detection and categorization
+- Trend analysis (improving, degrading, stable)
+- Common and optimal parameter identification
+
+**Recommendation Types**:
+- **Regression**: Low success rate, quality degradation
+- **Optimization**: Performance degradation
+- **Missing Test**: Recurring errors without test coverage
+- **Undocumented Feature**: Features used but not documented
+
+**Natural Language Queries**:
+- "What is the success rate for depth_pipeline?"
+- "How is the performance of material_response?"
+- "What errors occurred in lux_render?"
+- "What improvements do you recommend?"
+
+**Usage**:
+```bash
+# Analyze a pipeline
+python .github/agents/rag_system/knowledge_engine.py \
+    --feedback-file feedback.json \
+    --analyze-pipeline depth_pipeline \
+    --days 30
+
+# Generate recommendations
+python .github/agents/rag_system/knowledge_engine.py \
+    --feedback-file feedback.json \
+    --recommendations
+
+# Natural language query
+python .github/agents/rag_system/knowledge_engine.py \
+    --feedback-file feedback.json \
+    --query "What is the average processing time?"
+
+# Export knowledge base
+python .github/agents/rag_system/knowledge_engine.py \
+    --feedback-file feedback.json \
+    --export knowledge_base.json
+```
+
 ## JSON Response Schema
 
 All code modification responses must follow this schema:
