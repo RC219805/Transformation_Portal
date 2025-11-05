@@ -126,16 +126,15 @@ def test_report_json(tmp_path_factory) -> Path:
         ],
     }
 
-    # Create the JSON file in the repository root (where pytest runs from)
-    json_path = Path("material_response_report.json")
+    # Create the JSON file in a temporary directory using tmp_path_factory
+    tmp_dir = tmp_path_factory.mktemp("material_response")
+    json_path = tmp_dir / "material_response_report.json"
     with json_path.open("w", encoding="utf-8") as fp:
         json.dump(test_data, fp, indent=2)
 
     yield json_path
 
-    # Cleanup after tests
-    if json_path.exists():
-        json_path.unlink()
+    # Cleanup is handled automatically by pytest's tmp_path_factory
 
 
 @pytest.fixture(scope="module")
