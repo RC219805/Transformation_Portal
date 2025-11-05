@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -11,14 +12,141 @@ from material_response_optimizer import MaterialAwareEnhancementPlanner, RenderE
 
 
 @pytest.fixture(scope="module")
-def blueprint() -> dict:
-    planner = RenderEnhancementPlanner.from_json(Path("material_response_report.json"))
+def test_report_json(tmp_path_factory) -> Path:
+    """Create a temporary material_response_report.json for testing."""
+    test_data = {
+        "generated": "2025-11-05T08:00:00Z",
+        "analysis_version": "1.0.0",
+        "scenes": [
+            {
+                "name": "pool",
+                "versions": {
+                    "regular": {
+                        "luminance": 0.23,
+                        "awe": 0.68,
+                        "comfort": 0.72,
+                        "texture_dimension": 1.85,
+                        "future_alignment": 0.65,
+                        "luxury_index": 0.65,
+                    },
+                    "lux": {
+                        "luminance": 0.25,
+                        "awe": 0.70,
+                        "comfort": 0.74,
+                        "texture_dimension": 1.90,
+                        "future_alignment": 0.67,
+                        "luxury_index": 0.68,
+                    },
+                },
+            },
+            {
+                "name": "aerial",
+                "versions": {
+                    "regular": {
+                        "luminance": 0.28,
+                        "awe": 0.62,
+                        "comfort": 0.70,
+                        "texture_dimension": 1.75,
+                        "future_alignment": 0.58,
+                        "luxury_index": 0.60,
+                    },
+                    "lux": {
+                        "luminance": 0.29,
+                        "awe": 0.63,
+                        "comfort": 0.71,
+                        "texture_dimension": 1.78,
+                        "future_alignment": 0.59,
+                        "luxury_index": 0.611,
+                    },
+                },
+            },
+            {
+                "name": "great_room",
+                "versions": {
+                    "regular": {
+                        "luminance": 0.32,
+                        "awe": 0.78,
+                        "comfort": 0.75,
+                        "texture_dimension": 2.05,
+                        "future_alignment": 0.68,
+                        "luxury_index": 0.72,
+                    },
+                    "lux": {
+                        "luminance": 0.34,
+                        "awe": 0.80,
+                        "comfort": 0.77,
+                        "texture_dimension": 2.10,
+                        "future_alignment": 0.70,
+                        "luxury_index": 0.75,
+                    },
+                },
+            },
+            {
+                "name": "primary_bedroom",
+                "versions": {
+                    "regular": {
+                        "luminance": 0.30,
+                        "awe": 0.65,
+                        "comfort": 0.82,
+                        "texture_dimension": 2.00,
+                        "future_alignment": 0.64,
+                        "luxury_index": 0.68,
+                    },
+                    "lux": {
+                        "luminance": 0.31,
+                        "awe": 0.67,
+                        "comfort": 0.84,
+                        "texture_dimension": 2.05,
+                        "future_alignment": 0.66,
+                        "luxury_index": 0.71,
+                    },
+                },
+            },
+            {
+                "name": "kitchen",
+                "versions": {
+                    "regular": {
+                        "luminance": 0.33,
+                        "awe": 0.80,
+                        "comfort": 0.76,
+                        "texture_dimension": 1.95,
+                        "future_alignment": 0.70,
+                        "luxury_index": 0.74,
+                    },
+                    "lux": {
+                        "luminance": 0.35,
+                        "awe": 0.82,
+                        "comfort": 0.78,
+                        "texture_dimension": 2.00,
+                        "future_alignment": 0.72,
+                        "luxury_index": 0.77,
+                    },
+                },
+            },
+        ],
+    }
+
+    # Create the JSON file in the repository root (where pytest runs from)
+    json_path = Path("material_response_report.json")
+    with json_path.open("w", encoding="utf-8") as fp:
+        json.dump(test_data, fp, indent=2)
+
+    yield json_path
+
+    # Cleanup after tests
+    if json_path.exists():
+        json_path.unlink()
+
+
+@pytest.fixture(scope="module")
+def blueprint(test_report_json: Path) -> dict:
+    planner = RenderEnhancementPlanner.from_json(test_report_json)
     return planner.build_blueprint()
 
 
 @pytest.fixture(scope="module")
-def material_blueprint() -> dict:
-    planner = MaterialAwareEnhancementPlanner.from_json(Path("material_response_report.json"))
+def material_blueprint(test_report_json: Path) -> dict:
+    planner = MaterialAwareEnhancementPlanner.from_json(test_report_json)
     return planner.build_blueprint()
 
 
