@@ -177,9 +177,6 @@ def retry_on_failure(
                     current_delay *= backoff
                     attempt += 1
 
-            # Should not reach here; all code paths above should return or raise
-            raise AssertionError("Unreachable code reached in retry_on_failure wrapper")
-
         return cast(F, wrapper)
     return decorator
 
