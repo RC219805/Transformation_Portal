@@ -39,17 +39,20 @@ f"RealESRGANer unavailable due to import error: {_import_error_msg}\n"
 
 ### Method 1: Push Existing Fix Commit (Fastest)
 
-The fix is already committed to the local branch. Just push it:
+The fix is already committed to the local branch. Check if you have it and push:
 
 ```bash
-# The fix commit a0d6869 exists on copilot/fix-pipeline-infrastructure-issues
-# It just needs to be pushed to GitHub
+# First, check if the fix commit exists locally
+git log --oneline copilot/fix-pipeline-infrastructure-issues | grep a0d6869
 
-# If you have the local branch:
+# If found, switch to the branch and push:
 git checkout copilot/fix-pipeline-infrastructure-issues
 git push origin copilot/fix-pipeline-infrastructure-issues
 
-# The commit is already there - just needs a push!
+# If not found, you may need to fetch first:
+git fetch origin copilot/fix-pipeline-infrastructure-issues
+git checkout copilot/fix-pipeline-infrastructure-issues
+git push origin copilot/fix-pipeline-infrastructure-issues
 ```
 
 ### Method 2: GitHub Web UI
