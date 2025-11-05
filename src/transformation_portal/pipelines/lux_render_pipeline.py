@@ -40,7 +40,7 @@ except ImportError:  # pragma: no cover - package not installed
 except Exception as e:  # pragma: no cover - other import errors (e.g., missing dependencies of realesrgan)
     # This catches cases where realesrgan is installed but its dependencies are missing
     _HAS_REALESRGAN_IMPORT = False
-    print(f"⚠ Warning: Error importing realesrgan (dependencies may be missing): {e}")
+    # Warning is now included in the RuntimeError below, not printed at import time.
     class RealESRGANer:  # minimal CI stub for type compatibility
         def __init__(self, *_, **__):
             raise RuntimeError(
