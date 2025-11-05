@@ -31,6 +31,15 @@ except ImportError:
     tqdm = None
 
 
+# Model configuration constants
+# Real-ESRGAN 4x upscaling model
+REALESRGAN_MODEL_URL = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/RealESRGAN_x4plus.pth"
+REALESRGAN_MODEL_FILENAME = "RealESRGAN_x4plus.pth"
+
+# Depth Anything V2 CoreML model (not yet publicly hosted)
+DEPTH_ANYTHING_V2_COREML_FILENAME = "DepthAnythingV2SmallF16.mlpackage"
+
+
 class DownloadProgressBar:
     """Progress bar for downloads using tqdm if available, otherwise basic progress."""
     
@@ -110,7 +119,7 @@ def download_depth_anything_v2_coreml(output_dir: Path) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    model_path = output_dir / "DepthAnythingV2SmallF16.mlpackage"
+    model_path = output_dir / DEPTH_ANYTHING_V2_COREML_FILENAME
     
     print("\n" + "="*70)
     print("DEPTH ANYTHING V2 COREML MODEL")
@@ -153,8 +162,7 @@ def download_realesrgan_weights(output_dir: Path) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    model_url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/RealESRGAN_x4plus.pth"
-    model_path = output_dir / "RealESRGAN_x4plus.pth"
+    model_path = output_dir / REALESRGAN_MODEL_FILENAME
     
     print("\n" + "="*70)
     print("REAL-ESRGAN 4X UPSCALING MODEL")
@@ -164,7 +172,7 @@ def download_realesrgan_weights(output_dir: Path) -> bool:
         print(f"✓ Model already exists: {model_path}")
         return True
     
-    return download_file(model_url, model_path, "Real-ESRGAN 4x model")
+    return download_file(REALESRGAN_MODEL_URL, model_path, "Real-ESRGAN 4x model")
 
 
 def verify_models(model_dir: Path) -> dict:
@@ -177,8 +185,8 @@ def verify_models(model_dir: Path) -> dict:
         Dictionary of model status
     """
     status = {
-        "depth_anything_coreml": (model_dir / "DepthAnythingV2SmallF16.mlpackage").exists(),
-        "realesrgan": (model_dir / "RealESRGAN_x4plus.pth").exists(),
+        "depth_anything_coreml": (model_dir / DEPTH_ANYTHING_V2_COREML_FILENAME).exists(),
+        "realesrgan": (model_dir / REALESRGAN_MODEL_FILENAME).exists(),
     }
     
     print("\n" + "="*70)
