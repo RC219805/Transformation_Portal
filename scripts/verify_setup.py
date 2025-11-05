@@ -18,7 +18,7 @@ import argparse
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 
 def check_package(package_name: str, import_name: str = None) -> Tuple[bool, str]:
