@@ -733,6 +733,7 @@ __all__ = [
     "compose_operations",
     "apply_transformation_tensor",
     "violates",
+    "_clamp",
 ]
 
 
