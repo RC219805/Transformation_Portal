@@ -1009,8 +1009,15 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
     """
     original_width, original_height = width, height
     
-    # Check if dimensions are multiples of SD_DIMENSION_MULTIPLE
-    if width % SD_DIMENSION_MULTIPLE != 0 or height % SD_DIMENSION_MULTIPLE != 0:
+    # Check if dimensions are multiples of SD_DIMENSION_MULTIPLE or below minimum
+    needs_correction = (
+        width % SD_DIMENSION_MULTIPLE != 0 or 
+        height % SD_DIMENSION_MULTIPLE != 0 or
+        width < MIN_SD_DIMENSION or
+        height < MIN_SD_DIMENSION
+    )
+    
+    if needs_correction:
         if auto_correct:
             # Round down to nearest multiple of SD_DIMENSION_MULTIPLE
             corrected_width = (width // SD_DIMENSION_MULTIPLE) * SD_DIMENSION_MULTIPLE
@@ -1027,9 +1034,16 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
             )
             return corrected_width, corrected_height
         else:
+            # Build appropriate error message based on what's wrong
+            errors = []
+            if width % SD_DIMENSION_MULTIPLE != 0 or height % SD_DIMENSION_MULTIPLE != 0:
+                errors.append(f"must be multiples of {SD_DIMENSION_MULTIPLE}")
+            if width < MIN_SD_DIMENSION or height < MIN_SD_DIMENSION:
+                errors.append(f"must be at least {MIN_SD_DIMENSION}")
+            
             raise typer.BadParameter(
-                f"Dimensions must be multiples of {SD_DIMENSION_MULTIPLE} for Stable Diffusion 1.5. "
-                f"Got {width}×{height}. "
+                f"Dimensions {width}×{height} are invalid for Stable Diffusion 1.5: "
+                f"{' and '.join(errors)}. "
                 f"Recommended: {MIN_SD_DIMENSION}×{MIN_SD_DIMENSION}, 768×512, 512×768, 768×768, 1024×768, or 1024×1024. "
                 f"Use --width and --height to specify valid dimensions."
             )
