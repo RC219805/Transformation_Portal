@@ -177,16 +177,13 @@ def retry_on_failure(
                     current_delay *= backoff
                     attempt += 1
 
-            # Should not reach here; all code paths above should return or raise
-            raise AssertionError("Unreachable code reached in retry_on_failure wrapper")
-
         return cast(F, wrapper)
     return decorator
 
 
 def make_batch_processor(
     func: F, batch_size: Optional[int] = None
-) -> Callable[..., list]:
+) -> Callable[[list, Any], list]:
     """Create a batch-processing version of a single-item function.
 
     This function returns a new function that processes a list of items in batches,
