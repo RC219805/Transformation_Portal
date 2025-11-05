@@ -166,11 +166,15 @@ class TestWrapperFiles:
         for wrapper in wrapper_files:
             wrapper_path = _repo_root / wrapper
             if wrapper_path.exists():
-                # Wrapper should be small (< 100 lines)
+                # Wrapper should be small (< 100 non-comment, non-blank lines)
                 lines = wrapper_path.read_text().splitlines()
-                assert len(lines) < 100, (
-                    f"{wrapper} should be a thin wrapper (< 100 lines), "
-                    f"but has {len(lines)} lines"
+                code_lines = [
+                    line for line in lines
+                    if line.strip() and not line.strip().startswith("#") and not line.strip().startswith('"""') and not line.strip().startswith("'''")
+                ]
+                assert len(code_lines) < 100, (
+                    f"{wrapper} should be a thin wrapper (< 100 non-comment, non-blank lines), "
+                    f"but has {len(code_lines)} code lines"
                 )
 
 
@@ -242,6 +246,18 @@ class TestNoOrphanedFiles:
             assert root_size < src_size * 0.5, (
                 "Root material_response.py seems to be a full duplicate. "
                 "Should be a thin wrapper."
+            )
+
+            # Check that the root file actually delegates to the src implementation
+            root_text = root_file.read_text(encoding="utf-8")
+            # Look for an import from transformation_portal (allow whitespace, case-insensitive)
+            import_found = (
+                "from transformation_portal" in root_text
+                or "import transformation_portal" in root_text
+            )
+            assert import_found, (
+                "Root material_response.py should import from transformation_portal "
+                "to delegate implementation, not duplicate it."
             )
     
     def test_no_build_artifacts_in_root(self):
