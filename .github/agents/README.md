@@ -4,11 +4,18 @@ This directory contains specialized GitHub Copilot agents tailored for the Trans
 
 ## Available Agents
 
-### 🎨 Transformation Portal Specialist
+### 🎨 Transformation Portal Specialist (RAG-Enhanced)
 
 **File**: `transformation-portal-specialist.md`
 
-**Purpose**: Expert agent for luxury real estate rendering, architectural visualization, and professional image/video processing pipelines.
+**Purpose**: Expert agent for luxury real estate rendering, architectural visualization, and professional image/video processing pipelines. **Now enhanced with Retrieval-Augmented Generation (RAG)** for grounded, evidence-based responses.
+
+**RAG Enhancements**:
+- **Repository indexing**: Searches docs/, src/, tests/, agents/, changelogs, READMEs
+- **Hybrid retrieval**: BM25 sparse + dense vector embeddings for optimal results
+- **Citation system**: File paths, line numbers, code snippets with confidence scores
+- **Structured responses**: JSON schema for code modifications (machine-parseable)
+- **Canonical templates**: Feature implementation, bug triage, CI changes with few-shot examples
 
 **Best Used For**:
 - Implementing or modifying depth-aware processing pipelines
@@ -22,6 +29,10 @@ This directory contains specialized GitHub Copilot agents tailored for the Trans
 - Ensuring metadata preservation (IPTC/XMP/GPS)
 
 **Key Capabilities**:
+- **RAG-powered context retrieval**: Grounds responses in actual repository code and documentation
+- **Structured code modifications**: JSON schema for machine-parseable patches and test recommendations
+- **Citation-backed responses**: Every code suggestion includes file paths, snippets, and confidence scores
+- **Canonical workflow templates**: Predefined templates for feature implementation, bug triage, CI changes
 - Deep understanding of all core pipelines (Depth, Lux Render, Material Response, Video Grader)
 - Expertise in PyTorch, FFmpeg, NumPy, Pillow, and color science
 - Knowledge of Apple Silicon optimization (CoreML, MPS)
@@ -64,15 +75,84 @@ Use **general Copilot** for:
 - Infrastructure and CI/CD changes (though the specialist can help with these too)
 - Basic file operations or utilities
 
+## RAG System Overview
+
+The **Retrieval-Augmented Generation (RAG) system** enhances the Transformation Portal Specialist agent by:
+
+### 1. Repository Content Indexing
+- **Indexed content**: docs/, src/, tests/, .github/agents/, CHANGELOGs, READMEs, examples/
+- **Chunking**: 500-1000 tokens with 50-100 token overlap
+- **Metadata**: File paths, line numbers, function/class names, docstrings
+- **Total chunks**: ~1200 chunks for Transformation Portal (as of Nov 2025)
+
+### 2. Hybrid Retrieval System
+- **BM25 sparse retrieval**: Keyword-based matching for precise term lookup
+- **Vector embeddings**: (Extensible) Dense semantic search for similar concepts
+- **Filtering**: By file type (code/doc/test) or path pattern
+- **Context windows**: Retrieve surrounding chunks for additional context
+
+### 3. Result Reranking
+- **Exact match bonus**: +2.0 for exact query phrases in content
+- **Code quality signals**: +0.3 for docstrings and type hints
+- **Documentation signals**: +0.2 for titles, examples, links
+- **Test relevance**: +0.1 for matching test function names
+
+### 4. Citation Generation
+- **File references**: `path/to/file.py:10-25`
+- **Confidence scores**: 0.0-1.0 based on retrieval rank and score
+- **Code snippets**: Trimmed to 10 lines / 500 chars
+- **Relevance notes**: Function names, doc types, match quality
+
+### 5. Canonical Templates
+- **Feature implementation**: Requirements → Files → Tests → PR body
+- **Bug triage**: Error log → Root cause → Minimal repro → Fix
+- **CI changes**: Workflow → Job steps → Testing → Secrets
+- **Few-shot examples**: Real examples from repository history
+- **JSON schema**: Structured responses for CI validation
+
+### Benefits
+- ✅ **Reduces hallucinations**: Responses grounded in actual repo content
+- ✅ **Increases relevance**: Finds repo-specific patterns and examples
+- ✅ **Provides evidence**: Citations with file paths and snippets
+- ✅ **Enables automation**: JSON schema for machine parsing
+- ✅ **Improves consistency**: Canonical templates for common workflows
+
+### Using the RAG System
+
+```bash
+# Index repository
+python .github/agents/rag_system/indexer.py --repo-root .
+
+# Test retrieval
+python .github/agents/rag_system/retriever.py \
+    --query "depth pipeline atmospheric effects" \
+    --top-k 5
+
+# Generate citations
+python .github/agents/rag_system/citation.py \
+    --query "material response enhancement" \
+    --format markdown
+
+# Create workflow template
+python .github/agents/rag_system/templates.py \
+    --type feature \
+    --description "Add sunset LUT preset" \
+    --with-examples
+```
+
+See `.github/agents/rag_system/README.md` for full documentation.
+
 ## Agent Design Philosophy
 
 The Transformation Portal Specialist agent is designed with:
 
-1. **Domain Expertise**: Deep knowledge of image/video processing, color science, and ML/AI
-2. **Repository Context**: Understanding of the specific architecture, pipelines, and coding standards
-3. **Practical Focus**: Emphasis on working code, performance, and testing
-4. **Professional Standards**: Knowledge of industry best practices (HDR, color spaces, metadata)
-5. **Hardware Awareness**: Optimization for specific accelerators (Apple Silicon, CUDA)
+1. **RAG-Enhanced Context**: Retrieval-augmented responses grounded in repository content
+2. **Domain Expertise**: Deep knowledge of image/video processing, color science, and ML/AI
+3. **Repository Context**: Understanding of the specific architecture, pipelines, and coding standards
+4. **Practical Focus**: Emphasis on working code, performance, and testing
+5. **Professional Standards**: Knowledge of industry best practices (HDR, color spaces, metadata)
+6. **Hardware Awareness**: Optimization for specific accelerators (Apple Silicon, CUDA)
+7. **Structured Output**: JSON schemas and templates for automation
 
 ## Creating Additional Agents
 
