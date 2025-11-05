@@ -59,6 +59,7 @@ def check_torch_backend() -> Dict[str, bool]:
         backends['cuda'] = torch.cuda.is_available()
         backends['mps'] = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
     except ImportError:
+        # PyTorch is not installed; report 'cuda' and 'mps' as unavailable.
         pass
     
     return backends
