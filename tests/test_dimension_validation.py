@@ -167,7 +167,6 @@ class TestDimensionValidationIntegration:
 # Property-based tests using hypothesis (if available)
 try:
     from hypothesis import given, strategies as st
-    import hypothesis
     
     @given(
         width=st.integers(min_value=64, max_value=2048),
