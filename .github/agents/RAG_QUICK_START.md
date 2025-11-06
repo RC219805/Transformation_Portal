@@ -21,9 +21,9 @@ cd /path/to/Transformation_Portal
 python .github/agents/rag_system/indexer.py --repo-root . --verbose
 
 # Output:
-# Indexed 1206 chunks
-# Total characters: 931,675
-# By type: agent: 38, code: 595, doc: 142, test: 431
+# Indexed 1838 chunks
+# Total characters: 1,901,957
+# By type: agent: 81, code: 638, doc: 421, test: 698
 ```
 
 ### Search for Code Examples
