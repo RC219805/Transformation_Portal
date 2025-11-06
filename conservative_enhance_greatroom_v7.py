@@ -270,16 +270,13 @@ if MATERIAL_CLARITY > 0:
 # ============================================================================
 print(f"\n[9/10] Applying edge sharpening...")
 
-if EDGE_SHARPNESS > 0:
-    sharpened = ImageEnhance.Sharpness(composite_pil).enhance(1 + EDGE_SHARPNESS)
-    print(f"  ✓ Sharpness: +{EDGE_SHARPNESS:.0%}")
-else:  # noqa: F841 - Defensive programming: keep else clause for config flexibility
-    sharpened = composite_pil
+# Apply edge sharpness (EDGE_SHARPNESS is always > 0 in this version)
+sharpened = ImageEnhance.Sharpness(composite_pil).enhance(1 + EDGE_SHARPNESS)
+print(f"  ✓ Sharpness: +{EDGE_SHARPNESS:.0%}")
 
-# Final tone curve (gentle S-curve)
-if FINAL_TONE_CURVE != 1.0:
-    sharpened = ImageEnhance.Contrast(sharpened).enhance(FINAL_TONE_CURVE)
-    print(f"  ✓ Final tone curve: {FINAL_TONE_CURVE:.2%}")
+# Apply final tone curve (FINAL_TONE_CURVE is always != 1.0 in this version)
+sharpened = ImageEnhance.Contrast(sharpened).enhance(FINAL_TONE_CURVE)
+print(f"  ✓ Final tone curve: {FINAL_TONE_CURVE:.2%}")
 
 # ============================================================================
 # STEP 10: SAVE OUTPUT
@@ -288,22 +285,17 @@ print(f"\n[10/10] Saving output...")
 
 output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v7.tiff"
 
-# Save as 16-bit TIFF to preserve quality
+# Save as 16-bit TIFF to preserve quality (OUTPUT_BIT_DEPTH is always 16 in this version)
 final_array = np.array(sharpened, dtype=np.uint8)
-
-if OUTPUT_BIT_DEPTH == 16:
-    final_16bit = (final_array.astype(np.uint16) * 257)  # Scale 8-bit to 16-bit
-    if TIFFFILE_AVAILABLE:
-        tifffile.imwrite(output_path, final_16bit, photometric='rgb', compression='lzw')
-        print(f"  ✓ Saved 16-bit TIFF with tifffile: {output_path}")
-    else:
-        # PIL fallback
-        final_img = Image.fromarray(final_16bit, mode='RGB;16')
-        final_img.save(output_path, compression='tiff_lzw')
-        print(f"  ✓ Saved 16-bit TIFF with PIL: {output_path}")
-else:  # noqa: F841 - Defensive programming: keep else clause for config flexibility
-    sharpened.save(output_path, compression='tiff_lzw')
-    print(f"  ✓ Saved 8-bit TIFF: {output_path}")
+final_16bit = (final_array.astype(np.uint16) * 257)  # Scale 8-bit to 16-bit
+if TIFFFILE_AVAILABLE:
+    tifffile.imwrite(output_path, final_16bit, photometric='rgb', compression='lzw')
+    print(f"  ✓ Saved 16-bit TIFF with tifffile: {output_path}")
+else:
+    # PIL fallback
+    final_img = Image.fromarray(final_16bit, mode='RGB;16')
+    final_img.save(output_path, compression='tiff_lzw')
+    print(f"  ✓ Saved 16-bit TIFF with PIL: {output_path}")
 
 file_size_mb = output_path.stat().st_size / 1024 / 1024
 print(f"  File size: {file_size_mb:.1f} MB")
