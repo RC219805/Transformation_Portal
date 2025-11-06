@@ -19,7 +19,6 @@ Strategy:
 from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
 from pathlib import Path
-from scipy.ndimage import gaussian_filter
 
 try:
     import tifffile
@@ -253,7 +252,7 @@ if OUTPUT_BIT_DEPTH == 16:
         final_img = Image.fromarray(final_16bit, mode='RGB;16')
         final_img.save(output_path, compression='tiff_lzw')
         print(f"  ✓ Saved 16-bit TIFF with PIL")
-else:
+else:  # noqa: F841 - Defensive programming: keep else clause for config flexibility
     sharpened.save(output_path, compression='tiff_lzw')
     print(f"  ✓ Saved 8-bit TIFF")
 

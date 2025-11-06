@@ -70,7 +70,7 @@ if TIFFFILE_AVAILABLE:
         # Handle alpha channel if present
         if img_array.shape[2] == 4:
             rgb = img_array[:, :, :3]
-            alpha = img_array[:, :, 3]
+            # Drop alpha channel - not needed for RGB processing
         else:
             rgb = img_array
         
