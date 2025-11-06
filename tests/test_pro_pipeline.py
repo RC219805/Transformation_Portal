@@ -11,20 +11,18 @@ Tests cover:
 - Error handling and graceful degradation
 """
 
-import json
-import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
 from PIL import Image
 
-# Import the pro pipeline
+# Add parent directory to path to import pro_pipeline
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pro_pipeline import (
+from pro_pipeline import (  # noqa: E402 - import after path manipulation
     ProPipeline,
     ProPipelineConfig,
     PipelinePreset,
@@ -269,7 +267,7 @@ class TestProPipeline:
         with patch.object(pipeline, '_apply_depth_stage', side_effect=Exception("Test error")):
             result = pipeline.process_image(temp_image_file)
             # Should still complete despite error in one stage
-            # (actually processes since we only mocked one stage)
+            assert result is not None or pipeline.stats["images_failed"] == 1
     
     def test_batch_processing(self, pipeline_config, tmp_path):
         """Test batch processing of multiple images."""

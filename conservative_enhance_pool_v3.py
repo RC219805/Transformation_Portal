@@ -24,7 +24,7 @@ Expected Results:
 - Pool water: Jewel-toned turquoise (restored)
 - Sky gradient: Smooth and detailed (preserved)
 """
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance
 import numpy as np
 from pathlib import Path
 from scipy.ndimage import gaussian_filter
@@ -425,7 +425,7 @@ if OUTPUT_BIT_DEPTH == 16:
         img_output = Image.fromarray((rgb_final * 255).astype(np.uint8))
         img_output.save(output_path)
         print(f"  ✓ Saved 8-bit (tifffile not available): {output_path}")
-else:
+else:  # noqa: F841 - Defensive programming: keep else clause for config flexibility
     img_output = Image.fromarray((rgb_final * 255).astype(np.uint8))
     img_output.save(output_path)
     print(f"  ✓ Saved 8-bit: {output_path}")

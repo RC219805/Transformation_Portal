@@ -28,7 +28,7 @@ WARNINGS FROM LESSONS LEARNED:
 - Maintain concrete neutrality
 - Conservative parameters to avoid artifacts
 """
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance
 import numpy as np
 from pathlib import Path
 from scipy.ndimage import gaussian_filter
