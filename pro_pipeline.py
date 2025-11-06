@@ -218,7 +218,8 @@ class ProPipeline:
         """
         if self._depth_pipeline is None:
             try:
-                from src.transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
+                # Try installed package import first (correct for editable installs)
+                from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
                 config_path = Path("config/interior_preset.yaml")
                 if config_path.exists():
                     self._depth_pipeline = ArchitecturalDepthPipeline.from_config(str(config_path))
@@ -238,7 +239,8 @@ class ProPipeline:
         """
         if self._ai_pipeline is None:
             try:
-                from src.transformation_portal.pipelines.lux_render_pipeline import (  # noqa: F401
+                # Try installed package import first (correct for editable installs)
+                from transformation_portal.pipelines.lux_render_pipeline import (  # noqa: F401
                     apply_material_response_finishing
                 )
                 self._ai_pipeline = "available"

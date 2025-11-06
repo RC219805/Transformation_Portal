@@ -240,21 +240,16 @@ print(f"\nSaving output...")
 
 output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v8.tiff"
 
-# Save as 16-bit TIFF
+# Save as 16-bit TIFF (OUTPUT_BIT_DEPTH is always 16 in this version)
 final_array = np.array(sharpened, dtype=np.uint8)
-
-if OUTPUT_BIT_DEPTH == 16:
-    final_16bit = (final_array.astype(np.uint16) * 257)
-    if TIFFFILE_AVAILABLE:
-        tifffile.imwrite(output_path, final_16bit, photometric='rgb', compression='lzw')
-        print(f"  ✓ Saved 16-bit TIFF with tifffile")
-    else:
-        final_img = Image.fromarray(final_16bit, mode='RGB;16')
-        final_img.save(output_path, compression='tiff_lzw')
-        print(f"  ✓ Saved 16-bit TIFF with PIL")
-else:  # noqa: F841 - Defensive programming: keep else clause for config flexibility
-    sharpened.save(output_path, compression='tiff_lzw')
-    print(f"  ✓ Saved 8-bit TIFF")
+final_16bit = (final_array.astype(np.uint16) * 257)
+if TIFFFILE_AVAILABLE:
+    tifffile.imwrite(output_path, final_16bit, photometric='rgb', compression='lzw')
+    print(f"  ✓ Saved 16-bit TIFF with tifffile")
+else:
+    final_img = Image.fromarray(final_16bit, mode='RGB;16')
+    final_img.save(output_path, compression='tiff_lzw')
+    print(f"  ✓ Saved 16-bit TIFF with PIL")
 
 file_size_mb = output_path.stat().st_size / 1024 / 1024
 

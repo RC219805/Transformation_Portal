@@ -415,20 +415,15 @@ print(f"\n[10/10] Saving enhanced image...")
 output_name = Path(INPUT).stem + "_Enhanced_v3.tif"
 output_path = OUTPUT_DIR / output_name
 
-# Convert to 16-bit for output
-if OUTPUT_BIT_DEPTH == 16:
-    rgb_output = (rgb_final * 65535).astype(np.uint16)
-    if TIFFFILE_AVAILABLE:
-        tifffile.imwrite(output_path, rgb_output)
-        print(f"  ✓ Saved 16-bit TIFF with tifffile: {output_path}")
-    else:
-        img_output = Image.fromarray((rgb_final * 255).astype(np.uint8))
-        img_output.save(output_path)
-        print(f"  ✓ Saved 8-bit (tifffile not available): {output_path}")
-else:  # noqa: F841 - Defensive programming: keep else clause for config flexibility
+# Convert to 16-bit for output (OUTPUT_BIT_DEPTH is always 16 in this version)
+rgb_output = (rgb_final * 65535).astype(np.uint16)
+if TIFFFILE_AVAILABLE:
+    tifffile.imwrite(output_path, rgb_output)
+    print(f"  ✓ Saved 16-bit TIFF with tifffile: {output_path}")
+else:
     img_output = Image.fromarray((rgb_final * 255).astype(np.uint8))
     img_output.save(output_path)
-    print(f"  ✓ Saved 8-bit: {output_path}")
+    print(f"  ✓ Saved 8-bit (tifffile not available): {output_path}")
 
 # ============================================================================
 # VALIDATION METRICS (NEW IN V3)
