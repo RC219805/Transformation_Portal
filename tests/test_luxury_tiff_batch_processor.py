@@ -550,12 +550,12 @@ def test_image_roundtrip_uint16_with_alpha():
         ],
         dtype=np.uint16,
     )
-    # Note: PIL automatically converts uint16 RGBA images to uint8
-    # This is the expected behavior, not a bug
-    # We need to specify mode="RGBA" for uint16 data, though it's deprecated
+    # Note: PIL doesn't support uint16 RGBA directly via fromarray
+    # Convert to uint8 first, as PIL will do this anyway
+    data_uint8 = (data / 256).astype(np.uint8)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        image = Image.fromarray(data, mode="RGBA")
+        image = Image.fromarray(data_uint8, mode="RGBA")
 
     base_float, base_dtype, alpha, base_channels = ltiff.image_to_float(
         image, return_format="tuple4"
