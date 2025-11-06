@@ -1,0 +1,390 @@
+# Professional Pipeline Configuration
+# ===================================
+# 
+# This configuration file defines presets and parameters for the
+# Transformation Portal Professional Pipeline.
+#
+# Usage:
+#   python pro_pipeline.py process image.jpg --config pro_pipeline_config.yaml
+
+# Default global settings
+global:
+  device: auto  # auto, cpu, cuda, mps
+  quality: high  # draft, standard, high, ultra
+  output_format: tiff  # jpg, png, tiff
+  bit_depth: 16  # 8, 16, 32
+  preserve_metadata: true
+  use_cache: true
+  num_workers: 4
+
+# Stage configurations
+stages:
+  # Stage 1: Depth-Aware Processing
+  depth:
+    model: depth-anything-v2-base  # small, base, large
+    use_coreml: true  # Use Apple Neural Engine on M-series chips
+    atmospheric_haze:
+      enabled: false
+      strength: 0.22
+      near: 15.0
+      far: 85.0
+    clarity:
+      enabled: true
+      amount: 0.15
+      radius: 3
+    zone_tone_mapping:
+      enabled: false
+      operator: agx  # agx, reinhard, filmic
+  
+  # Stage 2: AI Enhancement
+  ai:
+    model: stable-diffusion-xl-1.0  # sdxl, sd-1.5
+    controlnet:
+      enabled: true
+      type: canny  # canny, depth, normal
+      conditioning_scale: 0.7
+    steps: 30
+    guidance_scale: 7.5
+    strength: 0.45
+    upscale:
+      enabled: false
+      method: realesrgan  # realesrgan, lanczos, bicubic
+      scale: 4
+  
+  # Stage 3: Material Response
+  material:
+    strength: 0.65
+    surfaces:
+      - wood
+      - metal
+      - glass
+      - fabric
+      - stone
+    preserve_highlights: true
+    micro_contrast: 0.08
+  
+  # Stage 4: Color Grading
+  grading:
+    lut:
+      enabled: false
+      path: assets/luts/film_emulation/Kodak_2393.cube
+      intensity: 0.8
+    tone_curve: agx  # agx, agx-high, filmic, reinhard
+    exposure: 0.0
+    contrast: 1.08
+    saturation: 1.08
+    vibrance: 0.05
+    temperature: 0  # -100 to 100 (warm to cool)
+    tint: 0  # -100 to 100 (green to magenta)
+  
+  # Stage 5: Finishing
+  finishing:
+    sharpen:
+      enabled: true
+      amount: 0.14
+      radius: 1.0
+      threshold: 0
+    clarity:
+      enabled: true
+      amount: 0.18
+      protect_shadows: true
+      protect_highlights: true
+    micro_contrast:
+      enabled: true
+      amount: 0.04
+      radius: 8
+    glow:
+      enabled: false
+      amount: 0.12
+      threshold: 0.8
+    vignette:
+      enabled: false
+      amount: 0.15
+      roundness: 1.0
+
+# Preset configurations
+presets:
+  architectural-hero:
+    description: "Dramatic enhancement for hero architectural shots"
+    stages:
+      depth:
+        enabled: true
+        model: depth-anything-v2-large
+        clarity:
+          amount: 0.18
+      ai:
+        enabled: true
+        strength: 0.45
+        steps: 30
+      material:
+        enabled: true
+        strength: 0.7
+      grading:
+        enabled: true
+        lut:
+          path: assets/luts/film_emulation/Kodak_2393.cube
+          intensity: 0.8
+        contrast: 1.12
+        saturation: 1.08
+      finishing:
+        enabled: true
+        sharpen:
+          amount: 0.14
+        clarity:
+          amount: 0.18
+  
+  interior-dramatic:
+    description: "High-contrast dramatic interior rendering"
+    stages:
+      depth:
+        enabled: true
+        model: depth-anything-v2-base
+        clarity:
+          amount: 0.15
+      ai:
+        enabled: false
+      material:
+        enabled: true
+        strength: 0.65
+      grading:
+        enabled: true
+        contrast: 1.12
+        saturation: 1.08
+        exposure: 0.22
+      finishing:
+        enabled: true
+        clarity:
+          amount: 0.15
+        micro_contrast:
+          amount: 0.04
+  
+  exterior-golden-hour:
+    description: "Warm golden hour aesthetic for exteriors"
+    stages:
+      depth:
+        enabled: true
+        atmospheric_haze:
+          enabled: true
+          strength: 0.22
+      ai:
+        enabled: true
+        strength: 0.35
+      material:
+        enabled: true
+        strength: 0.6
+      grading:
+        enabled: true
+        lut:
+          path: assets/luts/location_aesthetic/California_Golden_Hour.cube
+        temperature: 15
+        saturation: 1.10
+      finishing:
+        enabled: true
+        glow:
+          enabled: true
+          amount: 0.12
+  
+  aerial-estate:
+    description: "Aerial photography enhancement with depth perspective"
+    stages:
+      depth:
+        enabled: true
+        atmospheric_haze:
+          enabled: true
+          strength: 0.30
+        zone_tone_mapping:
+          enabled: true
+          operator: agx
+      ai:
+        enabled: false
+      material:
+        enabled: true
+        strength: 0.6
+        surfaces:
+          - grass
+          - water
+          - roof
+          - pavement
+      grading:
+        enabled: true
+        contrast: 1.10
+        saturation: 1.12
+        vibrance: 0.08
+      finishing:
+        enabled: true
+        clarity:
+          amount: 0.20
+        sharpen:
+          amount: 0.16
+  
+  pool-luxury:
+    description: "Pool and water feature enhancement"
+    stages:
+      depth:
+        enabled: true
+        clarity:
+          amount: 0.20
+      ai:
+        enabled: false
+      material:
+        enabled: true
+        strength: 0.7
+        surfaces:
+          - water
+          - tile
+          - concrete
+          - glass
+      grading:
+        enabled: true
+        lut:
+          path: assets/luts/location_aesthetic/Mediterranean_Blue.cube
+        saturation: 1.15
+        vibrance: 0.10
+      finishing:
+        enabled: true
+        clarity:
+          amount: 0.22
+        sharpen:
+          amount: 0.18
+  
+  kitchen-bright:
+    description: "Bright, clean kitchen enhancement"
+    stages:
+      depth:
+        enabled: true
+        clarity:
+          amount: 0.12
+      ai:
+        enabled: false
+      material:
+        enabled: true
+        strength: 0.5
+      grading:
+        enabled: true
+        exposure: 0.05
+        contrast: 1.06
+        saturation: 1.10
+      finishing:
+        enabled: true
+        clarity:
+          amount: 0.10
+        sharpen:
+          amount: 0.12
+  
+  bedroom-cozy:
+    description: "Warm, cozy bedroom aesthetic"
+    stages:
+      depth:
+        enabled: true
+      ai:
+        enabled: false
+      material:
+        enabled: true
+        strength: 0.6
+      grading:
+        enabled: true
+        temperature: 10
+        contrast: 1.04
+        saturation: 1.05
+      finishing:
+        enabled: true
+        glow:
+          enabled: true
+          amount: 0.08
+  
+  bathroom-spa:
+    description: "Spa-like bathroom enhancement"
+    stages:
+      depth:
+        enabled: true
+        clarity:
+          amount: 0.15
+      ai:
+        enabled: false
+      material:
+        enabled: true
+        strength: 0.65
+        surfaces:
+          - marble
+          - glass
+          - metal
+          - ceramic
+      grading:
+        enabled: true
+        contrast: 1.08
+        saturation: 1.05
+      finishing:
+        enabled: true
+        clarity:
+          amount: 0.16
+  
+  courtyard-natural:
+    description: "Natural outdoor courtyard aesthetic"
+    stages:
+      depth:
+        enabled: true
+        atmospheric_haze:
+          enabled: true
+          strength: 0.15
+      ai:
+        enabled: true
+        strength: 0.30
+      material:
+        enabled: true
+        strength: 0.55
+      grading:
+        enabled: true
+        saturation: 1.08
+        vibrance: 0.06
+      finishing:
+        enabled: true
+        clarity:
+          amount: 0.14
+
+# Performance tuning
+performance:
+  # Batch processing
+  batch:
+    chunk_size: 4
+    use_multiprocessing: true
+    max_workers: 6
+  
+  # Memory management
+  memory:
+    max_image_size: 8192  # Maximum dimension
+    cache_size_mb: 2048
+    aggressive_cleanup: false
+  
+  # GPU settings
+  gpu:
+    prefer_fp16: true  # Use half precision for speed
+    batch_size: 1
+    enable_attention_slicing: true
+
+# Output settings
+output:
+  # Naming convention
+  naming:
+    suffix: "_{preset}"  # Can include {preset}, {stage}, {timestamp}
+    preserve_original_name: true
+  
+  # Quality settings
+  jpeg:
+    quality: 95
+    optimize: true
+    progressive: true
+  
+  png:
+    compress_level: 6
+    optimize: true
+  
+  tiff:
+    compression: tiff_adobe_deflate
+    predictor: 2
+  
+  # Metadata
+  metadata:
+    preserve_exif: true
+    preserve_iptc: true
+    preserve_xmp: true
+    add_processing_info: true

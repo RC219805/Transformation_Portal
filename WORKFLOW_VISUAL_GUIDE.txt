@@ -1,0 +1,435 @@
+================================================================================
+TRANSFORMATION PORTAL - VISUAL WORKFLOW GUIDE
+================================================================================
+Last Updated: November 5, 2025
+Status: Production Ready
+
+================================================================================
+1. IMAGE ANALYSIS WORKFLOW
+================================================================================
+
+    ┌─────────────────┐
+    │   INPUT IMAGE   │
+    │  (TIFF/TIF)     │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────────────────────────┐
+    │  AUTOMATIC ANALYSIS                 │
+    │  • Brightness (mean luminance)      │
+    │  • Saturation (chroma range)        │
+    │  • Sky B/R ratio (if present)       │
+    │  • Histogram distribution           │
+    └────────┬────────────────────────────┘
+             │
+             ▼
+    ┌─────────────────────────────────────┐
+    │  CLASSIFICATION                     │
+    ├─────────────────────────────────────┤
+    │  Brightness < 0.4  → DARK INTERIOR  │
+    │  Brightness 0.4-0.6 → BALANCED      │
+    │  Brightness > 0.6  → BRIGHT         │
+    └────────┬────────────────────────────┘
+             │
+             ▼
+    ┌─────────────────────────────────────┐
+    │  STRATEGY SELECTION                 │
+    │  (Automatic based on analysis)      │
+    └─────────────────────────────────────┘
+
+================================================================================
+2. PROCESSING PIPELINE (10 STEPS)
+================================================================================
+
+Step 1: LOAD & ANALYZE
+    ┌──────────────────────────────────────────────────────┐
+    │  Load with tifffile (HDR-aware)                      │
+    │  Measure: brightness, saturation, sky B/R            │
+    │  Establish baseline metrics                          │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 2: EXPOSURE LIFT
+    ┌──────────────────────────────────────────────────────┐
+    │  Global Lift        → +15-30% (content-dependent)    │
+    │  Shadow Recovery    → +20-30 levels (<70/255)        │
+    │  Midtone Boost      → +5-8% (Gaussian weighted)      │
+    │  Highlight Protect  → Preserve >230/255              │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 3: COLOR GRADING
+    ┌──────────────────────────────────────────────────────┐
+    │  Saturation Boost   → +8-12% (HSV-based)             │
+    │  Warmth Adjust      → R±1-2%, B∓1-2%                 │
+    │  Hue Preservation   → HSV transform maintains hue    │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 4: ⭐ SKY NEUTRALITY PROTECTION ⭐
+    ┌──────────────────────────────────────────────────────┐
+    │  Detect Sky         → Brightness >200/255            │
+    │  Measure B/R        → Current ratio                  │
+    │  Neutralize         → If not 0.98-1.02               │
+    │  Smooth Mask        → Gaussian σ=5                   │
+    │  Target: B/R = 0.98-1.02 (neutral)                   │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 5: ZONE-BASED CLARITY
+    ┌──────────────────────────────────────────────────────┐
+    │  Shadow Zone    (<0.3)  → 6% strength (gentle)       │
+    │  Midtone Zone   (0.3-0.7) → 12% strength (primary)   │
+    │  Highlight Zone (>0.7)  → 8% strength (moderate)     │
+    │  Method: Unsharp mask with zone weighting            │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 6: EDGE SHARPENING
+    ┌──────────────────────────────────────────────────────┐
+    │  Edge Detection     → Find Edges filter              │
+    │  Unsharp Mask       → radius=1.3, 150%               │
+    │  Selective Blend    → 14% strength                   │
+    │  Smooth Transitions → Gaussian edge mask             │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 7: MICRO-CONTRAST
+    ┌──────────────────────────────────────────────────────┐
+    │  Boost              → +4% contrast                   │
+    │  Target             → Midtones only (±0.2σ)          │
+    │  Purpose            → Depth perception               │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 8: QUALITY VALIDATION
+    ┌──────────────────────────────────────────────────────┐
+    │  ✓ Brightness       → Appropriate for scene          │
+    │  ✓ Sky B/R          → 0.98-1.02 (if present)         │
+    │  ✓ Clipping         → <0.5%                          │
+    │  ✓ Saturation       → Natural, not oversaturated     │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 9: 16-BIT CONVERSION
+    ┌──────────────────────────────────────────────────────┐
+    │  float32 → uint16 (0-65535 range)                    │
+    │  Preserve full tonal range                           │
+    │  Professional output standard                        │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+
+Step 10: EXPORT
+    ┌──────────────────────────────────────────────────────┐
+    │  Master:  16-bit TIFF + LZW compression              │
+    │  Preview: High-quality JPG (95%)                     │
+    │  Compare: Side-by-side validation                    │
+    └──────────────────────────────────────────────────────┘
+                            ↓
+    ┌──────────────────────────────────────────────────────┐
+    │              OUTPUT FILES READY                      │
+    │         ✅ Production Quality Achieved               │
+    └──────────────────────────────────────────────────────┘
+
+================================================================================
+3. IMAGE TYPE DECISION TREE
+================================================================================
+
+                        ┌─────────────────┐
+                        │  INPUT IMAGE    │
+                        └────────┬────────┘
+                                 │
+                                 ▼
+                    ┌────────────────────────┐
+                    │  Measure Brightness    │
+                    └────────┬───────────────┘
+                             │
+            ┌────────────────┼────────────────┐
+            │                │                │
+            ▼                ▼                ▼
+    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │ Bright < 0.4 │ │ 0.4 - 0.6    │ │  Bright > 0.6│
+    │ DARK         │ │ BALANCED     │ │  BRIGHT      │
+    └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+           │                │                │
+           ▼                ▼                ▼
+    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │EXPOSURE LIFT │ │ BALANCED     │ │ SATURATION   │
+    │Strategy      │ │ Strategy     │ │ Strategy     │
+    └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+           │                │                │
+           ▼                ▼                ▼
+    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │Lift: +20-30% │ │Lift: +10-15% │ │Lift: 0-5%    │
+    │Shadow: +25   │ │Shadow: +15   │ │Shadow: +8    │
+    │Sat: +8-12%   │ │Sat: +10%     │ │Sat: +12-15%  │
+    └──────────────┘ └──────────────┘ └──────────────┘
+           │                │                │
+           └────────────────┼────────────────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │ SKY PROTECTION│
+                    │  (Universal)  │
+                    └───────┬───────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │ ZONE CLARITY  │
+                    │  (Universal)  │
+                    └───────┬───────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │ VALIDATE &    │
+                    │ EXPORT        │
+                    └───────────────┘
+
+================================================================================
+4. QUALITY VALIDATION FLOWCHART
+================================================================================
+
+    ┌─────────────────────────────────────────┐
+    │      PROCESS COMPLETE                   │
+    └──────────────────┬──────────────────────┘
+                       │
+                       ▼
+    ┌─────────────────────────────────────────┐
+    │  Check Brightness                       │
+    │  Target: +10-25% for dark images        │
+    │          ±5% for bright images          │
+    └──────────────────┬──────────────────────┘
+                       │
+              ┌────────┴────────┐
+              │                 │
+           PASS ✓           FAIL ✗
+              │                 │
+              │                 ▼
+              │        ┌─────────────────┐
+              │        │ Adjust EXPOSURE │
+              │        │ Reprocess       │
+              │        └─────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────┐
+    │  Check Sky Neutrality (if applicable)   │
+    │  Target: B/R ratio 0.98-1.02            │
+    └──────────────────┬──────────────────────┘
+                       │
+              ┌────────┴────────┐
+              │                 │
+           PASS ✓           FAIL ✗
+              │                 │
+              │                 ▼
+              │        ┌─────────────────────┐
+              │        │ Check SKY_PROTECTION│
+              │        │ is enabled          │
+              │        └─────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────┐
+    │  Check Clipping                         │
+    │  Target: < 0.5%                         │
+    └──────────────────┬──────────────────────┘
+                       │
+              ┌────────┴────────┐
+              │                 │
+           PASS ✓           FAIL ✗
+              │                 │
+              │                 ▼
+              │        ┌─────────────────────┐
+              │        │ Reduce EXPOSURE_LIFT│
+              │        │ or add HIGHLIGHT    │
+              │        │ PROTECTION          │
+              │        └─────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────┐
+    │  Visual Inspection                      │
+    │  Compare side-by-side                   │
+    └──────────────────┬──────────────────────┘
+                       │
+              ┌────────┴────────┐
+              │                 │
+          APPROVED          REFINE
+              │                 │
+              │                 ▼
+              │        ┌─────────────────────┐
+              │        │ Adjust parameters   │
+              │        │ Reprocess           │
+              │        └─────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────┐
+    │     ✅ PRODUCTION APPROVED              │
+    │     Ready for delivery                  │
+    └─────────────────────────────────────────┘
+
+================================================================================
+5. PARAMETER TUNING GUIDE
+================================================================================
+
+EXPOSURE LIFT (Brightness adjustment)
+    ═══════════════════════════════════════════════════════════════
+    0.05    0.10    0.15    0.20    0.25    0.30    0.35    0.40
+    ├───────┼───────┼───────┼───────┼───────┼───────┼───────┤
+    │   Minimal   │    Moderate    │   Aggressive  │   Max  │
+    │   (Bright)  │    (Balanced)  │   (Dark)      │  (VDark)│
+    └─────────────┴────────────────┴───────────────┴────────┘
+
+SATURATION LIFT
+    ═══════════════════════════════════════════════════════════════
+    1.00    1.05    1.10    1.15    1.20    1.25    1.30
+    ├───────┼───────┼───────┼───────┼───────┼───────┤
+    │  None │ Subtle│ Moderate │ Strong  │  Max    │
+    │       │       │ (Sweet   │ (Risk   │ (Avoid) │
+    │       │       │  Spot)   │  Zone)  │         │
+    └───────┴───────┴──────────┴─────────┴─────────┘
+
+CLARITY (Material enhancement)
+    ═══════════════════════════════════════════════════════════════
+    0.00    0.05    0.10    0.15    0.20    0.25    0.30
+    ├───────┼───────┼───────┼───────┼───────┼───────┤
+    │  None │ Subtle│ Standard │ Strong  │ Very    │
+    │       │ (Shadow) │ (Midtone)│(Highlight)│Strong│
+    │       │  6%   │   12%    │   15%   │ (Caution)│
+    └───────┴───────┴──────────┴─────────┴─────────┘
+
+SKY B/R RATIO (Neutrality)
+    ═══════════════════════════════════════════════════════════════
+    0.90    0.95    0.98    1.00    1.02    1.05    1.10
+    ├───────┼───────┼───────┼───────┼───────┼───────┤
+    │  Warm │  OK   │ ✓NEUTRAL ✓  │  OK   │  Cool  │
+    │  Tint │       │ TARGET ZONE │       │  Tint  │
+    └───────┴───────┴─────────────┴───────┴────────┘
+
+CLIPPING (Pixel loss)
+    ═══════════════════════════════════════════════════════════════
+    0.0%    0.5%    1.0%    2.0%    5.0%    10.0%
+    ├───────┼───────┼───────┼───────┼───────┤
+    │ ✓ Perfect  │ ✓ OK  │ ⚠️ Caution │ ❌ Bad │
+    │ TARGET ZONE│       │            │        │
+    └────────────┴───────┴────────────┴────────┘
+
+================================================================================
+6. COMMON ISSUES & SOLUTIONS MAP
+================================================================================
+
+CYAN SKY ARTIFACTS
+    Problem:  Sky develops artificial cyan/turquoise tint
+    Cause:    RGB channel manipulation without sky masking
+    Solution: Enable SKY_PROTECTION = True (Step 4)
+    Document: GREATROOM_MASTER_SUMMARY.md
+
+IMAGE TOO DARK
+    Problem:  Result darker than original
+    Cause:    Overly conservative EXPOSURE_LIFT
+    Solution: Increase to 0.20-0.30 for dark images
+    Document: GREATROOM_FINAL_SUMMARY.md
+
+NOISY SHADOWS
+    Problem:  Shadow regions look grainy
+    Cause:    Excessive CLARITY in shadow zones
+    Solution: Reduce to 0.06 or less
+    Document: PROCESSING_QUICK_REFERENCE.md
+
+LOST MATERIAL DETAIL
+    Problem:  Wood grain, textures unclear
+    Cause:    Uniform enhancement without zones
+    Solution: Enable zone-based clarity (Step 5)
+    Document: GREATROOM_FINAL_APPROACH.md
+
+HUE SHIFT
+    Problem:  Colors look wrong, shifted hue
+    Cause:    RGB multiplication for saturation
+    Solution: Use HSV transformation (Step 3)
+    Document: PROCESSING_QUICK_REFERENCE.md
+
+OVEREXPOSED HIGHLIGHTS
+    Problem:  Bright areas blown out
+    Cause:    Insufficient highlight protection
+    Solution: Lower HIGHLIGHT_PROTECT threshold (235→225)
+    Document: GREATROOM_FINAL_APPROACH.md
+
+================================================================================
+7. SUCCESS METRICS DASHBOARD
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │                    QUALITY SCORECARD                        │
+    ├─────────────────────────────────────────────────────────────┤
+    │                                                             │
+    │  BRIGHTNESS       [████████████████████░░░] 90%  ✓ PASS    │
+    │  Target: Appropriate for scene type                         │
+    │                                                             │
+    │  SKY NEUTRALITY   [████████████████████░░░] 95%  ✓ PASS    │
+    │  Target: B/R = 0.98-1.02                                    │
+    │                                                             │
+    │  CLIPPING         [███████████████████████] 98%  ✓ PASS    │
+    │  Target: < 0.5%                                             │
+    │                                                             │
+    │  SATURATION       [████████████████████░░░] 92%  ✓ PASS    │
+    │  Target: Natural, not cartoonish                            │
+    │                                                             │
+    │  MATERIAL DETAIL  [████████████████████░░░] 93%  ✓ PASS    │
+    │  Target: Visible texture and clarity                        │
+    │                                                             │
+    │  EDGE QUALITY     [████████████████████░░░] 94%  ✓ PASS    │
+    │  Target: Sharp without halos                                │
+    │                                                             │
+    │  ═══════════════════════════════════════════════════════   │
+    │  OVERALL SCORE:   [████████████████████░░░] 94%  ✓ APPROVED│
+    │  STATUS: PRODUCTION READY FOR DELIVERY                      │
+    │                                                             │
+    └─────────────────────────────────────────────────────────────┘
+
+================================================================================
+8. FILE ORGANIZATION STRUCTURE
+================================================================================
+
+Transformation_Portal/
+│
+├── input_images/
+│   ├── 750Picacho_GreatRoom_Reset.tif       [Source file]
+│   ├── 750Picacho_Kitchen.tiff              [Other images]
+│   └── Coastal_Interior_*.tif               [Series]
+│
+├── processed_images/
+│   ├── Conservative/
+│   │   ├── 750Picacho_GreatRoom_Final.tiff  [16-bit master ✓]
+│   │   ├── 750Picacho_GreatRoom_Final.jpg   [Preview ✓]
+│   │   └── GreatRoom_Comparison_Final.jpg   [Validation ✓]
+│   │
+│   ├── Archive/
+│   │   ├── *_v1.jpg  [Learning iterations]
+│   │   ├── *_v7.tiff [Conservative attempt]
+│   │   └── *_v8.tiff [Good baseline]
+│   │
+│   └── Comparisons/
+│       └── [Side-by-side validations]
+│
+├── Documentation/
+│   ├── DOCUMENTATION_INDEX.md               [This index ⭐]
+│   ├── GREATROOM_EXECUTIVE_SUMMARY.md       [Quick start ⭐]
+│   ├── PROCESSING_QUICK_REFERENCE.md        [Workflow guide ⭐]
+│   ├── GREATROOM_MASTER_SUMMARY.md          [Complete story]
+│   └── [20+ other guides]
+│
+└── Scripts/
+    ├── conservative_enhance_greatroom_final.py  [Production ✓]
+    ├── conservative_enhance_kitchen.py          [Kitchen]
+    └── [Version archive]
+
+================================================================================
+LEGEND
+================================================================================
+
+✓  = Success / Validated
+⭐ = Start here / Important
+⚠️  = Warning / Caution
+❌ = Failure / Avoid
+→  = Process flow
+├─ = Decision branch
+═  = Scale / Range
+
+================================================================================

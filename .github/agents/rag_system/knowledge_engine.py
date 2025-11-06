@@ -539,9 +539,9 @@ class KnowledgeIntegrationEngine:
                 summary[kpi_key] = {
                     'data_points': filtered_values,
                     'current': filtered_values[-1][1],
-                    'average': statistics.mean([v for _, v in filtered_values]),
-                    'min': min([v for _, v in filtered_values]),
-                    'max': max([v for _, v in filtered_values]),
+                    'average': statistics.mean(v for _, v in filtered_values),
+                    'min': min(v for _, v in filtered_values),
+                    'max': max(v for _, v in filtered_values),
                 }
 
         return summary

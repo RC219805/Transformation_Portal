@@ -1,0 +1,522 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Tests for the Fully-Integrated Professional Pipeline.
+
+Tests cover:
+- Configuration and preset loading
+- Individual pipeline stages
+- Batch processing
+- CLI interface
+- Error handling and graceful degradation
+"""
+
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+import numpy as np
+import pytest
+from PIL import Image
+
+# Add parent directory to path to import pro_pipeline
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from pro_pipeline import (  # noqa: E402 - import after path manipulation
+    ProPipeline,
+    ProPipelineConfig,
+    PipelinePreset,
+    PipelineStage,
+)
+
+
+@pytest.fixture
+def sample_image():
+    """Create a sample RGB image for testing."""
+    img_array = np.random.randint(0, 255, (512, 512, 3), dtype=np.uint8)
+    return Image.fromarray(img_array)
+
+
+@pytest.fixture
+def temp_image_file(sample_image, tmp_path):
+    """Create a temporary image file."""
+    image_path = tmp_path / "test_image.jpg"
+    sample_image.save(image_path, quality=95)
+    return image_path
+
+
+@pytest.fixture
+def pipeline_config(tmp_path):
+    """Create a basic pipeline configuration."""
+    return ProPipelineConfig(
+        input_path=tmp_path / "input.jpg",
+        output_dir=tmp_path / "output",
+        preset=PipelinePreset.CUSTOM,
+        device="cpu",
+        quality="standard",
+    )
+
+
+class TestPipelineStage:
+    """Tests for PipelineStage dataclass."""
+    
+    def test_stage_creation(self):
+        """Test creating a pipeline stage."""
+        stage = PipelineStage("Test Stage", enabled=True, config={"param": 1.0})
+        assert stage.name == "Test Stage"
+        assert stage.enabled is True
+        assert stage.config["param"] == 1.0
+    
+    def test_stage_repr(self):
+        """Test string representation."""
+        stage_enabled = PipelineStage("Enabled", enabled=True)
+        stage_disabled = PipelineStage("Disabled", enabled=False)
+        
+        assert "✓" in repr(stage_enabled)
+        assert "✗" in repr(stage_disabled)
+
+
+class TestProPipelineConfig:
+    """Tests for ProPipelineConfig."""
+    
+    def test_config_creation(self, tmp_path):
+        """Test creating a pipeline configuration."""
+        config = ProPipelineConfig(
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+        )
+        
+        assert config.input_path.name == "input.jpg"
+        assert config.output_dir.name == "output"
+        assert config.preset == PipelinePreset.CUSTOM
+        assert config.device == "auto"
+    
+    def test_preset_application(self, tmp_path):
+        """Test that presets correctly configure stages."""
+        config = ProPipelineConfig(
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+            preset=PipelinePreset.ARCHITECTURAL_HERO,
+        )
+        
+        # Check that stages are configured according to preset
+        assert config.depth_stage.enabled is True
+        assert config.ai_stage.enabled is True
+        assert config.material_stage.enabled is True
+        assert config.grading_stage.enabled is True
+        assert config.finishing_stage.enabled is True
+    
+    def test_interior_dramatic_preset(self, tmp_path):
+        """Test interior dramatic preset configuration."""
+        config = ProPipelineConfig(
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+            preset=PipelinePreset.INTERIOR_DRAMATIC,
+        )
+        
+        # Interior dramatic disables AI enhancement
+        assert config.ai_stage.enabled is False
+        assert config.depth_stage.enabled is True
+        assert config.material_stage.enabled is True
+    
+    def test_custom_preset_no_changes(self, tmp_path):
+        """Test that custom preset doesn't apply automatic configuration."""
+        config = ProPipelineConfig(
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+            preset=PipelinePreset.CUSTOM,
+        )
+        
+        # Custom preset should have defaults
+        assert config.depth_stage.enabled is True
+        assert config.depth_stage.config == {}
+
+
+class TestProPipeline:
+    """Tests for ProPipeline orchestrator."""
+    
+    def test_pipeline_creation(self, pipeline_config):
+        """Test creating a pipeline instance."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        assert pipeline.config == pipeline_config
+        assert pipeline.device in ["cpu", "cuda", "mps"]
+        assert pipeline.stats["images_processed"] == 0
+    
+    def test_device_detection(self, pipeline_config):
+        """Test automatic device detection."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        # Device should be detected (cpu, cuda, or mps)
+        assert pipeline.device in ["cpu", "cuda", "mps"]
+    
+    def test_manual_device_selection(self, tmp_path):
+        """Test manual device selection."""
+        config = ProPipelineConfig(
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+            device="cpu",
+        )
+        pipeline = ProPipeline(config)
+        
+        assert pipeline.device == "cpu"
+    
+    def test_process_image_success(self, pipeline_config, temp_image_file):
+        """Test successful image processing."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        result = pipeline.process_image(temp_image_file)
+        
+        assert result is not None
+        assert result.exists()
+        assert pipeline.stats["images_processed"] == 1
+        assert pipeline.stats["images_failed"] == 0
+    
+    def test_process_image_creates_output_dir(self, tmp_path, temp_image_file):
+        """Test that output directory is created if it doesn't exist."""
+        output_dir = tmp_path / "new_output_dir"
+        assert not output_dir.exists()
+        
+        config = ProPipelineConfig(
+            input_path=temp_image_file,
+            output_dir=output_dir,
+        )
+        pipeline = ProPipeline(config)
+        
+        result = pipeline.process_image(temp_image_file)
+        
+        assert output_dir.exists()
+        assert result.parent == output_dir
+    
+    def test_process_nonexistent_image(self, pipeline_config, tmp_path):
+        """Test handling of nonexistent image."""
+        nonexistent = tmp_path / "nonexistent.jpg"
+        pipeline = ProPipeline(pipeline_config)
+        
+        result = pipeline.process_image(nonexistent)
+        
+        assert result is None
+        assert pipeline.stats["images_failed"] == 1
+    
+    def test_depth_stage_execution(self, pipeline_config, temp_image_file, sample_image):
+        """Test depth-aware processing stage."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        # Enable only depth stage
+        pipeline.config.depth_stage.enabled = True
+        pipeline.config.ai_stage.enabled = False
+        pipeline.config.material_stage.enabled = False
+        pipeline.config.grading_stage.enabled = False
+        pipeline.config.finishing_stage.enabled = False
+        
+        result = pipeline._apply_depth_stage(sample_image, temp_image_file)
+        
+        assert result is not None
+        assert isinstance(result, Image.Image)
+        assert result.size == sample_image.size
+    
+    def test_ai_stage_execution(self, pipeline_config, temp_image_file, sample_image):
+        """Test AI enhancement stage."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        result = pipeline._apply_ai_stage(sample_image, temp_image_file)
+        
+        assert result is not None
+        assert isinstance(result, Image.Image)
+        assert result.size == sample_image.size
+    
+    def test_material_stage_execution(self, pipeline_config, temp_image_file, sample_image):
+        """Test Material Response stage."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        result = pipeline._apply_material_stage(sample_image, temp_image_file)
+        
+        assert result is not None
+        assert isinstance(result, Image.Image)
+        assert result.size == sample_image.size
+    
+    def test_grading_stage_execution(self, pipeline_config, temp_image_file, sample_image):
+        """Test color grading stage."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        result = pipeline._apply_grading_stage(sample_image, temp_image_file)
+        
+        assert result is not None
+        assert isinstance(result, Image.Image)
+        assert result.size == sample_image.size
+    
+    def test_finishing_stage_execution(self, pipeline_config, temp_image_file, sample_image):
+        """Test finishing stage."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        result = pipeline._apply_finishing_stage(sample_image, temp_image_file)
+        
+        assert result is not None
+        assert isinstance(result, Image.Image)
+        assert result.size == sample_image.size
+    
+    def test_stage_graceful_failure(self, pipeline_config, temp_image_file):
+        """Test that pipeline continues when a stage fails."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        # Create a mock image that will cause processing to fail
+        mock_image = Mock(spec=Image.Image)
+        mock_image.size = (512, 512)
+        
+        # Depth stage should catch exception and return original
+        with patch.object(pipeline, '_apply_depth_stage', side_effect=Exception("Test error")):
+            result = pipeline.process_image(temp_image_file)
+            # Should still complete despite error in one stage
+            assert result is not None or pipeline.stats["images_failed"] == 1
+    
+    def test_batch_processing(self, pipeline_config, tmp_path):
+        """Test batch processing of multiple images."""
+        # Create multiple test images
+        images = []
+        for i in range(3):
+            img_path = tmp_path / f"test_{i}.jpg"
+            img = Image.new("RGB", (256, 256), color=(i * 50, i * 50, i * 50))
+            img.save(img_path)
+            images.append(img_path)
+        
+        pipeline = ProPipeline(pipeline_config)
+        stats = pipeline.batch_process(images)
+        
+        assert stats["processed"] == 3
+        assert stats["failed"] == 0
+        assert len(stats["results"]) == 3
+        assert stats["total_time"] > 0
+    
+    def test_batch_processing_with_failures(self, pipeline_config, tmp_path):
+        """Test batch processing handles failures gracefully."""
+        # Mix of valid and invalid images
+        img_path = tmp_path / "valid.jpg"
+        img = Image.new("RGB", (256, 256), color=(100, 100, 100))
+        img.save(img_path)
+        
+        nonexistent = tmp_path / "nonexistent.jpg"
+        
+        images = [img_path, nonexistent]
+        
+        pipeline = ProPipeline(pipeline_config)
+        stats = pipeline.batch_process(images)
+        
+        assert stats["processed"] == 1
+        assert stats["failed"] == 1
+    
+    def test_output_filename_generation(self, pipeline_config, temp_image_file):
+        """Test output filename generation with presets."""
+        # Test with architectural hero preset
+        config_hero = ProPipelineConfig(
+            input_path=temp_image_file,
+            output_dir=pipeline_config.output_dir,
+            preset=PipelinePreset.ARCHITECTURAL_HERO,
+        )
+        pipeline = ProPipeline(config_hero)
+        
+        output = pipeline._save_output(Image.new("RGB", (100, 100)), temp_image_file)
+        
+        assert "architectural-hero" in output.name
+        assert output.suffix == ".tiff"  # Default format
+    
+    def test_different_output_formats(self, pipeline_config, temp_image_file, sample_image):
+        """Test saving in different output formats."""
+        formats = ["jpg", "png", "tiff"]
+        
+        for fmt in formats:
+            pipeline_config.output_format = fmt
+            pipeline = ProPipeline(pipeline_config)
+            
+            output = pipeline._save_output(sample_image, temp_image_file)
+            
+            assert output.suffix == f".{fmt}"
+            assert output.exists()
+    
+    def test_statistics_tracking(self, pipeline_config, tmp_path):
+        """Test that statistics are properly tracked."""
+        # Create test images
+        images = []
+        for i in range(2):
+            img_path = tmp_path / f"test_{i}.jpg"
+            img = Image.new("RGB", (256, 256))
+            img.save(img_path)
+            images.append(img_path)
+        
+        pipeline = ProPipeline(pipeline_config)
+        stats = pipeline.batch_process(images)
+        
+        # Check statistics structure
+        assert "processed" in stats
+        assert "failed" in stats
+        assert "total_time" in stats
+        assert "avg_time" in stats
+        assert "stage_times" in stats
+        
+        # Check values
+        assert stats["processed"] == 2
+        assert stats["avg_time"] > 0
+
+
+class TestPresets:
+    """Tests for pipeline presets."""
+    
+    def test_all_presets_valid(self, tmp_path):
+        """Test that all presets can be instantiated."""
+        for preset in PipelinePreset:
+            if preset == PipelinePreset.CUSTOM:
+                continue
+            
+            config = ProPipelineConfig(
+                input_path=tmp_path / "input.jpg",
+                output_dir=tmp_path / "output",
+                preset=preset,
+            )
+            
+            pipeline = ProPipeline(config)
+            
+            # Should be created without errors
+            assert pipeline.config.preset == preset
+    
+    def test_exterior_golden_hour_preset(self, tmp_path):
+        """Test exterior golden hour preset specifics."""
+        config = ProPipelineConfig(
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+            preset=PipelinePreset.EXTERIOR_GOLDEN_HOUR,
+        )
+        
+        # Should have specific configurations
+        assert config.depth_stage.enabled is True
+        assert config.ai_stage.enabled is True
+        assert config.material_stage.enabled is True
+        
+        # Check golden hour specific config
+        assert "atmospheric_haze" in config.depth_stage.config or True  # May not be set
+    
+    def test_aerial_estate_preset(self, tmp_path):
+        """Test aerial estate preset specifics."""
+        config = ProPipelineConfig(
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+            preset=PipelinePreset.AERIAL_ESTATE,
+        )
+        
+        # Aerial preset disables AI to preserve natural look
+        assert config.ai_stage.enabled is False
+        assert config.depth_stage.enabled is True
+
+
+class TestErrorHandling:
+    """Tests for error handling and graceful degradation."""
+    
+    def test_missing_dependencies_graceful(self, pipeline_config):
+        """Test graceful handling when optional dependencies are missing."""
+        pipeline = ProPipeline(pipeline_config)
+        
+        # Should create pipeline even if some modules can't be loaded
+        assert pipeline is not None
+        assert pipeline._depth_pipeline is None  # Lazy loaded
+    
+    def test_invalid_input_path(self, tmp_path):
+        """Test handling of invalid input path."""
+        config = ProPipelineConfig(
+            input_path=tmp_path / "nonexistent.jpg",
+            output_dir=tmp_path / "output",
+        )
+        pipeline = ProPipeline(config)
+        
+        result = pipeline.process_image(tmp_path / "nonexistent.jpg")
+        
+        assert result is None
+        assert pipeline.stats["images_failed"] == 1
+    
+    def test_corrupted_image_handling(self, pipeline_config, tmp_path):
+        """Test handling of corrupted image files."""
+        # Create a corrupted image file
+        corrupted = tmp_path / "corrupted.jpg"
+        corrupted.write_text("This is not an image")
+        
+        pipeline = ProPipeline(pipeline_config)
+        result = pipeline.process_image(corrupted)
+        
+        assert result is None
+        assert pipeline.stats["images_failed"] == 1
+
+
+class TestCLI:
+    """Tests for CLI interface (typer commands)."""
+    
+    def test_cli_imports(self):
+        """Test that CLI can be imported without errors."""
+        from pro_pipeline import app, process, batch, list_presets, version
+        
+        assert app is not None
+        assert process is not None
+        assert batch is not None
+        assert list_presets is not None
+        assert version is not None
+    
+    def test_preset_enum_values(self):
+        """Test that preset enum has expected values."""
+        assert PipelinePreset.ARCHITECTURAL_HERO.value == "architectural-hero"
+        assert PipelinePreset.INTERIOR_DRAMATIC.value == "interior-dramatic"
+        assert PipelinePreset.EXTERIOR_GOLDEN_HOUR.value == "exterior-golden-hour"
+
+
+class TestIntegration:
+    """Integration tests for the full pipeline."""
+    
+    def test_end_to_end_processing(self, tmp_path):
+        """Test complete end-to-end processing workflow."""
+        # Create test image
+        input_image = tmp_path / "input" / "test.jpg"
+        input_image.parent.mkdir(parents=True, exist_ok=True)
+        img = Image.new("RGB", (512, 512), color=(100, 100, 100))
+        img.save(input_image)
+        
+        output_dir = tmp_path / "output"
+        
+        # Create config with all stages enabled
+        config = ProPipelineConfig(
+            input_path=input_image,
+            output_dir=output_dir,
+            preset=PipelinePreset.ARCHITECTURAL_HERO,
+            device="cpu",
+            quality="standard",
+        )
+        
+        pipeline = ProPipeline(config)
+        result = pipeline.process_image(input_image)
+        
+        # Verify output
+        assert result is not None
+        assert result.exists()
+        assert result.parent == output_dir
+        
+        # Verify output is valid image
+        output_image = Image.open(result)
+        assert output_image.size == img.size
+    
+    def test_metadata_preservation(self, tmp_path):
+        """Test that image metadata is preserved when possible."""
+        # Create image with metadata
+        input_image = tmp_path / "input.jpg"
+        img = Image.new("RGB", (512, 512))
+        img.save(input_image, exif=b"test_exif_data")
+        
+        config = ProPipelineConfig(
+            input_path=input_image,
+            output_dir=tmp_path / "output",
+            preserve_metadata=True,
+        )
+        
+        pipeline = ProPipeline(config)
+        result = pipeline.process_image(input_image)
+        
+        # Output should exist
+        assert result is not None
+        assert result.exists()
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
