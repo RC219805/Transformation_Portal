@@ -160,13 +160,12 @@ for c in range(3):
         correction = channel * SKY_GREEN_REDUCTION
     else:  # Blue - aggressive reduction
         correction = channel * SKY_BLUE_REDUCTION
-    
+
     # Blend based on sky mask
     img_corrected[:, :, c] = channel * (1 - sky_mask_smooth) + correction * sky_mask_smooth
 
 # DESATURATE sky to remove cartoon look
-from PIL import Image as PILImage
-sky_image = PILImage.fromarray(img_corrected.astype(np.uint8))
+sky_image = Image.fromarray(img_corrected.astype(np.uint8))
 desaturator = ImageEnhance.Color(sky_image)
 
 # Create desaturation mask
