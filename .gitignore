@@ -94,6 +94,14 @@ data/sample_images/**/*.tif
 data/sample_images/**/*.tiff
 !data/sample_images/.gitkeep
 
+# Input images (local development only)
+input_images/**/*.jpg
+input_images/**/*.jpeg
+input_images/**/*.png
+input_images/**/*.tif
+input_images/**/*.tiff
+!input_images/.gitkeep
+
 # RAG system generated files
 index_stats.json
 
