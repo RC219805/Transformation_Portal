@@ -39,8 +39,8 @@ def cmd_index(args):
     
     indexer = RepositoryIndexer(
         repo_root=args.repo_root,
-        chunk_size=args.chunk_size,
-        chunk_overlap=args.chunk_overlap
+        chunk_size_tokens=args.chunk_size,
+        overlap_tokens=args.chunk_overlap
     )
     
     chunks = indexer.index_repository()
@@ -63,8 +63,8 @@ def cmd_index(args):
             'total_chunks': len(chunks),
             'chunk_types': chunk_types,
             'repo_root': args.repo_root,
-            'chunk_size': args.chunk_size,
-            'chunk_overlap': args.chunk_overlap
+            'chunk_size_tokens': args.chunk_size,
+            'overlap_tokens': args.chunk_overlap
         }
         
         with open(args.output, 'w') as f:
@@ -94,7 +94,7 @@ def cmd_search(args):
     results = retriever.retrieve(
         query=args.query,
         top_k=args.top_k * 2,  # Get more for reranking
-        chunk_types=chunk_types
+        chunk_type_filter=chunk_types
     )
     
     # Rerank if requested
@@ -108,16 +108,15 @@ def cmd_search(args):
     print("=" * 80)
     
     for i, result in enumerate(results, 1):
-        chunk = result.chunk
-        print(f"\n[{i}] {chunk.file_path}:{chunk.start_line}-{chunk.end_line}")
+        print(f"\n[{i}] {result.file_path}:{result.start_line}-{result.end_line}")
         print(f"Score: {result.score:.3f}")
-        print(f"Type: {chunk.chunk_type}")
-        if chunk.metadata:
-            print(f"Metadata: {chunk.metadata}")
+        print(f"Method: {result.retrieval_method}")
+        if result.metadata:
+            print(f"Metadata: {result.metadata}")
         print(f"\nContent preview:")
         # Show first 200 characters
-        preview = chunk.content[:200]
-        if len(chunk.content) > 200:
+        preview = result.content[:200]
+        if len(result.content) > 200:
             preview += "..."
         print(preview)
         print("-" * 80)
