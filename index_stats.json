@@ -1,15 +1,15 @@
 {
-  "total_chunks": 1676,
+  "total_chunks": 1838,
   "by_type": {
-    "doc": 301,
-    "code": 639,
-    "test": 655,
+    "doc": 421,
+    "code": 638,
+    "test": 698,
     "agent": 81
   },
   "by_language": {
-    "markdown": 340,
-    "python": 1329,
+    "markdown": 460,
+    "python": 1377,
     "json": 1
   },
-  "total_chars": 1558252
+  "total_chars": 1901957
 }
