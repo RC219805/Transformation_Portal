@@ -96,3 +96,25 @@ data/sample_images/**/*.tiff
 
 # RAG system generated files
 index_stats.json
+
+# Model weights and checkpoints
+*.pth
+*.safetensors
+*.ckpt
+*.bin
+*.pt
+*.pb
+*.onnx
+*.tflite
+*.mlmodel
+*.mlpackage
+
+# Model directories
+models/
+weights/
+checkpoints/
+pretrained/
+
+# Real-ESRGAN specific
+RealESRGAN_*.pth
+realesr-*.pth

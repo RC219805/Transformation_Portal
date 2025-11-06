@@ -1,0 +1,101 @@
+{
+  "artifacts": {
+    "artifact_000000": {
+      "artifact_id": "artifact_000000",
+      "file_path": "output/metrics.json",
+      "artifact_type": "metric",
+      "pipeline": "unknown",
+      "parent_id": null,
+      "children_ids": [],
+      "related_ids": [],
+      "tags": [
+        "metric",
+        "unknown"
+      ],
+      "version": "1.0",
+      "metadata": {
+        "timestamp": null,
+        "parameters": {},
+        "hardware": null,
+        "success": null,
+        "processing_time": null,
+        "error_message": null,
+        "resolution": null,
+        "color_space": null,
+        "bit_depth": null,
+        "ai_model": null,
+        "quality_score": null
+      }
+    },
+    "artifact_000001": {
+      "artifact_id": "artifact_000001",
+      "file_path": "output/test_render_001_depth.png",
+      "artifact_type": "depth_map",
+      "pipeline": "unknown",
+      "parent_id": null,
+      "children_ids": [],
+      "related_ids": [],
+      "tags": [
+        "depth_map",
+        "unknown"
+      ],
+      "version": "1.0",
+      "metadata": {
+        "timestamp": null,
+        "parameters": {},
+        "hardware": null,
+        "success": null,
+        "processing_time": null,
+        "error_message": null,
+        "resolution": null,
+        "color_space": null,
+        "bit_depth": null,
+        "ai_model": null,
+        "quality_score": null
+      }
+    },
+    "artifact_000002": {
+      "artifact_id": "artifact_000002",
+      "file_path": "output/scene_color_graded.tiff",
+      "artifact_type": "color_grade",
+      "pipeline": "video_grader",
+      "parent_id": null,
+      "children_ids": [],
+      "related_ids": [],
+      "tags": [
+        "video_grader",
+        "color_grade"
+      ],
+      "version": "1.0",
+      "metadata": {
+        "timestamp": null,
+        "parameters": {},
+        "hardware": null,
+        "success": null,
+        "processing_time": null,
+        "error_message": null,
+        "resolution": null,
+        "color_space": null,
+        "bit_depth": null,
+        "ai_model": null,
+        "quality_score": null
+      }
+    }
+  },
+  "statistics": {
+    "total_artifacts": 3,
+    "by_type": {
+      "metric": 1,
+      "depth_map": 1,
+      "color_grade": 1
+    },
+    "by_pipeline": {
+      "unknown": 2,
+      "video_grader": 1
+    },
+    "success_rate": 0.0,
+    "avg_processing_time": 0.0,
+    "artifacts_with_errors": 0
+  },
+  "export_time": "2025-11-06T12:48:55.108926"
+}

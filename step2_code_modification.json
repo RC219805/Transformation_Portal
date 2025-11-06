@@ -1,0 +1,26 @@
+{
+  "summary": "Add atmospheric haze effect to depth pipeline",
+  "files": [
+    {
+      "path": "depth_pipeline/processors/atmospheric.py",
+      "patch": "+ def apply_haze(image, depth, intensity=0.3): ...",
+      "description": "Add haze effect implementation"
+    },
+    {
+      "path": "config/exterior_preset.yaml",
+      "patch": "+ haze_intensity: 0.3",
+      "description": "Configure default haze for exteriors"
+    }
+  ],
+  "tests": [
+    "tests/test_atmospheric_processor.py"
+  ],
+  "explanation": "Atmospheric haze blends fog color proportional to depth distance",
+  "confidence": 0.85,
+  "citations": [
+    {
+      "file_path": "depth_pipeline/processors/clarity.py",
+      "relevance": "Similar pattern for depth-based processing"
+    }
+  ]
+}

@@ -200,23 +200,43 @@ def cmd_classify(args):
     print(f"Classifying artifacts in: {args.input_dir}")
     
     classifier = ArtifactClassifier()
-    artifacts = classifier.classify_directory(args.input_dir, recursive=args.recursive)
     
-    print(f"\nFound {len(artifacts)} artifacts:")
+    # Scan directory and classify artifacts
+    input_dir = Path(args.input_dir)
+    if not input_dir.exists():
+        print(f"Error: Directory not found: {input_dir}")
+        return []
+    
+    artifact_count = 0
+    for file_path in input_dir.rglob('*') if args.recursive else input_dir.glob('*'):
+        if file_path.is_file():
+            # Try to read content if it's a text file
+            content = None
+            if file_path.suffix in {'.json', '.log', '.txt', '.md'}:
+                try:
+                    content = file_path.read_text(encoding='utf-8', errors='ignore')
+                except Exception:
+                    pass
+            
+            classifier.add_artifact(str(file_path), content)
+            artifact_count += 1
     
     # Show statistics
     stats = classifier.get_statistics()
-    print(f"\nStatistics:")
-    print(f"  By type:")
-    for artifact_type, count in stats.get('by_type', {}).items():
-        print(f"    {artifact_type}: {count}")
+    print(f"\nClassified {stats['total_artifacts']} artifacts")
+    print(f"\nBy type:")
+    for artifact_type, count in sorted(stats.get('by_type', {}).items()):
+        print(f"  {artifact_type}: {count}")
+    print(f"\nBy pipeline:")
+    for pipeline, count in sorted(stats.get('by_pipeline', {}).items()):
+        print(f"  {pipeline}: {count}")
     
     # Save if requested
     if args.output:
         classifier.export_to_json(args.output)
         print(f"\nArtifacts saved to: {args.output}")
     
-    return artifacts
+    return classifier.artifacts
 
 
 def cmd_analyze(args):
