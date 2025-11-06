@@ -189,7 +189,7 @@ if sky_region.sum() > 0:
 
 # Clip and convert
 img_corrected = np.clip(img_corrected, 0, 255)
-img = PILImage.fromarray(img_corrected.astype(np.uint8))
+img = Image.fromarray(img_corrected.astype(np.uint8))
 
 print(f"\n[4/10] Applying minimal shadow lift (+{int((SHADOW_LIFT-1)*100)}%)...")
 
@@ -204,7 +204,7 @@ for c in range(3):
                          img_array[:, :, c] * SHADOW_LIFT * shadow_mask
 
 img_array = np.clip(img_array, 0, 255)
-img = PILImage.fromarray(img_array.astype(np.uint8))
+img = Image.fromarray(img_array.astype(np.uint8))
 print(f"  ✓ Shadow pixels enhanced: {int(shadow_pixels):,} ({shadow_pixels/(width*height)*100:.1f}%)")
 
 print(f"\n[5/10] Adjusting saturation (+{int((GLOBAL_SATURATION-1)*100)}%)...")
@@ -257,7 +257,7 @@ for c in range(3):
                          img_array[:, :, c] * STONE_ENHANCEMENT * stone_mask
 
 img_array = np.clip(img_array, 0, 255)
-img = PILImage.fromarray(img_array.astype(np.uint8))
+img = Image.fromarray(img_array.astype(np.uint8))
 print(f"  ✓ Wood enhancement: {int(wood_pixels):,} pixels (+{int((WOOD_ENHANCEMENT-1)*100)}%)")
 print(f"  ✓ Stone enhancement: {int(stone_pixels):,} pixels (+{int((STONE_ENHANCEMENT-1)*100)}%)")
 
@@ -268,7 +268,7 @@ blurred = img.filter(ImageFilter.GaussianBlur(radius=1.0))
 img_array = np.array(img, dtype=np.float32)
 blurred_array = np.array(blurred, dtype=np.float32)
 sharpened = img_array + EDGE_SHARPENING * (img_array - blurred_array)
-img = PILImage.fromarray(np.clip(sharpened, 0, 255).astype(np.uint8))
+img = Image.fromarray(np.clip(sharpened, 0, 255).astype(np.uint8))
 
 print("\n[9/10] Final quality check...")
 
