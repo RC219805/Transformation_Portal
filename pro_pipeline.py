@@ -33,17 +33,13 @@ Performance: 2-5 minutes per 4K image (M4 Max with CoreML + MPS)
 
 from __future__ import annotations
 
-import json
 import logging
-import shutil
-import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 
-import numpy as np
 import typer
 from PIL import Image
 from tqdm import tqdm
@@ -215,7 +211,10 @@ class ProPipeline:
         return "cpu"
     
     def _load_depth_pipeline(self):
-        """Lazy load the depth processing pipeline."""
+        """Lazy load the depth processing pipeline.
+        
+        Note: Requires package installation with 'pip install -e .'
+        """
         if self._depth_pipeline is None:
             try:
                 from src.transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
@@ -227,20 +226,25 @@ class ProPipeline:
                     self._depth_pipeline = None
             except ImportError as e:
                 log.warning(f"Could not load depth pipeline: {e}")
+                log.warning("Install package with: pip install -e .")
                 self._depth_pipeline = None
         return self._depth_pipeline
     
     def _load_ai_pipeline(self):
-        """Lazy load the AI enhancement pipeline."""
+        """Lazy load the AI enhancement pipeline.
+        
+        Note: Requires package installation with 'pip install -e .'
+        """
         if self._ai_pipeline is None:
             try:
-                from src.transformation_portal.pipelines.lux_render_pipeline import (
+                from src.transformation_portal.pipelines.lux_render_pipeline import (  # noqa: F401
                     apply_material_response_finishing
                 )
                 self._ai_pipeline = "available"
                 log.info("AI enhancement pipeline loaded")
             except ImportError as e:
                 log.warning(f"Could not load AI pipeline: {e}")
+                log.warning("Install package with: pip install -e .")
                 self._ai_pipeline = None
         return self._ai_pipeline
     
@@ -248,10 +252,9 @@ class ProPipeline:
         """Lazy load the material response module."""
         if self._material_response is None:
             try:
-                from src.transformation_portal.processors.material_response.core import (
-                    CognitiveMaterialResponse
-                )
-                self._material_response = CognitiveMaterialResponse()
+                # Import from root level module (material_response.py in repo root)
+                import material_response  # noqa: F401
+                self._material_response = "available"
                 log.info("Material Response system loaded")
             except ImportError as e:
                 log.warning(f"Could not load Material Response: {e}")
@@ -356,7 +359,6 @@ class ProPipeline:
             # Placeholder - would call actual AI pipeline in production
             # For now, apply basic enhancement
             import numpy as np
-            from scipy.ndimage import gaussian_filter
             
             strength = self.config.ai_stage.config.get("strength", 0.3)
             

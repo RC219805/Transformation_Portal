@@ -9,8 +9,6 @@ Downloads and configures:
 3. ControlNet models (if missing)
 """
 
-import os
-import sys
 from pathlib import Path
 import urllib.request
 from tqdm import tqdm
@@ -51,7 +49,7 @@ print("=" * 70)
 print("\nChecking for Depth Anything V2 in HuggingFace cache...")
 
 try:
-    from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+    from transformers import AutoImageProcessor
     
     # Check if model is cached
     model_id = "LiheYoung/depth-anything-small-hf"
@@ -65,7 +63,7 @@ try:
         # Test model loading (don't actually load to save time)
         print(f"✓ Depth Anything V2 is ready")
         
-    except Exception as e:
+    except Exception:  # Model not cached - will download on first use
         print(f"⚠ Model not in cache, will download on first use")
         print(f"  This is normal - models download automatically")
         
@@ -122,15 +120,14 @@ CONTROLNET_MODELS = [
 print("\nChecking ControlNet models in HuggingFace cache...")
 
 try:
-    from diffusers import ControlNetModel
+    from huggingface_hub import snapshot_download
     
     for model_id in CONTROLNET_MODELS:
         try:
             # Check if model exists in cache (don't load)
-            from huggingface_hub import snapshot_download
             cache_dir = snapshot_download(repo_id=model_id, allow_patterns=["*.json"])
             print(f"✓ Found: {model_id}")
-        except Exception as e:
+        except Exception:  # Model not cached - will download on first use
             print(f"⚠ Not cached: {model_id}")
             print(f"  Will download automatically on first use (~1.5GB)")
             

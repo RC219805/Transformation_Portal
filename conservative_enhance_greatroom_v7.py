@@ -273,7 +273,7 @@ print(f"\n[9/10] Applying edge sharpening...")
 if EDGE_SHARPNESS > 0:
     sharpened = ImageEnhance.Sharpness(composite_pil).enhance(1 + EDGE_SHARPNESS)
     print(f"  ✓ Sharpness: +{EDGE_SHARPNESS:.0%}")
-else:
+else:  # noqa: F841 - Defensive programming: keep else clause for config flexibility
     sharpened = composite_pil
 
 # Final tone curve (gentle S-curve)
@@ -301,7 +301,7 @@ if OUTPUT_BIT_DEPTH == 16:
         final_img = Image.fromarray(final_16bit, mode='RGB;16')
         final_img.save(output_path, compression='tiff_lzw')
         print(f"  ✓ Saved 16-bit TIFF with PIL: {output_path}")
-else:
+else:  # noqa: F841 - Defensive programming: keep else clause for config flexibility
     sharpened.save(output_path, compression='tiff_lzw')
     print(f"  ✓ Saved 8-bit TIFF: {output_path}")
 
