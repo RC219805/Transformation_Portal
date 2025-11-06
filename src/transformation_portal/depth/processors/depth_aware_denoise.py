@@ -10,9 +10,15 @@ Performance: ~180ms for 4K image (guided bilateral filter)
 import logging
 from typing import Optional
 
-import cv2
 import numpy as np
 from scipy.ndimage import gaussian_filter, sobel
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    logging.warning("cv2 (opencv-python) not available. Some depth processing features will be limited.")
 
 from .base import DepthProcessorMixin
 
@@ -118,8 +124,13 @@ class DepthAwareDenoise(DepthProcessorMixin):
         edge_map = (grad_magnitude > self.edge_threshold).astype(np.float32)
 
         # Dilate edges slightly to ensure full preservation
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        edge_map = cv2.dilate(edge_map, kernel, iterations=1)
+        if CV2_AVAILABLE:
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            edge_map = cv2.dilate(edge_map, kernel, iterations=1)
+        else:
+            # Fallback: use scipy's binary_dilation
+            from scipy.ndimage import binary_dilation
+            edge_map = binary_dilation(edge_map > 0, iterations=1).astype(np.float32)
 
         return edge_map
 
@@ -152,18 +163,23 @@ class DepthAwareDenoise(DepthProcessorMixin):
         _adaptive_sigma = self.sigma_spatial * (0.5 + 0.5 * depth_normalized)  # noqa: F841
 
         # Apply bilateral filter
-        # Note: OpenCV bilateral doesn't support per-pixel sigma,
-        # so we use a global value
-        diameter = int(self.sigma_spatial * 2)
-        sigma_color = self.sigma_range * 255  # Convert to 8-bit range
-        sigma_space = self.sigma_spatial
+        if CV2_AVAILABLE:
+            # Note: OpenCV bilateral doesn't support per-pixel sigma,
+            # so we use a global value
+            diameter = int(self.sigma_spatial * 2)
+            sigma_color = self.sigma_range * 255  # Convert to 8-bit range
+            sigma_space = self.sigma_spatial
 
-        filtered = cv2.bilateralFilter(
-            image_8bit,
-            d=diameter,
-            sigmaColor=sigma_color,
-            sigmaSpace=sigma_space,
-        )
+            filtered = cv2.bilateralFilter(
+                image_8bit,
+                d=diameter,
+                sigmaColor=sigma_color,
+                sigmaSpace=sigma_space,
+            )
+        else:
+            # Fallback: use Gaussian filter (less sophisticated but works)
+            logger.warning("cv2 not available, using Gaussian filter instead of bilateral")
+            filtered = gaussian_filter(image_8bit.astype(np.float32), sigma=self.sigma_spatial).astype(np.uint8)
 
         # Convert back to float
         if image.max() <= 1.0:
@@ -261,14 +277,19 @@ class FastDepthDenoise:
             _depth_8bit = (depth * 255 / depth.max()).astype(np.uint8)  # noqa: F841
 
         # Non-local means with depth guidance
-        denoised = cv2.fastNlMeansDenoisingColored(
-            image_8bit,
-            None,
-            h=self.h,
-            hColor=self.h,
-            templateWindowSize=self.template_window_size,
-            searchWindowSize=self.search_window_size,
-        )
+        if CV2_AVAILABLE:
+            denoised = cv2.fastNlMeansDenoisingColored(
+                image_8bit,
+                None,
+                h=self.h,
+                hColor=self.h,
+                templateWindowSize=self.template_window_size,
+                searchWindowSize=self.search_window_size,
+            )
+        else:
+            # Fallback: use Gaussian filter
+            logger.warning("cv2 not available, using Gaussian filter instead of non-local means")
+            denoised = gaussian_filter(image_8bit.astype(np.float32), sigma=3.0).astype(np.uint8)
 
         # Convert back
         if image.max() <= 1.0:
