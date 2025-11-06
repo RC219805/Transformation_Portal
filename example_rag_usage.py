@@ -65,10 +65,9 @@ def example_basic_search():
     
     print("\n4. Top results:")
     for i, result in enumerate(results[:3], 1):
-        chunk = result.chunk
-        print(f"   [{i}] {chunk.file_path}:{chunk.start_line}")
-        print(f"       Score: {result.score:.3f}, Type: {chunk.chunk_type}")
-        print(f"       Preview: {chunk.content[:100]}...")
+        print(f"   [{i}] {result.file_path}:{result.start_line}")
+        print(f"       Score: {result.score:.3f}, Method: {result.retrieval_method}")
+        print(f"       Preview: {result.content[:100]}...")
 
 
 def example_with_reranking():
@@ -102,8 +101,7 @@ def example_with_reranking():
     
     print("\nTop reranked results:")
     for i, result in enumerate(reranked[:3], 1):
-        chunk = result.chunk
-        print(f"[{i}] {chunk.file_path}:{chunk.start_line}-{chunk.end_line}")
+        print(f"[{i}] {result.file_path}:{result.start_line}-{result.end_line}")
         print(f"    Score: {result.score:.3f}")
 
 
@@ -137,7 +135,7 @@ def example_with_citations():
     print(f"\nGenerated {len(citations)} citations for: '{query}'\n")
     
     # Format as markdown
-    markdown = citation_gen.format_citations(citations, format='markdown')
+    markdown = citation_gen.format_citations(citations, format_type='markdown')
     print(markdown)
 
 
@@ -167,12 +165,12 @@ def example_prompt_template():
     
     citation_gen = CitationGenerator()
     citations = citation_gen.generate_citations(reranked, max_citations=3)
-    context = citation_gen.format_citations(citations, format='plain')
+    context = citation_gen.format_citations(citations, format_type='text')
     
     # Generate template with context
     print("\nGenerating feature implementation template...")
     template = PromptTemplates.feature_implementation(
-        description="Add HDR tone mapping with custom transfer function",
+        feature_description="Add HDR tone mapping with custom transfer function",
         context=context
     )
     
@@ -278,32 +276,23 @@ def example_knowledge_engine():
     
     # Add some sample feedback
     sample_feedback = [
-        {
-            "pipeline": "depth_pipeline",
-            "success": True,
-            "processing_time": 0.045,
-            "parameters": {"model": "depth_anything_v2", "tone_mapping": "agx"}
-        },
-        {
-            "pipeline": "depth_pipeline",
-            "success": True,
-            "processing_time": 0.052,
-            "parameters": {"model": "depth_anything_v2", "tone_mapping": "agx"}
-        },
-        {
-            "pipeline": "material_response",
-            "success": True,
-            "processing_time": 0.120,
-            "parameters": {"strength": 0.7, "surfaces": ["wood", "metal"]}
-        }
+        ("depth_pipeline", "img001", True, 0.045, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
+        ("depth_pipeline", "img002", True, 0.052, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
+        ("material_response", "img003", True, 0.120, {"strength": 0.7, "surfaces": ["wood", "metal"]}),
     ]
     
-    for feedback in sample_feedback:
-        engine.add_feedback(feedback)
+    for pipeline, artifact_id, success, time, params in sample_feedback:
+        engine.add_feedback(
+            pipeline=pipeline,
+            artifact_id=artifact_id,
+            success=success,
+            processing_time=time,
+            parameters=params
+        )
     
     # Analyze pipeline
     print("\nAnalyzing depth_pipeline...")
-    analysis = engine.analyze_pipeline("depth_pipeline")
+    analysis = engine.analyze_patterns("depth_pipeline")
     
     print(f"  Success rate: {analysis.success_rate:.1%}")
     print(f"  Avg processing time: {analysis.avg_processing_time:.3f}s")
@@ -311,7 +300,7 @@ def example_knowledge_engine():
     
     # Natural language query
     print("\nNatural language query:")
-    answer = engine.query("What is the success rate for depth_pipeline?")
+    answer = engine.query_natural_language("What is the success rate for depth_pipeline?")
     print(f"  {answer}")
 
 
