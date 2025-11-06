@@ -1,0 +1,83 @@
+# ============================================================================
+# BINARY FILE EXCLUSIONS - Enhanced 2025-11-06
+# Add these patterns to .gitignore after line 103
+# ============================================================================
+
+# PNG preview files (generated from TIFF client files)
+# These are 40-55MB derivatives - should be generated locally as needed
+input_images/**/*.png
+!input_images/.gitkeep
+
+# Processed output examples (move to docs/examples/ if needed for README)
+# Currently tracking ~15MB of processed JPG examples
+processed_images/**/*.jpg
+processed_images/**/*.png
+processed_images/**/*.tiff
+!processed_images/.gitkeep
+!processed_images/*.md  # Keep markdown documentation
+
+# Large texture files (keep small board materials < 500KB)
+textures/**/*.jpg
+textures/**/*.png
+textures/**/*.tiff
+!textures/board_materials/*.png  # Exception for essential materials (currently 8 files, ~500KB each)
+
+# Sample data directory (download via scripts/download_samples.py)
+data/**/*.jpg
+data/**/*.jpeg
+data/**/*.png
+data/**/*.tif
+data/**/*.tiff
+!data/**/.gitkeep
+
+# Video files (all formats - always external)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.m4v
+*.webm
+*.flv
+*.wmv
+
+# RAW camera files
+*.raw
+*.cr2
+*.nef
+*.arw
+*.dng
+
+# Additional image formats
+*.bmp
+*.gif
+*.ico
+*.svg
+!assets/**/*.svg  # Exception for brand assets
+
+# Archive files with large binaries
+*.zip
+*.tar.gz
+*.7z
+*.rar
+!docs/**/*.zip  # Exception for documentation archives
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# macOS extended attributes
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Thumbnails
+Thumbs.db
+.Spotlight-V100
+.Trashes
