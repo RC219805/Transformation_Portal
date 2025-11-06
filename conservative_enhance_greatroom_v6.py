@@ -17,7 +17,7 @@ Key improvements:
 from PIL import Image, ImageEnhance
 import numpy as np
 from pathlib import Path
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, binary_erosion, binary_dilation
 
 try:
     import tifffile
@@ -116,7 +116,6 @@ cyan_mask = (cyan_ratio > SKY_CYAN_THRESHOLD) & (b > SKY_BLUE_MIN)
 sky_mask_raw = bright_mask & cyan_mask
 
 # Morphological operations to clean mask
-from scipy.ndimage import binary_erosion, binary_dilation
 sky_mask_clean = binary_erosion(sky_mask_raw, iterations=SKY_EROSION_ITERATIONS)
 sky_mask_clean = binary_dilation(sky_mask_clean, iterations=SKY_EROSION_ITERATIONS)
 
