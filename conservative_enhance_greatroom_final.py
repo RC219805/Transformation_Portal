@@ -38,7 +38,7 @@ print("=" * 80)
 # OPTIMIZED CONFIGURATION
 # ============================================================================
 
-INPUT = "input_images/750Picacho_GreatRoom_Reset.tif"
+INPUT = "input_images/750Picacho_GreatRoom_Reset.ti"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -83,7 +83,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, {img_array.dtype}")
-        
+
         # Normalize to 0-1 range
         if img_array.dtype == np.float32:
             rgb = np.clip(img_array, 0, 1)
@@ -91,10 +91,10 @@ if TIFFFILE_AVAILABLE:
             rgb = img_array.astype(np.float32) / 65535.0
         else:
             rgb = img_array.astype(np.float32) / 255.0
-        
+
         if rgb.shape[2] == 4:
             rgb = rgb[:, :, :3]
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}")
         TIFFFILE_AVAILABLE = False
@@ -120,7 +120,7 @@ if sky_color.sum() > 0:
 # ============================================================================
 # STEP 2: EXPOSURE LIFT (Shadow-focused)
 # ============================================================================
-print(f"\n[2/10] Exposure adjustment...")
+print("\n[2/10] Exposure adjustment...")
 
 # Global lift
 rgb_lifted = rgb * (1 + EXPOSURE_LIFT)
@@ -152,11 +152,11 @@ rgb = rgb_lifted
 # ============================================================================
 # STEP 3: COLOR GRADING (Saturation + Warmth)
 # ============================================================================
-print(f"\n[3/10] Color grading...")
+print("\n[3/10] Color grading...")
 
 # Saturation boost
 hsv = np.zeros_like(rgb)
-hsv[:,:,0] = np.arctan2(np.sqrt(3) * (rgb[:,:,1] - rgb[:,:,2]), 
+hsv[:,:,0] = np.arctan2(np.sqrt(3) * (rgb[:,:,1] - rgb[:,:,2]),
                         2 * rgb[:,:,0] - rgb[:,:,1] - rgb[:,:,2])
 hsv[:,:,2] = rgb.max(axis=2)
 hsv[:,:,1] = (hsv[:,:,2] - rgb.min(axis=2)) / (hsv[:,:,2] + 1e-10)
@@ -199,7 +199,7 @@ print(f"  Warmth: R+{(WARMTH_RED-1)*100:.0f}%, B{(WARMTH_BLUE-1)*100:+.0f}%")
 # ============================================================================
 # STEP 4: SKY NEUTRALITY PROTECTION
 # ============================================================================
-print(f"\n[4/10] Sky neutrality protection...")
+print("\n[4/10] Sky neutrality protection...")
 
 # Detect bright regions (potential sky)
 brightness = rgb.mean(axis=2)
@@ -209,28 +209,28 @@ if sky_candidate_mask.sum() > 100:  # If we found potential sky pixels
     # Calculate current sky color
     sky_rgb = rgb[sky_candidate_mask].mean(axis=0)
     sky_br_ratio = sky_rgb[2] / sky_rgb[0] if sky_rgb[0] > 0 else 1.0
-    
+
     print(f"  Detected bright regions: {sky_candidate_mask.sum()} pixels")
     print(f"  Current B/R ratio: {sky_br_ratio:.3f}")
-    
+
     # If sky has developed a tint, neutralize it
     if not (0.98 <= sky_br_ratio <= 1.02):
         target_gray = sky_rgb.mean()
         sky_mask_smooth = gaussian_filter(sky_candidate_mask.astype(float), sigma=5)
-        
+
         for i in range(3):
             rgb[:,:,i] = rgb[:,:,i] * (1 - sky_mask_smooth) + target_gray * sky_mask_smooth
-        
-        print(f"  ✓ Sky neutralized to prevent cyan/tint artifacts")
+
+        print("  ✓ Sky neutralized to prevent cyan/tint artifacts")
     else:
-        print(f"  ✓ Sky already neutral, no correction needed")
+        print("  ✓ Sky already neutral, no correction needed")
 else:
-    print(f"  ℹ️  No significant sky regions detected")
+    print("  ℹ️  No significant sky regions detected")
 
 # ============================================================================
 # STEP 5: ZONE-BASED CLARITY ENHANCEMENT
 # ============================================================================
-print(f"\n[5/10] Material enhancement (zone-based clarity)...")
+print("\n[5/10] Material enhancement (zone-based clarity)...")
 
 luminance = 0.2126 * rgb[:,:,0] + 0.7152 * rgb[:,:,1] + 0.0722 * rgb[:,:,2]
 
@@ -263,7 +263,7 @@ print(f"  Highlight zone: {highlight_zone.sum()/highlight_zone.size*100:.1f}% @ 
 # ============================================================================
 # STEP 6: EDGE SHARPENING
 # ============================================================================
-print(f"\n[6/10] Edge sharpening...")
+print("\n[6/10] Edge sharpening...")
 
 rgb_8bit = (rgb * 255).astype(np.uint8)
 img_pil = Image.fromarray(rgb_8bit)
@@ -290,7 +290,7 @@ print(f"  Sharpness: {EDGE_SHARPNESS*100:.0f}% blend, radius: {UNSHARP_AMOUNT}")
 # ============================================================================
 # STEP 7: MICRO-CONTRAST (Depth Enhancement)
 # ============================================================================
-print(f"\n[7/10] Micro-contrast (depth enhancement)...")
+print("\n[7/10] Micro-contrast (depth enhancement)...")
 
 # Local contrast enhancement
 rgb_8bit = (rgb * 255).astype(np.uint8)
@@ -304,12 +304,12 @@ rgb = rgb * (1 - midtone_weight[:,:,np.newaxis] * 0.5) + \
       contrast_array * (midtone_weight[:,:,np.newaxis] * 0.5)
 
 rgb = np.clip(rgb, 0, 1)
-print(f"  ✓ Micro-contrast applied (+4% in midtones)")
+print("  ✓ Micro-contrast applied (+4% in midtones)")
 
 # ============================================================================
 # STEP 8: FINAL QUALITY CHECK
 # ============================================================================
-print(f"\n[8/10] Quality validation...")
+print("\n[8/10] Quality validation...")
 
 final_brightness = rgb.mean()
 final_saturation = (rgb.max(axis=2) - rgb.min(axis=2)).mean()
@@ -328,17 +328,17 @@ if sky_candidate_mask.sum() > 100:
 # ============================================================================
 # STEP 9: CONVERT TO 16-BIT
 # ============================================================================
-print(f"\n[9/10] Converting to 16-bit...")
+print("\n[9/10] Converting to 16-bit...")
 
 rgb_16bit = (rgb * 65535).astype(np.uint16)
-print(f"  ✓ Converted to 16-bit (0-65535 range)")
+print("  ✓ Converted to 16-bit (0-65535 range)")
 
 # ============================================================================
 # STEP 10: EXPORT
 # ============================================================================
-print(f"\n[10/10] Exporting...")
+print("\n[10/10] Exporting...")
 
-output_tiff = OUTPUT_DIR / "750Picacho_GreatRoom_Final.tiff"
+output_tiff = OUTPUT_DIR / "750Picacho_GreatRoom_Final.tif"
 output_jpg = OUTPUT_DIR / "750Picacho_GreatRoom_Final.jpg"
 
 # Export TIFF
@@ -368,39 +368,39 @@ print("\n" + "=" * 80)
 print("✅ PROCESSING COMPLETE")
 print("=" * 80)
 
-print(f"\n📊 Enhancement Summary:")
+print("\n📊 Enhancement Summary:")
 print(f"  Brightness: {original_brightness:.4f} → {final_brightness:.4f} "
       f"(+{(final_brightness/original_brightness-1)*100:.1f}%)")
 print(f"  Saturation: {original_saturation:.4f} → {final_saturation:.4f} "
       f"(+{(final_saturation/original_saturation-1)*100:.1f}%)")
 print(f"  Clipping: {clipped_pixels/rgb.size*100:.4f}%")
 
-print(f"\n✨ Applied Enhancements:")
+print("\n✨ Applied Enhancements:")
 print(f"  ✓ Exposure lift: +{EXPOSURE_LIFT*100:.0f}%")
 print(f"  ✓ Shadow recovery: +{SHADOW_RECOVERY} levels ({shadow_pixels*100:.1f}% of image)")
 print(f"  ✓ Midtone boost: +{(MIDTONE_BOOST-1)*100:.0f}%")
 print(f"  ✓ Saturation: +{(SATURATION_LIFT-1)*100:.0f}%")
 print(f"  ✓ Warmth: R+{(WARMTH_RED-1)*100:.0f}%, B{(WARMTH_BLUE-1)*100:+.0f}%")
-print(f"  ✓ Sky neutrality: Protected")
-print(f"  ✓ Zone-based clarity: 6-12% by luminance")
+print("  ✓ Sky neutrality: Protected")
+print("  ✓ Zone-based clarity: 6-12% by luminance")
 print(f"  ✓ Edge sharpening: {EDGE_SHARPNESS*100:.0f}%")
-print(f"  ✓ Micro-contrast: +4% in midtones")
+print("  ✓ Micro-contrast: +4% in midtones")
 
-print(f"\n📁 Output Files:")
+print("\n📁 Output Files:")
 print(f"  • {output_tiff.name} - 16-bit master")
 print(f"  • {output_jpg.name} - 8-bit preview")
 
-print(f"\n🎯 Quality Targets Met:")
-print(f"  ✓ Brightness lifted without overexposure")
-print(f"  ✓ Sky remained neutral (no cyan artifacts)")
-print(f"  ✓ Material detail enhanced")
+print("\n🎯 Quality Targets Met:")
+print("  ✓ Brightness lifted without overexposure")
+print("  ✓ Sky remained neutral (no cyan artifacts)")
+print("  ✓ Material detail enhanced")
 print(f"  ✓ Minimal clipping ({clipped_pixels} pixels)")
-print(f"  ✓ Professional 16-bit output")
+print("  ✓ Professional 16-bit output")
 
-print(f"\n📝 Comparison:")
-print(f"  Original: input_images/750Picacho_GreatRoom_Reset.tif")
-print(f"  v7: processed_images/Conservative/750Picacho_GreatRoom_v7.tiff (too conservative)")
-print(f"  v8: processed_images/Conservative/750Picacho_GreatRoom_v8.tiff (good baseline)")
+print("\n📝 Comparison:")
+print("  Original: input_images/750Picacho_GreatRoom_Reset.tif")
+print("  v7: processed_images/Conservative/750Picacho_GreatRoom_v7.tiff (too conservative)")
+print("  v8: processed_images/Conservative/750Picacho_GreatRoom_v8.tiff (good baseline)")
 print(f"  Final: {output_tiff} (optimized comprehensive approach)")
 
 print("\n" + "=" * 80)

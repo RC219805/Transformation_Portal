@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pylint: disable=redefined-outer-name
 """
 Conservative Enhancement V3 - 750 Picacho Pool Aerial Rendering
 MAJOR REVISION: Proper tone mapping, highlight preservation, color accuracy
@@ -44,7 +45,7 @@ print("=" * 80)
 # CONFIGURATION - V3 CORRECTED PARAMETERS
 # ============================================================================
 
-INPUT = "input_images/750Picacho_Pool.tiff"
+INPUT = "input_images/750Picacho_Pool.tif"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -90,27 +91,27 @@ def apply_agx_tone_map(rgb_linear):
     """
     AgX tone mapping for LINEAR → display-referred sRGB conversion.
     Preserves highlights while maintaining color accuracy.
-    
+
     Args:
         rgb_linear: Linear RGB values [0-1+] (may contain values >1 for HDR)
-    
+
     Returns:
         rgb_srgb: Display-referred sRGB [0-1]
     """
     # Convert to log space
     rgb_log = np.log2(rgb_linear + 1e-10)
-    
+
     # Compress dynamic range
     rgb_log = np.clip(rgb_log, MIN_EV, MAX_EV)
     rgb_log = (rgb_log - MIN_EV) / (MAX_EV - MIN_EV)
-    
+
     # Apply S-curve for smooth highlight rolloff (cubic hermite spline)
     def smoothstep(x):
         x = np.clip(x, 0, 1)
         return x * x * (3.0 - 2.0 * x)
-    
+
     rgb_compressed = smoothstep(rgb_log)
-    
+
     # Convert to sRGB gamma
     return np.power(rgb_compressed, 1/2.2)
 
@@ -121,31 +122,31 @@ def apply_agx_tone_map(rgb_linear):
 def protect_sky_highlights(rgb, threshold=0.75):
     """
     Preserve sky gradient detail by masking from aggressive adjustments.
-    
+
     Args:
         rgb: Display-referred sRGB [0-1]
         threshold: Luminance above which sky protection activates
-    
+
     Returns:
         sky_mask: Smooth mask [0-1] indicating sky regions
     """
     r, g, b = rgb[:,:,0], rgb[:,:,1], rgb[:,:,2]
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    
+
     # Detect sky (bright, neutral, top of frame)
     height = rgb.shape[0]
     y_coords = np.arange(height)[:, np.newaxis] / height
-    
+
     sky_mask = (
         (luminance > threshold) &              # Bright
         (np.abs(r - g) < 0.1) &               # Neutral (not color cast)
         (np.abs(g - b) < 0.15) &              # Neutral
         (y_coords < 0.5)                      # Upper half of frame
     )
-    
+
     # Smooth mask for natural transition
     sky_mask_smooth = gaussian_filter(sky_mask.astype(np.float32), sigma=SKY_MASK_SIGMA)
-    
+
     return sky_mask_smooth
 
 # ============================================================================
@@ -157,9 +158,9 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, dtype: {img_array.dtype}")
-        
+
         # Normalize to 0-1 range (LINEAR space)
-        if img_array.dtype == np.float32 or img_array.dtype == np.float64:
+        if img_array.dtype in (np.float32, np.float64):
             if img_array.max() > 1.0:
                 rgb_linear = np.clip(img_array / img_array.max(), 0, 1)
             else:
@@ -168,12 +169,12 @@ if TIFFFILE_AVAILABLE:
             rgb_linear = img_array.astype(np.float32) / 65535.0
         else:
             rgb_linear = img_array.astype(np.float32) / 255.0
-        
+
         # Drop alpha channel if present
         if rgb_linear.shape[2] == 4:
             rgb_linear = rgb_linear[:, :, :3]
-            print(f"  ✓ Dropped alpha channel")
-            
+            print("  ✓ Dropped alpha channel")
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
         TIFFFILE_AVAILABLE = False
@@ -195,14 +196,14 @@ print(f"  Mean luminance (Display, for reference): {original_luminance_display:.
 # ============================================================================
 # STEP 2: AGX TONE MAPPING (LINEAR → Display sRGB) - CRITICAL FIX!
 # ============================================================================
-print(f"\n[2/10] Applying AgX tone mapping (LINEAR → display sRGB)...")
+print("\n[2/10] Applying AgX tone mapping (LINEAR → display sRGB)...")
 print(f"  Dynamic range: {MIN_EV} EV to {MAX_EV} EV")
 
 rgb = apply_agx_tone_map(rgb_linear)
 
-print(f"  ✓ AgX tone mapping complete")
+print("  ✓ AgX tone mapping complete")
 print(f"  ✓ Luminance after tone map: {rgb.mean():.3f}")
-print(f"  ✓ Highlight rolloff preserved (smooth gradient)")
+print("  ✓ Highlight rolloff preserved (smooth gradient)")
 
 # Apply global exposure lift
 print(f"\n  Applying global exposure lift (+{int(GLOBAL_EXPOSURE_LIFT * 100)}%)...")
@@ -213,7 +214,7 @@ print(f"  ✓ Luminance after exposure lift: {rgb.mean():.3f}")
 # ============================================================================
 # STEP 3: SKY HIGHLIGHT PROTECTION (NEW IN V3)
 # ============================================================================
-print(f"\n[3/10] Protecting sky highlights...")
+print("\n[3/10] Protecting sky highlights...")
 
 sky_mask = protect_sky_highlights(rgb, threshold=SKY_PROTECTION_THRESHOLD)
 sky_pixels = (sky_mask > 0.5).sum()
@@ -254,7 +255,7 @@ print(f"  ✓ Shadow lift applied (factor: {shadow_lift_factor:.3f}×)")
 protection = 1.0 - sky_mask * SKY_PROTECTION_STRENGTH
 rgb_exposed = rgb_exposed * protection[:,:,np.newaxis]
 
-print(f"  ✓ Sky protected from shadow lift")
+print("  ✓ Sky protected from shadow lift")
 
 # ============================================================================
 # STEP 5: MIDTONE CONTRAST (CORRECTED - reduced)
@@ -271,12 +272,12 @@ rgb_contrast = np.array(img_contrast, dtype=np.float32) / 255.0
 rgb_contrast = rgb_contrast * protection[:,:,np.newaxis] + \
                rgb_exposed * (1 - protection[:,:,np.newaxis])
 
-print(f"  ✓ Contrast enhanced with sky protection")
+print("  ✓ Contrast enhanced with sky protection")
 
 # ============================================================================
 # STEP 6: POOL WATER COLOR CORRECTION (MAJOR REVISION - jewel tone)
 # ============================================================================
-print(f"\n[6/10] Enhancing pool water (jewel-toned turquoise)...")
+print("\n[6/10] Enhancing pool water (jewel-toned turquoise)...")
 
 r, g, b_ch = rgb_contrast[:,:,0], rgb_contrast[:,:,1], rgb_contrast[:,:,2]
 
@@ -323,7 +324,7 @@ rgb_water = np.clip(np.stack([r_final, g_final, b_final], axis=2), 0, 1)
 
 print(f"  ✓ Water enhanced: R×{WATER_RED_REDUCTION:.2f}, G×{WATER_GREEN_MAINTAIN:.2f}, B×{WATER_BLUE_BOOST:.2f}")
 print(f"  ✓ Blend strength: {int(WATER_STRENGTH * 100)}%")
-print(f"  ✓ Luminance preserved for transparency")
+print("  ✓ Luminance preserved for transparency")
 
 # ============================================================================
 # STEP 7: GLOBAL SATURATION (CORRECTED - increased)
@@ -335,12 +336,12 @@ enhancer = ImageEnhance.Color(img_pil)
 img_saturated = enhancer.enhance(GLOBAL_SATURATION)
 rgb_saturated = np.array(img_saturated, dtype=np.float32) / 255.0
 
-print(f"  ✓ Saturation enhanced globally")
+print("  ✓ Saturation enhanced globally")
 
 # ============================================================================
 # STEP 8: VEGETATION ENHANCEMENT (CORRECTED - saturation only)
 # ============================================================================
-print(f"\n[8/10] Enhancing vegetation (saturation only, preserve shadows)...")
+print("\n[8/10] Enhancing vegetation (saturation only, preserve shadows)...")
 
 r, g, b_ch = rgb_saturated[:,:,0], rgb_saturated[:,:,1], rgb_saturated[:,:,2]
 
@@ -377,7 +378,7 @@ img_rgb_enhanced = img_hsv_enhanced.convert('RGB')
 rgb_vegetation = np.array(img_rgb_enhanced, dtype=np.float32) / 255.0
 
 print(f"  ✓ Vegetation saturation enhanced (+{int(saturation_boost_amount * 100)}%)")
-print(f"  ✓ Shadow depth preserved (no brightness lift)")
+print("  ✓ Shadow depth preserved (no brightness lift)")
 
 # ============================================================================
 # STEP 9: CLARITY ENHANCEMENT (CORRECTED - reduced, masked)
@@ -405,14 +406,14 @@ rgb_clarity = rgb_vegetation + high_pass * CLARITY_STRENGTH * mask_3d
 rgb_final = np.clip(rgb_clarity, 0, 1)
 
 print(f"  ✓ Clarity applied with masking (radius: {CLARITY_RADIUS}px)")
-print(f"  ✓ Sky and highlights protected")
+print("  ✓ Sky and highlights protected")
 
 # ============================================================================
 # STEP 10: SAVE OUTPUT
 # ============================================================================
-print(f"\n[10/10] Saving enhanced image...")
+print("\n[10/10] Saving enhanced image...")
 
-output_name = Path(INPUT).stem + "_Enhanced_v3.tif"
+output_name = Path(INPUT).stem + "_Enhanced_v3.ti"
 output_path = OUTPUT_DIR / output_name
 
 # Convert to 16-bit for output (OUTPUT_BIT_DEPTH is always 16 in this version)
@@ -449,32 +450,33 @@ original_sat = calc_saturation(original_display)  # Compare display to display
 final_sat = calc_saturation(rgb_final)
 saturation_change = ((final_sat / original_sat) - 1) * 100
 
-print(f"\n1. LUMINANCE (Display space comparison):")
+print("\n1. LUMINANCE (Display space comparison):")
 print(f"   Original (LINEAR): {original_luminance_linear:.3f}")
 print(f"   Original (Display-referred): {original_luminance_display:.3f}")
 print(f"   Enhanced (Display): {final_luminance:.3f}")
 print(f"   Change: {luminance_change:+.1f}%")
-print(f"   Target: +15% to +25%")
+print("   Target: +15% to +25%")
 print(f"   Status: {'✅ PASS' if 15 <= luminance_change <= 25 else '❌ FAIL'}")
 
-print(f"\n2. HIGHLIGHT CLIPPING:")
+print("\n2. HIGHLIGHT CLIPPING:")
 print(f"   Clipped pixels: {highlight_clipping:.2f}%")
-print(f"   Target: <1%")
+print("   Target: <1%")
 print(f"   Status: {'✅ PASS' if highlight_clipping < 1.0 else '❌ FAIL'}")
 
-print(f"\n3. SHADOW CLIPPING:")
+print("\n3. SHADOW CLIPPING:")
 print(f"   Clipped pixels: {shadow_clipping:.2f}%")
-print(f"   Target: <2%")
+print("   Target: <2%")
 print(f"   Status: {'✅ PASS' if shadow_clipping < 2.0 else '❌ FAIL'}")
 
-print(f"\n4. SATURATION:")
+print("\n4. SATURATION:")
 print(f"   Original: {original_sat:.3f}")
 print(f"   Enhanced: {final_sat:.3f}")
 print(f"   Change: {saturation_change:+.1f}%")
-print(f"   Target: +5% to +15%")
+print("   Target: +5% to +15%")
 print(f"   Status: {'✅ PASS' if 5 <= saturation_change <= 15 else '❌ FAIL'}")
 
 # Overall assessment
+# pylint: disable=chained-comparison
 overall_pass = (
     15 <= luminance_change <= 25 and
     highlight_clipping < 1.0 and
@@ -501,7 +503,7 @@ print("ENHANCEMENT COMPLETE - V3")
 print("=" * 80)
 print(f"\nOutput: {output_path}")
 print(f"Compare with original: {INPUT}")
-print(f"\nFor detailed analysis, see:")
-print(f"  - POOL_V3_RECOMMENDATIONS.md (technical details)")
-print(f"  - POOL_V3_EXECUTIVE_SUMMARY.md (high-level overview)")
-print(f"  - POOL_V3_QUICK_GUIDE.md (parameter tuning)")
+print("\nFor detailed analysis, see:")
+print("  - POOL_V3_RECOMMENDATIONS.md (technical details)")
+print("  - POOL_V3_EXECUTIVE_SUMMARY.md (high-level overview)")
+print("  - POOL_V3_QUICK_GUIDE.md (parameter tuning)")
