@@ -135,11 +135,39 @@ The imports of `os` and `sys` are already removed in the current version.
 
 **Resolution:** Already fixed in the current codebase.
 
+### 6. Empty Except Clause (VALID - NEEDS FIX)
+
+**File:** `pro_pipeline.py` (line 209)
+
+**Review Comment:** "'except' clause does nothing but pass and there is no explanatory comment."
+
+**Analysis:** This is a VALID comment. The except clause should have a comment explaining why ImportError is caught and ignored.
+
+**Current Code:**
+```python
+try:
+    import torch
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():
+        return "mps"
+except ImportError:
+    pass  # No comment explaining why
+return "cpu"
+```
+
+**Reason for Fix:** Best practice requires explaining why exceptions are silently caught.
+
+**Resolution:** Add explanatory comment to except clause.
+
 ## Summary
 
 **Fixed (3 files):**
 - ✓ Removed unused `ImageFilter` imports from 3 conservative_enhance files
 - ✓ Removed unused alpha variable comments
+
+**Needs Fix (1 file):**
+- ⚠️ `pro_pipeline.py` line 209 - Add explanatory comment to empty except clause
 
 **False Positives (No Action Needed):**
 - ✗ Unreachable code complaints (4 instances) - else clauses ARE reachable
@@ -161,4 +189,4 @@ The review comments appear to be from an overzealous automated linter that:
 2. Doesn't recognize that imports may require package installation
 3. Doesn't properly trace variable usage in assertions
 
-All legitimate issues (unused imports) have been fixed. The remaining comments are false positives and should be ignored.
+Almost all issues have been resolved. One remaining valid issue (empty except clause comment) should be addressed.
