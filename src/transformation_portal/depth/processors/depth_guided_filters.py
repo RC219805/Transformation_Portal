@@ -13,9 +13,15 @@ Performance: ~200ms for 4K image
 import logging
 from typing import Optional
 
-import cv2
 import numpy as np
 from scipy.ndimage import gaussian_filter
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    logging.warning("cv2 (opencv-python) not available. Some depth filtering features will be limited.")
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +104,14 @@ class DepthGuidedFilters:
             Edge map (0=flat, 1=edge)
         """
         # Compute depth gradients using Sobel
-        grad_x = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
+        if CV2_AVAILABLE:
+            grad_x = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
+        else:
+            # Fallback to scipy
+            from scipy.ndimage import sobel
+            grad_x = sobel(depth, axis=1).astype(np.float32)
+            grad_y = sobel(depth, axis=0).astype(np.float32)
 
         # Gradient magnitude
         grad_magnitude = np.sqrt(grad_x**2 + grad_y**2)
@@ -112,8 +124,13 @@ class DepthGuidedFilters:
         edge_map = (grad_magnitude > self.edge_preserve_threshold).astype(np.float32)
 
         # Dilate slightly
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        edge_map = cv2.dilate(edge_map, kernel, iterations=1)
+        if CV2_AVAILABLE:
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            edge_map = cv2.dilate(edge_map, kernel, iterations=1)
+        else:
+            # Fallback to scipy
+            from scipy.ndimage import binary_dilation
+            edge_map = binary_dilation(edge_map > 0, iterations=1).astype(np.float32)
 
         return edge_map
 
@@ -136,6 +153,12 @@ class DepthGuidedFilters:
         Returns:
             Enhanced image
         """
+        if not CV2_AVAILABLE:
+            # Fallback: simple unsharp masking
+            logger.warning("cv2 not available, using simple unsharp mask instead of multiscale clarity")
+            blurred = gaussian_filter(image, sigma=2.0)
+            return image + self.strength * (image - blurred)
+        
         # Build Gaussian pyramid
         pyramid = [image]
         current = image
@@ -371,8 +394,13 @@ class LocalContrastEnhancement:
         local_mean = gaussian_filter(luminance, sigma=sigma)
 
         # Detect depth edges
-        grad_x = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
+        if CV2_AVAILABLE:
+            grad_x = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
+        else:
+            from scipy.ndimage import sobel
+            grad_x = sobel(depth, axis=1).astype(np.float32)
+            grad_y = sobel(depth, axis=0).astype(np.float32)
         grad_magnitude = np.sqrt(grad_x**2 + grad_y**2)
         grad_magnitude = grad_magnitude / (grad_magnitude.max() + 1e-8)
 

@@ -9,15 +9,27 @@ Provides common operations for depth processing including:
 - Statistics
 """
 
-import matplotlib.pyplot as plt
 import logging
 from typing import List, Optional, Tuple
 
-import cv2
 import numpy as np
 from scipy.ndimage import gaussian_filter, sobel
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend
+
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # Non-interactive backend
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    logging.warning("matplotlib not available. Visualization features will be disabled.")
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    logging.warning("cv2 (opencv-python) not available. Some depth processing features will be limited.")
 
 logger = logging.getLogger(__name__)
 
@@ -108,19 +120,31 @@ def compute_depth_edges(
         edges = np.sqrt(grad_x**2 + grad_y**2)
 
     elif method == "canny":
-        # Convert to uint8 for Canny
-        depth_uint8 = (normalize_depth(depth) * 255).astype(np.uint8)
+        if not CV2_AVAILABLE:
+            logger.warning("cv2 not available, falling back to sobel for edge detection")
+            grad_x = sobel(depth, axis=1)
+            grad_y = sobel(depth, axis=0)
+            edges = np.sqrt(grad_x**2 + grad_y**2)
+        else:
+            # Convert to uint8 for Canny
+            depth_uint8 = (normalize_depth(depth) * 255).astype(np.uint8)
 
-        # Apply Canny
-        low_threshold = threshold or 50
-        high_threshold = threshold or 150
-        edges = cv2.Canny(depth_uint8, low_threshold, high_threshold)
-        edges = edges.astype(np.float32) / 255.0
+            # Apply Canny
+            low_threshold = threshold or 50
+            high_threshold = threshold or 150
+            edges = cv2.Canny(depth_uint8, low_threshold, high_threshold)
+            edges = edges.astype(np.float32) / 255.0
 
     elif method == "laplacian":
-        # Laplacian edge detection
-        edges = cv2.Laplacian(depth, cv2.CV_32F)
-        edges = np.abs(edges)
+        if not CV2_AVAILABLE:
+            logger.warning("cv2 not available, falling back to sobel for edge detection")
+            grad_x = sobel(depth, axis=1)
+            grad_y = sobel(depth, axis=0)
+            edges = np.sqrt(grad_x**2 + grad_y**2)
+        else:
+            # Laplacian edge detection
+            edges = cv2.Laplacian(depth, cv2.CV_32F)
+            edges = np.abs(edges)
 
     else:
         raise ValueError(f"Unknown edge detection method: {method}")
@@ -223,6 +247,10 @@ def smooth_depth(
         return gaussian_filter(depth, sigma=sigma)
 
     elif method == "bilateral":
+        if not CV2_AVAILABLE:
+            logger.warning("cv2 not available, falling back to gaussian smoothing")
+            return gaussian_filter(depth, sigma=sigma)
+        
         # Convert to uint8 for OpenCV
         depth_uint8 = (normalize_depth(depth) * 255).astype(np.uint8)
 
@@ -241,6 +269,10 @@ def smooth_depth(
         return smoothed.astype(np.float32) / 255.0
 
     elif method == "median":
+        if not CV2_AVAILABLE:
+            logger.warning("cv2 not available, falling back to gaussian smoothing")
+            return gaussian_filter(depth, sigma=sigma)
+        
         # Median filter
         ksize = int(sigma * 2) + 1
         smoothed = cv2.medianBlur(depth, ksize)
@@ -268,6 +300,20 @@ def visualize_depth(
     Returns:
         RGB visualization (HxWx3, uint8)
     """
+    if not MATPLOTLIB_AVAILABLE:
+        logger.warning("matplotlib not available, returning grayscale depth map")
+        # Return grayscale as RGB
+        depth_norm = normalize_depth(depth)
+        if invert:
+            depth_norm = 1.0 - depth_norm
+        gray = (depth_norm * 255).astype(np.uint8)
+        rgb = np.stack([gray, gray, gray], axis=-1)
+        if save_path:
+            from PIL import Image
+            img = Image.fromarray(rgb)
+            img.save(save_path)
+        return rgb
+    
     # Normalize
     depth_norm = normalize_depth(depth)
 
@@ -345,6 +391,13 @@ def align_depth_to_image(
     if depth.shape[:2] == target_shape:
         return depth
 
+    if not CV2_AVAILABLE:
+        # Fallback to scipy zoom
+        from scipy.ndimage import zoom
+        zoom_factors = (target_shape[0] / depth.shape[0], target_shape[1] / depth.shape[1])
+        order = 1 if interpolation == 'bilinear' else 3 if interpolation == 'bicubic' else 0
+        return zoom(depth, zoom_factors, order=order)
+    
     interp_map = {
         'bilinear': cv2.INTER_LINEAR,
         'bicubic': cv2.INTER_CUBIC,
@@ -378,6 +431,18 @@ def inpaint_depth_holes(
     Returns:
         Inpainted depth map
     """
+    if not CV2_AVAILABLE:
+        logger.warning("cv2 not available, returning depth with holes filled with mean value")
+        # Simple fallback: fill holes with mean of valid values
+        if mask is None:
+            mask = ((depth == 0) | np.isnan(depth))
+        else:
+            mask = mask.astype(bool)
+        result = depth.copy()
+        valid_mean = depth[~mask].mean() if (~mask).any() else 0
+        result[mask] = valid_mean
+        return result
+    
     # Auto-detect holes
     if mask is None:
         mask = ((depth == 0) | np.isnan(depth)).astype(np.uint8)
