@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pylint: disable=redefined-outer-name
 """
 Conservative Enhancement V3 - 750 Picacho Pool Aerial Rendering
 MAJOR REVISION: Proper tone mapping, highlight preservation, color accuracy
@@ -475,6 +476,7 @@ print("   Target: +5% to +15%")
 print(f"   Status: {'✅ PASS' if 5 <= saturation_change <= 15 else '❌ FAIL'}")
 
 # Overall assessment
+# pylint: disable=chained-comparison
 overall_pass = (
     15 <= luminance_change <= 25 and
     highlight_clipping < 1.0 and

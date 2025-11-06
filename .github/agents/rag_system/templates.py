@@ -10,6 +10,7 @@ Provides structured templates for common workflows:
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 import json
+import sys
 
 
 @dataclass
@@ -540,7 +541,7 @@ def main():
             print(json.dumps(data, indent=2))
         else:
             print("✗ Response is invalid")
-            exit(1)
+            sys.exit(1)
         return
 
     # Generate template
