@@ -11,7 +11,7 @@ Key improvements over v4:
 - Protected white surfaces from over-brightening
 - Maintains natural material response
 """
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance
 import numpy as np
 from pathlib import Path
 from scipy.ndimage import gaussian_filter
@@ -71,7 +71,6 @@ if TIFFFILE_AVAILABLE:
         # Handle alpha channel if present
         if img_array.shape[2] == 4:
             rgb = img_array[:, :, :3]
-            # Drop alpha channel - not needed for RGB processing
         else:
             rgb = img_array
         
