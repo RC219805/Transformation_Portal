@@ -312,7 +312,7 @@ class RepositoryIndexer:
                 if line.startswith('# '):
                     metadata['title'] = line[2:].strip()
                     break
-                elif line.startswith('## '):
+                if line.startswith('## '):
                     metadata['section'] = line[3:].strip()
                     break
 
