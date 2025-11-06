@@ -146,7 +146,7 @@ def cmd_cite(args):
     citations = citation_gen.generate_citations(results, max_citations=args.max_citations)
     
     # Format output
-    formatted = citation_gen.format_citations(citations, format=args.format)
+    formatted = citation_gen.format_citations(citations, format_type=args.format)
     
     print("\n" + formatted)
     
@@ -166,7 +166,7 @@ def cmd_template(args):
     """Generate prompt template."""
     if args.type == 'feature':
         template = PromptTemplates.feature_implementation(
-            description=args.description,
+            feature_description=args.description,
             context=args.context or ""
         )
     elif args.type == 'bug':
@@ -304,7 +304,7 @@ def main():
     cite_parser.add_argument('query', help='Search query')
     cite_parser.add_argument('--repo-root', default='.', help='Repository root directory')
     cite_parser.add_argument('--max-citations', type=int, default=5, help='Max citations')
-    cite_parser.add_argument('--format', choices=['markdown', 'plain', 'json'], 
+    cite_parser.add_argument('--format', choices=['markdown', 'text', 'json'], 
                              default='markdown', help='Output format')
     cite_parser.add_argument('--output', help='Save citations to file')
     
