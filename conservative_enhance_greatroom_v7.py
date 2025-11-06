@@ -38,7 +38,7 @@ print("=" * 80)
 # CONFIGURATION - OPTIMIZED FROM 6 ITERATIONS
 # ============================================================================
 
-INPUT = "input_images/750Picacho_GreatRoom_Reset.tif"
+INPUT = "input_images/750Picacho_GreatRoom_Reset.ti"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -51,7 +51,7 @@ SKY_MASK_SIGMA = 10.0                # Large blur to avoid halos (v6 learned: bi
 # Sky Color Correction (Targeted to cyan removal)
 SKY_CHANNEL_ADJUST = {
     'red': 1.12,      # Boost red to counter cyan (was 89, target ~100)
-    'green': 0.88,    # Reduce green slightly (was 114, target ~100)  
+    'green': 0.88,    # Reduce green slightly (was 114, target ~100)
     'blue': 0.78      # Reduce blue aggressively (was 126, target ~98)
 }
 SKY_DESATURATE = 0.65                # Desaturate to remove "cartoon" look
@@ -82,7 +82,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, dtype: {img_array.dtype}")
-        
+
         # Normalize to 0-1 range based on dtype
         if img_array.dtype == np.uint8:
             rgb = img_array.astype(np.float32) / 255.0
@@ -92,17 +92,17 @@ if TIFFFILE_AVAILABLE:
             rgb = img_array.astype(np.float32)
             # If float but not normalized, clip
             if rgb.max() > 1.0:
-                print(f"  ⚠️  Float data not normalized, clipping to [0,1]")
+                print("  ⚠️  Float data not normalized, clipping to [0,1]")
                 rgb = np.clip(rgb / rgb.max(), 0, 1)
-        
+
         # Handle alpha if present
         if rgb.shape[2] == 4:
-            print(f"  ⚠️  Alpha channel detected, extracting RGB")
+            print("  ⚠️  Alpha channel detected, extracting RGB")
             rgb = rgb[:, :, :3]
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}")
-        print(f"  Falling back to PIL...")
+        print("  Falling back to PIL...")
         TIFFFILE_AVAILABLE = False
 
 if not TIFFFILE_AVAILABLE:
@@ -121,7 +121,7 @@ original_rgb = rgb.copy()
 # ============================================================================
 # STEP 2: WHITE SURFACE PROTECTION MASK
 # ============================================================================
-print(f"\n[2/10] Creating white surface protection mask...")
+print("\n[2/10] Creating white surface protection mask...")
 
 brightness = rgb.mean(axis=2)
 white_mask = brightness > WHITE_THRESHOLD
@@ -143,7 +143,7 @@ print(f"  ✓ Protection strength: {WHITE_PROTECTION_STRENGTH:.0%}")
 # ============================================================================
 # STEP 3: SKY DETECTION
 # ============================================================================
-print(f"\n[3/10] Detecting sky regions...")
+print("\n[3/10] Detecting sky regions...")
 
 # Brightness-based detection
 sky_threshold = np.percentile(brightness, SKY_PERCENTILE)
@@ -170,7 +170,7 @@ print(f"  ✓ Mask blur: σ={SKY_MASK_SIGMA} (large to prevent halos)")
 # ============================================================================
 # STEP 4: SKY COLOR CORRECTION
 # ============================================================================
-print(f"\n[4/10] Applying sky color correction...")
+print("\n[4/10] Applying sky color correction...")
 
 # Apply channel-wise adjustments
 sky_r = r * SKY_CHANNEL_ADJUST['red']
@@ -191,7 +191,7 @@ print(f"  ✓ Desaturation: {SKY_DESATURATE:.0%}")
 # ============================================================================
 # STEP 5: INTERIOR ENHANCEMENT
 # ============================================================================
-print(f"\n[5/10] Enhancing interior regions...")
+print("\n[5/10] Enhancing interior regions...")
 
 # Convert to PIL for controlled enhancements
 interior_img = Image.fromarray((rgb * 255).astype(np.uint8))
@@ -211,14 +211,14 @@ if INTERIOR_BRIGHTNESS != 1.0:
     interior_img = ImageEnhance.Brightness(interior_img).enhance(INTERIOR_BRIGHTNESS)
     print(f"  ✓ Brightness: {INTERIOR_BRIGHTNESS:.2%}")
 else:
-    print(f"  ✓ Brightness: preserved (no adjustment)")
+    print("  ✓ Brightness: preserved (no adjustment)")
 
 interior_enhanced = np.array(interior_img, dtype=np.float32) / 255.0
 
 # ============================================================================
 # STEP 6: BLEND SKY AND INTERIOR
 # ============================================================================
-print(f"\n[6/10] Compositing sky and interior...")
+print("\n[6/10] Compositing sky and interior...")
 
 # Expand sky mask to 3 channels
 sky_mask_3d = np.stack([sky_mask_smooth] * 3, axis=2)
@@ -226,13 +226,13 @@ sky_mask_3d = np.stack([sky_mask_smooth] * 3, axis=2)
 # Blend: corrected sky where mask=1, enhanced interior where mask=0
 composite = sky_mask_3d * sky_corrected + (1 - sky_mask_3d) * interior_enhanced
 
-print(f"  ✓ Sky-interior blend complete")
+print("  ✓ Sky-interior blend complete")
 print(f"  Range: [{composite.min():.3f}, {composite.max():.3f}]")
 
 # ============================================================================
 # STEP 7: APPLY WHITE PROTECTION
 # ============================================================================
-print(f"\n[7/10] Protecting white surfaces...")
+print("\n[7/10] Protecting white surfaces...")
 
 # Expand white protection mask to 3 channels
 white_mask_3d = np.stack([white_protected_smooth] * 3, axis=2)
@@ -241,12 +241,12 @@ white_mask_3d = np.stack([white_protected_smooth] * 3, axis=2)
 composite = (1 - white_mask_3d * WHITE_PROTECTION_STRENGTH) * composite + \
             (white_mask_3d * WHITE_PROTECTION_STRENGTH) * original_rgb
 
-print(f"  ✓ White surfaces protected from color shifts")
+print("  ✓ White surfaces protected from color shifts")
 
 # ============================================================================
 # STEP 8: MATERIAL CLARITY ENHANCEMENT
 # ============================================================================
-print(f"\n[8/10] Enhancing material clarity...")
+print("\n[8/10] Enhancing material clarity...")
 
 # Identify non-white, non-sky regions (likely materials: wood, stone, textiles)
 material_mask = (1 - sky_mask_smooth) * (1 - white_protected_smooth)
@@ -268,7 +268,7 @@ if MATERIAL_CLARITY > 0:
 # ============================================================================
 # STEP 9: EDGE SHARPENING
 # ============================================================================
-print(f"\n[9/10] Applying edge sharpening...")
+print("\n[9/10] Applying edge sharpening...")
 
 # Apply edge sharpness (EDGE_SHARPNESS is always > 0 in this version)
 sharpened = ImageEnhance.Sharpness(composite_pil).enhance(1 + EDGE_SHARPNESS)
@@ -281,9 +281,9 @@ print(f"  ✓ Final tone curve: {FINAL_TONE_CURVE:.2%}")
 # ============================================================================
 # STEP 10: SAVE OUTPUT
 # ============================================================================
-print(f"\n[10/10] Saving output...")
+print("\n[10/10] Saving output...")
 
-output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v7.tiff"
+output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v7.tif"
 
 # Save as 16-bit TIFF to preserve quality (OUTPUT_BIT_DEPTH is always 16 in this version)
 final_array = np.array(sharpened, dtype=np.uint8)
@@ -310,30 +310,30 @@ print(f"\nInput:  {INPUT}")
 print(f"Output: {output_path}")
 print()
 print("ENHANCEMENT SUMMARY:")
-print(f"  Sky Correction:")
+print("  Sky Correction:")
 print(f"    • Coverage: {sky_percentage:.2f}% of image")
 print(f"    • Color: R×{SKY_CHANNEL_ADJUST['red']:.2f}, " +
       f"G×{SKY_CHANNEL_ADJUST['green']:.2f}, B×{SKY_CHANNEL_ADJUST['blue']:.2f}")
 print(f"    • Desaturation: {SKY_DESATURATE:.0%}")
 print(f"    • Mask blur: σ={SKY_MASK_SIGMA} (anti-halo)")
 print()
-print(f"  Interior Enhancement:")
+print("  Interior Enhancement:")
 print(f"    • Saturation: {INTERIOR_SATURATION:.2%}")
 print(f"    • Contrast: {INTERIOR_CONTRAST:.2%}")
 print(f"    • Brightness: {INTERIOR_BRIGHTNESS:.2%}")
 print()
-print(f"  Material Enhancement:")
+print("  Material Enhancement:")
 print(f"    • Coverage: {material_percentage:.1f}% (non-white, non-sky)")
 print(f"    • Clarity: +{MATERIAL_CLARITY:.0%}")
 print(f"    • Sharpness: +{EDGE_SHARPNESS:.0%}")
 print()
-print(f"  White Surface Protection:")
+print("  White Surface Protection:")
 print(f"    • Coverage: {white_percentage:.1f}%")
 print(f"    • Protection: {WHITE_PROTECTION_STRENGTH:.0%}")
 print()
-print(f"  Global Finishing:")
+print("  Global Finishing:")
 print(f"    • Tone curve: {FINAL_TONE_CURVE:.2%}")
 print(f"    • Bit depth: {OUTPUT_BIT_DEPTH}-bit")
 print(f"{'='*80}")
 print("\n✓ Fresh start complete! Natural sky + preserved interior warmth.")
-print(f"  Compare against original to verify quality.")
+print("  Compare against original to verify quality.")

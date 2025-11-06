@@ -35,7 +35,7 @@ print("=" * 80)
 # CONFIGURATION - OPTIMIZED FOR DARK INTERIOR
 # ============================================================================
 
-INPUT = "input_images/750Picacho_GreatRoom_Reset.tif"
+INPUT = "input_images/750Picacho_GreatRoom_Reset.ti"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -75,7 +75,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, dtype: {img_array.dtype}")
-        
+
         if img_array.dtype == np.float32:
             if img_array.max() > 1.0:
                 rgb = np.clip(img_array / img_array.max(), 0, 1)
@@ -85,10 +85,10 @@ if TIFFFILE_AVAILABLE:
             rgb = img_array.astype(np.float32) / 65535.0
         else:
             rgb = img_array.astype(np.float32) / 255.0
-        
+
         if rgb.shape[2] == 4:
             rgb = rgb[:, :, :3]
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
         TIFFFILE_AVAILABLE = False
@@ -105,7 +105,7 @@ original_brightness = rgb.mean()
 # ============================================================================
 # STEP 2: EXPOSURE LIFT
 # ============================================================================
-print(f"\n[2/8] Lifting exposure...")
+print("\n[2/8] Lifting exposure...")
 
 # Apply global lift
 rgb_lifted = rgb * (1 + GLOBAL_EXPOSURE_LIFT)
@@ -120,7 +120,7 @@ print(f"  ✓ Brightness: {original_brightness:.3f} → {new_brightness:.3f} (+{
 # ============================================================================
 # STEP 3: SHADOW RECOVERY
 # ============================================================================
-print(f"\n[3/8] Recovering shadow detail...")
+print("\n[3/8] Recovering shadow detail...")
 
 # Convert to 0-255 range for shadow detection
 rgb_255 = rgb_lifted * 255.0
@@ -140,7 +140,7 @@ print(f"  ✓ Shadow lift: +{SHADOW_LIFT_AMOUNT} (0-255 scale)")
 # ============================================================================
 # STEP 4: HIGHLIGHT PROTECTION
 # ============================================================================
-print(f"\n[4/8] Protecting highlights...")
+print("\n[4/8] Protecting highlights...")
 
 rgb_255 = rgb_lifted * 255.0
 highlight_mask = rgb_255.max(axis=2) > HIGHLIGHT_PROTECTION
@@ -153,12 +153,12 @@ highlight_pixels = highlight_mask.sum()
 highlight_percentage = (highlight_pixels / highlight_mask.size) * 100
 
 print(f"  ✓ Highlights: {highlight_pixels:,} pixels ({highlight_percentage:.2f}%)")
-print(f"  ✓ Protection: 50% blend with original")
+print("  ✓ Protection: 50% blend with original")
 
 # ============================================================================
 # STEP 5: COLOR GRADING
 # ============================================================================
-print(f"\n[5/8] Applying color grading...")
+print("\n[5/8] Applying color grading...")
 
 # Convert to PIL for controlled adjustments
 img_pil = Image.fromarray((rgb_protected * 255).astype(np.uint8))
@@ -180,7 +180,7 @@ img_pil = Image.fromarray((img_array * 255).astype(np.uint8))
 # ============================================================================
 # STEP 6: MIDTONE CONTRAST
 # ============================================================================
-print(f"\n[6/8] Enhancing midtone contrast...")
+print("\n[6/8] Enhancing midtone contrast...")
 
 img_pil = ImageEnhance.Contrast(img_pil).enhance(MIDTONE_CONTRAST)
 print(f"  ✓ Midtone contrast: {MIDTONE_CONTRAST:.0%}")
@@ -188,7 +188,7 @@ print(f"  ✓ Midtone contrast: {MIDTONE_CONTRAST:.0%}")
 # ============================================================================
 # STEP 7: MATERIAL CLARITY
 # ============================================================================
-print(f"\n[7/8] Enhancing material clarity...")
+print("\n[7/8] Enhancing material clarity...")
 
 # Zone-based clarity
 img_array = np.array(img_pil, dtype=np.float32) / 255.0
@@ -228,7 +228,7 @@ img_pil = Image.fromarray((img_array * 255).astype(np.uint8))
 # ============================================================================
 # STEP 8: EDGE SHARPENING
 # ============================================================================
-print(f"\n[8/8] Applying edge sharpening...")
+print("\n[8/8] Applying edge sharpening...")
 
 sharpened = ImageEnhance.Sharpness(img_pil).enhance(1 + EDGE_SHARPNESS)
 print(f"  ✓ Edge sharpness: +{EDGE_SHARPNESS:.0%}")
@@ -236,20 +236,20 @@ print(f"  ✓ Edge sharpness: +{EDGE_SHARPNESS:.0%}")
 # ============================================================================
 # SAVE OUTPUT
 # ============================================================================
-print(f"\nSaving output...")
+print("\nSaving output...")
 
-output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v8.tiff"
+output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v8.tif"
 
 # Save as 16-bit TIFF (OUTPUT_BIT_DEPTH is always 16 in this version)
 final_array = np.array(sharpened, dtype=np.uint8)
 final_16bit = (final_array.astype(np.uint16) * 257)
 if TIFFFILE_AVAILABLE:
     tifffile.imwrite(output_path, final_16bit, photometric='rgb', compression='lzw')
-    print(f"  ✓ Saved 16-bit TIFF with tifffile")
+    print("  ✓ Saved 16-bit TIFF with tifffile")
 else:
     final_img = Image.fromarray(final_16bit, mode='RGB;16')
     final_img.save(output_path, compression='tiff_lzw')
-    print(f"  ✓ Saved 16-bit TIFF with PIL")
+    print("  ✓ Saved 16-bit TIFF with PIL")
 
 file_size_mb = output_path.stat().st_size / 1024 / 1024
 
@@ -264,24 +264,24 @@ print(f"Output: {output_path}")
 print(f"Size:   {file_size_mb:.1f} MB")
 print()
 print("ENHANCEMENT SUMMARY:")
-print(f"  Exposure:")
+print("  Exposure:")
 print(f"    • Global lift: +{GLOBAL_EXPOSURE_LIFT:.0%}")
 print(f"    • Shadow recovery: +{SHADOW_LIFT_AMOUNT} (0-255)")
-print(f"    • Highlight protection: 50% blend")
+print("    • Highlight protection: 50% blend")
 print(f"    • Final brightness: {rgb.mean():.3f} → {new_brightness:.3f}")
 print()
-print(f"  Color Grading:")
+print("  Color Grading:")
 print(f"    • Saturation: {GLOBAL_SATURATION:.0%}")
 print(f"    • Warmth: R+{(WARMTH_BOOST_RED-1)*100:.1f}%, B{(WARMTH_REDUCE_BLUE-1)*100:.1f}%")
 print(f"    • Midtone contrast: {MIDTONE_CONTRAST:.0%}")
 print()
-print(f"  Material Enhancement:")
+print("  Material Enhancement:")
 print(f"    • Highlights: +{TEXTURE_ZONES['highlights']:.0%}")
 print(f"    • Midtones: +{TEXTURE_ZONES['midtones']:.0%}")
 print(f"    • Shadows: +{TEXTURE_ZONES['shadows']:.0%}")
 print(f"    • Edge sharpness: +{EDGE_SHARPNESS:.0%}")
 print()
-print(f"  Processing Zones:")
+print("  Processing Zones:")
 print(f"    • Shadows: {shadow_percentage:.1f}%")
 print(f"    • Highlights: {highlight_percentage:.2f}%")
 print(f"{'='*80}")

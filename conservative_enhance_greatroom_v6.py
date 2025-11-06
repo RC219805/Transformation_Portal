@@ -31,7 +31,7 @@ print("CONSERVATIVE ENHANCEMENT v6 - 750 PICACHO GREAT ROOM")
 print("Precision sky correction + protected interior preservation")
 print("=" * 80)
 
-INPUT = "input_images/750Picacho_GreatRoom.tiff"  # Using original TIFF
+INPUT = "input_images/750Picacho_GreatRoom.tif"  # Using original TIFF
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -68,7 +68,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, dtype: {img_array.dtype}")
-        
+
         # Normalize to 0-1 range
         if img_array.dtype == np.uint8:
             rgb = img_array.astype(np.float32) / 255.0
@@ -78,11 +78,11 @@ if TIFFFILE_AVAILABLE:
             rgb = img_array.astype(np.float32)
             if rgb.max() > 1.0:
                 rgb = np.clip(rgb / rgb.max(), 0, 1)
-        
+
         # Handle alpha if present
         if rgb.shape[2] == 4:
             rgb = rgb[:, :, :3]
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
         TIFFFILE_AVAILABLE = False
@@ -99,7 +99,7 @@ print(f"  Range: [{rgb.min():.3f}, {rgb.max():.3f}]")
 # ============================================================================
 # [2/9] SKY DETECTION - DUAL THRESHOLD APPROACH
 # ============================================================================
-print(f"\n[2/9] Detecting sky regions...")
+print("\n[2/9] Detecting sky regions...")
 
 r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
 
@@ -132,7 +132,7 @@ print(f"  ✓ Mask smoothing: σ={SKY_MASK_BLUR}")
 # ============================================================================
 # [3/9] SKY CORRECTION - SURGICAL COLOR ADJUSTMENT
 # ============================================================================
-print(f"\n[3/9] Applying surgical sky correction...")
+print("\n[3/9] Applying surgical sky correction...")
 
 # Create corrected sky
 sky_r = r * SKY_RED_BOOST
@@ -152,7 +152,7 @@ print(f"  ✓ Desaturation: {SKY_SATURATION:.0%}")
 # ============================================================================
 # [4/9] INTERIOR ENHANCEMENT - GENTLE ADJUSTMENTS
 # ============================================================================
-print(f"\n[4/9] Enhancing interior regions...")
+print("\n[4/9] Enhancing interior regions...")
 
 # Convert to PIL for controlled adjustments
 interior_img = Image.fromarray((rgb * 255).astype(np.uint8))
@@ -167,12 +167,12 @@ interior_enhanced = np.array(interior_img, dtype=np.float32) / 255.0
 
 print(f"  ✓ Saturation: {INTERIOR_SATURATION:.2%}")
 print(f"  ✓ Contrast: {INTERIOR_CONTRAST:.2%}")
-print(f"  ✓ Brightness: preserved (no adjustment)")
+print("  ✓ Brightness: preserved (no adjustment)")
 
 # ============================================================================
 # [5/9] COMPOSITE - BLEND SKY AND INTERIOR
 # ============================================================================
-print(f"\n[5/9] Compositing sky and interior...")
+print("\n[5/9] Compositing sky and interior...")
 
 # Expand mask to 3 channels
 sky_mask_3d = np.stack([sky_mask_smooth] * 3, axis=2)
@@ -180,13 +180,13 @@ sky_mask_3d = np.stack([sky_mask_smooth] * 3, axis=2)
 # Blend: sky_corrected where mask=1, interior_enhanced where mask=0
 composite = sky_mask_3d * sky_corrected + (1 - sky_mask_3d) * interior_enhanced
 
-print(f"  ✓ Edge-aware blending complete")
+print("  ✓ Edge-aware blending complete")
 print(f"  Range: [{composite.min():.3f}, {composite.max():.3f}]")
 
 # ============================================================================
 # [6/9] MIDTONE CONTRAST - GENTLE S-CURVE
 # ============================================================================
-print(f"\n[6/9] Applying midtone contrast...")
+print("\n[6/9] Applying midtone contrast...")
 
 # Simple S-curve
 composite_curve = composite * MIDTONE_CONTRAST
@@ -201,7 +201,7 @@ print(f"  ✓ Midtone enhancement: {MIDTONE_CONTRAST:.2%}")
 # ============================================================================
 # [7/9] SHARPENING - EDGE ENHANCEMENT
 # ============================================================================
-print(f"\n[7/9] Applying edge sharpening...")
+print("\n[7/9] Applying edge sharpening...")
 
 composite_pil = Image.fromarray((composite * 255).astype(np.uint8))
 sharpened = ImageEnhance.Sharpness(composite_pil).enhance(1 + GLOBAL_SHARPNESS)
@@ -211,9 +211,9 @@ print(f"  ✓ Sharpness: +{GLOBAL_SHARPNESS:.0%}")
 # ============================================================================
 # [8/9] SAVE OUTPUT
 # ============================================================================
-print(f"\n[8/9] Saving output...")
+print("\n[8/9] Saving output...")
 
-output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v6.tiff"
+output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v6.tif"
 
 # Save as 16-bit TIFF to preserve quality
 final_array = np.array(sharpened, dtype=np.uint8)
@@ -231,21 +231,21 @@ print(f"  File size: {output_path.stat().st_size / 1024 / 1024:.1f} MB")
 # ============================================================================
 # [9/9] SUMMARY
 # ============================================================================
-print(f"\n[9/9] PROCESSING COMPLETE")
+print("\n[9/9] PROCESSING COMPLETE")
 print("=" * 80)
 print(f"Input:  {INPUT}")
 print(f"Output: {output_path}")
 print()
 print("ADJUSTMENTS APPLIED:")
-print(f"  Sky Correction:")
+print("  Sky Correction:")
 print(f"    - Color: R×{SKY_RED_BOOST:.2f}, G×{SKY_GREEN_REDUCTION:.2f}, B×{SKY_BLUE_REDUCTION:.2f}")
 print(f"    - Saturation: {SKY_SATURATION:.0%}")
 print(f"    - Coverage: {sky_percentage:.1f}% of image")
-print(f"  Interior Enhancement:")
+print("  Interior Enhancement:")
 print(f"    - Saturation: {INTERIOR_SATURATION:.2%}")
 print(f"    - Contrast: {INTERIOR_CONTRAST:.2%}")
-print(f"    - Brightness: preserved")
-print(f"  Global Finishing:")
+print("    - Brightness: preserved")
+print("  Global Finishing:")
 print(f"    - Midtone contrast: {MIDTONE_CONTRAST:.2%}")
 print(f"    - Sharpness: +{GLOBAL_SHARPNESS:.0%}")
 print("=" * 80)
