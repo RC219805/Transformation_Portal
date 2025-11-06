@@ -1,0 +1,10 @@
+# RAG System Requirements
+# Core dependencies for the Retrieval-Augmented Generation system
+
+# Core dependencies
+numpy>=1.24.0,<3
+scikit-learn>=1.3.0  # For TF-IDF and BM25 implementation
+
+# Optional but recommended
+# sentence-transformers>=2.2.0  # For dense vector embeddings (future enhancement)
+# faiss-cpu>=1.7.0  # For fast similarity search (future enhancement)
