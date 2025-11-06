@@ -11,7 +11,7 @@ Key improvements over v4:
 - Protected white surfaces from over-brightening
 - Maintains natural material response
 """
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
 from pathlib import Path
 from scipy.ndimage import gaussian_filter
