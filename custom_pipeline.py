@@ -4,31 +4,47 @@ Custom pipeline example.
 
 Demonstrates building a custom processing pipeline with specific parameters.
 
-NOTE: Requires package installation: pip install -e .
+NOTE: This script requires package installation with: pip install -e .
+
+The imports assume the transformation_portal package is installed and available
+in your Python path. If you get import errors, install the package first.
 
 Usage:
-    python examples/custom_pipeline.py input.jpg output.jpg
+    # Install package first
+    pip install -e .
+    
+    # Run custom pipeline
+    python custom_pipeline.py input.jpg output.jpg
 
 Prerequisites:
-    pip install -e .
+    - pip install -e .
+    - transformers, torch, pillow, numpy
 """
 
 import sys
 from pathlib import Path
 
-from transformation_portal.depth.utils import (
-    load_image,
-    save_image,
-    visualize_depth,
-    depth_statistics,
-)
-from transformation_portal.depth.processors import (
-    DepthAwareDenoise,
-    ZoneToneMapping,
-    AtmosphericEffects,
-    DepthGuidedFilters,
-)
-from transformation_portal.depth.models import DepthAnythingV2Model, ModelVariant
+try:
+    from transformation_portal.depth.utils import (
+        load_image,
+        save_image,
+        visualize_depth,
+        depth_statistics,
+    )
+    from transformation_portal.depth.processors import (
+        DepthAwareDenoise,
+        ZoneToneMapping,
+        AtmosphericEffects,
+        DepthGuidedFilters,
+    )
+    from transformation_portal.depth.models import DepthAnythingV2Model, ModelVariant
+except ImportError as e:
+    print("ERROR: Could not import transformation_portal package.")
+    print(f"Details: {e}")
+    print("\nPlease install the package first:")
+    print("  cd /path/to/Transformation_Portal")
+    print("  pip install -e .")
+    sys.exit(1)
 
 
 def main():

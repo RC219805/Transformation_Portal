@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Automated Model Installation - No prompts"""
 
-import os
-import sys
 from pathlib import Path
 import urllib.request
 

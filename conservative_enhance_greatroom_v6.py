@@ -14,7 +14,7 @@ Key improvements:
 - Edge-aware blending to prevent artifacts
 - Preserve interior color temperature and brightness
 """
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance
 import numpy as np
 from pathlib import Path
 from scipy.ndimage import gaussian_filter
