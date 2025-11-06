@@ -207,6 +207,7 @@ class ProPipeline:
             elif torch.backends.mps.is_available():
                 return "mps"
         except ImportError:
+            # Torch not installed, fall back to CPU
             pass
         return "cpu"
     
