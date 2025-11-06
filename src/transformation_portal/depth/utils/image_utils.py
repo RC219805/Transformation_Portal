@@ -7,9 +7,15 @@ import logging
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
-import cv2
 import numpy as np
 from PIL import Image
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    logging.warning("cv2 (opencv-python) not available. Some image processing features will be limited.")
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +57,9 @@ def load_image(
         image = np.array(img)
 
     except Exception as e:
+        if not CV2_AVAILABLE:
+            raise RuntimeError(f"PIL failed and cv2 not available: {e}") from e
+        
         logger.warning(f"PIL failed ({e}), trying OpenCV")
         # Fallback to OpenCV
         if color_space == "GRAY":
@@ -101,6 +110,18 @@ def save_image(
             image = (image * 255).astype(np.uint8)
         else:
             image = image.astype(np.uint8)
+
+    # Use PIL if cv2 not available
+    if not CV2_AVAILABLE:
+        if color_space == "RGB":
+            img = Image.fromarray(image)
+        elif color_space == "GRAY":
+            img = Image.fromarray(image, mode='L')
+        else:
+            img = Image.fromarray(image)
+        img.save(path, quality=quality)
+        logger.debug(f"Saved image (PIL): {path}")
+        return path
 
     # Convert color space for OpenCV if needed
     if color_space == "RGB" and image.ndim == 3:
@@ -184,6 +205,21 @@ def resize_image(
         'bicubic': cv2.INTER_CUBIC,
         'lanczos': cv2.INTER_LANCZOS4,
     }
+    
+    if not CV2_AVAILABLE:
+        # Fallback to PIL
+        from PIL import Image as PILImage
+        img = PILImage.fromarray(image)
+        pil_interp_map = {
+            'nearest': PILImage.Resampling.NEAREST,
+            'bilinear': PILImage.Resampling.BILINEAR,
+            'bicubic': PILImage.Resampling.BICUBIC,
+            'lanczos': PILImage.Resampling.LANCZOS,
+        }
+        pil_interp = pil_interp_map.get(interpolation, PILImage.Resampling.BILINEAR)
+        resized_img = img.resize((target_w, target_h), pil_interp)
+        return np.array(resized_img)
+    
     interp_flag = interp_map.get(interpolation, cv2.INTER_LINEAR)
 
     # Resize

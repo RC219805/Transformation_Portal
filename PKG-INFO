@@ -1,3 +1,46 @@
+Metadata-Version: 2.4
+Name: transformation-portal
+Version: 0.1.0
+Summary: Professional image and video processing toolkit for luxury real estate rendering and architectural visualization.
+Author: RC219805
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: Other/Proprietary License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy<3,>=1.24
+Requires-Dist: Pillow<12,>=10.0.0
+Requires-Dist: scipy<2,>=1.10
+Requires-Dist: scikit-learn<2,>=1.4.0
+Requires-Dist: typer<1,>=0.12
+Requires-Dist: torch<3,>=2.0
+Requires-Dist: diffusers<1,>=0.20
+Requires-Dist: controlnet-aux<1,>=0.0.6
+Requires-Dist: realesrgan<1,>=0.3.0
+Requires-Dist: tqdm<5,>=4.65
+Provides-Extra: tiff
+Requires-Dist: tifffile<2025,>=2023.7.18; extra == "tiff"
+Requires-Dist: imagecodecs>=2023.1.23; extra == "tiff"
+Provides-Extra: ml
+Requires-Dist: transformers>=4.35.0; extra == "ml"
+Requires-Dist: huggingface-hub>=0.19.0; extra == "ml"
+Requires-Dist: torchvision>=0.15.0; extra == "ml"
+Requires-Dist: opencv-python>=4.8.0; extra == "ml"
+Requires-Dist: scikit-image>=0.21.0; extra == "ml"
+Requires-Dist: PyYAML>=6.0; extra == "ml"
+Requires-Dist: colour-science>=0.4.2; extra == "ml"
+Requires-Dist: coremltools>=7.0; extra == "ml"
+Requires-Dist: psutil>=5.9.0; extra == "ml"
+Requires-Dist: memory-profiler>=0.61.0; extra == "ml"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3.3; extra == "dev"
+Requires-Dist: pytest-cov>=5.0.0; extra == "dev"
+Requires-Dist: hypothesis>=6.115.0; extra == "dev"
+Requires-Dist: flake8>=7.0; extra == "dev"
+Requires-Dist: pylint>=3.2.0; extra == "dev"
+Provides-Extra: all
+Requires-Dist: transformation-portal[dev,ml,tiff]; extra == "all"
+
 [![CI](https://github.com/RC219805/Transformation_Portal/actions/workflows/python-app.yml/badge.svg)](https://github.com/RC219805/Transformation_Portal/actions)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
@@ -184,52 +227,11 @@ pip install -e ".[tiff]"  # Includes tifffile + imagecodecs
 # macOS: brew install ffmpeg
 ```
 
-📖 **[Complete Format Documentation](docs/guides/SUPPORTED_FILE_FORMATS.md)** - Detailed format specifications, constraints, and examples
+📖 **[Complete Format Documentation](SUPPORTED_FILE_FORMATS.md)** - Detailed format specifications, constraints, and examples
 
 ---
 
 ## Core Components
-
-### 🌟 Professional Pipeline (NEW!)
-
-**Fully-integrated orchestrator** combining all pipeline stages into a unified, production-ready workflow.
-
-**Capabilities:**
-- ✅ **5-Stage Integration** - Depth → AI → Material → Grading → Finishing
-- ✅ **10 Professional Presets** - Optimized for common use cases
-- ✅ **Batch Processing** - 400-600 images/hour throughput
-- ✅ **Intelligent Stage Management** - Enable/disable stages as needed
-- ✅ **Performance Optimized** - Apple Silicon (CoreML + MPS) + CUDA support
-
-**Quick Start:**
-```bash
-# Single image with preset
-python pro_pipeline.py process render.jpg --preset architectural-hero --out ./enhanced
-
-# Batch processing
-python pro_pipeline.py batch ./renders --preset interior-dramatic --out ./final
-
-# List available presets
-python pro_pipeline.py list-presets
-```
-
-**Available Presets:**
-- `architectural-hero` - Dramatic enhancement for hero shots
-- `interior-dramatic` - High-contrast interior rendering
-- `exterior-golden-hour` - Warm golden hour aesthetic
-- `aerial-estate` - Aerial photography with depth perspective
-- `pool-luxury` - Pool and water feature enhancement
-- `kitchen-bright` - Bright, clean kitchen spaces
-- `bedroom-cozy` - Warm bedroom aesthetic
-- `bathroom-spa` - Spa-like bathroom enhancement
-- `courtyard-natural` - Natural outdoor aesthetic
-- `custom` - Manual configuration
-
-**Performance:** 2-5 minutes per 4K image | 400-600 images/hour batch
-
-📖 **[Complete Pro Pipeline Guide](docs/PRO_PIPELINE_GUIDE.md)** - Comprehensive usage documentation
-
----
 
 ### Depth Pipeline
 
@@ -262,7 +264,7 @@ results = pipeline.batch_process(image_paths, output_dir='output/')
 
 **Performance:** 855-950ms per 4K image | 400-600 images/hour batch throughput
 
-📖 [Full Depth Pipeline Documentation](docs/depth_pipeline/DEPTH_PIPELINE_README.md)
+📖 [Full Depth Pipeline Documentation](DEPTH_PIPELINE_README.md)
 
 ---
 
