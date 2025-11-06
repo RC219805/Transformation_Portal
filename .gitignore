@@ -126,3 +126,10 @@ pretrained/
 # Real-ESRGAN specific
 RealESRGAN_*.pth
 realesr-*.pth
+
+# Local backup directory (client-specific work)
+.local_backup/
+
+# Additional PNG exclusions
+input_images/**/*.png
+!input_images/.gitkeep
