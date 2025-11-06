@@ -85,7 +85,7 @@ def test_demonstrates_existing_docstring():
     st.one_of(
         st.text(min_size=1, max_size=20),
         st.integers(),
-        st.builds(type, st.text(min_size=1, max_size=10), st.tuples())
+        st.builds(type, st.text(min_size=1, max_size=10), st.tuples(), st.just({}))
     )
 )
 def test_demonstrates_with_various_concepts(concept):
@@ -101,7 +101,7 @@ def test_demonstrates_with_various_concepts(concept):
         st.one_of(
             st.text(min_size=1, max_size=20),
             st.integers(),
-            st.builds(type, st.text(min_size=1, max_size=10), st.tuples())
+            st.builds(type, st.text(min_size=1, max_size=10), st.tuples(), st.just({}))
         ),
         min_size=1,
         max_size=5

@@ -204,10 +204,10 @@ class ProPipeline:
             import torch
             if torch.cuda.is_available():
                 return "cuda"
-            elif torch.backends.mps.is_available():
+            elif hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 return "mps"
-        except ImportError:
-            # Torch not installed, fall back to CPU
+        except (ImportError, AttributeError):
+            # Torch not installed or not fully available, fall back to CPU
             pass
         return "cpu"
     
