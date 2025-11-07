@@ -36,6 +36,17 @@ __version__ = "1.0.0"
 __author__ = "Transformation Portal Team"
 
 # Lazy imports to avoid loading heavy dependencies
+# Note: Some modules are in the root directory, others are in scripts/ subdirectory
+from . import decision_decay_dashboard
+from . import download_depth_models
+from . import download_samples
+from . import install_models
+from . import install_models_auto
+from .scripts import codebase_philosophy_auditor
+from .scripts import create_board_textures
+from .scripts import run_aerial_enhancement
+from .scripts import verify_setup
+
 __all__ = [
     "codebase_philosophy_auditor",
     "decision_decay_dashboard",
