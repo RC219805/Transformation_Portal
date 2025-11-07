@@ -1,15 +1,12 @@
 {
-  "total_chunks": 1838,
-  "by_type": {
-    "doc": 421,
-    "code": 638,
+  "total_chunks": 1775,
+  "chunk_types": {
+    "doc": 361,
+    "code": 642,
     "test": 698,
-    "agent": 81
+    "agent": 74
   },
-  "by_language": {
-    "markdown": 460,
-    "python": 1377,
-    "json": 1
-  },
-  "total_chars": 1901957
+  "repo_root": ".",
+  "chunk_size_tokens": 1000,
+  "overlap_tokens": 100
 }

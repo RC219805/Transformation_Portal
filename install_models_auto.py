@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Automated Model Installation - No prompts"""
 
+import os
+import sys
 from pathlib import Path
 import urllib.request
 
@@ -16,14 +18,14 @@ def download_file(url, output_path):
     """Download file with progress."""
     print(f"\nDownloading: {output_path.name}")
     print(f"URL: {url}")
-
+    
     def report_progress(block_num, block_size, total_size):
         downloaded = block_num * block_size
         percent = min(100, (downloaded / total_size) * 100)
         mb_downloaded = downloaded / (1024 * 1024)
         mb_total = total_size / (1024 * 1024)
         print(f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end='', flush=True)
-
+    
     try:
         urllib.request.urlretrieve(url, output_path, reporthook=report_progress)
         print(f"\n✓ Downloaded: {output_path.name}")
@@ -36,7 +38,7 @@ def download_file(url, output_path):
 print("\n[1/4] Checking Depth Anything V2...")
 try:
     from transformers import AutoImageProcessor
-    processor = AutoImageProcessor.from_pretrained("LiheYoung/depth-anything-small-h")
+    processor = AutoImageProcessor.from_pretrained("LiheYoung/depth-anything-small-hf")
     print("✓ Depth Anything V2 ready")
 except Exception as e:
     print(f"⚠ Will download on first use: {e}")
@@ -59,7 +61,7 @@ else:
 print("\n[3/4] Checking ControlNet models...")
 try:
     from huggingface_hub import snapshot_download
-
+    
     for model_id in ["lllyasviel/sd-controlnet-canny", "lllyasviel/sd-controlnet-depth"]:
         try:
             snapshot_download(repo_id=model_id, allow_patterns=["*.json"])
