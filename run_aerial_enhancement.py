@@ -139,10 +139,7 @@ def process_single_image(
         result = enhance_aerial(
             input_path,
             output_path,
-            analysis_max_dim=args.analysis_resolution,
             k=args.materials,
-            seed=args.seed,
-            target_width=args.resolution,
         )
 
         size_mb = result.stat().st_size / (1024**2)
