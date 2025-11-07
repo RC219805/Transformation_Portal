@@ -1,0 +1,12 @@
+{
+  "total_chunks": 1775,
+  "chunk_types": {
+    "doc": 361,
+    "code": 642,
+    "test": 698,
+    "agent": 74
+  },
+  "repo_root": ".",
+  "chunk_size_tokens": 1000,
+  "overlap_tokens": 100
+}

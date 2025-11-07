@@ -1,0 +1,158 @@
+{
+  "artifacts": {
+    "artifact_000000": {
+      "artifact_id": "artifact_000000",
+      "file_path": "output/render_enhanced.jpg",
+      "artifact_type": "unknown",
+      "pipeline": "unknown",
+      "parent_id": null,
+      "children_ids": [],
+      "related_ids": [],
+      "tags": [
+        "unknown"
+      ],
+      "version": "1.0",
+      "metadata": {
+        "timestamp": null,
+        "parameters": {},
+        "hardware": null,
+        "success": null,
+        "processing_time": null,
+        "error_message": null,
+        "resolution": null,
+        "color_space": null,
+        "bit_depth": null,
+        "ai_model": null,
+        "quality_score": null
+      }
+    },
+    "artifact_000001": {
+      "artifact_id": "artifact_000001",
+      "file_path": "output/depth_map.png",
+      "artifact_type": "depth_map",
+      "pipeline": "unknown",
+      "parent_id": null,
+      "children_ids": [],
+      "related_ids": [],
+      "tags": [
+        "depth_map",
+        "unknown"
+      ],
+      "version": "1.0",
+      "metadata": {
+        "timestamp": null,
+        "parameters": {},
+        "hardware": null,
+        "success": null,
+        "processing_time": null,
+        "error_message": null,
+        "resolution": null,
+        "color_space": null,
+        "bit_depth": null,
+        "ai_model": null,
+        "quality_score": null
+      }
+    },
+    "artifact_000002": {
+      "artifact_id": "artifact_000002",
+      "file_path": "output/graded_video.mp4",
+      "artifact_type": "color_grade",
+      "pipeline": "unknown",
+      "parent_id": null,
+      "children_ids": [],
+      "related_ids": [],
+      "tags": [
+        "unknown",
+        "color_grade"
+      ],
+      "version": "1.0",
+      "metadata": {
+        "timestamp": null,
+        "parameters": {},
+        "hardware": null,
+        "success": null,
+        "processing_time": null,
+        "error_message": null,
+        "resolution": null,
+        "color_space": null,
+        "bit_depth": null,
+        "ai_model": null,
+        "quality_score": null
+      }
+    },
+    "artifact_000003": {
+      "artifact_id": "artifact_000003",
+      "file_path": "output/test_result.log",
+      "artifact_type": "log",
+      "pipeline": "unknown",
+      "parent_id": null,
+      "children_ids": [],
+      "related_ids": [],
+      "tags": [
+        "failure",
+        "log",
+        "unknown",
+        "has_error"
+      ],
+      "version": "1.0",
+      "metadata": {
+        "timestamp": null,
+        "parameters": {},
+        "hardware": null,
+        "success": false,
+        "processing_time": null,
+        "error_message": "Processing failed",
+        "resolution": null,
+        "color_space": null,
+        "bit_depth": null,
+        "ai_model": null,
+        "quality_score": null
+      }
+    },
+    "artifact_000004": {
+      "artifact_id": "artifact_000004",
+      "file_path": "output/metrics.json",
+      "artifact_type": "metric",
+      "pipeline": "unknown",
+      "parent_id": null,
+      "children_ids": [],
+      "related_ids": [],
+      "tags": [
+        "metric",
+        "success",
+        "unknown"
+      ],
+      "version": "1.0",
+      "metadata": {
+        "timestamp": null,
+        "parameters": {},
+        "hardware": null,
+        "success": true,
+        "processing_time": 2.5,
+        "error_message": null,
+        "resolution": null,
+        "color_space": null,
+        "bit_depth": null,
+        "ai_model": null,
+        "quality_score": null
+      }
+    }
+  },
+  "statistics": {
+    "total_artifacts": 5,
+    "by_type": {
+      "unknown": 1,
+      "depth_map": 1,
+      "color_grade": 1,
+      "log": 1,
+      "metric": 1
+    },
+    "by_pipeline": {
+      "unknown": 5
+    },
+    "success_rate": 0.5,
+    "avg_processing_time": 2.5,
+    "artifacts_with_errors": 1
+  },
+  "export_time": "2025-11-06T13:08:59.757441"
+}
