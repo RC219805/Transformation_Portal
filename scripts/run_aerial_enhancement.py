@@ -17,7 +17,7 @@ print()
 image = Image.open(input_path).convert("RGB")
 image_array = np.asarray(image, dtype=np.float32) / 255.0
 
-# Enhance with MBAR board materials
+# Enhance with MBAR board materials (uses default textures from DEFAULT_TEXTURES)
 result = enhance_aerial(
     image_array,
     str(output_path),
