@@ -217,11 +217,11 @@ def main() -> None:
         return
 
     # Single image mode
-    # Use default paths if not specified (for backward compatibility)
-    if not args.input:
-        args.input = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tiff")
-    if not args.output:
-        args.output = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picacho_Aerial_MBAR_Enhanced.jpg")
+    # Require input and output paths for single image mode
+    if not args.input or not args.output:
+        print("❌ Error: --input and --output are required for single image processing.")
+        print("   Example: python scripts/run_aerial_enhancement.py --input path/to/image.tiff --output path/to/output.jpg")
+        sys.exit(1)
 
     print("=" * 70)
     print("AERIAL ENHANCEMENT - MBAR Materials")
