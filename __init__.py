@@ -1,21 +1,49 @@
-"""
-Model wrappers for depth estimation.
+"""Scripts package for Transformation Portal utilities.
+
+This package contains utility scripts for codebase maintenance,
+analysis, and auxiliary processing tasks.
+
+Modules:
+    - codebase_philosophy_auditor: Audit code quality and decision annotations
+    - decision_decay_dashboard: Monitor temporal contract decay
+    - download_depth_models: Download Depth Anything V2 models
+    - download_samples: Download sample images for testing
+    - install_models: Interactive model installation (Grade A+)
+    - install_models_auto: Automated model installation with retry logic
+    - create_board_textures: Generate MBAR material textures
+    - run_aerial_enhancement: Batch aerial photo enhancement
+    - verify_setup: Verify repository setup and dependencies
+
+Execution:
+    Scripts can be run directly or as modules:
+    
+    Direct execution:
+        python scripts/decision_decay_dashboard.py
+    
+    Module execution (recommended for relative imports):
+        python -m scripts.decision_decay_dashboard
+
+Notes:
+    - Scripts use lazy imports for faster startup (PIL, matplotlib, torch)
+    - Most scripts support --help for usage information
+    - Refer to each script's docstring for specific usage and examples
+
+Version: 1.0.0
+Author: Transformation Portal Team
 """
 
-# Lazy imports to avoid ImportError when dependencies are not installed
-# This allows pytest to import the root directory without requiring all dependencies
-__all__ = ["DepthAnythingV2Model", "ModelBackend", "ModelVariant", "CoreMLDepthModel"]  # pylint: disable=undefined-all-variable
+__version__ = "1.0.0"
+__author__ = "Transformation Portal Team"
 
-def __getattr__(name):
-    """Lazy import of depth estimation modules."""
-    if name in ("DepthAnythingV2Model", "ModelBackend", "ModelVariant"):
-        from .depth_anything_v2 import DepthAnythingV2Model, ModelBackend, ModelVariant
-        globals()["DepthAnythingV2Model"] = DepthAnythingV2Model
-        globals()["ModelBackend"] = ModelBackend
-        globals()["ModelVariant"] = ModelVariant
-        return globals()[name]
-    if name == "CoreMLDepthModel":
-        from .coreml_wrapper import CoreMLDepthModel
-        globals()["CoreMLDepthModel"] = CoreMLDepthModel
-        return CoreMLDepthModel
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+# Lazy imports to avoid loading heavy dependencies
+__all__ = [
+    "codebase_philosophy_auditor",
+    "decision_decay_dashboard",
+    "download_depth_models",
+    "download_samples",
+    "install_models",
+    "install_models_auto",
+    "create_board_textures",
+    "run_aerial_enhancement",
+    "verify_setup",
+]
