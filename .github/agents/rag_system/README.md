@@ -1,448 +1,302 @@
-# RAG System for Transformation Portal Specialist Agent
+# RAG System Prompt Templates
 
-Retrieval-Augmented Generation (RAG) system that enhances the Transformation Portal Specialist custom agent with:
+This directory contains comprehensive prompt templates for the Transformation Portal RAG system. These templates provide structured workflows for common development tasks, ensuring consistency and completeness.
 
-1. **Repository content indexing** with intelligent chunking
-2. **Hybrid retrieval** combining BM25 sparse and dense vector search
-3. **Result reranking** for improved precision
-4. **Citation generation** with confidence scores
-5. **Canonical prompt templates** for common workflows
-6. **Structured JSON response schemas** for machine parsing
+## Available Templates
 
-## Architecture
+### 1. Feature Implementation (`feature_implementation.md`)
+**Use for**: Adding new features to pipelines, processors, or utilities
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     RAG System Architecture                      │
-└─────────────────────────────────────────────────────────────────┘
+**Includes**:
+- Requirements analysis framework
+- Implementation plan structure
+- Testing strategy (unit, integration, property-based)
+- Documentation requirements
+- Performance benchmarking approach
+- Few-shot examples from repository
 
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│   Indexer    │─────▶│  Retriever   │─────▶│  Reranker    │
-│              │      │              │      │              │
-│ • Chunks     │      │ • BM25       │      │ • Exact      │
-│ • Metadata   │      │ • Vector     │      │   matches    │
-│ • Overlap    │      │ • Hybrid     │      │ • Quality    │
-└──────────────┘      └──────────────┘      └──────────────┘
-                                                    │
-                                                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    Citation Generator                            │
-│  • File paths + line numbers                                    │
-│  • Code/doc snippets                                            │
-│  • Confidence scores (0.0-1.0)                                  │
-│  • Relevance notes                                              │
-└─────────────────────────────────────────────────────────────────┘
-                                                    │
-                                                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   Prompt Templates                               │
-│  • Feature implementation                                        │
-│  • Bug triage                                                   │
-│  • CI changes                                                   │
-│  • Few-shot examples                                            │
-│  • JSON response schema                                         │
-└─────────────────────────────────────────────────────────────────┘
-```
+**When to use**:
+- Adding depth-based effects to pipelines
+- Implementing new material enhancement techniques
+- Creating new LUT presets or color grading workflows
+- Extending batch processing capabilities
 
-## Components
+---
 
-### 1. Indexer (`indexer.py`)
+### 2. Bug Triage (`bug_triage.md`)
+**Use for**: Debugging errors, import issues, FFmpeg problems, runtime failures
 
-Indexes repository content into searchable chunks:
+**Includes**:
+- Error classification system
+- Root cause analysis framework
+- Fix strategy comparison (multiple approaches)
+- Regression test creation
+- Common bug patterns and solutions
 
-- **Chunk size**: 500-1000 tokens (~2000-4000 characters)
-- **Overlap**: 50-100 tokens (~200-400 characters) between chunks
-- **Indexed content**:
-  - `docs/` - Documentation
-  - `src/` - Source code
-  - `tests/` - Test files
-  - `.github/agents/` - Agent definitions
-  - Top-level markdown files (READMEs, CHANGELOGs, guides)
-  - `examples/` - Example code
+**When to use**:
+- ImportError for missing dependencies
+- FFmpeg command failures
+- Out of memory errors
+- Metadata preservation issues
+- Platform-specific errors (CoreML, CUDA)
 
-**Features**:
-- Python-aware chunking (preserves functions/classes)
-- Metadata extraction (function names, docstrings, titles)
-- File path and line number tracking
+---
 
-**Usage**:
-```bash
-python -m .github.agents.rag_system.indexer \
-    --repo-root /path/to/repo \
-    --output index_stats.json \
-    --verbose
-```
+### 3. Pipeline Configuration (`pipeline_configuration.md`)
+**Use for**: Creating YAML configs for depth pipeline, video grader, batch processors
 
-### 2. Retriever (`retriever.py`)
+**Includes**:
+- Complete parameter reference tables
+- Configuration validation checklist
+- Performance vs quality tradeoffs
+- Use case-specific presets (interior, exterior, aerial, product)
+- Testing and validation workflow
 
-Hybrid retrieval using BM25 for sparse keyword matching:
+**When to use**:
+- Creating custom depth pipeline presets
+- Adding video grading presets
+- Configuring batch processing workflows
+- Optimizing for specific content types
 
-- **BM25 parameters**: k1=1.5, b=0.75 (tuned for code/docs)
-- **Filtering**: By chunk type (code/doc/test) or file path pattern
-- **Context window**: Retrieve surrounding chunks for additional context
+---
 
-**Features**:
-- Efficient sparse retrieval with TF-IDF
-- Query tokenization and normalization
-- Configurable top-k results
-- File path and type filtering
+### 4. Testing (`testing.md`)
+**Use for**: Writing comprehensive test suites (unit, integration, performance)
 
-**Usage**:
-```bash
-python -m .github.agents.rag_system.retriever \
-    --repo-root /path/to/repo \
-    --query "depth pipeline atmospheric effects" \
-    --top-k 5 \
-    --type doc code
-```
+**Includes**:
+- Unit test structure and patterns
+- Integration test workflows
+- Property-based testing with Hypothesis
+- Performance benchmarking framework
+- Mock-based testing for heavy dependencies
+- CI test configuration
 
-### 3. Reranker (`reranker.py`)
+**When to use**:
+- Testing new feature implementations
+- Adding regression tests for bug fixes
+- Benchmarking pipeline performance
+- Testing metadata preservation
+- Validating FFmpeg integration
 
-Reranks retrieval results using additional signals:
+---
 
-- **Exact match bonus**: +2.0 for exact query phrases
-- **Code quality bonus**: +0.3 for docstrings, type hints
-- **Documentation bonus**: +0.2 for titles, examples, links
-- **Test relevance bonus**: +0.1 for matching test names
+### 5. Documentation (`documentation.md`)
+**Use for**: Documenting features, APIs, configurations, and workflows
 
-**Features**:
-- Multi-signal scoring
-- Configurable signal weights
-- Metadata-aware reranking
+**Includes**:
+- Feature documentation structure
+- NumPy-style docstring format
+- Usage guide templates
+- Configuration reference format
+- Troubleshooting guide structure
+- API reference patterns
 
-**Usage**:
-```bash
-python -m .github.agents.rag_system.reranker \
-    --repo-root /path/to/repo \
-    --query "ffmpeg filter graph" \
-    --top-k 5
-```
+**When to use**:
+- Documenting new pipeline features
+- Writing user guides for workflows
+- Creating API documentation
+- Documenting configuration presets
+- Writing troubleshooting guides
 
-### 4. Citation Generator (`citation.py`)
+---
 
-Generates structured citations with confidence scores:
+### 6. Performance Optimization (`performance_optimization.md`)
+**Use for**: Profiling and optimizing processing pipelines
 
-- **Confidence**: Computed from retrieval rank and score (0.0-1.0)
-- **Snippets**: Trimmed to 10 lines / 500 characters max
-- **Formats**: Markdown, plain text, JSON
+**Includes**:
+- Profiling tools and techniques (cProfile, memory_profiler, PyTorch profiler)
+- Optimization strategies (caching, batching, GPU acceleration, vectorization)
+- Benchmarking framework
+- Before/after comparison methodology
+- Repository-specific optimizations
 
-**Features**:
-- Rank-based confidence scoring
-- Relevance notes (function names, doc types)
-- Multiple output formats
+**When to use**:
+- Optimizing depth estimation speed
+- Reducing memory usage for large images
+- Improving batch processing throughput
+- Implementing GPU/CoreML acceleration
+- Profiling video processing workflows
 
-**Usage**:
-```bash
-python -m .github.agents.rag_system.citation \
-    --repo-root /path/to/repo \
-    --query "material response enhancement" \
-    --max-citations 5 \
-    --format markdown
-```
+---
 
-### 5. Prompt Templates (`templates.py`)
+## Template Usage
 
-Canonical templates for common workflows:
+### Basic Usage
 
-#### Feature Implementation Template
-- Requirements → Files to modify → Tests to add → PR body
-- Includes few-shot examples from repository
-- Structured JSON response schema
+Each template follows a structured format with:
+1. **Overview** - Purpose and when to use
+2. **Workflow Steps** - Sequential process to follow
+3. **Code Examples** - Real patterns from the repository
+4. **Validation Checklist** - Ensure completeness
+5. **Few-Shot Examples** - Actual repository examples
 
-#### Bug Triage Template
-- Error log → Probable cause → Minimal repro → Fix steps
-- Root cause analysis workflow
-- Similar issues injection
+### Integration with RAG System
 
-#### CI Change Template
-- Workflow name → Job steps → Test coverage → Required secrets
-- Impact assessment
-- Existing workflow examples
-
-**Features**:
-- Structured JSON response schema (`CodeModificationResponse`)
-- Few-shot examples from repository history
-- Schema validation
-
-**Usage**:
-```bash
-# Generate feature template
-python -m .github.agents.rag_system.templates \
-    --type feature \
-    --description "Add depth-based fog effect" \
-    --with-examples
-
-# Generate bug triage template
-python -m .github.agents.rag_system.templates \
-    --type bug \
-    --description "ImportError: No module named 'torch'" \
-    --context "Python 3.10, Ubuntu 20.04"
-
-# Validate response schema
-python -m .github.agents.rag_system.templates \
-    --validate response.json
-```
-
-### 6. Artifact Classifier (`classifier.py`)
-
-Automatically classifies and organizes image processing artifacts:
-
-- **Auto-classification**: Analyses, depth maps, color grades, HDR outputs, metrics, logs, profiles
-- **Metadata extraction**: Pipeline, parameters, timestamps, hardware, success/failure, timing
-- **Hierarchical organization**: By pipeline type with relational links (parent/child/related)
-- **Tag generation**: Pipeline name, AI model, error patterns, hardware, color space, resolution, processing time
-- **Version control**: Track pipeline evolution and parameter tuning
-- **Lineage tracking**: Full transformation chains with audit trails
-
-**Artifact Types**:
-- Analysis, Depth Map, Color Grade, HDR Output, Metric, Log, Profile, Render, Material Response, LUT Application
-
-**Pipeline Types**:
-- Depth Pipeline, Lux Render, Material Response, Video Grader, TIFF Processor, HDR Production, AGX Filmic
-
-**Features**:
-- Pattern-based classification from filenames
-- Content-based classification from file contents
-- Metadata extraction (resolution, color space, bit depth, AI models, timestamps)
-- Hierarchical artifact relationships (parent → child → grandchild)
-- Tag-based search and filtering
-- Statistics and export to JSON
-
-**Usage**:
-```bash
-# Classify artifacts in a directory
-python .github/agents/rag_system/classifier.py \
-    --input-dir output/ \
-    --output artifacts.json \
-    --verbose
-
-# Search by tags
-python .github/agents/rag_system/classifier.py \
-    --input-dir output/ \
-    --tags depth_map 4k_plus success \
-    --require-all-tags
-```
-
-### 7. Knowledge Integration Engine (`knowledge_engine.py`)
-
-Provides pattern analysis, feedback loops, and recommendations for continuous improvement:
-
-- **Pattern analysis**: Success rates, failure modes, performance trends, quality evolution
-- **Feedback loops**: Historical outcomes inform current decisions
-- **Recommendations**: Gap analysis (missing tests, undocumented features, regressions, optimizations)
-- **Natural language query**: Ask questions about pipeline performance, errors, and quality
-- **KPI tracking**: Track accuracy, latency, quality, and success rates over time
-
-**Analysis Features**:
-- Success rate tracking per pipeline
-- Processing time statistics (avg, median, P95)
-- Failure mode detection and categorization
-- Trend analysis (improving, degrading, stable)
-- Common and optimal parameter identification
-
-**Recommendation Types**:
-- **Regression**: Low success rate, quality degradation
-- **Optimization**: Performance degradation
-- **Missing Test**: Recurring errors without test coverage
-- **Undocumented Feature**: Features used but not documented
-
-**Natural Language Queries**:
-- "What is the success rate for depth_pipeline?"
-- "How is the performance of material_response?"
-- "What errors occurred in lux_render?"
-- "What improvements do you recommend?"
-
-**Usage**:
-```bash
-# Analyze a pipeline
-python .github/agents/rag_system/knowledge_engine.py \
-    --feedback-file feedback.json \
-    --analyze-pipeline depth_pipeline \
-    --days 30
-
-# Generate recommendations
-python .github/agents/rag_system/knowledge_engine.py \
-    --feedback-file feedback.json \
-    --recommendations
-
-# Natural language query
-python .github/agents/rag_system/knowledge_engine.py \
-    --feedback-file feedback.json \
-    --query "What is the average processing time?"
-
-# Export knowledge base
-python .github/agents/rag_system/knowledge_engine.py \
-    --feedback-file feedback.json \
-    --export knowledge_base.json
-```
-
-## JSON Response Schema
-
-All code modification responses must follow this schema:
-
-```json
-{
-  "summary": "Brief summary of changes (1-2 sentences)",
-  "files": [
-    {
-      "path": "relative/path/to/file.py",
-      "patch": "unified diff or change description",
-      "description": "Why this change is needed"
-    }
-  ],
-  "tests": [
-    "tests/test_module.py",
-    "tests/integration/test_feature.py"
-  ],
-  "explanation": "Detailed explanation of approach, trade-offs, alternatives",
-  "confidence": 0.85,
-  "citations": [
-    {
-      "file_path": "existing_code.py",
-      "snippet": "relevant code snippet",
-      "relevance": "shows similar pattern"
-    }
-  ]
-}
-```
-
-**Benefits**:
-- Machine-parseable for CI validation
-- Structured patches for automated application
-- Confidence scoring for human review
-- Citations for verification
-
-## Integration with Agent
-
-The RAG system enhances the Transformation Portal Specialist agent by:
-
-1. **Reducing hallucinations**: Grounding responses in actual repository content
-2. **Improving relevance**: Finding repo-specific patterns and examples
-3. **Providing evidence**: Citations with file paths and snippets
-4. **Structuring responses**: JSON schema for automation
-
-### Workflow Integration
+Templates are designed to work with the RAG system's retrieval and reranking:
 
 ```python
-from .github.agents.rag_system import (
-    RepositoryIndexer,
-    HybridRetriever,
-    ResultReranker,
-    CitationGenerator,
-    PromptTemplates,
+from rag_system.templates import PromptTemplates
+from rag_system.retriever import HybridRetriever
+from rag_system.citation import CitationGenerator
+
+# 1. Generate base template
+template = PromptTemplates.feature_implementation(
+    feature_description="Add depth-based atmospheric haze",
+    context="For exterior architectural renders"
 )
 
-# 1. Index repository (one-time or periodic)
-indexer = RepositoryIndexer('/path/to/repo')
-chunks = indexer.index_repository()
-
-# 2. Setup retrieval pipeline
+# 2. Retrieve relevant repository examples
 retriever = HybridRetriever()
-retriever.index(chunks)
-reranker = ResultReranker()
+examples = retriever.retrieve(
+    query="atmospheric effects depth processing",
+    top_k=5
+)
 
-# 3. Process query
-query = "How to add a new LUT preset?"
-results = retriever.retrieve(query, top_k=10)
-reranked = reranker.rerank(results, query, top_k=5)
+# 3. Add few-shot examples to template
+template_with_examples = PromptTemplates.add_few_shot_examples(
+    template, examples
+)
 
 # 4. Generate citations
-citation_gen = CitationGenerator()
-citations = citation_gen.generate_citations(reranked)
-
-# 5. Use template with citations
-template = PromptTemplates.feature_implementation(
-    "Add warm sunset LUT preset",
-    context=citation_gen.format_citations(citations)
-)
+citations = CitationGenerator.generate_citations(examples)
 ```
 
-## Performance Characteristics
+### Customization
 
-### Indexing
-- **Time**: ~2-5 seconds for typical repo size (100+ files)
-- **Memory**: ~50-100 MB for index in memory
-- **Chunks**: ~500-1000 chunks for Transformation Portal
+Templates include placeholders in `{CURLY_BRACES}` for user-specific details:
+- `{FEATURE_NAME}` - Name of the feature being implemented
+- `{MODULE_NAME}` - Python module/file name
+- `{CONFIG_NAME}` - Configuration file name
+- `{USE_CASE}` - Intended use case or scenario
 
-### Retrieval
-- **BM25 search**: <10ms for typical queries
-- **Reranking**: <5ms for top-10 results
-- **Citation generation**: <1ms
+Replace these with actual values when using templates.
 
-### Scalability
-- **Small repos** (<100 files): In-memory BM25 (current implementation)
-- **Medium repos** (100-1000 files): FAISS for vector embeddings
-- **Large repos** (>1000 files): Weaviate or Pinecone for distributed search
+---
 
-## Vector Database Options
+## Template Standards
 
-Current implementation uses **in-memory BM25** for simplicity. For enhanced semantic search, consider:
+### Code Examples
+- ✅ Use actual patterns from the repository
+- ✅ Include both "before" and "after" examples
+- ✅ Show expected output or results
+- ✅ Document performance characteristics
 
-### Self-Hosted Options
-- **FAISS** (Facebook AI Similarity Search)
-  - Best for: Single-machine, fast vector search
-  - Pros: No dependencies, very fast, free
-  - Cons: In-memory only, no distributed search
+### Testing
+- ✅ Include unit, integration, and property-based tests
+- ✅ Cover edge cases and error conditions
+- ✅ Use pytest markers (fast, slow, integration)
+- ✅ Mock heavy dependencies for CI
 
-- **Weaviate**
-  - Best for: Self-hosted semantic search with GraphQL API
-  - Pros: Full-featured, persistent storage, hybrid search
-  - Cons: Requires Docker/Kubernetes, more complex setup
+### Documentation
+- ✅ Follow NumPy docstring format
+- ✅ Include usage examples with realistic parameters
+- ✅ Document performance characteristics
+- ✅ Link to related documentation
 
-### Cloud Options
-- **Pinecone**
-  - Best for: Managed vector database with low maintenance
-  - Pros: Fully managed, scalable, easy to use
-  - Cons: Costs money, vendor lock-in
+### Performance
+- ✅ Profile before optimizing
+- ✅ Document baseline and optimized performance
+- ✅ Include memory usage measurements
+- ✅ Test on representative data sizes
 
-- **Redis Vector Search**
-  - Best for: Existing Redis users
-  - Pros: Integrated with Redis, fast, flexible
-  - Cons: Requires Redis Stack
+---
 
-## Future Enhancements
+## Repository-Specific Patterns
 
-1. **Dense vector embeddings**: Add sentence-transformers for semantic search
-2. **Persistent index**: Save/load indexed chunks to avoid reindexing
-3. **Incremental updates**: Update index when files change (git hooks)
-4. **Query expansion**: Automatic synonym expansion for better recall
-5. **Code understanding**: AST-based code analysis for deeper understanding
-6. **Embedding caching**: Cache embeddings for faster retrieval
+### Depth Pipeline
+```python
+# Pattern: Zone-based processing with depth maps
+depth_map = normalize_depth(raw_depth)
+foreground_mask = depth_map < 0.3
+background_mask = depth_map >= 0.7
 
-## Testing
-
-Run tests for RAG components:
-
-```bash
-# Test indexing
-pytest tests/test_rag_indexer.py -v
-
-# Test retrieval
-pytest tests/test_rag_retriever.py -v
-
-# Test templates
-pytest tests/test_rag_templates.py -v
-
-# Full RAG pipeline test
-pytest tests/test_rag_pipeline.py -v
+result[foreground_mask] = process_foreground(image[foreground_mask])
+result[background_mask] = process_background(image[background_mask])
 ```
+
+### Metadata Preservation
+```python
+# Pattern: Preserve PIL Image.info dict
+original_info = image.info.copy()
+result = process_image(image)
+result.info = original_info
+```
+
+### Optional Dependencies
+```python
+# Pattern: Graceful fallback for optional packages
+try:
+    import tifffile
+    TIFFFILE_AVAILABLE = True
+except ImportError:
+    TIFFFILE_AVAILABLE = False
+    warnings.warn("tifffile not available, using Pillow")
+```
+
+### LRU Caching
+```python
+# Pattern: Cache expensive computations
+from functools import lru_cache
+
+@lru_cache(maxsize=128)
+def estimate_depth(image_hash: str) -> np.ndarray:
+    image = load_from_hash(image_hash)
+    return depth_model.estimate(image)
+```
+
+---
+
+## Version Control
+
+**Template Version**: 1.0  
+**Last Updated**: 2025-11-06  
+**Maintained By**: Transformation Portal RAG System
+
+### Changelog
+
+**v1.0.0** (2025-11-06)
+- Initial template collection
+- Feature implementation template
+- Bug triage template
+- Pipeline configuration template
+- Testing template
+- Documentation template
+- Performance optimization template
+
+---
 
 ## Contributing
 
-When adding new features to the RAG system:
+When updating templates:
 
-1. **Maintain compatibility**: Don't break existing indexer/retriever APIs
-2. **Add tests**: Test new chunking strategies, retrieval methods
-3. **Document performance**: Benchmark and document timing/memory
-4. **Update examples**: Add new few-shot examples to `templates.py`
-5. **Validate schemas**: Ensure JSON responses validate
+1. **Maintain structure** - Don't change placeholder format `{VARIABLE}`
+2. **Update examples** - Use current repository patterns
+3. **Test templates** - Verify placeholders are comprehensive
+4. **Document changes** - Update this README and template version
+5. **Review patterns** - Ensure alignment with repository standards
 
-## References
+---
 
-- **BM25**: Robertson & Zaragoza (2009) - "The Probabilistic Relevance Framework: BM25 and Beyond"
-- **Hybrid Search**: Combining sparse (BM25) and dense (vector) retrieval for optimal results
-- **RAG**: Lewis et al. (2020) - "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+## Related Documentation
 
-## License
+- [RAG System Architecture](../README.md)
+- [Knowledge Engine](../knowledge_engine.py)
+- [Citation Generator](../citation.py)
+- [Prompt Templates (Python)](../templates.py)
 
-Same as parent repository (see root LICENSE file).
+---
+
+## Quick Reference
+
+| Template | Primary Use | Key Sections |
+|----------|-------------|--------------|
+| Feature Implementation | New pipeline features | Requirements, Implementation Plan, Testing, Few-Shot Examples |
+| Bug Triage | Debugging errors | Error Classification, Root Cause, Fix Strategy, Regression Tests |
+| Pipeline Configuration | YAML configs | Parameter Reference, Use Cases, Validation, Performance |
+| Testing | Test suites | Unit Tests, Integration Tests, Benchmarks, CI Configuration |
+| Documentation | Feature docs | API Reference, Usage Examples, Troubleshooting, Performance |
+| Performance Optimization | Speed/memory tuning | Profiling, Optimization Strategies, Benchmarking, Validation |
+
+---
+
+**Need help?** Refer to the main [RAG System README](../README.md) or examine the [templates.py](../templates.py) Python implementation.
