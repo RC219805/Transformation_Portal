@@ -295,7 +295,7 @@ def main() -> int:
 
     if args.palette and args.palette.exists():
         print(f"Loading palette from: {args.palette}")
-        assignments = load_palette_assignments(args.palette, rules)
+        assignments = load_palette_assignments(args.palette)
     else:
         print("Computing material assignments...")
         stats = compute_cluster_stats(base_array, labels)
