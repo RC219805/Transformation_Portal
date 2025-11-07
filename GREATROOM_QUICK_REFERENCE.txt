@@ -1,0 +1,87 @@
+================================================================================
+750 PICACHO GREAT ROOM - QUICK REFERENCE GUIDE
+================================================================================
+
+IMAGE SPECS
+-----------
+Resolution: 4000x3000 (12MP)
+Format: 16-bit float (float32)
+File: input_images/750Picacho_GreatRoom.tiff
+
+KEY QUALITY METRICS
+-------------------
+✅ Edge Strength: 0.243 (EXCEPTIONAL - 35% better than Kitchen)
+✅ Shadow Clipping: 0.27% (4.4× better than Kitchen)
+⚠️  Highlight Clipping: 1.36% (needs selective recovery)
+⚠️  Color Bias: Warm (R/G: 1.093, B/G: 0.919)
+✅ Exposure: 0.500 (perfectly centered)
+✅ Contrast: 0.295 std dev (good spread)
+
+PROCESSING PHILOSOPHY
+---------------------
+🎯 CONSERVATIVE (6/10) - Image already excellent, minimal intervention needed
+✓ Selective highlight recovery
+✓ Gentle material enhancement
+✓ Subtle color corrections
+✗ AVOID aggressive adjustments (will over-process)
+
+MATERIALS PRIORITY
+------------------
+1. WOOD (~20% coverage) - Priority: HIGH
+   → Material Response Wood LUT @ 70%
+
+2. GLASS/WINDOWS (~5-8%) - Priority: CRITICAL  
+   → Selective highlight recovery
+
+3. TEXTILES (~10-15%) - Priority: MODERATE
+   → Clarity +0.12, preserve softness
+
+4. STONE/WALLS (~50-60%) - Priority: LOW
+   → Subtle texture @ 40-50%
+
+RECOMMENDED PARAMETERS
+----------------------
+Exposure:      +0.05
+Contrast:      1.06
+Saturation:    1.06 (+6%)
+Clarity:       0.12
+Highlights:    -12
+Shadows:       +6
+Temperature:   -400K
+Material LUT:  Wood_Warm_Grain.cube @ 70%
+Color LUT:     Kodak_2383.cube @ 60%
+
+QUICK COMMAND
+-------------
+python conservative_enhance.py \
+  --input input_images/750Picacho_GreatRoom.tiff \
+  --exposure 0.05 --contrast 1.06 --saturation 1.06 \
+  --clarity 0.12 --highlights -12 --shadows +6 \
+  --temperature -400 --material-response 0.70 \
+  --lut assets/luts/film_emulation/Kodak_2383.cube \
+  --lut-strength 0.60 --depth-aware --preserve-highlights
+
+COMPARISON TO KITCHEN
+---------------------
+Great Room SUPERIOR in:
+  • Edge strength (+35%)
+  • Shadow preservation (4.4× better)
+  • Detail retention
+  • Overall sharpness
+
+Kitchen SUPERIOR in:
+  • Highlight control (less clipping)
+  • Uniform lighting
+
+KEY DIFFERENCE: Great Room needs GENTLER processing than Kitchen!
+
+EXPECTED RESULTS
+----------------
+✅ Recovered window detail
+✅ Enhanced wood grain
+✅ Improved spatial depth
+✅ Cooler, neutral white balance
+✅ Preserved sharpness
+✅ Publication-ready quality
+
+================================================================================

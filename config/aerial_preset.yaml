@@ -1,0 +1,33 @@
+depth_model:
+  variant: "small"
+  backend: "coreml"
+  cache_size: 50
+
+processing:
+  depth_aware_denoise:
+    enabled: true
+    sigma_spatial: 2.0
+    edge_threshold: 0.08
+    preserve_strength: 0.9
+
+  zone_tone_mapping:
+    enabled: true
+    num_zones: 5
+    method: "agx"
+    zone_params:
+      - {contrast: 1.25, saturation: 1.15}
+      - {contrast: 1.15, saturation: 1.10}
+      - {contrast: 1.05, saturation: 1.00}
+      - {contrast: 0.95, saturation: 0.92}
+      - {contrast: 0.85, saturation: 0.85}
+
+  atmospheric_effects:
+    enabled: true
+    haze_strength: 0.15
+    aerial_desaturation: 0.25
+    depth_color_shift: [0.15, 0.12, 0.08]
+
+  depth_guided_filters:
+    enabled: true
+    clarity_strength: 0.65
+    glow_radius: 0

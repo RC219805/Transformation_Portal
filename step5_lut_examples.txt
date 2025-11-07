@@ -1,0 +1,179 @@
+LUT Processing Code Examples
+Query: LUT application video processing
+
+
+============================================================
+Example 1: src/transformation_portal/cli/__init__.py
+Lines: 204-208
+Score: 12.061
+
+def process_video(
+    input_path: Path = typer.Option(..., "--input", "-i", help="Input video path"),
+    output_path: Path = typer.Option(..., "--output", "-o", help="Output video path"),
+    preset: str = typer.Option("signature_estate", "--preset", "-p", help="Grading preset"),
+    lut_strength: float = typer.Option(0.7, "--lut-strength", help="LUT strength (0.0-1.0)"),
+
+============================================================
+Example 2: src/transformation_portal/processors/luxury_video_master_grader.py
+Lines: 33-54
+Score: 6.947
+
+class GradePreset:
+    """Container describing the finishing recipe for a video preset."""
+
+    name: str
+    description: str
+    lut: Path
+    lut_strength: float = 1.0
+    denoise: Optional[str] = None
+    contrast: float = 1.0
+    saturation: float = 1.0
+    gamma: float = 1.0
+    brightness: float = 0.0
+    warmth: float = 0.0
+    cool: float = 0.0
+    sharpen: Optional[str] = None
+    grain: float = 0.0
+    notes: str = ""
+    deband: Optional[str] = None
+    halation_intensity: float = 0.0
+    halation_radius: float = 18.0
+    halation_threshold: float = 0.6
+
+
+============================================================
+Example 3: examples/vfx_extension_example.py
+Lines: 90-118
+Score: 6.804
+
+def example_cli_usage():
+    """Example: Show CLI usage."""
+    _info("=== CLI Usage Examples ===")
+    
+    _info("\n1. Single image with VFX:")
+    _info("   python realize_v8_unified_cli_extension.py enhance-vfx \\")
+    _info("       --input interior.jpg \\")
+    _info("       --output enhanced.jpg \\")
+    _info("       --base-preset signature_estate_agx \\")
+    _info("       --vfx-preset cinematic_fog \\")
+    _info("       --material-response")
+    
+    _info("\n2. Batch processing:")
+    _info("   python realize_v8_unified_cli_extension.py batch-vfx \\")
+    _info("       --input renders/ \\")
+    _info("       --output finals/ \\")
+    _info("       --base-preset signature_estate \\")
+    _info("       --vfx-preset dramatic_dof \\")
+    _info("       --jobs 4")
+    
+    _info("\n3. With custom LUT:")
+    _info("   python realize_v8_unified_cli_extension.py enhance-vfx \\")
+    _info("       --input interior.jpg \\")
+    _info("       --output enhanced.jpg \\")
+    _info("       --vfx-preset subtle_estate \\")
+    # Path verified to exist after restructuring (2025-11-04)
+    _info("       --lut assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube")
+
+
+
+============================================================
+Example 4: src/transformation_portal/processors/luxury_video_master_grader.py
+Lines: 248-309
+Score: 6.722
+
+def summarize_probe(data: Dict[str, object]) -> str:
+    fmt = data.get("format", {})
+    duration = fmt.get("duration")
+    streams = data.get("streams", [])
+    video = next((s for s in streams if s.get("codec_type") == "video"), {})
+    audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
+    pieces = []
+    numeric_duration = _parse_probe_duration(duration)
+    if numeric_duration is not None:
+        pieces.append(f"duration {numeric_duration:.2f}s")
+    if video:
+        w = video.get("width")
+        h = video.get("height")
+        fps = describe_frame_rates(
+            video.get("avg_frame_rate"), video.get("r_frame_rate")
+        )
+        codec = video.get("codec_name")
+        pix_fmt = video.get("pix_fmt")
+
+        # Build video info string
+        video_info = f"video {codec} {w}x{h} @ {fps}"
+        if pix_fmt:
+            video_info += f" {pix_fmt}"
+
+        # Add bit depth if available
+        bits_per_raw_sample = video.get("bits_per_raw_sample")
+        if bits_per_raw_sample:
+            video_info += f" {bits_per_raw_sample}bit"
+        elif pix_fmt:
+            # Try to derive bit depth from pixel format
+            if "10" in pix_fmt:
+                video_info += " 10bit"
+            elif "12" in pix_fmt:
+                video_info += " 12bit"
+            elif "16" in pix_fmt:
+                video_info += " 16bit"
+
+        # Add color metadata if present
+        color_parts = []
+        color_primaries = normalise_color_tag(video.get("color_primaries"))
+        color_trc = normalise_color_tag(video.get("color_trc"))
+        colorspace = normalise_color_tag(get_color_space_tag(video))
+
+        if color_primaries:
+            color_parts.append(f"primaries={color_primaries}")
+        if color_trc:
+            color_parts.append(f"trc={color_trc}")
+        if colorspace:
+            color_parts.append(f"space={colorspace}")
+
+        if color_parts:
+            video_info += f" ({', '.join(color_parts)})"
+
+        pieces.append(video_info)
+    if audio:
+        codec = audio.get("codec_name")
+        sr = audio.get("sample_rate")
+        channels = audio.get("channels")
+        pieces.append(f"audio {codec} {channels}ch {sr}Hz")
+    return ", ".join(pieces)
+
+
+
+============================================================
+Example 5: src/transformation_portal/utils/format_utils.py
+Lines: 379-406
+Score: 6.608
+
+def format_help_text(format_type: str = 'image') -> str:
+    """Generate help text for supported formats.
+
+    Args:
+        format_type: 'image', 'video', or 'both'
+
+    Returns:
+        Formatted help text string
+
+    Examples:
+        >>> print(format_help_text('image'))
+        Supported image formats: .bmp, .gif, .ico, .jpg, ...
+    """
+    summary = get_supported_formats_summary()
+
+    if format_type == 'image':
+        return f"Supported image formats: {', '.join(summary['image'])}"
+    elif format_type == 'video':
+        return f"Supported video formats: {', '.join(summary['video'])}"
+    elif format_type == 'both':
+        return (
+            f"Supported image formats: {', '.join(summary['image'])}\n"
+            f"Supported video formats: {', '.join(summary['video'])}"
+        )
+    else:
+        raise ValueError(f"Invalid format_type: {format_type}")
+
+
