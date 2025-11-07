@@ -139,15 +139,14 @@ def download_file(
 
             if HAS_TQDM:
                 with tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1) as pbar:
+                    last_downloaded = 0
                     def update_progress(block_num: int, block_size: int, total_size: int):
+                        nonlocal last_downloaded
                         if pbar.total is None and total_size > 0:
                             pbar.total = total_size
                         downloaded = block_num * block_size
-                        if hasattr(pbar, '_last_downloaded'):
-                            pbar.update(downloaded - pbar._last_downloaded)
-                        else:
-                            pbar.update(downloaded)
-                        pbar._last_downloaded = downloaded
+                        pbar.update(downloaded - last_downloaded)
+                        last_downloaded = downloaded
 
                     urllib.request.urlretrieve(url, output_path, reporthook=update_progress)
             else:
