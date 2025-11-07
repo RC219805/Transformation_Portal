@@ -133,3 +133,7 @@ realesr-*.pth
 # Additional PNG exclusions
 input_images/**/*.png
 !input_images/.gitkeep
+
+# Patch files
+*.patch
+*.diff
