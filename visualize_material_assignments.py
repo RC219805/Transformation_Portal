@@ -298,7 +298,6 @@ def main() -> int:
         assignments = load_palette_assignments(args.palette)
     else:
         print("Computing material assignments...")
-        stats = compute_cluster_stats(base_array, labels)
         assignments = auto_assign_materials_by_stats(labels, base_array, rules)
 
     # Save palette if requested
