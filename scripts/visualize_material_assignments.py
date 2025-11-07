@@ -61,7 +61,7 @@ if "--save-palette" in sys.argv:
 # Load or compute assignments
 if palette_path and palette_path.exists():
     print(f"Loading palette from: {palette_path}")
-    assignments = load_palette_assignments(palette_path, rules)
+    assignments = load_palette_assignments(palette_path)
 else:
     assignments = assign_materials(stats, rules)
 
