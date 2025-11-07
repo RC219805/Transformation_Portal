@@ -1,0 +1,58 @@
+{
+  "project_name": "750 Picacho Lane",
+  "project_address": "750 Picacho Lane",
+  "space_name": "Kitchen",
+  "space_type": "kitchen",
+  "dimensions": {
+    "width": 18.0,
+    "length": 22.0,
+    "height": null,
+    "area": 396.0,
+    "ceiling_height": 10.0,
+    "unit": "feet"
+  },
+  "materials": [
+    {
+      "material_type": "wood",
+      "location": "cabinetry",
+      "finish": "white oak",
+      "color": "natural",
+      "manufacturer": null,
+      "model": null
+    },
+    {
+      "material_type": "stone",
+      "location": "countertop",
+      "finish": "quartz",
+      "color": "white",
+      "manufacturer": null,
+      "model": null
+    },
+    {
+      "material_type": "metal",
+      "location": "hardware",
+      "finish": "brushed brass",
+      "color": null,
+      "manufacturer": null,
+      "model": null
+    },
+    {
+      "material_type": "stone",
+      "location": "backsplash",
+      "finish": "marble",
+      "color": "carrara white",
+      "manufacturer": null,
+      "model": null
+    },
+    {
+      "material_type": "metal",
+      "location": "appliances",
+      "finish": "stainless steel",
+      "color": null,
+      "manufacturer": null,
+      "model": null
+    }
+  ],
+  "spatial_context": {
+    "space_name": "Kitchen",
+    "space_type": 

@@ -10,7 +10,10 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
-from scripts.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
+try:
+    from scripts.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
+except ModuleNotFoundError:
+    from codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 
 @dataclass
@@ -117,6 +120,9 @@ def _valid_until_from_decorator(  # pylint: disable=too-many-branches
 
     try:
         deadline_value = ast.literal_eval(decorator.args[0])
+    except (ValueError, TypeError, SyntaxError):
+        # Skip decorators that don't use literal values (e.g., variables, constants)
+        return None
     except Exception as exc:  # pragma: no cover - defensive
         raise ValueError(f"Unable to evaluate valid_until deadline in {path}") from exc
 
@@ -155,7 +161,11 @@ def collect_philosophy_violations(
     summaries: Dict[str, PrincipleSummary] = {}
 
     for module_path in _iter_python_files(paths):
-        violations = auditor.audit_module(module_path)
+        try:
+            violations = auditor.audit_module(module_path)
+        except (UnicodeDecodeError, SyntaxError, ValueError):
+            # Skip files that can't be parsed (binary, encoding issues, syntax errors)
+            continue
         for violation in violations:
             summary = summaries.get(violation.principle)
             location = _format_violation_location(module_path, violation)
@@ -189,7 +199,12 @@ def _format_violation_location(module_path: Path, violation: Violation) -> str:
 def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:  # pylint: disable=too-many-locals
     """Return usage information for brand color tokens defined in *tokens_path*."""
 
-    tokens_data = json.loads(tokens_path.read_text())
+    try:
+        tokens_data = json.loads(tokens_path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        # Graceful degradation when tokens file is missing or invalid
+        return ColorTokenReport(tokens=[], orphans=[])
+
     brand_tokens = (
         tokens_data.get("tokens", {})
         .get("color", {})
@@ -443,9 +458,22 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             / "lantern_tokens.json"
         )
 
-    valid_until_records = collect_valid_until_records(tests_root)
+    # Validate paths and provide graceful degradation
+    if not tests_root.exists():
+        import sys
+        print(f"Warning: Tests directory not found: {tests_root}", file=sys.stderr)
+        valid_until_records = []
+    else:
+        valid_until_records = collect_valid_until_records(tests_root)
+
     principle_summaries = collect_philosophy_violations([root])
-    color_report = collect_color_token_report(tokens_path)
+
+    if not tokens_path.exists():
+        import sys
+        print(f"Warning: Brand tokens file not found: {tokens_path}", file=sys.stderr)
+        color_report = ColorTokenReport(tokens=[], orphans=[])
+    else:
+        color_report = collect_color_token_report(tokens_path)
 
     if args.json:
         export_json(args.json, valid_until_records, principle_summaries, color_report)

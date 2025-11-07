@@ -24,3 +24,4 @@ colour-science>=0.4.2,<0.5
 coremltools>=7.0,<9
 psutil>=5.9.0,<8
 memory-profiler>=0.61.0,<1
+PyPDF2

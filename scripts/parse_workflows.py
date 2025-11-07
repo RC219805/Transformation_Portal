@@ -372,18 +372,61 @@ class WorkflowParser:
                             ))
 
 
+def _print_json_output(bugs: List[WorkflowBug]) -> None:
+    """Print bugs in JSON format."""
+    import json
+    data = [
+        {
+            "file": bug.file_path,
+            "line": bug.line_number,
+            "severity": bug.severity,
+            "message": bug.message,
+            "context": bug.context,
+        }
+        for bug in bugs
+    ]
+    print(json.dumps(data, indent=2))
+
+
 def main():
     """Main entry point."""
-    repo_root = Path(__file__).parent
-    workflow_dir = repo_root / ".github" / "workflows"
+    import argparse
+
+    # Calculate repo root from script location (scripts/ -> repo root)
+    repo_root = Path(__file__).parent.parent
+    default_workflow_dir = repo_root / ".github" / "workflows"
+
+    parser = argparse.ArgumentParser(
+        description="Parse and validate GitHub Actions workflow files for common bugs"
+    )
+    parser.add_argument(
+        "--workflow-dir",
+        type=Path,
+        default=default_workflow_dir,
+        help=f"Path to workflows directory (default: {default_workflow_dir})"
+    )
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)"
+    )
+
+    args = parser.parse_args()
+    workflow_dir = args.workflow_dir
 
     if not workflow_dir.exists():
-        print(f"Error: Workflow directory not found at {workflow_dir}")
+        print(f"Error: Workflow directory not found at {workflow_dir}", file=sys.stderr)
         sys.exit(1)
 
-    parser = WorkflowParser(workflow_dir)
-    bugs = parser.parse_all_workflows()
+    parser_obj = WorkflowParser(workflow_dir)
+    bugs = parser_obj.parse_all_workflows()
 
+    if args.format == "json":
+        _print_json_output(bugs)
+        return 1 if any(b.severity == "error" for b in bugs) else 0
+
+    # Text format output
     if not bugs:
         print("\n✅ No bugs found in workflow files!")
         return 0

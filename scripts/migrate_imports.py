@@ -169,6 +169,7 @@ def main():
     if path.is_file():
         if path.suffix == ".py":
             changed = process_file(path, args.dry_run)
+            changed_count = 1 if changed else 0
             if changed:
                 print("\n✓ Migration complete - 1 file updated")
             else:

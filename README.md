@@ -7,6 +7,22 @@
 
 > Professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production.
 
+## 🚀 Latest Update: Context-Aware Rendering (November 2025)
+
+**NEW**: Revolutionary **Context-Aware Rendering System** that extracts architectural intelligence from construction documents (floor plans, elevations, specifications) and uses this knowledge to inform every processing decision.
+
+### What's New
+- 🏗️ **Architectural Context Extraction** - Reads PDFs to extract room types, dimensions, materials, and design style
+- 🧠 **Intelligent Strategy Derivation** - Automatically optimizes processing for each specific space
+- 🎯 **Room-Specific Processing** - Kitchen, bedroom, bathroom, living, outdoor areas each get tailored treatment
+- 📐 **Dimension-Aware** - Depth processing respects actual room proportions
+- 🎨 **Style-Consistent** - Color grading aligns with architectural design language
+- 📄 **Document Provenance** - Direct connection between construction docs and final renders
+
+**See**: [Context-Aware Rendering Guide](docs/CONTEXT_AWARE_RENDERING.md) | [Quick Start](scripts/context_aware_quickstart.sh) | [Implementation Summary](docs/CONTEXT_SYSTEM_SUMMARY.md)
+
+---
+
 ## 🎉 Recent Update: Repository Refactored (October 2025)
 
 The repository has been significantly reorganized for better performance and maintainability:
@@ -35,6 +51,7 @@ Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
 * [Supported File Formats](#supported-file-formats)
 * [**📖 Pipeline Operations Guide**](docs/PIPELINE_OPERATIONS_GUIDE.md) ⬅️**How to Operate**
 * [Core Components](#core-components))
+  * [**Context-Aware Rendering**](#context-aware-rendering-system) 🆕
   * [Depth Pipeline](#depth-pipeline)
   * [Lux Render Pipeline](#lux-render-pipeline)
   * [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
@@ -55,6 +72,7 @@ Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
 
 ### Core Capabilities
 
+- ✅ **Context-Aware Rendering** - First-of-its-kind system that reads architectural documents and adapts processing accordingly
 - ✅ **AI-Powered Enhancement** - Stable Diffusion XL, ControlNet, Real-ESRGAN upscaling
 - ✅ **Depth-Aware Processing** - Depth Anything V2 with Apple Neural Engine optimization
 - ✅ **Material Response Technology** - Physics-based surface enhancement for wood, metal, glass, textiles
@@ -189,6 +207,64 @@ pip install -e ".[tiff]"  # Includes tifffile + imagecodecs
 ---
 
 ## Core Components
+
+### 🧠 Context-Aware Rendering System (NEW!)
+
+**Revolutionary intelligence-driven rendering** that reads architectural documents and adapts processing to each specific space.
+
+**Workflow:**
+1. **Extract Context** - Parse PDFs (floor plans, elevations, specs) to extract architectural intelligence
+2. **Derive Strategy** - Automatically determine optimal processing for each rendering
+3. **Process with Intelligence** - Apply context-aware depth, materials, and color grading
+
+**Capabilities:**
+- ✅ **Document Intelligence** - Extracts room types, dimensions, materials, design style from PDFs
+- ✅ **Room-Specific Optimization** - Kitchen, bedroom, bathroom, living, outdoor each get tailored processing
+- ✅ **Material-Aware** - Prioritizes enhancement for actual materials used in design
+- ✅ **Style-Consistent** - Color grading respects architectural design language
+- ✅ **Dimension-Aware** - Depth processing accounts for actual room proportions
+- ✅ **Three Quality Tiers** - Standard (30-45s), Premium (60-90s), Ultimate (3-5min with 4K)
+
+**Example Workflow:**
+```bash
+# Step 1: Extract architectural context from PDF
+python scripts/architectural_context_extractor.py \
+    "750_Picacho_Plans.pdf" \
+    --output extracted_context \
+    --verbose
+
+# Step 2: Process rendering with context intelligence
+python scripts/premium_context_pipeline.py \
+    "input_images/Kitchen_Rendering.tiff" \
+    --context "extracted_context/750_Picacho_context.json" \
+    --quality premium \
+    --output output_premium
+
+# Or use shortcut:
+bash scripts/context_aware_quickstart.sh  # Interactive guide
+```
+
+**What Gets Extracted:**
+- Room types and dimensions (Kitchen: 18' x 14.5', 10' ceiling)
+- Material palette (Quartzite, Stainless Steel, White Oak)
+- Design style (Modern, Traditional, Contemporary, etc.)
+- Floor plans and elevations (as images)
+- Project metadata (name, number, address)
+
+**How It Adapts:**
+- **Kitchen** → Bright lighting, balanced depth, metal/stone/glass emphasis, neutral temperature
+- **Bedroom** → Soft lighting, atmospheric depth, wood/fabric emphasis, warm temperature
+- **Bathroom** → Soft lighting, stone/glass/metal, spa aesthetic, neutral temperature
+- **Outdoor** → Natural lighting, atmospheric depth, stone/concrete, enhanced perspective
+
+**Performance:**
+- Context extraction: 5-60 seconds (depending on PDF size)
+- Strategy derivation: < 100ms
+- Full pipeline: 30-45s (standard), 60-90s (premium), 3-5min (ultimate)
+
+📖 **[Complete Context-Aware Guide](docs/CONTEXT_AWARE_RENDERING.md)** | **[Implementation Summary](docs/CONTEXT_SYSTEM_SUMMARY.md)** | **[Quick Start](scripts/context_aware_quickstart.sh)**
+
+---
 
 ### 🌟 Professional Pipeline (NEW!)
 
