@@ -146,10 +146,10 @@ class TestRAGPipeline:
         assert len(citations) > 0, "Should generate citations"
         
         for citation in citations:
-            assert 'file_path' in citation, "Citation should have file_path"
-            assert 'snippet' in citation, "Citation should have snippet"
-            assert 'confidence' in citation, "Citation should have confidence"
-            assert 0.0 <= citation['confidence'] <= 1.0, "Confidence should be in [0,1]"
+            assert hasattr(citation, 'file_path'), "Citation should have file_path"
+            assert hasattr(citation, 'snippet'), "Citation should have snippet"
+            assert hasattr(citation, 'confidence'), "Citation should have confidence"
+            assert 0.0 <= citation.confidence <= 1.0, "Confidence should be in [0,1]"
     
     def test_end_to_end_workflow(self, temp_repo):
         """Test complete RAG workflow from indexing to citation."""
@@ -185,7 +185,7 @@ class TestRAGPipeline:
     def test_prompt_templates_feature_implementation(self):
         """Test feature implementation template generation."""
         template = PromptTemplates.feature_implementation(
-            description="Add depth-based atmospheric haze effect",
+            feature_description="Add depth-based atmospheric haze effect",
             context="Existing atmospheric processor in depth_pipeline/processors/"
         )
         
