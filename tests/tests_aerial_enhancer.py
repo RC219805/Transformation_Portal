@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image
-from your_module import (
+from board_material_aerial_enhancer import (
     _kmeans,
     _cluster_stats,
     assign_materials,
