@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Precompiled regex patterns for performance
+# Precompiled regex patterns for performance (shared across all WorkflowParser instances)
 _NEWLINE_SEMICOLON = re.compile(r'[\n;]')
 _COMMENT_PATTERN = re.compile(r'#.*$')
 _IF_PATTERN = re.compile(r'\bif\s+')
