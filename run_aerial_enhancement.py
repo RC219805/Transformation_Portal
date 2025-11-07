@@ -8,8 +8,8 @@ from board_material_aerial_enhancer import enhance_aerial
 def main():
     """Main entry point for the aerial enhancement script."""
     # Input: Aerial TIFF from input_images
-    input_path = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tiff")
-    output_path = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picacho_Aerial_MBAR_Enhanced.jpg")
+    input_path = Path("input_images/RC-office750Picacho_Aerial.tiff")
+    output_path = Path("processed_images/750_Picacho_Aerial_MBAR_Enhanced.jpg")
 
     print(f"Processing: {input_path.name}")
     print(f"Output: {output_path.name}")

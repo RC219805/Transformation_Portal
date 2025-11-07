@@ -20,7 +20,7 @@ from board_material_aerial_enhancer import (
 def main():
     """Main entry point for the material assignment visualization script."""
     # Load the input image
-    input_path = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tiff")
+    input_path = Path("input_images/RC-office750Picacho_Aerial.tiff")
     image = Image.open(input_path).convert("RGB")
     base_array = np.asarray(image, dtype=np.float32) / 255.0
 
@@ -137,7 +137,7 @@ def main():
             y_offset += 45
 
     # Save visualization
-    output_path = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picacho_Material_Assignment_Map.jpg")
+    output_path = Path("processed_images/750_Picacho_Material_Assignment_Map.jpg")
     legend_img.save(output_path, quality=95)
 
     print(f"✅ Material assignment map saved to: {output_path}")
