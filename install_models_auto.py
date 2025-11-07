@@ -142,7 +142,12 @@ def download_file(
                     def update_progress(block_num: int, block_size: int, total_size: int):
                         if pbar.total is None and total_size > 0:
                             pbar.total = total_size
-                        pbar.update(block_size)
+                        downloaded = block_num * block_size
+                        if hasattr(pbar, '_last_downloaded'):
+                            pbar.update(downloaded - pbar._last_downloaded)
+                        else:
+                            pbar.update(downloaded)
+                        pbar._last_downloaded = downloaded
 
                     urllib.request.urlretrieve(url, output_path, reporthook=update_progress)
             else:
