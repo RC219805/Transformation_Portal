@@ -43,7 +43,7 @@ python3 conservative_enhance_greatroom_final.py
 
 ### 3. Read More (Optional)
 - **Quick overview:** GREATROOM_EXECUTIVE_SUMMARY.md
-- **Workflow guide:** docs/quick_references/PROCESSING_QUICK_REFERENCE.md
+- **Workflow guide:** PROCESSING_QUICK_REFERENCE.md
 - **Complete story:** GREATROOM_MASTER_SUMMARY.md
 
 ---
@@ -55,7 +55,7 @@ python3 conservative_enhance_greatroom_final.py
 2. **WORKFLOW_VISUAL_GUIDE.txt** (3 min) - Visual flowcharts
 
 ### For Implementers (20 minutes total)
-1. **docs/quick_references/PROCESSING_QUICK_REFERENCE.md** (10 min) - How to process images
+1. **PROCESSING_QUICK_REFERENCE.md** (10 min) - How to process images
 2. **GREATROOM_FINAL_APPROACH.md** (10 min) - Technical details
 
 ### For Deep Divers (1 hour total)
@@ -163,7 +163,7 @@ conservative_enhance_greatroom_final.py  ← Use this! ⭐
 ### Documentation
 ```
 GREATROOM_EXECUTIVE_SUMMARY.md         ← Quick start ⭐
-docs/quick_references/PROCESSING_QUICK_REFERENCE.md          ← Workflow guide ⭐
+PROCESSING_QUICK_REFERENCE.md          ← Workflow guide ⭐
 GREATROOM_MASTER_SUMMARY.md            ← Complete story
 DOCUMENTATION_INDEX.md                 ← Full doc map
 ```
@@ -265,7 +265,7 @@ python3 conservative_enhance_greatroom_final.py
 
 ### Essential Reading
 - **GREATROOM_EXECUTIVE_SUMMARY.md** - 2-minute overview
-- **docs/quick_references/PROCESSING_QUICK_REFERENCE.md** - Practical workflow guide
+- **PROCESSING_QUICK_REFERENCE.md** - Practical workflow guide
 - **WORKFLOW_VISUAL_GUIDE.txt** - Visual flowcharts
 
 ### Deep Dive
@@ -323,7 +323,7 @@ A: Use `conservative_enhance_kitchen.py` instead (different strategy)
 A: DOCUMENTATION_INDEX.md has full map of 20+ guides
 
 **Q: What if I need help?**  
-A: Read docs/quick_references/PROCESSING_QUICK_REFERENCE.md (troubleshooting section)
+A: Read PROCESSING_QUICK_REFERENCE.md (troubleshooting section)
 
 ---
 
@@ -342,7 +342,7 @@ A: Read docs/quick_references/PROCESSING_QUICK_REFERENCE.md (troubleshooting sec
 ### Next Steps
 1. Deliver `750Picacho_GreatRoom_Final.tiff` to client
 2. Use `conservative_enhance_greatroom_final.py` for similar images
-3. Refer to docs/quick_references/PROCESSING_QUICK_REFERENCE.md for workflows
+3. Refer to PROCESSING_QUICK_REFERENCE.md for workflows
 
 ---
 
@@ -351,7 +351,7 @@ A: Read docs/quick_references/PROCESSING_QUICK_REFERENCE.md (troubleshooting sec
 | Need | Document | Time |
 |------|----------|------|
 | **Quick overview** | GREATROOM_EXECUTIVE_SUMMARY.md | 2 min |
-| **How to process** | docs/quick_references/PROCESSING_QUICK_REFERENCE.md | 10 min |
+| **How to process** | PROCESSING_QUICK_REFERENCE.md | 10 min |
 | **Visual guide** | WORKFLOW_VISUAL_GUIDE.txt | 5 min |
 | **Complete story** | GREATROOM_MASTER_SUMMARY.md | 30 min |
 | **All docs** | DOCUMENTATION_INDEX.md | - |
