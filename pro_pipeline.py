@@ -107,6 +107,7 @@ class ProPipelineConfig:
     quality: str = "high"  # draft, standard, high, ultra
     output_format: str = "tiff"  # jpg, png, tiff
     bit_depth: int = 16  # 8, 16, 32
+    linear_output: bool = True  # Save in linear colorspace (recommended for compositing)
     preserve_metadata: bool = True
     keep_intermediates: bool = False
     dry_run: bool = False
@@ -484,6 +485,8 @@ class ProPipeline:
     
     def _save_output(self, image: Image.Image, input_path: Path) -> Path:
         """Save the processed image with appropriate format and metadata."""
+        import numpy as np
+        
         # Determine output filename
         stem = input_path.stem
         ext = self.config.output_format
@@ -500,7 +503,51 @@ class ProPipeline:
         # Ensure output directory exists
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save with appropriate quality
+        # Convert to linear colorspace if requested (for TIFF only)
+        if self.config.linear_output and ext.lower() in ["tif", "tiff"]:
+            try:
+                import tifffile
+                
+                # Convert PIL image to numpy array
+                img_array = np.array(image)
+                
+                # Convert sRGB to linear
+                img_float = img_array.astype(np.float32) / 255.0
+                linear_array = np.where(
+                    img_float <= 0.04045,
+                    img_float / 12.92,
+                    np.power((img_float + 0.055) / 1.055, 2.4)
+                )
+                
+                # Scale to bit depth
+                if self.config.bit_depth == 16:
+                    output_array = (linear_array * 65535).astype(np.uint16)
+                elif self.config.bit_depth == 32:
+                    output_array = linear_array.astype(np.float32)
+                else:
+                    output_array = (linear_array * 255).astype(np.uint8)
+                
+                # Save with tifffile
+                tifffile.imwrite(
+                    output_path,
+                    output_array,
+                    compression='deflate',
+                    photometric='rgb',
+                    metadata={'colorspace': 'linear'}
+                )
+                
+                log.info(f"  ✓ Saved as {self.config.bit_depth}-bit linear TIFF")
+                
+            except ImportError:
+                log.warning("  ⚠ tifffile not available, saving as standard TIFF")
+                self._save_standard(image, output_path, ext)
+        else:
+            self._save_standard(image, output_path, ext)
+        
+        return output_path
+    
+    def _save_standard(self, image: Image.Image, output_path: Path, ext: str):
+        """Save image in standard gamma-encoded format."""
         save_kwargs = {}
         if ext.lower() in ["jpg", "jpeg"]:
             save_kwargs["quality"] = 95
@@ -511,8 +558,6 @@ class ProPipeline:
             save_kwargs["compression"] = "tiff_adobe_deflate"
         
         image.save(output_path, **save_kwargs)
-        
-        return output_path
     
     def batch_process(self, input_paths: List[Path]) -> Dict[str, Any]:
         """
@@ -611,6 +656,7 @@ def process(
     # Output options
     output_format: str = typer.Option("tiff", "--format", "-f", help="Output format (jpg, png, tiff)"),
     bit_depth: int = typer.Option(16, "--bits", help="Bit depth for TIFF (8, 16, 32)"),
+    linear_output: bool = typer.Option(True, "--linear/--gamma", help="Save in linear colorspace (recommended)"),
     
     # Performance
     device: str = typer.Option("auto", "--device", help="Device to use (auto, cpu, cuda, mps)"),
@@ -635,6 +681,7 @@ def process(
         quality=quality,
         output_format=output_format,
         bit_depth=bit_depth,
+        linear_output=linear_output,
         keep_intermediates=keep_intermediates,
         dry_run=dry_run,
     )
