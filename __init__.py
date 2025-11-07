@@ -43,7 +43,6 @@ from . import download_depth_models
 from . import download_samples
 from . import install_models
 from . import install_models_auto
-from . import codebase_philosophy_auditor
 from . import create_board_textures
 from . import run_aerial_enhancement
 from . import verify_setup
