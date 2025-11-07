@@ -36,6 +36,7 @@ __version__ = "1.0.0"
 __author__ = "Transformation Portal Team"
 
 # Lazy imports to avoid loading heavy dependencies
+from . import codebase_philosophy_auditor
 # Note: Some modules are in the root directory, others are in scripts/ subdirectory
 from . import decision_decay_dashboard
 from . import download_depth_models
