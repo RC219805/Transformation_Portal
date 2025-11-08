@@ -16,20 +16,30 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
-.PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean
+.PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
+        lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs
 
 help:
 	@echo "Targets:"
-	@echo "  setup           Install package in editable mode (pip install -e .)"
-	@echo "  test-fast       Run fast subset (no video/optional heavy paths)"
-	@echo "  test-novideo    Run all tests excluding video suite via -k filter"
-	@echo "  test-full       Run entire test suite (parallel if xdist present)"
-	@echo "  test-structure  Run codebase structure validation tests"
-	@echo "  test-utils      Run tests for performance and error handling utilities"
-	@echo "  venv            Create local .venv if missing"
-	@echo "  clean           Remove Python cache files and build artifacts"
-	@echo "  lint            Run linting (flake8 + pylint)"
-	@echo "  ci              Run local CI checks (lint + test-fast)"
+	@echo "  setup              Install package in editable mode (pip install -e .)"
+	@echo "  test-fast          Run fast subset (no video/optional heavy paths)"
+	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
+	@echo "  test-full          Run entire test suite (parallel if xdist present)"
+	@echo "  test-structure     Run codebase structure validation tests"
+	@echo "  test-utils         Run tests for performance and error handling utilities"
+	@echo "  venv               Create local .venv if missing"
+	@echo "  clean              Remove Python cache files and build artifacts"
+	@echo ""
+	@echo "Quality & CI:"
+	@echo "  lint               Run linting (flake8 + pylint)"
+	@echo "  ci                 Run local CI checks (lint + test-fast)"
+	@echo "  ci-full            Run comprehensive CI simulation (all checks)"
+	@echo "  pre-commit         Run pre-commit checks manually"
+	@echo "  install-hooks      Install git pre-commit hook"
+	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
+	@echo "  fix-quality        Auto-fix common quality issues"
+	@echo "  validate-ci        Validate GitHub Actions workflow configs"
+	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
 
 venv:
 	@if [ ! -x .venv/bin/python ]; then \
@@ -82,3 +92,62 @@ lint:
 
 ci: lint test-fast
 	@echo "✅ Local CI checks completed successfully."
+
+# Comprehensive CI simulation
+ci-full:
+	@echo "Running comprehensive CI simulation..."
+	@./scripts/local_ci_check.sh
+
+# Quick CI check (fast mode)
+ci-quick:
+	@echo "Running quick CI checks..."
+	@./scripts/local_ci_check.sh --quick
+
+# Pre-commit checks
+pre-commit:
+	@echo "Running pre-commit checks..."
+	@./scripts/pre_commit_hook.sh
+
+# Install git hooks
+install-hooks:
+	@echo "Installing git pre-commit hook..."
+	@cp scripts/pre_commit_hook.sh .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "✓ Pre-commit hook installed at .git/hooks/pre-commit"
+
+# Quality check (all validations)
+quality-check: lint validate-ci
+	@echo "Running documentation structure check..."
+	@MD_COUNT=$$(find . -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' '); \
+	if [ $$MD_COUNT -gt 10 ]; then \
+		echo "⚠ Too many markdown files in root: $$MD_COUNT (max: 10)"; \
+		echo "💡 Run 'make organize-docs' to fix"; \
+	else \
+		echo "✓ Markdown file count OK ($$MD_COUNT/10)"; \
+	fi
+	@echo "✅ Quality checks completed."
+
+# Auto-fix quality issues
+fix-quality:
+	@echo "Auto-fixing quality issues..."
+	@"$(PY)" scripts/auto_fix_quality.py --fix-all
+
+# Fix quality issues (dry-run)
+check-quality:
+	@echo "Checking for quality issues (dry-run)..."
+	@"$(PY)" scripts/auto_fix_quality.py --dry-run
+
+# Validate CI configuration
+validate-ci:
+	@echo "Validating GitHub Actions workflows..."
+	@"$(PY)" scripts/validate_ci_config.py
+
+# Organize documentation
+organize-docs:
+	@echo "Organizing documentation files..."
+	@./scripts/organize_docs.sh
+
+# Organize documentation (dry-run)
+check-docs:
+	@echo "Checking documentation organization..."
+	@./scripts/organize_docs.sh --dry-run
