@@ -12,7 +12,7 @@ in your Python path. If you get import errors, install the package first.
 Usage:
     # Install package first
     pip install -e .
-    
+
     # Run custom pipeline
     python custom_pipeline.py input.jpg output.jpg
 

@@ -46,7 +46,7 @@ class ContextAwareRenderingPipeline:
     """
     Intelligent rendering pipeline guided by architectural context.
     """
-    
+
     # Room-specific rendering strategies
     ROOM_STRATEGIES = {
         'kitchen': RenderingStrategy(
@@ -95,7 +95,7 @@ class ContextAwareRenderingPipeline:
             lut_preset='golden_hour_courtyard',
         ),
     }
-    
+
     def __init__(
         self,
         project_context: ProjectContext,
@@ -103,7 +103,7 @@ class ContextAwareRenderingPipeline:
     ):
         """
         Initialize context-aware pipeline.
-        
+
         Args:
             project_context: Extracted architectural context
             output_dir: Output directory for processed renders
@@ -111,7 +111,7 @@ class ContextAwareRenderingPipeline:
         self.context = project_context
         self.output_dir = output_dir or Path("output_context_aware")
         self.output_dir.mkdir(exist_ok=True, parents=True)
-        
+
         print(f"\n{'='*70}")
         print("CONTEXT-AWARE RENDERING PIPELINE")
         print(f"{'='*70}")
@@ -120,24 +120,24 @@ class ContextAwareRenderingPipeline:
             print(f"Style: {self.context.design_style}")
         print(f"Rooms: {len(self.context.rooms)}")
         print(f"Materials: {', '.join(self.context.materials_palette[:5])}")
-    
+
     def identify_room_from_filename(self, image_path: Path) -> Optional[str]:
         """
         Identify room type from image filename.
-        
+
         Args:
             image_path: Path to rendering
-            
+
         Returns:
             Room type key (e.g., 'kitchen', 'bedroom') or None
         """
         filename_lower = image_path.stem.lower()
-        
+
         # Direct matches
         for room_key in self.ROOM_STRATEGIES.keys():
             if room_key in filename_lower:
                 return room_key
-        
+
         # Alias matching
         aliases = {
             'kitchen': ['kitch', 'cook'],
@@ -146,13 +146,13 @@ class ContextAwareRenderingPipeline:
             'living': ['great room', 'living', 'family'],
             'outdoor': ['pool', 'patio', 'deck', 'terrace', 'courtyard', 'exterior'],
         }
-        
+
         for room_key, alias_list in aliases.items():
             if any(alias in filename_lower for alias in alias_list):
                 return room_key
-        
+
         return None
-    
+
     def get_room_context(self, room_type: str) -> Optional[RoomContext]:
         """Get room context from project context."""
         # Find matching room in project context
@@ -160,20 +160,20 @@ class ContextAwareRenderingPipeline:
             if room_key.startswith(room_type):
                 return room
         return None
-    
+
     def derive_strategy(self, image_path: Path) -> RenderingStrategy:
         """
         Derive optimal rendering strategy from context.
-        
+
         Args:
             image_path: Path to rendering
-            
+
         Returns:
             RenderingStrategy optimized for this specific render
         """
         # Identify room type
         room_type = self.identify_room_from_filename(image_path)
-        
+
         if not room_type:
             # Default strategy
             print(f"⚠ Could not identify room type from: {image_path.name}")
@@ -186,15 +186,15 @@ class ContextAwareRenderingPipeline:
                 color_temperature='neutral',
                 enhancement_strength=0.7,
             )
-        
+
         # Get base strategy for room type
         base_strategy = self.ROOM_STRATEGIES.get(room_type)
         if not base_strategy:
             return self.derive_strategy(image_path)  # Fallback to default
-        
+
         # Customize based on project context
         room_context = self.get_room_context(room_type)
-        
+
         # Adjust materials based on project palette
         if self.context.materials_palette:
             # Prioritize materials that appear in both strategy and project
@@ -204,7 +204,7 @@ class ContextAwareRenderingPipeline:
             ]
             if matched_materials:
                 base_strategy.primary_materials = matched_materials
-        
+
         # Adjust based on design style
         if self.context.design_style:
             style_lower = self.context.design_style.lower()
@@ -214,23 +214,23 @@ class ContextAwareRenderingPipeline:
             elif 'traditional' in style_lower:
                 base_strategy.color_temperature = 'warm'
                 base_strategy.enhancement_strength = max(base_strategy.enhancement_strength - 0.1, 0.5)
-        
+
         print(f"\n✓ Derived strategy for {room_type}:")
         print(f"  Materials: {', '.join(base_strategy.primary_materials)}")
         print(f"  Lighting: {base_strategy.lighting_style}")
         print(f"  Depth: {base_strategy.depth_emphasis}")
         print(f"  Temperature: {base_strategy.color_temperature}")
         print(f"  Enhancement: {base_strategy.enhancement_strength:.2f}")
-        
+
         return base_strategy
-    
+
     def generate_depth_config(self, strategy: RenderingStrategy) -> Dict:
         """Generate depth pipeline configuration from strategy."""
         base_config = {
             'model_size': 'small',
             'device': 'mps',  # Apple Silicon
         }
-        
+
         # Depth emphasis
         if strategy.depth_emphasis == 'foreground':
             base_config['zone_weights'] = {
@@ -250,7 +250,7 @@ class ContextAwareRenderingPipeline:
                 'midground': 1.0,
                 'background': 0.8,
             }
-        
+
         # Tone mapping based on lighting style
         tone_map_operators = {
             'bright': 'reinhard',
@@ -263,9 +263,9 @@ class ContextAwareRenderingPipeline:
             strategy.lighting_style,
             'agx'
         )
-        
+
         return base_config
-    
+
     def generate_material_config(self, strategy: RenderingStrategy) -> Dict:
         """Generate material response configuration from strategy."""
         config = {
@@ -274,37 +274,37 @@ class ContextAwareRenderingPipeline:
             'preserve_highlights': True,
             'micro_contrast': 0.15,
         }
-        
+
         # Per-material strengths
         material_strengths = {}
         for i, material in enumerate(strategy.primary_materials):
             # Primary materials get higher strength
             strength = strategy.enhancement_strength * (1.0 - i * 0.1)
             material_strengths[material] = max(strength, 0.5)
-        
+
         config['material_strengths'] = material_strengths
-        
+
         return config
-    
+
     def generate_color_config(self, strategy: RenderingStrategy) -> Dict:
         """Generate color grading configuration from strategy."""
         config = {
             'lut_preset': strategy.lut_preset,
             'lut_strength': 0.7,
         }
-        
+
         # Temperature adjustments
         temp_adjustments = {
             'warm': {'saturation': 1.08, 'tint': 5},
             'neutral': {'saturation': 1.05, 'tint': 0},
             'cool': {'saturation': 1.03, 'tint': -5},
         }
-        
+
         adjustments = temp_adjustments.get(strategy.color_temperature, temp_adjustments['neutral'])
         config.update(adjustments)
-        
+
         return config
-    
+
     def process_render(
         self,
         image_path: Path,
@@ -314,28 +314,28 @@ class ContextAwareRenderingPipeline:
     ) -> Path:
         """
         Process render with context-aware intelligence.
-        
+
         Args:
             image_path: Path to rendering
             apply_depth: Apply depth-aware processing
             apply_material: Apply material response
             apply_color: Apply color grading
-            
+
         Returns:
             Path to processed output
         """
         print(f"\n{'='*70}")
         print(f"PROCESSING: {image_path.name}")
         print(f"{'='*70}")
-        
+
         # Derive strategy
         strategy = self.derive_strategy(image_path)
-        
+
         # Generate configurations
         depth_config = self.generate_depth_config(strategy) if apply_depth else None
         material_config = self.generate_material_config(strategy) if apply_material else None
         color_config = self.generate_color_config(strategy) if apply_color else None
-        
+
         # Save strategy and configs
         strategy_path = self.output_dir / f"{image_path.stem}_strategy.json"
         with open(strategy_path, 'w') as f:
@@ -353,20 +353,20 @@ class ContextAwareRenderingPipeline:
                 'material_config': material_config,
                 'color_config': color_config,
             }, f, indent=2)
-        
+
         print(f"\n✓ Strategy saved: {strategy_path}")
-        
+
         # TODO: Integrate with actual processing pipelines
         # This would call:
         # 1. depth_pipeline with depth_config
         # 2. material_response with material_config
         # 3. luxury_tiff_batch_processor with color_config
-        
+
         print(f"\n💡 Next steps:")
         print(f"  1. Apply depth pipeline with: {strategy_path}")
         print(f"  2. Apply material response")
         print(f"  3. Apply color grading with LUT: {strategy.lut_preset}")
-        
+
         # For now, return strategy path
         return strategy_path
 
@@ -374,7 +374,7 @@ class ContextAwareRenderingPipeline:
 def main():
     """CLI for context-aware rendering."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(
         description='Context-aware architectural rendering'
     )
@@ -389,13 +389,13 @@ def main():
                         help='Skip material response')
     parser.add_argument('--no-color', action='store_true',
                         help='Skip color grading')
-    
+
     args = parser.parse_args()
-    
+
     if not args.image.exists():
         print(f"✗ Image not found: {args.image}")
         return 1
-    
+
     # Load or extract context
     if args.context.suffix == '.pdf':
         print(f"Extracting context from PDF: {args.context}")
@@ -421,13 +421,13 @@ def main():
     else:
         print(f"✗ Context must be PDF or JSON: {args.context}")
         return 1
-    
+
     # Initialize pipeline
     pipeline = ContextAwareRenderingPipeline(
         project_context=context,
         output_dir=args.output
     )
-    
+
     # Process render
     output = pipeline.process_render(
         args.image,
@@ -435,10 +435,10 @@ def main():
         apply_material=not args.no_material,
         apply_color=not args.no_color,
     )
-    
+
     print(f"\n✓ Processing complete")
     print(f"  Strategy: {output}")
-    
+
     return 0
 
 

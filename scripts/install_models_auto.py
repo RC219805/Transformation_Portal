@@ -61,17 +61,17 @@ RETRY_DELAY = 2  # seconds
 
 def check_disk_space(required_mb: int = 1000) -> bool:
     """Check if sufficient disk space is available.
-    
+
     Args:
         required_mb: Required space in megabytes
-        
+
     Returns:
         True if sufficient space available
     """
     try:
         stat = os.statvfs(WEIGHTS_DIR)
         free_mb = (stat.f_bavail * stat.f_frsize) / (1024 * 1024)
-        
+
         if free_mb < required_mb:
             print(f"⚠️  Warning: Low disk space ({free_mb:.1f} MB free, {required_mb} MB required)")
             return False
@@ -82,11 +82,11 @@ def check_disk_space(required_mb: int = 1000) -> bool:
 
 def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     """Verify file SHA256 checksum.
-    
+
     Args:
         file_path: Path to file
         expected_sha256: Expected SHA256 hash (or None to skip)
-        
+
     Returns:
         True if checksum matches or verification skipped
     """
@@ -95,11 +95,11 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
 
     print("  Verifying checksum...")
     sha256 = hashlib.sha256()
-    
+
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             sha256.update(chunk)
-    
+
     actual = sha256.hexdigest()
     if actual != expected_sha256:
         print("  ❌ Checksum mismatch!")
@@ -118,13 +118,13 @@ def download_file(
     max_retries: int = MAX_RETRIES
 ) -> bool:
     """Download file with retry logic and checksum verification.
-    
+
     Args:
         url: Download URL
         output_path: Output file path
         expected_sha256: Expected SHA256 hash for verification
         max_retries: Maximum retry attempts
-        
+
     Returns:
         True if download successful and verified
     """
@@ -184,7 +184,7 @@ def download_file(
 
 def check_depth_anything() -> bool:
     """Check if Depth Anything V2 is available.
-    
+
     Returns:
         True if model can be loaded
     """
@@ -201,10 +201,10 @@ def check_depth_anything() -> bool:
 
 def install_realesrgan(force: bool = False) -> bool:
     """Install Real-ESRGAN weights.
-    
+
     Args:
         force: Force re-download even if file exists
-        
+
     Returns:
         True if installation successful
     """
@@ -214,7 +214,7 @@ def install_realesrgan(force: bool = False) -> bool:
     if model_path.exists() and not force:
         size_mb = model_path.stat().st_size / (1024 * 1024)
         print(f"  ✓ Already exists: {model_path.name} ({size_mb:.1f} MB)")
-        
+
         # Verify checksum of existing file
         if not verify_checksum(model_path, REALESRGAN_MODEL["sha256"]):
             print("  ⚠️  Existing file corrupted, re-downloading...")
@@ -235,14 +235,14 @@ def install_realesrgan(force: bool = False) -> bool:
 
 def check_controlnet() -> bool:
     """Check if ControlNet models are available.
-    
+
     Returns:
         True if models can be accessed
     """
     print("\n[3/4] Checking ControlNet models...")
     try:
         from huggingface_hub import snapshot_download
-        
+
         models = ["lllyasviel/sd-controlnet-canny", "lllyasviel/sd-controlnet-depth"]
         success = True
 
@@ -262,10 +262,10 @@ def check_controlnet() -> bool:
 
 def check_stable_diffusion(skip_optional: bool = False) -> bool:
     """Check if Stable Diffusion is available.
-    
+
     Args:
         skip_optional: Skip optional models
-        
+
     Returns:
         True if model can be accessed
     """
@@ -306,7 +306,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Main installation workflow."""
     args = parse_args()
-    
+
     print("=" * 70)
     print("AUTOMATED MODEL INSTALLATION")
     print("Transformation Portal - ML Model Setup")
@@ -319,7 +319,7 @@ def main() -> None:
     print(f"\nWeights directory: {WEIGHTS_DIR}")
 
     check_disk_space(required_mb=500)
-    
+
     # Install models
     results = []
     results.append(check_depth_anything())

@@ -16,10 +16,10 @@ Modules:
 
 Execution:
     Scripts can be run directly or as modules:
-    
+
     Direct execution:
         python scripts/decision_decay_dashboard.py
-    
+
     Module execution (recommended for relative imports):
         python -m scripts.decision_decay_dashboard
 

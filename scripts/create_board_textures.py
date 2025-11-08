@@ -71,7 +71,7 @@ def create_texture(
         2048x2048: ~180-220ms
     """
     Image = _import_pil()
-    
+
     # Vectorized base color array (3-5x faster than loop)
     img = np.full((size, size, 3), base_color, dtype=np.float32)
 

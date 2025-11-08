@@ -132,12 +132,12 @@ SD_MODELS = [
 
 class DownloadProgressBar:
     """Progress bar for downloads with fallback."""
-    
+
     def __init__(self, desc: str, total: Optional[int] = None):
         self.desc = desc
         self.total = total
         self.pbar = None
-        
+
         if HAS_TQDM:
             self.pbar = tqdm(
                 total=total,
@@ -148,24 +148,24 @@ class DownloadProgressBar:
             )
         else:
             print(f"Downloading {desc}...", end='', flush=True)
-    
+
     def update(self, n: int):
         if self.pbar:
             self.pbar.update(n)
         elif n >= self.total:
             print(" Done!")
-    
+
     def close(self):
         if self.pbar:
             self.pbar.close()
-    
+
     def __call__(self, block_num: int, block_size: int, total_size: int):
         """Callback for urllib.request.urlretrieve"""
         if self.total is None and total_size > 0:
             self.total = total_size
             if self.pbar:
                 self.pbar.total = total_size
-        
+
         downloaded = block_num * block_size
         if self.pbar:
             self.pbar.n = min(downloaded, total_size)
@@ -179,7 +179,7 @@ def check_disk_space(required_mb: int) -> bool:
     try:
         stat = shutil.disk_usage(WEIGHTS_DIR)
         free_mb = stat.free / (1024 * 1024)
-        
+
         if free_mb < required_mb * 1.1:  # 10% buffer
             print(f"⚠️  Low disk space: {free_mb:.0f} MB free, need {required_mb} MB")
             return False
@@ -193,22 +193,22 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     """Verify file SHA256 checksum."""
     if expected_sha256 is None:
         return True  # Skip verification
-    
+
     print(f"  Verifying checksum...")
     sha256 = hashlib.sha256()
-    
+
     with open(file_path, 'rb') as f:
         for chunk in iter(lambda: f.read(8192), b''):
             sha256.update(chunk)
-    
+
     actual = sha256.hexdigest()
-    
+
     if actual != expected_sha256:
         print(f"  ✗ Checksum mismatch!")
         print(f"    Expected: {expected_sha256}")
         print(f"    Got:      {actual}")
         return False
-    
+
     print(f"  ✓ Checksum verified")
     return True
 
@@ -221,30 +221,30 @@ def download_file_with_retry(
     max_retries: int = 3
 ) -> bool:
     """Download file with retry logic and checksum verification."""
-    
+
     for attempt in range(max_retries):
         try:
             if attempt > 0:
                 print(f"  Retry {attempt}/{max_retries}...")
-            
+
             # Create progress bar
             progress = DownloadProgressBar(description)
-            
+
             # Download
             urllib.request.urlretrieve(url, output_path, reporthook=progress)
             progress.close()
-            
+
             # Verify checksum
             if not verify_checksum(output_path, expected_sha256):
                 if attempt < max_retries - 1:
                     output_path.unlink()  # Remove corrupted file
                     continue
                 return False
-            
+
             size_mb = output_path.stat().st_size / (1024 * 1024)
             print(f"  ✓ Downloaded: {output_path.name} ({size_mb:.1f} MB)")
             return True
-            
+
         except KeyboardInterrupt:
             print("\n\n⚠️  Download cancelled by user")
             if output_path.exists():
@@ -258,7 +258,7 @@ def download_file_with_retry(
             else:
                 print(f"  Failed after {max_retries} attempts")
                 return False
-    
+
     return False
 
 
@@ -266,7 +266,7 @@ def check_huggingface_model(model_id: str) -> Tuple[bool, Optional[str]]:
     """Check if HuggingFace model is cached."""
     try:
         from huggingface_hub import snapshot_download
-        
+
         # Try to find cached model
         cache_dir = snapshot_download(
             repo_id=model_id,
@@ -281,7 +281,7 @@ def check_huggingface_model(model_id: str) -> Tuple[bool, Optional[str]]:
 def estimate_download_time(size_mb: int, speed_mbps: float = 10.0) -> str:
     """Estimate download time based on size and connection speed."""
     seconds = (size_mb * 8) / speed_mbps
-    
+
     if seconds < 60:
         return f"~{int(seconds)}s"
     elif seconds < 3600:
@@ -299,39 +299,39 @@ def install_depth_models(install_all: bool = False, dry_run: bool = False) -> in
     print("\n" + "=" * 70)
     print("1. DEPTH ANYTHING V2 MODELS")
     print("=" * 70)
-    
+
     installed = 0
-    
+
     try:
         from transformers import AutoImageProcessor
-        
+
         for name, config in DEPTH_MODELS.items():
             if not config["required"] and not install_all:
                 continue
-            
+
             model_id = config["model_id"]
             print(f"\nChecking: {config['description']}")
             print(f"  Model ID: {model_id}")
-            
+
             is_cached, cache_dir = check_huggingface_model(model_id)
-            
+
             if is_cached:
                 print(f"  ✓ Already cached: {cache_dir}")
                 installed += 1
             else:
                 print(f"  ⚠️  Not cached (~{config['size_mb']} MB)")
                 print(f"  Download time: {estimate_download_time(config['size_mb'])}")
-                
+
                 if dry_run:
                     print(f"  [DRY RUN] Would download on first use")
                 else:
                     print(f"  Will download automatically on first pipeline run")
-        
+
     except ImportError:
         print("\n✗ transformers not installed")
         print("  Install with: pip install transformers torch")
         return 0
-    
+
     return installed
 
 
@@ -340,43 +340,43 @@ def install_realesrgan_weights(force: bool = False, dry_run: bool = False) -> in
     print("\n" + "=" * 70)
     print("2. REAL-ESRGAN WEIGHTS")
     print("=" * 70)
-    
+
     print(f"\nWeights directory: {WEIGHTS_DIR}")
     installed = 0
-    
+
     for model_name, config in REALESRGAN_MODELS.items():
         model_path = WEIGHTS_DIR / model_name
-        
+
         print(f"\nModel: {config['description']}")
         print(f"  File: {model_name}")
         print(f"  Size: ~{config['size_mb']} MB")
-        
+
         if model_path.exists() and not force:
             size_mb = model_path.stat().st_size / (1024 * 1024)
             print(f"  ✓ Already installed ({size_mb:.1f} MB)")
             installed += 1
             continue
-        
+
         if not config["required"]:
             print(f"  ⚠️  Optional model, skipping")
             print(f"  Download manually if needed: {config['url']}")
             continue
-        
+
         print(f"  ⚠️  Not found")
         print(f"  Download time: {estimate_download_time(config['size_mb'])}")
-        
+
         if dry_run:
             print(f"  [DRY RUN] Would prompt for download")
             continue
-        
+
         # Check disk space
         if not check_disk_space(config['size_mb']):
             print(f"  ✗ Insufficient disk space, skipping")
             continue
-        
+
         # Prompt for download
         response = input(f"  Download {model_name}? [y/N]: ").lower().strip()
-        
+
         if response == 'y':
             success = download_file_with_retry(
                 config['url'],
@@ -384,7 +384,7 @@ def install_realesrgan_weights(force: bool = False, dry_run: bool = False) -> in
                 model_name,
                 config['sha256']
             )
-            
+
             if success:
                 installed += 1
             else:
@@ -392,7 +392,7 @@ def install_realesrgan_weights(force: bool = False, dry_run: bool = False) -> in
                 print(f"  Manual download: {config['url']}")
         else:
             print(f"  Skipped")
-    
+
     return installed
 
 
@@ -401,37 +401,37 @@ def install_controlnet_models(dry_run: bool = False) -> int:
     print("\n" + "=" * 70)
     print("3. CONTROLNET MODELS")
     print("=" * 70)
-    
+
     installed = 0
-    
+
     try:
         from diffusers import ControlNetModel
-        
+
         for config in CONTROLNET_MODELS:
             model_id = config["model_id"]
             print(f"\nModel: {config['description']}")
             print(f"  ID: {model_id}")
             print(f"  Size: ~{config['size_mb']} MB")
-            
+
             is_cached, cache_dir = check_huggingface_model(model_id)
-            
+
             if is_cached:
                 print(f"  ✓ Already cached")
                 installed += 1
             else:
                 print(f"  ⚠️  Not cached")
                 print(f"  Download time: {estimate_download_time(config['size_mb'])}")
-                
+
                 if dry_run:
                     print(f"  [DRY RUN] Would download on first use")
                 else:
                     print(f"  Will download automatically on first use")
-    
+
     except ImportError:
         print("\n✗ diffusers not installed")
         print("  Install with: pip install diffusers torch")
         return 0
-    
+
     return installed
 
 
@@ -440,29 +440,29 @@ def install_stable_diffusion_models(dry_run: bool = False) -> int:
     print("\n" + "=" * 70)
     print("4. STABLE DIFFUSION MODELS")
     print("=" * 70)
-    
+
     installed = 0
-    
+
     for config in SD_MODELS:
         model_id = config["model_id"]
         print(f"\nModel: {config['description']}")
         print(f"  ID: {model_id}")
         print(f"  Size: ~{config['size_mb']} MB")
-        
+
         is_cached, cache_dir = check_huggingface_model(model_id)
-        
+
         if is_cached:
             print(f"  ✓ Already cached")
             installed += 1
         else:
             print(f"  ⚠️  Not cached")
             print(f"  Download time: {estimate_download_time(config['size_mb'])}")
-            
+
             if dry_run:
                 print(f"  [DRY RUN] Would download on first use")
             else:
                 print(f"  Will download automatically on first use")
-    
+
     return installed
 
 
@@ -489,7 +489,7 @@ Examples:
   python scripts/install_models.py --force
         """
     )
-    
+
     parser.add_argument(
         '--all',
         action='store_true',
@@ -505,21 +505,21 @@ Examples:
         action='store_true',
         help='Force re-download even if files exist'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Header
     print("=" * 70)
     print("TRANSFORMATION PORTAL - MODEL INSTALLATION")
     print("=" * 70)
-    
+
     if args.dry_run:
         print("\n[DRY RUN MODE] - No files will be downloaded")
-    
+
     # Install models
     depth_installed = install_depth_models(args.all, args.dry_run)
     realesrgan_installed = install_realesrgan_weights(args.force, args.dry_run)
-    
+
     if args.all:
         controlnet_installed = install_controlnet_models(args.dry_run)
         sd_installed = install_stable_diffusion_models(args.dry_run)
@@ -527,40 +527,40 @@ Examples:
         controlnet_installed = 0
         sd_installed = 0
         print("\n💡 Tip: Use --all to check/install ControlNet and Stable Diffusion models")
-    
+
     # Summary
     print("\n" + "=" * 70)
     print("INSTALLATION SUMMARY")
     print("=" * 70)
-    
+
     print(f"\n✓ Models Ready:")
     print(f"  • Depth Anything V2:  {depth_installed} models")
     print(f"  • Real-ESRGAN:        {realesrgan_installed} models")
     if args.all:
         print(f"  • ControlNet:         {controlnet_installed} models")
         print(f"  • Stable Diffusion:   {sd_installed} models")
-    
+
     print(f"\n📦 Model Locations:")
     print(f"  • HuggingFace cache: ~/.cache/huggingface/")
     print(f"  • Real-ESRGAN:       {WEIGHTS_DIR}")
-    
+
     print(f"\n💡 Notes:")
     print(f"  • HuggingFace models auto-download on first use")
     print(f"  • First pipeline run will be slower (model loading)")
     print(f"  • Models are cached and reused across runs")
-    
+
     print(f"\n🔧 Optional Dependencies:")
     print(f"  • pip install accelerate      (faster loading)")
     print(f"  • pip install realesrgan       (4x upscaling)")
     print(f"  • pip install torch            (GPU acceleration)")
-    
+
     if not args.dry_run:
         print(f"\n✅ Setup complete!")
     else:
         print(f"\n[DRY RUN] Run without --dry-run to actually download")
-    
+
     print("=" * 70)
-    
+
     return 0
 
 

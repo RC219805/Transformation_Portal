@@ -47,10 +47,10 @@ for pdf_path in pdf_paths:
     if pdf_path.exists():
         print(f"  ✓ Found: {pdf_path.name}")
         pdf_found.append(pdf_path)
-        
+
         # Extract context from PDF
         pdf_context = extractor.extract_from_pdf(pdf_path)
-        
+
         # Merge into main context
         if pdf_context.dimensions:
             context.dimensions = pdf_context.dimensions

@@ -20,21 +20,21 @@ import sys
 
 class ArchitecturalContext:
     """Load and query architectural context from PDF extraction."""
-    
+
     def __init__(self, context_file: Path):
         """Initialize with rendering knowledge base JSON."""
         with open(context_file, 'r') as f:
             self.kb = json.load(f)
-        
+
         self.property_name = self.kb.get('property_name', 'Unknown Property')
         self.rooms = self.kb.get('rooms', [])
         self.materials = self.kb.get('materials', [])
         self.rendering_pages = self.kb.get('rendering_pages', {})
-    
+
     def identify_room(self, image_path: Path) -> Optional[str]:
         """Identify room type from image filename or metadata."""
         filename_lower = image_path.stem.lower()
-        
+
         # Check for room keywords in filename
         room_keywords = {
             'kitchen': ['kitchen', 'cook', 'culinary'],
@@ -46,22 +46,22 @@ class ArchitecturalContext:
             'entry': ['entry', 'foyer', 'entrance'],
             'closet': ['closet', 'wardrobe', 'storage'],
         }
-        
+
         for room_type, keywords in room_keywords.items():
             if any(kw in filename_lower for kw in keywords):
                 return room_type
-        
+
         return None
-    
+
     def get_material_palette(self, room_type: Optional[str] = None) -> List[str]:
         """Get material palette, optionally filtered by room type."""
         # For now, return all materials
         # Could be enhanced with room-specific material filtering
         return self.materials
-    
+
     def get_enhancement_profile(self, room_type: Optional[str]) -> Dict:
         """Get room-specific enhancement parameters."""
-        
+
         profiles = {
             'kitchen': {
                 'materials_focus': ['wood', 'stone', 'steel', 'glass'],
@@ -104,15 +104,15 @@ class ArchitecturalContext:
                 'notes': 'Standard architectural enhancement'
             }
         }
-        
+
         return profiles.get(room_type, profiles['default'])
-    
+
     def get_rendering_context(self, image_path: Path) -> Dict:
         """Get full context for rendering enhancement."""
         room_type = self.identify_room(image_path)
         enhancement_profile = self.get_enhancement_profile(room_type)
         material_palette = self.get_material_palette(room_type)
-        
+
         return {
             'property_name': self.property_name,
             'image_path': str(image_path),
@@ -125,20 +125,20 @@ class ArchitecturalContext:
 
 class ContextAwareRenderer:
     """Rendering pipeline with architectural context awareness."""
-    
+
     def __init__(self, context_file: Path):
         """Initialize with architectural context."""
         self.context = ArchitecturalContext(context_file)
         print(f"✅ Loaded context for: {self.context.property_name}")
         print(f"   Rooms: {len(self.context.rooms)}")
         print(f"   Materials: {len(self.context.materials)}")
-    
+
     def enhance_render(self, image_path: Path, output_dir: Path, pipeline: str = 'standard'):
         """Enhance render with context-aware processing."""
-        
+
         # Get rendering context
         ctx = self.context.get_rendering_context(image_path)
-        
+
         print("\n" + "=" * 80)
         print(f"CONTEXT-AWARE RENDERING: {image_path.name}")
         print("=" * 80)
@@ -149,7 +149,7 @@ class ContextAwareRenderer:
         print(f"🔧 Clarity Boost: {ctx['enhancement_profile']['clarity_boost']}")
         print(f"🎬 LUT: {Path(ctx['enhancement_profile']['lut']).name}")
         print(f"\n📝 Notes: {ctx['enhancement_profile']['notes']}")
-        
+
         # Build pipeline command
         if pipeline == 'standard':
             cmd = self._build_standard_pipeline(image_path, output_dir, ctx)
@@ -157,16 +157,16 @@ class ContextAwareRenderer:
             cmd = self._build_premium_pipeline(image_path, output_dir, ctx)
         else:
             raise ValueError(f"Unknown pipeline: {pipeline}")
-        
+
         print("\n🔧 Pipeline Command:")
         print(f"   {cmd}")
-        
+
         return cmd, ctx
-    
+
     def _build_standard_pipeline(self, image_path: Path, output_dir: Path, ctx: Dict) -> str:
         """Build standard enhancement pipeline command."""
         profile = ctx['enhancement_profile']
-        
+
         # Use luxury_tiff_batch_processor with context-aware parameters
         cmd = (
             f"python luxury_tiff_batch_processor.py "
@@ -175,18 +175,18 @@ class ContextAwareRenderer:
             f"--clarity {profile['clarity_boost']:.2f} "
             f"--material-response {profile['material_response_strength']:.2f} "
         )
-        
+
         # Add LUT if exists
         lut_path = Path(profile['lut'])
         if lut_path.exists():
             cmd += f"--lut \"{lut_path}\" "
-        
+
         return cmd
-    
+
     def _build_premium_pipeline(self, image_path: Path, output_dir: Path, ctx: Dict) -> str:
         """Build premium enhancement pipeline command."""
         profile = ctx['enhancement_profile']
-        
+
         # Use lux_render_pipeline with context-aware parameters
         cmd = (
             f"python lux_render_pipeline.py "
@@ -196,38 +196,38 @@ class ContextAwareRenderer:
             f"--material-response {profile['material_response_strength']:.2f} "
             f"--room-type {ctx['room_type']} "
         )
-        
+
         return cmd
 
 
 def main():
     """Demo: Context-aware rendering of 750 Picacho kitchen."""
-    
+
     # Load knowledge base
     kb_file = Path("/Users/rc/750_picacho_context/rendering_knowledge_base.json")
-    
+
     if not kb_file.exists():
         print(f"❌ Knowledge base not found: {kb_file}")
         print("   Run PDF extraction first")
         sys.exit(1)
-    
+
     # Initialize renderer
     renderer = ContextAwareRenderer(kb_file)
-    
+
     # Demo: Kitchen render
     kitchen_render = Path("input_images/Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright.jpg")
-    
+
     if not kitchen_render.exists():
         print(f"\n⚠️  Demo image not found: {kitchen_render}")
         print("   Showing pipeline structure only")
         kitchen_render = Path("example_kitchen.jpg")
-    
+
     # Get context and build pipeline
     output_dir = Path("output/context_aware")
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     cmd_standard, ctx = renderer.enhance_render(kitchen_render, output_dir, pipeline='standard')
-    
+
     print("\n" + "=" * 80)
     print("CONTEXT-AWARE ENHANCEMENT READY")
     print("=" * 80)
@@ -236,12 +236,12 @@ def main():
     print(f"   • Material palette from architectural specs")
     print(f"   • Validated against floor plans")
     print(f"\n💡 Run command above to execute enhancement")
-    
+
     # Save context for this rendering
     context_output = output_dir / f"{kitchen_render.stem}_context.json"
     with open(context_output, 'w') as f:
         json.dump(ctx, f, indent=2)
-    
+
     print(f"\n📄 Rendering context saved: {context_output}")
 
 

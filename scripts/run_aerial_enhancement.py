@@ -109,12 +109,12 @@ def process_single_image(
     args: argparse.Namespace,
 ) -> Optional[Path]:
     """Process a single aerial image.
-    
+
     Args:
         input_path: Input image path
         output_path: Output image path
         args: Parsed arguments
-        
+
     Returns:
         Path to output file if successful, None otherwise
     """
@@ -160,12 +160,12 @@ def process_batch(
     args: argparse.Namespace,
 ) -> List[Path]:
     """Process all images in a directory.
-    
+
     Args:
         input_dir: Input directory
         output_dir: Output directory
         args: Parsed arguments
-        
+
     Returns:
         List of successfully processed output paths
     """
@@ -229,9 +229,9 @@ def main() -> None:
     print("=" * 70)
     print("AERIAL ENHANCEMENT - MBAR Materials")
     print("=" * 70)
-    
+
     result = process_single_image(args.input, args.output, args)
-    
+
     if result:
         print("=" * 70)
         print("✅ Enhancement complete")

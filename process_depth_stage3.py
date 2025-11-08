@@ -41,7 +41,7 @@ saturations = [1.15, 1.10, 1.00, 0.92, 0.85]
 for zone_idx, (zone_mask, contrast, saturation) in enumerate(zip(zones, contrasts, saturations)):
     # Apply contrast
     enhanced[zone_mask] = np.clip((enhanced[zone_mask] - 0.5) * contrast + 0.5, 0, 1)
-    
+
     # Apply saturation
     gray = np.dot(enhanced[zone_mask], [0.299, 0.587, 0.114])[:, np.newaxis]
     enhanced[zone_mask] = np.clip(gray + (enhanced[zone_mask] - gray) * saturation, 0, 1)

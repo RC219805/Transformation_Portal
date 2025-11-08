@@ -42,27 +42,27 @@ def example_basic_search():
     print("=" * 80)
     print("Example 1: Basic Search Workflow")
     print("=" * 80)
-    
+
     # Get repository root (current directory or parent)
     repo_root = Path.cwd()
     if not (repo_root / '.git').exists():
         repo_root = repo_root.parent
-    
+
     print(f"\n1. Indexing repository: {repo_root}")
     indexer = RepositoryIndexer(str(repo_root))
     chunks = indexer.index_repository()
     print(f"   Created {len(chunks)} chunks")
-    
+
     print("\n2. Setting up retrieval")
     retriever = HybridRetriever()
     retriever.index(chunks)
     print("   Retriever ready")
-    
+
     print("\n3. Searching for 'depth pipeline'")
     query = "depth pipeline atmospheric effects"
     results = retriever.retrieve(query, top_k=5)
     print(f"   Found {len(results)} results")
-    
+
     print("\n4. Top results:")
     for i, result in enumerate(results[:3], 1):
         print(f"   [{i}] {result.file_path}:{result.start_line}")
@@ -75,30 +75,30 @@ def example_with_reranking():
     print("\n" + "=" * 80)
     print("Example 2: Search with Reranking")
     print("=" * 80)
-    
+
     repo_root = Path.cwd()
     if not (repo_root / '.git').exists():
         repo_root = repo_root.parent
-    
+
     # Index and retrieve
     indexer = RepositoryIndexer(str(repo_root))
     chunks = indexer.index_repository()
-    
+
     retriever = HybridRetriever()
     retriever.index(chunks)
-    
+
     query = "How to add a new LUT preset?"
     print(f"\nQuery: {query}")
-    
+
     # Get initial results
     results = retriever.retrieve(query, top_k=10)
     print(f"Initial retrieval: {len(results)} results")
-    
+
     # Rerank
     reranker = ResultReranker()
     reranked = reranker.rerank(results, query, top_k=5)
     print(f"After reranking: {len(reranked)} results")
-    
+
     print("\nTop reranked results:")
     for i, result in enumerate(reranked[:3], 1):
         print(f"[{i}] {result.file_path}:{result.start_line}-{result.end_line}")
@@ -110,30 +110,30 @@ def example_with_citations():
     print("\n" + "=" * 80)
     print("Example 3: Generate Citations")
     print("=" * 80)
-    
+
     repo_root = Path.cwd()
     if not (repo_root / '.git').exists():
         repo_root = repo_root.parent
-    
+
     # Index, retrieve, and rerank
     indexer = RepositoryIndexer(str(repo_root))
     chunks = indexer.index_repository()
-    
+
     retriever = HybridRetriever()
     retriever.index(chunks)
-    
+
     query = "material response enhancement"
     results = retriever.retrieve(query, top_k=10)
-    
+
     reranker = ResultReranker()
     reranked = reranker.rerank(results, query, top_k=5)
-    
+
     # Generate citations
     citation_gen = CitationGenerator()
     citations = citation_gen.generate_citations(reranked, max_citations=3)
-    
+
     print(f"\nGenerated {len(citations)} citations for: '{query}'\n")
-    
+
     # Format as markdown
     markdown = citation_gen.format_citations(citations, format_type='markdown')
     print(markdown)
@@ -144,36 +144,36 @@ def example_prompt_template():
     print("\n" + "=" * 80)
     print("Example 4: Prompt Template with Context")
     print("=" * 80)
-    
+
     repo_root = Path.cwd()
     if not (repo_root / '.git').exists():
         repo_root = repo_root.parent
-    
+
     # Get context from repository
     indexer = RepositoryIndexer(str(repo_root))
     chunks = indexer.index_repository()
-    
+
     retriever = HybridRetriever()
     retriever.index(chunks)
-    
+
     # Find relevant context for feature request
     query = "FFmpeg filter graph video processing"
     results = retriever.retrieve(query, top_k=5)
-    
+
     reranker = ResultReranker()
     reranked = reranker.rerank(results, query, top_k=3)
-    
+
     citation_gen = CitationGenerator()
     citations = citation_gen.generate_citations(reranked, max_citations=3)
     context = citation_gen.format_citations(citations, format_type='text')
-    
+
     # Generate template with context
     print("\nGenerating feature implementation template...")
     template = PromptTemplates.feature_implementation(
         feature_description="Add HDR tone mapping with custom transfer function",
         context=context
     )
-    
+
     print("\nTemplate (first 500 chars):")
     print(template[:500] + "...\n")
 
@@ -183,7 +183,7 @@ def example_code_modification_response():
     print("\n" + "=" * 80)
     print("Example 5: Structured Code Modification Response")
     print("=" * 80)
-    
+
     # Create a structured response
     response = CodeModificationResponse(
         summary="Add atmospheric haze effect to depth pipeline",
@@ -192,11 +192,11 @@ def example_code_modification_response():
                 path="depth_pipeline/processors/atmospheric.py",
                 patch="""
 @@ -10,6 +10,15 @@
- 
+
  class AtmosphericProcessor:
 +    def apply_haze(self, image, depth_map, intensity=0.3):
 +        '''Apply depth-based atmospheric haze.
-+        
++
 +        Args:
 +            image: Input image array
 +            depth_map: Normalized depth map
@@ -235,7 +235,7 @@ def example_code_modification_response():
             }
         ]
     )
-    
+
     print("\nStructured Response:")
     print(response.to_json())
 
@@ -245,20 +245,20 @@ def example_artifact_classification():
     print("\n" + "=" * 80)
     print("Example 6: Artifact Classification")
     print("=" * 80)
-    
+
     # Note: This requires an actual output directory with artifacts
     output_dir = Path.cwd() / "output"
-    
+
     if not output_dir.exists():
         print(f"\nSkipping: {output_dir} does not exist")
         print("Create some pipeline outputs first, then run this example")
         return
-    
+
     classifier = ArtifactClassifier()
     artifacts = classifier.classify_directory(str(output_dir), recursive=True)
-    
+
     print(f"\nClassified {len(artifacts)} artifacts in {output_dir}")
-    
+
     stats = classifier.get_statistics()
     print("\nStatistics:")
     print(f"  By type: {stats.get('by_type', {})}")
@@ -270,17 +270,17 @@ def example_knowledge_engine():
     print("\n" + "=" * 80)
     print("Example 7: Knowledge Integration Engine")
     print("=" * 80)
-    
+
     # Create sample feedback data
     engine = KnowledgeIntegrationEngine()
-    
+
     # Add some sample feedback
     sample_feedback = [
         ("depth_pipeline", "img001", True, 0.045, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
         ("depth_pipeline", "img002", True, 0.052, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
         ("material_response", "img003", True, 0.120, {"strength": 0.7, "surfaces": ["wood", "metal"]}),
     ]
-    
+
     for pipeline, artifact_id, success, time, params in sample_feedback:
         engine.add_feedback(
             pipeline=pipeline,
@@ -289,15 +289,15 @@ def example_knowledge_engine():
             processing_time=time,
             parameters=params
         )
-    
+
     # Analyze pipeline
     print("\nAnalyzing depth_pipeline...")
     analysis = engine.analyze_patterns("depth_pipeline")
-    
+
     print(f"  Success rate: {analysis.success_rate:.1%}")
     print(f"  Avg processing time: {analysis.avg_processing_time:.3f}s")
     print(f"  Common parameters: {analysis.common_parameters}")
-    
+
     # Natural language query
     print("\nNatural language query:")
     answer = engine.query_natural_language("What is the success rate for depth_pipeline?")
@@ -310,7 +310,7 @@ def main():
     print("RAG System Usage Examples")
     print("Transformation Portal Repository")
     print("=" * 80)
-    
+
     try:
         example_basic_search()
         example_with_reranking()
@@ -319,17 +319,17 @@ def main():
         example_code_modification_response()
         example_artifact_classification()
         example_knowledge_engine()
-        
+
         print("\n" + "=" * 80)
         print("All examples completed successfully!")
         print("=" * 80)
-        
+
     except Exception as e:
         print(f"\nError running examples: {e}")
         import traceback
         traceback.print_exc()
         return 1
-    
+
     return 0
 
 

@@ -71,7 +71,7 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
         "sha256": None,
         "description": "Grayscale depth map for testing (256x256px)",
     },
-    
+
     # ========================================================================
     # DEMO: Small examples for README and documentation
     # ========================================================================
@@ -91,7 +91,7 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
         "sha256": None,
         "description": "Pool aerial enhancement demo (downscaled to 2K)",
     },
-    
+
     # ========================================================================
     # FULL: Complete sample dataset for pipeline testing
     # ========================================================================
@@ -120,11 +120,11 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
 
 class DownloadProgressBar:
     """Progress bar for downloads using tqdm if available."""
-    
+
     def __init__(self, desc: str):
         self.desc = desc
         self.pbar = None
-    
+
     def __call__(self, block_num: int, block_size: int, total_size: int):
         if self.pbar is None:
             if tqdm:
@@ -137,7 +137,7 @@ class DownloadProgressBar:
             else:
                 # Fallback to simple progress
                 print(f"Downloading {self.desc}...", end='', flush=True)
-        
+
         if self.pbar:
             downloaded = block_num * block_size
             if downloaded < total_size:
@@ -152,12 +152,12 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     """Verify file SHA256 checksum."""
     if expected_sha256 is None:
         return True  # Skip verification if no checksum provided
-    
+
     sha256 = hashlib.sha256()
     with open(file_path, 'rb') as f:
         for chunk in iter(lambda: f.read(4096), b''):
             sha256.update(chunk)
-    
+
     actual = sha256.hexdigest()
     if actual != expected_sha256:
         print(f"❌ Checksum mismatch for {file_path.name}")
@@ -172,21 +172,21 @@ def download_file(url: str, output_path: Path, description: str, sha256: Optiona
     try:
         # Create parent directory if needed
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Download file
         urllib.request.urlretrieve(
             url,
             output_path,
             reporthook=DownloadProgressBar(description)
         )
-        
+
         # Verify checksum
         if not verify_checksum(output_path, sha256):
             output_path.unlink()  # Remove corrupted file
             return False
-        
+
         return True
-        
+
     except Exception as e:
         print(f"❌ Failed to download {description}: {e}")
         if output_path.exists():
@@ -214,50 +214,50 @@ def download_samples(
 ) -> int:
     """
     Download samples from specified categories.
-    
+
     Args:
         categories: List of categories to download ("minimal", "demo", "full")
         output_dir: Base output directory (default: repository root)
         force: Force re-download even if files exist
-    
+
     Returns:
         Number of files successfully downloaded
     """
     if output_dir is None:
         # Default to repository root
         output_dir = Path(__file__).parent.parent
-    
+
     # Collect all samples to download
     samples_to_download = []
     for category in categories:
         samples_to_download.extend(get_samples_by_category(category))
-    
+
     if not samples_to_download:
         print(f"No samples found for categories: {categories}")
         return 0
-    
+
     print(f"\n📥 Downloading {len(samples_to_download)} sample files...")
     print(f"📂 Output directory: {output_dir}\n")
-    
+
     downloaded = 0
     skipped = 0
     failed = 0
-    
+
     for sample in samples_to_download:
         output_path = output_dir / sample["path"]
-        
+
         # Skip if file exists and not forcing re-download
         if output_path.exists() and not force:
             print(f"⏭️  Skipped {sample['name']} (already exists)")
             skipped += 1
             continue
-        
+
         # Check if URL is available
         if sample["url"] is None:
             print(f"⚠️  {sample['name']}: URL not yet available (TODO: upload to GitHub Release)")
             failed += 1
             continue
-        
+
         # Download file
         success = download_file(
             sample["url"],
@@ -265,24 +265,24 @@ def download_samples(
             sample["name"],
             sample.get("sha256")
         )
-        
+
         if success:
             print(f"✅ Downloaded {sample['name']} ({sample['size']})")
             downloaded += 1
         else:
             failed += 1
-    
+
     # Summary
     print(f"\n{'='*60}")
     print(f"✅ Downloaded: {downloaded}")
     print(f"⏭️  Skipped:    {skipped}")
     print(f"❌ Failed:     {failed}")
     print(f"{'='*60}\n")
-    
+
     if failed > 0:
         print("⚠️  Some files failed to download. This is expected if samples haven't been uploaded to GitHub Releases yet.")
         print("   See BINARY_FILE_BEST_PRACTICES.md for instructions on hosting samples.\n")
-    
+
     return downloaded
 
 
@@ -310,11 +310,11 @@ Examples:
 
 Categories:
   minimal - Tiny synthetic images for unit tests (< 50KB total)
-  demo    - Small demo images for README examples (~10MB total)  
+  demo    - Small demo images for README examples (~10MB total)
   full    - Complete sample dataset for pipeline testing (~50MB total)
         """
     )
-    
+
     parser.add_argument(
         "--all",
         action="store_true",
@@ -340,9 +340,9 @@ Categories:
         action="store_true",
         help="List available samples without downloading"
     )
-    
+
     args = parser.parse_args()
-    
+
     # List samples if requested
     if args.list:
         print("\n📋 Available Samples:\n")
@@ -355,25 +355,25 @@ Categories:
                 print(f"    {sample['description']}")
         print()
         return 0
-    
+
     # Determine categories to download
     categories = ["minimal"]  # Always download minimal for tests
     if args.demo:
         categories.append("demo")
     if args.all:
         categories = ["minimal", "demo", "full"]
-    
+
     # Download samples
     downloaded = download_samples(
         categories,
         output_dir=args.output_dir,
         force=args.force
     )
-    
+
     if downloaded == 0 and not args.list:
         print("ℹ️  No new files downloaded. Use --force to re-download existing files.")
         return 1
-    
+
     return 0
 
 
