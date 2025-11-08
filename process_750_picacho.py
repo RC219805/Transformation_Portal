@@ -11,6 +11,13 @@ from PIL import Image
 from typing import Tuple, Optional
 import warnings
 
+# Optional imports
+try:
+    import imageio.v3 as iio
+    HAS_IMAGEIO = True
+except ImportError:
+    HAS_IMAGEIO = False
+
 # Add current directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -144,9 +151,11 @@ def save_16bit_tiff(img_float: np.ndarray, output_path: Path, compression: str =
         print(f"    Saved 16-bit TIFF: {output_path.name} ({output_path.stat().st_size / (1024*1024):.1f} MB)")
     except ImportError:
         # Fallback to imageio
-        import imageio.v3 as iio
-        iio.imwrite(output_path, img_16bit, compression=1 if compression != 'none' else 0)
-        print(f"    Saved 16-bit TIFF (imageio): {output_path.name}")
+        if HAS_IMAGEIO:
+            iio.imwrite(output_path, img_16bit, compression=1 if compression != 'none' else 0)
+            print(f"    Saved 16-bit TIFF (imageio): {output_path.name}")
+        else:
+            raise ImportError("Neither tifffile nor imageio available for TIFF export")
 
 
 def save_jpeg(img_float: np.ndarray, output_path: Path, quality: int = 95):
