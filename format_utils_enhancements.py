@@ -29,8 +29,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 try:
     from PIL import Image, ImageFile
     ImageFile.LOAD_TRUNCATED_IMAGES = True  # Handle truncated images gracefully
-except ImportError:
-    raise ImportError("Pillow is required. Install with: pip install Pillow")
+except ImportError as exc:
+    raise ImportError("Pillow is required. Install with: pip install Pillow") from exc
 
 # Optional but recommended for advanced features
 try:
