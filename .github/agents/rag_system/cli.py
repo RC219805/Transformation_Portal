@@ -45,7 +45,7 @@ def cmd_index(args):
 
     chunks = indexer.index_repository()
 
-    print(f"\nIndexing complete:")
+    print("\nIndexing complete:")
     print(f"  Total chunks: {len(chunks)}")
 
     # Show chunk type distribution
@@ -53,7 +53,7 @@ def cmd_index(args):
     for chunk in chunks:
         chunk_types[chunk.chunk_type] = chunk_types.get(chunk.chunk_type, 0) + 1
 
-    print(f"  Chunk types:")
+    print("  Chunk types:")
     for chunk_type, count in sorted(chunk_types.items()):
         print(f"    {chunk_type}: {count}")
 
@@ -113,7 +113,7 @@ def cmd_search(args):
         print(f"Method: {result.retrieval_method}")
         if result.metadata:
             print(f"Metadata: {result.metadata}")
-        print(f"\nContent preview:")
+        print("\nContent preview:")
         # Show first 200 characters
         preview = result.content[:200]
         if len(result.content) > 200:
@@ -224,10 +224,10 @@ def cmd_classify(args):
     # Show statistics
     stats = classifier.get_statistics()
     print(f"\nClassified {stats['total_artifacts']} artifacts")
-    print(f"\nBy type:")
+    print("\nBy type:")
     for artifact_type, count in sorted(stats.get('by_type', {}).items()):
         print(f"  {artifact_type}: {count}")
-    print(f"\nBy pipeline:")
+    print("\nBy pipeline:")
     for pipeline, count in sorted(stats.get('by_pipeline', {}).items()):
         print(f"  {pipeline}: {count}")
 
@@ -264,7 +264,7 @@ def cmd_analyze(args):
         print(f"Common parameters: {analysis.common_parameters}")
 
         if analysis.failure_modes:
-            print(f"\nFailure modes:")
+            print("\nFailure modes:")
             for mode, count in analysis.failure_modes.items():
                 print(f"  {mode}: {count}")
 
