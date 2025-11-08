@@ -144,6 +144,7 @@ def save_16bit_tiff(img_float: np.ndarray, output_path: Path, compression: str =
         print(f"    Saved 16-bit TIFF: {output_path.name} ({output_path.stat().st_size / (1024*1024):.1f} MB)")
     except ImportError:
         # Fallback to imageio
+        import imageio.v3 as iio
         iio.imwrite(output_path, img_16bit, compression=1 if compression != 'none' else 0)
         print(f"    Saved 16-bit TIFF (imageio): {output_path.name}")
 
