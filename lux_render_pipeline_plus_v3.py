@@ -319,8 +319,7 @@ def apply_pbr_overlays(
             if exposure != 0.0:
                 x *= 2.0**float(exposure)
             lo, hi = float(np.clip(lo, 0, 1)), float(np.clip(hi, 0, 1))
-            if hi < lo:
-                hi = lo
+            hi = max(hi, lo)
             x = np.zeros_like(x) if hi == lo else (x-lo)/max(1e-6, hi-lo)
             return (np.clip(x, 0, 1)*255.0+0.5).astype(np.uint8)
         lut = _lut_u8(exposure, clamp_low, clamp_high)
