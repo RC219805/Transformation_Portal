@@ -1,5 +1,7 @@
 # Core runtime
-numpy>=1.24,<3
+# Pin numpy <2.3.0 for opencv-python compatibility (until opencv-python supports 2.3+)
+# See: https://github.com/opencv/opencv-python/issues/954
+numpy>=1.24,<2.3.0
 Pillow>=10,<12
 scipy>=1.15,<2
 tifffile>=2023.7.18,<2025

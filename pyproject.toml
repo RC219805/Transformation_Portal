@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "RC219805" }]
 dependencies = [
-    "numpy>=1.24,<3",
+    # Pin numpy <2.3.0 for opencv-python compatibility
+    # See: https://github.com/opencv/opencv-python/issues/954
+    "numpy>=1.24,<2.3.0",
     "Pillow>=10.0.0,<12",
     "scipy>=1.10,<2",
     "scikit-learn>=1.4.0,<2",
