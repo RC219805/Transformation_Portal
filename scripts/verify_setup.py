@@ -164,7 +164,7 @@ def main():
     for pkg_name, import_name in required_packages:
         installed, version = check_package(pkg_name, import_name)
         symbol = "✓" if installed else "✗"
-        status = f"{version}" if installed else f"NOT INSTALLED"
+        status = f"{version}" if installed else "NOT INSTALLED"
         print(f"{symbol} {pkg_name:20s} {status}")
         if not installed:
             required_ok = False

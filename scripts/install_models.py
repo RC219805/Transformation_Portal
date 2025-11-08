@@ -194,7 +194,7 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     if expected_sha256 is None:
         return True  # Skip verification
 
-    print(f"  Verifying checksum...")
+    print("  Verifying checksum...")
     sha256 = hashlib.sha256()
 
     with open(file_path, 'rb') as f:
@@ -204,12 +204,12 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     actual = sha256.hexdigest()
 
     if actual != expected_sha256:
-        print(f"  ✗ Checksum mismatch!")
+        print("  ✗ Checksum mismatch!")
         print(f"    Expected: {expected_sha256}")
         print(f"    Got:      {actual}")
         return False
 
-    print(f"  ✓ Checksum verified")
+    print("  ✓ Checksum verified")
     return True
 
 
@@ -323,9 +323,9 @@ def install_depth_models(install_all: bool = False, dry_run: bool = False) -> in
                 print(f"  Download time: {estimate_download_time(config['size_mb'])}")
 
                 if dry_run:
-                    print(f"  [DRY RUN] Would download on first use")
+                    print("  [DRY RUN] Would download on first use")
                 else:
-                    print(f"  Will download automatically on first pipeline run")
+                    print("  Will download automatically on first pipeline run")
 
     except ImportError:
         print("\n✗ transformers not installed")
@@ -358,20 +358,20 @@ def install_realesrgan_weights(force: bool = False, dry_run: bool = False) -> in
             continue
 
         if not config["required"]:
-            print(f"  ⚠️  Optional model, skipping")
+            print("  ⚠️  Optional model, skipping")
             print(f"  Download manually if needed: {config['url']}")
             continue
 
-        print(f"  ⚠️  Not found")
+        print("  ⚠️  Not found")
         print(f"  Download time: {estimate_download_time(config['size_mb'])}")
 
         if dry_run:
-            print(f"  [DRY RUN] Would prompt for download")
+            print("  [DRY RUN] Would prompt for download")
             continue
 
         # Check disk space
         if not check_disk_space(config['size_mb']):
-            print(f"  ✗ Insufficient disk space, skipping")
+            print("  ✗ Insufficient disk space, skipping")
             continue
 
         # Prompt for download
@@ -388,10 +388,10 @@ def install_realesrgan_weights(force: bool = False, dry_run: bool = False) -> in
             if success:
                 installed += 1
             else:
-                print(f"  ✗ Download failed")
+                print("  ✗ Download failed")
                 print(f"  Manual download: {config['url']}")
         else:
-            print(f"  Skipped")
+            print("  Skipped")
 
     return installed
 
@@ -416,16 +416,16 @@ def install_controlnet_models(dry_run: bool = False) -> int:
             is_cached, cache_dir = check_huggingface_model(model_id)
 
             if is_cached:
-                print(f"  ✓ Already cached")
+                print("  ✓ Already cached")
                 installed += 1
             else:
-                print(f"  ⚠️  Not cached")
+                print("  ⚠️  Not cached")
                 print(f"  Download time: {estimate_download_time(config['size_mb'])}")
 
                 if dry_run:
-                    print(f"  [DRY RUN] Would download on first use")
+                    print("  [DRY RUN] Would download on first use")
                 else:
-                    print(f"  Will download automatically on first use")
+                    print("  Will download automatically on first use")
 
     except ImportError:
         print("\n✗ diffusers not installed")
@@ -452,16 +452,16 @@ def install_stable_diffusion_models(dry_run: bool = False) -> int:
         is_cached, cache_dir = check_huggingface_model(model_id)
 
         if is_cached:
-            print(f"  ✓ Already cached")
+            print("  ✓ Already cached")
             installed += 1
         else:
-            print(f"  ⚠️  Not cached")
+            print("  ⚠️  Not cached")
             print(f"  Download time: {estimate_download_time(config['size_mb'])}")
 
             if dry_run:
-                print(f"  [DRY RUN] Would download on first use")
+                print("  [DRY RUN] Would download on first use")
             else:
-                print(f"  Will download automatically on first use")
+                print("  Will download automatically on first use")
 
     return installed
 
@@ -541,18 +541,18 @@ Examples:
         print(f"  • Stable Diffusion:   {sd_installed} models")
 
     print(f"\n📦 Model Locations:")
-    print(f"  • HuggingFace cache: ~/.cache/huggingface/")
+    print("  • HuggingFace cache: ~/.cache/huggingface/")
     print(f"  • Real-ESRGAN:       {WEIGHTS_DIR}")
 
     print(f"\n💡 Notes:")
-    print(f"  • HuggingFace models auto-download on first use")
-    print(f"  • First pipeline run will be slower (model loading)")
-    print(f"  • Models are cached and reused across runs")
+    print("  • HuggingFace models auto-download on first use")
+    print("  • First pipeline run will be slower (model loading)")
+    print("  • Models are cached and reused across runs")
 
     print(f"\n🔧 Optional Dependencies:")
-    print(f"  • pip install accelerate      (faster loading)")
-    print(f"  • pip install realesrgan       (4x upscaling)")
-    print(f"  • pip install torch            (GPU acceleration)")
+    print("  • pip install accelerate      (faster loading)")
+    print("  • pip install realesrgan       (4x upscaling)")
+    print("  • pip install torch            (GPU acceleration)")
 
     if not args.dry_run:
         print(f"\n✅ Setup complete!")
