@@ -3,12 +3,13 @@ Tests for the workflow parser that detects bugs in GitHub Actions workflows.
 """
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 
-from transformation_portal.analyzers.parse_workflows import WorkflowParser, WorkflowBug
+import pytest
+
+from transformation_portal.analyzers.parse_workflows import WorkflowBug, WorkflowParser
 
 
 @pytest.fixture

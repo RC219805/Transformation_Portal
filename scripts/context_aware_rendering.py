@@ -14,19 +14,14 @@ Uses extracted architectural intelligence to inform every processing decision.
 """
 
 import json
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
-from dataclasses import dataclass
-import re
 
-from PIL import Image
 import numpy as np
-
-from architectural_context_extractor import (
-    ArchitecturalContextExtractor,
-    ProjectContext,
-    RoomContext
-)
+from architectural_context_extractor import ArchitecturalContextExtractor, ProjectContext, RoomContext
+from PIL import Image
 
 
 @dataclass

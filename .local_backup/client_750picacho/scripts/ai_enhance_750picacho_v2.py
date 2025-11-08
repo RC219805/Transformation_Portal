@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """AI Enhancement for 750 Picacho - Fixed dimensions"""
-import torch
-from PIL import Image, ImageEnhance
-from diffusers import StableDiffusionControlNetImg2ImgPipeline, ControlNetModel, UniPCMultistepScheduler
-from controlnet_aux import CannyDetector
 from pathlib import Path
+
+import torch
+from controlnet_aux import CannyDetector
+from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline, UniPCMultistepScheduler
+from PIL import Image, ImageEnhance
 
 print("=" * 60)
 print("AI PHOTOREALISTIC ENHANCEMENT - 750 Picacho")

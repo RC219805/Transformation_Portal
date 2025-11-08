@@ -1,10 +1,11 @@
 """Tests guarding Lantern logo CSS architectural decisions."""
 
 from __future__ import annotations
-from .documentation import documents, valid_until
 
-from pathlib import Path
 import re
+from pathlib import Path
+
+from .documentation import documents, valid_until
 
 ROOT = Path(__file__).resolve().parent.parent
 CSS_PATH = ROOT / "assets" / "brand" / "lantern_logo" / "lantern_logo.css"

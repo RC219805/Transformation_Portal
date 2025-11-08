@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Callable, Optional, List
+from typing import Callable, List, Optional
 
 import numpy as np
 from PIL import Image

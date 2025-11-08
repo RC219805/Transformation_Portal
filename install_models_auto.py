@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Automated Model Installation - No prompts"""
 
-from pathlib import Path
 import urllib.request
+from pathlib import Path
 
 print("=" * 70)
 print("AUTOMATED MODEL INSTALLATION")

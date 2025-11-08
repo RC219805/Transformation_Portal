@@ -13,12 +13,12 @@ Extracts:
 Enhances rendering pipeline with architectural knowledge.
 """
 
-import sys
-from pathlib import Path
 import json
 import re
+import sys
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, asdict
 
 try:
     import fitz  # PyMuPDF

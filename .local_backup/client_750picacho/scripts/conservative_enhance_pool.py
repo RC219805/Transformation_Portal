@@ -28,9 +28,10 @@ WARNINGS FROM LESSONS LEARNED:
 - Maintain concrete neutrality
 - Conservative parameters to avoid artifacts
 """
-from PIL import Image, ImageEnhance
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance
 from scipy.ndimage import gaussian_filter
 
 try:

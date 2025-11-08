@@ -12,23 +12,23 @@ import from the repository root.
 
 # Import all public API from the core implementation
 from transformation_portal.processors.material_response.core import (
+    CognitiveMaterialResponse,
+    ContextualResonance,
+    EmotionalResonance,
+    FutureStatePredictor,
+    GlobalLuxurySemantics,
+    LightingProfile,
+    MarketingClaimValidator,
+    MaterialAestheticProfile,
     MaterialResponseExample,
     MaterialResponsePrinciple,
-    MaterialAestheticProfile,
-    LightingProfile,
-    ViewerProfile,
-    EmotionalResonance,
-    ContextualResonance,
-    NeuroAestheticEngine,
-    GlobalLuxurySemantics,
-    FutureStatePredictor,
-    CognitiveMaterialResponse,
-    violates,
-    MarketingClaimValidator,
     MaterialResponseValidator,
-    compose_operations,
-    apply_transformation_tensor,
+    NeuroAestheticEngine,
     QuantumMaterialResponse,
+    ViewerProfile,
+    apply_transformation_tensor,
+    compose_operations,
+    violates,
 )
 
 __all__ = [

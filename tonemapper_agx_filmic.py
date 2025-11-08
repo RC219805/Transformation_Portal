@@ -26,7 +26,9 @@ Notes
 """
 
 from __future__ import annotations
+
 import os
+
 import numpy as np
 
 # Optional dependency: PyOpenColorIO (pip install opencolorio)

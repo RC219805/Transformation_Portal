@@ -8,10 +8,10 @@ import pytest
 # Use proper package imports (assumes package is installed or PYTHONPATH is set)
 # For development: pip install -e . or set PYTHONPATH to include src/
 from transformation_portal.utils.performance import (
-    timing_decorator,
+    PerformanceMonitor,
     cache_result,
     retry_on_failure,
-    PerformanceMonitor,
+    timing_decorator,
 )
 
 

@@ -6,8 +6,8 @@ This module provides decorators and utilities for performance profiling,
 caching, and optimization of image/video processing pipelines.
 """
 import functools
-import time
 import logging
+import time
 from typing import Any, Callable, Optional, TypeVar, cast
 
 logger = logging.getLogger(__name__)

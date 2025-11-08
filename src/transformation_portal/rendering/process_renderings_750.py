@@ -33,7 +33,6 @@ from typing import Dict, Iterable
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 
-
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif"}
 CONVERTIBLE_IMAGE_SUFFIXES = {".tif", ".tiff", ".webp", ".bmp", ".tga", ".psd", ".exr"}
 

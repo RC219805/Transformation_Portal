@@ -10,9 +10,10 @@ Key improvements over v2:
 - Smooth gradient transitions to prevent visible masking artifacts
 - Material-aware enhancement for stone, wood, and textiles
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 from scipy.ndimage import gaussian_filter
 
 try:

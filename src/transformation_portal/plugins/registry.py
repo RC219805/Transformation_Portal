@@ -6,13 +6,13 @@ import inspect
 import sys
 import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Type, Any
 from threading import Lock
+from typing import Any, Dict, List, Optional, Type
 
 from .interface import (
     PluginInterface,
-    PluginType,
     PluginMetadata,
+    PluginType,
     PluginValidationError,
 )
 

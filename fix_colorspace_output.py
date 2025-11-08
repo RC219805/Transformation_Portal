@@ -2,6 +2,7 @@
 import numpy as np
 from PIL import Image
 
+
 def srgb_to_linear(img_array):
     """Convert sRGB gamma-encoded image to linear colorspace."""
     # Normalize to 0-1 range

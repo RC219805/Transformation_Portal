@@ -4,9 +4,9 @@ Citation Generator for RAG System
 Generates citations with file paths, snippets, and confidence scores.
 """
 
-from typing import List, Optional
-from dataclasses import dataclass
 import textwrap
+from dataclasses import dataclass
+from typing import List, Optional
 
 
 @dataclass
@@ -243,15 +243,15 @@ class CitationGenerator:
 def main():
     """CLI for testing citation generation."""
     import argparse
-    import sys
     import os
+    import sys
 
     # Add parent directory to path
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     from rag_system.indexer import RepositoryIndexer
-    from rag_system.retriever import HybridRetriever
     from rag_system.reranker import ResultReranker
+    from rag_system.retriever import HybridRetriever
 
     parser = argparse.ArgumentParser(description='Test citation generation')
     parser.add_argument('--repo-root', default='.', help='Repository root directory')

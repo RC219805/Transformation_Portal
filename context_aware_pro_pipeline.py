@@ -14,16 +14,16 @@ Features:
 - Design intent preservation
 """
 
-import sys
 import argparse
-from pathlib import Path
-from typing import Optional, List, Dict
 import logging
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional
 
 # Import architectural context engine
 from architectural_context_engine import (
-    ContextAwareRenderingPipeline,
     ArchitecturalContext,
+    ContextAwareRenderingPipeline,
     SpaceType,
 )
 
@@ -223,8 +223,8 @@ class ContextAwareProPipeline:
             mr = MaterialResponse()
 
             # Load and process image
-            from PIL import Image
             import numpy as np
+            from PIL import Image
 
             image = Image.open(image_path)
             image_array = np.array(image)

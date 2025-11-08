@@ -10,12 +10,11 @@ bend the rules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import ast
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional
-
 
 _DECISION_PATTERN = re.compile(
     r"#\s*Decision\s*:\s*(?P<name>[A-Za-z0-9_\-]+)(?:\s*-\s*(?P<text>.*))?",

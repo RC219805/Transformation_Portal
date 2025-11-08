@@ -2,7 +2,7 @@
 
 import functools
 import warnings
-from typing import Callable, Optional, Any
+from typing import Any, Callable, Optional
 
 
 def deprecated(

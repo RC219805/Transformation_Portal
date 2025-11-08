@@ -1,9 +1,10 @@
 """Version checking and compatibility utilities."""
 
-from typing import Optional, Tuple
-from dataclasses import dataclass
-from packaging import version as pkg_version
 import warnings
+from dataclasses import dataclass
+from typing import Optional, Tuple
+
+from packaging import version as pkg_version
 
 
 @dataclass

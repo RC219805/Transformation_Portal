@@ -6,27 +6,23 @@ from pathlib import Path
 
 import pytest
 
-# Format validation functions
-from transformation_portal.utils.format_utils import (
-    normalize_extension,
-    is_supported_image_format,
-    is_supported_video_format,
-    is_supported_tiff_format,
-    is_luxury_format,
-    validate_format,
-    get_format_info,
-    suggest_output_format,
-    get_supported_formats_summary,
-    format_help_text,
-)
-
-# Exceptions
-from transformation_portal.utils.format_utils import UnsupportedFormatError
-
 # Constants
+# Exceptions
+# Format validation functions
 from transformation_portal.utils.format_utils import (
     SUPPORTED_IMAGE_EXTENSIONS,
     SUPPORTED_VIDEO_EXTENSIONS,
+    UnsupportedFormatError,
+    format_help_text,
+    get_format_info,
+    get_supported_formats_summary,
+    is_luxury_format,
+    is_supported_image_format,
+    is_supported_tiff_format,
+    is_supported_video_format,
+    normalize_extension,
+    suggest_output_format,
+    validate_format,
 )
 
 

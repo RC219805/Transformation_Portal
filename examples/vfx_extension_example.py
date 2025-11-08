@@ -18,9 +18,9 @@ from pathlib import Path
 from realize_v8_unified import _info
 from realize_v8_unified_cli_extension import (
     VFX_PRESETS,
-    enhance_with_vfx,
     _open_any,
     _save_with_meta,
+    enhance_with_vfx,
 )
 
 
@@ -60,8 +60,8 @@ def example_single_image():
 
     # Save depth map
     if result["depth"] is not None:
-        from PIL import Image
         import numpy as np
+        from PIL import Image
         depth_path = output_path.with_name(f"{output_path.stem}_depth.png")
         depth_img = (result["depth"] * 65535).astype(np.uint16)
         Image.fromarray(depth_img, mode='I;16').save(depth_path)

@@ -13,10 +13,10 @@ Example:
 
 from .decorators import (
     deprecated,
-    renamed_function,
-    renamed_class,
-    renamed_module,
     moved_to,
+    renamed_class,
+    renamed_function,
+    renamed_module,
 )
 from .shims import (
     LegacyAPIShim,

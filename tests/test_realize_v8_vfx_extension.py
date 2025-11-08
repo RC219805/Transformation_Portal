@@ -13,25 +13,23 @@ from PIL import Image
 
 # Import modules under test
 from realize_v8_unified import (
-    enhance,
-    _open_any,
-    _save_with_meta,
-    _image_to_float_array,
     PRESETS,
     Preset,
+    _image_to_float_array,
+    _open_any,
+    _save_with_meta,
+    enhance,
 )
-
 from realize_v8_unified_cli_extension import (
     VFX_PRESETS,
-    estimate_depth_fast,
+    apply_color_grade_zones,
     apply_depth_bloom,
     apply_depth_fog,
     apply_depth_of_field,
     apply_lut_with_depth,
-    apply_color_grade_zones,
     enhance_with_vfx,
+    estimate_depth_fast,
 )
-
 
 # ==================== Fixtures ====================
 

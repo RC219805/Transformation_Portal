@@ -32,16 +32,13 @@ Usage:
 import argparse
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 from PIL import Image
 
 # Your existing infrastructure
-from realize_v8_unified import (
-    enhance, _open_any, _save_with_meta,
-    _info, _warn, _error, PRESETS
-)
+from realize_v8_unified import PRESETS, _error, _info, _open_any, _save_with_meta, _warn, enhance
 
 # Your depth pipeline (optimized for M4 Max)
 try:

@@ -11,15 +11,16 @@ Usage:
       --mask-root   "/Users/rc/Desktop/my_project/outputs/seg/750_Picacho" \
       --device cpu --save-panoptic
 """
-import os
 import glob
+import os
+
 import numpy as np
-from PIL import Image
-from detectron2.config import get_cfg
 from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
+from detectron2.config import get_cfg
 from detectron2.data import MetadataCatalog
+from detectron2.engine import DefaultPredictor
 from detectron2.utils.visualizer import ColorMode, Visualizer
+from PIL import Image
 
 
 def build_predictor(device="cpu"):

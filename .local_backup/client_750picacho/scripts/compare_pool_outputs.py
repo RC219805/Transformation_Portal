@@ -4,10 +4,11 @@ Visual comparison tool for pool enhancement outputs.
 Creates side-by-side comparisons with quality metrics.
 """
 
+import sys
+from pathlib import Path
+
 import numpy as np
 from PIL import Image
-from pathlib import Path
-import sys
 
 # Try to use tifffile for better TIFF support
 try:

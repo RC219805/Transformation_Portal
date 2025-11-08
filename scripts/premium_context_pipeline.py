@@ -14,24 +14,17 @@ Combines all processing stages with architectural intelligence:
 This is the flagship pipeline for luxury real estate visualization.
 """
 
-import sys
 import json
-from pathlib import Path
-from typing import Optional, Dict
-import subprocess
 import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Dict, Optional
 
-from PIL import Image
 import numpy as np
-
-from architectural_context_extractor import (
-    ArchitecturalContextExtractor,
-    ProjectContext
-)
-from context_aware_rendering import (
-    ContextAwareRenderingPipeline,
-    RenderingStrategy
-)
+from architectural_context_extractor import ArchitecturalContextExtractor, ProjectContext
+from context_aware_rendering import ContextAwareRenderingPipeline, RenderingStrategy
+from PIL import Image
 
 
 class PremiumContextAwarePipeline:

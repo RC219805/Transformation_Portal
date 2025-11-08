@@ -16,8 +16,8 @@ from PIL import Image
 # Import from the module location
 from src.transformation_portal.pipelines.depth_tools import (
     BatchOptions,
-    process_batch,
     main,
+    process_batch,
 )
 
 

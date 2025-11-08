@@ -9,7 +9,8 @@ import pytest
 
 # Hypothesis for property-based testing
 try:
-    from hypothesis import given, strategies as st
+    from hypothesis import given
+    from hypothesis import strategies as st
 except ImportError as exc:
     raise ImportError(
         "Hypothesis is required for these tests. Install via `pip install hypothesis`."
@@ -17,7 +18,7 @@ except ImportError as exc:
 
 # Import the helpers under test
 try:
-    from helpers import documents, demonstrates, valid_until
+    from helpers import demonstrates, documents, valid_until
 except ImportError as e:
     raise ImportError(
         "Failed to import 'helpers' module. Ensure 'helpers' is in PYTHONPATH or installed."

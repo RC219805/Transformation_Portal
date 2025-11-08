@@ -5,12 +5,12 @@ Provides pattern analysis, feedback loops, recommendations, and query interface
 for continuous improvement of image processing workflows.
 """
 
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from collections import defaultdict, Counter
 import json
 import statistics
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass

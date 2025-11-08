@@ -1,11 +1,11 @@
 """Plugin interface definitions for extensible architecture."""
 
+import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
 from pathlib import Path
-import inspect
+from typing import Any, Callable, Dict, List, Optional
 
 
 class PluginType(Enum):

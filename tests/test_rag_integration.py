@@ -4,19 +4,20 @@ Integration tests for RAG system - full pipeline.
 Tests the complete workflow from indexing to citation generation.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add agents directory to path  # noqa: E402
 agents_path = Path(__file__).parent.parent / '.github' / 'agents'
 sys.path.insert(0, str(agents_path))
 
-from rag_system.indexer import RepositoryIndexer  # noqa: E402
-from rag_system.retriever import HybridRetriever  # noqa: E402
-from rag_system.reranker import ResultReranker  # noqa: E402
 from rag_system.citation import CitationGenerator  # noqa: E402
-from rag_system.templates import PromptTemplates, FewShotExamples  # noqa: E402
+from rag_system.indexer import RepositoryIndexer  # noqa: E402
+from rag_system.reranker import ResultReranker  # noqa: E402
+from rag_system.retriever import HybridRetriever  # noqa: E402
+from rag_system.templates import FewShotExamples, PromptTemplates  # noqa: E402
 
 
 @pytest.fixture(scope="module")

@@ -8,8 +8,8 @@ Provides monocular depth estimation with depth-guided enhancements for architect
 __version__ = "1.0.0"
 __author__ = "Transformation Portal"
 
-from .pipeline import ArchitecturalDepthPipeline
 from .models.depth_anything_v2 import DepthAnythingV2Model
+from .pipeline import ArchitecturalDepthPipeline
 from .utils.cache import DepthCache
 
 __all__ = [

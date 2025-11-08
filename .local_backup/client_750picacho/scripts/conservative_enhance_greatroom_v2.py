@@ -4,9 +4,10 @@ Conservative Enhancement - 750 Picacho Great Room v2
 WITH SKY REFINEMENT for window areas
 Optimized for luxury living room with improved sky/window detail
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 
 try:
     import tifffile
@@ -119,6 +120,7 @@ sky_mask = ((brightness > 180) & (blue_channel > red_channel)).astype(float)
 
 # Smooth the mask to avoid harsh transitions
 from scipy.ndimage import gaussian_filter
+
 sky_mask = gaussian_filter(sky_mask, sigma=3)
 
 sky_pixels = (sky_mask > 0.5).sum()

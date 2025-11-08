@@ -4,11 +4,12 @@ Conservative enhancement for Coastal_Interior_11.tif
 Preserves 16-bit TIFF quality and architectural detail
 """
 
-import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
-from pathlib import Path
 import json
 from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 
 def analyze_image(img_array):

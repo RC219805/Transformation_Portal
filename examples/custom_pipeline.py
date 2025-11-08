@@ -16,19 +16,19 @@ Prerequisites:
 import sys
 from pathlib import Path
 
+from transformation_portal.depth.models import DepthAnythingV2Model, ModelVariant
+from transformation_portal.depth.processors import (
+    AtmosphericEffects,
+    DepthAwareDenoise,
+    DepthGuidedFilters,
+    ZoneToneMapping,
+)
 from transformation_portal.depth.utils import (
+    depth_statistics,
     load_image,
     save_image,
     visualize_depth,
-    depth_statistics,
 )
-from transformation_portal.depth.processors import (
-    DepthAwareDenoise,
-    ZoneToneMapping,
-    AtmosphericEffects,
-    DepthGuidedFilters,
-)
-from transformation_portal.depth.models import DepthAnythingV2Model, ModelVariant
 
 
 def main():

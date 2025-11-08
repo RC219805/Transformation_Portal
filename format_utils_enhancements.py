@@ -22,9 +22,9 @@ Usage:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING, Union
 import warnings
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 try:
     from PIL import Image, ImageFile

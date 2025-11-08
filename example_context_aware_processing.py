@@ -5,13 +5,14 @@ Demonstrates architectural context integration with 750 Picacho Kitchen renderin
 """
 
 from pathlib import Path
+
 from architectural_context_engine import (
-    ArchitecturalContextExtractor,
     ArchitecturalContext,
+    ArchitecturalContextExtractor,
     DimensionInfo,
     MaterialSpec,
+    SpaceType,
     SpatialContext,
-    SpaceType
 )
 
 print("=" * 80)

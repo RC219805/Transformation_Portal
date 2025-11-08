@@ -17,9 +17,10 @@ Key Learnings from v1-v6:
 - Large mask blur (σ=7+) prevents halos
 - Edge strength 0.243 already excellent - don't over-sharpen
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 from scipy.ndimage import gaussian_filter
 
 try:

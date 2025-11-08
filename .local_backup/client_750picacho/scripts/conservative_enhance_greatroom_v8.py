@@ -16,9 +16,10 @@ Strategy:
 4. Micro-contrast for depth perception
 5. Edge clarity for architectural details
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 
 try:
     import tifffile

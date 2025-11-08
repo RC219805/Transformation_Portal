@@ -13,8 +13,8 @@ Prerequisites:
     pip install -e .
 """
 
-import sys
 import argparse
+import sys
 from pathlib import Path
 
 from transformation_portal.depth import ArchitecturalDepthPipeline

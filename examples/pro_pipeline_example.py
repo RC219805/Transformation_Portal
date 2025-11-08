@@ -8,7 +8,9 @@ for architectural rendering enhancement.
 """
 
 from pathlib import Path
-from pro_pipeline import ProPipeline, ProPipelineConfig, PipelinePreset
+
+from pro_pipeline import PipelinePreset, ProPipeline, ProPipelineConfig
+
 
 def example_single_image():
     """Process a single image with the architectural hero preset."""

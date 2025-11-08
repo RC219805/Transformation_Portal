@@ -6,17 +6,17 @@ import pytest
 # Use proper package imports (assumes package is installed or PYTHONPATH is set)
 # For development: pip install -e . or set PYTHONPATH to include src/
 from transformation_portal.utils.error_handling import (
-    ProcessingError,
-    FileValidationError,
-    DependencyError,
     ConfigurationError,
-    validate_file_path,
-    validate_directory,
-    check_dependency,
-    safe_execute,
-    validate_range,
+    DependencyError,
+    FileValidationError,
+    ProcessingError,
     batch_with_error_handling,
+    check_dependency,
     get_error_summary,
+    safe_execute,
+    validate_directory,
+    validate_file_path,
+    validate_range,
 )
 
 

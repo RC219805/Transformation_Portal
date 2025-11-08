@@ -4,9 +4,10 @@ Conservative Enhancement - 750 Picacho Great Room
 Optimized for luxury living room with fireplace, soaring ceilings, and warm ambiance
 Based on successful kitchen processing (99.5% fidelity)
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 
 try:
     import tifffile

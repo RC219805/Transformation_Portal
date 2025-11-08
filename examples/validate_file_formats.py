@@ -21,12 +21,12 @@ from pathlib import Path
 
 # pylint: disable=wrong-import-position
 from format_utils import (  # noqa: E402
-    validate_format,
+    UnsupportedFormatError,
     get_format_info,
-    suggest_output_format,
     get_supported_formats_summary,
     is_supported_tiff_format,
-    UnsupportedFormatError,
+    suggest_output_format,
+    validate_format,
 )
 
 

@@ -5,11 +5,11 @@ Indexes repository content (docs/, src/, tests/, agent files, changelogs, README
 into chunks with metadata for efficient retrieval.
 """
 
-import re
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass, field
 import hashlib
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass

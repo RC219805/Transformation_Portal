@@ -5,13 +5,13 @@ Automatically classifies and organizes image processing artifacts with
 metadata extraction and hierarchical organization.
 """
 
-from typing import Dict, List, Optional, Set
-from dataclasses import dataclass, field
-from pathlib import Path
-from enum import Enum
 import json
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 
 class ArtifactType(Enum):

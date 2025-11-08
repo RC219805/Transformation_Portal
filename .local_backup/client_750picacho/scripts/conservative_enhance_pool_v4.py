@@ -24,9 +24,10 @@ Expected Results:
 - Pool water: Jewel-toned turquoise (restored)
 - Sky gradient: Smooth and detailed (preserved)
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 from scipy.ndimage import gaussian_filter
 
 try:

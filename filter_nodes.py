@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping
-
 
 _OPERATION_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 _PARAM_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")

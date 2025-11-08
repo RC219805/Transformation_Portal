@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date
 from functools import wraps
-from collections.abc import Iterable
 from typing import Callable, TypeVar, cast
 
 F = TypeVar("F", bound=Callable[..., object])

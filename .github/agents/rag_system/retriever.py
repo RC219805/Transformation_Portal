@@ -5,11 +5,11 @@ Implements hybrid retrieval using BM25 (sparse) and dense vector embeddings
 to ensure both recall and precision.
 """
 
-from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
-import re
 import math
+import re
 from collections import Counter
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -303,8 +303,8 @@ class HybridRetriever:
 def main():
     """CLI for testing retrieval."""
     import argparse
-    import sys
     import os
+    import sys
 
     # Add parent directory to path for imports
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

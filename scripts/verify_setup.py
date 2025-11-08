@@ -90,7 +90,9 @@ def verify_dimension_validation():
     try:
         sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
         from transformation_portal.pipelines.lux_render_pipeline import (
-            validate_sd_dimensions, SD_DIMENSION_MULTIPLE, MIN_SD_DIMENSION
+            MIN_SD_DIMENSION,
+            SD_DIMENSION_MULTIPLE,
+            validate_sd_dimensions,
         )
         print(f"Using imported constants: SD_DIMENSION_MULTIPLE={SD_DIMENSION_MULTIPLE}, MIN_SD_DIMENSION={MIN_SD_DIMENSION}")
     except ImportError as e:

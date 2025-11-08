@@ -24,13 +24,13 @@ else:
     sys.path.insert(0, '.github/agents/rag_system')
 
 try:
-    from indexer import RepositoryIndexer
-    from retriever import HybridRetriever
-    from reranker import ResultReranker
     from citation import CitationGenerator
-    from templates import PromptTemplates, CodeModificationResponse, FileModification
     from classifier import ArtifactClassifier
+    from indexer import RepositoryIndexer
     from knowledge_engine import KnowledgeIntegrationEngine
+    from reranker import ResultReranker
+    from retriever import HybridRetriever
+    from templates import CodeModificationResponse, FileModification, PromptTemplates
 except ImportError as e:
     print(f"Error: Could not import RAG components: {e}")
     print("Make sure you're running from the repository root directory")

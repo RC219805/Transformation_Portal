@@ -11,11 +11,12 @@ This script identifies:
 - Invalid GitHub Actions syntax
 """
 
-import yaml
 import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
+
+import yaml
 
 # Precompiled regex patterns for performance
 _NEWLINE_SEMICOLON = re.compile(r'[\n;]')

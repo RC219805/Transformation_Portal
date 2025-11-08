@@ -2,9 +2,10 @@
 Tests for RAG Artifact Classifier.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add agents directory to path
 agents_path = Path(__file__).parent.parent / '.github' / 'agents'

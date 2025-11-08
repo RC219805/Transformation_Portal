@@ -10,6 +10,5 @@ from __future__ import annotations
 
 from luxury_tiff_batch_processor.cli import main
 
-
 if __name__ == "__main__":  # pragma: no cover - exercised via integration test
     raise SystemExit(main())

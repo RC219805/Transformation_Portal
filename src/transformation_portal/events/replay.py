@@ -1,6 +1,7 @@
 """Event replay for debugging and testing."""
 
-from typing import List, Callable, Optional, Any
+from typing import Any, Callable, List, Optional
+
 from .store import Event, EventStore
 
 

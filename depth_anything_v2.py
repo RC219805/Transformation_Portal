@@ -23,7 +23,7 @@ import torch
 from PIL import Image
 
 try:
-    from transformers import pipeline, AutoImageProcessor, AutoModelForDepthEstimation
+    from transformers import AutoImageProcessor, AutoModelForDepthEstimation, pipeline
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False

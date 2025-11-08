@@ -8,31 +8,27 @@ Test coverage for new features:
 Run with: pytest tests/test_format_utils_enhancements.py -v
 """
 
-import pytest
 import numpy as np
+import pytest
 from PIL import Image
 
 # Import from the enhancements module
-from format_utils_enhancements import (
-    # Option 2: Enhanced detection
-    detect_format_from_content,
-    get_mime_type,
-    validate_image_integrity,
-    get_image_metadata,
-    # Option 3: Conversion
-    convert_image_format,
+from format_utils_enhancements import (  # Option 2: Enhanced detection; Option 3: Conversion; Option 4: TIFF handling
     batch_convert_directory,
-    smart_convert,
-    get_optimal_format_for_use_case,
-    # Option 4: TIFF handling
     check_tifffile_available,
-    save_tiff_16bit,
-    load_tiff_preserve_depth,
+    convert_image_format,
     convert_tiff_preserve_depth,
+    detect_format_from_content,
+    get_image_metadata,
+    get_mime_type,
+    get_optimal_format_for_use_case,
     get_tiff_compression_info,
+    load_tiff_preserve_depth,
     optimize_tiff_compression,
+    save_tiff_16bit,
+    smart_convert,
+    validate_image_integrity,
 )
-
 
 # ==============================================================================
 # Fixtures

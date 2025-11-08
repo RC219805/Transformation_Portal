@@ -18,9 +18,10 @@ Final Strategy:
 5. Micro-contrast for depth and texture
 6. Professional 16-bit output
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 from scipy.ndimage import gaussian_filter
 
 try:

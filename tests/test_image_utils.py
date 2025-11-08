@@ -12,10 +12,10 @@ from PIL import Image
 
 from transformation_portal.utils.image_utils import (
     load_image,
-    save_image,
-    pil_to_np,
-    np_to_pil,
     load_image_rgb,
+    np_to_pil,
+    pil_to_np,
+    save_image,
 )
 
 

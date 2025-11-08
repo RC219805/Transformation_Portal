@@ -41,12 +41,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 try:
     from board_material_aerial_enhancer import (
+        DEFAULT_TEXTURES,
+        auto_assign_materials_by_stats,
         build_material_rules,
+        compute_cluster_stats,
         load_palette_assignments,
         save_palette_assignments,
-        compute_cluster_stats,
-        auto_assign_materials_by_stats,
-        DEFAULT_TEXTURES,
     )
 except ImportError as exc:
     print(f"Error: board_material_aerial_enhancer module not found: {exc}", file=sys.stderr)

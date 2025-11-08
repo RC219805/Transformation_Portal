@@ -9,10 +9,10 @@ reference.  This module provides such an artefact.
 
 from __future__ import annotations
 
-from collections.abc import Sequence as SequenceABC
-from dataclasses import dataclass
 import math
 import re
+from collections.abc import Sequence as SequenceABC
+from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 import numpy as np

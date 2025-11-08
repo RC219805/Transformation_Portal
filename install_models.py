@@ -9,8 +9,9 @@ Downloads and configures:
 3. ControlNet models (if missing)
 """
 
-from pathlib import Path
 import urllib.request
+from pathlib import Path
+
 from tqdm import tqdm
 
 print("=" * 70)

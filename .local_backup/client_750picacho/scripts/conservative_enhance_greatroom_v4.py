@@ -11,9 +11,10 @@ Key improvements over v3:
 - Protected white interior surfaces from sky corrections
 - Added natural sky gradient (cooler top, warmer horizon)
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 from scipy.ndimage import gaussian_filter
 
 try:

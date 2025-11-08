@@ -66,14 +66,14 @@ from __future__ import annotations
 import logging
 
 from .adjustments import (
-    AdjustmentSettings,
     LUXURY_PRESETS,
+    AdjustmentSettings,
     apply_adjustments,
     gaussian_blur,
     gaussian_kernel,
     gaussian_kernel_cached,
 )
-from .cli import build_adjustments, main, parse_args, run_pipeline, default_output_folder
+from .cli import build_adjustments, default_output_folder, main, parse_args, run_pipeline
 from .io_utils import (
     FloatDynamicRange,
     ImageToFloatResult,
@@ -84,13 +84,13 @@ from .io_utils import (
     image_to_float,
     save_image,
 )
-from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 from .pipeline import (
     collect_images,
     ensure_output_path,
     process_image,
     process_single_image,
 )
+from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 

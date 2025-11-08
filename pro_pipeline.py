@@ -38,7 +38,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 import typer
 from PIL import Image
@@ -241,9 +241,7 @@ class ProPipeline:
         if self._ai_pipeline is None:
             try:
                 # Try installed package import first (correct for editable installs)
-                from transformation_portal.pipelines.lux_render_pipeline import (  # noqa: F401
-                    apply_material_response_finishing
-                )
+                from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing  # noqa: F401
                 self._ai_pipeline = "available"
                 log.info("AI enhancement pipeline loaded")
             except ImportError as e:

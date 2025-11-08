@@ -23,16 +23,16 @@ Author: Richie Cheetham
 Date: October 2025
 """
 
-import sys
-import math
-import json
 import argparse
-import threading
 import collections
-from pathlib import Path
-from dataclasses import dataclass
-from typing import Sequence, Mapping, Callable, Dict, Optional
+import json
+import math
+import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Dict, Mapping, Optional, Sequence
 
 import numpy as np
 from PIL import Image, ImageFilter

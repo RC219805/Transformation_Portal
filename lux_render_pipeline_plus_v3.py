@@ -24,9 +24,11 @@ CLI examples:
 """
 
 from __future__ import annotations
-from pathlib import Path
+
 import argparse
-from typing import Optional, Tuple, List, Union
+from pathlib import Path
+from typing import List, Optional, Tuple, Union
+
 import numpy as np
 from PIL import Image, ImageEnhance
 

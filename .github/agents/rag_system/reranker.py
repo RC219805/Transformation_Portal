@@ -4,9 +4,9 @@ Result Reranker for RAG System
 Reranks retrieval results to improve precision using additional signals.
 """
 
-from typing import List, Optional
 import re
 from dataclasses import dataclass
+from typing import List, Optional
 
 
 @dataclass
@@ -177,8 +177,8 @@ class ResultReranker:
 def main():
     """CLI for testing reranking."""
     import argparse
-    import sys
     import os
+    import sys
 
     # Add parent directory to path
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

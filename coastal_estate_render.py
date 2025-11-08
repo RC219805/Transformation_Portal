@@ -14,7 +14,6 @@ from importlib import import_module
 from types import ModuleType
 from typing import Any, Mapping
 
-
 COASTAL_ESTATE_PROMPT: str = (
     "luxury coastal estates Montecito golden hour, Spanish Mediterranean "
     "architecture, terracotta roofs glowing in sunset, emerald manicured lawns, "

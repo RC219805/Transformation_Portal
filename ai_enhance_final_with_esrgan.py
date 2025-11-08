@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """AI Enhancement with Real-ESRGAN 4x Upscaling - FULLY FUNCTIONAL"""
-import torch
-from PIL import Image, ImageEnhance
-from diffusers import StableDiffusionControlNetImg2ImgPipeline, ControlNetModel, UniPCMultistepScheduler
-from controlnet_aux import CannyDetector
 from pathlib import Path
+
 import cv2
 import numpy as np
+import torch
+from basicsr.archs.rrdbnet_arch import RRDBNet
+from controlnet_aux import CannyDetector
+from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline, UniPCMultistepScheduler
+from PIL import Image, ImageEnhance
 
 # Real-ESRGAN imports (now working!)
 from realesrgan import RealESRGANer
-from basicsr.archs.rrdbnet_arch import RRDBNet
 
 print("=" * 70)
 print("AI ENHANCEMENT + REAL-ESRGAN 4X UPSCALING")

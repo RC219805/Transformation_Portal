@@ -2,16 +2,18 @@
 # -*- coding: utf-8 -*-
 """Tests for Stable Diffusion dimension validation (Issue #3)."""
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 try:
-    from transformation_portal.pipelines.lux_render_pipeline import validate_sd_dimensions
     import typer
+
+    from transformation_portal.pipelines.lux_render_pipeline import validate_sd_dimensions
     HAS_DEPENDENCIES = True
 except ImportError:
     HAS_DEPENDENCIES = False
@@ -166,7 +168,8 @@ class TestDimensionValidationIntegration:
 
 # Property-based tests using hypothesis (if available)
 try:
-    from hypothesis import given, strategies as st
+    from hypothesis import given
+    from hypothesis import strategies as st
 
     @given(
         width=st.integers(min_value=64, max_value=2048),

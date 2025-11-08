@@ -100,7 +100,7 @@ def create_compatibility_wrapper(
     @functools.wraps(old_func)
     def wrapper(*args, **kwargs):
         import warnings
-        
+
         # Show deprecation warning
         msg = f"'{old_func.__name__}' is deprecated. Use '{new_func.__name__}' instead"
         if removal_version:

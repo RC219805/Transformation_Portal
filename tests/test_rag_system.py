@@ -2,24 +2,25 @@
 Tests for RAG system components.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add agents directory to path for imports  # noqa: E402
 agents_path = Path(__file__).parent.parent / '.github' / 'agents'
 sys.path.insert(0, str(agents_path))
 
-from rag_system.indexer import RepositoryIndexer, DocumentChunk  # noqa: E402
-from rag_system.retriever import HybridRetriever, BM25Retriever  # noqa: E402
-from rag_system.reranker import ResultReranker  # noqa: E402
 from rag_system.citation import CitationGenerator  # noqa: E402
+from rag_system.indexer import DocumentChunk, RepositoryIndexer  # noqa: E402
+from rag_system.reranker import ResultReranker  # noqa: E402
+from rag_system.retriever import BM25Retriever, HybridRetriever  # noqa: E402
 from rag_system.templates import (  # noqa: E402
-    PromptTemplates,
-    FewShotExamples,
-    validate_response_schema,
     CodeModificationResponse,
+    FewShotExamples,
     FileModification,
+    PromptTemplates,
+    validate_response_schema,
 )
 
 

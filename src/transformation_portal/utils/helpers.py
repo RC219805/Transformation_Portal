@@ -2,6 +2,7 @@
 """Shared architectural helpers and Golden Hour Courtyard utilities."""
 
 from __future__ import annotations
+
 from datetime import date
 from functools import wraps
 from typing import Any, Callable, Sequence, Type, Union

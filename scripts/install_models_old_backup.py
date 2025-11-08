@@ -11,8 +11,9 @@ Downloads and configures:
 
 import os
 import sys
-from pathlib import Path
 import urllib.request
+from pathlib import Path
+
 from tqdm import tqdm
 
 print("=" * 70)

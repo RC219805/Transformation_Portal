@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
+from typing import Callable, List, Optional
+
 import numpy as np
 from sklearn.cluster import KMeans
-from typing import Callable, Optional, List
 
 # ==========================
 # Default Textures (placeholder)

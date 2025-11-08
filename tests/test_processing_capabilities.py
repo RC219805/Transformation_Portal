@@ -1,5 +1,6 @@
-from luxury_tiff_batch_processor import LuxuryGradeException, ProcessingCapabilities
 import pytest
+
+from luxury_tiff_batch_processor import LuxuryGradeException, ProcessingCapabilities
 
 pytest.importorskip("numpy")
 

@@ -11,6 +11,8 @@ Tests cover:
 - Error handling and graceful degradation
 """
 
+# Add parent directory to path to import pro_pipeline
+import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -18,15 +20,13 @@ import numpy as np
 import pytest
 from PIL import Image
 
-# Add parent directory to path to import pro_pipeline
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pro_pipeline import (  # noqa: E402 - import after path manipulation
-    ProPipeline,
-    ProPipelineConfig,
     PipelinePreset,
     PipelineStage,
+    ProPipeline,
+    ProPipelineConfig,
 )
 
 
@@ -448,7 +448,7 @@ class TestCLI:
 
     def test_cli_imports(self):
         """Test that CLI can be imported without errors."""
-        from pro_pipeline import app, process, batch, list_presets, version
+        from pro_pipeline import app, batch, list_presets, process, version
 
         assert app is not None
         assert process is not None

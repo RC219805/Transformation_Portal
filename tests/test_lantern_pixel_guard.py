@@ -1,5 +1,4 @@
 from __future__ import annotations
-from PIL import Image
 
 import json
 import subprocess
@@ -7,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 pytest.importorskip("PIL.Image")
 

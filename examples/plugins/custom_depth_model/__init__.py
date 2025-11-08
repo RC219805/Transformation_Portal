@@ -4,17 +4,18 @@ This demonstrates how to create a custom depth estimation plugin
 for the Transformation Portal.
 """
 
-import numpy as np
 from typing import Any, Dict, Optional
+
+import numpy as np
 from PIL import Image
 
 from transformation_portal.plugins import (
     DepthModelPlugin,
     PluginMetadata,
     PluginType,
-    plugin,
-    measure_performance,
     cached_execution,
+    measure_performance,
+    plugin,
 )
 
 

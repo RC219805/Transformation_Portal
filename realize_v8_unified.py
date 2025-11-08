@@ -11,9 +11,9 @@ Usage:
     from realize_v8_unified import enhance, PRESETS
 """
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image

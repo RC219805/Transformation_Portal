@@ -16,17 +16,17 @@ from tqdm import tqdm
 
 from .models import DepthAnythingV2Model, ModelBackend, ModelVariant
 from .processors import (
-    DepthAwareDenoise,
-    ZoneToneMapping,
     AtmosphericEffects,
+    DepthAwareDenoise,
     DepthGuidedFilters,
+    ZoneToneMapping,
 )
 from .utils import (
     DepthCache,
+    depth_statistics,
     load_image,
     save_image,
     visualize_depth,
-    depth_statistics,
 )
 
 logger = logging.getLogger(__name__)

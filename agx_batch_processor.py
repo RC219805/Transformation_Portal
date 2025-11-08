@@ -21,34 +21,23 @@ Customization:
     ]
 """
 
-import os
-import sys
 import argparse
 import logging
+import os
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
 import numpy as np
 from PIL import Image
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 # Tonemapper module import
 try:
-    from .tonemapper_agx_filmic import (
-        apply_agx_ocio,
-        apply_filmic_hable,
-        list_ocio_views,
-        guess_agx_view,
-        srgb_to_linear
-    )
+    from .tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable, guess_agx_view, list_ocio_views, srgb_to_linear
 except ImportError:
     try:
-        from tonemapper_agx_filmic import (
-            apply_agx_ocio,
-            apply_filmic_hable,
-            list_ocio_views,
-            guess_agx_view,
-            srgb_to_linear
-        )
+        from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable, guess_agx_view, list_ocio_views, srgb_to_linear
     except ImportError as e:
         print(f"ERROR: tonemapper_agx_filmic not found: {e}")
         sys.exit(1)

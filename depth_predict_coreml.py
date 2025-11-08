@@ -15,12 +15,14 @@ Arguments:
     --model-path  : Optional. Path to .mlpackage CoreML model (default: DepthAnythingV2SmallF16.mlpackage)
 """
 
-import os
-import glob
 import argparse
+import glob
+import os
+
+import coremltools as ct
 import numpy as np
 from PIL import Image
-import coremltools as ct
+
 # --------------------------------------------------------------------------
 # CONFIG (now via argparse)
 

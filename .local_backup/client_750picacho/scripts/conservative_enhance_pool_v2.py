@@ -18,9 +18,10 @@ CORRECTIONS IN V2:
 6. More subtle water correction to preserve transparency
 7. Added luminance-aware processing to protect highlights
 """
-from PIL import Image, ImageEnhance
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance
 from scipy.ndimage import gaussian_filter
 
 try:

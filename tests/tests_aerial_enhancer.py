@@ -1,13 +1,13 @@
 import numpy as np
 from PIL import Image
 from your_module import (
-    _kmeans,
-    _cluster_stats,
-    assign_materials,
-    _soft_mask,
-    enhance_aerial,
     ClusterStats,
     MaterialRule,
+    _cluster_stats,
+    _kmeans,
+    _soft_mask,
+    assign_materials,
+    enhance_aerial,
 )
 
 # --------------------------

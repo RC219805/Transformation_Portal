@@ -14,10 +14,11 @@ Key improvements:
 - Edge-aware blending to prevent artifacts
 - Preserve interior color temperature and brightness
 """
-from PIL import Image, ImageEnhance
-import numpy as np
 from pathlib import Path
-from scipy.ndimage import gaussian_filter, binary_erosion, binary_dilation
+
+import numpy as np
+from PIL import Image, ImageEnhance
+from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter
 
 try:
     import tifffile

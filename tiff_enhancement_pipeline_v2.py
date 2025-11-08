@@ -18,6 +18,7 @@ Backward Compatible: Defaults to original semantic segmentation behavior.
 """
 
 from __future__ import annotations
+
 import argparse
 import json
 import logging

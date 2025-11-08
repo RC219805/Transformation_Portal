@@ -20,13 +20,13 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from indexer import RepositoryIndexer
-    from retriever import HybridRetriever
-    from reranker import ResultReranker
     from citation import CitationGenerator
-    from templates import PromptTemplates
     from classifier import ArtifactClassifier
+    from indexer import RepositoryIndexer
     from knowledge_engine import KnowledgeIntegrationEngine
+    from reranker import ResultReranker
+    from retriever import HybridRetriever
+    from templates import PromptTemplates
 except ImportError as e:
     print(f"Error importing RAG components: {e}", file=sys.stderr)
     print("Make sure you're running from the correct directory", file=sys.stderr)

@@ -4,6 +4,7 @@ Creates procedurally-generated texture plates with colors representative
 of the approved Montecito Board of Architectural Review palette.
 """
 from pathlib import Path
+
 import numpy as np
 from PIL import Image
 

@@ -4,16 +4,16 @@ from typing import Optional
 import numpy as np
 from PIL import Image
 
+import luxury_tiff_batch_processor as ltiff
+from luxury_tiff_batch_processor.adjustments import (
+    gaussian_blur,
+    gaussian_kernel_cached,
+)
 from luxury_tiff_batch_processor.io_utils import (
     float_to_dtype_array,
     image_to_float,
     save_image,
 )
-from luxury_tiff_batch_processor.adjustments import (
-    gaussian_blur,
-    gaussian_kernel_cached,
-)
-import luxury_tiff_batch_processor as ltiff
 
 try:
     import tifffile

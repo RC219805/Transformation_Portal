@@ -1,8 +1,8 @@
 """Streaming processing utilities."""
 
-from typing import Iterator, Callable, Any, Optional, List
-from pathlib import Path
 import time
+from pathlib import Path
+from typing import Any, Callable, Iterator, List, Optional
 
 
 class StreamingProcessor:

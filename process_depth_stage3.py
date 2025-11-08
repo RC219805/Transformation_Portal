@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Stage 3: Depth-aware enhancement using ControlNet depth processor"""
-import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter
-from controlnet_aux import ZoeDetector
 import os
+
+import numpy as np
+from controlnet_aux import ZoeDetector
+from PIL import Image, ImageEnhance, ImageFilter
 
 print("Loading depth processor...")
 zoe = ZoeDetector.from_pretrained("lllyasviel/Annotators")

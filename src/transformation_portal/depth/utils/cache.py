@@ -10,12 +10,12 @@ Memory usage: ~4MB per 4K depth map (FP16)
 
 import hashlib
 import logging
+import pickle
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 
 import numpy as np
-import pickle
 
 logger = logging.getLogger(__name__)
 

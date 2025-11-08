@@ -13,12 +13,13 @@ Key Fixes:
 4. Careful downsampling for web outputs
 """
 
+import json
 import sys
 from pathlib import Path
 from typing import Dict, Optional
-import json
 
 from PIL import Image
+
 Image.MAX_IMAGE_PIXELS = None  # Allow large images
 
 import numpy as np

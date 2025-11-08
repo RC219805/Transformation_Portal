@@ -1,13 +1,16 @@
 from __future__ import annotations
-# pylint: disable=no-member  # False positives with package imports
 
-from pathlib import Path
 import subprocess
 import sys
 import warnings
+from pathlib import Path
 from typing import Any, Dict
 
 import pytest
+
+# pylint: disable=no-member  # False positives with package imports
+
+
 
 # NOTE: Tests assume package is installed with: pip install -e .
 
@@ -22,8 +25,8 @@ pytest.importorskip("PIL.TiffImagePlugin")
 from PIL import Image, TiffImagePlugin  # noqa: E402  # pylint: disable=wrong-import-position
 
 import luxury_tiff_batch_processor as ltiff  # noqa: E402  # pylint: disable=wrong-import-position,consider-using-from-import
-from luxury_tiff_batch_processor import pipeline  # noqa: E402  # pylint: disable=wrong-import-position
 from luxury_tiff_batch_processor import io_utils  # noqa: E402  # pylint: disable=wrong-import-position
+from luxury_tiff_batch_processor import pipeline  # noqa: E402  # pylint: disable=wrong-import-position
 
 
 def test_run_pipeline_exposed_in_dunder_all():

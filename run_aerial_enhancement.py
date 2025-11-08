@@ -1,5 +1,6 @@
 """Apply MBAR board materials to the 750 Picacho Lane aerial photograph."""
 from pathlib import Path
+
 from board_material_aerial_enhancer import enhance_aerial
 
 # Input: Aerial TIFF from input_images

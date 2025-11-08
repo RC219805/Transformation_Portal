@@ -2,7 +2,8 @@
 
 import functools
 import warnings
-from typing import Callable, Optional, List
+from typing import Callable, List, Optional
+
 from packaging import version as pkg_version
 
 from .interface import PluginInterface, PluginMetadata, PluginType

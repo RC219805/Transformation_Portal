@@ -17,11 +17,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
-from indexer import RepositoryIndexer, DocumentChunk
-from retriever import HybridRetriever
-from reranker import ResultReranker
 from citation import CitationGenerator
-from templates import PromptTemplates, CodeModificationResponse
+from indexer import DocumentChunk, RepositoryIndexer
+from reranker import ResultReranker
+from retriever import HybridRetriever
+from templates import CodeModificationResponse, PromptTemplates
 
 
 @pytest.fixture

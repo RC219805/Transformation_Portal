@@ -4,9 +4,10 @@ Conservative Enhancement - 750 Picacho Kitchen
 Optimized for luxury kitchen interior rendering
 Based on successful aerial processing approach (99.5% fidelity)
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 
 try:
     import tifffile

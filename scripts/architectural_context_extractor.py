@@ -14,14 +14,16 @@ Extracts architectural intelligence from PDFs:
 Enriches rendering pipeline with contextual understanding.
 """
 
+import io
 import json
 import re
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, asdict
+
 import fitz  # PyMuPDF
 from PIL import Image
-import io
+
 
 @dataclass
 class RoomContext:

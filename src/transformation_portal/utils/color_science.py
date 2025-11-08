@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Optional, Tuple
 
-
 _COLOR_SPACE_ALIASES = {
     "rec709": "bt709",
     "rec.709": "bt709",

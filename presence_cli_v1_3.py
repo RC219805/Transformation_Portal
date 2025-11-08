@@ -9,18 +9,19 @@ New in v1.3:
 Requires: Pillow, numpy, (optional) PyNaCl for signature verification
 """
 import argparse
-import json
-import sys
 import base64
 import hashlib
-from typing import Tuple, Dict
-from PIL import Image
+import json
+import sys
+from typing import Dict, Tuple
+
 import numpy as np
+from PIL import Image
 
 # Optional Ed25519 verify
 try:
-    from nacl.signing import VerifyKey
     from nacl.exceptions import BadSignatureError
+    from nacl.signing import VerifyKey
     NACL_OK = True
 except ImportError:
     NACL_OK = False

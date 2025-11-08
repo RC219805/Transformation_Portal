@@ -5,20 +5,20 @@ RAG System Workflow Demonstration
 Comprehensive demonstration of the RAG system following the integration guide.
 """
 
-from pathlib import Path
-import sys
 import json
+import sys
+from pathlib import Path
 
 # Add RAG system to path
 sys.path.insert(0, '.github/agents/rag_system')
 
-from indexer import RepositoryIndexer
-from retriever import HybridRetriever
-from reranker import ResultReranker
 from citation import CitationGenerator
-from templates import PromptTemplates, CodeModificationResponse, FileModification
 from classifier import ArtifactClassifier
+from indexer import RepositoryIndexer
 from knowledge_engine import KnowledgeIntegrationEngine
+from reranker import ResultReranker
+from retriever import HybridRetriever
+from templates import CodeModificationResponse, FileModification, PromptTemplates
 
 
 def print_section(title):

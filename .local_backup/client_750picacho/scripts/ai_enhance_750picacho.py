@@ -3,12 +3,13 @@
 AI Enhancement for 750 Picacho Aerial
 Using Stable Diffusion + ControlNet with Material Response
 """
-import torch
-from PIL import Image, ImageEnhance
-from diffusers import StableDiffusionControlNetImg2ImgPipeline, ControlNetModel, UniPCMultistepScheduler
-from controlnet_aux import CannyDetector
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import torch
+from controlnet_aux import CannyDetector
+from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline, UniPCMultistepScheduler
+from PIL import Image, ImageEnhance
 
 print("=" * 60)
 print("AI PHOTOREALISTIC ENHANCEMENT")

@@ -3,9 +3,10 @@
 Conservative Enhancement - Maximum Fidelity
 Preserves original quality while applying subtle professional-grade enhancements
 """
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 
 print("=" * 70)
 print("CONSERVATIVE ENHANCEMENT - MAXIMUM FIDELITY")

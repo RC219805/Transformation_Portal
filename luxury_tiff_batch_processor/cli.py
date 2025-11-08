@@ -15,7 +15,7 @@ try:  # pragma: no cover - optional dependency
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     yaml = None
 
-from .adjustments import AdjustmentSettings, LUXURY_PRESETS
+from .adjustments import LUXURY_PRESETS, AdjustmentSettings
 from .pipeline import (
     _process_image_worker,
     _wrap_with_progress,

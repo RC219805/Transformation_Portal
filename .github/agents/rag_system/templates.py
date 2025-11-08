@@ -7,10 +7,10 @@ Provides structured templates for common workflows:
 - CI changes
 """
 
-from typing import Dict, List, Optional
-from dataclasses import dataclass
 import json
 import sys
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 
 @dataclass

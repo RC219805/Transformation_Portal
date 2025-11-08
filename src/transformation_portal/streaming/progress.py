@@ -1,9 +1,9 @@
 """Progress tracking with real-time updates."""
 
 import time
-from typing import Optional, Callable, Any
 from dataclasses import dataclass, field
 from threading import Lock
+from typing import Any, Callable, Optional
 
 
 @dataclass
@@ -298,6 +298,7 @@ def create_progress(
         try:
             # Try to use rich library if available
             from rich.progress import Progress
+
             # Could wrap rich.Progress here
             pass
         except ImportError:
