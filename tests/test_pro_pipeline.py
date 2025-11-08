@@ -390,8 +390,8 @@ class TestPresets:
         assert config.ai_stage.enabled is True
         assert config.material_stage.enabled is True
 
-        # Check golden hour specific config
-        assert "atmospheric_haze" in config.depth_stage.config or True  # May not be set
+        # Verify depth stage has config (atmospheric_haze may or may not be set)
+        assert isinstance(config.depth_stage.config, dict)
 
     def test_aerial_estate_preset(self, tmp_path):
         """Test aerial estate preset specifics."""
