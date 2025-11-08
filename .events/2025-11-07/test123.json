@@ -1,0 +1,11 @@
+{
+  "id": "test123",
+  "type": "test.event",
+  "timestamp": 1762575593.453568,
+  "data": {
+    "test": "data"
+  },
+  "metadata": {},
+  "user": null,
+  "correlation_id": null
+}
