@@ -17,7 +17,7 @@ Features:
 import sys
 import argparse
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 import logging
 
 # Import architectural context engine
