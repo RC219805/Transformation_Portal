@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from process_renderings_750 import (
+from src.transformation_portal.rendering.process_renderings_750 import (
     CONVERTIBLE_IMAGE_SUFFIXES,
     SUPPORTED_IMAGE_SUFFIXES,
     convert_renderings_to_jpeg,

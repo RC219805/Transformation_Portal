@@ -40,7 +40,7 @@ python examples/simple_process.py interior.jpg output/
 ### 2. Batch Process Photos
 
 ```bash
-python luxury_tiff_batch_processor.py raw_photos/ enhanced/ --preset signature
+python luxury_tiff_batch_processor_cli.py raw_photos/ enhanced/ --preset signature
 ```
 
 **Output:** Entire folder processed with consistent look
@@ -113,16 +113,16 @@ python lux_render_pipeline.py --input 'folder/*.png' --out ./final \
 
 ```bash
 # Default (Signature preset)
-python luxury_tiff_batch_processor.py input/ output/
+python luxury_tiff_batch_processor_cli.py input/ output/
 
 # Vivid (high saturation)
-python luxury_tiff_batch_processor.py input/ output/ --preset vivid
+python luxury_tiff_batch_processor_cli.py input/ output/ --preset vivid
 
 # Natural (subtle)
-python luxury_tiff_batch_processor.py input/ output/ --preset natural
+python luxury_tiff_batch_processor_cli.py input/ output/ --preset natural
 
 # Moody (dramatic)
-python luxury_tiff_batch_processor.py input/ output/ --preset moody
+python luxury_tiff_batch_processor_cli.py input/ output/ --preset moody
 ```
 
 ### Video Master Grader
@@ -321,7 +321,7 @@ python examples/simple_process.py render.jpg output/
 
 ### 2. Batch Property Photos
 ```bash
-python luxury_tiff_batch_processor.py photos/ enhanced/ --preset signature
+python luxury_tiff_batch_processor_cli.py photos/ enhanced/ --preset signature
 ```
 
 ### 3. AI Marketing Render

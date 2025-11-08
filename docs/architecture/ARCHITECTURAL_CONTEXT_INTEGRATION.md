@@ -166,7 +166,7 @@ renderer.enhance_render(
 )
 
 # Generates command:
-# python luxury_tiff_batch_processor.py \
+# python luxury_tiff_batch_processor_cli.py \
 #   --input kitchen.jpg \
 #   --clarity 0.20 \
 #   --material-response 0.75 \

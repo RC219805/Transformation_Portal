@@ -10,7 +10,7 @@
 |----------|----------|-------|--------|---------|
 | **Depth Pipeline** | Architectural renders with depth awareness | JPG/PNG images | Enhanced + depth maps | `python examples/simple_process.py` |
 | **Lux Render** | AI-powered photorealistic refinement | Renders/photos | AI-enhanced images | `python lux_render_pipeline.py` |
-| **TIFF Processor** | High-end photography batch processing | TIFF images | Enhanced TIFFs | `python luxury_tiff_batch_processor.py` |
+| **TIFF Processor** | High-end photography batch processing | TIFF images | Enhanced TIFFs | `python luxury_tiff_batch_processor_cli.py` |
 | **Video Grader** | Professional video color grading | MP4/MOV videos | Graded videos | `python luxury_video_master_grader.py` |
 | **Material Response** | Surface-aware enhancement | Images | Material-enhanced | Python API |
 
@@ -473,7 +473,7 @@ Professional-grade batch processing for high-end photography with:
 #### 1. Process with Default Preset
 
 ```bash
-python luxury_tiff_batch_processor.py input_folder/ output_folder/
+python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/
 ```
 
 Uses "Signature" preset by default.
@@ -482,19 +482,19 @@ Uses "Signature" preset by default.
 
 ```bash
 # Vivid preset for marketing
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
   ./raw_photos/ \
   ./enhanced_photos/ \
   --preset vivid
 
 # Natural preset for editorial
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
   ./editorial/ \
   ./output/ \
   --preset natural
 
 # Moody preset for dramatic effect
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
   ./interiors/ \
   ./moody_output/ \
   --preset moody
@@ -503,7 +503,7 @@ python luxury_tiff_batch_processor.py \
 #### 3. Process with Progress Tracking
 
 ```bash
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
   ./source/ \
   ./processed/ \
   --preset signature \
@@ -829,7 +829,7 @@ result.save('./final/render_final.jpg', quality=95)
 
 ```bash
 # Process entire folder with Signature preset
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
   ./raw_photos/ \
   ./client_delivery/ \
   --preset signature \
@@ -1155,10 +1155,10 @@ python lux_render_pipeline.py --input 'folder/*.png' --out ./final \
 
 # TIFF BATCH PROCESSOR
 # Default (Signature preset)
-python luxury_tiff_batch_processor.py input/ output/
+python luxury_tiff_batch_processor_cli.py input/ output/
 
 # Specific preset
-python luxury_tiff_batch_processor.py input/ output/ --preset vivid
+python luxury_tiff_batch_processor_cli.py input/ output/ --preset vivid
 
 
 # VIDEO MASTER GRADER

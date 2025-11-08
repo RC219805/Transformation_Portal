@@ -88,7 +88,7 @@ python luxury_video_master_grader.py \
 
 **Usage:**
 ```bash
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
   --input input_dir/ \
   --output output_dir/ \
   --preset warm_estate \

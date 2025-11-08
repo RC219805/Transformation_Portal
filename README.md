@@ -146,7 +146,7 @@ make test-fast
 python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
 
 # TIFF batch processing
-python luxury_tiff_batch_processor.py input_folder/ output_folder/ --preset signature
+python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input bedroom.jpg --out ./enhanced --prompt "luxury bedroom interior" --material-response
@@ -390,7 +390,7 @@ High-end workflow for polishing large-format TIFF photography with metadata pres
 
 **Usage:**
 ```bash
-python luxury_tiff_batch_processor.py input_folder/ output_folder/ --preset signature
+python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/ --preset signature
 ```
 
 ---
@@ -584,7 +584,7 @@ python lux_render_pipeline.py \
 
 ```bash
 # Process folder of high-res TIFFs with Signature preset
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
   ./source_photography/ \
   ./output_enhanced/ \
   --preset signature
@@ -955,7 +955,7 @@ python scripts/migrate_imports.py your_project/
 python depth_pipeline/pipeline.py --input image.jpg --output enhanced.jpg
 
 # Batch process TIFFs
-python luxury_tiff_batch_processor.py input/ output/ --preset signature
+python luxury_tiff_batch_processor_cli.py input/ output/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input render.jpg --out ./enhanced --prompt "luxury interior"

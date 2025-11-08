@@ -74,7 +74,7 @@ Choose the appropriate pipeline based on your file type:
 
 ```bash
 # TIFF files → Luxury TIFF Batch Processor
-python luxury_tiff_batch_processor.py input/ output/ --preset signature
+python luxury_tiff_batch_processor_cli.py input/ output/ --preset signature
 
 # General images → Depth Pipeline
 python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
@@ -165,7 +165,7 @@ python examples/validate_file_formats.py --formats
 ```bash
 # Step 1: Convert RAW to 16-bit TIFF (use Lightroom/Darktable)
 # Step 2: Batch process TIFFs
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
     ./raw_tiffs/ \
     ./enhanced_tiffs/ \
     --preset signature_estate \

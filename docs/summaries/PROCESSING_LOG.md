@@ -27,7 +27,7 @@ The signature preset applies the following adjustments optimized for the 800 Pic
 
 ### Command Used
 ```bash
-python luxury_tiff_batch_processor.py input_images processed_images \
+python luxury_tiff_batch_processor_cli.py input_images processed_images \
   --preset signature --overwrite --log-level INFO
 ```
 

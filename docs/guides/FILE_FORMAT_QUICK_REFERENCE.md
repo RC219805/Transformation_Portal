@@ -57,7 +57,7 @@ python examples/validate_file_formats.py --formats
 ### Process Images
 ```bash
 # TIFF batch processing
-python luxury_tiff_batch_processor.py input/ output/ --preset signature
+python luxury_tiff_batch_processor_cli.py input/ output/ --preset signature
 
 # Depth-aware enhancement
 python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg

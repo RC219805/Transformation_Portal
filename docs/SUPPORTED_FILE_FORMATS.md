@@ -67,7 +67,7 @@ pip install -e ".[tiff]"  # Includes tifffile + imagecodecs
 **Example**:
 ```bash
 # Process directory of 16-bit TIFFs with Material Response
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
     --input ./raw_tiffs \
     --output ./enhanced \
     --preset signature_estate \
@@ -356,7 +356,7 @@ Enables: Video format support, LUT application, HDR tone mapping
 
 ```bash
 # 16-bit TIFF with metadata preservation
-python luxury_tiff_batch_processor.py \
+python luxury_tiff_batch_processor_cli.py \
     --input ./tiff_photos \
     --output ./enhanced_tiffs \
     --preset signature_estate \

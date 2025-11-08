@@ -167,7 +167,7 @@ cp ~/Desktop/new_render.tiff input_images/
 git status  # Won't show TIFF files
 
 # Process as normal
-python luxury_tiff_batch_processor.py input_images/ output/ --preset signature
+python luxury_tiff_batch_processor_cli.py input_images/ output/ --preset signature
 
 # Only commit code changes
 git add luxury_tiff_batch_processor.py
