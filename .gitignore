@@ -92,10 +92,12 @@ test_output/
 *_IMPROVEMENTS*.md
 *_REPORT*.md
 TIFF_*.md
-CODE_*.md
 PHASE_*.md
 SESSION_*.md
 UNIFIED_*.md
+
+# But allow important docs in docs/
+!docs/CODE_QUALITY_SYSTEM.md
 
 # Large data files (keep directory structure, ignore large images)
 data/sample_images/**/*.jpg

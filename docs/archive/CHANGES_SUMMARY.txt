@@ -74,14 +74,14 @@ Two critical bugs causing 16-bit TIFFs to degrade to 8-bit quality:
    - Lacked proper clipping
    - No ICC profile preservation
    - No quality verification
-   
+
    ✅ After: Proper float32 intermediate conversion with clipping
 
 2. premium_pipeline_fixed.py (line 111):
    ❌ Before: master.save(path, compression='lzw')
    - PIL cannot save true 16-bit RGB TIFFs
    - Silently converts to 8-bit
-   
+
    ✅ After: Uses tifffile for true 16-bit output
 
 QUALITY IMPACT:

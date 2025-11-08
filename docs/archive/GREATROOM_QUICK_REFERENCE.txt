@@ -30,7 +30,7 @@ MATERIALS PRIORITY
 1. WOOD (~20% coverage) - Priority: HIGH
    → Material Response Wood LUT @ 70%
 
-2. GLASS/WINDOWS (~5-8%) - Priority: CRITICAL  
+2. GLASS/WINDOWS (~5-8%) - Priority: CRITICAL
    → Selective highlight recovery
 
 3. TEXTILES (~10-15%) - Priority: MODERATE
