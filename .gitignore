@@ -85,6 +85,17 @@ test_output/
 # Temporary markdown files (keep permanent docs only)
 *_TEMP.md
 *_WIP.md
+*_SESSION*.md
+*_SUMMARY*.md
+*_COMPLETE*.md
+*_FIX*.md
+*_IMPROVEMENTS*.md
+*_REPORT*.md
+TIFF_*.md
+CODE_*.md
+PHASE_*.md
+SESSION_*.md
+UNIFIED_*.md
 
 # Large data files (keep directory structure, ignore large images)
 data/sample_images/**/*.jpg
