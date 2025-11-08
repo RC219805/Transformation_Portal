@@ -163,7 +163,7 @@ def create_comparison(img1, img2, labels, output_path):
     try:
         font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32)
         font_small = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 18)
-    except:
+    except (OSError, IOError):
         font = ImageFont.load_default()
         font_small = font
 
