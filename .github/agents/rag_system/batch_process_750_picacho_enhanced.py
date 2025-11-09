@@ -170,7 +170,7 @@ def process_scene(
         return None
 
     preset = SCENE_PRESETS[scene_name]
-    output_path = output_dir / f"750Picacho_{scene_name}_enhanced.tif"
+    output_path = output_dir / f"750Picacho_{scene_name}_enhanced.ti"
 
     print(f"\n{'='*80}")
     print(f"Scene: {scene_name}")

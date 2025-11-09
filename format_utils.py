@@ -56,7 +56,6 @@ TIFF_EXTENSIONS = {'.ti', '.tiff'}
 
 class UnsupportedFormatError(ValueError):
     """Raised when a file format is not supported by the pipeline."""
-    pass
 
 
 def normalize_extension(path: Union[str, Path]) -> str:
