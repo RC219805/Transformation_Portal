@@ -119,7 +119,7 @@ class ArchitecturalContextExtractor:
             ProjectContext with extracted intelligence
         """
         print(f"\n{'='*70}")
-        print(f"EXTRACTING ARCHITECTURAL CONTEXT")
+        print("EXTRACTING ARCHITECTURAL CONTEXT")
         print(f"{'='*70}")
         print(f"PDF: {pdf_path.name}")
 
@@ -166,7 +166,7 @@ class ArchitecturalContextExtractor:
 
         doc.close()
 
-        print(f"\n✓ Extraction complete")
+        print("\n✓ Extraction complete")
         print(f"  Rooms identified: {len(context.rooms)}")
         print(f"  Materials found: {len(context.materials_palette)}")
         print(f"  Images extracted: {len(context.extracted_images)}")
@@ -293,7 +293,7 @@ class ArchitecturalContextExtractor:
             'Modern': ['modern', 'contemporary', 'minimalist', 'clean lines'],
             'Traditional': ['traditional', 'classic', 'colonial', 'crown molding'],
             'Transitional': ['transitional', 'blend', 'timeless'],
-            'Mediterranean': ['mediterranean', 'spanish', 'tile roof', 'stucco'],
+            'Mediterranean': ['mediterranean', 'spanish', 'tile roo', 'stucco'],
             'Craftsman': ['craftsman', 'bungalow', 'exposed beams'],
             'Industrial': ['industrial', 'exposed', 'concrete', 'metal'],
             'Luxury Estate': ['estate', 'luxury', 'grand', 'palatial'],
@@ -395,7 +395,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Extract architectural context from construction documents'
     )
-    parser.add_argument('pdf', type=Path, help='PDF file to analyze')
+    parser.add_argument('pd', type=Path, help='PDF file to analyze')
     parser.add_argument('--output', '-o', type=Path, default=Path('extracted_context'),
                         help='Output directory for extracted context')
     parser.add_argument('--verbose', '-v', action='store_true',
@@ -430,7 +430,7 @@ def main():
             floor = f" [{room.floor_level}]" if room.floor_level else ""
             print(f"  • {room.name}: {dims}{floor}")
 
-        print(f"\nMaterials Palette:")
+        print("\nMaterials Palette:")
         for material in context.materials_palette[:10]:  # Top 10
             print(f"  • {material.title()}")
 

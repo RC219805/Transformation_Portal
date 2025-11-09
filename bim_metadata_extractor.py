@@ -404,7 +404,7 @@ def main():
     metadata = extractor.extract_all(canonical_views=args.canonical_views)
     extractor.save_metadata(args.output, metadata)
 
-    print(f"\nExtracted metadata:")
+    print("\nExtracted metadata:")
     print(f"  Project: {metadata['project']}")
     print(f"  Location: {metadata['location']}")
     print(f"  Views: {metadata['view_count']}")

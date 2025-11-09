@@ -131,12 +131,12 @@ def process_scene(
         print(f"⚠️  No config for scene type '{scene_type}', using defaults")
         config = {'exposure': 0.0, 'contrast': 1.0, 'saturation': 1.0}
 
-    print(f"Configuration:")
+    print("Configuration:")
     for key, value in config.items():
         print(f"  {key}: {value}")
 
     # Load image (16-bit TIFF)
-    print(f"\nLoading 16-bit TIFF...")
+    print("\nLoading 16-bit TIFF...")
     img = tifffile.imread(str(input_path))
     print(f"  Shape: {img.shape}, dtype: {img.dtype}")
     print(f"  Range: [{img.min()}, {img.max()}]")
@@ -150,7 +150,7 @@ def process_scene(
         img_float = img.astype(np.float32)
 
     # Apply scene-specific processing
-    print(f"\nApplying enhancements...")
+    print("\nApplying enhancements...")
 
     # 1. Exposure correction
     if 'exposure' in config and config['exposure'] != 0:
@@ -207,7 +207,7 @@ def process_scene(
     img_output = (np.clip(img_blended, 0, 1) * 65535).astype(np.uint16)
 
     # Save 16-bit TIFF
-    print(f"\nSaving refined 16-bit TIFF...")
+    print("\nSaving refined 16-bit TIFF...")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tifffile.imwrite(
         str(output_path),
@@ -235,20 +235,20 @@ def main():
     output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Phase3_Refined")
 
     print(f"\n{'#' * 80}")
-    print(f"  PHASE 3: SCENE-SPECIFIC REFINEMENT")
-    print(f"  750 Picacho Lane")
+    print("  PHASE 3: SCENE-SPECIFIC REFINEMENT")
+    print("  750 Picacho Lane")
     print(f"{'#' * 80}\n")
 
     print(f"Input: {input_dir}")
     print(f"Output: {output_dir}\n")
 
     # Process luxury TIFFs
-    tiff_files = sorted(input_dir.glob("*_luxury.tif"))
+    tiff_files = sorted(input_dir.glob("*_luxury.ti"))
 
     if not tiff_files:
         print("⚠️  No *_luxury.tif files found!")
         print("Looking for alternative TIFF files...")
-        tiff_files = sorted(input_dir.glob("*.tif"))
+        tiff_files = sorted(input_dir.glob("*.ti"))
 
     print(f"Found {len(tiff_files)} TIFF files to refine\n")
 
@@ -260,7 +260,7 @@ def main():
 
         # Create output filename
         base_name = tiff_path.stem.replace('_luxury', '').replace('_ultimate', '')
-        output_path = output_dir / f"{base_name}_refined.tif"
+        output_path = output_dir / f"{base_name}_refined.ti"
 
         # Process
         try:
@@ -272,7 +272,7 @@ def main():
             traceback.print_exc()
 
     print(f"\n{'#' * 80}")
-    print(f"  PHASE 3 COMPLETE")
+    print("  PHASE 3 COMPLETE")
     print(f"{'#' * 80}\n")
     print(f"Refined outputs: {output_dir}")
     print(f"Total files: {len(list(output_dir.glob('*')))}")

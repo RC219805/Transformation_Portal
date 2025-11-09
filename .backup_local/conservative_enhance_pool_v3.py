@@ -44,7 +44,7 @@ print("=" * 80)
 # CONFIGURATION - V3 CORRECTED PARAMETERS
 # ============================================================================
 
-INPUT = "input_images/750Picacho_Pool.tiff"
+INPUT = "input_images/750Picacho_Pool.tif"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -172,7 +172,7 @@ if TIFFFILE_AVAILABLE:
         # Drop alpha channel if present
         if rgb_linear.shape[2] == 4:
             rgb_linear = rgb_linear[:, :, :3]
-            print(f"  ✓ Dropped alpha channel")
+            print("  ✓ Dropped alpha channel")
 
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
@@ -195,14 +195,14 @@ print(f"  Mean luminance (Display, for reference): {original_luminance_display:.
 # ============================================================================
 # STEP 2: AGX TONE MAPPING (LINEAR → Display sRGB) - CRITICAL FIX!
 # ============================================================================
-print(f"\n[2/10] Applying AgX tone mapping (LINEAR → display sRGB)...")
+print("\n[2/10] Applying AgX tone mapping (LINEAR → display sRGB)...")
 print(f"  Dynamic range: {MIN_EV} EV to {MAX_EV} EV")
 
 rgb = apply_agx_tone_map(rgb_linear)
 
-print(f"  ✓ AgX tone mapping complete")
+print("  ✓ AgX tone mapping complete")
 print(f"  ✓ Luminance after tone map: {rgb.mean():.3f}")
-print(f"  ✓ Highlight rolloff preserved (smooth gradient)")
+print("  ✓ Highlight rolloff preserved (smooth gradient)")
 
 # Apply global exposure lift
 print(f"\n  Applying global exposure lift (+{int(GLOBAL_EXPOSURE_LIFT * 100)}%)...")
@@ -213,7 +213,7 @@ print(f"  ✓ Luminance after exposure lift: {rgb.mean():.3f}")
 # ============================================================================
 # STEP 3: SKY HIGHLIGHT PROTECTION (NEW IN V3)
 # ============================================================================
-print(f"\n[3/10] Protecting sky highlights...")
+print("\n[3/10] Protecting sky highlights...")
 
 sky_mask = protect_sky_highlights(rgb, threshold=SKY_PROTECTION_THRESHOLD)
 sky_pixels = (sky_mask > 0.5).sum()
@@ -254,7 +254,7 @@ print(f"  ✓ Shadow lift applied (factor: {shadow_lift_factor:.3f}×)")
 protection = 1.0 - sky_mask * SKY_PROTECTION_STRENGTH
 rgb_exposed = rgb_exposed * protection[:,:,np.newaxis]
 
-print(f"  ✓ Sky protected from shadow lift")
+print("  ✓ Sky protected from shadow lift")
 
 # ============================================================================
 # STEP 5: MIDTONE CONTRAST (CORRECTED - reduced)
@@ -271,12 +271,12 @@ rgb_contrast = np.array(img_contrast, dtype=np.float32) / 255.0
 rgb_contrast = rgb_contrast * protection[:,:,np.newaxis] + \
                rgb_exposed * (1 - protection[:,:,np.newaxis])
 
-print(f"  ✓ Contrast enhanced with sky protection")
+print("  ✓ Contrast enhanced with sky protection")
 
 # ============================================================================
 # STEP 6: POOL WATER COLOR CORRECTION (MAJOR REVISION - jewel tone)
 # ============================================================================
-print(f"\n[6/10] Enhancing pool water (jewel-toned turquoise)...")
+print("\n[6/10] Enhancing pool water (jewel-toned turquoise)...")
 
 r, g, b_ch = rgb_contrast[:,:,0], rgb_contrast[:,:,1], rgb_contrast[:,:,2]
 
@@ -323,7 +323,7 @@ rgb_water = np.clip(np.stack([r_final, g_final, b_final], axis=2), 0, 1)
 
 print(f"  ✓ Water enhanced: R×{WATER_RED_REDUCTION:.2f}, G×{WATER_GREEN_MAINTAIN:.2f}, B×{WATER_BLUE_BOOST:.2f}")
 print(f"  ✓ Blend strength: {int(WATER_STRENGTH * 100)}%")
-print(f"  ✓ Luminance preserved for transparency")
+print("  ✓ Luminance preserved for transparency")
 
 # ============================================================================
 # STEP 7: GLOBAL SATURATION (CORRECTED - increased)
@@ -335,12 +335,12 @@ enhancer = ImageEnhance.Color(img_pil)
 img_saturated = enhancer.enhance(GLOBAL_SATURATION)
 rgb_saturated = np.array(img_saturated, dtype=np.float32) / 255.0
 
-print(f"  ✓ Saturation enhanced globally")
+print("  ✓ Saturation enhanced globally")
 
 # ============================================================================
 # STEP 8: VEGETATION ENHANCEMENT (CORRECTED - saturation only)
 # ============================================================================
-print(f"\n[8/10] Enhancing vegetation (saturation only, preserve shadows)...")
+print("\n[8/10] Enhancing vegetation (saturation only, preserve shadows)...")
 
 r, g, b_ch = rgb_saturated[:,:,0], rgb_saturated[:,:,1], rgb_saturated[:,:,2]
 
@@ -377,7 +377,7 @@ img_rgb_enhanced = img_hsv_enhanced.convert('RGB')
 rgb_vegetation = np.array(img_rgb_enhanced, dtype=np.float32) / 255.0
 
 print(f"  ✓ Vegetation saturation enhanced (+{int(saturation_boost_amount * 100)}%)")
-print(f"  ✓ Shadow depth preserved (no brightness lift)")
+print("  ✓ Shadow depth preserved (no brightness lift)")
 
 # ============================================================================
 # STEP 9: CLARITY ENHANCEMENT (CORRECTED - reduced, masked)
@@ -405,14 +405,14 @@ rgb_clarity = rgb_vegetation + high_pass * CLARITY_STRENGTH * mask_3d
 rgb_final = np.clip(rgb_clarity, 0, 1)
 
 print(f"  ✓ Clarity applied with masking (radius: {CLARITY_RADIUS}px)")
-print(f"  ✓ Sky and highlights protected")
+print("  ✓ Sky and highlights protected")
 
 # ============================================================================
 # STEP 10: SAVE OUTPUT
 # ============================================================================
-print(f"\n[10/10] Saving enhanced image...")
+print("\n[10/10] Saving enhanced image...")
 
-output_name = Path(INPUT).stem + "_Enhanced_v3.tif"
+output_name = Path(INPUT).stem + "_Enhanced_v3.ti"
 output_path = OUTPUT_DIR / output_name
 
 # Convert to 16-bit for output
@@ -454,29 +454,29 @@ original_sat = calc_saturation(original_display)  # Compare display to display
 final_sat = calc_saturation(rgb_final)
 saturation_change = ((final_sat / original_sat) - 1) * 100
 
-print(f"\n1. LUMINANCE (Display space comparison):")
+print("\n1. LUMINANCE (Display space comparison):")
 print(f"   Original (LINEAR): {original_luminance_linear:.3f}")
 print(f"   Original (Display-referred): {original_luminance_display:.3f}")
 print(f"   Enhanced (Display): {final_luminance:.3f}")
 print(f"   Change: {luminance_change:+.1f}%")
-print(f"   Target: +15% to +25%")
+print("   Target: +15% to +25%")
 print(f"   Status: {'✅ PASS' if 15 <= luminance_change <= 25 else '❌ FAIL'}")
 
-print(f"\n2. HIGHLIGHT CLIPPING:")
+print("\n2. HIGHLIGHT CLIPPING:")
 print(f"   Clipped pixels: {highlight_clipping:.2f}%")
-print(f"   Target: <1%")
+print("   Target: <1%")
 print(f"   Status: {'✅ PASS' if highlight_clipping < 1.0 else '❌ FAIL'}")
 
-print(f"\n3. SHADOW CLIPPING:")
+print("\n3. SHADOW CLIPPING:")
 print(f"   Clipped pixels: {shadow_clipping:.2f}%")
-print(f"   Target: <2%")
+print("   Target: <2%")
 print(f"   Status: {'✅ PASS' if shadow_clipping < 2.0 else '❌ FAIL'}")
 
-print(f"\n4. SATURATION:")
+print("\n4. SATURATION:")
 print(f"   Original: {original_sat:.3f}")
 print(f"   Enhanced: {final_sat:.3f}")
 print(f"   Change: {saturation_change:+.1f}%")
-print(f"   Target: +5% to +15%")
+print("   Target: +5% to +15%")
 print(f"   Status: {'✅ PASS' if 5 <= saturation_change <= 15 else '❌ FAIL'}")
 
 # Overall assessment
@@ -506,7 +506,7 @@ print("ENHANCEMENT COMPLETE - V3")
 print("=" * 80)
 print(f"\nOutput: {output_path}")
 print(f"Compare with original: {INPUT}")
-print(f"\nFor detailed analysis, see:")
-print(f"  - POOL_V3_RECOMMENDATIONS.md (technical details)")
-print(f"  - POOL_V3_EXECUTIVE_SUMMARY.md (high-level overview)")
-print(f"  - POOL_V3_QUICK_GUIDE.md (parameter tuning)")
+print("\nFor detailed analysis, see:")
+print("  - POOL_V3_RECOMMENDATIONS.md (technical details)")
+print("  - POOL_V3_EXECUTIVE_SUMMARY.md (high-level overview)")
+print("  - POOL_V3_QUICK_GUIDE.md (parameter tuning)")

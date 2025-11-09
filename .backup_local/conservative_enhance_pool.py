@@ -48,7 +48,7 @@ print("=" * 80)
 # CONFIGURATION - OPTIMIZED FOR AERIAL POOL RENDERING
 # ============================================================================
 
-INPUT = "input_images/750Picacho_Pool.tiff"
+INPUT = "input_images/750Picacho_Pool.tif"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -104,7 +104,7 @@ if TIFFFILE_AVAILABLE:
         # Drop alpha channel if present
         if rgb_linear.shape[2] == 4:
             rgb_linear = rgb_linear[:, :, :3]
-            print(f"  ✓ Dropped alpha channel")
+            print("  ✓ Dropped alpha channel")
 
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
@@ -126,13 +126,13 @@ print(f"\n[2/9] Converting linear to sRGB (gamma {GAMMA_CORRECTION})...")
 
 rgb = np.power(np.clip(rgb_linear, 0, 1), 1/GAMMA_CORRECTION)
 
-print(f"  ✓ Gamma corrected")
+print("  ✓ Gamma corrected")
 print(f"  ✓ Luminance after gamma: {rgb.mean():.3f}")
 
 # ============================================================================
 # STEP 3: EXPOSURE LIFT
 # ============================================================================
-print(f"\n[3/9] Lifting exposure...")
+print("\n[3/9] Lifting exposure...")
 
 # Calculate exposure multiplier
 exposure_multiplier = 2 ** GLOBAL_EXPOSURE_LIFT
@@ -146,7 +146,7 @@ print(f"  ✓ Luminance: {original_luminance:.3f} → {new_luminance:.3f}")
 # ============================================================================
 # STEP 4: SHADOW RECOVERY
 # ============================================================================
-print(f"\n[4/9] Recovering shadow detail...")
+print("\n[4/9] Recovering shadow detail...")
 
 # Calculate luminance
 luminance = 0.2126 * rgb_exposed[:,:,0] + 0.7152 * rgb_exposed[:,:,1] + 0.0722 * rgb_exposed[:,:,2]
@@ -171,7 +171,7 @@ print(f"  ✓ Shadow lift: +{SHADOW_LIFT_STOPS:.2f} stops")
 # ============================================================================
 # STEP 5: CONTRAST ENHANCEMENT
 # ============================================================================
-print(f"\n[5/9] Enhancing contrast...")
+print("\n[5/9] Enhancing contrast...")
 
 # Apply midtone contrast
 midpoint = 0.5
@@ -183,7 +183,7 @@ print(f"  ✓ Midtone contrast: {MIDTONE_CONTRAST:.2f}×")
 # ============================================================================
 # STEP 6: POOL WATER COLOR CORRECTION
 # ============================================================================
-print(f"\n[6/9] Correcting pool water color...")
+print("\n[6/9] Correcting pool water color...")
 
 # Detect pool water (blue-dominant pixels)
 # Pool water: high blue channel, cyan hue
@@ -210,7 +210,7 @@ print(f"  ✓ Color shift: R {WATER_RED_ADJUSTMENT:.2f}×, G {WATER_GREEN_BOOST:
 # ============================================================================
 # STEP 7: SATURATION BOOST
 # ============================================================================
-print(f"\n[7/9] Adjusting saturation...")
+print("\n[7/9] Adjusting saturation...")
 
 # Convert to HSV for saturation adjustment
 rgb_uint8 = (rgb_corrected * 255).astype(np.uint8)
@@ -244,7 +244,7 @@ print(f"  ✓ Vegetation boost: {VEGETATION_SAT_BOOST:.2f}×")
 # ============================================================================
 # STEP 8: CLARITY ENHANCEMENT (MINIMAL)
 # ============================================================================
-print(f"\n[8/9] Applying clarity enhancement...")
+print("\n[8/9] Applying clarity enhancement...")
 
 # High-pass filter for clarity
 blurred = gaussian_filter(rgb_sat, sigma=CLARITY_RADIUS / 4.0)
@@ -255,18 +255,18 @@ rgb_clarity = rgb_sat + high_pass * CLARITY_STRENGTH
 rgb_clarity = np.clip(rgb_clarity, 0, 1)
 
 print(f"  ✓ Clarity: {CLARITY_STRENGTH:.2f} @ radius {CLARITY_RADIUS}px")
-print(f"  ⚠️  Minimal clarity used (image already sharp)")
+print("  ⚠️  Minimal clarity used (image already sharp)")
 
 # ============================================================================
 # STEP 9: SAVE OUTPUT
 # ============================================================================
-print(f"\n[9/9] Saving enhanced image...")
+print("\n[9/9] Saving enhanced image...")
 
 # Convert to 16-bit
 rgb_16bit = (rgb_clarity * 65535).astype(np.uint16)
 
 # Save with tifffile if available
-output_path = OUTPUT_DIR / "750Picacho_Pool_Enhanced.tif"
+output_path = OUTPUT_DIR / "750Picacho_Pool_Enhanced.ti"
 
 if TIFFFILE_AVAILABLE:
     tifffile.imwrite(output_path, rgb_16bit, compression='lzw')

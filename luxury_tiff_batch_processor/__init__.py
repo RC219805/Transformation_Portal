@@ -48,8 +48,8 @@ Example Usage
     # Use a preset for quick processing
     settings = LUXURY_PRESETS["signature"]
     process_single_image(
-        source=Path("input.tif"),
-        destination=Path("output.tif"),
+        source=Path("input.ti"),
+        destination=Path("output.ti"),
         adjustments=settings,
         compression="tiff_lzw",
     )

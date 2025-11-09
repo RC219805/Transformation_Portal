@@ -75,7 +75,7 @@ def process_single_image(
             # Use scene name (not source filename) for outputs
             output_name_override=scene_name,
             # Enable all output formats
-            output_formats=['jpg', 'tif', 'png'],
+            output_formats=['jpg', 'ti', 'png'],
             # Maximum quality settings
             depth_estimation=True,
             material_response=True,
@@ -99,7 +99,7 @@ def process_single_image(
         pipeline = UnifiedLuxuryPipeline(config)
 
         # Process image
-        print(f"\n🚀 Starting pipeline processing...")
+        print("\n🚀 Starting pipeline processing...")
         output_paths = pipeline.process_image(source_path, output_dir)
 
         results['status'] = 'success'
@@ -110,7 +110,7 @@ def process_single_image(
         }
 
         # Validation
-        print(f"\n✅ Processing complete!")
+        print("\n✅ Processing complete!")
         print(f"   Outputs generated: {len(output_paths)}")
         for format_name, path in output_paths.items():
             if path.exists():
@@ -160,7 +160,7 @@ def batch_process_canonical_sources(
     print("="*80)
 
     # Load manifest
-    print(f"\n📋 Loading canonical manifest...")
+    print("\n📋 Loading canonical manifest...")
     manifest = load_canonical_manifest(manifest_path)
     print(f"   Found {len(manifest['canonical_sources'])} canonical sources")
 
@@ -232,7 +232,7 @@ def batch_process_canonical_sources(
                 })
 
                 if not continue_on_error:
-                    print(f"\n❌ Stopping batch processing due to error (continue_on_error=False)")
+                    print("\n❌ Stopping batch processing due to error (continue_on_error=False)")
                     break
 
         except Exception as e:
@@ -246,7 +246,7 @@ def batch_process_canonical_sources(
             print(f"   Traceback:\n{error_info['traceback']}")
 
             if not continue_on_error:
-                print(f"\n❌ Stopping batch processing")
+                print("\n❌ Stopping batch processing")
                 break
 
     # Finalize summary
@@ -272,7 +272,7 @@ def batch_process_canonical_sources(
     print("\n\n" + "="*80)
     print("BATCH PROCESSING COMPLETE")
     print("="*80)
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     print(f"   Total scenes: {results_summary['summary']['total_scenes']}")
     print(f"   Processed: {results_summary['summary']['processed']}")
     print(f"   ✅ Successful: {results_summary['summary']['successful']}")
@@ -283,7 +283,7 @@ def batch_process_canonical_sources(
     print(f"\n💾 Results saved to: {results_file}")
 
     if results_summary['failures']:
-        print(f"\n⚠️  Failed scenes:")
+        print("\n⚠️  Failed scenes:")
         for failure in results_summary['failures']:
             print(f"   - {failure['scene']}: {failure['error']}")
 
@@ -329,7 +329,7 @@ def main():
     # Validate manifest
     if not args.manifest.exists():
         print(f"❌ Manifest not found: {args.manifest}")
-        print(f"\nRun resolve_750_picacho_duplicates.py first to generate manifest")
+        print("\nRun resolve_750_picacho_duplicates.py first to generate manifest")
         sys.exit(1)
 
     # Run batch processing

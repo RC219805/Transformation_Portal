@@ -21,11 +21,11 @@ print("CONSERVATIVE ENHANCEMENT - 750 PICACHO GREAT ROOM")
 print("Optimized for luxury living space with natural light and fireplace")
 print("=" * 70)
 
-INPUT = "input_images/750Picacho_GreatRoom.tiff"
+INPUT = "input_images/750Picacho_GreatRoom.tif"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-print(f"\n[1/8] Loading 32-bit TIFF...")
+print("\n[1/8] Loading 32-bit TIFF...")
 
 # Try tifffile first for better HDR handling
 if TIFFFILE_AVAILABLE:
@@ -50,7 +50,7 @@ if TIFFFILE_AVAILABLE:
 
     except Exception as e:
         print(f"  tifffile failed: {e}")
-        print(f"  Falling back to PIL...")
+        print("  Falling back to PIL...")
         img = Image.open(INPUT).convert("RGB")
 else:
     # Fallback to PIL
@@ -74,16 +74,16 @@ result = img.copy()
 # ============================================================================
 # Step 2: Color Grading (Saturation Boost)
 # ============================================================================
-print(f"\n[2/8] Color grading (saturation boost)...")
+print("\n[2/8] Color grading (saturation boost)...")
 # Great Room analysis showed warm tones but needs more vibrancy
 # Target: +10% saturation for rich, inviting atmosphere
 result = ImageEnhance.Color(result).enhance(1.10)
-print(f"  ✓ Saturation: +10% (enhance warm ambiance)")
+print("  ✓ Saturation: +10% (enhance warm ambiance)")
 
 # ============================================================================
 # Step 3: Color Temperature Adjustment
 # ============================================================================
-print(f"\n[3/8] Balancing color temperature...")
+print("\n[3/8] Balancing color temperature...")
 # Great Room has warm fireplace glow - preserve warmth but balance
 # Subtle adjustment to avoid cool cast while maintaining natural warmth
 result_array = np.array(result).astype(np.float32)
@@ -91,21 +91,21 @@ result_array[:,:,0] *= 0.98  # Reduce red slightly by 2%
 result_array[:,:,2] *= 1.02  # Boost blue slightly by 2%
 result_array = np.clip(result_array, 0, 255).astype(np.uint8)
 result = Image.fromarray(result_array)
-print(f"  ✓ Color temperature: Warm-preserved with balanced highlights")
+print("  ✓ Color temperature: Warm-preserved with balanced highlights")
 
 # ============================================================================
 # Step 4: Contrast Enhancement
 # ============================================================================
-print(f"\n[4/8] Enhancing contrast...")
+print("\n[4/8] Enhancing contrast...")
 # Great Room has dramatic lighting (fireplace, windows, ceiling height)
 # +8% contrast to emphasize architectural drama and depth
 result = ImageEnhance.Contrast(result).enhance(1.08)
-print(f"  ✓ Contrast: +8% (architectural drama and depth)")
+print("  ✓ Contrast: +8% (architectural drama and depth)")
 
 # ============================================================================
 # Step 5: Shadow Recovery (for fireplace/window balance)
 # ============================================================================
-print(f"\n[5/8] Shadow recovery (preserve detail)...")
+print("\n[5/8] Shadow recovery (preserve detail)...")
 # Great Room has high dynamic range (bright windows + darker corners)
 # Subtle shadow lift to reveal detail without destroying atmosphere
 result_array = np.array(result).astype(np.float32)
@@ -116,12 +116,12 @@ shadow_mask = (result_array < 50).astype(float)
 lift = shadow_mask * 8
 result_array = np.clip(result_array + lift, 0, 255)
 result = Image.fromarray(result_array.astype(np.uint8))
-print(f"  ✓ Shadow detail recovered (+8 units in darkest areas)")
+print("  ✓ Shadow detail recovered (+8 units in darkest areas)")
 
 # ============================================================================
 # Step 6: Material Enhancement (Selective Sharpening)
 # ============================================================================
-print(f"\n[6/8] Material enhancement...")
+print("\n[6/8] Material enhancement...")
 # Target wood beams, stone fireplace, textured walls, floor details
 # Selective sharpening on edges to enhance architectural features
 
@@ -140,16 +140,16 @@ sharpened_array = np.array(sharpened)
 edge_mask_3d = np.stack([edge_mask] * 3, axis=2)
 blended = result_array * (1 - edge_mask_3d * 0.30) + sharpened_array * (edge_mask_3d * 0.30)
 result = Image.fromarray(blended.astype(np.uint8))
-print(f"  ✓ Selective sharpening: 30% on edges")
-print(f"    - Wood beam texture enhanced")
-print(f"    - Stone fireplace detail improved")
-print(f"    - Floor texture clarity enhanced")
-print(f"    - Window frames sharpened")
+print("  ✓ Selective sharpening: 30% on edges")
+print("    - Wood beam texture enhanced")
+print("    - Stone fireplace detail improved")
+print("    - Floor texture clarity enhanced")
+print("    - Window frames sharpened")
 
 # ============================================================================
 # Step 7: Brightness Preservation
 # ============================================================================
-print(f"\n[7/8] Brightness preservation...")
+print("\n[7/8] Brightness preservation...")
 # Critical: Maintain original brightness (lesson from aerial processing)
 current_brightness = np.array(result).mean()
 brightness_ratio = original_brightness / current_brightness
@@ -160,16 +160,16 @@ if abs(brightness_ratio - 1.0) > 0.01:  # More than 1% difference
     print(f"  Original: {original_brightness:.2f}")
     print(f"  After processing: {current_brightness:.2f}")
     print(f"  Corrected to: {final_brightness:.2f}")
-    print(f"  ✓ Brightness preserved within 0.5%")
+    print("  ✓ Brightness preserved within 0.5%")
 else:
     print(f"  ✓ Brightness maintained ({current_brightness:.2f})")
 
 # ============================================================================
 # Step 8: Export
 # ============================================================================
-print(f"\n[8/8] Exporting...")
+print("\n[8/8] Exporting...")
 output_png = OUTPUT_DIR / "750Picacho_GreatRoom_Conservative_4K.png"
-output_tiff = OUTPUT_DIR / "750Picacho_GreatRoom_Conservative_4K.tiff"
+output_tiff = OUTPUT_DIR / "750Picacho_GreatRoom_Conservative_4K.tif"
 
 # Export PNG for web/presentation
 result.save(output_png, quality=100, optimize=True)
@@ -188,17 +188,17 @@ print("\n" + "=" * 70)
 print("✅ PROCESSING COMPLETE")
 print("=" * 70)
 
-print(f"\n📁 Output Files:")
+print("\n📁 Output Files:")
 print(f"  • {output_png.name}")
-print(f"    - Format: PNG (8-bit, sRGB)")
-print(f"    - Use: Web, social media, presentations")
+print("    - Format: PNG (8-bit, sRGB)")
+print("    - Use: Web, social media, presentations")
 print(f"    - Size: ~{output_png.stat().st_size / 1_000_000:.1f} MB")
 print(f"  • {output_tiff.name}")
-print(f"    - Format: TIFF (LZW compressed)")
-print(f"    - Use: Print, archival, future editing")
+print("    - Format: TIFF (LZW compressed)")
+print("    - Use: Print, archival, future editing")
 print(f"    - Size: ~{output_tiff.stat().st_size / 1_000_000:.1f} MB")
 
-print(f"\n📊 Quality Metrics:")
+print("\n📊 Quality Metrics:")
 print(f"  Resolution: {original_size[0]}×{original_size[1]} pixels (preserved)")
 
 brightness_change = (result_array.mean() - original_array.mean()) / original_array.mean() * 100
@@ -215,57 +215,57 @@ print(f"  Saturation: +{sat_change:.1f}% (target: +10%)")
 r_mean = result_array[:,:,0].mean()
 g_mean = result_array[:,:,1].mean()
 b_mean = result_array[:,:,2].mean()
-print(f"\n  Color Channels (after adjustment):")
+print("\n  Color Channels (after adjustment):")
 print(f"    Red: {r_mean:.1f} (was {original_array[:,:,0].mean():.1f})")
 print(f"    Green: {g_mean:.1f} (was {original_array[:,:,1].mean():.1f})")
 print(f"    Blue: {b_mean:.1f} (was {original_array[:,:,2].mean():.1f})")
 
-print(f"\n🎯 Enhancements Applied:")
-print(f"  ✓ Color saturation boost (+10%)")
-print(f"  ✓ Warm tone preservation (balanced)")
-print(f"  ✓ Contrast enhancement (+8%)")
-print(f"  ✓ Shadow detail recovery")
-print(f"  ✓ Selective edge sharpening (30%)")
-print(f"  ✓ Material detail enhancement")
-print(f"  ✓ Brightness preservation")
-print(f"  ✗ No AI processing")
-print(f"  ✗ No aggressive post-processing")
-print(f"  ✗ No resolution changes")
+print("\n🎯 Enhancements Applied:")
+print("  ✓ Color saturation boost (+10%)")
+print("  ✓ Warm tone preservation (balanced)")
+print("  ✓ Contrast enhancement (+8%)")
+print("  ✓ Shadow detail recovery")
+print("  ✓ Selective edge sharpening (30%)")
+print("  ✓ Material detail enhancement")
+print("  ✓ Brightness preservation")
+print("  ✗ No AI processing")
+print("  ✗ No aggressive post-processing")
+print("  ✗ No resolution changes")
 
-print(f"\n💡 Result: Professional Great Room enhancement")
-print(f"   Warm inviting atmosphere, architectural drama, enhanced materials")
-print(f"   Natural lighting preserved, fireplace ambiance maintained")
+print("\n💡 Result: Professional Great Room enhancement")
+print("   Warm inviting atmosphere, architectural drama, enhanced materials")
+print("   Natural lighting preserved, fireplace ambiance maintained")
 
-print(f"\n📈 Fidelity: ~99.5% (based on kitchen processing success)")
+print("\n📈 Fidelity: ~99.5% (based on kitchen processing success)")
 print("=" * 70)
 
-print(f"\n✨ Success Criteria:")
+print("\n✨ Success Criteria:")
 print(f"  {'✅' if abs(brightness_change) < 0.5 else '⚠️ '} Brightness preserved (<0.5%)")
 print(f"  {'✅' if 8 <= sat_change <= 12 else '⚠️ '} Saturation enhanced (8-12%)")
 print(f"  {'✅' if 6 <= contrast_change <= 10 else '⚠️ '} Contrast improved (6-10%)")
 
-print(f"\n🎨 Visual Check:")
+print("\n🎨 Visual Check:")
 print(f"  1. Open {output_png.name} at 100% zoom")
-print(f"  2. Compare to original for brightness match")
-print(f"  3. Check fireplace warmth (should be natural)")
-print(f"  4. Verify window light balance (not blown out)")
-print(f"  5. Inspect wood beam texture (enhanced but natural)")
-print(f"  6. Check floor detail visibility")
-print(f"  7. Verify stone fireplace texture")
-print(f"  8. Ensure no artifacts in ceiling/shadows")
+print("  2. Compare to original for brightness match")
+print("  3. Check fireplace warmth (should be natural)")
+print("  4. Verify window light balance (not blown out)")
+print("  5. Inspect wood beam texture (enhanced but natural)")
+print("  6. Check floor detail visibility")
+print("  7. Verify stone fireplace texture")
+print("  8. Ensure no artifacts in ceiling/shadows")
 
-print(f"\n📍 Great Room Specific Features:")
-print(f"  • High contrast processing for dramatic lighting")
-print(f"  • Shadow recovery to maintain detail range")
-print(f"  • Stronger sharpening (30%) for larger space scale")
-print(f"  • Warm tone preservation for inviting atmosphere")
-print(f"  • Enhanced saturation (+10%) for rich ambiance")
+print("\n📍 Great Room Specific Features:")
+print("  • High contrast processing for dramatic lighting")
+print("  • Shadow recovery to maintain detail range")
+print("  • Stronger sharpening (30%) for larger space scale")
+print("  • Warm tone preservation for inviting atmosphere")
+print("  • Enhanced saturation (+10%) for rich ambiance")
 
-print(f"\n📍 Next Steps:")
-print(f"  • Review output for client approval")
-print(f"  • Compare side-by-side with original")
-print(f"  • Verify fireplace warmth appears natural")
-print(f"  • Check shadow detail in corners")
-print(f"  • Adjust if needed (contrast ±2%, saturation ±2%)")
+print("\n📍 Next Steps:")
+print("  • Review output for client approval")
+print("  • Compare side-by-side with original")
+print("  • Verify fireplace warmth appears natural")
+print("  • Check shadow detail in corners")
+print("  • Adjust if needed (contrast ±2%, saturation ±2%)")
 
 print("\n" + "=" * 70)

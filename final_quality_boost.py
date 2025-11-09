@@ -308,13 +308,13 @@ class UltraQualityBooster:
 
         # Step 4: Optional color temperature shift
         if profile.color_temp_shift:
-            print(f"[4/4] Applying color temperature shift...")
+            print("[4/4] Applying color temperature shift...")
             processed = self._apply_color_temperature_shift(
                 processed,
                 profile.color_temp_shift
             )
         else:
-            print(f"[4/4] Skipping color temperature shift")
+            print("[4/4] Skipping color temperature shift")
 
         # Measure enhanced quality
         enhanced_metrics = self._measure_quality(processed)
@@ -332,7 +332,7 @@ class UltraQualityBooster:
         print(f"\n✓ Quality Improvement: {improvement:+.2f} points")
 
         # Convert to 16-bit for maximum quality preservation
-        print(f"\nConverting to 16-bit TIFF...")
+        print("\nConverting to 16-bit TIFF...")
         processed_16bit = (processed.astype(np.float32) / 255.0 * 65535.0).astype(np.uint16)
 
         # Save as 16-bit TIFF using tifffile for proper 16-bit RGB support
@@ -389,15 +389,15 @@ class UltraQualityBooster:
     ) -> Dict:
         """Batch process all images"""
         print(f"\n{'#'*70}")
-        print(f"# 750 Picacho Lane - Ultra-Quality Finishing Pass")
-        print(f"# Target: 90.7/100 → 95+/100")
+        print("# 750 Picacho Lane - Ultra-Quality Finishing Pass")
+        print("# Target: 90.7/100 → 95+/100")
         print(f"{'#'*70}")
 
         # Create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Find all master TIFF files
-        tiff_files = sorted(input_dir.glob("*_Master.tif"))
+        tiff_files = sorted(input_dir.glob("*_Master.ti"))
 
         if not tiff_files:
             raise FileNotFoundError(f"No *_Master.tif files found in {input_dir}")
@@ -416,7 +416,7 @@ class UltraQualityBooster:
             profile = self.ROOM_PROFILES[room_name]
 
             # Generate output filename
-            output_filename = tiff_file.stem.replace('_Master', '_UltraQuality') + '.tif'
+            output_filename = tiff_file.stem.replace('_Master', '_UltraQuality') + '.ti'
             output_path = output_dir / output_filename
 
             # Process
@@ -431,7 +431,7 @@ class UltraQualityBooster:
         avg_improvement = avg_enhanced - avg_baseline
 
         print(f"\n{'='*70}")
-        print(f"BATCH PROCESSING COMPLETE")
+        print("BATCH PROCESSING COMPLETE")
         print(f"{'='*70}")
         print(f"Processed: {len(results)} images in {total_time:.2f}s")
         print(f"Average baseline: {avg_baseline:.2f}/100")
@@ -498,12 +498,12 @@ def main():
 
     # Success
     if report['processing_summary']['target_achieved']:
-        print(f"\n🎉 SUCCESS: Quality target achieved!")
+        print("\n🎉 SUCCESS: Quality target achieved!")
         sys.exit(0)
     else:
-        print(f"\n⚠️  WARNING: Quality target not fully achieved")
+        print("\n⚠️  WARNING: Quality target not fully achieved")
         print(f"   Achieved: {report['processing_summary']['enhanced_avg_score']:.2f}/100")
-        print(f"   Target: 95.0/100")
+        print("   Target: 95.0/100")
         sys.exit(0)  # Still exit 0 as processing completed
 
 

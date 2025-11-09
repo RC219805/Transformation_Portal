@@ -52,7 +52,7 @@ class ContextAwareProPipeline:
 
         self.context_pipeline = ContextAwareRenderingPipeline(context_dir)
 
-        logger.info(f"Context-Aware Pro Pipeline initialized")
+        logger.info("Context-Aware Pro Pipeline initialized")
         logger.info(f"  Output: {self.output_dir}")
         logger.info(f"  Context cache: {context_dir}")
 
@@ -94,7 +94,7 @@ class ContextAwareProPipeline:
 
         # 2. Generate context-enhanced prompt
         enhanced_prompt = context.to_enhanced_prompt(base_prompt)
-        logger.info(f"\n[2/5] Enhanced AI prompt generated")
+        logger.info("\n[2/5] Enhanced AI prompt generated")
         logger.info(f"  Base: {base_prompt}")
         logger.info(f"  Enhanced: {enhanced_prompt}")
 
@@ -102,35 +102,35 @@ class ContextAwareProPipeline:
 
         # 3. Depth-aware processing (if enabled)
         if enable_depth:
-            logger.info(f"\n[3/5] Depth-aware processing...")
+            logger.info("\n[3/5] Depth-aware processing...")
             depth_output = self._process_depth_stage(
                 image_path, context, enhanced_prompt
             )
             outputs['depth'] = depth_output
         else:
-            logger.info(f"\n[3/5] Depth processing: SKIPPED")
+            logger.info("\n[3/5] Depth processing: SKIPPED")
             outputs['depth'] = image_path
 
         # 4. Material response (if enabled)
         if enable_material_response:
-            logger.info(f"\n[4/5] Material response processing...")
+            logger.info("\n[4/5] Material response processing...")
             material_output = self._process_material_stage(
                 outputs['depth'], context, enhanced_prompt
             )
             outputs['material'] = material_output
         else:
-            logger.info(f"\n[4/5] Material response: SKIPPED")
+            logger.info("\n[4/5] Material response: SKIPPED")
             outputs['material'] = outputs['depth']
 
         # 5. AI enhancement (if enabled)
         if enable_ai_enhancement:
-            logger.info(f"\n[5/5] AI enhancement...")
+            logger.info("\n[5/5] AI enhancement...")
             ai_output = self._process_ai_stage(
                 outputs['material'], context, enhanced_prompt, upscale_4x
             )
             outputs['ai_enhanced'] = ai_output
         else:
-            logger.info(f"\n[5/5] AI enhancement: SKIPPED")
+            logger.info("\n[5/5] AI enhancement: SKIPPED")
             outputs['ai_enhanced'] = outputs['material']
 
         # Save final context summary
@@ -183,7 +183,7 @@ class ContextAwareProPipeline:
 
         except Exception as e:
             logger.warning(f"  ⚠ Depth processing failed: {e}")
-            logger.info(f"  Continuing with original image...")
+            logger.info("  Continuing with original image...")
             return image_path
 
     def _process_material_stage(self,
@@ -246,7 +246,7 @@ class ContextAwareProPipeline:
 
         except Exception as e:
             logger.warning(f"  ⚠ Material processing failed: {e}")
-            logger.info(f"  Continuing with depth-processed image...")
+            logger.info("  Continuing with depth-processed image...")
             return image_path
 
     def _process_ai_stage(self,
@@ -279,7 +279,7 @@ class ContextAwareProPipeline:
 
         except Exception as e:
             logger.warning(f"  ⚠ AI enhancement failed: {e}")
-            logger.info(f"  Continuing with material-processed image...")
+            logger.info("  Continuing with material-processed image...")
             return image_path
 
     def _save_processing_summary(self,
@@ -355,7 +355,7 @@ def main():
     )
 
     parser.add_argument(
-        "--pdf",
+        "--pd",
         type=Path,
         action="append",
         help="Architectural PDF document(s) for context extraction (can specify multiple)"

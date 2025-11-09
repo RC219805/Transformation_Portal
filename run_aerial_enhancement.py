@@ -4,7 +4,7 @@ from pathlib import Path
 from board_material_aerial_enhancer import enhance_aerial
 
 # Input: Aerial TIFF from input_images
-input_path = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tiff")
+input_path = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tif")
 output_path = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picacho_Aerial_MBAR_Enhanced.jpg")
 
 print(f"Processing: {input_path.name}")

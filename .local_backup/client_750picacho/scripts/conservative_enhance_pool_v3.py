@@ -46,7 +46,7 @@ print("=" * 80)
 # CONFIGURATION - V3 CORRECTED PARAMETERS
 # ============================================================================
 
-INPUT = "input_images/750Picacho_Pool.tif"
+INPUT = "input_images/750Picacho_Pool.ti"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -64,7 +64,7 @@ def main():
     print("Loaded model:", os.path.basename(MODEL_PATH))
 
     # Gather input files
-    exts = (".tif", ".tiff", ".jpg", ".jpeg", ".png", ".webp",
+    exts = (".ti", ".tif", ".jpg", ".jpeg", ".png", ".webp",
             ".TIF", ".TIFF", ".JPG", ".JPEG", ".PNG", ".WEBP")
     paths = sorted([p for p in glob.glob(os.path.join(IN_DIR, "*")) if p.endswith(exts)])
     if not paths:

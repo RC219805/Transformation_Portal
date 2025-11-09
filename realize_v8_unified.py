@@ -109,7 +109,7 @@ def _save_with_meta(
             if arr_uint.ndim == 3 and arr_uint.shape[2] == 3:
                 # 16-bit RGB - requires tifffile for TIFF
                 ext = path.suffix.lower()
-                if ext in ['.tif', '.tiff']:
+                if ext in ['.ti', '.tiff']:
                     if HAS_TIFFFILE:
                         try:
                             # Preserve metadata if present

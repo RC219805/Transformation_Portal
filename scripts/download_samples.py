@@ -99,7 +99,7 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
         "category": "full",
         "url": None,  # TODO: Upload to GitHub Release
         "size": "25MB",
-        "path": "data/sample_images/sample_render_4k.tiff",
+        "path": "data/sample_images/sample_render_4k.tif",
         "sha256": None,
         "description": "4K architectural render (16-bit TIFF)",
     },

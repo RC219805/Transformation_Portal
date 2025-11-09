@@ -63,7 +63,7 @@ def validate_single_file(filepath: Path) -> None:
 
     if info['is_image']:
         print("Image", end='')
-        if info['is_tiff']:
+        if info['is_tif']:
             print(" (TIFF)", end='')
         if info['is_luxury']:
             print(" [LUXURY GRADE]", end='')
@@ -90,7 +90,7 @@ def validate_single_file(filepath: Path) -> None:
 
     # Suggest appropriate pipeline
     print("\n🔧 Recommended Pipeline:")
-    if info['is_tiff']:
+    if info['is_tif']:
         print("   → Luxury TIFF Batch Processor")
         print("     python luxury_tiff_batch_processor.py input/ output/ --preset signature")
     elif info['is_image']:
@@ -209,7 +209,7 @@ def show_format_summary() -> None:
         print(f"   • {ext}", end='')
         if ext in summary['luxury']:
             print(" [LUXURY GRADE]", end='')
-        if ext in summary['tiff']:
+        if ext in summary['tif']:
             print(" [16-BIT CAPABLE]", end='')
         print()
 

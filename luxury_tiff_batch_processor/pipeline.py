@@ -103,7 +103,7 @@ def collect_images(folder: Path, recursive: bool) -> Iterator[Path]:
     Yields:
         Path objects for each TIFF file found.
     """
-    patterns: List[str] = ["*.tif", "*.tiff", "*.TIF", "*.TIFF"]
+    patterns: List[str] = ["*.ti", "*.tif", "*.TIF", "*.TIFF"]
     if recursive:
         for pattern in patterns:
             yield from folder.rglob(pattern)

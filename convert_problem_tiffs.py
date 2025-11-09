@@ -108,7 +108,7 @@ def convert_file(p: Path):
 
 def main(root):
     root = Path(root)
-    tifs = list(root.rglob("*.tif")) + list(root.rglob("*.tiff"))
+    tifs = list(root.rglob("*.ti")) + list(root.rglob("*.tif"))
     if not tifs:
         print("No TIFF files found under", root)
         return

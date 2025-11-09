@@ -105,7 +105,7 @@ def process_view(
 
     # Apply luxury grading if requested
     if apply_grade:
-        print(f"  Applying luxury color grade...")
+        print("  Applying luxury color grade...")
         rgb_16bit = apply_luxury_grade_16bit(rgb_16bit)
 
     # Save as 16-bit TIFF with proper metadata
@@ -133,13 +133,13 @@ def process_view(
               f"range=[{verify_arr.min()}, {verify_arr.max()}], shape={verify_arr.shape}")
 
         if verify_arr.dtype == np.uint16 and verify_arr.max() > 255:
-            print(f"  ✅ Successfully saved as 16-bit TIFF")
+            print("  ✅ Successfully saved as 16-bit TIFF")
         else:
             print(f"  ⚠️  Warning: Unexpected format: {verify_arr.dtype}")
 
     except ImportError:
-        print(f"  ❌ tifffile not available")
-        print(f"     Install with: pip install tifffile imagecodecs")
+        print("  ❌ tifffile not available")
+        print("     Install with: pip install tifffile imagecodecs")
         raise
 
     return output_path
@@ -171,7 +171,7 @@ def process_all(
             import traceback
             traceback.print_exc()
 
-    print(f"\n✅ Processing complete!")
+    print("\n✅ Processing complete!")
     print(f"   Output directory: {output_dir}")
 
 

@@ -141,7 +141,7 @@ def print_analysis(results: Dict):
     print(f"PIL Range: {results.get('pil_range', 'unknown')}")
 
     if 'tiff_dtype' in results:
-        print(f"\nTIFF Details:")
+        print("\nTIFF Details:")
         print(f"  dtype: {results['tiff_dtype']}")
         print(f"  Bits per sample: {results.get('bits_per_sample', 'unknown')}")
         print(f"  Compression: {results.get('compression', 'unknown')}")
@@ -153,12 +153,12 @@ def print_analysis(results: Dict):
 
     # Print issues
     if results['issues']:
-        print(f"\n❌ ISSUES FOUND:")
+        print("\n❌ ISSUES FOUND:")
         for issue in results['issues']:
             print(f"  • {issue}")
 
     if results['warnings']:
-        print(f"\n⚠️  WARNINGS:")
+        print("\n⚠️  WARNINGS:")
         for warning in results['warnings']:
             print(f"  • {warning}")
 
@@ -174,7 +174,7 @@ def print_analysis(results: Dict):
 
 def scan_directory(directory: Path) -> List[Dict]:
     """Scan directory for TIFF files and analyze them."""
-    tiff_files = list(directory.glob("**/*.tiff")) + list(directory.glob("**/*.tif"))
+    tiff_files = list(directory.glob("**/*.tif")) + list(directory.glob("**/*.ti"))
 
     print(f"Found {len(tiff_files)} TIFF files in {directory}")
 
@@ -190,7 +190,7 @@ def scan_directory(directory: Path) -> List[Dict]:
 def print_summary(all_results: List[Dict]):
     """Print summary of all analyzed files."""
     print(f"\n{'='*80}")
-    print(f"SUMMARY")
+    print("SUMMARY")
     print(f"{'='*80}")
 
     total = len(all_results)
@@ -205,7 +205,7 @@ def print_summary(all_results: List[Dict]):
 
     # List degraded files
     if degraded > 0:
-        print(f"\nDegraded files:")
+        print("\nDegraded files:")
         for r in all_results:
             if r['status'] == 'DEGRADED':
                 print(f"  • {Path(r['path']).name}")
@@ -217,7 +217,7 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python diagnose_tiff_quality.py <tiff_file_or_directory>")
         print("\nExamples:")
-        print("  python diagnose_tiff_quality.py output/kitchen_MASTER.tiff")
+        print("  python diagnose_tiff_quality.py output/kitchen_MASTER.tif")
         print("  python diagnose_tiff_quality.py output_premium_fixed/")
         sys.exit(1)
 

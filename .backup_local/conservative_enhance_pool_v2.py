@@ -38,7 +38,7 @@ print("=" * 80)
 # CONFIGURATION - CORRECTED PARAMETERS
 # ============================================================================
 
-INPUT = "input_images/750Picacho_Pool.tiff"
+INPUT = "input_images/750Picacho_Pool.tif"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -90,7 +90,7 @@ if TIFFFILE_AVAILABLE:
         # Drop alpha channel if present
         if rgb_linear.shape[2] == 4:
             rgb_linear = rgb_linear[:, :, :3]
-            print(f"  ✓ Dropped alpha channel")
+            print("  ✓ Dropped alpha channel")
 
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
@@ -112,13 +112,13 @@ print(f"\n[2/9] Converting linear to sRGB (gamma {GAMMA_CORRECTION})...")
 
 rgb = np.power(np.clip(rgb_linear, 0, 1), 1/GAMMA_CORRECTION)
 
-print(f"  ✓ Gamma corrected")
+print("  ✓ Gamma corrected")
 print(f"  ✓ Luminance after gamma: {rgb.mean():.3f}")
 
 # ============================================================================
 # STEP 3: EXPOSURE LIFT (CORRECTED - more conservative)
 # ============================================================================
-print(f"\n[3/9] Lifting exposure...")
+print("\n[3/9] Lifting exposure...")
 
 # Calculate luminance for highlight protection
 luminance = 0.2126 * rgb[:,:,0] + 0.7152 * rgb[:,:,1] + 0.0722 * rgb[:,:,2]
@@ -146,7 +146,7 @@ print(f"  ✓ Highlights protected: {highlight_pixels:,} pixels ({highlight_perc
 # ============================================================================
 # STEP 4: SHADOW RECOVERY (CORRECTED - more subtle)
 # ============================================================================
-print(f"\n[4/9] Recovering shadow detail...")
+print("\n[4/9] Recovering shadow detail...")
 
 # Calculate luminance
 luminance = 0.2126 * rgb_exposed[:,:,0] + 0.7152 * rgb_exposed[:,:,1] + 0.0722 * rgb_exposed[:,:,2]
@@ -171,7 +171,7 @@ print(f"  ✓ Shadow lift: +{SHADOW_LIFT_STOPS:.2f} stops (reduced for depth pre
 # ============================================================================
 # STEP 5: CONTRAST ENHANCEMENT (CORRECTED - more subtle)
 # ============================================================================
-print(f"\n[5/9] Enhancing contrast...")
+print("\n[5/9] Enhancing contrast...")
 
 # Apply midtone contrast
 midpoint = 0.5
@@ -183,7 +183,7 @@ print(f"  ✓ Midtone contrast: {MIDTONE_CONTRAST:.2f}×")
 # ============================================================================
 # STEP 6: POOL WATER COLOR CORRECTION (CORRECTED - more subtle)
 # ============================================================================
-print(f"\n[6/9] Correcting pool water color...")
+print("\n[6/9] Correcting pool water color...")
 
 # Detect pool water (blue-dominant pixels)
 r, g, b = rgb_contrast[:,:,0], rgb_contrast[:,:,1], rgb_contrast[:,:,2]
@@ -212,7 +212,7 @@ print(f"  ✓ Color shift (70% strength): R {WATER_RED_ADJUSTMENT:.2f}×, G {WAT
 # ============================================================================
 # STEP 7: SATURATION BOOST (CORRECTED - more subtle)
 # ============================================================================
-print(f"\n[7/9] Adjusting saturation...")
+print("\n[7/9] Adjusting saturation...")
 
 # Convert to HSV for saturation adjustment
 rgb_uint8 = (rgb_corrected * 255).astype(np.uint8)
@@ -249,7 +249,7 @@ print(f"  ✓ Vegetation boost: {VEGETATION_SAT_BOOST:.2f}× @ 60% strength (red
 # ============================================================================
 # STEP 8: CLARITY ENHANCEMENT (CORRECTED - minimal)
 # ============================================================================
-print(f"\n[8/9] Applying clarity enhancement...")
+print("\n[8/9] Applying clarity enhancement...")
 
 # High-pass filter for clarity
 blurred = gaussian_filter(rgb_sat, sigma=CLARITY_RADIUS / 3.0)  # Softer blur
@@ -260,18 +260,18 @@ rgb_clarity = rgb_sat + high_pass * CLARITY_STRENGTH
 rgb_clarity = np.clip(rgb_clarity, 0, 1)
 
 print(f"  ✓ Clarity: {CLARITY_STRENGTH:.2f} @ radius {CLARITY_RADIUS}px (minimal)")
-print(f"  ⚠️  Reduced to prevent halos")
+print("  ⚠️  Reduced to prevent halos")
 
 # ============================================================================
 # STEP 9: SAVE OUTPUT
 # ============================================================================
-print(f"\n[9/9] Saving enhanced image...")
+print("\n[9/9] Saving enhanced image...")
 
 # Convert to 16-bit
 rgb_16bit = (rgb_clarity * 65535).astype(np.uint16)
 
 # Save with tifffile if available
-output_path = OUTPUT_DIR / "750Picacho_Pool_Enhanced_v2.tif"
+output_path = OUTPUT_DIR / "750Picacho_Pool_Enhanced_v2.ti"
 
 if TIFFFILE_AVAILABLE:
     tifffile.imwrite(output_path, rgb_16bit, compression='lzw')
@@ -295,13 +295,13 @@ print(f"Saturation:      {GLOBAL_SATURATION:.2f}× (reduced)")
 print(f"Clarity:         {CLARITY_STRENGTH:.2f} (minimal)")
 print(f"\nWater corrected: {water_percentage:.1f}% of frame @ 70% strength")
 print(f"Vegetation boost: {vegetation_percentage:.1f}% of frame @ 60% strength")
-print(f"\n🔧 CORRECTIONS FROM V1:")
-print(f"   • Exposure reduced: 0.25 → 0.15 EV")
-print(f"   • Shadow lift reduced: 0.35 → 0.25 stops")
-print(f"   • Saturation reduced: 1.06 → 1.03")
-print(f"   • Clarity reduced: 0.12 → 0.08")
-print(f"   • Water correction at 70% strength (was 100%)")
-print(f"   • Vegetation boost at 60% strength (was 100%)")
+print("\n🔧 CORRECTIONS FROM V1:")
+print("   • Exposure reduced: 0.25 → 0.15 EV")
+print("   • Shadow lift reduced: 0.35 → 0.25 stops")
+print("   • Saturation reduced: 1.06 → 1.03")
+print("   • Clarity reduced: 0.12 → 0.08")
+print("   • Water correction at 70% strength (was 100%)")
+print("   • Vegetation boost at 60% strength (was 100%)")
 print("=" * 80)
 print("✓ ENHANCEMENT COMPLETE - MORE CONSERVATIVE APPROACH")
 print("=" * 80)

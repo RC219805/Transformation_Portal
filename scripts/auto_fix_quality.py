@@ -323,7 +323,7 @@ def main():
     if total_fixed > 0:
         fixer.log(f"✓ Fixed {total_fixed} issues in {len(fixer.fixed_files)} files", 'success')
         if not args.dry_run:
-            fixer.log("\n💡 Run 'git diff' to review changes", 'info')
+            fixer.log("\n💡 Run 'git dif' to review changes", 'info')
     else:
         fixer.log("✓ No issues found!", 'success')
 

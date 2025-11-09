@@ -78,7 +78,7 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
             metadata = {'source_format': 'exr', 'color_space': 'unknown'}
             return img_array, metadata
 
-    elif ext in ['.tif', '.tiff']:
+    elif ext in ['.ti', '.tiff']:
         # Use tifffile for proper 16-bit loading
         img_array = tifffile.imread(input_path)
 
@@ -89,7 +89,7 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
         else:
             img_array = img_array.astype(np.float32)
 
-        metadata = {'source_format': 'tiff', 'color_space': 'srgb'}
+        metadata = {'source_format': 'tif', 'color_space': 'srgb'}
         print(f"✓ Loaded TIFF: {img_array.shape}, dtype was {tifffile.imread(input_path).dtype}")
 
         return img_array, metadata
@@ -177,7 +177,7 @@ def process_single_view(
 
     if save_tiff:
         # 16-bit TIFF using standardized method from fix_tiff_16bit.py
-        tiff_path = output_dir / f"{scene_name}_luxury.tif"
+        tiff_path = output_dir / f"{scene_name}_luxury.ti"
 
         # Convert to 16-bit
         img_16bit = (np.clip(enhanced, 0, 1) * 65535).astype(np.uint16)
@@ -228,8 +228,8 @@ def main():
         return 1
 
     print(f"\n{'#'*80}")
-    print(f"  750 PICACHO LANE - UNIFIED LUXURY PIPELINE")
-    print(f"  Maximum Quality Processing")
+    print("  750 PICACHO LANE - UNIFIED LUXURY PIPELINE")
+    print("  Maximum Quality Processing")
     print(f"{'#'*80}\n")
     print(f"Source: {source_dir}")
     print(f"Output: {output_dir}")
@@ -255,7 +255,7 @@ def main():
 
     # Summary
     print(f"\n{'#'*80}")
-    print(f"  PROCESSING COMPLETE")
+    print("  PROCESSING COMPLETE")
     print(f"{'#'*80}\n")
     print(f"Total files processed: {len(exr_files)}")
     print(f"Total outputs created: {len(all_outputs)}")
@@ -263,7 +263,7 @@ def main():
 
     # Verify TIFFs
     print("\nVerifying TIFF quality...")
-    tiff_outputs = [f for f in all_outputs if f.suffix.lower() in ['.tif', '.tiff']]
+    tiff_outputs = [f for f in all_outputs if f.suffix.lower() in ['.ti', '.tiff']]
     if tiff_outputs:
         sample_tiff = tiff_outputs[0]
         img_verify = tifffile.imread(sample_tiff)
@@ -273,9 +273,9 @@ def main():
         print(f"  - Range: [{img_verify.min()}, {img_verify.max()}]")
 
         if img_verify.dtype == np.uint16 and img_verify.max() > 256:
-            print(f"\n✅ CONFIRMED: TIFFs are properly 16-bit with full range\n")
+            print("\n✅ CONFIRMED: TIFFs are properly 16-bit with full range\n")
         else:
-            print(f"\n⚠️  WARNING: Check TIFF bit depth\n")
+            print("\n⚠️  WARNING: Check TIFF bit depth\n")
 
     return 0
 

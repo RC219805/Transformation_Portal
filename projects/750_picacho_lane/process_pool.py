@@ -163,7 +163,7 @@ def save_outputs(img: np.ndarray, output_dir: Path, base_name: str):
     img_pil = Image.fromarray(img_uint16, mode='RGB')
 
     # Save 16-bit TIFF
-    tiff_path = output_dir / f"{base_name}_Master.tif"
+    tiff_path = output_dir / f"{base_name}_Master.ti"
     img_pil.save(tiff_path, compression='lzw')
     print(f"  ✅ Master TIFF (16-bit): {tiff_path.name} ({tiff_path.stat().st_size / 1024 / 1024:.1f} MB)")
 

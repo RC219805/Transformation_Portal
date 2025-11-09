@@ -50,7 +50,7 @@ def load_16bit_tiff(path: Union[str, Path]) -> Tuple[np.ndarray, dict]:
             return image_float, metadata
 
     except ImportError:
-        print(f"  ⚠️  tifffile not available, using PIL (will lose 16-bit depth)")
+        print("  ⚠️  tifffile not available, using PIL (will lose 16-bit depth)")
 
         # PIL fallback - this will convert to 8-bit!
         pil_img = Image.open(str(path))
@@ -65,7 +65,7 @@ def load_16bit_tiff(path: Union[str, Path]) -> Tuple[np.ndarray, dict]:
 
         image_float = image.astype(np.float32) / 255.0
         print(f"  Loaded 8-bit (from PIL): {path.name}")
-        print(f"  ⚠️  Install tifffile for 16-bit: pip install tifffile")
+        print("  ⚠️  Install tifffile for 16-bit: pip install tifffile")
 
         return image_float, metadata
 
@@ -89,7 +89,7 @@ def convert_8bit_to_16bit_tiff(input_path: Union[str, Path], output_path: Union[
     save_16bit_tiff(image, output_path)
 
     print(f"✓ Converted to: {output_path}")
-    print(f"  Note: If source was 8-bit, no data recovery possible")
+    print("  Note: If source was 8-bit, no data recovery possible")
 
 
 def verify_and_fix_directory(input_dir: Union[str, Path], output_dir: Union[str, Path] = None):
@@ -102,7 +102,7 @@ def verify_and_fix_directory(input_dir: Union[str, Path], output_dir: Union[str,
     output_dir = Path(output_dir) if output_dir else input_dir / "fixed_16bit"
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    tiff_files = list(input_dir.glob("*.tif")) + list(input_dir.glob("*.tiff"))
+    tiff_files = list(input_dir.glob("*.ti")) + list(input_dir.glob("*.tif"))
 
     print(f"\nVerifying {len(tiff_files)} TIFF files in {input_dir}")
     print("=" * 80)
@@ -139,7 +139,7 @@ if __name__ == "__main__":
             verify_and_fix_directory(input_path, output_dir)
         elif input_path.exists():
             # Single file mode
-            output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else input_path.parent / f"{input_path.stem}_16bit.tif"
+            output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else input_path.parent / f"{input_path.stem}_16bit.ti"
             convert_8bit_to_16bit_tiff(input_path, output_path)
         else:
             print(f"Path not found: {input_path}")

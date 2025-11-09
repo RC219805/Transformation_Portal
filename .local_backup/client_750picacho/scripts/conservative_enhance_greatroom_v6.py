@@ -32,7 +32,7 @@ print("CONSERVATIVE ENHANCEMENT v6 - 750 PICACHO GREAT ROOM")
 print("Precision sky correction + protected interior preservation")
 print("=" * 80)
 
-INPUT = "input_images/750Picacho_GreatRoom.tif"  # Using original TIFF
+INPUT = "input_images/750Picacho_GreatRoom.ti"  # Using original TIFF
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -214,7 +214,7 @@ print(f"  ✓ Sharpness: +{GLOBAL_SHARPNESS:.0%}")
 # ============================================================================
 print("\n[8/9] Saving output...")
 
-output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v6.tif"
+output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v6.ti"
 
 # Save as 16-bit TIFF to preserve quality
 final_array = np.array(sharpened, dtype=np.uint8)

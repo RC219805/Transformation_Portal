@@ -373,7 +373,7 @@ class TestResponseSchema:
             files=[
                 FileModification(
                     path="test.py",
-                    patch="diff",
+                    patch="dif",
                     description="Test change"
                 )
             ],

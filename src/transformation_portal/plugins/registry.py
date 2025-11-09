@@ -67,14 +67,14 @@ class PluginRegistry:
             if plugin_name in self._plugins[plugin_type] and not replace_existing:
                 raise ValueError(
                     f"Plugin '{plugin_name}' already registered in category '{plugin_type}'. "
-                    f"Use replace_existing=True to override."
+                    "Use replace_existing=True to override."
                 )
 
             # Validate plugin
             if not plugin.validate():
                 warnings.warn(
                     f"Plugin '{plugin_name}' validation returned False. "
-                    f"Plugin may not be properly initialized."
+                    "Plugin may not be properly initialized."
                 )
 
             self._plugins[plugin_type][plugin_name] = plugin

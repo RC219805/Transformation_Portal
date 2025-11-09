@@ -97,11 +97,11 @@ def main() -> None:
     if not root.exists():
         raise SystemExit(
             f"Root path '{root}' does not exist. Please check the path for typos "
-            f"and verify that you have the necessary permissions.")
+            "and verify that you have the necessary permissions.")
     if not root.is_dir():
         raise SystemExit(
             f"Root path '{root}' exists but is not a directory. Please check that "
-            f"the path is correct and that you have the necessary permissions."
+            "the path is correct and that you have the necessary permissions."
         )
 
     write_manifest(root, destination)

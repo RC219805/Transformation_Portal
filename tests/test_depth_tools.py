@@ -151,7 +151,7 @@ class TestBatchProcessing:
             images_root=temp_dirs["images"],
             depths_root=temp_dirs["depths"],
             out_root=temp_dirs["output"],
-            mode="dof",
+            mode="do",
             workers=1,
             skip_missing=True,
         )
@@ -232,7 +232,7 @@ class TestExitCodes:
             depth.save(depth_path)
 
         argv = [
-            "dof",
+            "do",
             temp_dirs["images"],
             temp_dirs["depths"],
             temp_dirs["output"],

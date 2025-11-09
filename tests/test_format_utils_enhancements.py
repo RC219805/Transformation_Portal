@@ -62,7 +62,7 @@ def sample_png(temp_dir):
 def sample_tiff_8bit(temp_dir):
     """Create a sample 8-bit TIFF file."""
     img = Image.new('RGB', (100, 100), color='blue')
-    path = temp_dir / 'sample.tiff'
+    path = temp_dir / 'sample.tif'
     img.save(path)
     return path
 
@@ -75,7 +75,7 @@ def sample_tiff_16bit(temp_dir):
 
     import tifffile
     arr = np.random.randint(0, 65536, (100, 100, 3), dtype=np.uint16)
-    path = temp_dir / 'sample_16bit.tiff'
+    path = temp_dir / 'sample_16bit.tif'
     tifffile.imwrite(path, arr, compression='lzw')
     return path
 
@@ -231,7 +231,7 @@ class TestFormatConversion:
         img2 = Image.new('RGB', (50, 50), 'blue')
         img3 = Image.new('RGB', (50, 50), 'green')
 
-        img1.save(input_dir / 'img1.tiff')
+        img1.save(input_dir / 'img1.tif')
         img2.save(input_dir / 'img2.bmp')
         img3.save(input_dir / 'img3.png')
 
@@ -283,12 +283,12 @@ class TestFormatConversion:
     def test_get_optimal_format_print(self):
         """Test format recommendation for print."""
         format_ext = get_optimal_format_for_use_case('print')
-        assert format_ext == '.tiff'
+        assert format_ext == '.tif'
 
     def test_get_optimal_format_16bit(self):
         """Test format recommendation when 16-bit required."""
         format_ext = get_optimal_format_for_use_case('web', requires_16bit=True)
-        assert format_ext == '.tiff'
+        assert format_ext == '.tif'
 
 
 # ==============================================================================
@@ -307,7 +307,7 @@ class TestTIFFHandling:
     def test_save_tiff_16bit(self, temp_dir):
         """Test saving 16-bit TIFF."""
         arr = np.random.randint(0, 65536, (100, 100, 3), dtype=np.uint16)
-        output = temp_dir / 'output_16bit.tiff'
+        output = temp_dir / 'output_16bit.tif'
 
         result = save_tiff_16bit(arr, output, compression='lzw')
 
@@ -350,7 +350,7 @@ class TestTIFFHandling:
     @pytest.mark.skipif(not check_tifffile_available(), reason="tifffile not available")
     def test_convert_tiff_preserve_depth(self, sample_tiff_16bit, temp_dir):
         """Test converting TIFF while preserving 16-bit depth."""
-        output = temp_dir / 'converted_16bit.tiff'
+        output = temp_dir / 'converted_16bit.tif'
 
         result = convert_tiff_preserve_depth(sample_tiff_16bit, output)
 
@@ -378,11 +378,11 @@ class TestTIFFHandling:
         arr[:100, :, 0] = 255  # Red top half
         arr[100:, :, 2] = 255  # Blue bottom half
 
-        input_path = temp_dir / 'uncompressed.tiff'
+        input_path = temp_dir / 'uncompressed.tif'
         save_tiff_16bit(arr, input_path, compression='none')
 
         # Optimize with LZW compression
-        output_path = temp_dir / 'compressed.tiff'
+        output_path = temp_dir / 'compressed.tif'
         success, ratio = optimize_tiff_compression(input_path, output_path, 'lzw')
 
         assert success is True

@@ -87,7 +87,7 @@ def process_single_jpeg(input_path: Path, output_dir: Path, formats: list = ['jp
 
     # Save in requested formats
     if 'tiff' in formats:
-        tiff_path = output_dir / f"{base_name}_luxury.tif"
+        tiff_path = output_dir / f"{base_name}_luxury.ti"
         img_16bit = save_16bit_tiff_proper(img_enhanced, tiff_path)
         outputs['tiff'] = tiff_path
         print(f"✓ Saved 16-bit TIFF: {tiff_path.name}")
@@ -152,7 +152,7 @@ def main():
             missing.append(filename)
 
     if missing:
-        print(f"❌ Missing files:")
+        print("❌ Missing files:")
         for f in missing:
             print(f"   - {f}")
         return 1

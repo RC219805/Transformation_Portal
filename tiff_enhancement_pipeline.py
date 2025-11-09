@@ -76,7 +76,7 @@ class PipelineConfig:
     tone_curve: str = "agx"
     ocio_config: Optional[str] = None
     depth_model_path: Optional[str] = None  # Path to CoreML depth model (.mlpackage directory)
-    depth_effects: List[str] = None  # ["haze", "clarity", "dof"]
+    depth_effects: List[str] = None  # ["haze", "clarity", "do"]
     workers: int = 4
     device: str = "cpu"  # cpu/cuda/mps
 
@@ -442,7 +442,7 @@ class Stage5DepthEffects(StageExecutor):
                 str(self.config.stage2_depth),
                 str(self.config.stage5_final),
                 "--mask-root", str(self.config.stage4_masks),
-                "--fmt", "tiff" if self.config.out_bitdepth > 8 else "jpg",
+                "--fmt", "tif" if self.config.out_bitdepth > 8 else "jpg",
                 "--workers", str(self.config.workers)
             ]
 
@@ -458,7 +458,7 @@ class Stage5DepthEffects(StageExecutor):
                     "--amount", "0.15",
                     "--radius", "3"
                 ])
-            elif effect == "dof":
+            elif effect == "do":
                 cmd.extend([
                     "--focus", "35.0",
                     "--aperture", "0.25"
@@ -519,8 +519,8 @@ class Pipeline:
             return False
 
         # Check for TIFF files
-        tiff_files = (list(self.config.input_dir.glob("*.tif")) +
-                      list(self.config.input_dir.glob("*.tiff")) +
+        tiff_files = (list(self.config.input_dir.glob("*.ti")) +
+                      list(self.config.input_dir.glob("*.tif")) +
                       list(self.config.input_dir.glob("*.TIF")) +
                       list(self.config.input_dir.glob("*.TIFF")))
 
@@ -679,7 +679,7 @@ def build_parser() -> argparse.ArgumentParser:
                          "Stage 2 (depth prediction) will be skipped if not provided, and the "
                          "pipeline will proceed directly to Stage 3 (AgX tone mapping).")
     ap.add_argument("--depth-effects", nargs="+",
-                    choices=["haze", "clarity", "dof"],
+                    choices=["haze", "clarity", "do"],
                     default=["haze", "clarity"],
                     help="Depth-based effects to apply")
 

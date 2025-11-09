@@ -96,7 +96,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--format",
-        choices=["jpg", "png", "tiff"],
+        choices=["jpg", "png", "tif"],
         default="jpg",
         help="Output format",
     )
@@ -123,7 +123,7 @@ def process_single_image(
         print(f"❌ Error: Input file not found: {input_path}")
         return None
 
-    if not input_path.suffix.lower() in [".tiff", ".tif", ".jpg", ".jpeg", ".png"]:
+    if not input_path.suffix.lower() in [".tif", ".ti", ".jpg", ".jpeg", ".png"]:
         print(f"⚠️  Warning: Unexpected file format: {input_path.suffix}")
 
     # Create output directory
@@ -174,7 +174,7 @@ def process_batch(
         return []
 
     # Find all images
-    image_exts = {".tiff", ".tif", ".jpg", ".jpeg", ".png"}
+    image_exts = {".tif", ".ti", ".jpg", ".jpeg", ".png"}
     images = [f for f in input_dir.iterdir() if f.suffix.lower() in image_exts]
 
     if not images:
@@ -222,7 +222,7 @@ def main() -> None:
     # Single image mode
     # Use default paths if not specified (for backward compatibility)
     if not args.input:
-        args.input = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tiff")
+        args.input = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tif")
     if not args.output:
         args.output = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picacho_Aerial_MBAR_Enhanced.jpg")
 

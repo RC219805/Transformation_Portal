@@ -350,7 +350,7 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
     tone_map_peak = args.tone_map_peak
     tone_map_desat = args.tone_map_desat
 
-    if method == "off":
+    if method == "of":
         return ToneMapPlan(enabled=False, note="Tone mapping disabled by user preference.")
 
     video = extract_video_stream(probe)
@@ -562,7 +562,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     current = new_label
 
     tone_map = config.get("tone_map")
-    if tone_map and str(tone_map).lower() != "off":
+    if tone_map and str(tone_map).lower() != "of":
         tone_map_peak = config.get("tone_map_peak")
         pre_tonemap_args = ["transfer=linear"]
         if tone_map_peak is not None:
@@ -592,7 +592,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     denoise = config.get("denoise")
-    if denoise and denoise.lower() != "off":
+    if denoise and denoise.lower() != "of":
         expr = HQDN3D_PRESETS.get(denoise.lower())
         if not expr:
             raise ValueError(f"Unsupported denoise preset: {denoise}")
@@ -665,7 +665,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = blend_label
 
     sharpen = config.get("sharpen")
-    if sharpen and sharpen.lower() != "off":
+    if sharpen and sharpen.lower() != "of":
         expr = UNSHARP_PRESETS.get(sharpen.lower())
         if not expr:
             raise ValueError(f"Unsupported sharpen preset: {sharpen}")
@@ -680,7 +680,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     deband = config.get("deband")
-    if deband and str(deband).lower() != "off":
+    if deband and str(deband).lower() != "of":
         expr = DEBAND_PRESETS.get(str(deband).lower())
         if not expr:
             raise ValueError(f"Unsupported deband preset: {deband}")
@@ -865,18 +865,18 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--custom-lut", type=Path, help="Override the preset LUT with a custom .cube file.")
     parser.add_argument("--lut-strength", type=float, help="Blend the LUT with the original signal (0.0-1.0).")
-    parser.add_argument("--denoise", choices=list(HQDN3D_PRESETS) + ["off"], help="Override denoise strength.")
+    parser.add_argument("--denoise", choices=list(HQDN3D_PRESETS) + ["of"], help="Override denoise strength.")
     parser.add_argument("--contrast", type=float, help="Override contrast multiplier.")
     parser.add_argument("--saturation", type=float, help="Override saturation multiplier.")
     parser.add_argument("--gamma", type=float, help="Override gamma adjustment.")
     parser.add_argument("--brightness", type=float, help="Override brightness offset.")
     parser.add_argument("--warmth", type=float, help="Override warm mid-tone tint (red channel).")
     parser.add_argument("--cool", type=float, help="Override cool mid-tone tint (blue channel).")
-    parser.add_argument("--sharpen", choices=list(UNSHARP_PRESETS) + ["off"], help="Override clarity setting.")
+    parser.add_argument("--sharpen", choices=list(UNSHARP_PRESETS) + ["of"], help="Override clarity setting.")
     parser.add_argument("--grain", type=float, help="Override film-grain intensity.")
     parser.add_argument(
         "--tone-map",
-        choices=["auto", "off", "hable", "mobius", "reinhard", "bt2390"],
+        choices=["auto", "of", "hable", "mobius", "reinhard", "bt2390"],
         default="auto",
         help="Tone-mapping operator to apply (auto = detect HDR metadata).",
     )
@@ -894,8 +894,8 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--deband",
-        choices=list(DEBAND_PRESETS) + ["off"],
-        default="off",
+        choices=list(DEBAND_PRESETS) + ["of"],
+        default="of",
         help="Apply debanding (gradfun) smoothing after grain.",
     )
     parser.add_argument(

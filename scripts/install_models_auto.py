@@ -191,7 +191,7 @@ def check_depth_anything() -> bool:
     print("\n[1/4] Checking Depth Anything V2...")
     try:
         from transformers import AutoImageProcessor
-        AutoImageProcessor.from_pretrained("LiheYoung/depth-anything-small-hf")
+        AutoImageProcessor.from_pretrained("LiheYoung/depth-anything-small-h")
         print("  ✓ Depth Anything V2 ready")
         return True
     except Exception as e:

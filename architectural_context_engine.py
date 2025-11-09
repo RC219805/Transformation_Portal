@@ -235,7 +235,7 @@ class ArchitecturalContextExtractor:
     def extract_from_filename(self, filename: str) -> ArchitecturalContext:
         """Extract context from structured filename."""
         # Example: "Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright"
-        # Example: "250930_MBAR_SUBMITTAL_2.pdf"
+        # Example: "250930_MBAR_SUBMITTAL_2.pd"
 
         parts = Path(filename).stem.split('_')
 
@@ -462,8 +462,8 @@ def main():
 
     test_filenames = [
         "Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright.jpg",
-        "250930_MBAR_SUBMITTAL_2.pdf",
-        "Coastal_Estate_Greatroom_Twilight.tiff",
+        "250930_MBAR_SUBMITTAL_2.pd",
+        "Coastal_Estate_Greatroom_Twilight.tif",
     ]
 
     for filename in test_filenames:
@@ -496,7 +496,7 @@ def main():
     print("3. PDF DOCUMENT ANALYSIS")
     print("-" * 80)
 
-    pdf_path = Path("/Users/rc/24098.00_750 PICACHO LANE.pdf")
+    pdf_path = Path("/Users/rc/24098.00_750 PICACHO LANE.pd")
     if pdf_path.exists():
         pdf_context = extractor.extract_from_pdf(pdf_path)
         print(f"\nPDF: {pdf_path.name}")

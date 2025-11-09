@@ -132,7 +132,7 @@ def process_single_image(
     base_name = input_path.stem
 
     # 16-bit TIFF (master)
-    tiff_path = output_dir / f"{base_name}_master.tif"
+    tiff_path = output_dir / f"{base_name}_master.ti"
     save_16bit_tiff(img, tiff_path)
     stats['tiff'] = str(tiff_path)
 

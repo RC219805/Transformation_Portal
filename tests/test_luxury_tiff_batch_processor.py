@@ -124,10 +124,10 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
         image = Image.fromarray(arr, mode="RGB")
     info = TiffImagePlugin.ImageFileDirectory_v2()
     info[270] = "Luxury scene"
-    source_path = source_dir / "frame.tif"
+    source_path = source_dir / "frame.ti"
     image.save(source_path, tiffinfo=info)
 
-    dest_path = output_dir / "frame_processed.tif"
+    dest_path = output_dir / "frame_processed.ti"
 
     ltiff.process_single_image(
         source_path,
@@ -154,7 +154,7 @@ def test_process_single_image_profile_overrides_dtype_and_compression(
     output_dir.mkdir()
 
     image = Image.new("RGB", (4, 4), color=(32, 64, 96))
-    source_path = source_dir / "frame.tif"
+    source_path = source_dir / "frame.ti"
     image.save(source_path)
 
     original_float_to_dtype = pipeline.float_to_dtype_array
@@ -178,7 +178,7 @@ def test_process_single_image_profile_overrides_dtype_and_compression(
 
     for profile_name in ("quality", "balanced", "performance"):
         profile = ltiff.PROCESSING_PROFILES[profile_name]
-        dest_path = output_dir / f"{profile_name}.tif"
+        dest_path = output_dir / f"{profile_name}.ti"
         ltiff.process_single_image(
             source_path,
             dest_path,
@@ -202,10 +202,10 @@ def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: py
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         image = Image.fromarray(arr, mode="RGB")
-    source_path = source_dir / "frame.tif"
+    source_path = source_dir / "frame.ti"
     image.save(source_path)
 
-    dest_path = output_dir / "frame_processed.tif"
+    dest_path = output_dir / "frame_processed.ti"
     original_bytes = b"original-destination"
     dest_path.write_bytes(original_bytes)
 
@@ -240,7 +240,7 @@ def test_save_image_round_trip_la_mode_pillow(tmp_path: Path, monkeypatch: pytes
     alpha = np.flipud(luminance)
     arr = np.stack([luminance, alpha], axis=2)
 
-    destination = tmp_path / "la.tif"
+    destination = tmp_path / "la.ti"
     ltiff.save_image(destination, arr, arr.dtype, metadata=None, icc_profile=None, compression="tiff_lzw")
 
     with Image.open(destination) as image:
@@ -258,7 +258,7 @@ def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
     input_dir.mkdir()
 
     image = Image.new("RGB", (2, 2), color=(128, 128, 128))
-    source_path = input_dir / "sample.tif"
+    source_path = input_dir / "sample.ti"
     image.save(source_path)
 
     args = ltiff.parse_args(
@@ -272,7 +272,7 @@ def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
     processed = ltiff.run_pipeline(args)
 
     assert processed == 0
-    assert not any(output_dir.rglob("*.tif"))
+    assert not any(output_dir.rglob("*.ti"))
 
 
 def _create_sample_image(path: Path) -> None:
@@ -286,7 +286,7 @@ def test_run_pipeline_parallel_execution(tmp_path: Path):
     input_dir.mkdir()
 
     for index in range(3):
-        _create_sample_image(input_dir / f"frame_{index}.tif")
+        _create_sample_image(input_dir / f"frame_{index}.ti")
 
     args = ltiff.parse_args([
         str(input_dir),
@@ -297,9 +297,9 @@ def test_run_pipeline_parallel_execution(tmp_path: Path):
 
     processed = ltiff.run_pipeline(args)
 
-    outputs = sorted(p.name for p in output_dir.glob("*.tif"))
+    outputs = sorted(p.name for p in output_dir.glob("*.ti"))
     assert processed == 3
-    assert outputs == [f"frame_{i}_lux.tif" for i in range(3)]
+    assert outputs == [f"frame_{i}_lux.ti" for i in range(3)]
 
 
 def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -307,7 +307,7 @@ def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch: pyte
     output_dir = tmp_path / "output"
     input_dir.mkdir()
 
-    sample = input_dir / "frame.tif"
+    sample = input_dir / "frame.ti"
     _create_sample_image(sample)
 
     args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run"])
@@ -338,7 +338,7 @@ def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch: pytest.Monke
     output_dir = tmp_path / "output"
     input_dir.mkdir()
 
-    _create_sample_image(input_dir / "frame.tif")
+    _create_sample_image(input_dir / "frame.ti")
 
     args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run", "--no-progress"])
 
@@ -360,7 +360,7 @@ def test_run_pipeline_supports_legacy_resize_target(tmp_path: Path, monkeypatch:
     output_dir = tmp_path / "output"
     input_dir.mkdir()
 
-    sample = input_dir / "frame.tif"
+    sample = input_dir / "frame.ti"
     _create_sample_image(sample)
 
     args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run"])
@@ -386,23 +386,23 @@ def test_run_pipeline_supports_legacy_resize_target(tmp_path: Path, monkeypatch:
 @documents("Filesystem discovery respects operator scope selections")
 def test_collect_images_handles_recursive(tmp_path: Path):
     input_root = tmp_path
-    (input_root / "top.tif").write_bytes(b"top")
+    (input_root / "top.ti").write_bytes(b"top")
     (input_root / "upper.TIFF").write_bytes(b"upper")
     nested = input_root / "nested"
     nested.mkdir()
-    (nested / "inner.tiff").write_bytes(b"inner")
+    (nested / "inner.tif").write_bytes(b"inner")
     (nested / "ignore.jpg").write_bytes(b"jpg")
 
     non_recursive = sorted(p.relative_to(input_root) for p in ltiff.collect_images(input_root, recursive=False))
     assert non_recursive == [
-        Path("top.tif"),
+        Path("top.ti"),
         Path("upper.TIFF"),
     ]
 
     recursive = sorted(p.relative_to(input_root) for p in ltiff.collect_images(input_root, recursive=True))
     assert recursive == [
-        Path("nested/inner.tiff"),
-        Path("top.tif"),
+        Path("nested/inner.tif"),
+        Path("top.ti"),
         Path("upper.TIFF"),
     ]
 

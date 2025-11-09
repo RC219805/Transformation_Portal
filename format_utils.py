@@ -37,13 +37,13 @@ from typing import Dict, List, Union
 
 # Supported image extensions (case-insensitive)
 SUPPORTED_IMAGE_EXTENSIONS = {
-    '.png', '.jpg', '.jpeg', '.tif', '.tiff',
-    '.webp', '.bmp', '.gif', '.ico',
+    '.png', '.jpg', '.jpeg', '.ti', '.tif',
+    '.webp', '.bmp', '.gi', '.ico',
     '.ppm', '.pgm', '.pbm', '.tga'
 }
 
 # Primary formats for luxury processing
-LUXURY_IMAGE_EXTENSIONS = {'.tif', '.tiff', '.png'}
+LUXURY_IMAGE_EXTENSIONS = {'.ti', '.tif', '.png'}
 
 # Supported video extensions (case-insensitive)
 SUPPORTED_VIDEO_EXTENSIONS = {
@@ -51,7 +51,7 @@ SUPPORTED_VIDEO_EXTENSIONS = {
 }
 
 # TIFF-specific extensions
-TIFF_EXTENSIONS = {'.tif', '.tiff'}
+TIFF_EXTENSIONS = {'.ti', '.tiff'}
 
 
 class UnsupportedFormatError(ValueError):
@@ -66,13 +66,13 @@ def normalize_extension(path: Union[str, Path]) -> str:
         path: File path or extension string
 
     Returns:
-        Normalized extension (e.g., '.png', '.tiff')
+        Normalized extension (e.g., '.png', '.tif')
 
     Examples:
         >>> normalize_extension('image.PNG')
         '.png'
         >>> normalize_extension('.TIFF')
-        '.tiff'
+        '.tif'
         >>> normalize_extension('photo.JPG')
         '.jpg'
     """
@@ -101,7 +101,7 @@ def is_supported_image_format(path: Union[str, Path]) -> bool:
     Examples:
         >>> is_supported_image_format('render.jpg')
         True
-        >>> is_supported_image_format('document.pdf')
+        >>> is_supported_image_format('document.pd')
         False
         >>> is_supported_image_format('photo.TIFF')
         True
@@ -141,7 +141,7 @@ def is_supported_tiff_format(path: Union[str, Path]) -> bool:
         True if file is TIFF, False otherwise
 
     Examples:
-        >>> is_supported_tiff_format('photo.tif')
+        >>> is_supported_tiff_format('photo.ti')
         True
         >>> is_supported_tiff_format('photo.TIFF')
         True
@@ -162,7 +162,7 @@ def is_luxury_format(path: Union[str, Path]) -> bool:
         True if format is luxury-grade, False otherwise
 
     Examples:
-        >>> is_luxury_format('render.tiff')
+        >>> is_luxury_format('render.tif')
         True
         >>> is_luxury_format('photo.png')
         True
@@ -197,7 +197,7 @@ def validate_format(
         True
         >>> validate_format('tour.mp4', 'video')
         True
-        >>> validate_format('document.pdf', 'image', raise_error=False)
+        >>> validate_format('document.pd', 'image', raise_error=False)
         False
     """
     if allowed_types not in {'image', 'video', 'both'}:
@@ -224,7 +224,7 @@ def validate_format(
         raise UnsupportedFormatError(
             f"Unsupported file format '{ext}' for file: {path_obj.name}\n"
             f"Supported {allowed_types} formats: {supported_list}\n"
-            f"See SUPPORTED_FILE_FORMATS.md for details."
+            "See SUPPORTED_FILE_FORMATS.md for details."
         )
 
     return is_valid
@@ -246,7 +246,7 @@ def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[s
         - recommendations: List of processing recommendations
 
     Examples:
-        >>> info = get_format_info('render.tiff')
+        >>> info = get_format_info('render.tif')
         >>> info['is_luxury']
         True
         >>> info = get_format_info('video.mp4')
@@ -298,7 +298,7 @@ def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[s
         'extension': ext,
         'is_image': is_image,
         'is_video': is_video,
-        'is_tiff': is_tiff,
+        'is_tif': is_tiff,
         'is_luxury': is_luxury,
         'is_supported': is_image or is_video,
         'recommendations': recommendations
@@ -320,13 +320,13 @@ def suggest_output_format(
                          If False, suggest web-optimized formats (may be lossy).
 
     Returns:
-        Recommended output extension (e.g., '.tiff', '.png', '.jpg')
+        Recommended output extension (e.g., '.tif', '.png', '.jpg')
 
     Examples:
         >>> suggest_output_format('photo.jpg', preserve_quality=True)
         '.png'
-        >>> suggest_output_format('render.tiff', preserve_quality=True)
-        '.tiff'
+        >>> suggest_output_format('render.tif', preserve_quality=True)
+        '.tif'
         >>> suggest_output_format('web_image.png', preserve_quality=False)
         '.png'
         >>> suggest_output_format('photo.jpg', preserve_quality=False)
@@ -341,7 +341,7 @@ def suggest_output_format(
 
     # TIFF stays TIFF for quality preservation
     if ext in TIFF_EXTENSIONS and preserve_quality:
-        return '.tiff'
+        return '.tif'
 
     # PNG is good lossless format for quality preservation
     if preserve_quality:
@@ -370,7 +370,7 @@ def get_supported_formats_summary() -> Dict[str, List[str]]:
     return {
         'image': sorted(SUPPORTED_IMAGE_EXTENSIONS),
         'video': sorted(SUPPORTED_VIDEO_EXTENSIONS),
-        'tiff': sorted(TIFF_EXTENSIONS),
+        'tif': sorted(TIFF_EXTENSIONS),
         'luxury': sorted(LUXURY_IMAGE_EXTENSIONS)
     }
 
@@ -411,7 +411,7 @@ if __name__ == '__main__':
         'photo.TIFF',
         'depth_map.png',
         'video.mp4',
-        'document.pdf',
+        'document.pd',
         'archive.WebP'
     ]
 

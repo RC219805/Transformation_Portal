@@ -28,7 +28,7 @@ print("CONSERVATIVE ENHANCEMENT v3 - 750 PICACHO GREAT ROOM")
 print("Precision sky correction + subtle interior enhancement")
 print("=" * 80)
 
-INPUT = "input_images/750Picacho_GreatRoom_Reset.tif"
+INPUT = "input_images/750Picacho_GreatRoom_Reset.ti"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -54,7 +54,7 @@ WOOD_ENHANCEMENT = 1.03     # Minimal wood grain boost
 STONE_ENHANCEMENT = 1.02    # Minimal stone texture
 MIDTONE_LIFT = 1.02         # Very gentle midtone boost
 
-print(f"\n[1/9] Loading 32-bit TIFF...")
+print("\n[1/9] Loading 32-bit TIFF...")
 
 # Load image with HDR-aware processing
 if TIFFFILE_AVAILABLE:
@@ -75,7 +75,7 @@ if TIFFFILE_AVAILABLE:
         # Check if this is HDR/linear data (values > 1.0 or negative)
         if rgb.max() > 1.0 or rgb.min() < 0:
             print(f"  ⚠️  HDR/Linear data detected (max: {rgb.max():.2f})")
-            print(f"  Applying Reinhard tone mapping...")
+            print("  Applying Reinhard tone mapping...")
 
             # Reinhard tone mapping: L_d = L_w / (1 + L_w)
             # But preserve relative ratios by normalizing first
@@ -131,7 +131,7 @@ print(f"  ✓ Smoothing sigma: {SKY_MASK_SIGMA} (prevents visible edges)")
 # ============================================================================
 # STEP 2: SKY COLOR CORRECTION (Remove cyan cast, naturalize blues)
 # ============================================================================
-print(f"\n[3/9] Applying sky color correction...")
+print("\n[3/9] Applying sky color correction...")
 
 img_corrected = img_array.copy()
 
@@ -202,7 +202,7 @@ img = enhancer.enhance(GLOBAL_CONTRAST)
 # ============================================================================
 # STEP 6: MATERIAL RESPONSE (Wood, Stone, Textiles)
 # ============================================================================
-print(f"\n[7/9] Applying material response...")
+print("\n[7/9] Applying material response...")
 
 img_array = np.array(img).astype(float) / 255.0
 
@@ -249,7 +249,7 @@ img = Image.blend(original, sharpened, EDGE_SHARPENING)
 # ============================================================================
 # STEP 8: SAVE OUTPUT
 # ============================================================================
-print(f"\n[9/9] Saving enhanced image...")
+print("\n[9/9] Saving enhanced image...")
 
 output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v3.jpg"
 img.save(output_path, "JPEG", quality=98, subsampling=0, optimize=True)
@@ -268,7 +268,7 @@ img_final = np.array(img)
 brightness_final = img_final.mean()
 sky_color_final = img_final[sky_mask > 0.5].mean(axis=0) if np.any(sky_mask > 0.5) else [0, 0, 0]
 
-print(f"\nFinal Metrics:")
+print("\nFinal Metrics:")
 print(f"  Overall brightness: {brightness_final:.1f}")
 print(f"  Sky color (final): R={sky_color_final[0]:.1f}, G={sky_color_final[1]:.1f}, B={sky_color_final[2]:.1f}")
 print(f"  Cyan bias removed: {avg_sky_before[1]-sky_color_final[1]:.1f} (G channel)")

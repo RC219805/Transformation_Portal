@@ -55,7 +55,7 @@ try:
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
     # Check if model is cached
-    model_id = "LiheYoung/depth-anything-small-hf"
+    model_id = "LiheYoung/depth-anything-small-h"
 
     try:
         print(f"\nVerifying model: {model_id}")
@@ -64,11 +64,11 @@ try:
         print(f"  Processor: {type(processor).__name__}")
 
         # Test model loading (don't actually load to save time)
-        print(f"✓ Depth Anything V2 is ready")
+        print("✓ Depth Anything V2 is ready")
 
     except Exception as e:
-        print(f"⚠ Model not in cache, will download on first use")
-        print(f"  This is normal - models download automatically")
+        print("⚠ Model not in cache, will download on first use")
+        print("  This is normal - models download automatically")
 
 except ImportError:
     print("✗ transformers not installed")
@@ -105,7 +105,7 @@ for model_name, model_url in REALESRGAN_MODELS.items():
                 print(f"✗ Download failed: {e}")
                 print(f"  Manual download: {model_url}")
         else:
-            print(f"  Skipped. Real-ESRGAN 4x upscaling will not be available.")
+            print("  Skipped. Real-ESRGAN 4x upscaling will not be available.")
             print(f"  Download manually: {model_url}")
 
 # ============================================================================
@@ -133,7 +133,7 @@ try:
             print(f"✓ Found: {model_id}")
         except Exception as e:
             print(f"⚠ Not cached: {model_id}")
-            print(f"  Will download automatically on first use (~1.5GB)")
+            print("  Will download automatically on first use (~1.5GB)")
 
 except ImportError:
     print("✗ diffusers not installed")
@@ -158,7 +158,7 @@ try:
         print(f"✓ Found: {SD_MODEL}")
     except Exception:
         print(f"⚠ Not cached: {SD_MODEL}")
-        print(f"  Will download automatically on first use (~4GB)")
+        print("  Will download automatically on first use (~4GB)")
 
 except ImportError:
     print("✗ huggingface_hub not installed")
@@ -171,9 +171,9 @@ print("INSTALLATION SUMMARY")
 print("=" * 70)
 
 print("\n📦 Model Locations:")
-print(f"  • HuggingFace models: ~/.cache/huggingface/")
+print("  • HuggingFace models: ~/.cache/huggingface/")
 print(f"  • Real-ESRGAN weights: {WEIGHTS_DIR}")
-print(f"  • ControlNet models: (cached by HuggingFace)")
+print("  • ControlNet models: (cached by HuggingFace)")
 
 print("\n💡 Notes:")
 print("  • HuggingFace models download automatically on first use")

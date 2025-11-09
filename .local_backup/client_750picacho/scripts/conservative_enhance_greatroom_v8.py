@@ -239,7 +239,7 @@ print(f"  ✓ Edge sharpness: +{EDGE_SHARPNESS:.0%}")
 # ============================================================================
 print("\nSaving output...")
 
-output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v8.tif"
+output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v8.ti"
 
 # Save as 16-bit TIFF (OUTPUT_BIT_DEPTH is always 16 in this version)
 final_array = np.array(sharpened, dtype=np.uint8)

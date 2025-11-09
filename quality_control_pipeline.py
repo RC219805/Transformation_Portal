@@ -93,7 +93,7 @@ class QualityControlPipeline:
                     }
 
                     # Format-specific checks
-                    if format_type == "tif":
+                    if format_type == "ti":
                         checks["bit_depth"] = "16-bit" if img.mode in ["I;16", "I;16B", "RGB;16"] else img.mode
                         checks["tiff_quality_ok"] = img.mode not in ["L", "P"]  # Should be RGB or better
 
@@ -119,7 +119,7 @@ class QualityControlPipeline:
         return results
 
     def run_pipeline(self, input_dir: Path, output_dir: Path,
-                    formats: List[str] = ["jpeg", "png", "tiff"]):
+                    formats: List[str] = ["jpeg", "png", "tif"]):
         """Run the unified luxury pipeline with quality controls"""
 
         # Step 1: Verify sources
@@ -166,7 +166,7 @@ class QualityControlPipeline:
         # Step 3: Verify outputs
         print("\nStep 3: Verifying output quality...")
         for fmt in formats:
-            ext = "tif" if fmt == "tiff" else ("jpg" if fmt == "jpeg" else fmt)
+            ext = "ti" if fmt == "tif" else ("jpg" if fmt == "jpeg" else fmt)
             output_results = self.verify_output_quality(output_dir, ext)
 
             valid_outputs = sum(1 for r in output_results.values() if r.get("valid"))
@@ -175,7 +175,7 @@ class QualityControlPipeline:
             self.quality_report["outputs"][fmt] = output_results
 
             # Check for TIFF degradation issue
-            if fmt == "tiff":
+            if fmt == "tif":
                 degraded = [
                     name for name, result in output_results.items()
                     if result.get("valid") and not result.get("tiff_quality_ok", True)
@@ -204,7 +204,7 @@ def main():
     success = qc.run_pipeline(
         input_dir=input_dir,
         output_dir=output_dir,
-        formats=["jpeg", "png", "tiff"]
+        formats=["jpeg", "png", "tif"]
     )
 
     sys.exit(0 if success else 1)

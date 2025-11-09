@@ -26,7 +26,7 @@ def _write_dummy_image(path: Path) -> None:
 
 
 def test_convert_renderings_to_jpeg_creates_jpg(tmp_path: Path) -> None:
-    source = tmp_path / "example.tif"
+    source = tmp_path / "example.ti"
     _write_dummy_image(source)
 
     converted_dir = convert_renderings_to_jpeg(tmp_path)

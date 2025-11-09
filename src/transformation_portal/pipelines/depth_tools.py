@@ -78,7 +78,7 @@ DEFAULT_IO_RETRY_DELAY = 0.5
 
 PRIORITY_TAGS = ("_enh", "_punchy", "_golden", "_agx", "_view", "_ok", "enh", "punchy", "golden")
 SUPPORTED_EXTENSIONS = (
-    ".tif", ".tiff", ".jpg", ".jpeg", ".png", ".webp",
+    ".ti", ".tif", ".jpg", ".jpeg", ".png", ".webp",
     ".TIF", ".TIFF", ".JPG", ".JPEG", ".PNG", ".WEBP"
 )
 
@@ -323,7 +323,7 @@ def find_mask_for_base(mask_root: Optional[str], base: str, kind: str) -> Option
     """Look for _mask_{kind}.* under mask_root (first match)."""
     if not mask_root:
         return None
-    exts = ("png", "tif", "tiff", "jpg", "jpeg")
+    exts = ("png", "ti", "tif", "jpg", "jpeg")
     for ext in exts:
         pat = os.path.join(mask_root, f"{base}_mask_{kind}.{ext}")
         matches = glob.glob(pat)
@@ -344,15 +344,15 @@ def load_image_rgb(path: str) -> np.ndarray:
 
 
 @retry_on_io_error()
-def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tiff", quality: int = 95) -> str:
+def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int = 95) -> str:
     path = str(path)
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
     stem = str(Path(path).with_suffix(""))
     fmt = fmt.lower()
-    if fmt in ("tiff", "tif") and _TIFFFILE_AVAILABLE:
-        out = f"{stem}.tiff"
+    if fmt in ("tif", "ti") and _TIFFFILE_AVAILABLE:
+        out = f"{stem}.tif"
         tiff.imwrite(out, rgb8, compression="deflate", photometric="rgb")
-    elif fmt in ("tiff", "tif") and not _TIFFFILE_AVAILABLE:
+    elif fmt in ("tif", "ti") and not _TIFFFILE_AVAILABLE:
         _log.debug("tifffile not available - falling back to PNG for %s", path)
         out = f"{stem}.png"
         Image.fromarray(rgb8).save(out, optimize=True)
@@ -619,7 +619,7 @@ class BatchOptions:
     mask_root: Optional[str] = None
     mode: str = "haze"
     restrict_tag: Optional[str] = None
-    fmt: str = "tiff"
+    fmt: str = "tif"
     workers: int = 1
     verbose: bool = False
     skip_missing: bool = True
@@ -643,7 +643,7 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
     Process a single depth map path (dp). Returns tuple (base, out_path or None, error or None).
     This helper is suitable for running in a child process as long as dependencies are available.
     """
-    base = os.path.basename(dp).replace("_depth16.png", "").replace("_depth16.tiff", "").replace("_depth16.tif", "")
+    base = os.path.basename(dp).replace("_depth16.png", "").replace("_depth16.tif", "").replace("_depth16.ti", "")
     try:
         # find source image
         src = find_file_for_base(opts.images_root, base, pattern_suffix="*")
@@ -677,13 +677,13 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
                                       near_pct=opts.near, far_pct=opts.far,
                                       sky_mask=sky_mask, building_mask=building_mask)
             suffix = "_depthclarity"
-        elif opts.mode == "dof":
+        elif opts.mode == "do":
             out = apply_depth_dof(img, depth,
                                   focus_pct=opts.focus, aperture=opts.aperture,
                                   clarity=opts.clarity, falloff=opts.falloff,
                                   edge_preserving=_CV2_AVAILABLE, bilateral_sigma_depth=0.08,
                                   sky_mask=sky_mask, building_mask=building_mask)
-            suffix = "_depthdof"
+            suffix = "_depthdo"
         else:
             raise ValueError(f"Unknown mode: {opts.mode}")
 
@@ -769,7 +769,7 @@ def build_cli() -> argparse.ArgumentParser:
         p.add_argument("--mask-root", type=str, default=None, help="Folder containing generated masks (<base>_mask_sky.png)")
         p.add_argument("--restrict-tag", type=str, default=None,
                        help="Restrict matches to a filename tag (not strictly required)")
-        p.add_argument("--fmt", type=str, default="tiff", help="Output format (tiff/png/jpg)")
+        p.add_argument("--fmt", type=str, default="tif", help="Output format (tiff/png/jpg)")
         p.add_argument("--workers", type=int, default=1, help="Parallel worker count (ProcessPoolExecutor)")
         p.add_argument("--verbose", action="store_true", help="Verbose logging")
         p.add_argument("--allow-partial-success", action="store_true",
@@ -790,12 +790,12 @@ def build_cli() -> argparse.ArgumentParser:
     pc.add_argument("--near", type=float, default=20.0)
     pc.add_argument("--far", type=float, default=80.0)
 
-    pd = sub.add_parser("dof", help="Cinematic depth-of-field")
+    pd = sub.add_parser("do", help="Cinematic depth-of-field")
     common(pd)
     pd.add_argument("--focus", type=float, default=35.0)
     pd.add_argument("--aperture", type=float, default=0.22)
     pd.add_argument("--clarity", type=float, default=0.18)
-    pd.add_argument("--falloff", type=float, default=1.4)
+    pd.add_argument("--fallof", type=float, default=1.4)
 
     return ap
 
@@ -822,7 +822,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         mask_root=getattr(args, "mask_root", None),
         mode=args.cmd,
         restrict_tag=getattr(args, "restrict_tag", None),
-        fmt=getattr(args, "fmt", "tiff"),
+        fmt=getattr(args, "fmt", "tif"),
         workers=max(1, int(getattr(args, "workers", 1))),
         verbose=getattr(args, "verbose", False),
         allow_partial_success=getattr(args, "allow_partial_success", False)
@@ -840,11 +840,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         opts.radius = int(getattr(args, "radius", 3))
         opts.near = float(getattr(args, "near", 20.0))
         opts.far = float(getattr(args, "far", 80.0))
-    elif args.cmd == "dof":
+    elif args.cmd == "do":
         opts.focus = float(getattr(args, "focus", 35.0))
         opts.aperture = float(getattr(args, "aperture", 0.22))
         opts.clarity = float(getattr(args, "clarity", 0.18))
-        opts.falloff = float(getattr(args, "falloff", 1.4))
+        opts.falloff = float(getattr(args, "fallof", 1.4))
 
     try:
         error_count = process_batch(opts, progress=_cli_progress)

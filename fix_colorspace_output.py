@@ -54,8 +54,8 @@ def save_linear_tiff(image: Image.Image, output_path, bit_depth=16):
 
 # Test with the current output
 if __name__ == "__main__":
-    input_path = "processed_images/pool_pro_full/750Picacho_Pool_compatible_pool-luxury.tiff"
-    output_path = "processed_images/pool_pro_full/750Picacho_Pool_compatible_pool-luxury_LINEAR.tiff"
+    input_path = "processed_images/pool_pro_full/750Picacho_Pool_compatible_pool-luxury.tif"
+    output_path = "processed_images/pool_pro_full/750Picacho_Pool_compatible_pool-luxury_LINEAR.tif"
 
     print("Loading sRGB image...")
     img = Image.open(input_path)

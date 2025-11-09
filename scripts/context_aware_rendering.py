@@ -172,7 +172,7 @@ class ContextAwareRenderingPipeline:
         if not room_type:
             # Default strategy
             print(f"⚠ Could not identify room type from: {image_path.name}")
-            print(f"  Using balanced default strategy")
+            print("  Using balanced default strategy")
             return RenderingStrategy(
                 room_type='unknown',
                 primary_materials=self.context.materials_palette[:4] if self.context.materials_palette else ['wood', 'stone'],
@@ -357,9 +357,9 @@ class ContextAwareRenderingPipeline:
         # 2. material_response with material_config
         # 3. luxury_tiff_batch_processor with color_config
 
-        print(f"\n💡 Next steps:")
+        print("\n💡 Next steps:")
         print(f"  1. Apply depth pipeline with: {strategy_path}")
-        print(f"  2. Apply material response")
+        print("  2. Apply material response")
         print(f"  3. Apply color grading with LUT: {strategy.lut_preset}")
 
         # For now, return strategy path
@@ -431,7 +431,7 @@ def main():
         apply_color=not args.no_color,
     )
 
-    print(f"\n✓ Processing complete")
+    print("\n✓ Processing complete")
     print(f"  Strategy: {output}")
 
     return 0

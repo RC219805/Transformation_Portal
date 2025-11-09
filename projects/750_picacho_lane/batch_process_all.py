@@ -260,7 +260,7 @@ def process_scene(input_path, output_dir, scene_name, config):
 
     # Master TIFF (16-bit)
     img_uint16 = (np.clip(graded, 0, 1) * 65535).astype(np.uint16)
-    master_path = output_dir / f"750Picacho_{base_name}_Master.tif"
+    master_path = output_dir / f"750Picacho_{base_name}_Master.ti"
     Image.fromarray(img_uint16, mode='RGB').save(
         master_path,
         format='TIFF',
@@ -370,7 +370,7 @@ def main():
     print(f"  {'TOTAL':20} |          | Master: {total_master_size:5.1f}MB | "
           f"Web: {total_web_size:4.1f}MB |")
     print()
-    print(f"📦 All deliverables saved to:")
+    print("📦 All deliverables saved to:")
     print(f"   {output_dir}")
     print()
     print("🎯 Ready for client delivery!")

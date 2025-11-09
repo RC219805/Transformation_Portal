@@ -16,7 +16,7 @@ from board_material_aerial_enhancer import (
 )
 
 # Input and output paths
-input_path = Path("input_images/RC_002RC-office750Picacho_Pool 2.tiff")
+input_path = Path("input_images/RC_002RC-office750Picacho_Pool 2.tif")
 output_dir = Path("processed_images")
 output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -154,7 +154,7 @@ with open(report_path, "w") as f:
         "cladding": "Sculptform Click-On Systems - Warm Timber",
         "screens": "Grey Gum Screens - Natural",
         "equitone": "Equitone LT85 Panels - Anthracite",
-        "roof": "Bison Weathered Ipe Pavers",
+        "roo": "Bison Weathered Ipe Pavers",
         "bronze": "Dark Bronze Anodized Metal",
         "shade": "Louvretec Powder Coated White",
     }

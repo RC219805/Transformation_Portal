@@ -21,7 +21,7 @@ except ImportError:
 def load_image(path):
     """Load image with proper TIFF support."""
     path = Path(path)
-    if HAS_TIFFFILE and path.suffix.lower() in ['.tif', '.tiff']:
+    if HAS_TIFFFILE and path.suffix.lower() in ['.ti', '.tiff']:
         try:
             array = tifffile.imread(str(path))
 
@@ -107,7 +107,7 @@ def create_comparison(original_path, enhanced_paths, output_dir):
         # Calculate metrics
         metrics = calculate_metrics(original, enhanced)
 
-        print(f"\n  Quality Metrics:")
+        print("\n  Quality Metrics:")
         print(f"    PSNR: {metrics['psnr']:.2f} dB")
         print(f"    MSE: {metrics['mse']:.2f}")
         print(f"    Brightness: {metrics['enh_brightness']:.2f}/255 ({metrics['brightness_delta']:+.1f}%)")
@@ -122,7 +122,7 @@ def create_comparison(original_path, enhanced_paths, output_dir):
             print(f"  ✓ Brightness change is reasonable ({metrics['brightness_delta']:+.1f}%)")
 
         if metrics['psnr'] < 25:
-            print(f"  ⚠️  WARNING: Low PSNR indicates significant distortion")
+            print("  ⚠️  WARNING: Low PSNR indicates significant distortion")
         elif metrics['psnr'] > 40:
             print(f"  ✓ Excellent quality preservation (PSNR: {metrics['psnr']:.2f} dB)")
         else:
@@ -187,17 +187,17 @@ def create_comparison(original_path, enhanced_paths, output_dir):
         print(f"\n✓ Brightness levels are acceptable (avg: {avg_brightness_delta:+.1f}%)")
 
     print(f"\nAll comparisons saved to: {output_dir}/")
-    print(f"Open comparison images to visually inspect quality.\n")
+    print("Open comparison images to visually inspect quality.\n")
 
     return results
 
 if __name__ == "__main__":
-    original = "input_images/750Picacho_Pool.tiff"
+    original = "input_images/750Picacho_Pool.tif"
     enhanced = [
-        "processed_images/Conservative/750Picacho_Pool_Enhanced.tif",
-        "processed_images/Conservative/750Picacho_Pool_Enhanced_v2.tif",
-        "processed_images/Conservative/750Picacho_Pool_Enhanced_v3.tif",
-        "processed_images/Conservative/750Picacho_Pool_Enhanced_v4.tif",
+        "processed_images/Conservative/750Picacho_Pool_Enhanced.ti",
+        "processed_images/Conservative/750Picacho_Pool_Enhanced_v2.ti",
+        "processed_images/Conservative/750Picacho_Pool_Enhanced_v3.ti",
+        "processed_images/Conservative/750Picacho_Pool_Enhanced_v4.ti",
     ]
 
     # Filter to only existing files
