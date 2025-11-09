@@ -4,9 +4,9 @@ Track all operations as events for debugging, replay, and audit trails.
 
 Example:
     >>> from transformation_portal.events import EventStore, event
-    >>> 
+    >>>
     >>> store = EventStore()
-    >>> 
+    >>>
     >>> @event("image.enhanced")
     ... def enhance_image(image_path):
     ...     return process(image_path)

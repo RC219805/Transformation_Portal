@@ -250,7 +250,7 @@ def smooth_depth(
         if not CV2_AVAILABLE:
             logger.warning("cv2 not available, falling back to gaussian smoothing")
             return gaussian_filter(depth, sigma=sigma)
-        
+
         # Convert to uint8 for OpenCV
         depth_uint8 = (normalize_depth(depth) * 255).astype(np.uint8)
 
@@ -272,7 +272,7 @@ def smooth_depth(
         if not CV2_AVAILABLE:
             logger.warning("cv2 not available, falling back to gaussian smoothing")
             return gaussian_filter(depth, sigma=sigma)
-        
+
         # Median filter
         ksize = int(sigma * 2) + 1
         smoothed = cv2.medianBlur(depth, ksize)
@@ -313,7 +313,7 @@ def visualize_depth(
             img = Image.fromarray(rgb)
             img.save(save_path)
         return rgb
-    
+
     # Normalize
     depth_norm = normalize_depth(depth)
 
@@ -397,7 +397,7 @@ def align_depth_to_image(
         zoom_factors = (target_shape[0] / depth.shape[0], target_shape[1] / depth.shape[1])
         order = 1 if interpolation == 'bilinear' else 3 if interpolation == 'bicubic' else 0
         return zoom(depth, zoom_factors, order=order)
-    
+
     interp_map = {
         'bilinear': cv2.INTER_LINEAR,
         'bicubic': cv2.INTER_CUBIC,
@@ -442,7 +442,7 @@ def inpaint_depth_holes(
         valid_mean = depth[~mask].mean() if (~mask).any() else 0
         result[mask] = valid_mean
         return result
-    
+
     # Auto-detect holes
     if mask is None:
         mask = ((depth == 0) | np.isnan(depth)).astype(np.uint8)

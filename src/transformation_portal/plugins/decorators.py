@@ -19,7 +19,7 @@ def plugin(
     **metadata_kwargs
 ):
     """Decorator to mark a class as a plugin and automatically register it.
-    
+
     Args:
         name: Plugin name
         plugin_type: Type of plugin
@@ -27,7 +27,7 @@ def plugin(
         description: Plugin description
         auto_register: Automatically register with global registry
         **metadata_kwargs: Additional metadata fields
-        
+
     Example:
         >>> @plugin(
         ...     name="my_depth_model",
@@ -38,10 +38,10 @@ def plugin(
         ... class MyDepthModel(DepthModelPlugin):
         ...     def _create_metadata(self):
         ...         return self._decorator_metadata
-        ...     
+        ...
         ...     def initialize(self, config=None):
         ...         self._initialized = True
-        ...     
+        ...
         ...     def estimate_depth(self, image):
         ...         return process_image(image)
     """
@@ -54,10 +54,10 @@ def plugin(
             description=description,
             **metadata_kwargs
         )
-        
+
         # Add metadata as class attribute
         cls._decorator_metadata = metadata
-        
+
         # Auto-register if enabled
         if auto_register:
             try:
@@ -68,9 +68,9 @@ def plugin(
                     f"Failed to auto-register plugin {name}: {e}",
                     RuntimeWarning
                 )
-        
+
         return cls
-    
+
     return decorator
 
 
@@ -79,11 +79,11 @@ def requires_version(
     max_version: Optional[str] = None
 ):
     """Decorator to enforce Transformation Portal version requirements.
-    
+
     Args:
         min_version: Minimum required portal version
         max_version: Maximum supported portal version
-        
+
     Example:
         >>> @requires_version(min_version="0.1.0", max_version="0.2.0")
         ... class MyPlugin(PluginInterface):
@@ -91,19 +91,19 @@ def requires_version(
     """
     def decorator(cls):
         original_init = cls.__init__
-        
+
         @functools.wraps(original_init)
         def new_init(self, *args, **kwargs):
             # Check version compatibility
             from transformation_portal import __version__ as portal_version
-            
+
             if min_version:
                 if pkg_version.parse(portal_version) < pkg_version.parse(min_version):
                     raise RuntimeError(
                         f"Plugin requires Transformation Portal >= {min_version}, "
                         f"but current version is {portal_version}"
                     )
-            
+
             if max_version:
                 if pkg_version.parse(portal_version) > pkg_version.parse(max_version):
                     warnings.warn(
@@ -111,12 +111,12 @@ def requires_version(
                         f"Current version is {portal_version}.",
                         RuntimeWarning
                     )
-            
+
             original_init(self, *args, **kwargs)
-        
+
         cls.__init__ = new_init
         return cls
-    
+
     return decorator
 
 
@@ -126,12 +126,12 @@ def deprecated_plugin(
     message: Optional[str] = None
 ):
     """Decorator to mark a plugin as deprecated.
-    
+
     Args:
         replacement: Name of replacement plugin
         removal_version: Version when plugin will be removed
         message: Custom deprecation message
-        
+
     Example:
         >>> @deprecated_plugin(
         ...     replacement="new_depth_model",
@@ -142,41 +142,41 @@ def deprecated_plugin(
     """
     def decorator(cls):
         original_init = cls.__init__
-        
+
         @functools.wraps(original_init)
         def new_init(self, *args, **kwargs):
             # Show deprecation warning
             warning_msg = message or (
                 f"Plugin {cls.__name__} is deprecated"
             )
-            
+
             if replacement:
                 warning_msg += f" and will be replaced by '{replacement}'"
-            
+
             if removal_version:
                 warning_msg += f". It will be removed in version {removal_version}"
-            
+
             warnings.warn(warning_msg, DeprecationWarning, stacklevel=2)
-            
+
             original_init(self, *args, **kwargs)
-            
+
             # Mark metadata as deprecated
             if hasattr(self, 'metadata'):
                 self.metadata.deprecated = True
                 self.metadata.replacement = replacement
-        
+
         cls.__init__ = new_init
         return cls
-    
+
     return decorator
 
 
 def cached_execution(maxsize: int = 128):
     """Decorator to cache plugin execution results (LRU cache).
-    
+
     Args:
         maxsize: Maximum cache size
-        
+
     Example:
         >>> class MyPlugin(PluginInterface):
         ...     @cached_execution(maxsize=256)
@@ -185,13 +185,13 @@ def cached_execution(maxsize: int = 128):
     """
     def decorator(func: Callable) -> Callable:
         return functools.lru_cache(maxsize=maxsize)(func)
-    
+
     return decorator
 
 
 def measure_performance(func: Callable) -> Callable:
     """Decorator to measure and log plugin execution performance.
-    
+
     Example:
         >>> class MyPlugin(PluginInterface):
         ...     @measure_performance
@@ -202,24 +202,24 @@ def measure_performance(func: Callable) -> Callable:
     def wrapper(self, *args, **kwargs):
         import time
         start = time.perf_counter()
-        
+
         try:
             result = func(self, *args, **kwargs)
             elapsed = time.perf_counter() - start
-            
+
             if hasattr(self, 'metadata'):
                 plugin_name = self.metadata.name
             else:
                 plugin_name = self.__class__.__name__
-            
+
             # Log performance (can be extended to send to monitoring)
             print(f"[Performance] {plugin_name}.{func.__name__}: {elapsed*1000:.2f}ms")
-            
+
             return result
-        
+
         except Exception as e:
             elapsed = time.perf_counter() - start
             print(f"[Performance] {func.__name__} failed after {elapsed*1000:.2f}ms: {e}")
             raise
-    
+
     return wrapper
