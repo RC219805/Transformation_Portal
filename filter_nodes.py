@@ -24,7 +24,7 @@ def _stringify_value(value: Any) -> str:
     if isinstance(value, float):
         if not math.isfinite(value):
             raise ValueError("Float parameters must be finite numbers")
-        return ("%0.6" % value).rstrip("0").rstrip(".") or "0"
+        return ("{:.6f}".format(value)).rstrip("0").rstrip(".") or "0"
 
     if isinstance(value, Path):
         value = str(value)
