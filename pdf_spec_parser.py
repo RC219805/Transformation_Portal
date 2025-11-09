@@ -392,10 +392,10 @@ class PDFSpecParser:
             'pdf_file': str(self.pdf_path),
             'extraction_method': 'fallback_montecito_luxury_standards',
             'material_specifications': [
-                FinishSpec('White Oak Flooring', 'wood', 'matte', location='living areas').to_dict(),
-                FinishSpec('Carrara Marble', 'stone', 'honed', location='kitchen/bath').to_dict(),
-                FinishSpec('Stainless Steel', 'metal', 'brushed', location='kitchen').to_dict(),
-                FinishSpec('Floor-to-Ceiling Glass', 'glass', 'clear', location='living areas').to_dict(),
+                FinishSpec(material='White Oak Flooring', material_type='wood', finish_type='matte', location='living areas').to_dict(),
+                FinishSpec(material='Carrara Marble', material_type='stone', finish_type='honed', location='kitchen/bath').to_dict(),
+                FinishSpec(material='Stainless Steel', material_type='metal', finish_type='brushed', location='kitchen').to_dict(),
+                FinishSpec(material='Floor-to-Ceiling Glass', material_type='glass', finish_type='clear', location='living areas').to_dict(),
             ],
             'color_palette': [
                 ColorSpec('Warm White', 'primary', application='walls').to_dict(),

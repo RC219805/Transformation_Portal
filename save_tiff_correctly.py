@@ -20,36 +20,36 @@ def save_16bit_tiff_correctly(
 ) -> Path:
     """
     Save 16-bit TIFF correctly using tifffile.
-    
+
     This function ALWAYS produces perfect quality TIFFs.
-    
+
     Args:
         image_array: NumPy array (uint8, uint16, or float)
         output_path: Where to save
         compression: 'none', 'lzw', 'adobe_deflate' (recommended), 'zip'
         metadata: Optional metadata dict
-        
+
     Returns:
         Path to saved file
-        
+
     Examples:
         >>> arr = np.random.randint(0, 65536, (2000, 3000, 3), dtype=np.uint16)
         >>> save_16bit_tiff_correctly(arr, 'output.tif')
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Convert float [0-1] to uint16
     if image_array.dtype in (np.float32, np.float64):
         if image_array.max() <= 1.0:
             image_array = (image_array * 65535).astype(np.uint16)
         else:
             image_array = image_array.astype(np.uint16)
-    
+
     # Convert uint8 to uint16 for maximum quality
     elif image_array.dtype == np.uint8:
         image_array = (image_array.astype(np.uint16) * 257)  # 0-255 -> 0-65535
-    
+
     # Determine photometric
     if image_array.ndim == 2:
         photometric = 'minisblack'
@@ -59,7 +59,7 @@ def save_16bit_tiff_correctly(
         photometric = 'rgb'
     else:
         photometric = 'minisblack'
-    
+
     # Save with tifffile for perfect quality
     tifffile.imwrite(
         output_path,
@@ -69,11 +69,11 @@ def save_16bit_tiff_correctly(
         photometric=photometric,
         planarconfig='contig',
     )
-    
+
     print(f"✓ Saved perfect-quality TIFF: {output_path.name}")
     print(f"  Shape: {image_array.shape}, dtype: {image_array.dtype}")
     print(f"  Size: {output_path.stat().st_size / 1024 / 1024:.2f} MB")
-    
+
     return output_path
 
 
@@ -84,12 +84,12 @@ def load_pil_and_save_correctly(
 ) -> Path:
     """
     Load image with PIL, save with tifffile for perfect quality.
-    
+
     Args:
         input_path: Input image (any format)
         output_path: Output TIFF path
         compression: Compression method
-        
+
     Returns:
         Path to saved file
     """
@@ -103,27 +103,27 @@ def load_pil_and_save_correctly(
             img = rgb
         elif img.mode != 'RGB':
             img = img.convert('RGB')
-        
+
         # Convert to numpy
         array = np.array(img)
-    
+
     # Save correctly
     return save_16bit_tiff_correctly(array, output_path, compression)
 
 
 if __name__ == '__main__':
     import sys
-    
+
     if len(sys.argv) != 3:
         print("Usage: python save_tiff_correctly.py <input> <output.tif>")
         sys.exit(1)
-    
+
     input_file = Path(sys.argv[1])
     output_file = Path(sys.argv[2])
-    
+
     if not input_file.exists():
         print(f"ERROR: File not found: {input_file}")
         sys.exit(1)
-    
+
     load_pil_and_save_correctly(input_file, output_file)
     print("\n✓ Conversion complete!")

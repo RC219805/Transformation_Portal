@@ -68,7 +68,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, dtype: {img_array.dtype}")
-        
+
         # Normalize to 0-1 range
         if img_array.dtype == np.uint8:
             rgb = img_array.astype(np.float32) / 255.0
@@ -78,11 +78,11 @@ if TIFFFILE_AVAILABLE:
             rgb = img_array.astype(np.float32)
             if rgb.max() > 1.0:
                 rgb = np.clip(rgb / rgb.max(), 0, 1)
-        
+
         # Handle alpha if present
         if rgb.shape[2] == 4:
             rgb = rgb[:, :, :3]
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
         TIFFFILE_AVAILABLE = False

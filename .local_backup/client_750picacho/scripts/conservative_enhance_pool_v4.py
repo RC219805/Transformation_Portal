@@ -91,27 +91,27 @@ def apply_agx_tone_map(rgb_linear):
     """
     AgX tone mapping for LINEAR → display-referred sRGB conversion.
     Preserves highlights while maintaining color accuracy.
-    
+
     Args:
         rgb_linear: Linear RGB values [0-1+] (may contain values >1 for HDR)
-    
+
     Returns:
         rgb_srgb: Display-referred sRGB [0-1]
     """
     # Convert to log space
     rgb_log = np.log2(rgb_linear + 1e-10)
-    
+
     # Compress dynamic range
     rgb_log = np.clip(rgb_log, MIN_EV, MAX_EV)
     rgb_log = (rgb_log - MIN_EV) / (MAX_EV - MIN_EV)
-    
+
     # Apply S-curve for smooth highlight rolloff (cubic hermite spline)
     def smoothstep(x):
         x = np.clip(x, 0, 1)
         return x * x * (3.0 - 2.0 * x)
-    
+
     rgb_compressed = smoothstep(rgb_log)
-    
+
     # Convert to sRGB gamma
     return np.power(rgb_compressed, 1/2.2)
 
@@ -122,31 +122,31 @@ def apply_agx_tone_map(rgb_linear):
 def protect_sky_highlights(rgb, threshold=0.75):
     """
     Preserve sky gradient detail by masking from aggressive adjustments.
-    
+
     Args:
         rgb: Display-referred sRGB [0-1]
         threshold: Luminance above which sky protection activates
-    
+
     Returns:
         sky_mask: Smooth mask [0-1] indicating sky regions
     """
     r, g, b = rgb[:,:,0], rgb[:,:,1], rgb[:,:,2]
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    
+
     # Detect sky (bright, neutral, top of frame)
     height = rgb.shape[0]
     y_coords = np.arange(height)[:, np.newaxis] / height
-    
+
     sky_mask = (
         (luminance > threshold) &              # Bright
         (np.abs(r - g) < 0.1) &               # Neutral (not color cast)
         (np.abs(g - b) < 0.15) &              # Neutral
         (y_coords < 0.5)                      # Upper half of frame
     )
-    
+
     # Smooth mask for natural transition
     sky_mask_smooth = gaussian_filter(sky_mask.astype(np.float32), sigma=SKY_MASK_SIGMA)
-    
+
     return sky_mask_smooth
 
 # ============================================================================
@@ -158,7 +158,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, dtype: {img_array.dtype}")
-        
+
         # Normalize to 0-1 range (LINEAR space)
         if img_array.dtype == np.float32 or img_array.dtype == np.float64:
             if img_array.max() > 1.0:
@@ -169,12 +169,12 @@ if TIFFFILE_AVAILABLE:
             rgb_linear = img_array.astype(np.float32) / 65535.0
         else:
             rgb_linear = img_array.astype(np.float32) / 255.0
-        
+
         # Drop alpha channel if present
         if rgb_linear.shape[2] == 4:
             rgb_linear = rgb_linear[:, :, :3]
             print(f"  ✓ Dropped alpha channel")
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
         TIFFFILE_AVAILABLE = False

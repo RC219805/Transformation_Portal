@@ -7,7 +7,7 @@ Model wrappers for depth estimation.
 
 # Decision: lazy_imports - Variables in __all__ are loaded dynamically via __getattr__
 # This is intentional to support optional dependencies (torch, coremltools)
-__all__ = ["DepthAnythingV2Model", "ModelBackend", "ModelVariant", "CoreMLDepthModel"]
+__all__ = ["DepthAnythingV2Model", "ModelBackend", "ModelVariant", "CoreMLDepthModel"]  # pylint: disable=undefined-all-variable
 
 def __getattr__(name):
     """Lazy import of depth estimation modules."""

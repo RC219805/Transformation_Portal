@@ -32,9 +32,9 @@ if TIFFFILE_AVAILABLE:
     try:
         with tifffile.TiffFile(INPUT) as tif:
             img_array = tif.pages[0].asarray()
-            
+
         print(f"  Loaded with tifffile: {img_array.shape}")
-        
+
         # Handle alpha channel if present
         if img_array.shape[2] == 4:
             rgb = img_array[:, :, :3]
@@ -42,11 +42,11 @@ if TIFFFILE_AVAILABLE:
             rgb = np.clip(rgb, 0, 1)
         else:
             rgb = img_array
-        
+
         # Convert to 8-bit for PIL processing
         img_8bit = (rgb * 255).astype(np.uint8)
         img = Image.fromarray(img_8bit, 'RGB')
-        
+
     except Exception as e:
         print(f"  tifffile failed: {e}")
         print(f"  Falling back to PIL...")
@@ -131,23 +131,23 @@ print(f"  Detected sky regions: {sky_percentage:.1f}% of image")
 
 if sky_percentage > 0.5:  # Only process if we found sky
     # Apply sky-specific enhancements
-    
+
     # 1. Reduce overexposure (pull down highlights)
     highlight_reduction = 0.92  # 8% reduction
     result_array[:,:,0] = result_array[:,:,0] * (1 - sky_mask * (1 - highlight_reduction))
     result_array[:,:,1] = result_array[:,:,1] * (1 - sky_mask * (1 - highlight_reduction))
     result_array[:,:,2] = result_array[:,:,2] * (1 - sky_mask * (1 - highlight_reduction))
-    
+
     # 2. Add subtle blue saturation to sky
     blue_boost = 1.08  # 8% blue boost in sky areas
     result_array[:,:,2] = result_array[:,:,2] * (1 + sky_mask * (blue_boost - 1))
-    
+
     # 3. Slight warmth reduction in sky (make it cooler/more natural)
     red_reduction = 0.96  # 4% red reduction in sky
     result_array[:,:,0] = result_array[:,:,0] * (1 - sky_mask * (1 - red_reduction))
-    
+
     result_array = np.clip(result_array, 0, 255)
-    
+
     print(f"  ✓ Sky highlights reduced by 8%")
     print(f"  ✓ Sky blue saturation boosted 8%")
     print(f"  ✓ Sky warmth reduced by 4% (cooler, more natural)")

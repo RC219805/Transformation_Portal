@@ -32,9 +32,9 @@ if TIFFFILE_AVAILABLE:
     try:
         with tifffile.TiffFile(INPUT) as tif:
             img_array = tif.pages[0].asarray()
-            
+
         print(f"  Loaded with tifffile: {img_array.shape}")
-        
+
         # Handle alpha channel if present
         if img_array.shape[2] == 4:
             rgb = img_array[:, :, :3]
@@ -43,11 +43,11 @@ if TIFFFILE_AVAILABLE:
             rgb = np.clip(rgb, 0, 1)
         else:
             rgb = img_array
-        
+
         # Convert to 8-bit for PIL processing
         img_8bit = (rgb * 255).astype(np.uint8)
         img = Image.fromarray(img_8bit, 'RGB')
-        
+
     except Exception as e:
         print(f"  tifffile failed: {e}")
         print(f"  Falling back to PIL...")

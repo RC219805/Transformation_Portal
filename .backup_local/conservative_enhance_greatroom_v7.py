@@ -51,7 +51,7 @@ SKY_MASK_SIGMA = 10.0                # Large blur to avoid halos (v6 learned: bi
 # Sky Color Correction (Targeted to cyan removal)
 SKY_CHANNEL_ADJUST = {
     'red': 1.12,      # Boost red to counter cyan (was 89, target ~100)
-    'green': 0.88,    # Reduce green slightly (was 114, target ~100)  
+    'green': 0.88,    # Reduce green slightly (was 114, target ~100)
     'blue': 0.78      # Reduce blue aggressively (was 126, target ~98)
 }
 SKY_DESATURATE = 0.65                # Desaturate to remove "cartoon" look
@@ -82,7 +82,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, dtype: {img_array.dtype}")
-        
+
         # Normalize to 0-1 range based on dtype
         if img_array.dtype == np.uint8:
             rgb = img_array.astype(np.float32) / 255.0
@@ -94,12 +94,12 @@ if TIFFFILE_AVAILABLE:
             if rgb.max() > 1.0:
                 print(f"  ⚠️  Float data not normalized, clipping to [0,1]")
                 rgb = np.clip(rgb / rgb.max(), 0, 1)
-        
+
         # Handle alpha if present
         if rgb.shape[2] == 4:
             print(f"  ⚠️  Alpha channel detected, extracting RGB")
             rgb = rgb[:, :, :3]
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}")
         print(f"  Falling back to PIL...")
