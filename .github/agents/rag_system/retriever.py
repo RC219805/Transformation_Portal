@@ -5,7 +5,6 @@ Implements hybrid retrieval using BM25 (sparse) and dense vector embeddings
 to ensure both recall and precision.
 """
 
-import hashlib
 import math
 import re
 from collections import Counter
@@ -175,14 +174,18 @@ class HybridRetriever:
         # Load config
         config = get_config()
         retriever_config = config.get_section('retriever')
+        citation_config = config.get_section('citation')
 
-        self.bm25_weight = bm25_weight or retriever_config.get('bm25_weight', 0.7)
-        self.vector_weight = vector_weight or retriever_config.get('vector_weight', 0.3)
+        self.bm25_weight = bm25_weight if bm25_weight is not None else retriever_config.get('bm25_weight', 0.7)
+        self.vector_weight = vector_weight if vector_weight is not None else retriever_config.get('vector_weight', 0.3)
         self.enable_vector_search = (
             enable_vector_search
             if enable_vector_search is not None
             else retriever_config.get('enable_vector_search', False)
         )
+        
+        # Get max expected score for normalization
+        self.max_expected_score = citation_config.get('max_expected_score', 20.0)
 
         # BM25 retriever
         bm25_k1 = retriever_config.get('bm25_k1', 1.5)
@@ -422,8 +425,8 @@ class HybridRetriever:
         # Add vector scores
         if vector_scores:
             for local_idx, score in vector_scores.items():
-                # Normalize vector score to roughly match BM25 range (0-20)
-                normalized_score = score * 20.0
+                # Normalize vector score to roughly match BM25 range
+                normalized_score = score * self.max_expected_score
                 combined_scores[local_idx] = (
                     combined_scores.get(local_idx, 0) +
                     self.vector_weight * normalized_score
