@@ -1,0 +1,250 @@
+{
+  "enhanced_results": {
+    "individual": {
+      "750Picacho_Pool_jpeg": {
+        "resolution": "4000x2250",
+        "pixels": 9000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 69.89371286531939,
+        "sharpness": 13092.342664642825,
+        "contrast": 63.41745669414136,
+        "brightness": 120.9151632962963,
+        "saturation": 95.90248977777777,
+        "file_size_mb": 4.980915069580078
+      },
+      "750Picacho_Pool_tiff": {
+        "resolution": "4000x2250",
+        "pixels": 9000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 70.15232363181954,
+        "sharpness": 13100.94811735184,
+        "contrast": 63.63488354644103,
+        "brightness": 121.37675525925926,
+        "saturation": 96.04870444444444,
+        "file_size_mb": 55.721893310546875
+      },
+      "750Picacho_Aerial_jpeg": {
+        "resolution": "4000x2400",
+        "pixels": 9600000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 79.23703897971687,
+        "sharpness": 13316.004887647474,
+        "contrast": 77.00530210261616,
+        "brightness": 110.46140673611112,
+        "saturation": 79.77004479166666,
+        "file_size_mb": 4.972601890563965
+      },
+      "750Picacho_Aerial_tiff": {
+        "resolution": "4000x2400",
+        "pixels": 9600000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 79.51212824267785,
+        "sharpness": 13323.287197180549,
+        "contrast": 77.24047541417906,
+        "brightness": 110.85856888888888,
+        "saturation": 80.01009520833334,
+        "file_size_mb": 60.42124080657959
+      },
+      "750Picacho_GreatRoom_jpeg": {
+        "resolution": "4000x3000",
+        "pixels": 12000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 70.7181533188225,
+        "sharpness": 12538.683155754155,
+        "contrast": 69.05636120223062,
+        "brightness": 171.47335313888888,
+        "saturation": 53.18644691666667,
+        "file_size_mb": 6.282946586608887
+      },
+      "750Picacho_GreatRoom_tiff": {
+        "resolution": "4000x3000",
+        "pixels": 12000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 70.99720545315905,
+        "sharpness": 12551.64112806561,
+        "contrast": 69.31638186329307,
+        "brightness": 172.15942866666666,
+        "saturation": 53.690317916666665,
+        "file_size_mb": 60.930816650390625
+      },
+      "750Picacho_Kitchen_jpeg": {
+        "resolution": "4000x2250",
+        "pixels": 9000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 60.02149844286158,
+        "sharpness": 12139.992159628215,
+        "contrast": 58.27226637890259,
+        "brightness": 171.90947185185186,
+        "saturation": 56.28007888888889,
+        "file_size_mb": 4.737677574157715
+      },
+      "750Picacho_Kitchen_tiff": {
+        "resolution": "4000x2250",
+        "pixels": 9000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 60.23812936781396,
+        "sharpness": 12153.79729411464,
+        "contrast": 58.488011718254704,
+        "brightness": 172.54236159259258,
+        "saturation": 56.24588488888889,
+        "file_size_mb": 51.136430740356445
+      },
+      "750Picacho_PrimaryBedroom_jpeg": {
+        "resolution": "4000x2667",
+        "pixels": 10668000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 70.69210298858503,
+        "sharpness": 10980.772788382068,
+        "contrast": 68.89804488674775,
+        "brightness": 136.900136607924,
+        "saturation": 87.66717913385827,
+        "file_size_mb": 6.842480659484863
+      },
+      "750Picacho_PrimaryBedroom_tiff": {
+        "resolution": "4000x2667",
+        "pixels": 10668000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 70.99049402736415,
+        "sharpness": 10987.671598560872,
+        "contrast": 69.16942213384836,
+        "brightness": 137.46990216847894,
+        "saturation": 88.31521972253468,
+        "file_size_mb": 65.48470783233643
+      },
+      "750Picacho_PrimaryBathroom_jpeg": {
+        "resolution": "4000x3000",
+        "pixels": 12000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 62.94730806982951,
+        "sharpness": 13024.934916188216,
+        "contrast": 58.199225150592945,
+        "brightness": 124.50548475,
+        "saturation": 97.24859591666667,
+        "file_size_mb": 6.09230899810791
+      },
+      "750Picacho_PrimaryBathroom_tiff": {
+        "resolution": "4000x3000",
+        "pixels": 12000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 63.17139100635156,
+        "sharpness": 13042.951767921046,
+        "contrast": 58.417545905506984,
+        "brightness": 124.9645453888889,
+        "saturation": 97.38154241666666,
+        "file_size_mb": 78.47878742218018
+      }
+    },
+    "averages": {
+      "avg_dynamic_range": 69.0476238661934,
+      "avg_sharpness": 12521.085639619792,
+      "avg_contrast": 65.92628141639624,
+      "avg_brightness": 139.62804819548728,
+      "avg_saturation": 78.47888333525496
+    },
+    "quality_score": 90.66135981248065,
+    "total_files": 12
+  },
+  "baseline_results": {
+    "individual": {
+      "750Picacho_Pool_jpeg": {
+        "resolution": "4000x2250",
+        "pixels": 9000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 60.89982664100287,
+        "sharpness": 13038.805712842557,
+        "contrast": 56.85238437944394,
+        "brightness": 70.12054940740741,
+        "saturation": 111.249383,
+        "file_size_mb": 5.456212997436523
+      },
+      "750Picacho_Aerial_jpeg": {
+        "resolution": "4000x2400",
+        "pixels": 9600000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 69.11551625849556,
+        "sharpness": 12655.966478541677,
+        "contrast": 67.8785460119355,
+        "brightness": 63.159003229166665,
+        "saturation": 73.2354821875,
+        "file_size_mb": 4.837472915649414
+      },
+      "750Picacho_GreatRoom_jpeg": {
+        "resolution": "4000x3000",
+        "pixels": 12000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 59.89462778755145,
+        "sharpness": 12782.67461674619,
+        "contrast": 58.719531846415364,
+        "brightness": 123.13215697222222,
+        "saturation": 55.738015,
+        "file_size_mb": 7.420989036560059
+      },
+      "750Picacho_Kitchen_jpeg": {
+        "resolution": "4000x2250",
+        "pixels": 9000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 58.63337728297847,
+        "sharpness": 12334.315428291447,
+        "contrast": 57.259937028505604,
+        "brightness": 117.72127744444444,
+        "saturation": 78.57275333333334,
+        "file_size_mb": 6.298447608947754
+      },
+      "750Picacho_PrimaryBedroom_jpeg": {
+        "resolution": "4000x2667",
+        "pixels": 10668000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 64.49687767824433,
+        "sharpness": 10944.491803111303,
+        "contrast": 63.14052799030938,
+        "brightness": 83.7684772528434,
+        "saturation": 118.25091751031121,
+        "file_size_mb": 10.294330596923828
+      },
+      "750Picacho_PrimaryBathroom_jpeg": {
+        "resolution": "4000x3000",
+        "pixels": 12000000,
+        "mode": "RGB",
+        "bit_depth": 8,
+        "dynamic_range": 60.33639311058155,
+        "sharpness": 12871.341539369272,
+        "contrast": 56.585672510205306,
+        "brightness": 69.13655008333333,
+        "saturation": 134.99208141666668,
+        "file_size_mb": 8.098175048828125
+      }
+    },
+    "averages": {
+      "avg_dynamic_range": 62.22943645980903,
+      "avg_sharpness": 12437.93259648374,
+      "avg_contrast": 60.072766627802515,
+      "avg_brightness": 87.83966906490292,
+      "avg_saturation": 95.3397720746352
+    },
+    "quality_score": 86.07816958430257,
+    "total_files": 6
+  },
+  "comparison": {
+    "enhanced_vs_baseline": {
+      "score_delta": 4.583190228178083,
+      "percent_improvement": 5.324451310142502
+    }
+  }
+}

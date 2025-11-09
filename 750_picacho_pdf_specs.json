@@ -1,0 +1,118 @@
+{
+  "pdf_file": "/Users/rc/Downloads/250930_MBAR SUBMITTAL 2.pdf",
+  "pdf_file_size_mb": 21.607404708862305,
+  "total_pages": 40,
+  "text_length": 280398,
+  "material_specifications": [
+    {
+      "material": "GRANITE\nUNDISTURBED",
+      "finish_type": "stone",
+      "manufacturer": null,
+      "product_name": null,
+      "location": null,
+      "notes": null
+    },
+    {
+      "material": "CERAMIC TILE",
+      "finish_type": "tile",
+      "manufacturer": null,
+      "product_name": null,
+      "location": null,
+      "notes": null
+    }
+  ],
+  "color_palette": [
+    {
+      "name": "GREY",
+      "category": "neutral",
+      "hex_code": null,
+      "rgb": null,
+      "application": null
+    },
+    {
+      "name": "SLATE",
+      "category": "neutral",
+      "hex_code": null,
+      "rgb": null,
+      "application": "pool"
+    },
+    {
+      "name": "gray",
+      "category": "neutral",
+      "hex_code": null,
+      "rgb": null,
+      "application": null
+    },
+    {
+      "name": "SAND",
+      "category": "neutral",
+      "hex_code": null,
+      "rgb": null,
+      "application": null
+    },
+    {
+      "name": "BEIGE",
+      "category": "neutral",
+      "hex_code": null,
+      "rgb": null,
+      "application": "entry"
+    },
+    {
+      "name": "OLIVE",
+      "category": "accent",
+      "hex_code": null,
+      "rgb": null,
+      "application": null
+    },
+    {
+      "name": "SAGE",
+      "category": "accent",
+      "hex_code": null,
+      "rgb": null,
+      "application": null
+    },
+    {
+      "name": "CLAY",
+      "category": "accent",
+      "hex_code": null,
+      "rgb": null,
+      "application": null
+    },
+    {
+      "name": "RUST",
+      "category": "accent",
+      "hex_code": null,
+      "rgb": null,
+      "application": null
+    },
+    {
+      "name": "Color #AD5282",
+      "category": "accent",
+      "hex_code": "#AD5282",
+      "rgb": null,
+      "application": null
+    }
+  ],
+  "dimensions": [],
+  "design_intent": {
+    "style_keywords": [
+      "coastal"
+    ],
+    "ambiance": [
+      "open"
+    ],
+    "key_features": [
+      "skylights",
+      "built-in",
+      "fireplace",
+      "pool",
+      "spa"
+    ]
+  },
+  "extraction_summary": {
+    "materials_count": 2,
+    "colors_count": 10,
+    "dimensions_count": 0,
+    "style_keywords": 1
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "view_name": "750Picacho_PrimaryBedroom.jpg",
+  "room_type": "bedroom",
+  "architectural_context": {
+    "view_name": "750Picacho_PrimaryBedroom.jpg",
+    "room_type": "bedroom",
+    "materials": [
+      {
+        "material_type": "wide_plank_oak",
+        "category": "wood",
+        "finish": "natural",
+        "color": null,
+        "reflectivity": 0.3,
+        "roughness": 0.5
+      },
+      {
+        "material_type": "linen_drapery",
+        "category": "fabric",
+        "finish": null,
+        "color": "ivory",
+        "reflectivity": 0.2,
+        "roughness": 0.7
+      },
+      {
+        "material_type": "upholstered_headboard",
+        "category": "fabric",
+        "finish": "velvet",
+        "color": null,
+        "reflectivity": 0.25,
+        "roughness": 0.65
+      },
+      {
+        "material_type": "glass_doors",
+        "category": "glass",
+        "finish": "clear",
+        "color": null,
+        "reflectivity": 0.9,
+        "roughness": 0.1
+      }
+    ],
+    "lighting": [
+      {
+        "light_type": "natural_daylight",
+        "intensity": 0.8,
+        "color_temperature": 5500,
+        "position": null,
+        "direction": null
+      },
+      {
+        "light_type": "bedside_lamps",
+        "intensity": 0.4,
+        "color_temperature": 2700,
+        "position": null,
+        "direction": null
+      },
+      {
+        "light_type": "recessed_dimmed",
+        "intensity": 0.3,
+        "color_temperature": 2800,
+        "position": null,
+        "direction": null
+      }
+    ],
+    "dimensions": {
+      "width": 22,
+      "height": 11,
+      "depth": 20
+    },
+    "color_guidance": [
+      "warm_white",
+      "soft_gray",
+      "ocean_blue",
+      "sage_green"
+    ],
+    "enhancement_params": {
+      "material_response_strength": 0.65,
+      "clarity": 0.12,
+      "glow": 0.12,
+      "saturation": 1.05,
+      "contrast": 1.03,
+      "sharpness": 0.08
+    }
+  },
+  "material_response": {
+    "enabled": true,
+    "material_types": [
+      "fabric",
+      "glass",
+      "wood"
+    ],
+    "base_strength": 0.65,
+    "category_strengths": {
+      "wood": 0.3,
+      "fabric": 0.25,
+      "glass": 0.9
+    },
+    "preserve_highlights": true,
+    "enhance_details": true
+  },
+  "depth_processing": {
+    "enabled": true,
+    "atmospheric_haze": 0.05,
+    "depth_of_field": 0.15,
+    "zone_enhancement": true,
+    "foreground_clarity": 0.15,
+    "background_softness": 0.1
+  },
+  "color_grading": {
+    "enabled": true,
+    "lut_path": "assets/luts/film_emulation/FilmConvert_Kodak_Vision3.cube",
+    "lut_strength": 0.7,
+    "exposure_adjustment": 0.0,
+    "saturation_boost": 1.05,
+    "contrast_boost": 1.03,
+    "color_temperature_shift": 500
+  },
+  "enhancement_params": {
+    "material_response_strength": 0.65,
+    "clarity": 0.12,
+    "glow": 0.12,
+    "saturation": 1.05,
+    "contrast": 1.03,
+    "sharpness": 0.08
+  },
+  "quality_target": 95
+}

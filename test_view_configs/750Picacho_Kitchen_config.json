@@ -1,0 +1,128 @@
+{
+  "view_name": "750Picacho_Kitchen.jpg",
+  "room_type": "kitchen",
+  "architectural_context": {
+    "view_name": "750Picacho_Kitchen.jpg",
+    "room_type": "kitchen",
+    "materials": [
+      {
+        "material_type": "carrara_marble_countertops",
+        "category": "stone",
+        "finish": "honed",
+        "color": null,
+        "reflectivity": 0.5,
+        "roughness": 0.3
+      },
+      {
+        "material_type": "custom_cabinetry",
+        "category": "wood",
+        "finish": "white_oak",
+        "color": null,
+        "reflectivity": 0.3,
+        "roughness": 0.5
+      },
+      {
+        "material_type": "stainless_steel_appliances",
+        "category": "metal",
+        "finish": "brushed",
+        "color": null,
+        "reflectivity": 0.7,
+        "roughness": 0.2
+      },
+      {
+        "material_type": "subway_tile_backsplash",
+        "category": "glass",
+        "finish": "glossy",
+        "color": null,
+        "reflectivity": 0.6,
+        "roughness": 0.2
+      }
+    ],
+    "lighting": [
+      {
+        "light_type": "natural_window_light",
+        "intensity": 0.8,
+        "color_temperature": 5500,
+        "position": null,
+        "direction": null
+      },
+      {
+        "light_type": "under_cabinet_led",
+        "intensity": 0.7,
+        "color_temperature": 3500,
+        "position": null,
+        "direction": null
+      },
+      {
+        "light_type": "pendant_island_lights",
+        "intensity": 0.6,
+        "color_temperature": 2800,
+        "position": null,
+        "direction": null
+      }
+    ],
+    "dimensions": {
+      "width": 20,
+      "height": 12,
+      "depth": 18
+    },
+    "color_guidance": [
+      "warm_white",
+      "soft_gray",
+      "ocean_blue",
+      "sage_green"
+    ],
+    "enhancement_params": {
+      "material_response_strength": 0.8,
+      "clarity": 0.2,
+      "glow": 0.05,
+      "saturation": 1.05,
+      "contrast": 1.08,
+      "sharpness": 0.15
+    }
+  },
+  "material_response": {
+    "enabled": true,
+    "material_types": [
+      "metal",
+      "stone",
+      "glass",
+      "wood"
+    ],
+    "base_strength": 0.8,
+    "category_strengths": {
+      "stone": 0.5,
+      "wood": 0.3,
+      "metal": 0.7,
+      "glass": 0.6
+    },
+    "preserve_highlights": true,
+    "enhance_details": true
+  },
+  "depth_processing": {
+    "enabled": true,
+    "atmospheric_haze": 0.0,
+    "depth_of_field": 0.08,
+    "zone_enhancement": true,
+    "foreground_clarity": 0.2,
+    "background_softness": 0.05
+  },
+  "color_grading": {
+    "enabled": true,
+    "lut_path": "assets/luts/material_response/Clean_Modern.cube",
+    "lut_strength": 0.7,
+    "exposure_adjustment": 0.0,
+    "saturation_boost": 1.05,
+    "contrast_boost": 1.08,
+    "color_temperature_shift": 500
+  },
+  "enhancement_params": {
+    "material_response_strength": 0.8,
+    "clarity": 0.2,
+    "glow": 0.05,
+    "saturation": 1.05,
+    "contrast": 1.08,
+    "sharpness": 0.15
+  },
+  "quality_target": 95
+}

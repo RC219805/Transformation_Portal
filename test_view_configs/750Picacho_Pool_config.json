@@ -1,0 +1,128 @@
+{
+  "view_name": "750Picacho_Pool.jpg",
+  "room_type": "exterior",
+  "architectural_context": {
+    "view_name": "750Picacho_Pool.jpg",
+    "room_type": "exterior",
+    "materials": [
+      {
+        "material_type": "blue_mosaic_tile",
+        "category": "glass",
+        "finish": "iridescent",
+        "color": null,
+        "reflectivity": 0.8,
+        "roughness": 0.2
+      },
+      {
+        "material_type": "limestone_coping",
+        "category": "stone",
+        "finish": "honed",
+        "color": null,
+        "reflectivity": 0.4,
+        "roughness": 0.4
+      },
+      {
+        "material_type": "teak_decking",
+        "category": "wood",
+        "finish": "weathered",
+        "color": null,
+        "reflectivity": 0.25,
+        "roughness": 0.6
+      },
+      {
+        "material_type": "water_surface",
+        "category": "liquid",
+        "finish": null,
+        "color": "azure",
+        "reflectivity": 0.9,
+        "roughness": 0.1
+      }
+    ],
+    "lighting": [
+      {
+        "light_type": "natural_sunlight",
+        "intensity": 1.0,
+        "color_temperature": 5800,
+        "position": null,
+        "direction": null
+      },
+      {
+        "light_type": "pool_underwater_led",
+        "intensity": 0.5,
+        "color_temperature": 4500,
+        "position": null,
+        "direction": null
+      },
+      {
+        "light_type": "landscape_accent",
+        "intensity": 0.3,
+        "color_temperature": 3000,
+        "position": null,
+        "direction": null
+      }
+    ],
+    "dimensions": {
+      "width": 40,
+      "depth": 60,
+      "pool_length": 50
+    },
+    "color_guidance": [
+      "warm_white",
+      "soft_gray",
+      "ocean_blue",
+      "sage_green"
+    ],
+    "enhancement_params": {
+      "material_response_strength": 0.75,
+      "clarity": 0.25,
+      "glow": 0.06,
+      "saturation": 1.1,
+      "contrast": 1.1,
+      "sharpness": 0.18
+    }
+  },
+  "material_response": {
+    "enabled": true,
+    "material_types": [
+      "stone",
+      "liquid",
+      "glass",
+      "wood"
+    ],
+    "base_strength": 0.75,
+    "category_strengths": {
+      "glass": 0.8,
+      "stone": 0.4,
+      "wood": 0.25,
+      "liquid": 0.9
+    },
+    "preserve_highlights": true,
+    "enhance_details": true
+  },
+  "depth_processing": {
+    "enabled": true,
+    "atmospheric_haze": 0.15,
+    "depth_of_field": 0.2,
+    "zone_enhancement": true,
+    "foreground_clarity": 0.25,
+    "background_softness": 0.15
+  },
+  "color_grading": {
+    "enabled": true,
+    "lut_path": "assets/luts/location_aesthetic/Coastal_Estate.cube",
+    "lut_strength": 0.7,
+    "exposure_adjustment": 0.0,
+    "saturation_boost": 1.1,
+    "contrast_boost": 1.1,
+    "color_temperature_shift": 500
+  },
+  "enhancement_params": {
+    "material_response_strength": 0.75,
+    "clarity": 0.25,
+    "glow": 0.06,
+    "saturation": 1.1,
+    "contrast": 1.1,
+    "sharpness": 0.18
+  },
+  "quality_target": 95
+}
