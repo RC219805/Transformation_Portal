@@ -1,0 +1,56 @@
+name: Quality Gate
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  pre-commit-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install quality tools
+        run: |
+          pip install flake8 pylint autopep8
+
+      - name: Auto-fix formatting issues
+        run: |
+          # Auto-fix trailing whitespace and basic formatting
+          find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*" -exec autopep8 --in-place --max-line-length=127 {} \;
+
+      - name: Run flake8 (critical errors only)
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated/,src/transformation_portal/,.venv/
+
+      - name: Run pylint (non-blocking)
+        continue-on-error: true
+        run: |
+          files=$(find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*")
+          if [ -n "$files" ]; then
+            pylint $files --exit-zero
+          fi
+
+      - name: Check markdown file count
+        run: |
+          markdown_count=$(find . -maxdepth 1 -name "*.md" -type f | wc -l)
+          if [ $markdown_count -gt 10 ]; then
+            echo "ERROR: Too many markdown files in root ($markdown_count). Maximum allowed: 10"
+            echo "Please move documentation files to docs/ subdirectories"
+            exit 1
+          fi
+
+      - name: Commit formatting fixes
+        if: success()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git diff --quiet || git commit -am "Auto-fix: Code formatting (trailing whitespace, line length)"
+        continue-on-error: true

@@ -1,31 +1,38 @@
 #!/bin/bash
+# Organize markdown files to comply with codebase structure test
 
-# Session summaries and temporary docs -> docs/session_summaries/
-mv -f TIFF_CONVERSION_FIX.md docs/session_summaries/ 2>/dev/null || true
-mv -f CODE_QUALITY_IMPROVEMENTS.md docs/session_summaries/ 2>/dev/null || true
-mv -f SESSION_SUMMARY_NOV8.md docs/session_summaries/ 2>/dev/null || true
-mv -f TIFF_FIX_SUMMARY_NOV8.md docs/session_summaries/ 2>/dev/null || true
-mv -f UNIFIED_PIPELINE_SUMMARY.md docs/session_summaries/ 2>/dev/null || true
-mv -f PHASE_2_COMPLETE.md docs/session_summaries/ 2>/dev/null || true
+# Create documentation subdirectories if they don't exist
+mkdir -p docs/sessions
+mkdir -p docs/projects/750_picacho_lane
+mkdir -p docs/guides
 
-# Implementation and task reports -> docs/
-mv -f IMPLEMENTATION_TEST_REPORT.md docs/ 2>/dev/null || true
-mv -f TASK_COMPLETION_SUMMARY.md docs/ 2>/dev/null || true
-mv -f WORKFLOW_OPTIMIZATION_SUMMARY.md docs/ 2>/dev/null || true
-mv -f QUALITY_SYSTEM_SUMMARY.md docs/ 2>/dev/null || true
+# Move session summaries
+for file in SESSION_SUMMARY_*.md TASK_COMPLETION_REPORT.md; do
+    if [ -f "$file" ]; then
+        git mv "$file" docs/sessions/ 2>/dev/null || mv "$file" docs/sessions/
+        echo "Moved $file to docs/sessions/"
+    fi
+done
 
-# Archive old summaries
-mv -f AUDIT_SUMMARY.txt docs/archive/ 2>/dev/null || true
-mv -f CHANGES_SUMMARY.txt docs/archive/ 2>/dev/null || true
-mv -f EXEC_SUMMARY.txt docs/archive/ 2>/dev/null || true
-mv -f GREATROOM_ANALYSIS_SUMMARY.txt docs/archive/ 2>/dev/null || true
-mv -f GREATROOM_QUICK_REFERENCE.txt docs/archive/ 2>/dev/null || true
-mv -f HEALTH_CHECK_SUMMARY.txt docs/archive/ 2>/dev/null || true
-mv -f KITCHEN_ANALYSIS_SUMMARY.txt docs/archive/ 2>/dev/null || true
-mv -f MERGE_SUMMARY.txt docs/archive/ 2>/dev/null || true
-mv -f PR232_VERIFICATION.txt docs/archive/ 2>/dev/null || true
-mv -f README_FIX.txt docs/archive/ 2>/dev/null || true
-mv -f WORKFLOW_VISUAL_GUIDE.txt docs/archive/ 2>/dev/null || true
-mv -f FILES_CHANGED.md docs/archive/ 2>/dev/null || true
+# Move 750 Picacho project documentation
+for file in 750_PICACHO_*.md AERIAL_DUPLICATE_RESOLUTION.md; do
+    if [ -f "$file" ]; then
+        git mv "$file" docs/projects/750_picacho_lane/ 2>/dev/null || mv "$file" docs/projects/750_picacho_lane/
+        echo "Moved $file to docs/projects/750_picacho_lane/"
+    fi
+done
 
-echo "Documentation organized successfully"
+# Move integration guides
+for file in BIM_PDF_*.md FINAL_QUALITY_BOOST_README.md; do
+    if [ -f "$file" ]; then
+        git mv "$file" docs/guides/ 2>/dev/null || mv "$file" docs/guides/
+        echo "Moved $file to docs/guides/"
+    fi
+done
+
+# Keep in root: README.md, START_HERE.md, MIGRATION_GUIDE.md, DEPRECATION_POLICY.md
+echo ""
+echo "Root markdown files remaining:"
+find . -maxdepth 1 -name "*.md" -type f
+echo ""
+echo "Total: $(find . -maxdepth 1 -name "*.md" -type f | wc -l)"
