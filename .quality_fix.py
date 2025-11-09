@@ -18,7 +18,6 @@ def fix_trailing_whitespace(file_path):
 def fix_imports_order(file_path):
     """Move imports to top of file (basic fix)."""
     # This is handled better by isort, skip for now
-    pass
 
 def main():
     """Fix common issues in Python files."""
