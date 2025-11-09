@@ -256,7 +256,8 @@ def main():
             print(f"\n⚠️  Source file not found: {source_file}")
             continue
 
-        result = process_scene(  # pylint: disable=assignment-from-none
+        # pylint: disable=assignment-from-none
+        result = process_scene(
             scene_name=scene_name,
             source_path=source_file,
             output_dir=args.output_dir,

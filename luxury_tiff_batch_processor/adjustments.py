@@ -205,7 +205,7 @@ def apply_shadow_lift(arr: np.ndarray, amount: float) -> np.ndarray:
     gamma = 1.0 / (1.0 + amount * 3.0)
     lum = luminance(arr)
     lifted = np.power(np.clip(lum, 0.0, 1.0), gamma)
-    LOGGER.debug("Shadow lift amount=%s gamma=%.3f", amount, gamma)
+    LOGGER.debug("Shadow lift amount=%s gamma=%.3f", amount, gamma)  # pylint: disable=logging-format-interpolation
     return arr + (lifted - lum)[..., None]
 
 
@@ -224,7 +224,7 @@ def apply_highlight_recovery(arr: np.ndarray, amount: float) -> np.ndarray:
     gamma = 1.0 + amount * 2.0
     lum = luminance(arr)
     compressed = np.power(np.clip(lum, 0.0, 1.0), gamma)
-    LOGGER.debug("Highlight recovery amount=%s gamma=%.3f", amount, gamma)
+    LOGGER.debug("Highlight recovery amount=%s gamma=%.3f", amount, gamma)  # pylint: disable=logging-format-interpolation
     return arr + (compressed - lum)[..., None]
 
 
