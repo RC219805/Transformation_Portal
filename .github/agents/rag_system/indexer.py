@@ -6,10 +6,17 @@ into chunks with metadata for efficient retrieval.
 """
 
 import hashlib
+import pickle
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+from config import get_config
+from exceptions import CacheError, IndexingError
+from logger import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -48,53 +55,100 @@ class RepositoryIndexer:
     def __init__(
         self,
         repo_root: str,
-        chunk_size_tokens: int = 750,
-        overlap_tokens: int = 75,
-        chars_per_token: float = 4.0,  # Approximate tokens to chars ratio
+        chunk_size_tokens: Optional[int] = None,
+        overlap_tokens: Optional[int] = None,
+        chars_per_token: Optional[float] = None,
+        use_cache: Optional[bool] = None,
     ):
         """
         Initialize the indexer.
 
         Args:
             repo_root: Root directory of the repository
-            chunk_size_tokens: Target size for each chunk in tokens
-            overlap_tokens: Overlap between chunks in tokens
-            chars_per_token: Approximate characters per token for estimation
+            chunk_size_tokens: Target size for each chunk in tokens (uses config if None)
+            overlap_tokens: Overlap between chunks in tokens (uses config if None)
+            chars_per_token: Approximate characters per token (uses config if None)
+            use_cache: Enable persistent caching (uses config if None)
         """
         self.repo_root = Path(repo_root)
-        self.chunk_size = int(chunk_size_tokens * chars_per_token)
-        self.overlap = int(overlap_tokens * chars_per_token)
         self.chunks: List[DocumentChunk] = []
 
-    def index_repository(self) -> List[DocumentChunk]:
+        # Load config
+        config = get_config()
+        indexer_config = config.get_section('indexer')
+
+        # Use config values as defaults
+        self.chunk_size_tokens = chunk_size_tokens or indexer_config.get('chunk_size_tokens', 750)
+        self.overlap_tokens = overlap_tokens or indexer_config.get('overlap_tokens', 75)
+        self.chars_per_token = chars_per_token or indexer_config.get('chars_per_token', 4.0)
+        self.use_cache = use_cache if use_cache is not None else indexer_config.get('cache_enabled', True)
+
+        # Calculate character-based sizes
+        self.chunk_size = int(self.chunk_size_tokens * self.chars_per_token)
+        self.overlap = int(self.overlap_tokens * self.chars_per_token)
+
+        # Setup cache directory
+        cache_dir = indexer_config.get('cache_dir', '.rag_cache')
+        self.cache_dir = self.repo_root / cache_dir
+        self.cache_file = self.cache_dir / 'chunks.pkl'
+
+        logger.debug(
+            f"Initialized indexer: chunk_size={self.chunk_size}, "
+            f"overlap={self.overlap}, cache_enabled={self.use_cache}"
+        )
+
+    def index_repository(self, force_reindex: bool = False) -> List[DocumentChunk]:
         """
         Index all relevant files in the repository.
+
+        Args:
+            force_reindex: Force reindexing even if cache exists
 
         Returns:
             List of document chunks with metadata
         """
+        # Try to load from cache if enabled
+        if self.use_cache and not force_reindex:
+            cached_chunks = self._load_cache()
+            if cached_chunks is not None:
+                logger.info(f"Loaded {len(cached_chunks)} chunks from cache")
+                self.chunks = cached_chunks
+                return self.chunks
+
+        logger.info("Indexing repository...")
         self.chunks = []
 
-        # Index documentation
-        self._index_directory('docs', chunk_type='doc')
+        try:
+            # Index documentation
+            self._index_directory('docs', chunk_type='doc')
 
-        # Index source code
-        if (self.repo_root / 'src').exists():
-            self._index_directory('src', chunk_type='code')
+            # Index source code
+            if (self.repo_root / 'src').exists():
+                self._index_directory('src', chunk_type='code')
 
-        # Index tests
-        if (self.repo_root / 'tests').exists():
-            self._index_directory('tests', chunk_type='test')
+            # Index tests
+            if (self.repo_root / 'tests').exists():
+                self._index_directory('tests', chunk_type='test')
 
-        # Index agent definitions
-        self._index_directory('.github/agents', chunk_type='agent')
+            # Index agent definitions
+            self._index_directory('.github/agents', chunk_type='agent')
 
-        # Index top-level markdown files (READMEs, CHANGELOGs, etc.)
-        self._index_top_level_files()
+            # Index top-level markdown files (READMEs, CHANGELOGs, etc.)
+            self._index_top_level_files()
 
-        # Index example code
-        if (self.repo_root / 'examples').exists():
-            self._index_directory('examples', chunk_type='code')
+            # Index example code
+            if (self.repo_root / 'examples').exists():
+                self._index_directory('examples', chunk_type='code')
+
+            logger.info(f"Indexed {len(self.chunks)} chunks from repository")
+
+            # Save to cache if enabled
+            if self.use_cache:
+                self._save_cache()
+
+        except Exception as e:
+            logger.error(f"Error during indexing: {e}")
+            raise IndexingError(f"Failed to index repository: {e}")
 
         return self.chunks
 
@@ -145,7 +199,7 @@ class RepositoryIndexer:
         try:
             content = file_path.read_text(encoding='utf-8', errors='ignore')
         except Exception as e:
-            print(f"Warning: Could not read {file_path}: {e}")
+            logger.warning(f"Could not read {file_path}: {e}")
             return
 
         rel_path = str(file_path.relative_to(self.repo_root))
@@ -341,6 +395,55 @@ class RepositoryIndexer:
             '.bash': 'bash',
         }
         return extension_map.get(file_path.suffix)
+
+    def _load_cache(self) -> Optional[List[DocumentChunk]]:
+        """
+        Load chunks from cache file.
+
+        Returns:
+            List of cached chunks or None if cache doesn't exist/is invalid
+        """
+        if not self.cache_file.exists():
+            logger.debug("No cache file found")
+            return None
+
+        try:
+            with open(self.cache_file, 'rb') as f:
+                chunks = pickle.load(f)
+
+            logger.debug(f"Loaded {len(chunks)} chunks from cache: {self.cache_file}")
+            return chunks
+
+        except Exception as e:
+            logger.warning(f"Failed to load cache: {e}")
+            # Don't raise - caching is optional
+            return None
+
+    def _save_cache(self):
+        """Save chunks to cache file."""
+        try:
+            # Create cache directory if it doesn't exist
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+            with open(self.cache_file, 'wb') as f:
+                pickle.dump(self.chunks, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+            logger.debug(f"Saved {len(self.chunks)} chunks to cache: {self.cache_file}")
+
+        except Exception as e:
+            logger.warning(f"Failed to save cache: {e}")
+            # Don't raise - caching is optional
+            # raise CacheError(f"Cache saving failed: {e}")
+
+    def clear_cache(self):
+        """Clear the cache file."""
+        if self.cache_file.exists():
+            try:
+                self.cache_file.unlink()
+                logger.info(f"Cleared cache: {self.cache_file}")
+            except Exception as e:
+                logger.warning(f"Failed to clear cache: {e}")
+                raise CacheError(f"Cache clearing failed: {e}")
 
     def get_statistics(self) -> Dict:
         """Get indexing statistics."""

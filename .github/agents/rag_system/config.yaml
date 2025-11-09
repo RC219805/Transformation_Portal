@@ -1,0 +1,31 @@
+# RAG System Configuration
+# Configuration for the Retrieval-Augmented Generation system
+
+# Indexer settings
+indexer:
+  chunk_size_tokens: 750          # Target tokens per chunk
+  overlap_tokens: 75              # Overlap between chunks
+  chars_per_token: 4.0            # Approximate chars per token
+  cache_enabled: true             # Enable persistent caching
+  cache_dir: ".rag_cache"         # Cache directory
+
+# Retriever settings
+retriever:
+  bm25_weight: 0.7                # Weight for BM25 scores (0-1)
+  vector_weight: 0.3              # Weight for vector scores (0-1)
+  enable_vector_search: false     # Enable vector embeddings (requires sentence-transformers)
+  vector_model: "all-MiniLM-L6-v2"  # Sentence transformer model
+  bm25_k1: 1.5                    # BM25 term frequency saturation
+  bm25_b: 0.75                    # BM25 length normalization
+  query_cache_size: 100           # LRU cache size for queries (0 to disable)
+
+# Citation settings
+citation:
+  max_results: 5                  # Maximum citation results
+  include_line_numbers: true      # Include line numbers in citations
+  max_expected_score: 20.0        # Expected maximum BM25 score for normalization
+
+# Reranker settings (optional, requires cross-encoder model)
+reranker:
+  enabled: false                  # Enable neural reranking
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Cross-encoder model
