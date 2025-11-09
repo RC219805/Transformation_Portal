@@ -16,7 +16,8 @@ def run_flake8_critical():
         ['flake8', '.', '--count', '--select=E9,F63,F7,F82', '--show-source', '--statistics',
          '--exclude=.venv,deprecated,src/transformation_portal,scripts'],
         capture_output=True,
-        text=True
+        text=True,
+        check=False
     )
 
     if result.returncode != 0:
