@@ -125,7 +125,7 @@ class TestIsLuxuryFormat:
 
     def test_luxury_formats(self):
         assert is_luxury_format('photo.tif') is True
-        assert is_luxury_format('render.ti') is True
+        assert is_luxury_format('render.tiff') is True  # Normalized to .tif
         assert is_luxury_format('image.png') is True
 
     def test_non_luxury_formats(self):
@@ -185,8 +185,8 @@ class TestGetFormatInfo:
     """Tests for format information retrieval."""
 
     def test_tiff_info(self):
-        info = get_format_info('render.ti')  # Use .ti which is supported
-        assert info['extension'] == '.ti'
+        info = get_format_info('render.tif')
+        assert info['extension'] == '.tif'
         assert info['is_image'] is True
         assert info['is_video'] is False
         assert info['is_tif'] is True
@@ -270,13 +270,12 @@ class TestGetSupportedFormatsSummary:
         summary = get_supported_formats_summary()
         assert '.png' in summary['image']
         assert '.jpg' in summary['image']
-        assert '.ti' in summary['image']  # Use .ti instead of .tif
+        assert '.tif' in summary['image']
         assert '.mp4' in summary['video']
         assert '.mov' in summary['video']
 
     def test_tiff_subset(self):
         summary = get_supported_formats_summary()
-        assert '.ti' in summary['tif']
         assert '.tif' in summary['tif']
         assert '.tiff' in summary['tif']
         # TIFF should be subset of image

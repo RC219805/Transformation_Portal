@@ -37,13 +37,13 @@ from typing import Dict, List, Union
 
 # Supported image extensions (case-insensitive)
 SUPPORTED_IMAGE_EXTENSIONS = {
-    '.png', '.jpg', '.jpeg', '.ti', '.tif',
-    '.webp', '.bmp', '.gi', '.ico',
+    '.png', '.jpg', '.jpeg', '.tif', '.tiff',
+    '.webp', '.bmp', '.gif', '.ico',
     '.ppm', '.pgm', '.pbm', '.tga'
 }
 
 # Primary formats for luxury processing
-LUXURY_IMAGE_EXTENSIONS = {'.ti', '.tif', '.png'}
+LUXURY_IMAGE_EXTENSIONS = {'.tif', '.tiff', '.png'}
 
 # Supported video extensions (case-insensitive)
 SUPPORTED_VIDEO_EXTENSIONS = {
@@ -51,7 +51,7 @@ SUPPORTED_VIDEO_EXTENSIONS = {
 }
 
 # TIFF-specific extensions
-TIFF_EXTENSIONS = {'.ti', '.tiff'}
+TIFF_EXTENSIONS = {'.tif', '.tiff'}
 
 
 class UnsupportedFormatError(ValueError):
@@ -85,6 +85,12 @@ def normalize_extension(path: Union[str, Path]) -> str:
         ext = str(path).lower()
         if not ext.startswith('.'):
             ext = '.' + ext
+
+    # Normalize TIFF extensions
+    if ext == '.tiff':
+        ext = '.tif'
+    elif ext == '.jpeg':
+        ext = '.jpg'
 
     return ext
 
@@ -339,18 +345,22 @@ def suggest_output_format(
     if ext in SUPPORTED_VIDEO_EXTENSIONS:
         return ext
 
-    # TIFF stays TIFF for quality preservation
-    if ext in TIFF_EXTENSIONS and preserve_quality:
-        return '.tif'
-
-    # PNG is good lossless format for quality preservation
+    # For quality preservation
     if preserve_quality:
+        # TIFF stays TIFF
+        if ext in TIFF_EXTENSIONS:
+            return '.tif'
+        # PNG stays PNG
         if ext == '.png':
             return '.png'
-        # For other image formats, use PNG as a high-quality default
+        # For other formats, suggest PNG as a high-quality lossless default
         return '.png'
 
-    # For other image formats without special properties, use JPEG for web delivery
+    # For non-quality-preservation (web optimization)
+    # JPEG is more efficient for web delivery
+    if ext == '.jpg':
+        return '.jpg'
+    # For other formats, default to JPEG for web
     return '.jpg'
 
 
