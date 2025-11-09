@@ -18,7 +18,7 @@ def run_autopep8_fix():
         "!", "-path", "./.venv/*",
         "-exec", "autopep8", "--in-place", "--max-line-length=127", "{}", ";"
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         print(f"❌ autopep8 failed: {result.stderr}")
         return False
@@ -37,7 +37,7 @@ def check_critical_errors():
         "--statistics",
         "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,projects/"
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
     if result.returncode != 0:
         print(f"❌ Critical errors found:\n{result.stdout}")
@@ -54,7 +54,7 @@ def check_imports():
         "--select=F401,F811",  # Unused imports, redefined names
         "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,projects/,tests/"
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
     if result.returncode != 0:
         print(f"⚠️  Import issues found (non-blocking):\n{result.stdout}")

@@ -13,7 +13,7 @@ def run_command(cmd, description):
     print(f"\n{'='*60}")
     print(f"{description}")
     print(f"{'='*60}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
     if result.stdout:
         print(result.stdout)
     if result.stderr and result.returncode != 0:
