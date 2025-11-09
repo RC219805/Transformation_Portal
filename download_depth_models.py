@@ -129,7 +129,7 @@ def download_depth_anything_v2_coreml(output_dir: Path) -> bool:
     print("\nThe CoreML model for Depth Anything V2 is not yet publicly hosted.")
     print("You have two options:\n")
 
-    print("Option 1: Convert from PyTorch yourself")
+    print("Option 1: Convert from PyTorch yoursel")
     print("-" * 70)
     print("1. Install coremltools: pip install coremltools")
     print("2. Download the PyTorch model from Hugging Face:")

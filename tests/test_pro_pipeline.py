@@ -317,11 +317,11 @@ class TestProPipeline:
         output = pipeline._save_output(Image.new("RGB", (100, 100)), temp_image_file)
 
         assert "architectural-hero" in output.name
-        assert output.suffix == ".tiff"  # Default format
+        assert output.suffix == ".tif"  # Default format
 
     def test_different_output_formats(self, pipeline_config, temp_image_file, sample_image):
         """Test saving in different output formats."""
-        formats = ["jpg", "png", "tiff"]
+        formats = ["jpg", "png", "tif"]
 
         for fmt in formats:
             pipeline_config.output_format = fmt

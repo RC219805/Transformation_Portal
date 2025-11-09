@@ -193,7 +193,7 @@ class PDFSpecParser:
                 elif category == 'rgb':
                     r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
                     colors.append(ColorSpec(
-                        name=f"RGB Color",
+                        name="RGB Color",
                         category='custom',
                         rgb=(r, g, b)
                     ))
@@ -446,7 +446,7 @@ def main():
     specs = parser_obj.parse_all()
     parser_obj.save_specs(args.output, specs)
 
-    print(f"\nExtracted specifications:")
+    print("\nExtracted specifications:")
     print(f"  PDF: {specs['pdf_file']}")
     print(f"  Pages: {specs.get('total_pages', 'N/A')}")
     print(f"  Materials: {specs['extraction_summary']['materials_count']}")

@@ -284,7 +284,7 @@ print(f"  ✓ Final tone curve: {FINAL_TONE_CURVE:.2%}")
 # ============================================================================
 print("\n[10/10] Saving output...")
 
-output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v7.tif"
+output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v7.ti"
 
 # Save as 16-bit TIFF to preserve quality (OUTPUT_BIT_DEPTH is always 16 in this version)
 final_array = np.array(sharpened, dtype=np.uint8)

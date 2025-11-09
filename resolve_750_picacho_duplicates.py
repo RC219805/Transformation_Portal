@@ -31,7 +31,7 @@ class DuplicateResolver:
         self.base_dir = Path(base_dir)
         self.source_dirs = {
             'exr': self.base_dir / '16-Bit_EXRs',
-            'tiff': self.base_dir / 'TIFFs' / '_TIFFs',
+            'tif': self.base_dir / 'TIFFs' / '_TIFFs',
             'lightroom': self.base_dir / 'LightRoom_TiFFs'
         }
         self.output_dirs = [
@@ -145,7 +145,7 @@ class DuplicateResolver:
                     f"2-{scene}-2"
                 ]
                 for pattern in patterns:
-                    for ext in ['.exr', '.tif', '.tiff']:
+                    for ext in ['.exr', '.ti', '.tiff']:
                         candidate = source_dir / f"{pattern}{ext}"
                         if candidate.exists():
                             versions.append(candidate)
@@ -272,14 +272,14 @@ def main():
     print("📋 Analyzing source files...")
     manifest = resolver.create_canonical_manifest()
 
-    print(f"\n✅ Analysis complete:")
+    print("\n✅ Analysis complete:")
     print(f"   Total scenes: {manifest['resolution_summary']['total_scenes']}")
     print(f"   Scenes with duplicates: {manifest['resolution_summary']['scenes_with_duplicates']}")
     print(f"   Canonical sources identified: {manifest['resolution_summary']['canonical_sources_identified']}")
 
     # Show duplicates
     if manifest['duplicates_found']:
-        print(f"\n🔍 Duplicate sources found:")
+        print("\n🔍 Duplicate sources found:")
         for scene, dup_info in manifest['duplicates_found'].items():
             print(f"\n   Scene: {scene}")
             print(f"   ✓ Canonical: {Path(dup_info['canonical']).name}")
@@ -288,7 +288,7 @@ def main():
                 print(f"      - {Path(alt).name}")
 
     # Cleanup analysis
-    print(f"\n🧹 Analyzing output cleanup...")
+    print("\n🧹 Analyzing output cleanup...")
     cleanup_summary = resolver.cleanup_duplicate_outputs(
         manifest,
         dry_run=not args.cleanup

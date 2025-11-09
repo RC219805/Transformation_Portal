@@ -48,8 +48,8 @@ except Exception as e:  # pragma: no cover - other import errors (e.g., missing 
         def __init__(self, *_, **__):
             raise RuntimeError(
                 f"RealESRGANer unavailable due to import error: {_REALESRGAN_IMPORT_ERROR}\n"
-                f"This usually means realesrgan dependencies are missing.\n"
-                f"Try reinstalling: pip install --force-reinstall realesrgan"
+                "This usually means realesrgan dependencies are missing.\n"
+                "Try reinstalling: pip install --force-reinstall realesrgan"
             )
 import glob
 import importlib.util
@@ -598,7 +598,7 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
     if text:
         try:
             # Use a clean sans (replace with your corporate font)
-            font = ImageFont.truetype("arial.ttf", size=max(22, height_px // 40))
+            font = ImageFont.truetype("arial.tt", size=max(22, height_px // 40))
         except (OSError, IOError):
             font = ImageFont.load_default()
 
@@ -1044,14 +1044,14 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
                 f"Dimensions {width}×{height} are invalid for Stable Diffusion 1.5: "
                 f"{' and '.join(errors)}. "
                 f"Recommended: {MIN_SD_DIMENSION}×{MIN_SD_DIMENSION}, 768×512, 512×768, 768×768, 1024×768, or 1024×1024. "
-                f"Use --width and --height to specify valid dimensions."
+                "Use --width and --height to specify valid dimensions."
             )
 
     # Warn about extremely large dimensions that may cause OOM
     if width * height > MAX_RECOMMENDED_PIXELS:
         typer.echo(
             f"⚠ Large dimensions ({width}×{height}) may require significant VRAM (8GB+). "
-            f"Consider using smaller dimensions or ensure sufficient GPU memory.",
+            "Consider using smaller dimensions or ensure sufficient GPU memory.",
             err=True
         )
 

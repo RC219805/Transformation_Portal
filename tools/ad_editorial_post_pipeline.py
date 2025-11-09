@@ -555,12 +555,12 @@ class Layout:
 RAW_EXTS = {
     ".cr2",
     ".cr3",
-    ".nef",
+    ".ne",
     ".arw",
-    ".raf",
+    ".ra",
     ".rw2",
     ".dng",
-    ".orf",
+    ".or",
     ".srw",
     ".crw",
 }
@@ -1270,7 +1270,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
     for rp in tqdm(raws, desc="RAW→TIFF"):
         try:
             img = raw_to_prophoto_tiff(rp)
-            out = lay.WORK_BASE / (rp.stem + ".tif")
+            out = lay.WORK_BASE / (rp.stem + ".ti")
             save_tiff16_prophoto(img, out, icc_prophoto)
             base_outputs.append(out)
         except Exception as e:
@@ -1286,7 +1286,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         for g in tqdm(groups, desc="HDR groups"):
             try:
                 hdr = hdr_merge_debvec(g)
-                out = lay.WORK_HDR / (g[0].stem + "_HDR.tif")
+                out = lay.WORK_HDR / (g[0].stem + "_HDR.ti")
                 save_tiff16_prophoto(hdr, out, icc_prophoto)
                 hdr_paths.append(out)
             except Exception as e:
@@ -1304,7 +1304,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                     continue
 
                 pano = stitch_pano(files)
-                out = lay.WORK_PANO / (files[0].stem + "_PANO.tif")
+                out = lay.WORK_PANO / (files[0].stem + "_PANO.ti")
                 save_tiff16_prophoto(pano, out, icc_prophoto)
                 pano_paths.append(out)
             except Exception as e:
@@ -1410,7 +1410,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
             manifest["exports"].append(
                 {
                     "style": style,
-                    "print_tiff": str(print_out.relative_to(cfg.project_root)),
+                    "print_tif": str(print_out.relative_to(cfg.project_root)),
                     "web_jpeg": str(web_out.relative_to(cfg.project_root)),
                 }
             )
@@ -1421,7 +1421,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         if not imgs:
             continue
 
-        out_pdf = lay.DOCS_CONTACTS / f"contact_{style}.pdf"
+        out_pdf = lay.DOCS_CONTACTS / f"contact_{style}.pd"
         build_contact_sheet(imgs, out_pdf, caption=f"{cfg.project_name} — {style}")
 
     # IPTC/XMP embedding
@@ -1437,7 +1437,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
             ):
                 row = (
                     meta_map.get(img.name)
-                    or meta_map.get(img.stem + ".tif")
+                    or meta_map.get(img.stem + ".ti")
                     or meta_map.get(img.stem + ".jpg")
                 )
                 if not row:
@@ -1450,10 +1450,10 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
 
         for style in lay.EXPORT_PRINT:
             for img in tqdm(
-                sorted(list(lay.EXPORT_PRINT[style].glob("*.tif")), key=human_sort_key),
+                sorted(list(lay.EXPORT_PRINT[style].glob("*.ti")), key=human_sort_key),
                 desc=f"Metadata {style}",
             ):
-                row = meta_map.get(img.name) or meta_map.get(img.stem + ".tif")
+                row = meta_map.get(img.name) or meta_map.get(img.stem + ".ti")
                 if not row:
                     continue
 

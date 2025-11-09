@@ -291,7 +291,7 @@ class WorkflowParser:
                                 line_num,
                                 'warning',
                                 f"Job '{job_name}' has device matrix [{device_list}] but includes "
-                                f"'lint' task which doesn't require multiple devices"))
+                                "'lint' task which doesn't require multiple devices"))
 
     def _remove_heredocs(self, script: str) -> str:
         """Remove heredoc content to avoid false positives from embedded code.

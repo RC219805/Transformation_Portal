@@ -144,7 +144,7 @@ def save_image(
             image_bgr,
             [cv2.IMWRITE_PNG_COMPRESSION, 9]
         )
-    elif ext in ['.tif', '.tiff']:
+    elif ext in ['.ti', '.tiff']:
         cv2.imwrite(str(path), image_bgr)
     else:
         # Fallback to PIL

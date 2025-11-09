@@ -37,7 +37,7 @@ def test_save_image_retains_float_tonal_range(tmp_path):
     rgb = np.stack([gradient, gradient ** 1.5, np.clip(gradient * 1.2, 0.0, 1.0)], axis=-1)
 
     float_data = float_to_dtype_array(rgb, np.float32, None)
-    output_path = tmp_path / "float_image.tiff"
+    output_path = tmp_path / "float_image.tif"
     save_image(output_path, float_data, np.dtype(np.float32), metadata=None, icc_profile=None, compression="deflate")
 
     if tifffile is not None:

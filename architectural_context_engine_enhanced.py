@@ -484,7 +484,7 @@ def main():
 
         if args.performance:
             perf = engine.get_performance_estimate(args.view)
-            print(f"\nPerformance Estimate:")
+            print("\nPerformance Estimate:")
             print(json.dumps(perf, indent=2))
 
     elif args.export_all:
@@ -494,11 +494,11 @@ def main():
 
     else:
         # Show summary
-        print(f"\nArchitectural Context Engine")
+        print("\nArchitectural Context Engine")
         print(f"Project: {engine.metadata.get('project')}")
         print(f"Location: {engine.metadata.get('location')}")
         print(f"Loaded views: {len(engine.view_contexts)}")
-        print(f"\nAvailable views:")
+        print("\nAvailable views:")
         for view_name, context in engine.view_contexts.items():
             print(f"  - {view_name} ({context.room_type})")
 

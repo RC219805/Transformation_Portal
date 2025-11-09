@@ -58,9 +58,9 @@ class ModelBackend(Enum):
 
 class ModelVariant(Enum):
     """Depth Anything V2 model variants."""
-    SMALL = "depth-anything/Depth-Anything-V2-Small-hf"
-    BASE = "depth-anything/Depth-Anything-V2-Base-hf"
-    LARGE = "depth-anything/Depth-Anything-V2-Large-hf"
+    SMALL = "depth-anything/Depth-Anything-V2-Small-h"
+    BASE = "depth-anything/Depth-Anything-V2-Base-h"
+    LARGE = "depth-anything/Depth-Anything-V2-Large-h"
 
     # CoreML optimized versions
     SMALL_COREML = "apple/coreml-depth-anything-v2-small"
@@ -234,7 +234,7 @@ class DepthAnythingV2Model:
         if not coreml_variant:
             raise ValueError(
                 f"CoreML model not available for variant {self.variant}. "
-                f"Use SMALL or BASE."
+                "Use SMALL or BASE."
             )
 
         # Download model package
@@ -407,7 +407,7 @@ class DepthAnythingV2Model:
 
     def __repr__(self) -> str:
         return (
-            f"DepthAnythingV2Model("
+            "DepthAnythingV2Model("
             f"variant={self.variant.name}, "
             f"backend={self.backend.name}, "
             f"device={self.device})"

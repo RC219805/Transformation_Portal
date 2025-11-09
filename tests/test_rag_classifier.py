@@ -74,7 +74,7 @@ class TestPipelineDetection:
 
     def test_detect_material_response(self, classifier):
         """Test material response detection."""
-        result = classifier.detect_pipeline("material_response/processed.tiff")
+        result = classifier.detect_pipeline("material_response/processed.tif")
         assert result == PipelineType.MATERIAL_RESPONSE
 
     def test_detect_unknown_pipeline(self, classifier):
@@ -154,7 +154,7 @@ class TestMetadataExtraction:
     def test_extract_color_space(self, classifier):
         """Test color space extraction."""
         metadata = classifier.extract_metadata(
-            "image_srgb_16bit.tiff",
+            "image_srgb_16bit.tif",
             ArtifactType.RENDER,
             PipelineType.TIFF_PROCESSOR,
         )

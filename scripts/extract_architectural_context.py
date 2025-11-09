@@ -102,7 +102,7 @@ class ArchitecturalContextExtractor:
             return self.context
 
         print(f"\n{'='*70}")
-        print(f"EXTRACTING ARCHITECTURAL CONTEXT")
+        print("EXTRACTING ARCHITECTURAL CONTEXT")
         print(f"{'='*70}")
         print(f"Source: {pdf_path.name}")
 
@@ -236,7 +236,7 @@ class ArchitecturalContextExtractor:
                 print(f"   ... and {len(self.context.rooms) - 10} more")
 
         if self.context.materials:
-            print(f"\n🎨 Materials:")
+            print("\n🎨 Materials:")
             for mat_type, items in self.context.materials.items():
                 print(f"   • {mat_type}: {', '.join(items[:3])}")
 
@@ -273,7 +273,7 @@ def main():
     context = extractor.extract_from_pdf(pdf_path)
     extractor.save_json(output_path)
 
-    print(f"\n✅ Extraction complete!")
+    print("\n✅ Extraction complete!")
 
 
 if __name__ == '__main__':

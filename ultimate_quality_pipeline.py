@@ -40,7 +40,7 @@ def estimate_depth_mps(image: Image.Image, device: str = "mps") -> np.ndarray:
 
     depth_estimator = pipeline(
         "depth-estimation",
-        model="depth-anything/Depth-Anything-V2-Large-hf",
+        model="depth-anything/Depth-Anything-V2-Large-h",
         device=device
     )
 
@@ -242,13 +242,13 @@ def main():
     output_dir.mkdir(exist_ok=True, parents=True)
 
     # Find TIFF files
-    tiff_files = list(input_dir.glob("*.tif")) + list(input_dir.glob("*.tiff"))
+    tiff_files = list(input_dir.glob("*.ti")) + list(input_dir.glob("*.tif"))
 
     if not tiff_files:
         print(f"No TIFF files found in {input_dir}")
         # Try alternate location
         alt_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/TIFFs/_TIFFs")
-        tiff_files = list(alt_dir.glob("*.tif")) + list(alt_dir.glob("*.tiff"))
+        tiff_files = list(alt_dir.glob("*.ti")) + list(alt_dir.glob("*.tif"))
 
         if tiff_files:
             input_dir = alt_dir

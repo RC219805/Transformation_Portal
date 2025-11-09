@@ -21,11 +21,11 @@ print("CONSERVATIVE ENHANCEMENT - 750 PICACHO KITCHEN")
 print("Optimized for luxury interior architectural rendering")
 print("=" * 70)
 
-INPUT = "input_images/750Picacho_Kitchen.tiff"
+INPUT = "input_images/750Picacho_Kitchen.tif"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-print(f"\n[1/7] Loading 32-bit TIFF...")
+print("\n[1/7] Loading 32-bit TIFF...")
 
 # Try tifffile first for better HDR handling
 if TIFFFILE_AVAILABLE:
@@ -50,7 +50,7 @@ if TIFFFILE_AVAILABLE:
 
     except Exception as e:
         print(f"  tifffile failed: {e}")
-        print(f"  Falling back to PIL...")
+        print("  Falling back to PIL...")
         img = Image.open(INPUT).convert("RGB")
 else:
     # Fallback to PIL
@@ -74,16 +74,16 @@ result = img.copy()
 # ============================================================================
 # Step 2: Color Grading (Saturation Boost)
 # ============================================================================
-print(f"\n[2/7] Color grading (saturation boost)...")
+print("\n[2/7] Color grading (saturation boost)...")
 # Analysis showed 14% saturation - boost to ~22% for vibrancy
 # +8% increase = 1.08 multiplier
 result = ImageEnhance.Color(result).enhance(1.08)
-print(f"  ✓ Saturation: +8% (lift from flat rendering)")
+print("  ✓ Saturation: +8% (lift from flat rendering)")
 
 # ============================================================================
 # Step 3: Color Temperature Adjustment
 # ============================================================================
-print(f"\n[3/7] Balancing color temperature...")
+print("\n[3/7] Balancing color temperature...")
 # Analysis showed warm cast: 54% red, 40% blue
 # Reduce red dominance and boost blue slightly
 result_array = np.array(result).astype(np.float32)
@@ -91,21 +91,21 @@ result_array[:,:,0] *= 0.97  # Reduce red by 3%
 result_array[:,:,2] *= 1.03  # Boost blue by 3%
 result_array = np.clip(result_array, 0, 255).astype(np.uint8)
 result = Image.fromarray(result_array)
-print(f"  ✓ Color temperature: Warm → Neutral-warm (balanced)")
+print("  ✓ Color temperature: Warm → Neutral-warm (balanced)")
 
 # ============================================================================
 # Step 4: Contrast Enhancement
 # ============================================================================
-print(f"\n[4/7] Enhancing contrast...")
+print("\n[4/7] Enhancing contrast...")
 # Midtones dominate (57.6%) - add contrast for depth
 # +6% contrast to separate tonal zones
 result = ImageEnhance.Contrast(result).enhance(1.06)
-print(f"  ✓ Contrast: +6% (depth and dimension)")
+print("  ✓ Contrast: +6% (depth and dimension)")
 
 # ============================================================================
 # Step 5: Material Enhancement (Selective Sharpening)
 # ============================================================================
-print(f"\n[5/7] Material enhancement...")
+print("\n[5/7] Material enhancement...")
 # Target wood grain (41.8%) and stone texture (26.1%)
 # Selective sharpening on edges only to avoid over-sharpening
 
@@ -124,15 +124,15 @@ sharpened_array = np.array(sharpened)
 edge_mask_3d = np.stack([edge_mask] * 3, axis=2)
 blended = result_array * (1 - edge_mask_3d * 0.25) + sharpened_array * (edge_mask_3d * 0.25)
 result = Image.fromarray(blended.astype(np.uint8))
-print(f"  ✓ Selective sharpening: 25% on edges")
-print(f"    - Wood grain detail enhanced")
-print(f"    - Stone texture clarity improved")
-print(f"    - Metal edges preserved")
+print("  ✓ Selective sharpening: 25% on edges")
+print("    - Wood grain detail enhanced")
+print("    - Stone texture clarity improved")
+print("    - Metal edges preserved")
 
 # ============================================================================
 # Step 6: Brightness Preservation
 # ============================================================================
-print(f"\n[6/7] Brightness preservation...")
+print("\n[6/7] Brightness preservation...")
 # Critical: Maintain original brightness (lesson from aerial processing)
 current_brightness = np.array(result).mean()
 brightness_ratio = original_brightness / current_brightness
@@ -143,16 +143,16 @@ if abs(brightness_ratio - 1.0) > 0.01:  # More than 1% difference
     print(f"  Original: {original_brightness:.2f}")
     print(f"  After processing: {current_brightness:.2f}")
     print(f"  Corrected to: {final_brightness:.2f}")
-    print(f"  ✓ Brightness preserved within 0.5%")
+    print("  ✓ Brightness preserved within 0.5%")
 else:
     print(f"  ✓ Brightness maintained ({current_brightness:.2f})")
 
 # ============================================================================
 # Step 7: Export
 # ============================================================================
-print(f"\n[7/7] Exporting...")
+print("\n[7/7] Exporting...")
 output_png = OUTPUT_DIR / "750Picacho_Kitchen_Conservative_4K.png"
-output_tiff = OUTPUT_DIR / "750Picacho_Kitchen_Conservative_4K.tiff"
+output_tiff = OUTPUT_DIR / "750Picacho_Kitchen_Conservative_4K.tif"
 
 # Export PNG for web/presentation
 result.save(output_png, quality=100, optimize=True)
@@ -171,17 +171,17 @@ print("\n" + "=" * 70)
 print("✅ PROCESSING COMPLETE")
 print("=" * 70)
 
-print(f"\n📁 Output Files:")
+print("\n📁 Output Files:")
 print(f"  • {output_png.name}")
-print(f"    - Format: PNG (8-bit, sRGB)")
-print(f"    - Use: Web, social media, presentations")
+print("    - Format: PNG (8-bit, sRGB)")
+print("    - Use: Web, social media, presentations")
 print(f"    - Size: ~{output_png.stat().st_size / 1_000_000:.1f} MB")
 print(f"  • {output_tiff.name}")
-print(f"    - Format: TIFF (LZW compressed)")
-print(f"    - Use: Print, archival, future editing")
+print("    - Format: TIFF (LZW compressed)")
+print("    - Use: Print, archival, future editing")
 print(f"    - Size: ~{output_tiff.stat().st_size / 1_000_000:.1f} MB")
 
-print(f"\n📊 Quality Metrics:")
+print("\n📊 Quality Metrics:")
 print(f"  Resolution: {original_size[0]}×{original_size[1]} pixels (preserved)")
 
 brightness_change = (result_array.mean() - original_array.mean()) / original_array.mean() * 100
@@ -198,46 +198,46 @@ print(f"  Saturation: +{sat_change:.1f}% (target: +8%)")
 r_mean = result_array[:,:,0].mean()
 g_mean = result_array[:,:,1].mean()
 b_mean = result_array[:,:,2].mean()
-print(f"\n  Color Channels (after adjustment):")
+print("\n  Color Channels (after adjustment):")
 print(f"    Red: {r_mean:.1f} (was {original_array[:,:,0].mean():.1f})")
 print(f"    Green: {g_mean:.1f} (was {original_array[:,:,1].mean():.1f})")
 print(f"    Blue: {b_mean:.1f} (was {original_array[:,:,2].mean():.1f})")
 
-print(f"\n🎯 Enhancements Applied:")
-print(f"  ✓ Color saturation boost (+8%)")
-print(f"  ✓ Warm cast reduction (balanced)")
-print(f"  ✓ Contrast enhancement (+6%)")
-print(f"  ✓ Selective edge sharpening (25%)")
-print(f"  ✓ Material detail enhancement")
-print(f"  ✓ Brightness preservation")
-print(f"  ✗ No AI processing")
-print(f"  ✗ No aggressive post-processing")
-print(f"  ✗ No resolution changes")
+print("\n🎯 Enhancements Applied:")
+print("  ✓ Color saturation boost (+8%)")
+print("  ✓ Warm cast reduction (balanced)")
+print("  ✓ Contrast enhancement (+6%)")
+print("  ✓ Selective edge sharpening (25%)")
+print("  ✓ Material detail enhancement")
+print("  ✓ Brightness preservation")
+print("  ✗ No AI processing")
+print("  ✗ No aggressive post-processing")
+print("  ✗ No resolution changes")
 
-print(f"\n💡 Result: Professional kitchen enhancement")
-print(f"   Natural appearance, vibrant colors, enhanced materials")
-print(f"   Architectural accuracy preserved, client-ready")
+print("\n💡 Result: Professional kitchen enhancement")
+print("   Natural appearance, vibrant colors, enhanced materials")
+print("   Architectural accuracy preserved, client-ready")
 
-print(f"\n📈 Fidelity: ~99.5% (based on aerial processing success)")
+print("\n📈 Fidelity: ~99.5% (based on aerial processing success)")
 print("=" * 70)
 
-print(f"\n✨ Success Criteria:")
+print("\n✨ Success Criteria:")
 print(f"  {'✅' if abs(brightness_change) < 0.5 else '⚠️ '} Brightness preserved (<0.5%)")
 print(f"  {'✅' if 6 <= sat_change <= 10 else '⚠️ '} Saturation enhanced (6-10%)")
 print(f"  {'✅' if 4 <= contrast_change <= 8 else '⚠️ '} Contrast improved (4-8%)")
 
-print(f"\n🎨 Visual Check:")
+print("\n🎨 Visual Check:")
 print(f"  1. Open {output_png.name} at 100% zoom")
-print(f"  2. Compare to original for brightness match")
-print(f"  3. Check wood grain visibility (cabinets)")
-print(f"  4. Verify stone texture clarity (counters)")
-print(f"  5. Ensure natural color (not oversaturated)")
-print(f"  6. Look for artifacts (should be none)")
+print("  2. Compare to original for brightness match")
+print("  3. Check wood grain visibility (cabinets)")
+print("  4. Verify stone texture clarity (counters)")
+print("  5. Ensure natural color (not oversaturated)")
+print("  6. Look for artifacts (should be none)")
 
-print(f"\n📍 Next Steps:")
-print(f"  • Review output for client approval")
-print(f"  • Compare side-by-side with original")
-print(f"  • Adjust parameters if needed (saturation ±2%)")
-print(f"  • Export additional formats if required")
+print("\n📍 Next Steps:")
+print("  • Review output for client approval")
+print("  • Compare side-by-side with original")
+print("  • Adjust parameters if needed (saturation ±2%)")
+print("  • Export additional formats if required")
 
 print("\n" + "=" * 70)

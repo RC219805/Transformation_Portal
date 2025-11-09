@@ -239,7 +239,7 @@ def example_parallel_output_generation():
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
-    outputs = pipeline.process(Path("input/large_image.tiff"))
+    outputs = pipeline.process(Path("input/large_image.tif"))
 
     print(f"Generated {len(outputs)} formats in parallel")
 
@@ -299,7 +299,7 @@ def example_social_media_workflow():
     # Process and get social-optimized outputs
     outputs = pipeline.process(Path("input/lifestyle_shot.jpg"))
 
-    print(f"Social media outputs:")
+    print("Social media outputs:")
     print(f"  Instagram (1080p): {outputs.get('social')}")
     print(f"  Website (4K): {outputs.get('web')}")
 

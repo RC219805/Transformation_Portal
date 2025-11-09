@@ -101,7 +101,7 @@ def test_enhance_aerial(tmp_path):
     img.save(input_path)
 
     # Use default textures (None) to avoid file dependencies
-    textures = {name: None for name in ["plaster", "stone", "cladding", "screens", "equitone", "roof", "bronze", "shade"]}
+    textures = {name: None for name in ["plaster", "stone", "cladding", "screens", "equitone", "roo", "bronze", "shade"]}
 
     out = enhance_aerial(
         input_path=input_path,

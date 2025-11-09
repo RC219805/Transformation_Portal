@@ -65,7 +65,7 @@ class PremiumContextAwarePipeline:
         """
         if self.verbose:
             print(f"\n{'='*70}")
-            print(f"PREMIUM CONTEXT-AWARE PIPELINE")
+            print("PREMIUM CONTEXT-AWARE PIPELINE")
             print(f"{'='*70}")
             print(f"Project: {self.context.project_name}")
             print(f"Image: {image_path.name}")
@@ -159,10 +159,10 @@ class PremiumContextAwarePipeline:
             # Check if depth_pipeline is available
             depth_pipeline_script = Path("depth_pipeline/pipeline.py")
             if not depth_pipeline_script.exists():
-                print(f"⚠ Depth pipeline not found, skipping depth processing")
+                print("⚠ Depth pipeline not found, skipping depth processing")
                 return None
 
-            output_path = self.output_dir / f"{image_path.stem}_depth.tiff"
+            output_path = self.output_dir / f"{image_path.stem}_depth.tif"
 
             # Build command
             cmd = [
@@ -201,10 +201,10 @@ class PremiumContextAwarePipeline:
         try:
             material_response_script = Path("material_response.py")
             if not material_response_script.exists():
-                print(f"⚠ Material Response not found, skipping")
+                print("⚠ Material Response not found, skipping")
                 return None
 
-            output_path = self.output_dir / f"{image_path.stem}_material.tiff"
+            output_path = self.output_dir / f"{image_path.stem}_material.tif"
 
             # Build command
             cmd = [
@@ -245,10 +245,10 @@ class PremiumContextAwarePipeline:
         try:
             color_script = Path("luxury_tiff_batch_processor.py")
             if not color_script.exists():
-                print(f"⚠ Color grading script not found, skipping")
+                print("⚠ Color grading script not found, skipping")
                 return None
 
-            output_path = self.output_dir / f"{image_path.stem}_graded.tiff"
+            output_path = self.output_dir / f"{image_path.stem}_graded.tif"
 
             preset = color_config.get('lut_preset', 'signature_estate')
 
@@ -267,14 +267,14 @@ class PremiumContextAwarePipeline:
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             # Find output (script generates its own naming)
-            expected_output = self.output_dir / f"{image_path.stem}_{preset}.tiff"
+            expected_output = self.output_dir / f"{image_path.stem}_{preset}.tif"
             if expected_output.exists():
                 # Rename to standard name
                 expected_output.rename(output_path)
                 print(f"✓ Color grading complete: {output_path}")
                 return output_path
             else:
-                print(f"⚠ Color grading failed or output not found")
+                print("⚠ Color grading failed or output not found")
                 return None
 
         except Exception as e:
@@ -289,10 +289,10 @@ class PremiumContextAwarePipeline:
         try:
             lux_script = Path("lux_render_pipeline.py")
             if not lux_script.exists():
-                print(f"⚠ Lux pipeline not found, skipping ultimate enhancement")
+                print("⚠ Lux pipeline not found, skipping ultimate enhancement")
                 return None
 
-            output_path = self.output_dir / f"{image_path.stem}_ultimate.tiff"
+            output_path = self.output_dir / f"{image_path.stem}_ultimate.tif"
 
             # Build command
             cmd = [
@@ -312,7 +312,7 @@ class PremiumContextAwarePipeline:
                 print(f"✓ Ultimate enhancement complete: {output_path}")
                 return output_path
             else:
-                print(f"⚠ Ultimate enhancement failed")
+                print("⚠ Ultimate enhancement failed")
                 return None
 
         except Exception as e:
@@ -388,7 +388,7 @@ def main():
         print(f"\n{'='*70}")
         print("PIPELINE COMPLETE")
         print(f"{'='*70}")
-        print(f"\nOutputs:")
+        print("\nOutputs:")
         for stage, path in outputs.items():
             print(f"  {stage.upper()}: {path}")
 

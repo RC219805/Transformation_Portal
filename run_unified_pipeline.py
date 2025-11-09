@@ -14,7 +14,7 @@ from src.transformation_portal.pipelines.unified_luxury_pipeline import (
 
 def main():
     # Input file from desktop cache - using Master TIFF (16-bit)
-    input_file = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Master_TIFFs_16bit/750Picacho_Pool.tiff")
+    input_file = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Master_TIFFs_16bit/750Picacho_Pool.tif")
 
     # Create output directory
     output_dir = Path("/Users/rc/Desktop/Cache/750_Picacho_Unified_Output")

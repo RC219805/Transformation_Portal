@@ -58,7 +58,7 @@ def test_metrics_and_diff(tmp_path: Path) -> None:
             str(SCRIPT),
             str(original),
             str(candidate),
-            "--diff",
+            "--dif",
             str(diff),
             "--json",
             str(metrics_json),

@@ -39,8 +39,8 @@ print("\n[2/4] Enriching with architectural documents...")
 print("-" * 80)
 
 pdf_paths = [
-    Path("/Users/rc/24098.00_750 PICACHO LANE.pdf"),
-    Path("/Users/rc/Documents/GitHub/Transformation_Portal/input_images/250930_MBAR SUBMITTAL 2.pdf"),
+    Path("/Users/rc/24098.00_750 PICACHO LANE.pd"),
+    Path("/Users/rc/Documents/GitHub/Transformation_Portal/input_images/250930_MBAR SUBMITTAL 2.pd"),
 ]
 
 pdf_found = []
@@ -172,15 +172,15 @@ print(f"\nMaterials ({len(context.materials)}):")
 for mat in context.materials:
     print(f"  - {mat.location}: {mat.to_prompt_fragment()}")
 
-print(f"\nDesign Intent:")
+print("\nDesign Intent:")
 for intent in context.design_intent:
     print(f"  - {intent}")
 
-print(f"\nStyle Notes:")
+print("\nStyle Notes:")
 for note in context.style_notes:
     print(f"  - {note}")
 
-print(f"\nSource Documents:")
+print("\nSource Documents:")
 for doc in context.source_documents:
     print(f"  - {doc}")
 
@@ -194,7 +194,7 @@ print("""
 1. Run context-aware pipeline:
    python context_aware_pro_pipeline.py \\
        input_images/Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright.jpg \\
-       --pdf "/Users/rc/24098.00_750 PICACHO LANE.pdf"
+       --pdf "/Users/rc/24098.00_750 PICACHO LANE.pd"
 
 2. Or use the enriched context directly:
    from architectural_context_engine import ArchitecturalContext

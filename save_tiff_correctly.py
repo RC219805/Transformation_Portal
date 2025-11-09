@@ -34,7 +34,7 @@ def save_16bit_tiff_correctly(
 
     Examples:
         >>> arr = np.random.randint(0, 65536, (2000, 3000, 3), dtype=np.uint16)
-        >>> save_16bit_tiff_correctly(arr, 'output.tif')
+        >>> save_16bit_tiff_correctly(arr, 'output.ti')
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

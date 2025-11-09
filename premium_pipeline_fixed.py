@@ -56,7 +56,7 @@ class PremiumPipelineFixed:
         """
         if self.verbose:
             print(f"\n{'='*70}")
-            print(f"PREMIUM PIPELINE (FIXED)")
+            print("PREMIUM PIPELINE (FIXED)")
             print(f"{'='*70}")
             print(f"Input: {input_path.name}")
             print(f"Preset: {preset}")
@@ -67,7 +67,7 @@ class PremiumPipelineFixed:
 
         # Load input
         if self.verbose:
-            print(f"\n[1/6] Loading input...")
+            print("\n[1/6] Loading input...")
         img = Image.open(input_path)
         if img.mode != 'RGB':
             img = img.convert('RGB')
@@ -77,35 +77,35 @@ class PremiumPipelineFixed:
 
         # Stage 1: Standard enhancement (depth, material response, color grading)
         if self.verbose:
-            print(f"\n[2/6] Standard enhancement pipeline...")
+            print("\n[2/6] Standard enhancement pipeline...")
 
         enhanced = self._standard_enhancement(img, preset)
 
         # Stage 2: Optional AI enhancement (use sparingly)
         if enable_ai_enhance:
             if self.verbose:
-                print(f"\n[3/6] AI enhancement (conservative)...")
+                print("\n[3/6] AI enhancement (conservative)...")
             enhanced = self._ai_enhance_conservative(enhanced)
         else:
             if self.verbose:
-                print(f"\n[3/6] AI enhancement SKIPPED (safer quality)")
+                print("\n[3/6] AI enhancement SKIPPED (safer quality)")
 
         # Stage 3: Optional 4K upscaling (this works well)
         if enable_4k_upscale:
             if self.verbose:
-                print(f"\n[4/6] 4K upscaling...")
+                print("\n[4/6] 4K upscaling...")
             upscaled = self._upscale_4x(enhanced)
             master = upscaled
         else:
             if self.verbose:
-                print(f"\n[4/6] 4K upscaling SKIPPED")
+                print("\n[4/6] 4K upscaling SKIPPED")
             master = enhanced
 
         # Stage 4: Save master TIFF
         if self.verbose:
-            print(f"\n[5/6] Saving master...")
+            print("\n[5/6] Saving master...")
 
-        master_name = input_path.stem + "_PREMIUM_MASTER.tiff"
+        master_name = input_path.stem + "_PREMIUM_MASTER.tif"
         master_path = self.output_dir / master_name
 
         # Save as true 16-bit TIFF using tifffile
@@ -131,8 +131,8 @@ class PremiumPipelineFixed:
         except ImportError:
             # Fallback to PIL (8-bit only)
             if self.verbose:
-                print(f"  ⚠️  tifffile not available - saving 8-bit TIFF")
-                print(f"     Install tifffile for 16-bit: pip install tifffile")
+                print("  ⚠️  tifffile not available - saving 8-bit TIFF")
+                print("     Install tifffile for 16-bit: pip install tifffile")
 
             master.save(
                 master_path,
@@ -148,7 +148,7 @@ class PremiumPipelineFixed:
 
         # Stage 5: Export optimized deliverables
         if self.verbose:
-            print(f"\n[6/6] Generating deliverables...")
+            print("\n[6/6] Generating deliverables...")
 
         deliverables = self._create_optimized_deliverables(master, input_path.stem)
         outputs.update(deliverables)
@@ -202,7 +202,7 @@ class PremiumPipelineFixed:
         Use 0.3-0.4 for subtle refinement only.
         """
         if self.verbose:
-            print(f"  Using conservative strength (0.35 vs 0.70)")
+            print("  Using conservative strength (0.35 vs 0.70)")
 
         # In production, this would call lux_render_pipeline with:
         # --strength 0.35 (instead of 0.70)
@@ -251,11 +251,11 @@ class PremiumPipelineFixed:
             upscaled = Image.fromarray(output, 'RGB')
 
             if self.verbose:
-                print(f"  ✓ Real-ESRGAN 4x upscale")
+                print("  ✓ Real-ESRGAN 4x upscale")
 
         except Exception as e:
             if self.verbose:
-                print(f"  ! Real-ESRGAN unavailable, using Lanczos")
+                print("  ! Real-ESRGAN unavailable, using Lanczos")
 
             # Fallback to Lanczos
             upscaled = img.resize(target_size, Image.Resampling.LANCZOS)
@@ -283,7 +283,7 @@ class PremiumPipelineFixed:
 
         # 1. Print JPEG (8K) - FIXED quality
         if self.verbose:
-            print(f"  Generating Print 8K...")
+            print("  Generating Print 8K...")
 
         # Downsample from 16K to 8K if needed
         if max(master.size) > 8000:
@@ -310,7 +310,7 @@ class PremiumPipelineFixed:
 
         # 2. Web Ultra (4K) - FIXED quality
         if self.verbose:
-            print(f"  Generating Web Ultra (4K)...")
+            print("  Generating Web Ultra (4K)...")
 
         ratio = 4000 / max(master.size)
         web_size = (int(master.size[0] * ratio), int(master.size[1] * ratio))
@@ -332,7 +332,7 @@ class PremiumPipelineFixed:
 
         # 3. Magazine Cover (2K) - FIXED quality
         if self.verbose:
-            print(f"  Generating Magazine Cover (2K)...")
+            print("  Generating Magazine Cover (2K)...")
 
         ratio = 2000 / max(master.size)
         mag_size = (int(master.size[0] * ratio), int(master.size[1] * ratio))
@@ -354,7 +354,7 @@ class PremiumPipelineFixed:
 
         # 4. Social Media (1200px)
         if self.verbose:
-            print(f"  Generating Social Media...")
+            print("  Generating Social Media...")
 
         ratio = 1200 / max(master.size)
         social_size = (int(master.size[0] * ratio), int(master.size[1] * ratio))
@@ -423,7 +423,7 @@ def main():
         enable_ai_enhance=args.enable_ai
     )
 
-    print(f"\n✅ Premium processing complete")
+    print("\n✅ Premium processing complete")
     print(f"   Outputs: {len(outputs)} files in {pipeline.output_dir}")
 
 

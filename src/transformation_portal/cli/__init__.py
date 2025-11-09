@@ -230,7 +230,7 @@ def process_video(
     typer.echo("⚠️  Note: FFmpeg is required for video processing")
 
 
-@process_app.command("tiff")
+@process_app.command("tif")
 def process_tiff(
     input_dir: Path = typer.Option(..., "--input", "-i", help="Input directory"),
     output_dir: Path = typer.Option(..., "--output", "-o", help="Output directory"),

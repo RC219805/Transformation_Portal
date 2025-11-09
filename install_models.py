@@ -53,7 +53,7 @@ try:
     from transformers import AutoImageProcessor
 
     # Check if model is cached
-    model_id = "LiheYoung/depth-anything-small-hf"
+    model_id = "LiheYoung/depth-anything-small-h"
 
     try:
         print(f"\nVerifying model: {model_id}")

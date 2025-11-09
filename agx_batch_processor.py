@@ -289,7 +289,7 @@ def process_folder(input_dir: Path,
                    quality: int = 95,
                    workers: int = 4):
     """Batch process an entire folder with ThreadPoolExecutor."""
-    image_exts = (".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".exr", ".hdr")
+    image_exts = (".jpg", ".jpeg", ".png", ".ti", ".tif", ".webp", ".exr", ".hdr")
     images = sorted([f for f in input_dir.glob("*") if f.suffix.lower() in image_exts])
     if not images:
         log.warning(f"No images found in {input_dir}")

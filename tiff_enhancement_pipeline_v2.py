@@ -268,8 +268,8 @@ class AdaptiveSegmentationStage:
         log.info(f"Running material clustering (k={self.config.material_clusters})...")
 
         # Find enhanced images
-        enhanced_images = (list(enhanced_dir.glob("*.tif")) +
-                           list(enhanced_dir.glob("*.tiff")) +
+        enhanced_images = (list(enhanced_dir.glob("*.ti")) +
+                           list(enhanced_dir.glob("*.tif")) +
                            list(enhanced_dir.glob("*.jpg")))
 
         mask_count = 0
@@ -320,8 +320,8 @@ class AdaptiveSegmentationStage:
         log.info("Auto-detecting optimal segmentation method...")
 
         # Analyze first image to determine type
-        enhanced_images = (list(enhanced_dir.glob("*.tif")) +
-                           list(enhanced_dir.glob("*.tiff")))
+        enhanced_images = (list(enhanced_dir.glob("*.ti")) +
+                           list(enhanced_dir.glob("*.tif")))
 
         if not enhanced_images:
             log.error("No images found for analysis")

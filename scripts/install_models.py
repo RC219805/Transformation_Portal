@@ -83,13 +83,13 @@ REALESRGAN_MODELS = {
 
 DEPTH_MODELS = {
     "depth-anything-small": {
-        "model_id": "LiheYoung/depth-anything-small-hf",
+        "model_id": "LiheYoung/depth-anything-small-h",
         "size_mb": 100,
         "description": "Depth Anything V2 Small (fastest)",
         "required": True,
     },
     "depth-anything-base": {
-        "model_id": "LiheYoung/depth-anything-base-hf",
+        "model_id": "LiheYoung/depth-anything-base-h",
         "size_mb": 350,
         "description": "Depth Anything V2 Base (balanced)",
         "required": False,
@@ -533,31 +533,31 @@ Examples:
     print("INSTALLATION SUMMARY")
     print("=" * 70)
 
-    print(f"\n✓ Models Ready:")
+    print("\n✓ Models Ready:")
     print(f"  • Depth Anything V2:  {depth_installed} models")
     print(f"  • Real-ESRGAN:        {realesrgan_installed} models")
     if args.all:
         print(f"  • ControlNet:         {controlnet_installed} models")
         print(f"  • Stable Diffusion:   {sd_installed} models")
 
-    print(f"\n📦 Model Locations:")
+    print("\n📦 Model Locations:")
     print("  • HuggingFace cache: ~/.cache/huggingface/")
     print(f"  • Real-ESRGAN:       {WEIGHTS_DIR}")
 
-    print(f"\n💡 Notes:")
+    print("\n💡 Notes:")
     print("  • HuggingFace models auto-download on first use")
     print("  • First pipeline run will be slower (model loading)")
     print("  • Models are cached and reused across runs")
 
-    print(f"\n🔧 Optional Dependencies:")
+    print("\n🔧 Optional Dependencies:")
     print("  • pip install accelerate      (faster loading)")
     print("  • pip install realesrgan       (4x upscaling)")
     print("  • pip install torch            (GPU acceleration)")
 
     if not args.dry_run:
-        print(f"\n✅ Setup complete!")
+        print("\n✅ Setup complete!")
     else:
-        print(f"\n[DRY RUN] Run without --dry-run to actually download")
+        print("\n[DRY RUN] Run without --dry-run to actually download")
 
     print("=" * 70)
 

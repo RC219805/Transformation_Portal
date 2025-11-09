@@ -330,7 +330,7 @@ def step5_example_workflows(chunks, retriever):
 
     # Save to file
     with open("step5_lut_examples.txt", 'w') as f:
-        f.write(f"LUT Processing Code Examples\n")
+        f.write("LUT Processing Code Examples\n")
         f.write(f"Query: {query1}\n\n")
         for i, result in enumerate(results1, 1):
             f.write(f"\n{'='*60}\n")
@@ -368,7 +368,7 @@ def step5_example_workflows(chunks, retriever):
 
     # Save citations
     with open("step5_depth_docs.md", 'w') as f:
-        f.write(f"# Depth Estimation Documentation\n\n")
+        f.write("# Depth Estimation Documentation\n\n")
         f.write(f"Query: {query2}\n\n")
         f.write(formatted2)
     print("✓ Saved documentation citations to step5_depth_docs.md")

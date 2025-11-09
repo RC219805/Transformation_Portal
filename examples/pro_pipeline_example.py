@@ -25,7 +25,7 @@ def example_single_image():
         preset=PipelinePreset.ARCHITECTURAL_HERO,
         device="auto",
         quality="high",
-        output_format="tiff",
+        output_format="tif",
         bit_depth=16,
     )
 

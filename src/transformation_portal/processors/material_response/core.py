@@ -267,7 +267,7 @@ _STOP_WORDS = {
     "a",
     "an",
     "to",
-    "of",
+    "o",
     "in",
     "between",
     "with",

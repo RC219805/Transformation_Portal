@@ -33,7 +33,7 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
         page = tif.pages[0]
         data = page.asarray()
 
-        print(f"Current format:")
+        print("Current format:")
         print(f"  Shape: {data.shape}")
         print(f"  Dtype: {data.dtype}")
         print(f"  Value range: [{data.min():.4f}, {data.max():.4f}]")
@@ -43,7 +43,7 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
         neg_pct = 100 * (data < 0).sum() / data.size
         over_pct = 100 * (data > 1.0).sum() / data.size
 
-        print(f"\nIssues detected:")
+        print("\nIssues detected:")
         print(f"  Negative values: {neg_pct:.2f}%")
         print(f"  Values > 1.0: {over_pct:.2f}%")
 
@@ -52,9 +52,9 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
             return False
 
         if neg_pct == 0 and over_pct == 0 and data.max() <= 1.0 and data.min() >= 0:
-            print(f"\n✓ Float values are already in [0,1], converting to uint16")
+            print("\n✓ Float values are already in [0,1], converting to uint16")
         else:
-            print(f"\n⚠️  Float values need clipping/normalization")
+            print("\n⚠️  Float values need clipping/normalization")
 
         if dry_run:
             print("\n[DRY RUN] - Would fix this file")
@@ -85,8 +85,8 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
         new_size = output_path.stat().st_size / (1024**2)
         old_size = input_path.stat().st_size / (1024**2) if input_path.exists() else backup_path.stat().st_size / (1024**2)
 
-        print(f"\n✓ Fixed!")
-        print(f"  New format: uint16, 16-bit")
+        print("\n✓ Fixed!")
+        print("  New format: uint16, 16-bit")
         print(f"  File size: {old_size:.1f} MB → {new_size:.1f} MB")
 
         return True
@@ -100,7 +100,7 @@ def main():
         sys.exit(1)
 
     # Find all TIF files
-    tiff_files = sorted(tiff_dir.glob("*.tif"))
+    tiff_files = sorted(tiff_dir.glob("*.ti"))
 
     if not tiff_files:
         print(f"No .tif files found in {tiff_dir}")

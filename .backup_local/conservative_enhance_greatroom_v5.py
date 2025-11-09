@@ -28,7 +28,7 @@ print("CONSERVATIVE ENHANCEMENT v5 - 750 PICACHO GREAT ROOM")
 print("Balanced: Aggressive sky fix + protected interior brightness")
 print("=" * 80)
 
-INPUT = "input_images/750Picacho_GreatRoom_Reset.tif"
+INPUT = "input_images/750Picacho_GreatRoom_Reset.ti"
 OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -57,7 +57,7 @@ WOOD_ENHANCEMENT = 1.02         # Minimal wood grain
 STONE_ENHANCEMENT = 1.01        # Minimal stone texture
 MIDTONE_LIFT = 1.01             # Very gentle
 
-print(f"\n[1/10] Loading 32-bit TIFF...")
+print("\n[1/10] Loading 32-bit TIFF...")
 
 # Load image with HDR-aware processing
 if TIFFFILE_AVAILABLE:
@@ -78,7 +78,7 @@ if TIFFFILE_AVAILABLE:
         # Check if this is HDR/linear data
         if rgb.max() > 1.0 or rgb.min() < 0:
             print(f"  ⚠️  HDR/Linear data detected (max: {rgb.max():.2f})")
-            print(f"  Applying Reinhard tone mapping...")
+            print("  Applying Reinhard tone mapping...")
 
             rgb_clipped = np.clip(rgb, 0, None)
             L_white = np.percentile(rgb_clipped, 99.5)
@@ -107,7 +107,7 @@ print(f"  Image: {img.size[0]}x{img.size[1]} ({img.size[0] * img.size[1]:,} pixe
 img_array = np.array(img, dtype=np.float32)
 height, width = img_array.shape[:2]
 
-print(f"\n[2/10] Creating AGGRESSIVE dual-zone sky mask...")
+print("\n[2/10] Creating AGGRESSIVE dual-zone sky mask...")
 
 # PRIMARY MASK: Top 3% brightest pixels
 luminance = 0.299 * img_array[:, :, 0] + 0.587 * img_array[:, :, 1] + 0.114 * img_array[:, :, 2]
@@ -136,9 +136,9 @@ sky_mask_smooth = gaussian_filter(sky_mask_combined, sigma=SKY_MASK_SIGMA)
 sky_pixels = (sky_mask_smooth > 0.1).sum()
 print(f"  ✓ Sky pixels (primary): {sky_pixels:,} ({sky_pixels / (width * height) * 100:.2f}% of image)")
 print(f"  ✓ Smoothing sigma: {SKY_MASK_SIGMA} (smooth transitions)")
-print(f"  ✓ Spatial bias applied: Top 40% weighted heavily")
+print("  ✓ Spatial bias applied: Top 40% weighted heavily")
 
-print(f"\n[3/10] Applying AGGRESSIVE sky color correction...")
+print("\n[3/10] Applying AGGRESSIVE sky color correction...")
 
 # Analyze current sky color
 sky_region = sky_mask_smooth > 0.3
@@ -186,7 +186,7 @@ if sky_region.sum() > 0:
     sky_g_after = img_corrected[:, :, 1][sky_region].mean()
     sky_b_after = img_corrected[:, :, 2][sky_region].mean()
     print(f"  Sky color after:  R={sky_r_after:.1f}, G={sky_g_after:.1f}, B={sky_b_after:.1f}")
-    print(f"  ✓ Aggressive cyan removal: G-30%, B-22%, R+18%")
+    print("  ✓ Aggressive cyan removal: G-30%, B-22%, R+18%")
     print(f"  ✓ Desaturation applied: {int((1-SKY_DESATURATE)*100)}% reduction")
 
 # Clip and convert
@@ -219,7 +219,7 @@ img = enhancer.enhance(GLOBAL_CONTRAST)
 
 # Normalize brightness to prevent inflation
 if BRIGHTNESS_NORMALIZE:
-    print(f"\n[6.5/10] Normalizing overall brightness...")
+    print("\n[6.5/10] Normalizing overall brightness...")
     img_array_check = np.array(img, dtype=np.float32)
     current_brightness = img_array_check.mean()
     target_brightness = 80.0  # Target similar to original (75-80 range)
@@ -236,7 +236,7 @@ if BRIGHTNESS_NORMALIZE:
         final_check = np.array(img).mean()
         print(f"  ✓ Normalized to: {final_check:.1f}")
 
-print(f"\n[7/10] Applying material response...")
+print("\n[7/10] Applying material response...")
 
 img_array = np.array(img, dtype=np.float32)
 
@@ -272,7 +272,7 @@ blurred_array = np.array(blurred, dtype=np.float32)
 sharpened = img_array + EDGE_SHARPENING * (img_array - blurred_array)
 img = PILImage.fromarray(np.clip(sharpened, 0, 255).astype(np.uint8))
 
-print(f"\n[9/10] Final quality check...")
+print("\n[9/10] Final quality check...")
 
 # Analyze final result
 img_array = np.array(img, dtype=np.float32)
@@ -288,11 +288,11 @@ if sky_region.sum() > 0:
     cyan_check = (final_sky_g > final_sky_r) or (final_sky_b > final_sky_r)
     print(f"  Final sky: R={final_sky_r:.1f}, G={final_sky_g:.1f}, B={final_sky_b:.1f}")
     if not cyan_check:
-        print(f"  ✓ Cyan cast REMOVED (R now dominant)")
+        print("  ✓ Cyan cast REMOVED (R now dominant)")
     else:
-        print(f"  ⚠️  Residual cyan/blue (may need further adjustment)")
+        print("  ⚠️  Residual cyan/blue (may need further adjustment)")
 
-print(f"\n[10/10] Saving enhanced image...")
+print("\n[10/10] Saving enhanced image...")
 
 # Save as high-quality JPEG
 output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v5_Balanced.jpg"
@@ -306,7 +306,7 @@ print("\n" + "=" * 80)
 print("ENHANCEMENT SUMMARY v5")
 print("=" * 80)
 
-print(f"\nFinal Metrics:")
+print("\nFinal Metrics:")
 print(f"  Overall brightness: {final_brightness:.1f}")
 if sky_region.sum() > 0:
     print(f"  Sky color (final): R={final_sky_r:.1f}, G={final_sky_g:.1f}, B={final_sky_b:.1f}")
@@ -314,15 +314,15 @@ if sky_region.sum() > 0:
     b_vs_r = ((final_sky_b - final_sky_r) / final_sky_r * 100) if final_sky_r > 0 else 0
     print(f"  Sky G vs R: {g_vs_r:+.1f}% | Sky B vs R: {b_vs_r:+.1f}%")
 
-print(f"\nKey Improvements:")
-print(f"  ✓ AGGRESSIVE cyan/blue sky correction (G-30%, B-22%, R+18%)")
-print(f"  ✓ Sky desaturated by 35% to remove cartoon appearance")
-print(f"  ✓ Dual-zone masking with spatial bias (top 40% weighted)")
-print(f"  ✓ Protected white interior surfaces from sky adjustments")
-print(f"  ✓ Brightness normalization prevents inflation (target: 80)")
-print(f"  ✓ Minimal shadow lift (+2%) maintains interior integrity")
+print("\nKey Improvements:")
+print("  ✓ AGGRESSIVE cyan/blue sky correction (G-30%, B-22%, R+18%)")
+print("  ✓ Sky desaturated by 35% to remove cartoon appearance")
+print("  ✓ Dual-zone masking with spatial bias (top 40% weighted)")
+print("  ✓ Protected white interior surfaces from sky adjustments")
+print("  ✓ Brightness normalization prevents inflation (target: 80)")
+print("  ✓ Minimal shadow lift (+2%) maintains interior integrity")
 print(f"  ✓ Smooth gradient transitions (sigma={SKY_MASK_SIGMA})")
-print(f"  ✓ Gentle material enhancement preserved naturalism")
+print("  ✓ Gentle material enhancement preserved naturalism")
 
 print("\n" + "=" * 80)
 print("COMPLETE - Please review output for sky quality")

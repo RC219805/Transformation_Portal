@@ -32,23 +32,23 @@ class TestNormalizeExtension:
     def test_lowercase_with_dot(self):
         assert normalize_extension('image.PNG') == '.png'
         assert normalize_extension('photo.JPEG') == '.jpeg'
-        assert normalize_extension('render.TIF') == '.tif'
+        assert normalize_extension('render.TIF') == '.ti'
 
     def test_already_normalized(self):
         assert normalize_extension('photo.jpg') == '.jpg'
-        assert normalize_extension('render.tiff') == '.tiff'
+        assert normalize_extension('render.tif') == '.tif'
 
     def test_path_object(self):
         assert normalize_extension(Path('image.PNG')) == '.png'
-        assert normalize_extension(Path('/path/to/photo.TIFF')) == '.tiff'
+        assert normalize_extension(Path('/path/to/photo.TIFF')) == '.tif'
 
     def test_extension_only(self):
         assert normalize_extension('.PNG') == '.png'
-        assert normalize_extension('.tiff') == '.tiff'
+        assert normalize_extension('.tif') == '.tif'
 
     def test_mixed_case(self):
         assert normalize_extension('photo.JpG') == '.jpg'
-        assert normalize_extension('render.TiFf') == '.tiff'
+        assert normalize_extension('render.TiF') == '.tif'
 
 
 class TestIsSupportedImageFormat:
@@ -57,7 +57,7 @@ class TestIsSupportedImageFormat:
     def test_supported_formats(self):
         assert is_supported_image_format('render.jpg') is True
         assert is_supported_image_format('photo.png') is True
-        assert is_supported_image_format('scan.tiff') is True
+        assert is_supported_image_format('scan.tif') is True
         assert is_supported_image_format('icon.bmp') is True
         assert is_supported_image_format('modern.webp') is True
 
@@ -67,7 +67,7 @@ class TestIsSupportedImageFormat:
         assert is_supported_image_format('Render.TIFF') is True
 
     def test_unsupported_formats(self):
-        assert is_supported_image_format('document.pdf') is False
+        assert is_supported_image_format('document.pd') is False
         assert is_supported_image_format('video.mp4') is False
         assert is_supported_image_format('archive.zip') is False
 
@@ -97,7 +97,7 @@ class TestIsSupportedVideoFormat:
 
     def test_unsupported_formats(self):
         assert is_supported_video_format('photo.jpg') is False
-        assert is_supported_video_format('document.pdf') is False
+        assert is_supported_video_format('document.pd') is False
 
     def test_all_supported_extensions(self):
         for ext in SUPPORTED_VIDEO_EXTENSIONS:
@@ -109,8 +109,8 @@ class TestIsSupportedTiffFormat:
     """Tests for TIFF format detection."""
 
     def test_tiff_formats(self):
-        assert is_supported_tiff_format('photo.tif') is True
-        assert is_supported_tiff_format('render.tiff') is True
+        assert is_supported_tiff_format('photo.ti') is True
+        assert is_supported_tiff_format('render.tif') is True
         assert is_supported_tiff_format('scan.TIF') is True
         assert is_supported_tiff_format('image.TIFF') is True
 
@@ -124,8 +124,8 @@ class TestIsLuxuryFormat:
     """Tests for luxury format detection."""
 
     def test_luxury_formats(self):
-        assert is_luxury_format('photo.tiff') is True
-        assert is_luxury_format('render.tif') is True
+        assert is_luxury_format('photo.tif') is True
+        assert is_luxury_format('render.ti') is True
         assert is_luxury_format('image.png') is True
 
     def test_non_luxury_formats(self):
@@ -140,7 +140,7 @@ class TestValidateFormat:
     def test_valid_image_format(self):
         assert validate_format('render.jpg', 'image') is True
         assert validate_format('photo.png', 'image') is True
-        assert validate_format('scan.tiff', 'image') is True
+        assert validate_format('scan.tif', 'image') is True
 
     def test_valid_video_format(self):
         assert validate_format('tour.mp4', 'video') is True
@@ -152,14 +152,14 @@ class TestValidateFormat:
 
     def test_invalid_image_raises_error(self):
         with pytest.raises(UnsupportedFormatError) as exc_info:
-            validate_format('document.pdf', 'image', raise_error=True)
+            validate_format('document.pd', 'image', raise_error=True)
 
         error_msg = str(exc_info.value)
-        assert 'document.pdf' in error_msg or '.pdf' in error_msg
+        assert 'document.pd' in error_msg or '.pd' in error_msg
         assert 'Unsupported' in error_msg
 
     def test_invalid_image_no_raise(self):
-        assert validate_format('document.pdf', 'image', raise_error=False) is False
+        assert validate_format('document.pd', 'image', raise_error=False) is False
 
     def test_invalid_video_raises_error(self):
         with pytest.raises(UnsupportedFormatError):
@@ -185,11 +185,11 @@ class TestGetFormatInfo:
     """Tests for format information retrieval."""
 
     def test_tiff_info(self):
-        info = get_format_info('render.tiff')
-        assert info['extension'] == '.tiff'
+        info = get_format_info('render.tif')
+        assert info['extension'] == '.tif'
         assert info['is_image'] is True
         assert info['is_video'] is False
-        assert info['is_tiff'] is True
+        assert info['is_tif'] is True
         assert info['is_luxury'] is True
         assert info['is_supported'] is True
         assert len(info['recommendations']) > 0
@@ -201,7 +201,7 @@ class TestGetFormatInfo:
         info = get_format_info('photo.png')
         assert info['extension'] == '.png'
         assert info['is_image'] is True
-        assert info['is_tiff'] is False
+        assert info['is_tif'] is False
         assert info['is_luxury'] is True
         assert 'lossless' in ' '.join(info['recommendations']).lower()
 
@@ -222,8 +222,8 @@ class TestGetFormatInfo:
         assert 'video' in recs or 'ffmpeg' in recs
 
     def test_unsupported_info(self):
-        info = get_format_info('document.pdf')
-        assert info['extension'] == '.pdf'
+        info = get_format_info('document.pd')
+        assert info['extension'] == '.pd'
         assert info['is_supported'] is False
         assert info['is_image'] is False
         assert info['is_video'] is False
@@ -233,8 +233,8 @@ class TestSuggestOutputFormat:
     """Tests for output format suggestions."""
 
     def test_tiff_preserve_quality(self):
-        assert suggest_output_format('render.tiff', preserve_quality=True) == '.tiff'
-        assert suggest_output_format('photo.tif', preserve_quality=True) == '.tiff'
+        assert suggest_output_format('render.tif', preserve_quality=True) == '.tif'
+        assert suggest_output_format('photo.ti', preserve_quality=True) == '.tif'
 
     def test_tiff_no_preserve(self):
         result = suggest_output_format('render.tiff', preserve_quality=False)
@@ -253,7 +253,7 @@ class TestSuggestOutputFormat:
         assert suggest_output_format('render.png', preserve_quality=True) == '.png'
 
     def test_path_object(self):
-        assert suggest_output_format(Path('render.tiff'), preserve_quality=True) == '.tiff'
+        assert suggest_output_format(Path('render.tif'), preserve_quality=True) == '.tif'
 
 
 class TestGetSupportedFormatsSummary:
@@ -263,23 +263,23 @@ class TestGetSupportedFormatsSummary:
         summary = get_supported_formats_summary()
         assert 'image' in summary
         assert 'video' in summary
-        assert 'tiff' in summary
+        assert 'tif' in summary
         assert 'luxury' in summary
 
     def test_summary_content(self):
         summary = get_supported_formats_summary()
         assert '.png' in summary['image']
         assert '.jpg' in summary['image']
-        assert '.tiff' in summary['image']
+        assert '.tif' in summary['image']
         assert '.mp4' in summary['video']
         assert '.mov' in summary['video']
 
     def test_tiff_subset(self):
         summary = get_supported_formats_summary()
-        assert '.tif' in summary['tiff']
-        assert '.tiff' in summary['tiff']
+        assert '.ti' in summary['tif']
+        assert '.tif' in summary['tif']
         # TIFF should be subset of image
-        for ext in summary['tiff']:
+        for ext in summary['tif']:
             assert ext in summary['image']
 
     def test_luxury_subset(self):
@@ -356,7 +356,7 @@ class TestIntegration:
         # Get info for various formats
         test_files = [
             'photo.jpg',
-            'render.tiff',
+            'render.tif',
             'depth.png',
             'tour.mp4',
             'web.webp'
@@ -375,7 +375,7 @@ class TestIntegration:
         files = [
             ('render.jpg', 'image', True),
             ('tour.mp4', 'video', True),
-            ('document.pdf', 'image', False),
+            ('document.pd', 'image', False),
         ]
 
         for file, type_check, expected_valid in files:

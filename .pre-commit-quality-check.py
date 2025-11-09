@@ -69,7 +69,7 @@ def check_trailing_whitespace():
     print("🔍 Checking for trailing whitespace...")
 
     result = subprocess.run(
-        ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACM'],
+        ['git', 'dif', '--cached', '--name-only', '--diff-filter=ACM'],
         capture_output=True,
         text=True
     )

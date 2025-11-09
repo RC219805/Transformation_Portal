@@ -166,7 +166,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("original", type=Path, help="Reference PNG asset")
     parser.add_argument("candidate", type=Path, help="Updated PNG asset")
     parser.add_argument(
-        "--diff",
+        "--dif",
         type=Path,
         default=None,
         help="Optional path to write a channel-difference visualization",

@@ -170,9 +170,9 @@ class ContextAwareRenderer:
 
         # Use luxury_tiff_batch_processor with context-aware parameters
         cmd = (
-            f"python luxury_tiff_batch_processor.py "
-            f"--input \"{image_path}\" "
-            f"--output \"{output_dir}\" "
+            "python luxury_tiff_batch_processor.py "
+            "--input \"{image_path}\" "
+            "--output \"{output_dir}\" "
             f"--clarity {profile['clarity_boost']:.2f} "
             f"--material-response {profile['material_response_strength']:.2f} "
         )
@@ -180,7 +180,7 @@ class ContextAwareRenderer:
         # Add LUT if exists
         lut_path = Path(profile['lut'])
         if lut_path.exists():
-            cmd += f"--lut \"{lut_path}\" "
+            cmd += "--lut \"{lut_path}\" "
 
         return cmd
 
@@ -190,10 +190,10 @@ class ContextAwareRenderer:
 
         # Use lux_render_pipeline with context-aware parameters
         cmd = (
-            f"python lux_render_pipeline.py "
-            f"--input \"{image_path}\" "
-            f"--output \"{output_dir}\" "
-            f"--upscale 4 "
+            "python lux_render_pipeline.py "
+            "--input \"{image_path}\" "
+            "--output \"{output_dir}\" "
+            "--upscale 4 "
             f"--material-response {profile['material_response_strength']:.2f} "
             f"--room-type {ctx['room_type']} "
         )
@@ -233,10 +233,10 @@ def main():
     print("CONTEXT-AWARE ENHANCEMENT READY")
     print("=" * 80)
     print("\n✅ Pipeline configured with:")
-    print(f"   • Room-specific enhancement profile")
-    print(f"   • Material palette from architectural specs")
-    print(f"   • Validated against floor plans")
-    print(f"\n💡 Run command above to execute enhancement")
+    print("   • Room-specific enhancement profile")
+    print("   • Material palette from architectural specs")
+    print("   • Validated against floor plans")
+    print("\n💡 Run command above to execute enhancement")
 
     # Save context for this rendering
     context_output = output_dir / f"{kitchen_render.stem}_context.json"

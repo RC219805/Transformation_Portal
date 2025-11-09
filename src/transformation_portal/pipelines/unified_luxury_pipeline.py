@@ -1002,7 +1002,7 @@ class UnifiedLuxuryPipeline:
 
     def _save_master_tiff(self, image: Image.Image, basename: str, metadata: Dict) -> Path:
         """Save 16-bit TIFF master with full resolution."""
-        output_path = self.config.output_dir / f"{basename}_MASTER.tiff"
+        output_path = self.config.output_dir / f"{basename}_MASTER.tif"
 
         if HAS_TIFFFILE:
             # Handle both PIL Images and numpy arrays
@@ -1277,7 +1277,7 @@ def batch_process_luxury_renders(
         )
     """
     input_paths = []
-    for ext in ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'exr']:
+    for ext in ['jpg', 'jpeg', 'png', 'tif', 'ti', 'exr']:
         input_paths.extend(Path(input_dir).glob(f"*.{ext}"))
 
     config = UnifiedPipelineConfig(

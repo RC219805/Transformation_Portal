@@ -81,7 +81,7 @@ def save_16bit_tiff(
 
         file_size_mb = output_path.stat().st_size / (1024**2)
         print(f"  Saved 8-bit TIFF: {output_path.name} ({file_size_mb:.1f} MB)")
-        print(f"  ⚠️  Install tifffile for 16-bit: pip install tifffile")
+        print("  ⚠️  Install tifffile for 16-bit: pip install tifffile")
         return output_path
 
 

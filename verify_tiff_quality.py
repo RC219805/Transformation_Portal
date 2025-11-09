@@ -91,8 +91,8 @@ def main():
     tiff_files = []
     for search_path in search_paths:
         if search_path.exists():
+            tiff_files.extend(list(search_path.glob("*.ti")))
             tiff_files.extend(list(search_path.glob("*.tif")))
-            tiff_files.extend(list(search_path.glob("*.tiff")))
 
     if not tiff_files:
         print("No TIFF files found to verify.")

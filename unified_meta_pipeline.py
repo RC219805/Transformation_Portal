@@ -226,7 +226,7 @@ class ArchHeroWorkflow(WorkflowExecutor):
             # Collect both .tif and .tiff files efficiently (case-insensitive, deduplicated)
             enhanced_images = [
                 p for p in enhanced_dir.iterdir()
-                if p.is_file() and p.suffix.lower() in {".tif", ".tiff"}
+                if p.is_file() and p.suffix.lower() in {".ti", ".tiff"}
             ]
 
             log.info(f"Found {len(enhanced_images)} enhanced images")
@@ -234,7 +234,7 @@ class ArchHeroWorkflow(WorkflowExecutor):
             final_output = self.config.output_dir / "final"
 
             for img_path in enhanced_images:
-                output_path = final_output / f"{img_path.stem}_materialized.tif"
+                output_path = final_output / f"{img_path.stem}_materialized.ti"
 
                 cmd_pbr = [
                     sys.executable,
@@ -488,7 +488,7 @@ def build_parser() -> argparse.ArgumentParser:
     enh.add_argument("--enhancement-tone-curve", default="agx",
                      choices=["agx", "agx-base", "agx-medium", "agx-high", "hable"])
     enh.add_argument("--depth-effects", nargs="+", default=["haze", "clarity"],
-                     choices=["haze", "clarity", "dof"])
+                     choices=["haze", "clarity", "do"])
     enh.add_argument("--enhancement-workers", type=int, default=6)
     enh.add_argument("--skip-stages", nargs="+", choices=["1", "2", "3", "4", "5"],
                      default=[])

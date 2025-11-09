@@ -38,8 +38,8 @@ class MaximumQualityPipeline:
         print(f"Initializing Maximum Quality Pipeline on {self.device}...")
 
         # Initialize depth estimation
-        depth_model = ("depth-anything/Depth-Anything-V2-Large-hf" if use_large_depth_model
-                      else "depth-anything/Depth-Anything-V2-Small-hf")
+        depth_model = ("depth-anything/Depth-Anything-V2-Large-h" if use_large_depth_model
+                      else "depth-anything/Depth-Anything-V2-Small-h")
 
         print(f"Loading {depth_model}...")
         self.depth_pipe = transformers_pipeline(
@@ -79,7 +79,7 @@ class MaximumQualityPipeline:
             except Exception as e:
                 print(f"  Warning: Could not load EXR with imageio ({e}), trying TIFF version...")
                 # Fall back to TIFF if EXR fails
-                tiff_path = image_path.with_suffix('.tif')
+                tiff_path = image_path.with_suffix('.ti')
                 if tiff_path.exists():
                     image_path = tiff_path
                 else:
@@ -347,7 +347,7 @@ class MaximumQualityPipeline:
         outputs = {}
 
         if save_tiff:
-            tiff_path = output_dir / f"{stem}_MaxQuality.tif"
+            tiff_path = output_dir / f"{stem}_MaxQuality.ti"
             self.save_16bit_tiff(final, tiff_path)
             outputs['tiff'] = tiff_path
 
@@ -364,7 +364,7 @@ class MaximumQualityPipeline:
             print(f"✓ Saved depth map: {depth_path.name}")
 
         print("-" * 60)
-        print(f"✓ Processing complete!")
+        print("✓ Processing complete!")
 
         return outputs
 
@@ -377,7 +377,7 @@ def main():
     parser.add_argument('input', type=str, help='Input image path or directory')
     parser.add_argument('--output', '-o', type=str, default='Maximum_Quality_Output',
                        help='Output directory')
-    parser.add_argument('--tiff', action='store_true', default=True,
+    parser.add_argument('--tif', action='store_true', default=True,
                        help='Save 16-bit TIFF (default: True)')
     parser.add_argument('--jpeg', action='store_true', default=True,
                        help='Save high-quality JPEG (default: True)')
@@ -406,7 +406,7 @@ def main():
     elif input_path.is_dir():
         # Batch process directory
         image_files = []
-        for ext in ['.exr', '.tif', '.tiff', '.jpg', '.jpeg', '.png']:
+        for ext in ['.exr', '.ti', '.tif', '.jpg', '.jpeg', '.png']:
             image_files.extend(input_path.glob(f'*{ext}'))
 
         print(f"\nFound {len(image_files)} images to process")

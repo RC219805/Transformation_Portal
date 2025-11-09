@@ -279,7 +279,7 @@ def process_single_exr(exr_path: Path, output_dir: Path, create_preview: bool = 
     jpeg_dir.mkdir(parents=True, exist_ok=True)
 
     base_name = exr_path.stem
-    tiff_path = tiff_dir / f"{base_name}_Master.tif"
+    tiff_path = tiff_dir / f"{base_name}_Master.ti"
     jpeg_path = jpeg_dir / f"{base_name}_Web.jpg"
 
     # Save outputs

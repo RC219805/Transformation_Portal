@@ -239,7 +239,7 @@ def main():
                        help='Architectural metadata JSON')
     parser.add_argument('--save-jpeg', action='store_true', default=True,
                        help='Save JPEG outputs')
-    parser.add_argument('--save-tiff', action='store_true', default=True,
+    parser.add_argument('--save-tif', action='store_true', default=True,
                        help='Save 16-bit TIFF outputs')
     parser.add_argument('--export-configs', type=Path,
                        help='Export view configs to directory')
@@ -304,16 +304,16 @@ def main():
 
     print(f"\nFiles processed: {summary.get('views_processed', 0)}")
     print(f"Total outputs: {len(all_outputs)}")
-    print(f"\n⏱️  Performance Summary:")
+    print("\n⏱️  Performance Summary:")
     print(f"   Total processing time: {summary.get('total_processing_time_s', 0):.1f}s")
     print(f"   Context overhead: {summary.get('total_context_overhead_ms', 0):.1f}ms")
     print(f"   Average overhead: {summary.get('average_overhead_pct', 0):.2f}%")
     print(f"   Target overhead: {summary.get('target_overhead_pct', 0):.1f}%")
 
     if summary.get('overhead_within_target'):
-        print(f"   ✅ Overhead within target (<5%)")
+        print("   ✅ Overhead within target (<5%)")
     else:
-        print(f"   ⚠️  Overhead exceeds target")
+        print("   ⚠️  Overhead exceeds target")
 
     print(f"\n✅ Outputs saved to: {args.output_dir}\n")
 

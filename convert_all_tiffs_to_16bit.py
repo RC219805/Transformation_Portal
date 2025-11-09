@@ -7,7 +7,7 @@ import tifffile
 
 # Find all TIFF files
 output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/TIFFs/_TIFFs")
-tiff_files = list(output_dir.glob("*.tif")) + list(output_dir.glob("*.tiff"))
+tiff_files = list(output_dir.glob("*.ti")) + list(output_dir.glob("*.tif"))
 
 print(f"Found {len(tiff_files)} TIFF files to convert\n")
 

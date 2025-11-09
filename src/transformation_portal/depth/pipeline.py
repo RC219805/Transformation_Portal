@@ -408,7 +408,7 @@ class ArchitecturalDepthPipeline:
 
     def __repr__(self) -> str:
         return (
-            f"ArchitecturalDepthPipeline("
+            "ArchitecturalDepthPipeline("
             f"model={self.depth_model.variant.name}, "
             f"processors={list(self.processors.keys())}, "
             f"images_processed={self.stats['images_processed']})"

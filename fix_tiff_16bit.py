@@ -122,7 +122,7 @@ if __name__ == "__main__":
     # Test with a sample array
     test_array = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
 
-    test_path = Path("/tmp/test_16bit.tif")
+    test_path = Path("/tmp/test_16bit.ti")
     save_16bit_tiff_tifffile(test_array, test_path)
 
     # Verify

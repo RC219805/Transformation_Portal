@@ -185,17 +185,17 @@ def main():
     print("=" * 80)
 
     # Setup paths
-    input_path = Path("input_images/Coastal_Interior_11.tif")
+    input_path = Path("input_images/Coastal_Interior_11.ti")
     output_dir = Path("processed_images/Conservative")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = output_dir / f"Coastal_Interior_11_enhanced_{timestamp}.tif"
+    output_path = output_dir / f"Coastal_Interior_11_enhanced_{timestamp}.ti"
     comparison_path = output_dir / f"Coastal_Interior_11_comparison_{timestamp}.jpg"
     metrics_path = output_dir / f"Coastal_Interior_11_metrics_{timestamp}.json"
 
     # Load image
-    print(f"\n1. LOADING IMAGE")
+    print("\n1. LOADING IMAGE")
     print(f"   Input: {input_path}")
     img = Image.open(input_path)
     print(f"   Mode: {img.mode}")
@@ -203,7 +203,7 @@ def main():
     print(f"   Format: {img.format}")
 
     # Analyze original
-    print(f"\n2. ANALYZING ORIGINAL IMAGE")
+    print("\n2. ANALYZING ORIGINAL IMAGE")
     img_array = np.array(img)
     original_metrics = analyze_image(img_array)
 
@@ -215,7 +215,7 @@ def main():
     print(f"   Dynamic Range: {original_metrics['dynamic_range']:.0f}")
 
     # Determine enhancement parameters based on analysis
-    print(f"\n3. DETERMINING ENHANCEMENT PARAMETERS")
+    print("\n3. DETERMINING ENHANCEMENT PARAMETERS")
 
     # Conservative parameters based on analysis
     params = {
@@ -230,11 +230,11 @@ def main():
     if original_metrics['normalized_mean'] < 45:
         params['exposure'] = 0.15
         print(f"   Image appears slightly dark (brightness {original_metrics['normalized_mean']:.1f})")
-        print(f"   Increasing exposure by +0.15 stops")
+        print("   Increasing exposure by +0.15 stops")
     elif original_metrics['normalized_mean'] > 55:
         params['exposure'] = -0.10
         print(f"   Image appears slightly bright (brightness {original_metrics['normalized_mean']:.1f})")
-        print(f"   Decreasing exposure by -0.10 stops")
+        print("   Decreasing exposure by -0.10 stops")
     else:
         print(f"   Brightness optimal ({original_metrics['normalized_mean']:.1f}), no exposure adjustment")
 
@@ -246,7 +246,7 @@ def main():
         params['contrast'] = 1.05
         print(f"   High contrast detected ({original_metrics['contrast_score']:.1f}), using gentle 1.05x")
 
-    print(f"\n   FINAL PARAMETERS:")
+    print("\n   FINAL PARAMETERS:")
     for key, value in params.items():
         if key == 'exposure':
             print(f"     {key}: {value:+.2f} stops")
@@ -254,23 +254,23 @@ def main():
             print(f"     {key}: {value}")
 
     # Apply enhancements
-    print(f"\n4. APPLYING ENHANCEMENTS")
+    print("\n4. APPLYING ENHANCEMENTS")
     enhanced_img, preview_img = conservative_enhance(img, params)
 
     # Save enhanced image
-    print(f"\n5. SAVING OUTPUT")
+    print("\n5. SAVING OUTPUT")
     print(f"   Output: {output_path}")
 
     if enhanced_img.mode == 'I;16':
         # Save 16-bit TIFF with compression
         enhanced_img.save(output_path, compression='tiff_adobe_deflate')
-        print(f"   Format: 16-bit TIFF with lossless compression")
+        print("   Format: 16-bit TIFF with lossless compression")
     else:
         enhanced_img.save(output_path, compression='tiff_adobe_deflate')
         print(f"   Format: {enhanced_img.mode} TIFF with lossless compression")
 
     # Analyze enhanced
-    print(f"\n6. ANALYZING ENHANCED IMAGE")
+    print("\n6. ANALYZING ENHANCED IMAGE")
     enhanced_array = np.array(enhanced_img)
     enhanced_metrics = analyze_image(enhanced_array)
 
@@ -289,7 +289,7 @@ def main():
     print(f"   Brightness Change: {brightness_change:+.2f}%")
 
     # Quality verification
-    print(f"\n7. QUALITY VERIFICATION")
+    print("\n7. QUALITY VERIFICATION")
     checks = {
         '16-bit preservation': enhanced_metrics['bit_depth'] >= original_metrics['bit_depth'],
         'Resolution maintained': enhanced_img.size == img.size,
@@ -303,7 +303,7 @@ def main():
         print(f"   {status}: {check}")
 
     # Create comparison
-    print(f"\n8. GENERATING COMPARISON")
+    print("\n8. GENERATING COMPARISON")
     create_comparison(
         img,
         enhanced_img,
@@ -312,7 +312,7 @@ def main():
     )
 
     # Save metrics
-    print(f"\n9. SAVING METRICS")
+    print("\n9. SAVING METRICS")
     metrics = {
         'timestamp': timestamp,
         'input_file': str(input_path),
@@ -338,9 +338,9 @@ def main():
 
     all_checks_passed = all(checks.values())
     if all_checks_passed:
-        print(f"\n✓ All quality checks PASSED")
+        print("\n✓ All quality checks PASSED")
     else:
-        print(f"\n⚠ Some quality checks FAILED - review output carefully")
+        print("\n⚠ Some quality checks FAILED - review output carefully")
 
     print(f"{'=' * 80}\n")
 

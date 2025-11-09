@@ -105,7 +105,7 @@ class ProPipelineConfig:
     # Global settings
     device: str = "auto"  # auto, cpu, cuda, mps
     quality: str = "high"  # draft, standard, high, ultra
-    output_format: str = "tiff"  # jpg, png, tiff
+    output_format: str = "tif"  # jpg, png, tiff
     bit_depth: int = 16  # 8, 16, 32
     linear_output: bool = True  # Save in linear colorspace (recommended for compositing)
     preserve_metadata: bool = True
@@ -502,7 +502,7 @@ class ProPipeline:
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Convert to linear colorspace if requested (for TIFF only)
-        if self.config.linear_output and ext.lower() in ["tif", "tiff"]:
+        if self.config.linear_output and ext.lower() in ["ti", "tiff"]:
             try:
                 import tifffile
 
@@ -552,7 +552,7 @@ class ProPipeline:
             save_kwargs["optimize"] = True
         elif ext.lower() == "png":
             save_kwargs["compress_level"] = 6
-        elif ext.lower() in ["tif", "tiff"]:
+        elif ext.lower() in ["ti", "tif"]:
             save_kwargs["compression"] = "tiff_adobe_deflate"
 
         image.save(output_path, **save_kwargs)
@@ -652,7 +652,7 @@ def process(
     finishing: bool = typer.Option(True, "--finishing/--no-finishing", help="Enable finishing"),
 
     # Output options
-    output_format: str = typer.Option("tiff", "--format", "-f", help="Output format (jpg, png, tiff)"),
+    output_format: str = typer.Option("tif", "--format", "-", help="Output format (jpg, png, tiff)"),
     bit_depth: int = typer.Option(16, "--bits", help="Bit depth for TIFF (8, 16, 32)"),
     linear_output: bool = typer.Option(True, "--linear/--gamma", help="Save in linear colorspace (recommended)"),
 
@@ -711,7 +711,7 @@ def process(
     if result:
         typer.echo(f"\n✓ Success! Output saved to: {result}")
     else:
-        typer.echo(f"\n✗ Processing failed", err=True)
+        typer.echo("\n✗ Processing failed", err=True)
         raise typer.Exit(code=1)
 
 
@@ -733,7 +733,7 @@ def batch(
     color_grading: bool = typer.Option(True, "--color-grading/--no-grading"),
     finishing: bool = typer.Option(True, "--finishing/--no-finishing"),
 
-    output_format: str = typer.Option("tiff", "--format", "-f"),
+    output_format: str = typer.Option("tif", "--format", "-"),
     bit_depth: int = typer.Option(16, "--bits"),
     device: str = typer.Option("auto", "--device"),
     quality: str = typer.Option("high", "--quality", "-q"),
@@ -750,7 +750,7 @@ def batch(
     """
     # Find input images
     input_paths = []
-    for ext in ["jpg", "jpeg", "png", "tiff", "tif"]:
+    for ext in ["jpg", "jpeg", "png", "tif", "ti"]:
         input_paths.extend(input_dir.glob(f"*.{ext}"))
         input_paths.extend(input_dir.glob(f"*.{ext.upper()}"))
 

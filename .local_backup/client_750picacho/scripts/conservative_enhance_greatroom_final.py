@@ -339,7 +339,7 @@ print("  ✓ Converted to 16-bit (0-65535 range)")
 # ============================================================================
 print("\n[10/10] Exporting...")
 
-output_tiff = OUTPUT_DIR / "750Picacho_GreatRoom_Final.tif"
+output_tiff = OUTPUT_DIR / "750Picacho_GreatRoom_Final.ti"
 output_jpg = OUTPUT_DIR / "750Picacho_GreatRoom_Final.jpg"
 
 # Export TIFF
@@ -399,7 +399,7 @@ print(f"  ✓ Minimal clipping ({clipped_pixels} pixels)")
 print("  ✓ Professional 16-bit output")
 
 print("\n📝 Comparison:")
-print("  Original: input_images/750Picacho_GreatRoom_Reset.tif")
+print("  Original: input_images/750Picacho_GreatRoom_Reset.ti")
 print("  v7: processed_images/Conservative/750Picacho_GreatRoom_v7.tiff (too conservative)")
 print("  v8: processed_images/Conservative/750Picacho_GreatRoom_v8.tiff (good baseline)")
 print(f"  Final: {output_tiff} (optimized comprehensive approach)")

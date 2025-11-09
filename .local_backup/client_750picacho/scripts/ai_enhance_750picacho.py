@@ -37,7 +37,7 @@ device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 print(f"\n✓ Using device: {device}")
 
 # Load image
-print(f"\n[1/6] Loading image...")
+print("\n[1/6] Loading image...")
 image = Image.open(INPUT_IMAGE).convert("RGB")
 original_size = image.size
 print(f"  Original size: {original_size}")
@@ -47,7 +47,7 @@ image_resized = image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
 print(f"  Processing size: {WIDTH}×{HEIGHT}")
 
 # Generate Canny edge map
-print(f"\n[2/6] Generating ControlNet conditioning (Canny edges)...")
+print("\n[2/6] Generating ControlNet conditioning (Canny edges)...")
 canny_detector = CannyDetector()
 canny_image = canny_detector(image_resized, low_threshold=100, high_threshold=200)
 canny_output = OUTPUT_DIR / "750Picacho_canny_edges.png"
@@ -55,15 +55,15 @@ canny_image.save(canny_output)
 print(f"  ✓ Saved: {canny_output}")
 
 # Load ControlNet
-print(f"\n[3/6] Loading ControlNet model...")
+print("\n[3/6] Loading ControlNet model...")
 controlnet = ControlNetModel.from_pretrained(
     "lllyasviel/sd-controlnet-canny",
     torch_dtype=torch.float32
 ).to(device)
-print(f"  ✓ ControlNet loaded")
+print("  ✓ ControlNet loaded")
 
 # Load pipeline
-print(f"\n[4/6] Loading Stable Diffusion pipeline...")
+print("\n[4/6] Loading Stable Diffusion pipeline...")
 pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
     "runwayml/stable-diffusion-v1-5",
     controlnet=controlnet,
@@ -72,13 +72,13 @@ pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
 ).to(device)
 
 pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
-print(f"  ✓ Pipeline ready")
+print("  ✓ Pipeline ready")
 
 # Generate
-print(f"\n[5/6] Running AI enhancement...")
+print("\n[5/6] Running AI enhancement...")
 print(f"  Prompt: {PROMPT[:80]}...")
 print(f"  Steps: {STEPS}, Strength: {STRENGTH}, Guidance: {GUIDANCE_SCALE}")
-print(f"  This will take ~60-90 seconds...")
+print("  This will take ~60-90 seconds...")
 
 generator = torch.Generator(device=device).manual_seed(SEED)
 
@@ -100,7 +100,7 @@ result.save(ai_output, quality=100)
 print(f"\n  ✓ AI enhancement complete: {ai_output}")
 
 # Material Response post-processing
-print(f"\n[6/6] Applying Material Response finishing...")
+print("\n[6/6] Applying Material Response finishing...")
 
 # Enhance details
 enhancer = ImageEnhance.Sharpness(result)
@@ -117,18 +117,18 @@ result = enhancer.enhance(1.12)
 # Save final result
 final_output = OUTPUT_DIR / "750Picacho_FINAL.png"
 result.save(final_output, quality=100, optimize=True)
-print(f"  ✓ Material Response applied")
+print("  ✓ Material Response applied")
 
 # Upscale back to original resolution
-print(f"\n  Upscaling to original resolution...")
+print("\n  Upscaling to original resolution...")
 result_upscaled = result.resize(original_size, Image.Resampling.LANCZOS)
 upscaled_output = OUTPUT_DIR / "750Picacho_FINAL_4K.png"
 result_upscaled.save(upscaled_output, quality=100)
 
-print(f"\n" + "=" * 60)
-print(f"✓ PROCESSING COMPLETE!")
-print(f"=" * 60)
-print(f"\nOutputs:")
+print("\n" + "=" * 60)
+print("✓ PROCESSING COMPLETE!")
+print("=" * 60)
+print("\nOutputs:")
 print(f"  • Canny edges: {canny_output}")
 print(f"  • AI enhanced: {ai_output}")
 print(f"  • Final (processed): {final_output}")

@@ -331,7 +331,7 @@ class TestOutputGeneration:
         output_path = pipeline._save_master_tiff(sample_image, "test", {})
 
         assert output_path.exists()
-        assert output_path.suffix == ".tiff"
+        assert output_path.suffix == ".tif"
         assert "MASTER" in output_path.name
 
         # Verify image can be loaded

@@ -107,8 +107,8 @@ def get_mime_type(path: Union[str, Path]) -> Optional[str]:
     mime_map = {
         'JPEG': 'image/jpeg',
         'PNG': 'image/png',
-        'TIFF': 'image/tiff',
-        'GIF': 'image/gif',
+        'TIFF': 'image/tif',
+        'GIF': 'image/gi',
         'BMP': 'image/bmp',
         'WEBP': 'image/webp',
         'ICO': 'image/x-icon',
@@ -267,7 +267,7 @@ def convert_image_format(
         True if conversion successful, False otherwise
 
     Examples:
-        >>> convert_image_format('photo.tiff', 'photo.jpg', quality=95)
+        >>> convert_image_format('photo.tif', 'photo.jpg', quality=95)
         True
         >>> convert_image_format('render.jpg', 'render.png')
         True
@@ -298,7 +298,7 @@ def convert_image_format(
                 save_kwargs['subsampling'] = 0  # Best quality
             elif output_ext == '.webp':
                 save_kwargs['quality'] = quality
-            elif output_ext in {'.tif', '.tiff'}:
+            elif output_ext in {'.ti', '.tiff'}:
                 save_kwargs['compression'] = 'tiff_lzw'  # Good lossless compression
             elif output_ext == '.png':
                 save_kwargs['compress_level'] = 6  # Balance speed/size
@@ -335,7 +335,7 @@ def batch_convert_directory(
     Args:
         input_dir: Source directory with images
         output_dir: Destination directory for converted images
-        target_format: Target extension (e.g., '.jpg', '.png', '.tiff')
+        target_format: Target extension (e.g., '.jpg', '.png', '.tif')
         quality: Quality for lossy formats (1-100)
         recursive: Whether to process subdirectories
         preserve_metadata: Whether to preserve EXIF data
@@ -362,7 +362,7 @@ def batch_convert_directory(
 
     # Get all image files
     pattern = '**/*' if recursive else '*'
-    image_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp', '.webp', '.gif'}
+    image_extensions = {'.jpg', '.jpeg', '.png', '.ti', '.tif', '.bmp', '.webp', '.gif'}
 
     for input_file in input_dir.glob(pattern):
         if not input_file.is_file():
@@ -414,7 +414,7 @@ def smart_convert(
         True if successful
 
     Examples:
-        >>> smart_convert('photo.tiff', 'photo.jpg')  # Uses quality=95
+        >>> smart_convert('photo.tif', 'photo.jpg')  # Uses quality=95
         True
         >>> smart_convert('logo.png', 'logo.webp')  # Uses lossless
         True
@@ -440,7 +440,7 @@ def smart_convert(
 
     # Handle 16-bit preservation
     if preserve_bit_depth and metadata.get('bit_depth') == 16:
-        if output_ext in {'.tif', '.tiff', '.png'}:
+        if output_ext in {'.ti', '.tif', '.png'}:
             # Use specialized converter for formats that support 16-bit (TIFF/PNG)
             return convert_tiff_preserve_depth(input_path, output_path)
 
@@ -482,7 +482,7 @@ def save_tiff_16bit(
     Examples:
         >>> import numpy as np
         >>> img = np.random.randint(0, 65536, (1000, 1000, 3), dtype=np.uint16)
-        >>> save_tiff_16bit(img, 'output.tiff', compression='lzw')
+        >>> save_tiff_16bit(img, 'output.tif', compression='lzw')
         True
     """
     if not HAS_TIFFFILE:
@@ -679,19 +679,19 @@ def get_optimal_format_for_use_case(
         >>> get_optimal_format_for_use_case('web', has_alpha=True)
         '.png'
         >>> get_optimal_format_for_use_case('print', requires_16bit=True)
-        '.tiff'
+        '.tif'
     """
     if requires_16bit:
-        return '.tiff'  # Only format that reliably supports 16-bit
+        return '.tif'  # Only format that reliably supports 16-bit
 
     if use_case == 'web':
         return '.png' if has_alpha else '.webp'
     elif use_case == 'print':
-        return '.tiff'
+        return '.tif'
     elif use_case == 'editing':
-        return '.tiff' if requires_16bit else '.png'
+        return '.tif' if requires_16bit else '.png'
     elif use_case == 'archival':
-        return '.tiff'
+        return '.tif'
     elif use_case == 'preview':
         return '.jpg'
     else:
@@ -716,7 +716,7 @@ if __name__ == '__main__':
 
     # Example: Format conversion
     print("\n=== Conversion Examples ===")
-    # convert_image_format('input.tiff', 'output.jpg', quality=95)
+    # convert_image_format('input.tif', 'output.jpg', quality=95)
     # stats = batch_convert_directory('./input', './output', '.png')
     # print(f"Conversion stats: {stats}")
 

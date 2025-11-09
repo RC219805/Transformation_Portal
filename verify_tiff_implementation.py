@@ -21,7 +21,7 @@ def test_tiff_quality():
     # Create test image with full 16-bit range
     test_array = np.random.randint(0, 65536, (100, 100, 3), dtype=np.uint16)
 
-    test_path = Path("test_16bit.tif")
+    test_path = Path("test_16bit.ti")
 
     # Save with tifffile
     from fix_tiff_16bit import save_16bit_tiff_tifffile
@@ -32,7 +32,7 @@ def test_tiff_quality():
     # Verify
     loaded = tifffile.imread(test_path)
 
-    print(f"\n2. Verification:")
+    print("\n2. Verification:")
     print(f"   Original dtype: {test_array.dtype}")
     print(f"   Loaded dtype:   {loaded.dtype}")
     print(f"   Original range: [{test_array.min()}, {test_array.max()}]")
@@ -50,7 +50,7 @@ def test_tiff_quality():
 
     # Test with float array [0, 1]
     test_float = np.random.rand(100, 100, 3).astype(np.float32)
-    test_path_2 = Path("test_pipeline.tif")
+    test_path_2 = Path("test_pipeline.ti")
 
     pipeline.save_16bit_tiff(test_float, test_path_2)
 

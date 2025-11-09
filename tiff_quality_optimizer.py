@@ -68,7 +68,7 @@ class TIFFQualityOptimizer:
         }
 
         # Try tifffile first for best TIFF support
-        if input_path.suffix.lower() in ['.tif', '.tiff']:
+        if input_path.suffix.lower() in ['.ti', '.tiff']:
             try:
                 self._log(f"Loading TIFF with tifffile: {input_path.name}")
                 with tifffile.TiffFile(input_path) as tif:
@@ -183,9 +183,9 @@ class TIFFQualityOptimizer:
         save_kwargs = {'compression': compression}
 
         # Add EXIF if present
-        if metadata and 'exif' in metadata:
+        if metadata and 'exi' in metadata:
             try:
-                save_kwargs['exif'] = metadata['exif']
+                save_kwargs['exi'] = metadata['exif']
             except:
                 pass
 
@@ -227,11 +227,11 @@ class TIFFQualityOptimizer:
             if array.max() <= 1.0:
                 # Normalized float [0-1], convert to uint16
                 save_array = (array * 65535).astype(np.uint16)
-                self._log(f"  Converting float [0-1] to uint16")
+                self._log("  Converting float [0-1] to uint16")
             else:
                 # Keep as float
                 save_array = array.astype(np.float32)
-                self._log(f"  Saving as float32")
+                self._log("  Saving as float32")
         else:
             save_array = array
 
@@ -344,28 +344,28 @@ class TIFFQualityOptimizer:
 
             results['pil'] = self.save_tiff_method_1_pil(
                 array,
-                output_dir / f"{base_name}_method1_pil.tif",
+                output_dir / f"{base_name}_method1_pil.ti",
                 metadata,
                 compression='tiff_adobe_deflate'
             )
 
             results['tifffile'] = self.save_tiff_method_2_tifffile(
                 array,
-                output_dir / f"{base_name}_method2_tifffile.tif",
+                output_dir / f"{base_name}_method2_tifffile.ti",
                 metadata,
                 compression=compression
             )
 
             results['imagecodecs'] = self.save_tiff_method_3_imagecodecs(
                 array,
-                output_dir / f"{base_name}_method3_imagecodecs.tif"
+                output_dir / f"{base_name}_method3_imagecodecs.ti"
             )
         else:
             # Use recommended method only (tifffile)
             self._log("\n=== Using recommended method (tifffile) ===")
             results['recommended'] = self.save_tiff_method_2_tifffile(
                 array,
-                output_dir / f"{base_name}.tif",
+                output_dir / f"{base_name}.ti",
                 metadata,
                 compression=compression
             )
@@ -442,7 +442,7 @@ def main():
     optimizer = TIFFQualityOptimizer(verbose=True)
 
     print(f"\n{'='*70}")
-    print(f"TIFF Quality Optimizer")
+    print("TIFF Quality Optimizer")
     print(f"{'='*70}\n")
     print(f"Input: {input_file}")
     print(f"Output: {output_dir}")
@@ -456,7 +456,7 @@ def main():
     )
 
     print(f"\n{'='*70}")
-    print(f"Conversion complete!")
+    print("Conversion complete!")
     print(f"{'='*70}\n")
     print("Output files:")
     for method, path in results.items():
