@@ -416,7 +416,8 @@ class RepositoryIndexer:
 
         except Exception as e:
             logger.warning(f"Failed to load cache: {e}")
-            raise CacheError(f"Cache loading failed: {e}")
+            # Don't raise - caching is optional
+            return None
 
     def _save_cache(self):
         """Save chunks to cache file."""
