@@ -8,8 +8,8 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from exceptions import ConfigError
-from logger import get_logger
+from .exceptions import ConfigError
+from .logger import get_logger
 
 logger = get_logger(__name__)
 

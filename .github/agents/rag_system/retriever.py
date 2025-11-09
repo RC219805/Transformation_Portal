@@ -14,9 +14,9 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from config import get_config
-from exceptions import RetrievalError
-from logger import get_logger
+from .config import get_config
+from .exceptions import RetrievalError
+from .logger import get_logger
 
 logger = get_logger(__name__)
 
