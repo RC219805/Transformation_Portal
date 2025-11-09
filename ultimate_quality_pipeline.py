@@ -114,7 +114,8 @@ def apply_luxury_color_grade(image_array: np.ndarray) -> np.ndarray:
     midtone_mask = (luminance >= 0.3) & (luminance <= 0.7)
     saturation_boost = 1.08
     for c in range(3):
-        result[midtone_mask, c] = luminance[midtone_mask] + (result[midtone_mask, c] - luminance[midtone_mask]) * saturation_boost
+        result[midtone_mask, c] = luminance[midtone_mask] + \
+            (result[midtone_mask, c] - luminance[midtone_mask]) * saturation_boost
 
     return np.clip(result, 0, 1)
 

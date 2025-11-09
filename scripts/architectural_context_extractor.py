@@ -207,7 +207,8 @@ class ArchitecturalContextExtractor:
             # Look for address
             if not context.address:
                 # Match street addresses
-                addr_match = re.search(r'\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Street|St|Avenue|Ave|Lane|Ln|Road|Rd|Drive|Dr|Way|Court|Ct))', line)
+                addr_match = re.search(
+                    r'\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Street|St|Avenue|Ave|Lane|Ln|Road|Rd|Drive|Dr|Way|Court|Ct))', line)
                 if addr_match:
                     context.address = addr_match.group(0)
 

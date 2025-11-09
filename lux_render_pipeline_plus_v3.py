@@ -189,7 +189,8 @@ def apply_pbr_overlays(
         mask_np = _as_f32_L(m)
 
     # Start from input (linear)
-    base = np.asarray(Image.fromarray((np.clip(base_hi, 0, 1)*255).astype(np.uint8)).resize((w, h), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+    base = np.asarray(Image.fromarray((np.clip(base_hi, 0, 1)*255).astype(np.uint8)
+                      ).resize((w, h), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
 
     # Albedo
     if albedo is not None:
@@ -305,11 +306,14 @@ def apply_pbr_overlays(
 
     # Upscale + detail restore
     if scale < 1.0:
-        up = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W, H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
-        hf = np.clip(base_hi - np.asarray(Image.fromarray((base_hi*255).astype(np.uint8)).resize((W, H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0, -1, 1)
+        up = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W, H),
+                        Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+        hf = np.clip(base_hi - np.asarray(Image.fromarray((base_hi*255).astype(np.uint8)
+                     ).resize((W, H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0, -1, 1)
         shaded = np.clip(up + 0.12*hf, 0.0, 1.0)
     else:
-        shaded = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W, H), Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+        shaded = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W, H),
+                            Image.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
 
     # Finishing
     # exposure/clamp

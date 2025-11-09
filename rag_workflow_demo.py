@@ -239,7 +239,8 @@ def step4_knowledge_engine():
     feedback_samples = [
         ("depth_pipeline", "art_001", True, 0.045, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
         ("depth_pipeline", "art_002", True, 0.038, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
-        ("depth_pipeline", "art_003", False, 0.0, {"model": "depth_anything_v2", "tone_mapping": "custom"}, "Custom tone mapping not found"),
+        ("depth_pipeline", "art_003", False, 0.0, {"model": "depth_anything_v2",
+         "tone_mapping": "custom"}, "Custom tone mapping not found"),
         ("depth_pipeline", "art_004", True, 0.042, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
         ("lux_render", "art_005", True, 2.5, {"model": "sdxl", "controlnet": "canny"}),
     ]

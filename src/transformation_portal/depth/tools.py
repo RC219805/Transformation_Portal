@@ -191,7 +191,8 @@ def retry_on_io_error(
                 except (IOError, OSError) as exc:
                     last_exc = exc
                     if attempt < max_attempts:
-                        _log.debug("I/O error in %s (attempt %d/%d): %s - retrying in %.2fs", func.__name__, attempt, max_attempts, exc, delay)
+                        _log.debug("I/O error in %s (attempt %d/%d): %s - retrying in %.2fs",
+                                   func.__name__, attempt, max_attempts, exc, delay)
                         time.sleep(delay)
                         delay *= backoff_factor
                     else:
@@ -494,7 +495,8 @@ def apply_depth_haze(
 
     H, W = depth.shape[:2]
     sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
-    building = np.zeros((H, W), dtype=np.float32) if (building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
+    building = np.zeros((H, W), dtype=np.float32) if (
+        building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
     sky = sky[..., None]
     building = building[..., None]
 
@@ -517,7 +519,8 @@ def apply_depth_clarity(img: np.ndarray, depth: np.ndarray, amount: float = 0.14
 
     H, W = depth.shape[:2]
     sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
-    building = np.zeros((H, W), dtype=np.float32) if (building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
+    building = np.zeros((H, W), dtype=np.float32) if (
+        building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
     sky = sky[..., None]
     building = building[..., None]
 
@@ -536,7 +539,8 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
     DOF with optional bilateral edge preservation. Masks protect building from blur and can slightly reduce sky extremes.
     """
     if clarity > 1e-6:
-        usm = Image.fromarray((img * 255.0).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=2, percent=int(clarity * 100), threshold=0))
+        usm = Image.fromarray((img * 255.0).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=2,
+                              percent=int(clarity * 100), threshold=0))
         img = np.asarray(usm).astype(np.float32) / 255.0
 
     focus_depth = float(np.percentile(depth, focus_pct))
@@ -547,7 +551,8 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
     weight = np.clip(dist ** max(1e-3, falloff), 0.0, 1.0)[..., None]
 
     H, W = depth.shape[:2]
-    building = np.zeros((H, W), dtype=np.float32) if (building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
+    building = np.zeros((H, W), dtype=np.float32) if (
+        building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
     sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
     building = building[..., None]
     sky = sky[..., None]
@@ -556,8 +561,10 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
     r_far = max(2.0, 6.0 + 28.0 * aperture)
 
     if edge_preserving and _CV2_AVAILABLE:
-        blur_near = bilateral_blur_float(img, depth, sigma_spatial=r_near, sigma_depth=bilateral_sigma_depth, diameter=bilateral_diameter)
-        blur_far = bilateral_blur_float(img, depth, sigma_spatial=r_far, sigma_depth=bilateral_sigma_depth * 0.75, diameter=bilateral_diameter)
+        blur_near = bilateral_blur_float(img, depth, sigma_spatial=r_near,
+                                         sigma_depth=bilateral_sigma_depth, diameter=bilateral_diameter)
+        blur_far = bilateral_blur_float(img, depth, sigma_spatial=r_far,
+                                        sigma_depth=bilateral_sigma_depth * 0.75, diameter=bilateral_diameter)
     else:
         blur_near = gaussian_blur_float(img, sigma=r_near)
         blur_far = gaussian_blur_float(img, sigma=r_far)
@@ -628,7 +635,8 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
         sky_path = find_mask_for_base(opts.mask_root, base, "sky") if opts.mask_root else None
         building_path = find_mask_for_base(opts.mask_root, base, "building") if opts.mask_root else None
         sky_mask = load_mask(sky_path, "sky", (H, W), use_cache=True) if sky_path else np.zeros((H, W), dtype=np.float32)
-        building_mask = load_mask(building_path, "building", (H, W), use_cache=True) if building_path else np.zeros((H, W), dtype=np.float32)
+        building_mask = load_mask(building_path, "building", (H, W),
+                                  use_cache=True) if building_path else np.zeros((H, W), dtype=np.float32)
 
         if opts.mode == "haze":
             out = apply_depth_haze(img, depth,
@@ -741,7 +749,8 @@ def build_cli() -> argparse.ArgumentParser:
         p.add_argument("depths_root", help="Root folder containing *_depth16.* depth maps")
         p.add_argument("out_root", help="Output folder")
         p.add_argument("--mask-root", type=str, default=None, help="Folder containing generated masks (<base>_mask_sky.png)")
-        p.add_argument("--restrict-tag", type=str, default=None, help="Restrict matches to a filename tag (not strictly required)")
+        p.add_argument("--restrict-tag", type=str, default=None,
+                       help="Restrict matches to a filename tag (not strictly required)")
         p.add_argument("--fmt", type=str, default="tiff", help="Output format (tiff/png/jpg)")
         p.add_argument("--workers", type=int, default=1, help="Parallel worker count (ProcessPoolExecutor)")
         p.add_argument("--allow-partial-success", action="store_true",
