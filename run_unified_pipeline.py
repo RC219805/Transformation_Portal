@@ -15,18 +15,18 @@ from src.transformation_portal.pipelines.unified_luxury_pipeline import (
 def main():
     # Input file from desktop cache - using Master TIFF (16-bit)
     input_file = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Master_TIFFs_16bit/750Picacho_Pool.tiff")
-    
+
     # Create output directory
     output_dir = Path("/Users/rc/Desktop/Cache/750_Picacho_Unified_Output")
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     print("=" * 80)
     print("Unified Luxury Pipeline - 750 Picacho Lane Pool View")
     print("=" * 80)
     print(f"Input:  {input_file}")
     print(f"Output: {output_dir}")
     print()
-    
+
     # Configure pipeline for premium pool rendering
     config = UnifiedPipelineConfig(
         scene_type=SceneType.EXTERIOR,  # Pool view is exterior
@@ -46,7 +46,7 @@ def main():
         save_intermediates=True,        # Save processing stages
         parallel_outputs=True           # Fast multi-format generation
     )
-    
+
     print("Pipeline Configuration:")
     print(f"  Scene Type: {config.scene_type.value}")
     print(f"  Profile: {config.profile.value}")
@@ -56,20 +56,20 @@ def main():
     print(f"  Color Grading: {config.enable_color_grading}")
     print(f"  Output Formats: {[f.value for f in config.output_formats]}")
     print()
-    
+
     # Initialize pipeline
     print("Initializing pipeline...")
     pipeline = UnifiedLuxuryPipeline(config)
     print("✓ Pipeline ready")
     print()
-    
+
     # Process image
     print("Processing 750Picacho_Pool.exr...")
     print("-" * 80)
-    
+
     try:
         results = pipeline.process(input_file)
-        
+
         print()
         print("=" * 80)
         print("✓ Processing Complete!")
@@ -80,7 +80,7 @@ def main():
             if output_path.exists():
                 size_mb = output_path.stat().st_size / (1024 * 1024)
                 print(f"  [{format_name}] {output_path.name} ({size_mb:.1f} MB)")
-        
+
         # Print statistics
         stats = pipeline.get_statistics()
         print()
@@ -89,9 +89,9 @@ def main():
         print(f"  Stages Completed: {stats.get('stages_completed', 0)}")
         print(f"  Stages Skipped: {stats.get('stages_skipped', 0)}")
         print(f"  Outputs Generated: {stats.get('outputs_generated', 0)}")
-        
+
         return 0
-        
+
     except Exception as e:
         print()
         print("=" * 80)

@@ -64,36 +64,36 @@ if TIFFFILE_AVAILABLE:
     try:
         with tifffile.TiffFile(INPUT) as tif:
             img_array = tif.pages[0].asarray()
-            
+
         print(f"  ✓ Loaded with tifffile: {img_array.shape}")
         print(f"  Data type: {img_array.dtype}, Range: [{img_array.min():.3f}, {img_array.max():.3f}]")
-        
+
         # Handle alpha channel if present
         if img_array.shape[2] == 4:
             rgb = img_array[:, :, :3]
             alpha = img_array[:, :, 3]
         else:
             rgb = img_array
-        
+
         # Check if this is HDR/linear data
         if rgb.max() > 1.0 or rgb.min() < 0:
             print(f"  ⚠️  HDR/Linear data detected (max: {rgb.max():.2f})")
             print(f"  Applying Reinhard tone mapping...")
-            
+
             rgb_clipped = np.clip(rgb, 0, None)
             L_white = np.percentile(rgb_clipped, 99.5)
             rgb_normalized = rgb_clipped / (L_white + 1e-6)
             rgb_tonemapped = rgb_normalized / (1 + rgb_normalized)
-            
+
             rgb = rgb_tonemapped
             print(f"  ✓ Tone mapped: new range [{rgb.min():.3f}, {rgb.max():.3f}]")
         else:
             rgb = np.clip(rgb, 0, 1)
-        
+
         # Convert to 8-bit for PIL processing
         img_8bit = (rgb * 255).astype(np.uint8)
         img = Image.fromarray(img_8bit, 'RGB')
-        
+
     except Exception as e:
         print(f"  ⚠️  tifffile error: {e}")
         print("  Falling back to PIL...")
@@ -154,14 +154,14 @@ img_corrected = img_array.copy()
 # Apply aggressive color correction to sky regions
 for c in range(3):
     channel = img_array[:, :, c].copy()
-    
+
     if c == 0:  # Red - boost
         correction = channel * SKY_RED_BOOST
     elif c == 1:  # Green - aggressive reduction
         correction = channel * SKY_GREEN_REDUCTION
     else:  # Blue - aggressive reduction
         correction = channel * SKY_BLUE_REDUCTION
-    
+
     # Blend based on sky mask
     img_corrected[:, :, c] = channel * (1 - sky_mask_smooth) + correction * sky_mask_smooth
 
@@ -223,16 +223,16 @@ if BRIGHTNESS_NORMALIZE:
     img_array_check = np.array(img, dtype=np.float32)
     current_brightness = img_array_check.mean()
     target_brightness = 80.0  # Target similar to original (75-80 range)
-    
+
     if current_brightness > target_brightness * 1.05:  # If >5% brighter
         adjustment = target_brightness / current_brightness
         print(f"  Current: {current_brightness:.1f}, Target: {target_brightness:.1f}")
         print(f"  Applying {adjustment:.3f}x adjustment...")
-        
+
         # Apply brightness normalization
         enhancer = ImageEnhance.Brightness(img)
         img = enhancer.enhance(adjustment)
-        
+
         final_check = np.array(img).mean()
         print(f"  ✓ Normalized to: {final_check:.1f}")
 
@@ -241,7 +241,7 @@ print(f"\n[7/10] Applying material response...")
 img_array = np.array(img, dtype=np.float32)
 
 # Wood enhancement (warm midtones)
-wood_mask = ((img_array[:, :, 0] > img_array[:, :, 1]) & 
+wood_mask = ((img_array[:, :, 0] > img_array[:, :, 1]) &
              (luminance > 50) & (luminance < 150)).astype(np.float32)
 wood_pixels = wood_mask.sum()
 
@@ -283,7 +283,7 @@ if sky_region.sum() > 0:
     final_sky_r = img_array[:, :, 0][sky_region].mean()
     final_sky_g = img_array[:, :, 1][sky_region].mean()
     final_sky_b = img_array[:, :, 2][sky_region].mean()
-    
+
     # Check for cyan cast (G and B > R)
     cyan_check = (final_sky_g > final_sky_r) or (final_sky_b > final_sky_r)
     print(f"  Final sky: R={final_sky_r:.1f}, G={final_sky_g:.1f}, B={final_sky_b:.1f}")

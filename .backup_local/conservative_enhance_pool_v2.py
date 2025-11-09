@@ -75,7 +75,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, dtype: {img_array.dtype}")
-        
+
         # Normalize to 0-1 range
         if img_array.dtype == np.float32 or img_array.dtype == np.float64:
             if img_array.max() > 1.0:
@@ -86,12 +86,12 @@ if TIFFFILE_AVAILABLE:
             rgb_linear = img_array.astype(np.float32) / 65535.0
         else:
             rgb_linear = img_array.astype(np.float32) / 255.0
-        
+
         # Drop alpha channel if present
         if rgb_linear.shape[2] == 4:
             rgb_linear = rgb_linear[:, :, :3]
             print(f"  ✓ Dropped alpha channel")
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}, falling back to PIL")
         TIFFFILE_AVAILABLE = False

@@ -111,39 +111,39 @@ class PremiumPipelineFixed:
         # Save as true 16-bit TIFF using tifffile
         try:
             import tifffile
-            
+
             # Convert 8-bit PIL Image to true 16-bit
             arr_8bit = np.array(master)
             arr_float = arr_8bit.astype(np.float32) / 255.0
             arr_16bit = (np.clip(arr_float, 0.0, 1.0) * 65535).astype(np.uint16)
-            
+
             tifffile.imwrite(
                 master_path,
                 arr_16bit,
                 photometric='rgb',
                 compression='lzw'
             )
-            
+
             if self.verbose:
                 size_mb = master_path.stat().st_size / (1024**2)
                 print(f"  ✓ Master: {master_path.name} (16-bit, {size_mb:.1f} MB)")
-                
+
         except ImportError:
             # Fallback to PIL (8-bit only)
             if self.verbose:
                 print(f"  ⚠️  tifffile not available - saving 8-bit TIFF")
                 print(f"     Install tifffile for 16-bit: pip install tifffile")
-            
+
             master.save(
                 master_path,
                 compression='lzw',
                 dpi=(300, 300)
             )
-            
+
             if self.verbose:
                 size_mb = master_path.stat().st_size / (1024**2)
                 print(f"  ✓ Master: {master_path.name} (8-bit, {size_mb:.1f} MB)")
-        
+
         outputs['master'] = master_path
 
         # Stage 5: Export optimized deliverables

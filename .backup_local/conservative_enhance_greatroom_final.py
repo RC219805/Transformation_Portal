@@ -83,7 +83,7 @@ if TIFFFILE_AVAILABLE:
     try:
         img_array = tifffile.imread(INPUT)
         print(f"  ✓ Loaded with tifffile: {img_array.shape}, {img_array.dtype}")
-        
+
         # Normalize to 0-1 range
         if img_array.dtype == np.float32:
             rgb = np.clip(img_array, 0, 1)
@@ -91,10 +91,10 @@ if TIFFFILE_AVAILABLE:
             rgb = img_array.astype(np.float32) / 65535.0
         else:
             rgb = img_array.astype(np.float32) / 255.0
-        
+
         if rgb.shape[2] == 4:
             rgb = rgb[:, :, :3]
-            
+
     except Exception as e:
         print(f"  ⚠️  tifffile failed: {e}")
         TIFFFILE_AVAILABLE = False
@@ -156,7 +156,7 @@ print(f"\n[3/10] Color grading...")
 
 # Saturation boost
 hsv = np.zeros_like(rgb)
-hsv[:,:,0] = np.arctan2(np.sqrt(3) * (rgb[:,:,1] - rgb[:,:,2]), 
+hsv[:,:,0] = np.arctan2(np.sqrt(3) * (rgb[:,:,1] - rgb[:,:,2]),
                         2 * rgb[:,:,0] - rgb[:,:,1] - rgb[:,:,2])
 hsv[:,:,2] = rgb.max(axis=2)
 hsv[:,:,1] = (hsv[:,:,2] - rgb.min(axis=2)) / (hsv[:,:,2] + 1e-10)
@@ -209,18 +209,18 @@ if sky_candidate_mask.sum() > 100:  # If we found potential sky pixels
     # Calculate current sky color
     sky_rgb = rgb[sky_candidate_mask].mean(axis=0)
     sky_br_ratio = sky_rgb[2] / sky_rgb[0] if sky_rgb[0] > 0 else 1.0
-    
+
     print(f"  Detected bright regions: {sky_candidate_mask.sum()} pixels")
     print(f"  Current B/R ratio: {sky_br_ratio:.3f}")
-    
+
     # If sky has developed a tint, neutralize it
     if not (0.98 <= sky_br_ratio <= 1.02):
         target_gray = sky_rgb.mean()
         sky_mask_smooth = gaussian_filter(sky_candidate_mask.astype(float), sigma=5)
-        
+
         for i in range(3):
             rgb[:,:,i] = rgb[:,:,i] * (1 - sky_mask_smooth) + target_gray * sky_mask_smooth
-        
+
         print(f"  ✓ Sky neutralized to prevent cyan/tint artifacts")
     else:
         print(f"  ✓ Sky already neutral, no correction needed")

@@ -61,40 +61,40 @@ if TIFFFILE_AVAILABLE:
     try:
         with tifffile.TiffFile(INPUT) as tif:
             img_array = tif.pages[0].asarray()
-            
+
         print(f"  ✓ Loaded with tifffile: {img_array.shape}")
         print(f"  Data type: {img_array.dtype}, Range: [{img_array.min():.3f}, {img_array.max():.3f}]")
-        
+
         # Handle alpha channel if present
         if img_array.shape[2] == 4:
             rgb = img_array[:, :, :3]
             alpha = img_array[:, :, 3]
         else:
             rgb = img_array
-        
+
         # Check if this is HDR/linear data (values > 1.0 or negative)
         if rgb.max() > 1.0 or rgb.min() < 0:
             print(f"  ⚠️  HDR/Linear data detected (max: {rgb.max():.2f})")
             print(f"  Applying Reinhard tone mapping...")
-            
+
             # Reinhard tone mapping: L_d = L_w / (1 + L_w)
             # But preserve relative ratios by normalizing first
             rgb_clipped = np.clip(rgb, 0, None)  # Remove negatives
-            
+
             # Apply Reinhard with scaled values
             L_white = np.percentile(rgb_clipped, 99.5)  # White point at 99.5th percentile
             rgb_normalized = rgb_clipped / (L_white + 1e-6)
             rgb_tonemapped = rgb_normalized / (1 + rgb_normalized)
-            
+
             rgb = rgb_tonemapped
             print(f"  ✓ Tone mapped: new range [{rgb.min():.3f}, {rgb.max():.3f}]")
         else:
             rgb = np.clip(rgb, 0, 1)
-        
+
         # Convert to 8-bit for PIL processing
         img_8bit = (rgb * 255).astype(np.uint8)
         img = Image.fromarray(img_8bit, 'RGB')
-        
+
     except Exception as e:
         print(f"  ⚠️  tifffile error: {e}")
         print("  Falling back to PIL...")
