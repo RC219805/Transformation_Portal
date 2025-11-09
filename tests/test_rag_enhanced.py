@@ -12,6 +12,7 @@ Tests:
 
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -22,8 +23,8 @@ sys.path.insert(0, str(agents_path))
 
 from rag_system.citation import CitationGenerator  # noqa: E402
 from rag_system.config import Config, get_config, reset_config  # noqa: E402
-from rag_system.exceptions import CacheError, IndexingError, RetrievalError  # noqa: E402
-from rag_system.indexer import DocumentChunk, RepositoryIndexer  # noqa: E402
+from rag_system.exceptions import IndexingError, RetrievalError  # noqa: E402
+from rag_system.indexer import RepositoryIndexer  # noqa: E402
 from rag_system.logger import get_logger  # noqa: E402
 from rag_system.reranker import ResultReranker  # noqa: E402
 from rag_system.retriever import HybridRetriever  # noqa: E402
@@ -185,10 +186,6 @@ class TestVectorSearch:
         assert len(results) > 0
         assert all(r.retrieval_method in ('bm25', 'hybrid') for r in results)
 
-    @pytest.mark.skipif(
-        not Path(__file__).parent.parent / '.github' / 'agents' / 'rag_system' / 'config.yaml',
-        reason="Requires sentence-transformers installation"
-    )
     def test_retriever_with_vectors_if_available(self, temp_repo):
         """Test retriever with vector search if sentence-transformers available."""
         try:
@@ -362,8 +359,6 @@ class TestPerformance:
 
     def test_indexing_performance(self, temp_repo):
         """Test that indexing completes in reasonable time."""
-        import time
-
         indexer = RepositoryIndexer(str(temp_repo), use_cache=False)
 
         start = time.time()
@@ -375,8 +370,6 @@ class TestPerformance:
 
     def test_retrieval_performance(self, temp_repo):
         """Test that retrieval is fast."""
-        import time
-
         indexer = RepositoryIndexer(str(temp_repo), use_cache=False)
         chunks = indexer.index_repository()
 
@@ -392,8 +385,6 @@ class TestPerformance:
 
     def test_cache_improves_performance(self, temp_repo):
         """Test that cache improves indexing performance."""
-        import time
-
         # First indexing (no cache)
         indexer1 = RepositoryIndexer(str(temp_repo), use_cache=True)
         start1 = time.time()
