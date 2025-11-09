@@ -6,9 +6,11 @@ numpy>=1.24.0,<3
 scikit-learn>=1.3.0  # For TF-IDF and BM25 implementation
 PyYAML>=6.0  # For configuration management
 
-# Vector embeddings (recommended for semantic search)
-sentence-transformers>=2.2.0  # For dense vector embeddings
-torch>=2.0.0  # Required by sentence-transformers
+# Vector embeddings (optional, required only for semantic/vector search)
+# To enable vector search, install these extras:
+# pip install sentence-transformers>=2.2.0 torch>=2.0.0
+# sentence-transformers>=2.2.0  # For dense vector embeddings
+# torch>=2.0.0  # Required by sentence-transformers
 
 # Optional but recommended
 # faiss-cpu>=1.7.0  # For fast similarity search (future enhancement)
