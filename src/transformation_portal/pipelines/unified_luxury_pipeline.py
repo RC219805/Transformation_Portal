@@ -731,14 +731,14 @@ class UnifiedLuxuryPipeline:
             # Create temporary file for depth processing
             temp_path = self.config.output_dir / "temp_for_depth.jpg"
             image.save(temp_path, quality=95)
-            
+
             # Process through depth pipeline
             result = self._depth_pipeline.process_render(str(temp_path))
-            
+
             # Clean up temporary file
             if not self.config.save_intermediates:
                 temp_path.unlink()
-            
+
             # Handle different result types from depth pipeline
             if isinstance(result, dict):
                 # Extract enhanced image from result dictionary
@@ -774,7 +774,7 @@ class UnifiedLuxuryPipeline:
             else:
                 log.warning(f"    Unexpected depth result type: {type(result)}")
                 return image
-                
+
         except Exception as e:
             log.warning(f"    Depth processing failed: {e}")
             # Clean up temp file on error
@@ -1024,17 +1024,17 @@ class UnifiedLuxuryPipeline:
                     raise TypeError(f"Unsupported array dtype: {image.dtype}")
             else:
                 raise TypeError(f"Image must be PIL.Image or numpy.ndarray, got {type(image)}")
-            
+
             # CRITICAL: Always clip to [0,1] before converting to 16-bit
             # This prevents float32 TIFFs with values outside [0,1] range
             arr_16bit = (np.clip(arr_float, 0.0, 1.0) * 65535).astype(np.uint16)
-            
+
             # Extract ICC profile if available
             icc_profile = metadata.get('info', {}).get('icc_profile')
             extratags = []
             if icc_profile:
                 extratags.append((34675, 'B', len(icc_profile), icc_profile, False))
-            
+
             # Save with proper 16-bit encoding
             tifffile.imwrite(
                 output_path,
@@ -1043,12 +1043,14 @@ class UnifiedLuxuryPipeline:
                 compression='lzw',
                 extratags=extratags if extratags else None
             )
-            log.info(f"    Master TIFF: {image.size[0]}x{image.size[1]}, 16-bit, {output_path.stat().st_size / (1024**2):.1f} MB")
+            log.info(
+                f"    Master TIFF: {image.size[0]}x{image.size[1]}, 16-bit, {output_path.stat().st_size / (1024**2):.1f} MB")
         else:
             # Fallback to PIL (8-bit only)
             log.warning("    tifffile not available - saving 8-bit TIFF (install tifffile for 16-bit)")
             image.save(output_path, compression='lzw', dpi=(300, 300))
-            log.info(f"    Master TIFF: {image.size[0]}x{image.size[1]}, 8-bit, {output_path.stat().st_size / (1024**2):.1f} MB")
+            log.info(
+                f"    Master TIFF: {image.size[0]}x{image.size[1]}, 8-bit, {output_path.stat().st_size / (1024**2):.1f} MB")
 
         return output_path
 

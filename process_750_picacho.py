@@ -145,11 +145,11 @@ def save_16bit_tiff(img_float: np.ndarray, output_path: Path, compression: str =
     except ImportError:
         # Fallback to imageio if available
         try:
-            import imageio.v3 as iio
+            import imageio.v3 as iio  # noqa: F401
             iio.imwrite(output_path, img_16bit, compression=1 if compression != 'none' else 0)
             print(f"    Saved 16-bit TIFF (imageio): {output_path.name}")
-        except ImportError:
-            raise ImportError("Neither tifffile nor imageio available for TIFF writing")
+        except ImportError as exc:
+            raise ImportError("Neither tifffile nor imageio available for TIFF writing") from exc
 
 
 def save_jpeg(img_float: np.ndarray, output_path: Path, quality: int = 95):

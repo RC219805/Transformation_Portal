@@ -209,7 +209,8 @@ def apply_agx_ocio(img_lin: np.ndarray,
         img = img_lin
 
     cfg = _resolve_config(config_path)
-    src_cs = in_colorspace or (cfg.getSceneLinearColorSpaceName() if hasattr(cfg, 'getSceneLinearColorSpaceName') else cfg.getRole(ocio.ROLE_SCENE_LINEAR))
+    src_cs = in_colorspace or (cfg.getSceneLinearColorSpaceName() if hasattr(
+        cfg, 'getSceneLinearColorSpaceName') else cfg.getRole(ocio.ROLE_SCENE_LINEAR))
 
     # Fallback to defaults if not specified
     display = display or cfg.getDefaultDisplay()
