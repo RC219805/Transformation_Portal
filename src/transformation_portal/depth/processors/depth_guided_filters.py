@@ -158,7 +158,7 @@ class DepthGuidedFilters:
             logger.warning("cv2 not available, using simple unsharp mask instead of multiscale clarity")
             blurred = gaussian_filter(image, sigma=2.0)
             return image + self.strength * (image - blurred)
-        
+
         # Build Gaussian pyramid
         pyramid = [image]
         current = image

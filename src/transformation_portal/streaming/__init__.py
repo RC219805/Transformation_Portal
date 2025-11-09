@@ -5,7 +5,7 @@ capabilities for long-running operations.
 
 Example:
     >>> from transformation_portal.streaming import ProgressTracker, StreamingProcessor
-    >>> 
+    >>>
     >>> tracker = ProgressTracker(total=100)
     >>> for i in range(100):
     ...     result = process_item(i)

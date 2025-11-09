@@ -36,33 +36,33 @@ class PluginMetadata:
     replacement: Optional[str] = None
     homepage: str = ""
     tags: List[str] = field(default_factory=list)
-    
+
     def is_compatible(self, portal_version: str) -> bool:
         """Check if plugin is compatible with current portal version."""
         from packaging import version
         portal_ver = version.parse(portal_version)
         min_ver = version.parse(self.min_portal_version)
-        
+
         if portal_ver < min_ver:
             return False
-            
+
         if self.max_portal_version:
             max_ver = version.parse(self.max_portal_version)
             if portal_ver > max_ver:
                 return False
-                
+
         return True
 
 
 class PluginInterface(ABC):
     """Base interface that all plugins must implement.
-    
+
     Plugins provide extensible functionality for the Transformation Portal,
     enabling hot-swappable components and community contributions.
-    
+
     Attributes:
         metadata: Plugin metadata including name, version, and dependencies
-        
+
     Example:
         >>> class MyDepthModel(PluginInterface):
         ...     def __init__(self):
@@ -72,69 +72,69 @@ class PluginInterface(ABC):
         ...             plugin_type=PluginType.DEPTH_MODEL,
         ...             description="Custom depth estimation model"
         ...         )
-        ...     
+        ...
         ...     def initialize(self, config):
         ...         self.model = load_my_model(config)
-        ...     
+        ...
         ...     def execute(self, image):
         ...         return self.model.predict(image)
     """
-    
+
     def __init__(self):
         """Initialize plugin with metadata."""
         self.metadata: PluginMetadata = self._create_metadata()
         self._initialized = False
         self._config: Dict[str, Any] = {}
-    
+
     @abstractmethod
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata. Must be implemented by subclasses."""
         pass
-    
+
     @abstractmethod
     def initialize(self, config: Optional[Dict[str, Any]] = None) -> None:
         """Initialize plugin with configuration.
-        
+
         Args:
             config: Optional configuration dictionary
-            
+
         Raises:
             PluginInitializationError: If initialization fails
         """
         pass
-    
+
     @abstractmethod
     def execute(self, *args, **kwargs) -> Any:
         """Execute plugin's main functionality.
-        
+
         Args:
             *args: Positional arguments
             **kwargs: Keyword arguments
-            
+
         Returns:
             Plugin execution result
-            
+
         Raises:
             PluginExecutionError: If execution fails
         """
         pass
-    
+
     def validate(self) -> bool:
         """Validate plugin configuration and state.
-        
+
         Returns:
             True if plugin is valid, False otherwise
         """
         return self._initialized
-    
+
     def cleanup(self) -> None:
         """Clean up plugin resources."""
         self._initialized = False
         self._config = {}
-    
+
     def get_info(self) -> Dict[str, Any]:
         """Get plugin information.
-        
+
         Returns:
             Dictionary with plugin details
         """
@@ -148,7 +148,7 @@ class PluginInterface(ABC):
             'deprecated': self.metadata.deprecated,
             'replacement': self.metadata.replacement,
         }
-    
+
     def __repr__(self) -> str:
         """String representation of plugin."""
         return (f"<{self.__class__.__name__} "
@@ -158,20 +158,20 @@ class PluginInterface(ABC):
 
 class DepthModelPlugin(PluginInterface):
     """Specialized interface for depth estimation model plugins."""
-    
+
     @abstractmethod
     def estimate_depth(self, image: Any, **kwargs) -> Any:
         """Estimate depth map from image.
-        
+
         Args:
             image: Input image (PIL, numpy array, or tensor)
             **kwargs: Additional model-specific parameters
-            
+
         Returns:
             Depth map (format depends on implementation)
         """
         pass
-    
+
     def execute(self, image: Any, **kwargs) -> Any:
         """Execute depth estimation (delegates to estimate_depth)."""
         return self.estimate_depth(image, **kwargs)
@@ -179,20 +179,20 @@ class DepthModelPlugin(PluginInterface):
 
 class ProcessorPlugin(PluginInterface):
     """Specialized interface for image/video processor plugins."""
-    
+
     @abstractmethod
     def process(self, input_data: Any, **kwargs) -> Any:
         """Process input data.
-        
+
         Args:
             input_data: Input image/video data
             **kwargs: Processing parameters
-            
+
         Returns:
             Processed output
         """
         pass
-    
+
     def execute(self, input_data: Any, **kwargs) -> Any:
         """Execute processing (delegates to process)."""
         return self.process(input_data, **kwargs)
@@ -200,21 +200,21 @@ class ProcessorPlugin(PluginInterface):
 
 class EnhancerPlugin(PluginInterface):
     """Specialized interface for enhancement plugins."""
-    
+
     @abstractmethod
     def enhance(self, image: Any, strength: float = 1.0, **kwargs) -> Any:
         """Enhance image.
-        
+
         Args:
             image: Input image
             strength: Enhancement strength (0.0 to 1.0)
             **kwargs: Additional parameters
-            
+
         Returns:
             Enhanced image
         """
         pass
-    
+
     def execute(self, image: Any, **kwargs) -> Any:
         """Execute enhancement (delegates to enhance)."""
         return self.enhance(image, **kwargs)

@@ -5,7 +5,7 @@ to ensure existing code continues to work across versions.
 
 Example:
     >>> from transformation_portal.compat import deprecated, renamed_module
-    >>> 
+    >>>
     >>> @deprecated(replacement="new_function", removal_version="2.0.0")
     ... def old_function():
     ...     return "old"

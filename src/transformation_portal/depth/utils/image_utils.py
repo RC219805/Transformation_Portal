@@ -59,7 +59,7 @@ def load_image(
     except Exception as e:
         if not CV2_AVAILABLE:
             raise RuntimeError(f"PIL failed and cv2 not available: {e}") from e
-        
+
         logger.warning(f"PIL failed ({e}), trying OpenCV")
         # Fallback to OpenCV
         if color_space == "GRAY":
@@ -205,7 +205,7 @@ def resize_image(
         'bicubic': cv2.INTER_CUBIC,
         'lanczos': cv2.INTER_LANCZOS4,
     }
-    
+
     if not CV2_AVAILABLE:
         # Fallback to PIL
         from PIL import Image as PILImage
@@ -219,7 +219,7 @@ def resize_image(
         pil_interp = pil_interp_map.get(interpolation, PILImage.Resampling.BILINEAR)
         resized_img = img.resize((target_w, target_h), pil_interp)
         return np.array(resized_img)
-    
+
     interp_flag = interp_map.get(interpolation, cv2.INTER_LINEAR)
 
     # Resize

@@ -983,22 +983,22 @@ def parse_float_triplet(value: str) -> Tuple[float, float, float]:
 
 def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -> Tuple[int, int]:
     """Validate and optionally auto-correct dimensions for Stable Diffusion 1.5 compatibility.
-    
+
     SD 1.5 requires dimensions that are multiples of 64 for proper feature map alignment.
     This prevents cryptic tensor dimension mismatch errors during processing.
-    
+
     Args:
         width: Desired image width in pixels
         height: Desired image height in pixels
         auto_correct: If True, auto-corrects to nearest valid dimensions with a warning.
                       If False, raises an error for invalid dimensions.
-    
+
     Returns:
         Tuple of (validated_width, validated_height)
-    
+
     Raises:
         typer.BadParameter: If dimensions are invalid and auto_correct is False
-    
+
     Examples:
         >>> validate_sd_dimensions(1024, 768)  # Valid
         (1024, 768)
@@ -1007,25 +1007,25 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
         (1024, 768)
     """
     original_width, original_height = width, height
-    
+
     # Check if dimensions are multiples of SD_DIMENSION_MULTIPLE or below minimum
     needs_correction = (
-        width % SD_DIMENSION_MULTIPLE != 0 or 
+        width % SD_DIMENSION_MULTIPLE != 0 or
         height % SD_DIMENSION_MULTIPLE != 0 or
         width < MIN_SD_DIMENSION or
         height < MIN_SD_DIMENSION
     )
-    
+
     if needs_correction:
         if auto_correct:
             # Round down to nearest multiple of SD_DIMENSION_MULTIPLE
             corrected_width = (width // SD_DIMENSION_MULTIPLE) * SD_DIMENSION_MULTIPLE
             corrected_height = (height // SD_DIMENSION_MULTIPLE) * SD_DIMENSION_MULTIPLE
-            
+
             # Ensure minimum dimensions
             corrected_width = max(MIN_SD_DIMENSION, corrected_width)
             corrected_height = max(MIN_SD_DIMENSION, corrected_height)
-            
+
             typer.echo(
                 f"⚠ Corrected dimensions from {original_width}×{original_height} "
                 f"to {corrected_width}×{corrected_height} (SD 1.5 compatible)",
@@ -1039,14 +1039,14 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
                 errors.append(f"must be multiples of {SD_DIMENSION_MULTIPLE}")
             if width < MIN_SD_DIMENSION or height < MIN_SD_DIMENSION:
                 errors.append(f"must be at least {MIN_SD_DIMENSION}")
-            
+
             raise typer.BadParameter(
                 f"Dimensions {width}×{height} are invalid for Stable Diffusion 1.5: "
                 f"{' and '.join(errors)}. "
                 f"Recommended: {MIN_SD_DIMENSION}×{MIN_SD_DIMENSION}, 768×512, 512×768, 768×768, 1024×768, or 1024×1024. "
                 f"Use --width and --height to specify valid dimensions."
             )
-    
+
     # Warn about extremely large dimensions that may cause OOM
     if width * height > MAX_RECOMMENDED_PIXELS:
         typer.echo(
@@ -1054,7 +1054,7 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
             f"Consider using smaller dimensions or ensure sufficient GPU memory.",
             err=True
         )
-    
+
     return width, height
 
 
