@@ -31,7 +31,7 @@ class TestNormalizeExtension:
 
     def test_lowercase_with_dot(self):
         assert normalize_extension('image.PNG') == '.png'
-        assert normalize_extension('photo.JPEG') == '.jpeg'
+        assert normalize_extension('photo.JPEG') == '.jpg'
         assert normalize_extension('render.TIF') == '.tif'
 
     def test_already_normalized(self):
@@ -40,7 +40,7 @@ class TestNormalizeExtension:
 
     def test_path_object(self):
         assert normalize_extension(Path('image.PNG')) == '.png'
-        assert normalize_extension(Path('/path/to/photo.TIFF')) == '.tiff'
+        assert normalize_extension(Path('/path/to/photo.TIFF')) == '.tif'
 
     def test_extension_only(self):
         assert normalize_extension('.PNG') == '.png'
@@ -64,7 +64,7 @@ class TestIsSupportedImageFormat:
     def test_case_insensitive(self):
         assert is_supported_image_format('IMAGE.PNG') is True
         assert is_supported_image_format('Photo.JPG') is True
-        assert is_supported_image_format('Render.TIFF') is False  # TIFF not in supported formats
+        assert is_supported_image_format('Render.TIFF') is True
 
     def test_unsupported_formats(self):
         assert is_supported_image_format('document.pd') is False
@@ -109,9 +109,9 @@ class TestIsSupportedTiffFormat:
     """Tests for TIFF format detection."""
 
     def test_tiff_formats(self):
-        assert is_supported_tiff_format('photo.ti') is True
-        assert is_supported_tiff_format('render.ti') is True  # .ti is TIFF
-        assert is_supported_tiff_format('scan.TIF') is False  # .TIF normalized to .tif which is not in ['.ti', '.tiff']
+        assert is_supported_tiff_format('photo.tif') is True
+        assert is_supported_tiff_format('render.tif') is True
+        assert is_supported_tiff_format('scan.TIF') is True  # .TIF normalized to .tif
         assert is_supported_tiff_format('image.TIFF') is True
 
     def test_non_tiff_formats(self):
@@ -233,8 +233,8 @@ class TestSuggestOutputFormat:
     """Tests for output format suggestions."""
 
     def test_tiff_preserve_quality(self):
-        assert suggest_output_format('render.ti', preserve_quality=True) == '.ti'
-        assert suggest_output_format('photo.ti', preserve_quality=True) == '.ti'
+        assert suggest_output_format('render.tif', preserve_quality=True) == '.tif'
+        assert suggest_output_format('photo.tif', preserve_quality=True) == '.tif'
 
     def test_tiff_no_preserve(self):
         result = suggest_output_format('render.tiff', preserve_quality=False)
@@ -253,7 +253,7 @@ class TestSuggestOutputFormat:
         assert suggest_output_format('render.png', preserve_quality=True) == '.png'
 
     def test_path_object(self):
-        assert suggest_output_format(Path('render.ti'), preserve_quality=True) == '.ti'  # Use .ti
+        assert suggest_output_format(Path('render.tif'), preserve_quality=True) == '.tif'  # Use .tif
 
 
 class TestGetSupportedFormatsSummary:
@@ -277,7 +277,8 @@ class TestGetSupportedFormatsSummary:
     def test_tiff_subset(self):
         summary = get_supported_formats_summary()
         assert '.ti' in summary['tif']
-        assert '.tiff' in summary['tif']  # Use .tiff instead of .tif
+        assert '.tif' in summary['tif']
+        assert '.tiff' in summary['tif']
         # TIFF should be subset of image
         for ext in summary['tif']:
             assert ext in summary['image']
@@ -356,7 +357,7 @@ class TestIntegration:
         # Get info for various formats (only use supported ones)
         test_files = [
             'photo.jpg',
-            'render.ti',  # Use .ti instead of .tif
+            'render.tif',  # Use .tif - standard TIFF extension
             'depth.png',
             'tour.mp4',
         ]
