@@ -206,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
 
     metrics = _compute_metrics(original, candidate)
 
-    if args.diff is not None:
+    if hasattr(args, 'diff') and args.diff is not None:
         _save_diff(original, candidate, args.diff)
 
     if args.json is not None:
