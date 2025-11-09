@@ -35,6 +35,7 @@ class ColorSpec:
 
 
 @dataclass
+@dataclass
 class FinishSpec:
     """Finish specification from architectural documents."""
     material: str
