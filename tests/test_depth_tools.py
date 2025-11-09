@@ -160,9 +160,9 @@ class TestBatchProcessing:
 
         assert error_count == 1, "Expected 1 error for missing image"
 
-        # Should have 2 successful outputs
-        output_files = list(Path(temp_dirs["output"]).glob("*_depthdof.*"))
-        assert len(output_files) == 2, "Expected 2 output files"
+        # Should have 2 successful outputs (mode="do" outputs .tif files)
+        output_files = list(Path(temp_dirs["output"]).glob("*_depthdo.*"))
+        assert len(output_files) == 2, f"Expected 2 output files, found {len(output_files)}: {list(output_files)}"
 
 
 class TestExitCodes:

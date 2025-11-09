@@ -21,9 +21,9 @@ def test_collect_valid_until_records_sorted(tmp_path):
     deadline_b = (date.today() + timedelta(days=5)).isoformat()
     module.write_text(
         "from tests.documentation import valid_until\n\n"
-        "@valid_until(\"{deadline_a}\", reason=\"Longer horizon\")\n"
+        f"@valid_until(\"{deadline_a}\", reason=\"Longer horizon\")\n"
         "def test_future_a():\n    pass\n\n"
-        "@valid_until(\"{deadline_b}\", reason=\"Soon\")\n"
+        f"@valid_until(\"{deadline_b}\", reason=\"Soon\")\n"
         "def test_future_b():\n    pass\n"
     )
 
@@ -41,9 +41,9 @@ def test_collect_outdated_valid_until_records(tmp_path):
     upcoming = (date.today() + timedelta(days=3)).isoformat()
     module.write_text(
         "from tests.documentation import valid_until\n\n"
-        "@valid_until(\"{expired}\", reason=\"Expired contract\")\n"
+        f"@valid_until(\"{expired}\", reason=\"Expired contract\")\n"
         "def test_outdated():\n    pass\n\n"
-        "@valid_until(\"{upcoming}\", reason=\"Still valid\")\n"
+        f"@valid_until(\"{upcoming}\", reason=\"Still valid\")\n"
         "def test_current():\n    pass\n"
     )
 
