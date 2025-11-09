@@ -117,6 +117,8 @@ input_images/**/*.tiff
 
 # RAG system generated files
 index_stats.json
+.rag_cache/
+rag_system.log
 
 # Model weights and checkpoints
 *.pth

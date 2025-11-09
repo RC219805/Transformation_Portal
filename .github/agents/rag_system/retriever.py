@@ -5,11 +5,32 @@ Implements hybrid retrieval using BM25 (sparse) and dense vector embeddings
 to ensure both recall and precision.
 """
 
+import hashlib
 import math
 import re
 from collections import Counter
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+
+from config import get_config
+from exceptions import RetrievalError
+from logger import get_logger
+
+logger = get_logger(__name__)
+
+# Optional sentence-transformers import
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    logger.warning(
+        "sentence-transformers not installed. Vector search will be disabled. "
+        "Install with: pip install sentence-transformers"
+    )
 
 
 @dataclass
@@ -137,21 +158,69 @@ class HybridRetriever:
 
     def __init__(
         self,
-        bm25_weight: float = 0.7,
-        vector_weight: float = 0.3,
+        bm25_weight: Optional[float] = None,
+        vector_weight: Optional[float] = None,
+        enable_vector_search: Optional[bool] = None,
+        vector_model: Optional[str] = None,
     ):
         """
         Initialize hybrid retriever.
 
         Args:
-            bm25_weight: Weight for BM25 scores (0-1)
-            vector_weight: Weight for vector similarity scores (0-1)
+            bm25_weight: Weight for BM25 scores (0-1, uses config if None)
+            vector_weight: Weight for vector similarity (0-1, uses config if None)
+            enable_vector_search: Enable vector embeddings (uses config if None)
+            vector_model: Sentence transformer model name (uses config if None)
         """
-        self.bm25_weight = bm25_weight
-        self.vector_weight = vector_weight
-        self.bm25 = BM25Retriever()
+        # Load config
+        config = get_config()
+        retriever_config = config.get_section('retriever')
+
+        self.bm25_weight = bm25_weight or retriever_config.get('bm25_weight', 0.7)
+        self.vector_weight = vector_weight or retriever_config.get('vector_weight', 0.3)
+        self.enable_vector_search = (
+            enable_vector_search
+            if enable_vector_search is not None
+            else retriever_config.get('enable_vector_search', False)
+        )
+
+        # BM25 retriever
+        bm25_k1 = retriever_config.get('bm25_k1', 1.5)
+        bm25_b = retriever_config.get('bm25_b', 0.75)
+        self.bm25 = BM25Retriever(k1=bm25_k1, b=bm25_b)
+
+        # Vector search components
+        self.encoder = None
+        self.embeddings = None
+
+        if self.enable_vector_search and SENTENCE_TRANSFORMERS_AVAILABLE:
+            model_name = vector_model or retriever_config.get('vector_model', 'all-MiniLM-L6-v2')
+            try:
+                logger.info(f"Loading sentence transformer model: {model_name}")
+                self.encoder = SentenceTransformer(model_name)
+                logger.info("Vector search enabled")
+            except Exception as e:
+                logger.warning(f"Failed to load sentence transformer: {e}")
+                self.enable_vector_search = False
+
+        # State
         self.chunks = []
         self.indexed = False
+
+        # Query cache size
+        cache_size = retriever_config.get('query_cache_size', 100)
+        if cache_size > 0:
+            # Wrap retrieve method with LRU cache
+            self._retrieve_cached = lru_cache(maxsize=cache_size)(self._retrieve_impl)
+            logger.debug(f"Query caching enabled: max_size={cache_size}")
+        else:
+            self._retrieve_cached = self._retrieve_impl
+
+        logger.debug(
+            f"Initialized retriever: bm25_weight={self.bm25_weight}, "
+            f"vector_weight={self.vector_weight}, "
+            f"vector_search={self.enable_vector_search}"
+        )
 
     def index(self, chunks: List):
         """
@@ -160,10 +229,30 @@ class HybridRetriever:
         Args:
             chunks: List of DocumentChunk objects
         """
+        logger.info(f"Indexing {len(chunks)} chunks...")
+
         self.chunks = chunks
         documents = [chunk.content for chunk in chunks]
+
+        # BM25 indexing
         self.bm25.fit(documents)
+
+        # Vector indexing (if enabled)
+        if self.enable_vector_search and self.encoder is not None:
+            try:
+                logger.info("Computing vector embeddings...")
+                self.embeddings = self.encoder.encode(
+                    documents,
+                    show_progress_bar=False,
+                    convert_to_numpy=True
+                )
+                logger.info(f"Computed embeddings: shape={self.embeddings.shape}")
+            except Exception as e:
+                logger.warning(f"Failed to compute embeddings: {e}")
+                self.embeddings = None
+
         self.indexed = True
+        logger.info("Indexing complete")
 
     def retrieve(
         self,
@@ -185,39 +274,195 @@ class HybridRetriever:
             List of RetrievalResult objects
         """
         if not self.indexed:
-            raise ValueError("Retriever not indexed. Call index() first.")
+            raise RetrievalError("Retriever not indexed. Call index() first.")
+
+        # Create cache key for filters (make hashable)
+        filter_key = (
+            tuple(sorted(chunk_type_filter)) if chunk_type_filter else None,
+            file_path_filter
+        )
+
+        # Call cached implementation
+        return self._retrieve_cached(query, top_k, filter_key)
+
+    def _retrieve_impl(
+        self,
+        query: str,
+        top_k: int,
+        filter_key: Optional[Tuple],
+    ) -> List[RetrievalResult]:
+        """
+        Internal retrieval implementation (cacheable).
+
+        Args:
+            query: Search query
+            top_k: Number of results to return
+            filter_key: Hashable filter key (chunk_types, file_path_filter)
+
+        Returns:
+            List of RetrievalResult objects
+        """
+        # Extract filters from key
+        chunk_type_filter = list(filter_key[0]) if filter_key and filter_key[0] else None
+        file_path_filter = filter_key[1] if filter_key else None
 
         # Apply filters
         filtered_indices = self._apply_filters(chunk_type_filter, file_path_filter)
 
         if not filtered_indices:
+            logger.debug("No chunks match filters")
             return []
 
-        # Create filtered corpus for BM25
+        # Create filtered corpus
         filtered_chunks = [self.chunks[i] for i in filtered_indices]
         filtered_docs = [chunk.content for chunk in filtered_chunks]
 
-        # Perform BM25 search on filtered corpus
-        temp_bm25 = BM25Retriever()
-        temp_bm25.fit(filtered_docs)
-        bm25_results = temp_bm25.search(query, top_k=top_k)
+        # Get BM25 results
+        bm25_scores = self._bm25_search(filtered_docs, query, top_k)
 
-        # Convert to RetrievalResult objects
-        results = []
+        # Get vector results (if enabled)
+        vector_scores = None
+        if self.enable_vector_search and self.embeddings is not None:
+            vector_scores = self._vector_search(filtered_indices, query, top_k)
+
+        # Combine results
+        results = self._combine_results(
+            filtered_indices,
+            bm25_scores,
+            vector_scores,
+            top_k
+        )
+
+        logger.debug(f"Retrieved {len(results)} results for query: '{query[:50]}'")
+        return results
+
+    def _bm25_search(
+        self,
+        documents: List[str],
+        query: str,
+        top_k: int
+    ) -> Dict[int, float]:
+        """
+        Perform BM25 search.
+
+        Returns:
+            Dict mapping local index to BM25 score
+        """
+        temp_bm25 = BM25Retriever(k1=self.bm25.k1, b=self.bm25.b)
+        temp_bm25.fit(documents)
+        bm25_results = temp_bm25.search(query, top_k=top_k * 2)  # Get more for hybrid
+
+        scores = {}
         for local_idx, score in bm25_results:
-            if score > 0:  # Only include results with positive scores
-                original_idx = filtered_indices[local_idx]
-                chunk = self.chunks[original_idx]
-                results.append(RetrievalResult(
-                    chunk_id=chunk.chunk_id,
-                    content=chunk.content,
-                    file_path=chunk.file_path,
-                    start_line=chunk.start_line,
-                    end_line=chunk.end_line,
-                    score=score,
-                    retrieval_method='bm25',
-                    metadata=chunk.metadata
-                ))
+            if score > 0:
+                scores[local_idx] = score
+
+        return scores
+
+    def _vector_search(
+        self,
+        filtered_indices: List[int],
+        query: str,
+        top_k: int
+    ) -> Dict[int, float]:
+        """
+        Perform vector similarity search.
+
+        Returns:
+            Dict mapping local index to similarity score
+        """
+        try:
+            # Encode query
+            query_embedding = self.encoder.encode([query], convert_to_numpy=True)[0]
+
+            # Get filtered embeddings
+            filtered_embeddings = self.embeddings[filtered_indices]
+
+            # Compute cosine similarity
+            query_norm = np.linalg.norm(query_embedding)
+            doc_norms = np.linalg.norm(filtered_embeddings, axis=1)
+
+            # Avoid division by zero
+            similarities = np.dot(filtered_embeddings, query_embedding) / (doc_norms * query_norm + 1e-8)
+
+            # Get top-k indices
+            top_indices = np.argsort(similarities)[::-1][:top_k * 2]
+
+            scores = {}
+            for local_idx in top_indices:
+                score = float(similarities[local_idx])
+                if score > 0:
+                    scores[int(local_idx)] = score
+
+            return scores
+
+        except Exception as e:
+            logger.warning(f"Vector search failed: {e}")
+            return {}
+
+    def _combine_results(
+        self,
+        filtered_indices: List[int],
+        bm25_scores: Dict[int, float],
+        vector_scores: Optional[Dict[int, float]],
+        top_k: int
+    ) -> List[RetrievalResult]:
+        """
+        Combine BM25 and vector scores.
+
+        Returns:
+            List of RetrievalResult objects sorted by combined score
+        """
+        combined_scores = {}
+
+        # Add BM25 scores
+        for local_idx, score in bm25_scores.items():
+            combined_scores[local_idx] = self.bm25_weight * score
+
+        # Add vector scores
+        if vector_scores:
+            for local_idx, score in vector_scores.items():
+                # Normalize vector score to roughly match BM25 range (0-20)
+                normalized_score = score * 20.0
+                combined_scores[local_idx] = (
+                    combined_scores.get(local_idx, 0) +
+                    self.vector_weight * normalized_score
+                )
+
+        # Sort by combined score
+        sorted_indices = sorted(
+            combined_scores.keys(),
+            key=lambda idx: combined_scores[idx],
+            reverse=True
+        )[:top_k]
+
+        # Create results
+        results = []
+        for local_idx in sorted_indices:
+            original_idx = filtered_indices[local_idx]
+            chunk = self.chunks[original_idx]
+
+            # Determine retrieval method
+            has_bm25 = local_idx in bm25_scores
+            has_vector = vector_scores and local_idx in vector_scores
+
+            if has_bm25 and has_vector:
+                method = 'hybrid'
+            elif has_vector:
+                method = 'vector'
+            else:
+                method = 'bm25'
+
+            results.append(RetrievalResult(
+                chunk_id=chunk.chunk_id,
+                content=chunk.content,
+                file_path=chunk.file_path,
+                start_line=chunk.start_line,
+                end_line=chunk.end_line,
+                score=combined_scores[local_idx],
+                retrieval_method=method,
+                metadata=chunk.metadata
+            ))
 
         return results
 
