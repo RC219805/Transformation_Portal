@@ -38,7 +38,8 @@ class ColorSpec:
 class FinishSpec:
     """Finish specification from architectural documents."""
     material: str
-    finish_type: str  # matte, glossy, brushed, honed, etc.
+    material_type: str  # wood, stone, metal, glass, etc.
+    finish_type: str = 'natural'  # matte, glossy, brushed, honed, etc.
     manufacturer: Optional[str] = None
     product_name: Optional[str] = None
     location: Optional[str] = None
@@ -142,7 +143,8 @@ class PDFSpecParser:
             for match in matches:
                 finishes.append(FinishSpec(
                     material=match.group(0),
-                    finish_type=category,
+                    material_type=category,
+                    finish_type='standard',
                     location=self._find_location_context(match.start())
                 ))
 
@@ -390,10 +392,10 @@ class PDFSpecParser:
             'pdf_file': str(self.pdf_path),
             'extraction_method': 'fallback_montecito_luxury_standards',
             'material_specifications': [
-                FinishSpec('White Oak Flooring', 'wood', finish_type='matte', location='living areas').to_dict(),
-                FinishSpec('Carrara Marble', 'stone', finish_type='honed', location='kitchen/bath').to_dict(),
-                FinishSpec('Stainless Steel', 'metal', finish_type='brushed', location='kitchen').to_dict(),
-                FinishSpec('Floor-to-Ceiling Glass', 'glass', finish_type='clear', location='living areas').to_dict(),
+                FinishSpec('White Oak Flooring', 'wood', 'matte', location='living areas').to_dict(),
+                FinishSpec('Carrara Marble', 'stone', 'honed', location='kitchen/bath').to_dict(),
+                FinishSpec('Stainless Steel', 'metal', 'brushed', location='kitchen').to_dict(),
+                FinishSpec('Floor-to-Ceiling Glass', 'glass', 'clear', location='living areas').to_dict(),
             ],
             'color_palette': [
                 ColorSpec('Warm White', 'primary', application='walls').to_dict(),

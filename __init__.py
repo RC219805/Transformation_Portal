@@ -4,7 +4,9 @@ Model wrappers for depth estimation.
 
 # Lazy imports to avoid ImportError when dependencies are not installed
 # This allows pytest to import the root directory without requiring all dependencies
-# pylint: disable=undefined-all-variable
+
+# Decision: lazy_imports - Variables in __all__ are loaded dynamically via __getattr__
+# This is intentional to support optional dependencies (torch, coremltools)
 __all__ = ["DepthAnythingV2Model", "ModelBackend", "ModelVariant", "CoreMLDepthModel"]
 
 def __getattr__(name):

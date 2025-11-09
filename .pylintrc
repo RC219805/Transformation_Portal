@@ -9,6 +9,7 @@ disable=
     R0902, R0903, R0913,  # class/method arg counts
     W0511,                # TODO comments
     E0401, E0611,         # import errors (optional deps)
+    E0603,                # undefined-all-variable (lazy imports pattern)
     R0801,                # duplicate-code (intentional duplicates in src/ refactor and deprecated/)
     C0302,                # too-many-lines (large files are intentional)
     R0914, R0912, R0915,  # too-many-locals/branches/statements (complexity is intentional)
