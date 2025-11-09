@@ -350,7 +350,7 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
     tone_map_peak = args.tone_map_peak
     tone_map_desat = args.tone_map_desat
 
-    if method == "of":
+    if method == "off":
         return ToneMapPlan(enabled=False, note="Tone mapping disabled by user preference.")
 
     video = extract_video_stream(probe)

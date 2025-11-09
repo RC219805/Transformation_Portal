@@ -147,7 +147,7 @@ class TestVFXExtension:
         assert "subtle_estate" in VFX_PRESETS
         assert "montecito_golden" in VFX_PRESETS
         assert "cinematic_fog" in VFX_PRESETS
-        assert "dramatic_do" in VFX_PRESETS
+        assert "dramatic_dof" in VFX_PRESETS  # Correct name is dramatic_dof not dramatic_do
 
     def test_vfx_preset_structure(self):
         """Test VFX preset structure."""
