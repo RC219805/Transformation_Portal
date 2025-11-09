@@ -89,7 +89,7 @@ class Superposition:
         if observer is None:
             return self.outcomes[0][1]
 
-        best_score = float("-in")
+        best_score = float("-inf")
         best_value: Any = self.outcomes[0][1]
         for transform, value in self.outcomes:
             score = observer(value)

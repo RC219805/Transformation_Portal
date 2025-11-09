@@ -37,13 +37,13 @@ from typing import Dict, List, Union
 
 # Supported image extensions (case-insensitive)
 SUPPORTED_IMAGE_EXTENSIONS = {
-    '.png', '.jpg', '.jpeg', '.ti', '.tif',
-    '.webp', '.bmp', '.gi', '.ico',
+    '.png', '.jpg', '.jpeg', '.tif', '.tiff',
+    '.webp', '.bmp', '.gif', '.ico',
     '.ppm', '.pgm', '.pbm', '.tga'
 }
 
 # Primary formats for luxury processing
-LUXURY_IMAGE_EXTENSIONS = {'.ti', '.tif', '.png'}
+LUXURY_IMAGE_EXTENSIONS = {'.tif', '.tiff', '.png'}
 
 # Supported video extensions (case-insensitive)
 SUPPORTED_VIDEO_EXTENSIONS = {
@@ -51,7 +51,7 @@ SUPPORTED_VIDEO_EXTENSIONS = {
 }
 
 # TIFF-specific extensions
-TIFF_EXTENSIONS = {'.ti', '.tiff'}
+TIFF_EXTENSIONS = {'.tif', '.tiff'}
 
 
 class UnsupportedFormatError(ValueError):
@@ -84,6 +84,12 @@ def normalize_extension(path: Union[str, Path]) -> str:
         ext = str(path).lower()
         if not ext.startswith('.'):
             ext = '.' + ext
+
+    # Normalize TIFF extensions
+    if ext == '.tiff':
+        ext = '.tif'
+    elif ext == '.jpeg':
+        ext = '.jpg'
 
     return ext
 
