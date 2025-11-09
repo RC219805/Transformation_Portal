@@ -6,6 +6,7 @@ Validates pipeline parallelism, streaming, progressive processing, and Numba JIT
 
 import tempfile
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -41,6 +42,29 @@ def dummy_images(temp_output_dir):
 
 
 @pytest.fixture
+def mock_depth_model():
+    """Create a mock depth model for testing."""
+    mock_model = Mock()
+
+    # Mock estimate_depth to return synthetic depth map
+    def mock_estimate_depth(image):
+        h, w = image.shape[:2]
+        depth = np.random.rand(h, w).astype(np.float32)
+        return {
+            'depth': depth,
+            'depth_raw': depth.copy(),
+            'metadata': {
+                'inference_time_ms': 10.0,
+                'backend': 'mock',
+            }
+        }
+
+    mock_model.estimate_depth.side_effect = mock_estimate_depth
+    mock_model.variant = Mock(name='SMALL')
+    return mock_model
+
+
+@pytest.fixture
 def pipeline_config():
     """Minimal pipeline configuration for testing."""
     return {
@@ -67,6 +91,14 @@ def pipeline_config():
             'depth_colormap': 'turbo',
         }
     }
+
+
+@pytest.fixture
+def pipeline(pipeline_config, mock_depth_model):
+    """Create a pipeline with mocked depth model."""
+    with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model', return_value=mock_depth_model):
+        pipeline = ArchitecturalDepthPipeline(pipeline_config)
+        return pipeline
 
 
 class TestNumbaIntegration:
@@ -142,9 +174,8 @@ class TestNumbaIntegration:
 class TestStreamingProcessing:
     """Test streaming batch processing (Phase 3)."""
 
-    def test_batch_process_streaming(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_batch_process_streaming(self, pipeline, dummy_images, temp_output_dir):
         """Test streaming batch processing."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         output_dir = temp_output_dir / "streaming_output"
         output_dir.mkdir(exist_ok=True)
@@ -175,9 +206,8 @@ class TestStreamingProcessing:
         assert len(results) == 3
         print(f"\n✓ Streaming processing completed: {len(results)} images")
 
-    def test_streaming_memory_efficiency(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_streaming_memory_efficiency(self, pipeline, dummy_images, temp_output_dir):
         """Test that streaming doesn't accumulate results in memory."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         output_dir = temp_output_dir / "streaming_memory"
         output_dir.mkdir(exist_ok=True)
@@ -200,9 +230,8 @@ class TestStreamingProcessing:
 class TestPipelineParallelism:
     """Test pipeline parallelism (Phase 3)."""
 
-    def test_batch_process_pipelined(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_batch_process_pipelined(self, pipeline, dummy_images, temp_output_dir):
         """Test pipelined batch processing."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         output_dir = temp_output_dir / "pipelined_output"
         output_dir.mkdir(exist_ok=True)
@@ -227,9 +256,8 @@ class TestPipelineParallelism:
         assert len(results) == 3
         print(f"\n✓ Pipelined processing completed: {len(results)} images")
 
-    def test_pipelined_vs_sequential_equivalence(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_pipelined_vs_sequential_equivalence(self, pipeline, dummy_images, temp_output_dir):
         """Test that pipelined and sequential processing produce same results."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         # Sequential processing
         seq_output = temp_output_dir / "sequential"
@@ -264,9 +292,8 @@ class TestPipelineParallelism:
 class TestProgressiveProcessing:
     """Test progressive/multi-resolution processing (Phase 3)."""
 
-    def test_process_render_progressive(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_process_render_progressive(self, pipeline, dummy_images, temp_output_dir):
         """Test progressive processing at multiple quality levels."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         # Process at multiple quality levels
         result = pipeline.process_render_progressive(
@@ -283,9 +310,8 @@ class TestProgressiveProcessing:
 
         print(f"\n✓ Progressive processing (highest quality) completed")
 
-    def test_process_render_progressive_all_levels(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_process_render_progressive_all_levels(self, pipeline, dummy_images, temp_output_dir):
         """Test progressive processing returning all levels."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         # Get all quality levels
         results = pipeline.process_render_progressive(
@@ -308,9 +334,8 @@ class TestProgressiveProcessing:
 
         print(f"\n✓ Progressive processing (all {len(results)} levels) completed")
 
-    def test_progressive_preview_only(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_progressive_preview_only(self, pipeline, dummy_images, temp_output_dir):
         """Test fast preview at low resolution."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         # Quick preview at 25% resolution
         result = pipeline.process_render_progressive(
@@ -332,29 +357,28 @@ class TestProgressiveProcessing:
 class TestBackwardCompatibility:
     """Test that Phase 3 features don't break existing functionality."""
 
-    def test_standard_batch_processing_still_works(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_standard_batch_processing_still_works(self, pipeline, dummy_images, temp_output_dir):
         """Test that original batch_process() still works."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         output_dir = temp_output_dir / "standard_output"
         output_dir.mkdir(exist_ok=True)
 
         # Use original batch processing
+        # Note: parallel=False because mock models can't be pickled for ProcessPoolExecutor
         results = pipeline.batch_process(
             dummy_images[:2],
             output_dir,
             save_depth=True,
             save_visualization=False,
-            parallel=True,  # Phase 1 feature
-            preload_images=True,  # Phase 1 feature
+            parallel=False,  # Disabled for mock testing
+            preload_images=True,  # Phase 1 feature (async I/O)
         )
 
         assert len(results) == 2
         print(f"\n✓ Original batch_process() still works")
 
-    def test_single_image_processing_still_works(self, pipeline_config, dummy_images, temp_output_dir):
+    def test_single_image_processing_still_works(self, pipeline, dummy_images, temp_output_dir):
         """Test that process_render() still works."""
-        pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
         result = pipeline.process_render(dummy_images[0])
 
