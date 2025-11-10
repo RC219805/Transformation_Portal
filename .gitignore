@@ -177,3 +177,7 @@ input_images/**/*.png
 *.patch
 *.diff
 .rag_cache/
+
+# Generated logs and artifacts
+logs/
+artifacts/
