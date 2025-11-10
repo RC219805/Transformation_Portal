@@ -102,21 +102,29 @@ from rag_system.config import get_config
 config = get_config()
 
 # Get specific value
-chunk_size = config.get('indexer', 'chunk_size_tokens')  # 750
+chunk_size = config.get('indexer.chunk_size_tokens')  # 750
 
 # Get entire section
 retriever_config = config.get_section('retriever')
 
 # Set value at runtime (not persisted)
-config.set('indexer', 'chunk_size_tokens', 1000)
+config.set('indexer.chunk_size_tokens', 1000)
 ```
 
 **Environment Variable Overrides:**
+
+Environment variables with the prefix `RAG_` will override configuration values. The format is `RAG_<SECTION>_<KEY>=<value>`.
+
 ```bash
 # Override any config value
 export RAG_INDEXER_CACHE_ENABLED=false
 export RAG_RETRIEVER_BM25_WEIGHT=0.8
-export RAG_LOGGING_LEVEL=DEBUG
+export RAG_CITATION_MAX_RESULTS=10
+
+# Values are automatically converted to appropriate types
+# Boolean: true/false, yes/no, 1/0, on/off
+# Numbers: integers and floats
+# Strings: anything else
 
 python your_script.py
 ```
@@ -280,11 +288,8 @@ from rag_system.exceptions import (
     RAGSystemError,      # Base exception
     IndexingError,       # Indexing failures
     RetrievalError,      # Retrieval failures
-    RerankingError,      # Reranking failures
-    CitationError,       # Citation generation failures
-    ConfigurationError,  # Invalid configuration
     CacheError,          # Cache operations
-    ValidationError,     # Input validation
+    ConfigError,         # Invalid configuration
 )
 ```
 
