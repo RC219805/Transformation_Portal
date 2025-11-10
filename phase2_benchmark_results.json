@@ -1,0 +1,38 @@
+{
+  "small": {
+    "variant": "small",
+    "model_id": "depth-anything/Depth-Anything-V2-Small-hf",
+    "init_time_sec": 0.8208329677581787,
+    "avg_inference_ms": 62.7687931060791,
+    "std_inference_ms": 1.6777143878137908,
+    "min_inference_ms": 60.83393096923828,
+    "max_inference_ms": 64.92900848388672,
+    "depth_map_shape": [
+      1500,
+      2000
+    ],
+    "depth_map_dtype": "float32",
+    "depth_range": [
+      0.0,
+      1.0
+    ]
+  },
+  "large": {
+    "variant": "large",
+    "model_id": "depth-anything/Depth-Anything-V2-Large-hf",
+    "init_time_sec": 1.7058610916137695,
+    "avg_inference_ms": 294.2633628845215,
+    "std_inference_ms": 0.9177431348436019,
+    "min_inference_ms": 292.97709465026855,
+    "max_inference_ms": 295.6671714782715,
+    "depth_map_shape": [
+      1500,
+      2000
+    ],
+    "depth_map_dtype": "float32",
+    "depth_range": [
+      0.0,
+      1.0
+    ]
+  }
+}

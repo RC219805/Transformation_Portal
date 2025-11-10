@@ -11,7 +11,11 @@ description: "Elite HDR processing for luxury coastal estate - complete 7-stage 
 # ============================================================================
 depth:
   enabled: true
-  model_variant: "small"  # small (fastest), base, large
+  # Phase 2 Upgrade: V2-Large support
+  # quality_mode: "fast" (V2-Small, 63ms) or "premium" (V2-Large, 294ms)
+  # RECOMMENDATION: Use "premium" for 750 Picacho (quality > speed for 6 images)
+  quality_mode: "premium"  # V2-Large: Superior quality, +6min for 6 images
+  model_variant: "large"  # small (fastest), base, large (manual override)
   backend: "pytorch_mps"  # pytorch_mps (M-series), coreml (ANE), pytorch_cpu
   num_zones: 4  # Depth-based zones for intelligent tone mapping
   zone_tone_method: "filmic"  # agx, filmic, reinhard
@@ -43,7 +47,7 @@ tone_mapping:
   preserve_hdr_highlights: true  # Maintain highlight detail
   white_point: 11.2  # Filmic white point (8.0 to 16.0)
   agx_config_path: null  # Path to AgX config.ocio if using AgX
-  
+
   # NEW: Adaptive tone mapping features
   adaptive_tone_mapping: true  # Enable scene-aware processing
   shadow_boost_outdoor: 0.3  # Shadow lift for outdoor scenes (0.0-1.0)
@@ -76,7 +80,7 @@ ai_enhancement:
   seed: 42  # Random seed for reproducibility
   prompt_template: "luxury {room_type} architectural photography, {style}, ultra detailed, professional, photorealistic, 8k"
   negative_prompt: "blurry, artifacts, cartoon, painting, oversaturated, unrealistic, low quality, distorted"
-  
+
   # NEW: Tensor compatibility fixes
   ai_enhancement_padding: true  # Auto-pad for ControlNet compatibility
   target_size_multiple: 64  # Pad to multiples of this value (64 or 96)
@@ -115,7 +119,7 @@ room_overrides:
       shadow_boost_outdoor: 0.4  # More boost for aerial shadows
     ai_enhancement:
       prompt_template: "luxury coastal estate aerial photography, dramatic hillside architecture, infinity pool, mediterranean landscaping, golden hour lighting, ultra detailed, professional, photorealistic, 8k"
-  
+
   bathroom:
     material_response:
       enhance_stone: true
@@ -123,7 +127,7 @@ room_overrides:
       strength: 0.80
     color_grading:
       saturation: 1.05
-  
+
   kitchen:
     material_response:
       enhance_metal: true
@@ -131,7 +135,7 @@ room_overrides:
       strength: 0.85
     tone_mapping:
       contrast: 1.08
-  
+
   bedroom:
     material_response:
       enhance_textiles: true
@@ -139,7 +143,7 @@ room_overrides:
     color_grading:
       saturation: 1.06
       vibrance: 0.12
-  
+
   great_room:
     material_response:
       enhance_wood: true
@@ -147,7 +151,7 @@ room_overrides:
     tone_mapping:
       exposure: 0.1
       contrast: 1.06
-  
+
   pool:
     depth:
       atmospheric_haze: true

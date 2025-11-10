@@ -2,7 +2,7 @@
 
 **Transformation Portal - API Stability and Deprecation Guidelines**
 
-Version: 1.0.0  
+Version: 1.0.0
 Last Updated: 2025-11-08
 
 ---
@@ -200,5 +200,5 @@ process_image(image_path="image.jpg", output_dir="output/")
 
 ---
 
-**Last Updated**: 2025-11-08  
+**Last Updated**: 2025-11-08
 **Policy Version**: 1.0.0
