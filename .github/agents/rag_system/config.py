@@ -77,6 +77,9 @@ class Config:
             else:
                 logger.debug("No config file found, using defaults")
 
+        # Apply environment variable overrides
+        self._apply_env_overrides()
+
     def load_from_file(self, config_path: str):
         """
         Load configuration from YAML file.
@@ -104,6 +107,79 @@ class Config:
                 self._deep_merge(base[key], value)
             else:
                 base[key] = value
+
+    def _apply_env_overrides(self):
+        """
+        Apply environment variable overrides.
+        
+        Environment variables should be in the format:
+        RAG_<SECTION>_<KEY>=<value>
+        
+        Examples:
+            RAG_INDEXER_CACHE_ENABLED=false
+            RAG_RETRIEVER_BM25_WEIGHT=0.8
+            RAG_LOGGING_LEVEL=DEBUG
+        """
+        prefix = 'RAG_'
+        
+        for env_key, env_value in os.environ.items():
+            if not env_key.startswith(prefix):
+                continue
+                
+            # Remove prefix and split into parts
+            key_parts = env_key[len(prefix):].lower().split('_')
+            
+            if len(key_parts) < 2:
+                logger.warning(f"Invalid environment variable format: {env_key}")
+                continue
+            
+            # First part is section, rest is the key
+            section = key_parts[0]
+            key_name = '_'.join(key_parts[1:])
+            
+            # Check if section exists in config
+            if section not in self.config:
+                logger.warning(f"Unknown config section in {env_key}: {section}")
+                continue
+            
+            # Convert value to appropriate type
+            try:
+                converted_value = self._convert_env_value(env_value)
+                
+                # Set the value using dot notation
+                config_key = f"{section}.{key_name}"
+                self.set(config_key, converted_value)
+                logger.info(f"Applied environment override: {env_key} = {converted_value}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to apply environment override {env_key}: {e}")
+
+    def _convert_env_value(self, value: str) -> Any:
+        """
+        Convert environment variable string to appropriate type.
+        
+        Args:
+            value: String value from environment variable
+            
+        Returns:
+            Converted value (bool, int, float, or string)
+        """
+        # Handle boolean values
+        if value.lower() in ('true', 'yes', '1', 'on'):
+            return True
+        elif value.lower() in ('false', 'no', '0', 'off'):
+            return False
+        
+        # Try to convert to number
+        try:
+            # Try int first
+            if '.' not in value:
+                return int(value)
+            # Try float
+            return float(value)
+        except ValueError:
+            # Return as string
+            return value
 
     def get(self, key: str, default: Any = None) -> Any:
         """

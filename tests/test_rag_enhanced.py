@@ -94,14 +94,33 @@ class TestConfiguration:
 
         assert config.get('indexer.chunk_size_tokens') == 1000
 
-    # Environment variable override functionality is not yet implemented
-    # def test_config_env_override(self, monkeypatch):
-    #     """Test environment variable override."""
-    #     monkeypatch.setenv('RAG_INDEXER_CACHE_ENABLED', 'false')
-    #     reset_config()
-    #
-    #     config = get_config()
-    #     assert config.get('indexer.cache_enabled') is False
+    def test_config_env_override(self, monkeypatch):
+        """Test environment variable override."""
+        monkeypatch.setenv('RAG_INDEXER_CACHE_ENABLED', 'false')
+        reset_config()
+
+        config = get_config()
+        assert config.get('indexer.cache_enabled') is False
+
+    def test_config_env_override_types(self, monkeypatch):
+        """Test environment variable override with different types."""
+        # Boolean
+        monkeypatch.setenv('RAG_INDEXER_CACHE_ENABLED', 'true')
+        # Float
+        monkeypatch.setenv('RAG_RETRIEVER_BM25_WEIGHT', '0.9')
+        # Integer
+        monkeypatch.setenv('RAG_CITATION_MAX_RESULTS', '10')
+        # String
+        monkeypatch.setenv('RAG_INDEXER_CACHE_DIR', '.custom_cache')
+        
+        reset_config()
+        config = get_config()
+        
+        assert config.get('indexer.cache_enabled') is True
+        assert config.get('retriever.bm25_weight') == 0.9
+        assert config.get('citation.max_results') == 10
+        assert config.get('indexer.cache_dir') == '.custom_cache'
+
 
 
 class TestPersistentCaching:
