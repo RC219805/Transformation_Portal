@@ -108,94 +108,44 @@ class Config:
             else:
                 base[key] = value
 
-    def _apply_env_overrides(self):
-        """
-        Apply environment variable overrides.
-        
-        Environment variables should be in the format:
-        RAG_<SECTION>_<KEY>=<value>
-        
-        Examples:
-            RAG_INDEXER_CACHE_ENABLED=false
-            RAG_RETRIEVER_BM25_WEIGHT=0.8
-            RAG_CITATION_MAX_RESULTS=10
-        """
-        prefix = 'RAG_'
-        
-        for env_key, env_value in os.environ.items():
-            if not env_key.startswith(prefix):
-                continue
-                
-            # Remove prefix and split into parts
-            key_parts = env_key[len(prefix):].lower().split('_')
-            
-            if len(key_parts) < 2:
-                logger.warning(f"Invalid environment variable format: {env_key}")
-                continue
-            
-            # First part is section, rest is the key
-            section = key_parts[0]
-            key_name = '_'.join(key_parts[1:])
-            
-            # Check if section exists in config
-            if section not in self.config:
-                logger.warning(f"Unknown config section in {env_key}: {section}")
-                continue
-            
-            # Convert value to appropriate type
-            try:
-                converted_value = self._convert_env_value(env_value)
-                
-                # Set the value using dot notation
-                config_key = f"{section}.{key_name}"
-                self.set(config_key, converted_value)
-                logger.info(f"Applied environment override: {env_key} = {converted_value}")
-                
-            except Exception as e:
-                logger.warning(f"Failed to apply environment override {env_key}: {e}")
-
-    def _convert_env_value(self, value: str) -> Any:
-        """
-        Convert environment variable string to appropriate type.
-
-        Args:
-            value: String value from environment variable
-
-        Returns:
-            Converted value (bool, int, float, or string)
-
-        Notes:
-            Only 'true', 'yes', 'on' (case-insensitive) are treated as boolean True.
-            Only 'false', 'no', 'off' (case-insensitive) are treated as boolean False.
-            '1' and '0' are parsed as integers if possible, not as booleans.
-        """
-        # Handle boolean values (do NOT treat '1'/'0' as bools)
-        if value.lower() in ('true', 'yes', 'on'):
-            return True
-        elif value.lower() in ('false', 'no', 'off'):
-            return False
-        # Try to convert to number
-        try:
-            # Try int first
-            if '.' not in value:
-                return int(value)
-            # Try float
-            return float(value)
-        except ValueError:
-            # Return as string
-            return value
-
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, *args, **kwargs) -> Any:
         """
         Get a configuration value.
 
+        Supports two calling conventions:
+        - get('section.key', default=None) - dot notation
+        - get('section', 'key', default=None) - separate args (legacy)
+
         Args:
-            key: Dot-separated key path (e.g., 'indexer.chunk_size_tokens')
-            default: Default value if key not found
+            *args: Either (key_path, default) or (section, key, default)
+            **kwargs: Optional 'default' keyword argument
 
         Returns:
             Configuration value
         """
+        default = kwargs.get('default', None)
+
+        # Handle both calling conventions
+        if len(args) == 1:
+            # Dot notation: config.get('indexer.chunk_size_tokens')
+            key = args[0]
+        elif len(args) == 2:
+            # Could be: config.get('indexer.chunk_size_tokens', default)
+            # Or: config.get('indexer', 'chunk_size_tokens')
+            if isinstance(args[1], str):
+                # Second arg is a string, so it's section, key
+                key = f"{args[0]}.{args[1]}"
+            else:
+                # Second arg is default value
+                key = args[0]
+                default = args[1]
+        elif len(args) == 3:
+            # config.get('indexer', 'chunk_size_tokens', default)
+            key = f"{args[0]}.{args[1]}"
+            default = args[2]
+        else:
+            raise TypeError(f"get() takes 1-3 positional arguments but {len(args)} were given")
+
         keys = key.split('.')
         value = self.config
 
@@ -219,14 +169,27 @@ class Config:
         """
         return self.config.get(section, {})
 
-    def set(self, key: str, value: Any):
+    def set(self, *args):
         """
         Set a configuration value.
 
+        Supports two calling conventions:
+        - set('section.key', value) - dot notation
+        - set('section', 'key', value) - separate args (legacy)
+
         Args:
-            key: Dot-separated key path
-            value: Value to set
+            *args: Either (key_path, value) or (section, key, value)
         """
+        if len(args) == 2:
+            # Dot notation: config.set('indexer.chunk_size_tokens', 1000)
+            key, value = args
+        elif len(args) == 3:
+            # Legacy: config.set('indexer', 'chunk_size_tokens', 1000)
+            key = f"{args[0]}.{args[1]}"
+            value = args[2]
+        else:
+            raise TypeError(f"set() takes 2-3 positional arguments but {len(args)} were given")
+
         keys = key.split('.')
         config = self.config
 
