@@ -93,6 +93,10 @@ test_artifacts/
 *_TEMP.md
 *_WIP.md
 SESSION_*.md
+Analysis_Complete.md
+IMPLEMENTATION_COMPLETE.md
+*_SUMMARY.md
+COMMIT_SUMMARY_OLD.md
 
 # But keep production documentation
 !750_PICACHO_*.md
@@ -108,6 +112,8 @@ SESSION_*.md
 !QUALITY_*.md
 !PHASE1_*.md
 !PHASE2_*.md
+!Visual_Feedback_Analysis_Summary.md
+!COMMIT_SUMMARY.md
 
 # But allow important docs in docs/
 !docs/CODE_QUALITY_SYSTEM.md
