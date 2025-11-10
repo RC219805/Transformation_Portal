@@ -118,7 +118,7 @@ class Config:
         Examples:
             RAG_INDEXER_CACHE_ENABLED=false
             RAG_RETRIEVER_BM25_WEIGHT=0.8
-            RAG_LOGGING_LEVEL=DEBUG
+            RAG_CITATION_MAX_RESULTS=10
         """
         prefix = 'RAG_'
         
