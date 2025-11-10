@@ -157,19 +157,23 @@ class Config:
     def _convert_env_value(self, value: str) -> Any:
         """
         Convert environment variable string to appropriate type.
-        
+
         Args:
             value: String value from environment variable
-            
+
         Returns:
             Converted value (bool, int, float, or string)
+
+        Notes:
+            Only 'true', 'yes', 'on' (case-insensitive) are treated as boolean True.
+            Only 'false', 'no', 'off' (case-insensitive) are treated as boolean False.
+            '1' and '0' are parsed as integers if possible, not as booleans.
         """
-        # Handle boolean values
-        if value.lower() in ('true', 'yes', '1', 'on'):
+        # Handle boolean values (do NOT treat '1'/'0' as bools)
+        if value.lower() in ('true', 'yes', 'on'):
             return True
-        elif value.lower() in ('false', 'no', '0', 'off'):
+        elif value.lower() in ('false', 'no', 'off'):
             return False
-        
         # Try to convert to number
         try:
             # Try int first
