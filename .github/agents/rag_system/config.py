@@ -108,6 +108,81 @@ class Config:
             else:
                 base[key] = value
 
+    def _apply_env_overrides(self):
+        """
+        Apply environment variable overrides to configuration.
+
+        Environment variables with the prefix RAG_ will override config values.
+        Format: RAG_<SECTION>_<KEY>=<value>
+
+        Examples:
+            RAG_INDEXER_CACHE_ENABLED=false
+            RAG_RETRIEVER_BM25_WEIGHT=0.8
+            RAG_CITATION_MAX_RESULTS=10
+
+        Values are automatically converted to appropriate types:
+        - Boolean: true/false, yes/no, 1/0, on/off (case-insensitive)
+        - Numbers: integers and floats
+        - Strings: anything else
+        """
+        prefix = 'RAG_'
+
+        for env_key, env_value in os.environ.items():
+            if not env_key.startswith(prefix):
+                continue
+
+            # Remove prefix and split into section and key
+            config_path = env_key[len(prefix):].lower()
+            parts = config_path.split('_', 1)
+
+            if len(parts) != 2:
+                logger.warning(f"Invalid environment variable format: {env_key}")
+                continue
+
+            section, key = parts
+
+            # Convert value to appropriate type
+            converted_value = self._convert_env_value(env_value)
+
+            # Set the configuration value
+            try:
+                self.set(f"{section}.{key}", converted_value)
+                logger.debug(f"Applied env override: {env_key}={converted_value}")
+            except Exception as e:
+                logger.warning(f"Failed to apply env override {env_key}: {e}")
+
+    def _convert_env_value(self, value: str) -> Any:
+        """
+        Convert environment variable string value to appropriate type.
+
+        Args:
+            value: String value from environment variable
+
+        Returns:
+            Converted value (bool, int, float, or str)
+        """
+        # Boolean conversion
+        lower_value = value.lower()
+        if lower_value in ('true', 'yes', '1', 'on'):
+            return True
+        if lower_value in ('false', 'no', '0', 'off'):
+            return False
+
+        # Try integer conversion
+        try:
+            return int(value)
+        except ValueError:
+            pass
+
+        # Try float conversion
+        try:
+            return float(value)
+        except ValueError:
+            pass
+
+        # Return as string
+        return value
+
     def get(self, *args, **kwargs) -> Any:
         """
         Get a configuration value.
