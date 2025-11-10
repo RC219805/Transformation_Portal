@@ -177,8 +177,13 @@ logging:
 
 **Installation:**
 ```bash
+# Option 1: Install transformation-portal with ML extras (recommended)
+pip install -e ".[ml]"
+
+# Option 2: Install manually
 pip install sentence-transformers torch
-# or
+
+# Option 3: Install RAG system requirements
 pip install -r .github/agents/rag_system/requirements.txt
 ```
 
@@ -508,7 +513,11 @@ indexer = RepositoryIndexer('/path/to/repo', use_cache=True)
 
 **Solutions:**
 ```bash
-# Install dependencies
+# Install dependencies (choose one option)
+# Option 1: Install with ML extras (recommended)
+pip install -e ".[ml]"
+
+# Option 2: Install manually
 pip install sentence-transformers torch
 
 # Enable in config
