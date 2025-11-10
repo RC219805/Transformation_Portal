@@ -111,7 +111,23 @@ retriever_config = config.get_section('retriever')
 config.set('indexer.chunk_size_tokens', 1000)
 ```
 
-**Note:** Environment variable overrides are not currently implemented but planned for future versions.
+**Environment Variable Overrides:**
+
+Environment variables with the prefix `RAG_` will override configuration values. The format is `RAG_<SECTION>_<KEY>=<value>`.
+
+```bash
+# Override any config value
+export RAG_INDEXER_CACHE_ENABLED=false
+export RAG_RETRIEVER_BM25_WEIGHT=0.8
+export RAG_CITATION_MAX_RESULTS=10
+
+# Values are automatically converted to appropriate types
+# Boolean: true/false, yes/no, 1/0, on/off
+# Numbers: integers and floats
+# Strings: anything else
+
+python your_script.py
+```
 
 ---
 
