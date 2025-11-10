@@ -105,17 +105,44 @@ class Config:
             else:
                 base[key] = value
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, *args, **kwargs) -> Any:
         """
         Get a configuration value.
 
+        Supports two calling conventions:
+        - get('section.key', default=None) - dot notation
+        - get('section', 'key', default=None) - separate args (legacy)
+
         Args:
-            key: Dot-separated key path (e.g., 'indexer.chunk_size_tokens')
-            default: Default value if key not found
+            *args: Either (key_path, default) or (section, key, default)
+            **kwargs: Optional 'default' keyword argument
 
         Returns:
             Configuration value
         """
+        default = kwargs.get('default', None)
+
+        # Handle both calling conventions
+        if len(args) == 1:
+            # Dot notation: config.get('indexer.chunk_size_tokens')
+            key = args[0]
+        elif len(args) == 2:
+            # Could be: config.get('indexer.chunk_size_tokens', default)
+            # Or: config.get('indexer', 'chunk_size_tokens')
+            if isinstance(args[1], str):
+                # Second arg is a string, so it's section, key
+                key = f"{args[0]}.{args[1]}"
+            else:
+                # Second arg is default value
+                key = args[0]
+                default = args[1]
+        elif len(args) == 3:
+            # config.get('indexer', 'chunk_size_tokens', default)
+            key = f"{args[0]}.{args[1]}"
+            default = args[2]
+        else:
+            raise TypeError(f"get() takes 1-3 positional arguments but {len(args)} were given")
+
         keys = key.split('.')
         value = self.config
 
@@ -139,14 +166,27 @@ class Config:
         """
         return self.config.get(section, {})
 
-    def set(self, key: str, value: Any):
+    def set(self, *args):
         """
         Set a configuration value.
 
+        Supports two calling conventions:
+        - set('section.key', value) - dot notation
+        - set('section', 'key', value) - separate args (legacy)
+
         Args:
-            key: Dot-separated key path
-            value: Value to set
+            *args: Either (key_path, value) or (section, key, value)
         """
+        if len(args) == 2:
+            # Dot notation: config.set('indexer.chunk_size_tokens', 1000)
+            key, value = args
+        elif len(args) == 3:
+            # Legacy: config.set('indexer', 'chunk_size_tokens', 1000)
+            key = f"{args[0]}.{args[1]}"
+            value = args[2]
+        else:
+            raise TypeError(f"set() takes 2-3 positional arguments but {len(args)} were given")
+
         keys = key.split('.')
         config = self.config
 
