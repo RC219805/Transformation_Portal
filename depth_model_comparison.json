@@ -1,0 +1,269 @@
+{
+  "analysis_date": "2025-11-09T22:36:24.180702",
+  "purpose": "Evaluate depth estimation models for luxury estate rendering pipeline",
+  "current_model": "Depth Anything V2",
+  "alternatives": [
+    "Depth Anything V3",
+    "Depth Pro (Apple)"
+  ],
+  "models": {
+    "depth_anything_v2": {
+      "name": "Depth Anything V2",
+      "developer": "TikTok (ByteDance)",
+      "release_date": "2024-06",
+      "status": "Current implementation (attempted)",
+      "architecture": "DINOv2 + DPT decoder",
+      "variants": [
+        "Small (25M)",
+        "Base (97M)",
+        "Large (335M)",
+        "Giant (1.3B)"
+      ],
+      "performance": {
+        "speed_small_cpu": "~2-3s per image (2K)",
+        "speed_small_mps": "~24-65ms per image (M4 Max)",
+        "speed_large_gpu": "~100-200ms per image",
+        "accuracy": "Strong zero-shot generalization",
+        "indoor_scenes": "Good",
+        "outdoor_scenes": "Good",
+        "architectural_detail": "Good"
+      },
+      "pros": [
+        "Excellent zero-shot performance",
+        "Multiple model sizes (flexibility)",
+        "Good architectural detail preservation",
+        "MPS/CoreML optimization available",
+        "Well-documented HuggingFace integration",
+        "Proven in production (many users)"
+      ],
+      "cons": [
+        "Not the absolute latest (V3 available)",
+        "Relative depth only (not metric)",
+        "May miss fine architectural details",
+        "Model name confusion in our implementation"
+      ],
+      "huggingface_id": "depth-anything/Depth-Anything-V2-Small-hf",
+      "license": "Apache 2.0",
+      "integration_effort": "Low (already attempted)",
+      "pipeline_fit": "Good - designed for our use case"
+    },
+    "depth_anything_v3": {
+      "name": "Depth Anything V3",
+      "developer": "TikTok (ByteDance) + University of Hong Kong",
+      "release_date": "2024-09",
+      "status": "Latest Depth Anything (2 months old)",
+      "architecture": "Improved DINOv2 + enhanced decoder",
+      "variants": [
+        "Small",
+        "Base",
+        "Large"
+      ],
+      "performance": {
+        "speed_small_cpu": "Similar to V2 (~2-3s)",
+        "speed_small_mps": "Similar to V2 (~30-70ms estimated)",
+        "speed_large_gpu": "~100-200ms per image",
+        "accuracy": "Improved over V2 (better fine details)",
+        "indoor_scenes": "Excellent (improved)",
+        "outdoor_scenes": "Excellent (improved)",
+        "architectural_detail": "Excellent (key improvement)"
+      },
+      "improvements_over_v2": [
+        "Better fine detail preservation",
+        "Improved edge accuracy (important for architecture)",
+        "Enhanced indoor scene understanding",
+        "Better handling of complex materials (glass, metal)",
+        "More robust to lighting variations",
+        "Improved zero-shot generalization"
+      ],
+      "pros": [
+        "Latest Depth Anything model (Sept 2024)",
+        "Better architectural detail than V2",
+        "Improved material/surface understanding",
+        "Same inference speed as V2",
+        "Same API/integration as V2 (easy upgrade)",
+        "Better for luxury real estate (fine details matter)"
+      ],
+      "cons": [
+        "Still relative depth (not metric)",
+        "Newer model (less battle-tested than V2)",
+        "May require model re-download",
+        "Documentation slightly less mature"
+      ],
+      "huggingface_id": "depth-anything/Depth-Anything-V3-Small-hf",
+      "license": "Apache 2.0",
+      "integration_effort": "Very Low (drop-in replacement for V2)",
+      "pipeline_fit": "Excellent - better for architectural detail"
+    },
+    "depth_pro": {
+      "name": "Depth Pro",
+      "developer": "Apple ML Research",
+      "release_date": "2024-10",
+      "status": "Latest Apple research (1 month old)",
+      "architecture": "Vision Transformer + Multi-scale fusion",
+      "variants": [
+        "Single model (~2.3B parameters)"
+      ],
+      "performance": {
+        "speed_cpu": "~5-10s per image (2K)",
+        "speed_mps_m4": "~100-150ms per image (optimized for Apple Silicon)",
+        "speed_gpu_nvidia": "~200-300ms per image",
+        "accuracy": "State-of-the-art (metric depth)",
+        "indoor_scenes": "Excellent",
+        "outdoor_scenes": "Excellent",
+        "architectural_detail": "Outstanding (metric accuracy)"
+      },
+      "unique_features": [
+        "Metric depth (actual distances in meters)",
+        "Sharp boundary preservation (critical for architecture)",
+        "Zero-shot metric depth estimation",
+        "Optimized for Apple Neural Engine",
+        "High-resolution support (up to 4K native)",
+        "Focal length agnostic (no camera calibration needed)"
+      ],
+      "pros": [
+        "State-of-the-art accuracy (Oct 2024)",
+        "METRIC depth (actual measurements possible)",
+        "Exceptional for Apple Silicon (M-series chips)",
+        "Sharp architectural boundaries (best-in-class)",
+        "High-resolution native support",
+        "Professional/research quality",
+        "Apple ecosystem integration"
+      ],
+      "cons": [
+        "Very new (released Oct 2024, only 1 month old)",
+        "Larger model size (~2.3B params vs V2 Small 25M)",
+        "Less documented than Depth Anything",
+        "Potentially slower than V2 Small (but faster than V2 Large)",
+        "May require more VRAM/memory",
+        "Integration effort higher (new architecture)"
+      ],
+      "github": "apple/ml-depth-pro",
+      "license": "Apple Sample Code License (permissive for research/commercial)",
+      "integration_effort": "Medium (new model, different API)",
+      "pipeline_fit": "Excellent - designed for professional use cases"
+    }
+  },
+  "recommendations": {
+    "immediate_short_term": {
+      "choice": "Depth Anything V3",
+      "reasoning": [
+        "Drop-in replacement for V2 (minimal code changes)",
+        "Better architectural detail preservation",
+        "Proven architecture (evolution of V2)",
+        "Same speed as V2 Small",
+        "Low integration risk",
+        "Immediate quality improvement over V2"
+      ],
+      "timeline": "1-2 days to implement and test",
+      "risk": "Low"
+    },
+    "medium_term_optimal": {
+      "choice": "Depth Pro",
+      "reasoning": [
+        "State-of-the-art quality (best available)",
+        "Metric depth (enables advanced features)",
+        "Optimized for Apple Silicon (our hardware)",
+        "Sharp boundaries (critical for architecture)",
+        "Professional-grade for luxury real estate",
+        "Future-proof (latest research)"
+      ],
+      "timeline": "1-2 weeks to integrate and validate",
+      "risk": "Medium (newer, less tested)",
+      "conditions": [
+        "After V3 implementation works well",
+        "For premium projects requiring best quality",
+        "When metric depth features are needed"
+      ]
+    },
+    "hybrid_approach": {
+      "choice": "V3 for production, Depth Pro for premium",
+      "reasoning": [
+        "V3: Fast, reliable, good quality (general use)",
+        "Depth Pro: Best quality, metric depth (premium projects)",
+        "Flexibility based on project requirements",
+        "Risk mitigation (fallback to V3 if Depth Pro issues)"
+      ],
+      "implementation": [
+        "Phase 1: Implement V3 as default (weeks 1-2)",
+        "Phase 2: Add Depth Pro as optional premium mode (weeks 3-4)",
+        "Phase 3: A/B test both on real projects (weeks 5-6)"
+      ],
+      "timeline": "4-6 weeks for full hybrid implementation",
+      "risk": "Low (V3 is safe, Depth Pro is optional)"
+    }
+  },
+  "implementation_priority": {
+    "phase_1_immediate": {
+      "action": "Fix current V2 model name and get it working",
+      "model": "Depth Anything V2",
+      "rationale": "Easiest path to functional depth features",
+      "effort": "1 hour (fix model name typo)",
+      "value": "Medium (functional baseline)"
+    },
+    "phase_2_short_term": {
+      "action": "Upgrade to Depth Anything V3",
+      "model": "Depth Anything V3",
+      "rationale": "Better quality, minimal effort",
+      "effort": "1-2 days (model swap + testing)",
+      "value": "High (quality improvement for free)"
+    },
+    "phase_3_medium_term": {
+      "action": "Evaluate and integrate Depth Pro",
+      "model": "Depth Pro",
+      "rationale": "State-of-the-art for premium projects",
+      "effort": "1-2 weeks (integration + validation)",
+      "value": "High (best-in-class quality)"
+    }
+  },
+  "technical_comparison": {
+    "speed_comparison_2k_image": {
+      "depth_anything_v2_small_mps": "24-65ms (baseline)",
+      "depth_anything_v3_small_mps": "30-70ms (similar)",
+      "depth_pro_mps_m4": "100-150ms (slower but acceptable)"
+    },
+    "quality_ranking": {
+      "overall_accuracy": [
+        "Depth Pro",
+        "Depth Anything V3",
+        "Depth Anything V2"
+      ],
+      "architectural_detail": [
+        "Depth Pro",
+        "Depth Anything V3",
+        "Depth Anything V2"
+      ],
+      "boundary_sharpness": [
+        "Depth Pro",
+        "Depth Anything V3",
+        "Depth Anything V2"
+      ],
+      "speed": [
+        "Depth Anything V2",
+        "Depth Anything V3",
+        "Depth Pro"
+      ]
+    },
+    "use_case_fit": {
+      "luxury_real_estate": "Depth Pro > V3 > V2 (detail matters)",
+      "high_volume_processing": "V3 > V2 > Depth Pro (speed matters)",
+      "architectural_visualization": "Depth Pro > V3 > V2 (precision matters)",
+      "general_photography": "V3 > V2 > Depth Pro (balance)"
+    }
+  },
+  "specific_benefits_for_750_picacho": {
+    "depth_anything_v3": [
+      "Better pool tile detail preservation",
+      "Improved jacaranda tree foliage separation",
+      "Enhanced glass/metal surface understanding",
+      "Better architectural edge definition",
+      "Faster than current V2 attempt (no overhead)"
+    ],
+    "depth_pro": [
+      "Metric depth for actual pool dimensions",
+      "Exceptional boundary sharpness (pool edge, building)",
+      "Superior material surface distinction",
+      "High-res support (4K native for 8K outputs)",
+      "Apple Silicon optimization (M4 Max perfect fit)"
+    ]
+  }
+}
