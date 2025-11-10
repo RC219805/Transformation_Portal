@@ -1,0 +1,157 @@
+# Elite Pipeline Preset - 750 Picacho Luxury Estate
+# Optimized configuration for montecito coastal property
+# HDR processing with cutting-edge AI enhancement
+
+name: "750 Picacho Complete Estate"
+description: "Full-stack processing for luxury montecito coastal estate - all room types optimized"
+
+# ============================================================================
+# Depth Processing (Depth Anything V2)
+# ============================================================================
+depth:
+  enabled: true
+  model_variant: "small"  # small, base, large - small is fastest with excellent quality
+  backend: "pytorch_mps"  # pytorch_mps (Apple Silicon), coreml, pytorch_cpu
+  num_zones: 4  # Depth-based zones for intelligent tone mapping
+  zone_tone_method: "agx"  # agx, filmic, reinhard
+  atmospheric_haze: false  # Enable for aerials, disable for interiors
+  haze_density: 0.02
+  clarity_strength: 0.5  # 0.0-1.0, higher = sharper architectural details
+
+# ============================================================================
+# Material Response Technology
+# ============================================================================
+material_response:
+  enabled: true
+  strength: 0.75  # Overall enhancement strength
+  preserve_highlights: true
+  enhance_wood: true  # Enhance wood grain and warmth
+  enhance_metal: true  # Enhance metallic surfaces and reflections
+  enhance_glass: true  # Enhance glass transparency and reflections
+  enhance_stone: true  # Enhance stone texture and depth
+  enhance_textiles: true  # Enhance fabric texture
+
+# ============================================================================
+# HDR Tone Mapping
+# ============================================================================
+tone_mapping:
+  method: "filmic"  # agx (requires OCIO config), filmic, reinhard, aces
+  exposure: 0.0  # EV adjustment (-2.0 to +2.0)
+  contrast: 1.05  # Contrast multiplier (0.5 to 1.5)
+  preserve_hdr_highlights: true
+  white_point: 11.2  # Filmic white point (8.0 to 16.0)
+  agx_config_path: null  # Path to AgX config.ocio if using AgX
+
+# ============================================================================
+# Color Grading & LUTs
+# ============================================================================
+color_grading:
+  enabled: true
+  
+  # LUT stack (applied in order)
+  lut_stack:
+    - "assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube"
+    - "assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube"
+  
+  # LUT strengths (0.0-1.0, corresponds to lut_stack order)
+  lut_strengths:
+    - 0.75  # Montecito Golden Hour @ 75%
+    - 0.65  # Kodak Film @ 65%
+  
+  # Color adjustments
+  saturation: 1.10  # Overall saturation multiplier
+  vibrance: 1.12  # Smart saturation (preserves skin tones)
+  
+  # Temperature shift (RGB multipliers)
+  # [R, G, B] - values > 1.0 boost, < 1.0 reduce
+  temperature_shift: [1.02, 1.0, 0.98]  # Subtle warmth for golden hour
+
+# ============================================================================
+# AI Enhancement (ControlNet + SDXL)
+# ============================================================================
+ai_enhancement:
+  enabled: true
+  use_controlnet: true  # Edge-preserving ControlNet
+  use_depth_controlnet: true  # Depth-aware ControlNet
+  
+  # Prompts
+  prompt: "photorealistic luxury architectural rendering, montecito estate, perfect lighting, ultra detailed, professional real estate photography, high-end finishes, pristine condition"
+  negative_prompt: "blurry, artifacts, cartoon, painting, oversaturated, unrealistic, distorted, low quality, compression artifacts, noise"
+  
+  # AI settings
+  strength: 0.32  # Lower = more faithful to original (0.0-1.0)
+  guidance_scale: 7.5  # CFG scale (1.0-20.0, higher = follows prompt more)
+  num_steps: 30  # Inference steps (20-50, more = better quality but slower)
+  
+  # Upscaling
+  upscale_4x: true  # Enable 4x upscaling
+  use_esrgan: true  # Use Real-ESRGAN for upscaling
+
+# ============================================================================
+# Output Configuration
+# ============================================================================
+output:
+  master_tiff_16bit: true  # Save 16-bit TIFF masters
+  delivery_jpeg_quality: 98  # JPEG quality (85-100)
+  delivery_jpeg_progressive: true  # Progressive JPEG encoding
+  save_intermediate_stages: true  # Save depth, material, graded stages
+  include_metadata_report: true  # Save JSON processing report
+
+# ============================================================================
+# Room-Specific Overrides
+# ============================================================================
+# These can be specified via CLI or by creating separate config files
+
+room_overrides:
+  
+  # Interior spaces (Great Room, Bedroom, Bathroom, Kitchen)
+  interior:
+    depth:
+      num_zones: 4
+      atmospheric_haze: false
+      clarity_strength: 0.6
+    color_grading:
+      saturation: 1.08
+      temperature_shift: [1.0, 0.98, 0.95]  # Warm interior lighting
+    ai_enhancement:
+      prompt: "luxury interior, montecito estate, perfect architectural lighting, high-end finishes, photorealistic, ultra detailed, professional real estate photography"
+      strength: 0.30
+  
+  # Aerial and exterior views
+  aerial:
+    depth:
+      num_zones: 3
+      atmospheric_haze: true
+      haze_density: 0.025
+      clarity_strength: 0.4
+    color_grading:
+      saturation: 1.12
+      vibrance: 1.15
+      temperature_shift: [1.05, 1.0, 1.0]  # Golden hour warmth
+    ai_enhancement:
+      prompt: "luxury montecito coastal estate aerial photography, dramatic hillside architecture, infinity pool, mediterranean landscaping, golden hour lighting, ultra detailed, professional architectural photography, photorealistic"
+      strength: 0.35
+  
+  # Pool and outdoor living
+  pool:
+    depth:
+      num_zones: 3
+      atmospheric_haze: false
+      clarity_strength: 0.5
+    color_grading:
+      saturation: 1.12
+      vibrance: 1.14
+      temperature_shift: [1.0, 1.0, 1.05]  # Cool water tones
+    ai_enhancement:
+      prompt: "luxury infinity pool, montecito coastal estate, crystal clear water, premium outdoor living, professional architectural photography, photorealistic, ultra detailed"
+      strength: 0.32
+
+# ============================================================================
+# Performance & Optimization
+# ============================================================================
+optimization:
+  device: "auto"  # auto, mps, cuda, cpu
+  batch_size: 1  # Images to process in parallel (limited by VRAM)
+  use_half_precision: false  # FP16 for faster processing (may reduce quality)
+  cache_depth_maps: true  # Cache depth maps for iterative workflows
+  progress_tracking: true  # Show detailed progress information

@@ -1,0 +1,180 @@
+# Elite Pipeline Preset - 750 Picacho Luxury Estate
+# ==================================================
+# Comprehensive HDR processing configuration for montecito coastal property
+# Optimized for 32-bit TIFF HDR sources with complete metadata preservation
+
+name: "750 Picacho Master"
+description: "Elite HDR processing for luxury coastal estate - complete 7-stage pipeline"
+
+# ============================================================================
+# Stage 2: Depth Processing (Depth Anything V2)
+# ============================================================================
+depth:
+  enabled: true
+  model_variant: "small"  # small (fastest), base, large
+  backend: "pytorch_mps"  # pytorch_mps (M-series), coreml (ANE), pytorch_cpu
+  num_zones: 4  # Depth-based zones for intelligent tone mapping
+  zone_tone_method: "filmic"  # agx, filmic, reinhard
+  atmospheric_haze: false  # Enable for aerials, disable for interiors
+  haze_density: 0.02  # 0.0-0.1, subtle atmospheric depth
+  clarity_strength: 0.55  # 0.0-1.0, architectural detail enhancement
+  auto_download_models: true  # Auto-download Depth Anything V2 if not cached
+
+# ============================================================================
+# Stage 3: Material Response Technology
+# ============================================================================
+material_response:
+  enabled: true
+  strength: 0.75  # Overall enhancement strength (0.0-1.0)
+  preserve_highlights: true  # Protect specular highlights
+  enhance_wood: true  # Wood grain and warmth
+  enhance_metal: true  # Metallic surfaces and reflections
+  enhance_glass: true  # Glass transparency and reflections
+  enhance_stone: true  # Stone texture and depth
+  enhance_textiles: true  # Fabric texture and detail
+
+# ============================================================================
+# Stage 4: HDR Tone Mapping
+# ============================================================================
+tone_mapping:
+  method: "filmic"  # agx (requires OCIO), filmic (Hable), reinhard
+  exposure: 0.0  # EV adjustment (-2.0 to +2.0)
+  contrast: 1.05  # Contrast multiplier (0.5 to 1.5)
+  preserve_hdr_highlights: true  # Maintain highlight detail
+  white_point: 11.2  # Filmic white point (8.0 to 16.0)
+  agx_config_path: null  # Path to AgX config.ocio if using AgX
+  
+  # NEW: Adaptive tone mapping features
+  adaptive_tone_mapping: true  # Enable scene-aware processing
+  shadow_boost_outdoor: 0.3  # Shadow lift for outdoor scenes (0.0-1.0)
+  use_zone_based_mapping: true  # Use depth zones for tone mapping
+
+# ============================================================================
+# Stage 5: Color Grading & LUTs
+# ============================================================================
+color_grading:
+  enabled: true
+  lut_stack:
+    # LUT stack applied in order: (path, strength)
+    - ["assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube", 0.70]
+    - ["assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube", 0.50]
+  temperature_shift: 0.0  # -100 to +100 (warmer/cooler)
+  tint_shift: 0.0  # -100 to +100 (green/magenta)
+  saturation: 1.08  # Saturation multiplier (0.0 to 2.0)
+  vibrance: 0.15  # Vibrance boost (0.0 to 1.0)
+
+# ============================================================================
+# Stage 6: AI Enhancement (ControlNet + SDXL)
+# ============================================================================
+ai_enhancement:
+  enabled: true
+  model_id: "runwayml/stable-diffusion-v1-5"
+  controlnet_id: "lllyasviel/sd-controlnet-canny"
+  num_inference_steps: 30  # 20-50, higher = better quality
+  guidance_scale: 7.5  # 5.0-15.0, prompt adherence
+  strength: 0.30  # 0.0-1.0, transformation strength
+  seed: 42  # Random seed for reproducibility
+  prompt_template: "luxury {room_type} architectural photography, {style}, ultra detailed, professional, photorealistic, 8k"
+  negative_prompt: "blurry, artifacts, cartoon, painting, oversaturated, unrealistic, low quality, distorted"
+  
+  # NEW: Tensor compatibility fixes
+  ai_enhancement_padding: true  # Auto-pad for ControlNet compatibility
+  target_size_multiple: 64  # Pad to multiples of this value (64 or 96)
+
+# ============================================================================
+# Stage 7: Upscaling (Real-ESRGAN)
+# ============================================================================
+upscaling:
+  enabled: true
+  method: "esrgan"  # esrgan (AI 4x), lanczos (fallback)
+  scale_factor: 4.0  # 2.0, 4.0
+  model_path: "weights/RealESRGAN_x4plus.pth"
+  tile_size: 512  # Tile size for memory management
+  tile_padding: 10  # Padding to avoid seams
+
+# ============================================================================
+# Output Configuration
+# ============================================================================
+output:
+  save_master_tiff: true  # Save 16/32-bit TIFF master
+  save_delivery_jpeg: true  # Save JPEG for delivery
+  save_intermediate_stages: true  # Save tonemapped preview
+  master_bit_depth: 16  # 16 or 32-bit TIFF
+  jpeg_quality: 95  # 80-100
+  output_dir: "output_750_picacho_elite"
+
+# ============================================================================
+# Room-Specific Overrides
+# ============================================================================
+room_overrides:
+  aerial:
+    depth:
+      atmospheric_haze: true
+      haze_density: 0.03
+    tone_mapping:
+      shadow_boost_outdoor: 0.4  # More boost for aerial shadows
+    ai_enhancement:
+      prompt_template: "luxury coastal estate aerial photography, dramatic hillside architecture, infinity pool, mediterranean landscaping, golden hour lighting, ultra detailed, professional, photorealistic, 8k"
+  
+  bathroom:
+    material_response:
+      enhance_stone: true
+      enhance_glass: true
+      strength: 0.80
+    color_grading:
+      saturation: 1.05
+  
+  kitchen:
+    material_response:
+      enhance_metal: true
+      enhance_stone: true
+      strength: 0.85
+    tone_mapping:
+      contrast: 1.08
+  
+  bedroom:
+    material_response:
+      enhance_textiles: true
+      enhance_wood: true
+    color_grading:
+      saturation: 1.06
+      vibrance: 0.12
+  
+  great_room:
+    material_response:
+      enhance_wood: true
+      enhance_glass: true
+    tone_mapping:
+      exposure: 0.1
+      contrast: 1.06
+  
+  pool:
+    depth:
+      atmospheric_haze: true
+      haze_density: 0.02
+    tone_mapping:
+      shadow_boost_outdoor: 0.35  # Boost for pool shadows
+    color_grading:
+      saturation: 1.10
+      vibrance: 0.18
+    ai_enhancement:
+      prompt_template: "luxury infinity pool mediterranean architecture, coastal estate, golden hour reflection, ultra detailed, professional, photorealistic, 8k"
+
+# ============================================================================
+# Performance Tuning
+# ============================================================================
+performance:
+  enable_caching: true  # Cache depth maps for iterative processing
+  batch_size: 1  # Parallel batch processing (1 = sequential)
+  use_fp16: true  # Half-precision for ML models (faster, less memory)
+  tile_processing: true  # Tile-based processing for large images
+
+# ============================================================================
+# Metadata Preservation
+# ============================================================================
+metadata:
+  preserve_iptc: true  # IPTC metadata
+  preserve_xmp: true  # XMP metadata
+  preserve_gps: true  # GPS coordinates
+  preserve_color_profile: true  # ICC color profile
+  embed_processing_history: true  # Embed processing parameters
