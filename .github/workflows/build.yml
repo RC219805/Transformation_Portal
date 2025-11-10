@@ -101,6 +101,8 @@ jobs:
           pip install -r requirements-ci.txt
           pip install -e .
           pip install pytest
+          # Install ML optional dependencies (including sentence-transformers for RAG vector search)
+          pip install -e ".[ml]"
           # Workaround for numpy/scikit-learn ABI incompatibility:
           # Recent versions of numpy (>=1.26) and scikit-learn (<1.4) can result in
           # runtime ImportError due to ABI mismatch, especially when other dependencies

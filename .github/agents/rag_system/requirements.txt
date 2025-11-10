@@ -9,8 +9,12 @@ PyYAML>=6.0  # For configuration management
 # Vector embeddings (optional, required only for semantic/vector search)
 # To enable vector search, install these extras:
 # pip install sentence-transformers>=2.2.0 torch>=2.0.0
-# sentence-transformers>=2.2.0  # For dense vector embeddings
-# torch>=2.0.0  # Required by sentence-transformers
+# 
+# OR install the transformation-portal package with ML extras:
+# pip install -e ".[ml]"
+#
+# sentence-transformers>=2.2.0  # For dense vector embeddings (included in [ml] extras)
+# torch>=2.0.0  # Required by sentence-transformers (included in [ml] extras)
 
 # Optional but recommended
 # faiss-cpu>=1.7.0  # For fast similarity search (future enhancement)
