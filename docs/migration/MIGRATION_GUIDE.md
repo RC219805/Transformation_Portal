@@ -2,7 +2,7 @@
 
 **Transformation Portal - Version Migration Guide**
 
-Version: 1.0.0  
+Version: 1.0.0
 Last Updated: 2025-11-08
 
 ---
@@ -93,7 +93,7 @@ The following changes are **under consideration** for v2.0.x (not finalized):
    ```python
    # May be deprecated in v2.0.x
    from depth_tools import estimate_depth
-   
+
    # Recommended migration
    from transformation_portal.depth import DepthEstimator
    estimator = DepthEstimator()
@@ -104,7 +104,7 @@ The following changes are **under consideration** for v2.0.x (not finalized):
    ```python
    # May be deprecated in v2.0.x
    result = process_image(image, preset="golden_hour")
-   
+
    # Recommended migration
    from transformation_portal.processors import ImageProcessor
    processor = ImageProcessor()
@@ -242,7 +242,7 @@ Update code comments and documentation to use new APIs:
 # Update docstring examples
 def my_function(image):
     """Process image.
-    
+
     Example:
         >>> from transformation_portal.depth import DepthEstimator  # Updated!
         >>> estimator = DepthEstimator()
@@ -327,18 +327,18 @@ grader.process(
 
 ### What We Guarantee
 
-✅ **API Stability**: No breaking changes within major version  
-✅ **Migration Period**: Minimum 6 months warning before removal  
-✅ **Compatibility Shims**: Old APIs delegate to new implementations  
-✅ **Configuration Migration**: Old configs automatically updated  
-✅ **Data Format Support**: Old TIFF/video formats always supported  
+✅ **API Stability**: No breaking changes within major version
+✅ **Migration Period**: Minimum 6 months warning before removal
+✅ **Compatibility Shims**: Old APIs delegate to new implementations
+✅ **Configuration Migration**: Old configs automatically updated
+✅ **Data Format Support**: Old TIFF/video formats always supported
 
 ### What We Don't Guarantee
 
-⚠️ **Exact Output**: Algorithm improvements may change results slightly  
-⚠️ **Performance**: Optimizations may change timing characteristics  
-⚠️ **Internal APIs**: `_private` functions can change without notice  
-⚠️ **Experimental Features**: `@experimental` APIs may change in minor versions  
+⚠️ **Exact Output**: Algorithm improvements may change results slightly
+⚠️ **Performance**: Optimizations may change timing characteristics
+⚠️ **Internal APIs**: `_private` functions can change without notice
+⚠️ **Experimental Features**: `@experimental` APIs may change in minor versions
 
 ---
 
@@ -359,5 +359,5 @@ grader.process(
 
 ---
 
-**Last Updated**: 2025-11-08  
+**Last Updated**: 2025-11-08
 **Guide Version**: 1.0.0

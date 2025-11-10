@@ -38,8 +38,8 @@ class MaximumQualityPipeline:
         print(f"Initializing Maximum Quality Pipeline on {self.device}...")
 
         # Initialize depth estimation
-        depth_model = ("depth-anything/Depth-Anything-V2-Large-h" if use_large_depth_model
-                      else "depth-anything/Depth-Anything-V2-Small-h")
+        depth_model = ("depth-anything/Depth-Anything-V2-Large-hf" if use_large_depth_model
+                      else "depth-anything/Depth-Anything-V2-Small-hf")
 
         print(f"Loading {depth_model}...")
         self.depth_pipe = transformers_pipeline(

@@ -1,0 +1,159 @@
+{
+  "project": "750 Picacho Lane",
+  "timestamp": "2025-11-08 17:27:37",
+  "processing_summary": {
+    "total_images": 6,
+    "total_time_seconds": 2.699465036392212,
+    "avg_time_per_image": 0.44991083939870197,
+    "baseline_avg_score": 66.00026934364972,
+    "enhanced_avg_score": 83.1693188355357,
+    "avg_improvement": 17.169049491885986,
+    "target_achieved": false
+  },
+  "individual_results": [
+    {
+      "filename": "750Picacho_Aerial_Master.tif",
+      "room": "Aerial View",
+      "baseline_score": 72.15421771619171,
+      "enhanced_score": 84.7541747669678,
+      "improvement": 12.599957050776084,
+      "baseline_metrics": {
+        "saturation": 147.91934239583333,
+        "dynamic_range": 63.20464912204113,
+        "brightness": 145.0797828125,
+        "contrast": 63.20464912204113,
+        "sharpness": 46604.70836545332
+      },
+      "enhanced_metrics": {
+        "saturation": 201.7111471875,
+        "dynamic_range": 70.19549559918269,
+        "brightness": 111.440646875,
+        "contrast": 70.19549559918269,
+        "sharpness": 90561.75222278901
+      },
+      "processing_time": 0.5192601680755615,
+      "output_size_mb": 28.127997398376465
+    },
+    {
+      "filename": "750Picacho_GreatRoom_Master.tif",
+      "room": "Great Room",
+      "baseline_score": 59.442630126123866,
+      "enhanced_score": 82.83483268621393,
+      "improvement": 23.392202560090062,
+      "baseline_metrics": {
+        "saturation": 134.05981241666666,
+        "dynamic_range": 45.27228913912346,
+        "brightness": 170.89717683333333,
+        "contrast": 45.27228913912346,
+        "sharpness": 33706.84730103857
+      },
+      "enhanced_metrics": {
+        "saturation": 207.06073716666666,
+        "dynamic_range": 63.35277822395118,
+        "brightness": 112.83052933333333,
+        "contrast": 63.35277822395118,
+        "sharpness": 74733.67352649174
+      },
+      "processing_time": 0.510807991027832,
+      "output_size_mb": 23.739983558654785
+    },
+    {
+      "filename": "750Picacho_Kitchen_Master.tif",
+      "room": "Gourmet Kitchen",
+      "baseline_score": 59.96961204895794,
+      "enhanced_score": 84.50801212755681,
+      "improvement": 24.53840007859887,
+      "baseline_metrics": {
+        "saturation": 137.95631066666667,
+        "dynamic_range": 45.44694182058735,
+        "brightness": 173.42566711111112,
+        "contrast": 45.44694182058735,
+        "sharpness": 32926.40566182875
+      },
+      "enhanced_metrics": {
+        "saturation": 211.7121668888889,
+        "dynamic_range": 65.11990735738473,
+        "brightness": 113.67554166666666,
+        "contrast": 65.11990735738473,
+        "sharpness": 74273.10868736076
+      },
+      "processing_time": 0.3593473434448242,
+      "output_size_mb": 22.668312072753906
+    },
+    {
+      "filename": "750Picacho_Pool_Master.tif",
+      "room": "Pool & Outdoor Living",
+      "baseline_score": 67.61290426579671,
+      "enhanced_score": 81.90871226400881,
+      "improvement": 14.295807998212098,
+      "baseline_metrics": {
+        "saturation": 155.37757444444443,
+        "dynamic_range": 46.39195919717123,
+        "brightness": 126.899735,
+        "contrast": 46.39195919717123,
+        "sharpness": 33808.860947541245
+      },
+      "enhanced_metrics": {
+        "saturation": 217.59510022222221,
+        "dynamic_range": 60.89149222249633,
+        "brightness": 94.60852355555555,
+        "contrast": 60.89149222249633,
+        "sharpness": 68927.55667686826
+      },
+      "processing_time": 0.36402010917663574,
+      "output_size_mb": 25.22364616394043
+    },
+    {
+      "filename": "750Picacho_PrimaryBathroom_Master.tif",
+      "room": "Primary Bathroom",
+      "baseline_score": 69.25777657996707,
+      "enhanced_score": 82.67608649820824,
+      "improvement": 13.418309918241164,
+      "baseline_metrics": {
+        "saturation": 150.77633141666666,
+        "dynamic_range": 52.89424066807599,
+        "brightness": 133.23777716666666,
+        "contrast": 52.89424066807599,
+        "sharpness": 45301.47579171154
+      },
+      "enhanced_metrics": {
+        "saturation": 213.99329558333332,
+        "dynamic_range": 63.14793113876166,
+        "brightness": 99.043668,
+        "contrast": 63.14793113876166,
+        "sharpness": 75338.70310952439
+      },
+      "processing_time": 0.4941260814666748,
+      "output_size_mb": 41.087812423706055
+    },
+    {
+      "filename": "750Picacho_PrimaryBedroom_Master.tif",
+      "room": "Primary Bedroom",
+      "baseline_score": 67.56447532486095,
+      "enhanced_score": 82.33409467025865,
+      "improvement": 14.7696193453977,
+      "baseline_metrics": {
+        "saturation": 145.53816516685416,
+        "dynamic_range": 52.21079882129836,
+        "brightness": 138.25018428946382,
+        "contrast": 52.21079882129836,
+        "sharpness": 39805.8161845444
+      },
+      "enhanced_metrics": {
+        "saturation": 210.39206392950882,
+        "dynamic_range": 63.08729322580281,
+        "brightness": 102.4575210911136,
+        "contrast": 63.08729322580281,
+        "sharpness": 70997.52678711405
+      },
+      "processing_time": 0.4514961242675781,
+      "output_size_mb": 34.117393493652344
+    }
+  ],
+  "quality_targets": {
+    "saturation": 128.0,
+    "dynamic_range": 80.0,
+    "brightness": 128.0,
+    "target_score": 95.0
+  }
+}

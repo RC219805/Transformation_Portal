@@ -58,9 +58,9 @@ class ModelBackend(Enum):
 
 class ModelVariant(Enum):
     """Depth Anything V2 model variants."""
-    SMALL = "depth-anything/Depth-Anything-V2-Small-h"
-    BASE = "depth-anything/Depth-Anything-V2-Base-h"
-    LARGE = "depth-anything/Depth-Anything-V2-Large-h"
+    SMALL = "depth-anything/Depth-Anything-V2-Small-hf"
+    BASE = "depth-anything/Depth-Anything-V2-Base-hf"
+    LARGE = "depth-anything/Depth-Anything-V2-Large-hf"
 
     # CoreML optimized versions
     SMALL_COREML = "apple/coreml-depth-anything-v2-small"
