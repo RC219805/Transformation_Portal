@@ -1,49 +1,31 @@
 # RAG System Configuration
-# Default configuration for the Retrieval-Augmented Generation system
+# Configuration for the Retrieval-Augmented Generation system
 
-# Indexer configuration
+# Indexer settings
 indexer:
-  chunk_size_tokens: 750        # Target chunk size in tokens
-  overlap_tokens: 75            # Overlap between chunks in tokens
-  chars_per_token: 4.0          # Approximate chars per token ratio
-  cache_enabled: true           # Enable persistent caching of indexed chunks
-  cache_dir: .rag_cache         # Directory for cache files (relative to repo root)
+  chunk_size_tokens: 750          # Target tokens per chunk
+  overlap_tokens: 75              # Overlap between chunks
+  chars_per_token: 4.0            # Approximate chars per token
+  cache_enabled: true             # Enable persistent caching
+  cache_dir: ".rag_cache"         # Cache directory
 
-# Retriever configuration
+# Retriever settings
 retriever:
-  bm25_weight: 0.7             # Weight for BM25 scores (0-1)
-  vector_weight: 0.3           # Weight for vector similarity (0-1)
-  bm25_k1: 1.5                 # BM25 k1 parameter (term frequency saturation)
-  bm25_b: 0.75                 # BM25 b parameter (length normalization)
-  top_k_default: 10            # Default number of results to return
-  enable_vector_search: false  # Enable dense vector embeddings (requires sentence-transformers)
-  vector_model: all-MiniLM-L6-v2  # Sentence transformer model to use
-  query_cache_size: 100        # LRU cache size for queries (0 to disable)
+  bm25_weight: 0.7                # Weight for BM25 scores (0-1)
+  vector_weight: 0.3              # Weight for vector scores (0-1)
+  enable_vector_search: false     # Enable vector embeddings (requires sentence-transformers)
+  vector_model: "all-MiniLM-L6-v2"  # Sentence transformer model
+  bm25_k1: 1.5                    # BM25 term frequency saturation
+  bm25_b: 0.75                    # BM25 length normalization
+  query_cache_size: 100           # LRU cache size for queries (0 to disable)
 
-# Reranker configuration
-reranker:
-  exact_match_bonus: 2.0       # Bonus for exact phrase matches
-  recency_bonus: 0.5           # Bonus for recent content
-  code_quality_bonus: 0.3      # Bonus for code with docstrings/type hints
-  documentation_bonus: 0.2     # Bonus for documentation chunks
-  test_bonus: 0.1              # Bonus for test matches
-
-# Citation generator configuration
+# Citation settings
 citation:
-  snippet_max_lines: 10        # Maximum lines in snippet
-  snippet_max_chars: 500       # Maximum characters in snippet
-  max_expected_score: 20.0     # Maximum expected BM25 score for normalization
-  default_max_citations: 5     # Default number of citations to generate
+  max_results: 5                  # Maximum citation results
+  include_line_numbers: true      # Include line numbers in citations
+  max_expected_score: 20.0        # Expected maximum BM25 score for normalization
 
-# Logging configuration
-logging:
-  level: INFO                  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  log_to_file: false          # Enable file logging
-  log_file: rag_system.log    # Log file path (relative to cache_dir)
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-# Knowledge engine configuration
-knowledge_engine:
-  min_samples_for_analysis: 5  # Minimum samples needed for pattern analysis
-  trend_window_days: 30        # Window for trend analysis
-  confidence_threshold: 0.7    # Minimum confidence for recommendations
+# Reranker settings (optional, requires cross-encoder model)
+reranker:
+  enabled: false                  # Enable neural reranking
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Cross-encoder model

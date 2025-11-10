@@ -81,20 +81,39 @@ processed_images/
 output/
 output_*/
 test_output/
+test_artifacts/
+
+# Large image files (exclude binary outputs)
+*.tif
+*.tiff
+!input_images/.gitkeep
+!data/sample_images/.gitkeep
 
 # Temporary markdown files (keep permanent docs only)
 *_TEMP.md
 *_WIP.md
-*_SESSION*.md
-*_SUMMARY*.md
-*_COMPLETE*.md
-*_FIX*.md
-*_IMPROVEMENTS*.md
-*_REPORT*.md
-TIFF_*.md
-PHASE_*.md
 SESSION_*.md
-UNIFIED_*.md
+Analysis_Complete.md
+IMPLEMENTATION_COMPLETE.md
+*_SUMMARY.md
+COMMIT_SUMMARY_OLD.md
+
+# But keep production documentation
+!750_PICACHO_*.md
+!CRITICAL_*.md
+!Root_Cause_Analysis.md
+!Corrective_Action_Plan.md
+!Immediate_Recommendations.md
+!QA_Improvements.md
+!DEPTH_MODEL_*.md
+!LUXURY_ESTATE_*.md
+!ELITE_PIPELINE_*.md
+!PIPELINE_*.md
+!QUALITY_*.md
+!PHASE1_*.md
+!PHASE2_*.md
+!Visual_Feedback_Analysis_Summary.md
+!COMMIT_SUMMARY.md
 
 # But allow important docs in docs/
 !docs/CODE_QUALITY_SYSTEM.md
@@ -118,7 +137,12 @@ input_images/**/*.tiff
 # RAG system generated files
 index_stats.json
 .rag_cache/
-rag_system.log
+
+# JSON metadata (keep quality analysis JSON)
+!*quality*.json
+!*metadata*.json
+!*comparison*.json
+!depth_model_comparison.json
 
 # Model weights and checkpoints
 *.pth
@@ -152,3 +176,8 @@ input_images/**/*.png
 # Patch files
 *.patch
 *.diff
+.rag_cache/
+
+# Generated logs and artifacts
+logs/
+artifacts/

@@ -1,218 +1,190 @@
 """
 Configuration management for RAG System.
-
-Loads configuration from YAML file with fallback to defaults.
 """
 
-import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
 
-from exceptions import ConfigurationError
+from .exceptions import ConfigError
+from .logger import get_logger
 
-
-# Default configuration (fallback if YAML not found)
-DEFAULT_CONFIG = {
-    'indexer': {
-        'chunk_size_tokens': 750,
-        'overlap_tokens': 75,
-        'chars_per_token': 4.0,
-        'cache_enabled': True,
-        'cache_dir': '.rag_cache',
-    },
-    'retriever': {
-        'bm25_weight': 0.7,
-        'vector_weight': 0.3,
-        'bm25_k1': 1.5,
-        'bm25_b': 0.75,
-        'top_k_default': 10,
-        'enable_vector_search': False,
-        'vector_model': 'all-MiniLM-L6-v2',
-        'query_cache_size': 100,
-    },
-    'reranker': {
-        'exact_match_bonus': 2.0,
-        'recency_bonus': 0.5,
-        'code_quality_bonus': 0.3,
-        'documentation_bonus': 0.2,
-        'test_bonus': 0.1,
-    },
-    'citation': {
-        'snippet_max_lines': 10,
-        'snippet_max_chars': 500,
-        'max_expected_score': 20.0,
-        'default_max_citations': 5,
-    },
-    'logging': {
-        'level': 'INFO',
-        'log_to_file': False,
-        'log_file': 'rag_system.log',
-        'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    },
-    'knowledge_engine': {
-        'min_samples_for_analysis': 5,
-        'trend_window_days': 30,
-        'confidence_threshold': 0.7,
-    },
-}
+logger = get_logger(__name__)
 
 
 class Config:
     """
     Configuration manager for RAG system.
 
-    Loads configuration from YAML file with environment variable overrides
-    and fallback to defaults.
+    Loads configuration from YAML file and provides type-safe access.
     """
+
+    DEFAULT_CONFIG = {
+        'indexer': {
+            'chunk_size_tokens': 750,
+            'overlap_tokens': 75,
+            'chars_per_token': 4.0,
+            'cache_enabled': True,
+            'cache_dir': '.rag_cache',
+        },
+        'retriever': {
+            'bm25_weight': 0.7,
+            'vector_weight': 0.3,
+            'enable_vector_search': False,
+            'vector_model': 'all-MiniLM-L6-v2',
+            'bm25_k1': 1.5,
+            'bm25_b': 0.75,
+            'query_cache_size': 100,
+        },
+        'citation': {
+            'max_results': 5,
+            'include_line_numbers': True,
+            'max_expected_score': 20.0,
+        },
+        'reranker': {
+            'enabled': False,
+            'model': 'cross-encoder/ms-marco-MiniLM-L-6-v2',
+        },
+    }
 
     def __init__(self, config_path: Optional[str] = None):
         """
         Initialize configuration.
 
         Args:
-            config_path: Path to YAML config file. If None, looks for config.yaml
-                        in the same directory as this module.
+            config_path: Path to YAML config file (optional)
         """
-        self._config: Dict[str, Any] = DEFAULT_CONFIG.copy()
+        self.config: Dict[str, Any] = self.DEFAULT_CONFIG.copy()
 
-        if config_path is None:
-            # Default to config.yaml in same directory
-            config_path = Path(__file__).parent / 'config.yaml'
+        # Load from file if provided
+        if config_path:
+            self.load_from_file(config_path)
+        else:
+            # Try to find config.yaml in common locations
+            search_paths = [
+                'config.yaml',
+                'rag_config.yaml',
+                '.github/agents/rag_system/config.yaml',
+            ]
 
-        self.config_path = Path(config_path)
-        self._load_config()
-        self._apply_env_overrides()
+            for path in search_paths:
+                if Path(path).exists():
+                    logger.info(f"Found config file: {path}")
+                    self.load_from_file(path)
+                    break
+            else:
+                logger.debug("No config file found, using defaults")
 
-    def _load_config(self):
-        """Load configuration from YAML file."""
-        if not self.config_path.exists():
-            logging.warning(
-                f"Config file not found: {self.config_path}. Using defaults."
-            )
-            return
+    def load_from_file(self, config_path: str):
+        """
+        Load configuration from YAML file.
 
+        Args:
+            config_path: Path to YAML config file
+        """
         try:
-            with open(self.config_path, 'r') as f:
-                user_config = yaml.safe_load(f)
+            with open(config_path, 'r') as f:
+                file_config = yaml.safe_load(f)
 
-            if user_config:
-                self._merge_configs(self._config, user_config)
-
-            logging.info(f"Loaded configuration from {self.config_path}")
+            if file_config:
+                # Merge with defaults (file config takes precedence)
+                self._deep_merge(self.config, file_config)
+                logger.info(f"Loaded configuration from {config_path}")
 
         except Exception as e:
-            raise ConfigurationError(
-                f"Failed to load config from {self.config_path}: {e}"
-            )
+            logger.warning(f"Failed to load config from {config_path}: {e}")
+            raise ConfigError(f"Failed to load config: {e}")
 
-    def _merge_configs(self, base: Dict, override: Dict):
-        """Recursively merge override config into base config."""
-        for key, value in override.items():
+    def _deep_merge(self, base: Dict, updates: Dict):
+        """Deep merge updates into base dictionary."""
+        for key, value in updates.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-                self._merge_configs(base[key], value)
+                self._deep_merge(base[key], value)
             else:
                 base[key] = value
 
-    def _apply_env_overrides(self):
-        """Apply environment variable overrides."""
-        # Example: RAG_INDEXER_CACHE_ENABLED=false
-        prefix = 'RAG_'
-
-        for env_key, env_value in os.environ.items():
-            if not env_key.startswith(prefix):
-                continue
-
-            # Parse env key: RAG_INDEXER_CACHE_ENABLED -> ['indexer', 'cache_enabled']
-            parts = env_key[len(prefix):].lower().split('_')
-
-            if len(parts) >= 2:
-                section = parts[0]
-                key = '_'.join(parts[1:])
-
-                if section in self._config and key in self._config[section]:
-                    # Convert string to appropriate type
-                    original_type = type(self._config[section][key])
-                    try:
-                        if original_type == bool:
-                            self._config[section][key] = env_value.lower() in ('true', '1', 'yes')
-                        elif original_type == int:
-                            self._config[section][key] = int(env_value)
-                        elif original_type == float:
-                            self._config[section][key] = float(env_value)
-                        else:
-                            self._config[section][key] = env_value
-
-                        logging.debug(f"Applied env override: {env_key}={env_value}")
-                    except ValueError as e:
-                        logging.warning(
-                            f"Could not parse env var {env_key}={env_value}: {e}"
-                        )
-
-    def get(self, section: str, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: Any = None) -> Any:
         """
         Get a configuration value.
 
         Args:
-            section: Configuration section (e.g., 'indexer')
-            key: Configuration key (e.g., 'chunk_size_tokens')
-            default: Default value if not found
+            key: Dot-separated key path (e.g., 'indexer.chunk_size_tokens')
+            default: Default value if key not found
 
         Returns:
-            Configuration value or default
+            Configuration value
         """
-        return self._config.get(section, {}).get(key, default)
+        keys = key.split('.')
+        value = self.config
+
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return default
+
+        return value
 
     def get_section(self, section: str) -> Dict[str, Any]:
         """
-        Get entire configuration section.
+        Get an entire configuration section.
 
         Args:
-            section: Section name (e.g., 'indexer')
+            section: Section name (e.g., 'indexer', 'retriever')
 
         Returns:
-            Dictionary of configuration values
+            Configuration dictionary for the section
         """
-        return self._config.get(section, {}).copy()
+        return self.config.get(section, {})
 
-    def set(self, section: str, key: str, value: Any):
+    def set(self, key: str, value: Any):
         """
-        Set a configuration value (runtime only, not persisted).
+        Set a configuration value.
 
         Args:
-            section: Configuration section
-            key: Configuration key
+            key: Dot-separated key path
             value: Value to set
         """
-        if section not in self._config:
-            self._config[section] = {}
-        self._config[section][key] = value
+        keys = key.split('.')
+        config = self.config
+
+        for k in keys[:-1]:
+            if k not in config:
+                config[k] = {}
+            config = config[k]
+
+        config[keys[-1]] = value
 
     def to_dict(self) -> Dict[str, Any]:
-        """Return full configuration as dictionary."""
-        return self._config.copy()
+        """Get the full configuration as a dictionary."""
+        return self.config.copy()
 
 
-# Global configuration instance
-_global_config: Optional[Config] = None
+# Global config instance
+_config: Optional[Config] = None
 
 
-def get_config() -> Config:
+def get_config(config_path: Optional[str] = None) -> Config:
     """
-    Get global configuration instance.
+    Get the global configuration instance.
+
+    Args:
+        config_path: Path to config file (only used on first call)
 
     Returns:
-        Global Config instance
+        Config instance
     """
-    global _global_config
-    if _global_config is None:
-        _global_config = Config()
-    return _global_config
+    global _config
+
+    if _config is None:
+        _config = Config(config_path)
+
+    return _config
 
 
 def reset_config():
-    """Reset global configuration (useful for testing)."""
-    global _global_config
-    _global_config = None
+    """Reset the global configuration (useful for testing)."""
+    global _config
+    _config = None
