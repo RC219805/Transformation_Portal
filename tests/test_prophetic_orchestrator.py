@@ -1,6 +1,6 @@
 # test_prophetic_orchestrator.py
 
-from prophetic_orchestrator import (
+from archive.deprecated.prophetic_orchestrator import (
     CausalityEngine,
     PropheticOrchestrator,
     TemporalAntibody,

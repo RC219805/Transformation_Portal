@@ -22,7 +22,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pro_pipeline import (  # noqa: E402 - import after path manipulation
+from scripts.pipelines.pro_pipeline import (  # noqa: E402 - import after path manipulation
     PipelinePreset,
     PipelineStage,
     ProPipeline,

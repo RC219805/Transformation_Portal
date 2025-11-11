@@ -13,7 +13,7 @@ import pytest
 from PIL import Image
 
 # Import from the enhancements module
-from format_utils_enhancements import (  # Option 2: Enhanced detection; Option 3: Conversion; Option 4: TIFF handling
+from scripts.utilities.format_utils_enhancements import (  # Option 2: Enhanced detection; Option 3: Conversion; Option 4: TIFF handling
     batch_convert_directory,
     check_tifffile_available,
     convert_image_format,

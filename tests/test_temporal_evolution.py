@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from temporal_evolution import TemporalEvolutionRoadmap
+from scripts.temporal_evolution import TemporalEvolutionRoadmap
 
 
 def _sample_payload() -> dict[str, object]:

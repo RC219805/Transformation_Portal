@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 # Import modules under test
-from realize_v8_unified import (
+from scripts.utilities.realize_v8_unified import (
     PRESETS,
     Preset,
     _image_to_float_array,
@@ -20,7 +20,7 @@ from realize_v8_unified import (
     _save_with_meta,
     enhance,
 )
-from realize_v8_unified_cli_extension import (
+from scripts.utilities.realize_v8_unified_cli_extension import (
     VFX_PRESETS,
     apply_color_grade_zones,
     apply_depth_bloom,
