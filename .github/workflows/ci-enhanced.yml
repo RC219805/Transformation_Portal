@@ -1,0 +1,375 @@
+# .github/workflows/ci-enhanced.yml
+# Phase 2: Enhanced CI/CD with Smart Caching & Parallel Execution
+name: CI Enhanced (Phase 2)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+# Cancel in-progress runs for same workflow + branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION_DEFAULT: "3.12"
+  CACHE_VERSION: v2  # Increment to bust all caches
+
+jobs:
+  # Job 1: Fast pre-checks (runs first, fails fast)
+  pre-checks:
+    name: Pre-flight Checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better caching decisions
+
+      - name: Check for large files
+        run: |
+          # Fail if files >10MB are added (prevents bloat)
+          large_files=$(find . -type f -size +10M -not -path "./.git/*" -not -path "./venv/*" -not -path "./weights/*" || true)
+          if [ -n "$large_files" ]; then
+            echo "❌ Large files detected (>10MB):"
+            echo "$large_files"
+            exit 1
+          fi
+
+      - name: Check for merge conflicts
+        run: |
+          if grep -r "<<<<<<< " . --exclude-dir=.git --exclude-dir=venv; then
+            echo "❌ Merge conflict markers found"
+            exit 1
+          fi
+
+      - name: Validate YAML files
+        run: |
+          # Check all workflow files are valid
+          for file in .github/workflows/*.yml; do
+            python -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
+          done
+
+  # Job 2: Parallel linting (faster than sequential)
+  lint:
+    name: Lint (${{ matrix.linter }})
+    runs-on: ubuntu-24.04
+    needs: pre-checks
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false  # Run all linters even if one fails
+      matrix:
+        linter: [flake8, ruff, pylint]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_DEFAULT }}
+
+      # Smart caching: separate cache per linter
+      - name: Cache linter dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-lint-${{ matrix.linter }}-${{ env.CACHE_VERSION }}-${{ hashFiles('requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-lint-${{ matrix.linter }}-${{ env.CACHE_VERSION }}-
+
+      - name: Install ${{ matrix.linter }}
+        run: |
+          pip install --upgrade pip
+          case "${{ matrix.linter }}" in
+            flake8)
+              pip install flake8
+              ;;
+            ruff)
+              pip install ruff
+              ;;
+            pylint)
+              pip install pylint
+              pip install -r requirements-ci.txt  # Pylint needs project deps
+              ;;
+          esac
+
+      - name: Run ${{ matrix.linter }}
+        run: |
+          case "${{ matrix.linter }}" in
+            flake8)
+              flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+              ;;
+            ruff)
+              ruff check . --output-format=github
+              ;;
+            pylint)
+              files=$(git diff --name-only origin/main...HEAD | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' || echo "")
+              if [ -z "$files" ]; then
+                pylint $(git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' | head -20) || true
+              else
+                pylint $files || true
+              fi
+              ;;
+          esac
+
+  # Job 3: Parallel testing with matrix
+  test:
+    name: Test (Py${{ matrix.python }} on ${{ matrix.device }})
+    runs-on: ubuntu-24.04
+    needs: pre-checks
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        device: [cpu]  # GPU tests optional, expensive
+        include:
+          # Add one GPU test for latest Python
+          - python-version: "3.12"
+            device: gpu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Advanced caching: separate cache per Python version + device
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}-${{ matrix.device }}-${{ env.CACHE_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-py${{ matrix.python-version }}-${{ matrix.device }}-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-pip-py${{ matrix.python-version }}-
+
+      # Cache ML models to avoid re-downloading
+      - name: Cache ML models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/torch
+            weights/
+          key: ${{ runner.os }}-models-${{ env.CACHE_VERSION }}-${{ hashFiles('**/download_depth_models.py') }}
+          restore-keys: |
+            ${{ runner.os }}-models-${{ env.CACHE_VERSION }}-
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h
+
+      - name: Install dependencies
+        env:
+          PIP_NO_CACHE_DIR: "0"  # Allow caching
+        run: |
+          pip install --upgrade pip
+
+          # Install PyTorch based on device
+          if [ "${{ matrix.device }}" = "gpu" ]; then
+            pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+          else
+            pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          fi
+
+          # Install project dependencies
+          pip install -r requirements-ci.txt
+          pip install -e .
+          pip install pytest pytest-xdist pytest-cov
+          pip install -e ".[ml]"
+
+          # Fix scikit-learn compatibility
+          SKLEARN_CONSTRAINT=$(grep -E '^scikit-learn[^#]*' requirements-ci.txt | head -n1)
+          if [ -n "$SKLEARN_CONSTRAINT" ]; then
+            pip install --force-reinstall "$SKLEARN_CONSTRAINT"
+          fi
+
+      - name: Run tests with coverage
+        run: |
+          # Parallel test execution with pytest-xdist
+          pytest -v -n auto --cov=. --cov-report=xml --cov-report=term tests/
+
+      - name: Upload coverage
+        if: matrix.python-version == env.PYTHON_VERSION_DEFAULT && matrix.device == 'cpu'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: coverage-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+
+  # Job 4: Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-24.04
+    needs: pre-checks
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_DEFAULT }}
+
+      - name: Run safety check
+        run: |
+          pip install safety
+          safety check --json || true  # Don't fail on vulnerabilities yet
+
+      - name: Run bandit security linter
+        run: |
+          pip install bandit
+          bandit -r . -f json -o bandit-report.json || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+
+  # Job 5: Build validation
+  build:
+    name: Build Package
+    runs-on: ubuntu-24.04
+    needs: [lint, test]
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_DEFAULT }}
+
+      - name: Install build tools
+        run: |
+          pip install build twine
+
+      - name: Build package
+        run: |
+          python -m build
+
+      - name: Check package
+        run: |
+          twine check dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/
+
+  # Job 6: Generate manifest (from existing workflow)
+  manifest:
+    name: Generate Manifest
+    runs-on: ubuntu-24.04
+    needs: [lint, test]
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_DEFAULT }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-manifest-${{ env.CACHE_VERSION }}-${{ hashFiles('requirements-ci.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Generate manifest
+        run: |
+          python tools/montecito_manifest.py . montecito_manifest.csv
+
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: montecito-manifest
+          path: montecito_manifest.csv
+
+  # Job 7: Performance benchmarks (optional, can be heavy)
+  benchmark:
+    name: Performance Benchmark
+    runs-on: ubuntu-24.04
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_DEFAULT }}
+
+      - name: Cache everything
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface
+            ~/.cache/torch
+          key: ${{ runner.os }}-benchmark-${{ env.CACHE_VERSION }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-ci.txt
+          pip install -e ".[ml]"
+          pip install pytest-benchmark
+
+      - name: Run benchmarks
+        run: |
+          # Run performance tests if they exist
+          if [ -d "tests/benchmarks" ]; then
+            pytest tests/benchmarks/ --benchmark-json=benchmark.json
+          fi
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark.json
+
+  # Job 8: Final status (all checks passed)
+  ci-success:
+    name: ✅ All Checks Passed
+    runs-on: ubuntu-24.04
+    needs: [pre-checks, lint, test, security, build, manifest]
+    if: always()
+
+    steps:
+      - name: Check job results
+        run: |
+          # Fail if any required job failed
+          if [ "${{ needs.pre-checks.result }}" != "success" ] || \
+             [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ] || \
+             [ "${{ needs.manifest.result }}" != "success" ]; then
+            echo "❌ One or more CI jobs failed"
+            exit 1
+          fi
+          echo "✅ All CI checks passed successfully!"
