@@ -18,10 +18,11 @@ except ImportError as exc:
 
 # Import the helpers under test
 try:
-    from helpers import demonstrates, documents, valid_until
+    from transformation_portal.utils.helpers import demonstrates, documents, valid_until
 except ImportError as e:
     raise ImportError(
-        "Failed to import 'helpers' module. Ensure 'helpers' is in PYTHONPATH or installed."
+        "Failed to import 'helpers' module from transformation_portal.utils. "
+        "Ensure the package is installed or PYTHONPATH is set correctly."
     ) from e
 
 # -------------------------
