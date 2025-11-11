@@ -11,7 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        # Run only Python 3.11 for now to conserve CI resources
+        # Can expand to ['3.10', '3.11', '3.12'] once stability is confirmed
+        python-version: ['3.11']
 
     steps:
     - uses: actions/checkout@v4
@@ -24,11 +26,25 @@ jobs:
     # Free up disk space FIRST - critical for avoiding "No space left on device"
     - name: Free disk space
       run: |
+        echo "Disk space before cleanup:"
+        df -h
+
+        # Remove large unnecessary tools and libraries
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /opt/ghc
         sudo rm -rf /usr/local/share/boost
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /usr/share/swift
+
+        # Clean Docker
         sudo docker image prune --all --force
+        sudo docker container prune --force
+
+        # Clean apt cache
+        sudo apt-get clean
+
+        echo "Disk space after cleanup:"
         df -h
 
     # Create cache directories
@@ -64,22 +80,31 @@ jobs:
       run: |
         python -m pip install --upgrade pip wheel setuptools
 
-        # Install CPU-only PyTorch first (saves ~6GB vs CUDA version)
-        pip install torch==2.5.1+cpu torchvision==0.20.1+cpu --index-url https://download.pytorch.org/whl/cpu
+        # Install CPU-only PyTorch FIRST to prevent CUDA version installation (saves ~6GB)
+        pip install --no-cache-dir torch==2.5.1+cpu torchvision==0.20.1+cpu --index-url https://download.pytorch.org/whl/cpu
 
         # Install core testing dependencies
-        pip install pytest>=7.0 pytest-cov>=4.0 coverage
+        pip install --no-cache-dir pytest>=7.0 pytest-cov>=4.0 coverage hypothesis
 
-        # Install minimal required dependencies for CI (avoid heavy deps like realesrgan, coremltools)
-        pip install numpy pillow scipy typer tqdm
-        pip install transformers huggingface-hub scikit-learn scikit-image PyYAML colour-science
-        pip install diffusers accelerate controlnet-aux
+        # Install minimal required dependencies for CI (skip heavy optional deps)
+        pip install --no-cache-dir numpy pillow scipy typer tqdm tifffile imagecodecs
+        pip install --no-cache-dir transformers huggingface-hub
+        pip install --no-cache-dir scikit-learn scikit-image PyYAML colour-science psutil memory-profiler
+        pip install --no-cache-dir diffusers accelerate controlnet-aux opencv-python
+
+        # Skip these heavy dependencies in CI (not needed for most tests):
+        # - realesrgan (requires basicsr, facexlib, gfpgan, large models)
+        # - coremltools (requires protobuf, large ML frameworks)
+        # - PyPDF2 (document processing, not core functionality)
 
         # Install package in editable mode
         pip install -e . --no-deps
 
         # Verify pytest-cov is installed
         pip show pytest-cov
+
+        # Show remaining disk space
+        df -h
 
     - name: Lint with flake8 (optional)
       continue-on-error: true
@@ -96,14 +121,18 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        # All tests can now import properly - import errors have been fixed
-        pytest -xvs tests/ \
+        # Run tests with proper PYTHONPATH set
+        # Skip tests that require optional heavy dependencies (realesrgan, coremltools)
+        pytest -v tests/ \
+          --ignore=tests/test_realesrgan_integration.py \
+          --ignore=tests/test_coreml_integration.py \
           --cov=src/transformation_portal \
           --cov-report=xml \
           --cov-report=term \
-          --cov-report=html
+          --cov-report=html \
+          --maxfail=5
       env:
-        PYTHONPATH: ${{ github.workspace }}
+        PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.11'
