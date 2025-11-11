@@ -21,7 +21,7 @@ scikit-learn>=1.4.0  # Updated to support numpy 2.x
 scikit-image>=0.21.0,<1.0  # Fixed version constraint
 PyYAML>=6.0,<7
 colour-science>=0.4.2,<0.5
-coremltools>=7.0,<9
+coremltools>=7.0,<10
 psutil>=5.9.0,<8
 memory-profiler>=0.61.0,<1
 PyPDF2
