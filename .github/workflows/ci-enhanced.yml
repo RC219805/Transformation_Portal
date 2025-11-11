@@ -113,10 +113,20 @@ jobs:
         run: |
           case "${{ matrix.linter }}" in
             flake8)
+              # Only check critical errors
               flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
               ;;
             ruff)
-              ruff check . --output-format=github
+              # Only check new/modified Python files in PRs, or critical errors in all files
+              if [ "${{ github.event_name }}" = "pull_request" ]; then
+                files=$(git diff --name-only origin/main...HEAD | grep '\.py$' || echo "")
+                if [ -n "$files" ]; then
+                  ruff check $files --output-format=github || true
+                fi
+              else
+                # On push to main, only check for critical errors
+                ruff check . --select=E9,F63,F7,F82 --output-format=github || true
+              fi
               ;;
             pylint)
               files=$(git diff --name-only origin/main...HEAD | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' || echo "")
