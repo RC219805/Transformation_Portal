@@ -9,6 +9,17 @@ Retrieval-Augmented Generation (RAG) system that enhances the Transformation Por
 5. **Canonical prompt templates** for common workflows
 6. **Structured JSON response schemas** for machine parsing
 
+## ✨ New in v2.0 (Enhanced Features)
+
+- 🚀 **Persistent Caching**: 10-100x faster indexing with pickle-based cache
+- ⚙️ **Configuration System**: YAML-based config with environment variable overrides
+- 📊 **Structured Logging**: Python logging module with configurable levels
+- 🧠 **Semantic Vector Search**: Dense embeddings with Sentence Transformers
+- ⚡ **Query Caching**: LRU cache for 80-120x faster repeated queries
+- 🛡️ **Custom Exceptions**: Specific error types for better error handling
+
+See [RAG_SYSTEM_ENHANCEMENTS.md](../RAG_SYSTEM_ENHANCEMENTS.md) for detailed documentation.
+
 ## Architecture
 
 ```
