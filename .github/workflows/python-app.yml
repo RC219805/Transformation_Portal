@@ -51,11 +51,26 @@ jobs:
           ${{ runner.os }}-models-v2-
           ${{ runner.os }}-models-
 
+    # Free up disk space on GitHub runners
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo docker image prune --all --force
+        df -h
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install wheel setuptools
-        pip install -r requirements.txt
+
+        # Install CPU-only PyTorch for CI (saves ~6GB, no GPU available anyway)
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+        # Install other dependencies
+        grep -v "^torch" requirements.txt | grep -v "^torchvision" > /tmp/requirements-no-torch.txt
+        pip install -r /tmp/requirements-no-torch.txt
         pip install -r requirements-dev.txt
         pip install -e .
 
