@@ -1,0 +1,183 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  ai-review:
+    name: AI-Powered Code Review
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v40
+        with:
+          files: |
+            **/*.py
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.md
+
+      - name: Set up Python
+        if: steps.changed-files.outputs.any_changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          pip install openai requests
+
+      - name: AI Code Review
+        if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO_FULL_NAME: ${{ github.repository }}
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import os
+          import json
+          import requests
+          from openai import OpenAI
+
+          # Initialize OpenAI client
+          client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+
+          # GitHub API setup
+          github_token = os.environ['GITHUB_TOKEN']
+          pr_number = os.environ['PR_NUMBER']
+          repo = os.environ['REPO_FULL_NAME']
+
+          headers = {
+              'Authorization': f'token {github_token}',
+              'Accept': 'application/vnd.github.v3+json'
+          }
+
+          # Get PR files
+          files_url = f'https://api.github.com/repos/{repo}/pulls/{pr_number}/files'
+          response = requests.get(files_url, headers=headers)
+          files = response.json()
+
+          print(f"📊 Reviewing {len(files)} changed files...")
+
+          # Filter to code files only
+          code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.yml', '.yaml', '.json'}
+          code_files = [f for f in files if any(f['filename'].endswith(ext) for ext in code_extensions)]
+
+          if not code_files:
+              print("ℹ️  No code files to review")
+              exit(0)
+
+          print(f"🔍 Analyzing {len(code_files)} code files...")
+
+          # Prepare review context
+          review_context = []
+          for file in code_files[:10]:  # Limit to 10 files to control costs
+              if file.get('patch'):
+                  review_context.append(f"File: {file['filename']}\n```diff\n{file['patch']}\n```\n")
+
+          if not review_context:
+              print("ℹ️  No code changes to review")
+              exit(0)
+
+          changes_text = "\n\n".join(review_context)
+
+          # Construct AI prompt
+          system_prompt = """You are an expert code reviewer for a luxury real estate rendering project.
+
+          Review the code changes and provide:
+          1. Code quality assessment (concise)
+          2. Potential bugs or issues (if any)
+          3. Security concerns (if any)
+          4. Performance improvements (if applicable)
+          5. Best practice suggestions (if needed)
+
+          Be concise and actionable. Focus on meaningful feedback.
+          Use emojis for visual clarity: ✅ (good), ⚠️ (warning), 🐛 (bug), 🔒 (security), ⚡ (performance).
+
+          If the code looks good, say so briefly. Don't nitpick minor style issues."""
+
+          user_prompt = f"""Review these code changes:
+
+          {changes_text}
+
+          Provide a brief, actionable code review."""
+
+          print("🤖 Requesting AI review from GPT-4o-mini...")
+
+          # Call OpenAI API
+          try:
+              response = client.chat.completions.create(
+                  model="gpt-4o-mini",
+                  messages=[
+                      {"role": "system", "content": system_prompt},
+                      {"role": "user", "content": user_prompt}
+                  ],
+                  max_tokens=1000,
+                  temperature=0.3
+              )
+
+              review_text = response.choices[0].message.content
+
+              # Post comment on PR
+              comment_body = f"""## 🤖 AI Code Review
+
+          {review_text}
+
+          ---
+          *Powered by GPT-4o-mini | Phase 3 Productivity Automation*
+          *This review is automated. Please use your judgment and human review for final decisions.*
+          """
+
+              comment_url = f'https://api.github.com/repos/{repo}/issues/{pr_number}/comments'
+              comment_data = {'body': comment_body}
+
+              post_response = requests.post(comment_url, headers=headers, json=comment_data)
+
+              if post_response.status_code == 201:
+                  print("✅ AI review posted successfully!")
+                  print(f"\n{review_text}")
+              else:
+                  print(f"⚠️  Failed to post comment: {post_response.status_code}")
+                  print(review_text)
+
+          except Exception as e:
+              print(f"❌ Error during AI review: {str(e)}")
+              exit(1)
+
+          PYTHON_SCRIPT
+
+      - name: Review Summary
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ AI Code Review Complete!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "The AI has analyzed your code changes and posted a review comment."
+          echo "Check the PR conversation tab for the detailed review."
+          echo ""
+          echo "Model: GPT-4o-mini (cost-optimized)"
+          echo "Scope: Python, JavaScript, TypeScript, YAML, JSON files"
+          echo ""
