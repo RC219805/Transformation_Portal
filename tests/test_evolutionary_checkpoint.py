@@ -41,11 +41,15 @@ class _FrozenDate(date):
 
 
 def test_today_defaults_to_current_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    import datetime as dt_module
+
     checkpoint = EvolutionaryCheckpoint(
         horizon=date(2024, 1, 10), mutation_path="lux/v3/pipeline"
     )
 
-    monkeypatch.setattr("transformation_portal.streaming.checkpoint.date", _FrozenDate)
+    # Patch the datetime module's date class
+    original_date = dt_module.date
+    monkeypatch.setattr(dt_module, "date", _FrozenDate)
 
     message = checkpoint.evolve_or_alert()
 
