@@ -25,3 +25,4 @@ coremltools>=7.0,<10
 psutil>=5.9.0,<8
 memory-profiler>=0.61.0,<1
 PyPDF2
+types-PyYAML>=6.0.12
