@@ -1,6 +1,6 @@
 """Tests for the CognitiveMaterialResponse orchestration layer."""
 
-from material_response import (
+from transformation_portal.processors.material_response.core import (
     CognitiveMaterialResponse,
     EmotionalResonance,
     GlobalLuxurySemantics,

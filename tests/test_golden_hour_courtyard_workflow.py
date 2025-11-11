@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-import golden_hour_courtyard_workflow as ghc
+from transformation_portal.rendering import golden_hour_courtyard_workflow as ghc
 
 
 class _SpyCapabilities:
