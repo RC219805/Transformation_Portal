@@ -1,0 +1,70 @@
+# .github/workflows/dependency-update.yml
+# Phase 2: Automated Dependency Management
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    name: Update Python Dependencies
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-tools
+        run: |
+          pip install pip-tools
+
+      - name: Update dependencies
+        run: |
+          # Compile updated requirements
+          pip-compile requirements.in -o requirements.txt --upgrade || true
+          pip-compile requirements-dev.in -o requirements-dev.txt --upgrade || true
+          pip-compile requirements-ci.in -o requirements-ci.txt --upgrade || true
+
+      - name: Check for vulnerabilities
+        run: |
+          pip install safety
+          safety check -r requirements.txt --json > safety-report.json || true
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update dependencies (automated)"
+          title: "🔄 Automated Dependency Updates"
+          body: |
+            ## 📦 Dependency Updates
+
+            This PR contains automated dependency updates from pip-compile.
+
+            ### 🔍 Security Report
+            See attached safety-report.json for vulnerability scan results.
+
+            ### ⚠️ Review Required
+            - [ ] Check for breaking changes
+            - [ ] Review security report
+            - [ ] Validate tests pass
+            - [ ] Verify compatibility
+
+            **Generated automatically by GitHub Actions**
+          branch: automated/dependency-updates
+          delete-branch: true
+          labels: |
+            dependencies
+            automated
