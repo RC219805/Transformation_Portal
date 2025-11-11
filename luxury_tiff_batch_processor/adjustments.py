@@ -11,6 +11,12 @@ import numpy as np
 
 from .profiles import ProcessingProfile
 
+try:
+    from scipy.ndimage import convolve1d as _scipy_convolve1d
+    _HAVE_SCIPY_NDIMAGE = True
+except ImportError:
+    _HAVE_SCIPY_NDIMAGE = False
+
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
 
@@ -430,6 +436,9 @@ gaussian_kernel.cache_info = _gaussian_kernel_cached.cache_info  # type: ignore[
 def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.ndarray:
     """Apply 1D convolution along specified axis with reflection padding.
 
+    Uses scipy.ndimage.convolve1d when available for better performance,
+    falls back to numpy implementation otherwise.
+
     Args:
         arr: Input array to convolve.
         kernel: 1D convolution kernel.
@@ -438,6 +447,12 @@ def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.nda
     Returns:
         Convolved array with same shape as input.
     """
+    if _HAVE_SCIPY_NDIMAGE:
+        return _scipy_convolve1d(
+            arr, kernel, axis=axis, mode='mirror'
+        ).astype(np.float32)
+
+    # Fallback implementation for environments without scipy
     pad_width = [(0, 0)] * arr.ndim
     k = kernel.size // 2
     pad_width[axis] = (k, k)
