@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from scripts.evolutionary_checkpoint import EvolutionaryCheckpoint
+from transformation_portal.streaming.checkpoint import EvolutionaryCheckpoint
 
 
 def test_evolution_required_message_when_horizon_has_passed() -> None:
@@ -45,7 +45,7 @@ def test_today_defaults_to_current_date(monkeypatch: pytest.MonkeyPatch) -> None
         horizon=date(2024, 1, 10), mutation_path="lux/v3/pipeline"
     )
 
-    monkeypatch.setattr("scripts.evolutionary_checkpoint.date", _FrozenDate)
+    monkeypatch.setattr("transformation_portal.streaming.checkpoint.date", _FrozenDate)
 
     message = checkpoint.evolve_or_alert()
 
