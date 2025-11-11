@@ -1,0 +1,148 @@
+name: Python CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    # Create cache directories before attempting to cache
+    - name: Create cache directories
+      run: |
+        mkdir -p ~/.cache/huggingface
+        mkdir -p ~/.cache/pip
+        mkdir -p models
+
+    # Cache pip packages for faster installs
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-
+
+    # Cache model files separately with versioning
+    - name: Cache models
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/huggingface
+          models
+        key: ${{ runner.os }}-models-v3-${{ hashFiles('**/requirements*.txt', '**/install_models*.py') }}
+        restore-keys: |
+          ${{ runner.os }}-models-v3-
+          ${{ runner.os }}-models-v2-
+          ${{ runner.os }}-models-
+
+    # Free up disk space on GitHub runners
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo docker image prune --all --force
+        df -h
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install wheel setuptools
+
+        # Install CPU-only PyTorch for CI (saves ~6GB, no GPU available anyway)
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+        # Install other dependencies
+        grep -v "^torch" requirements.txt | grep -v "^torchvision" > /tmp/requirements-no-torch.txt
+        pip install -r /tmp/requirements-no-torch.txt
+        pip install -r requirements-dev.txt
+        pip install -e .
+
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Type check with mypy (optional)
+      continue-on-error: true
+      run: |
+        mypy src/ --ignore-missing-imports --no-strict-optional || true
+
+    - name: Run tests with pytest
+      run: |
+        pytest -xvs --cov=. --cov-report=xml --cov-report=term --cov-report=html tests/
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+
+    - name: Upload coverage reports
+      if: matrix.python-version == '3.11'
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: htmlcov/
+
+    - name: Upload coverage to Codecov
+      if: matrix.python-version == '3.11'
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Check coverage threshold
+      if: matrix.python-version == '3.11'
+      run: |
+        coverage report --fail-under=35 || echo "Coverage is below threshold but continuing"
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Build package
+      run: python -m build
+
+    - name: Check distribution
+      run: |
+        twine check dist/*
+
+    # Uncomment when ready to publish to PyPI
+    # - name: Publish to PyPI
+    #   env:
+    #     TWINE_USERNAME: __token__
+    #     TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+    #   run: |
+    #     twine upload dist/*

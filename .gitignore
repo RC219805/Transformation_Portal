@@ -181,3 +181,16 @@ input_images/**/*.png
 # Generated logs and artifacts
 logs/
 artifacts/
+
+# Organized outputs directory (all generated content)
+outputs/
+!outputs/README.md
+!outputs/*/.gitkeep
+
+# Keep archive organization but ignore contents
+archive/experiments/
+archive/deprecated/
+archive/legacy/
+!archive/README.md
+!archive/*/.gitkeep
+venv_py311/

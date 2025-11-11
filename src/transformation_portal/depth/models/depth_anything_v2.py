@@ -16,7 +16,7 @@ import logging
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -24,9 +24,11 @@ from PIL import Image
 
 try:
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation, pipeline
+    from transformers.pipelines.depth_estimation import DepthEstimationPipeline
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
+    DepthEstimationPipeline = Any  # type: ignore
     logging.warning("transformers not available, install with: pip install transformers")
 
 try:
@@ -118,9 +120,9 @@ class DepthAnythingV2Model:
             device = self._auto_detect_device()
         self.device = device
 
-        # Initialize model
-        self.model = None
-        self.processor = None
+        # Initialize model with proper types
+        self.model: Optional[Union[DepthEstimationPipeline, Any]] = None
+        self.processor: Optional[Any] = None
         self._load_model()
 
         logger.info(
@@ -153,7 +155,7 @@ class DepthAnythingV2Model:
             return "cuda"
         return "cpu"
 
-    def _load_model(self):
+    def _load_model(self) -> None:
         """Load model based on backend."""
         if self.backend == ModelBackend.COREML:
             self._load_coreml_model()
@@ -162,7 +164,7 @@ class DepthAnythingV2Model:
         else:
             raise NotImplementedError(f"Backend {self.backend} not implemented")
 
-    def _load_pytorch_model(self):
+    def _load_pytorch_model(self) -> None:
         """Load PyTorch model using transformers."""
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError(
@@ -194,7 +196,7 @@ class DepthAnythingV2Model:
 
             logger.info("Loaded PyTorch model manually: %s", self.variant.value)
 
-    def _load_coreml_model(self):
+    def _load_coreml_model(self) -> None:
         """Load CoreML model for Apple Neural Engine."""
         if not COREML_AVAILABLE:
             raise ImportError(
@@ -251,7 +253,7 @@ class DepthAnythingV2Model:
         self,
         image: Union[np.ndarray, Image.Image, str, Path],
         output_size: Optional[Tuple[int, int]] = None,
-    ) -> dict:
+    ) -> Dict[str, Any]:
         """
         Estimate depth map from input image.
 
@@ -459,7 +461,10 @@ def safe_depth_estimation(
                 else image.size[::-1]
             )
             if not SKIMAGE_AVAILABLE:
-                raise ImportError("scikit-image is required for resizing. Install with: pip install scikit-image") from None
+                raise ImportError(
+                    "scikit-image is required for resizing. "
+                    "Install with: pip install scikit-image"
+                ) from None
 
             result['depth'] = resize(
                 result['depth'],
