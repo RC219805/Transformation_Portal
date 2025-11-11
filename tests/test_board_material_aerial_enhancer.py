@@ -3,7 +3,14 @@ from pathlib import Path
 
 import numpy as np
 
-from transformation_portal.enhancers import board_material_aerial_enhancer as bma
+# Updated import to work with package structure
+try:
+    from transformation_portal.enhancers import board_material_aerial_enhancer as bma
+except ImportError:
+    # Fallback for direct module import
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+    from transformation_portal.enhancers import board_material_aerial_enhancer as bma
 
 # ==========================
 # Test K-means
