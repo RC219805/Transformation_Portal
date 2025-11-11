@@ -1,5 +1,5 @@
 # Core deps for testing
-pytest>=8,<9
+pytest>=8,<10
 hypothesis>=6,<7
 
 # Image / array processing

@@ -15,5 +15,5 @@ tqdm>=4.66,<5
 typer>=0.10.0
 
 # Testing & fuzzing
-pytest>=8,<9
+pytest>=8,<10
 hypothesis>=6,<7
