@@ -50,7 +50,8 @@ jobs:
 
       - name: Check for merge conflicts
         run: |
-          if grep -r "<<<<<<< " . --exclude-dir=.git --exclude-dir=venv; then
+          # Check for merge conflict markers (but exclude workflow files themselves)
+          if grep -r "<<<<<<< " . --exclude-dir=.git --exclude-dir=venv --exclude-dir=.github 2>/dev/null; then
             echo "❌ Merge conflict markers found"
             exit 1
           fi
