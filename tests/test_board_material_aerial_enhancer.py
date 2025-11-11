@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-import board_material_aerial_enhancer as bma
+from transformation_portal.enhancers import board_material_aerial_enhancer as bma
 
 # ==========================
 # Test K-means
