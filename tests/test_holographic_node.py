@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from holographic_node import (
+from archive.deprecated.holographic_node import (
     EntanglementField,
     GlobalSystemState,
     HolographicNode,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from synthetic_viewer import ACUScore, JourneyMoment, SyntheticViewer
+from scripts.synthetic_viewer import ACUScore, JourneyMoment, SyntheticViewer
 
 
 def build_demo_stream() -> list[dict[str, float]]:

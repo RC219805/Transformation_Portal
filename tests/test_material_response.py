@@ -2,7 +2,7 @@
 
 import pytest
 
-from material_response import MaterialResponseValidator
+from scripts.utilities.material_response import MaterialResponseValidator
 
 
 def test_specular_preservation_returns_unity_when_reference_energy_is_zero() -> None:
