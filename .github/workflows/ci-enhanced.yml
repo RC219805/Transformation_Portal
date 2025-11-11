@@ -33,7 +33,15 @@ jobs:
       - name: Check for large files
         run: |
           # Fail if files >10MB are added (prevents bloat)
-          large_files=$(find . -type f -size +10M -not -path "./.git/*" -not -path "./venv/*" -not -path "./weights/*" || true)
+          # Exclude: git, venv, weights, projects, input_images, processed_images
+          large_files=$(find . -type f -size +10M \
+            -not -path "./.git/*" \
+            -not -path "./venv/*" \
+            -not -path "./weights/*" \
+            -not -path "./projects/*" \
+            -not -path "./input_images/*" \
+            -not -path "./processed_images/*" \
+            -not -path "./.venv/*" || true)
           if [ -n "$large_files" ]; then
             echo "❌ Large files detected (>10MB):"
             echo "$large_files"
