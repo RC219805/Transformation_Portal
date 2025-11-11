@@ -141,42 +141,51 @@ class Config:
 
             section, key = parts
 
+            # Get the original value from config to preserve type information
+            config_key = f"{section}.{key}"
+            original_value = self.get(config_key)
+            original_type = type(original_value) if original_value is not None else None
+
             # Convert value to appropriate type
-            converted_value = self._convert_env_value(env_value)
+            converted_value = self._convert_env_value(env_value, original_type)
 
             # Set the configuration value
             try:
-                self.set(f"{section}.{key}", converted_value)
+                self.set(config_key, converted_value)
                 logger.debug(f"Applied env override: {env_key}={converted_value}")
             except Exception as e:
                 logger.warning(f"Failed to apply env override {env_key}: {e}")
 
-    def _convert_env_value(self, value: str) -> Any:
+    def _convert_env_value(self, value: str, original_type: Optional[type] = None) -> Any:
         """
         Convert environment variable string value to appropriate type.
 
         Args:
             value: String value from environment variable
+            original_type: Type of the original config value (for type preservation)
 
         Returns:
             Converted value (bool, int, float, or str)
         """
-        # Boolean conversion
+        # Boolean conversion (only for explicit boolean strings, not "0"/"1")
         lower_value = value.lower()
-        if lower_value in ('true', 'yes', '1', 'on'):
+        if lower_value in ('true', 'yes', 'on'):
             return True
-        if lower_value in ('false', 'no', '0', 'off'):
+        if lower_value in ('false', 'no', 'off'):
             return False
 
-        # Try integer conversion
+        # Try numeric conversion
         try:
-            return int(value)
-        except ValueError:
-            pass
-
-        # Try float conversion
-        try:
-            return float(value)
+            float_val = float(value)
+            # Check if value looks like an integer (no decimal point)
+            if '.' not in value and 'e' not in value.lower():
+                # If original type is float, preserve it even for integer-looking values
+                if original_type is float:
+                    return float_val
+                # Otherwise convert to int for cleaner representation
+                return int(float_val)
+            # Has decimal point, return as float
+            return float_val
         except ValueError:
             pass
 
