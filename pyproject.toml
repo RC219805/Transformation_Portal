@@ -69,8 +69,8 @@ luxury_video_grader = "transformation_portal.processors.luxury_video_master_grad
 lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
-exclude = ["tests*", "data*", "docs*", "scripts"]
+where = ["."]
+exclude = ["tests*", "data*", "docs*", "scripts", "src/transformation_portal*"]
 
 [tool.pylint.main]
 # Increase limits for complex image/video processing functions
