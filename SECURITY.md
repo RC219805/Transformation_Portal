@@ -7,9 +7,8 @@ The following versions of Transformation Portal are currently supported with sec
 | Version | Supported          | Notes |
 | ------- | ------------------ | ----- |
 | main    | :white_check_mark: | Development branch - security fixes prioritized |
-| 1.0.x   | :white_check_mark: | Current stable release |
-| 0.9.x   | :warning:          | Critical security fixes only |
-| < 0.9   | :x:                | Unsupported |
+| 0.1.x   | :white_check_mark: | Current stable release |
+| < 0.1   | :x:                | Unsupported |
 
 ## Reporting a Vulnerability
 
@@ -68,16 +67,9 @@ Given our image/video processing nature, special attention is required for:
   - Limits on image dimensions (max 65536x65536)
   - Protection against compression bombs
 
-### Video Quality Assessment (VQAI) Security
-
-- **Prompt Injection**: Sanitize any user-provided prompts for AI models
-- **Resource Exhaustion**: Limit concurrent video processing jobs (default: 4)
-- **Output Validation**: Ensure AI-generated metadata doesn't contain sensitive information
-- **Model Isolation**: Run VQAI models in sandboxed environments
-
 ### Depth Map Processing
 
-- **ZoeDepth Model**: Validate input dimensions to prevent memory overflow (max 4096x4096)
+- **Depth Anything V2 Model**: Validate input dimensions to prevent memory overflow (max 4096x4096)
 - **Point Cloud Generation**: Limit vertex count to prevent DoS (max 10M vertices)
 - **Temporary File Management**: Secure cleanup of intermediate depth maps
 - **GPU Memory**: Monitor and limit VRAM usage (default: 8GB max)
@@ -137,18 +129,22 @@ Security features may impact performance:
 - Model checksums: +2-5s on first load
 - Input sanitization: +50-200ms per request
 - Memory clearing: +10-20% processing overhead
-- VQAI prompt validation: +100ms per request
 - Depth map bounds checking: +50ms per frame
 
-**Note**: These overheads are configurable via `config/security.yaml`
+**Note**: These overheads are configurable and can be tuned based on your security requirements
 
 ## Security Best Practices
 
 ### Deployment
 
 ```bash
-# Run with minimal privileges
-python -m transformation_portal --user nobody --group nogroup
+# Run with minimal privileges (recommended)
+sudo -u nobody python -m transformation_portal.cli
+
+# Or use systemd service with User directive:
+# [Service]
+# User=nobody
+# Group=nogroup
 
 # Use read-only filesystem where possible
 docker run --read-only --tmpfs /tmp transformation_portal:latest
@@ -161,23 +157,21 @@ Content-Security-Policy: default-src 'self'
 
 ### Configuration
 
+**Note**: The project currently uses `config/default_config.yaml` for depth pipeline settings (see actual structure with `depth_model.variant`, `processing.zone_tone_mapping`, `optimization.memory_limit_gb`, etc.). The following represents recommended security-related configuration fields that should be implemented for production deployments:
+
 ```yaml
-# config/security.yaml example
+# Recommended security configuration (not currently implemented)
+# These settings should be added to application configuration for production use
 security:
   max_file_size: 536870912  # 512MB
   allowed_extensions: ['.jpg', '.png', '.tiff', '.mp4', '.mov']
-  enable_telemetry: false
-  sandbox_mode: true
   temp_directory: '/tmp/transformation_portal'
   cleanup_interval: 3600  # seconds
-  vqai:
-    max_concurrent_jobs: 4
-    prompt_max_length: 500
-    enable_prompt_filtering: true
-  depth:
+  
+  depth_processing:
     max_input_dimension: 4096
     max_vertices: 10000000
-    gpu_memory_limit: 8192  # MB
+    gpu_memory_limit: 8192  # MB (reference: optimization.memory_limit_gb in default_config.yaml)
 ```
 
 ### Sensitive Data
@@ -192,23 +186,19 @@ security:
 Before submitting PRs:
 
 ```bash
-# Run security linter
-make security-check
+# Run code quality and security checks
+make quality-check
 
-# Test with malformed inputs
-python -m pytest tests/security/test_input_validation.py
+# Run full test suite
+make test-full
 
-# Check for common vulnerabilities
-bandit -r src/ -ll
+# Optional: Install and run security tools (not included by default)
+# pip install bandit
+# bandit -r src/ -ll
 
-# Test VQAI prompt injection
-python -m pytest tests/security/test_vqai_security.py
-
-# Validate depth processing limits
-python -m pytest tests/security/test_depth_limits.py
-
-# Full security suite
-make test-security
+# Note: Additional security testing tools like bandit, pip-audit, safety, 
+# semgrep, etc. are recommended but not included in project dependencies.
+# Install them separately if needed for security auditing.
 ```
 
 ## Incident Response
@@ -257,11 +247,7 @@ In case of a security breach:
 
 ## Security Audit History
 
-| Date | Auditor | Findings | Status |
-|------|---------|----------|--------|
-| 2025-01-15 | Dependency Scan | 2 Medium (deps) | In Progress |
-| 2024-10-01 | Internal | 2 Medium, 5 Low | Resolved |
-| 2024-07-15 | External Pen Test | 1 High, 3 Medium | Resolved |
+No formal security audits have been conducted yet. This section will be updated as audits are completed.
 
 ## Compliance
 
@@ -275,30 +261,32 @@ This project aims to maintain compliance with:
 
 ## Security Tools
 
-Recommended tools for security testing:
+Recommended external tools for security testing (require separate installation):
 
 ```bash
 # Dependency scanning
+pip install pip-audit
 pip-audit
+
+pip install safety
 safety check
-snyk test
 
 # Static analysis
+pip install bandit
 bandit -r src/
+
+pip install semgrep
 semgrep --config=auto
+
+# Existing project tools
 pylint --enable=security
 
-# Dynamic analysis
-python -m pytest tests/security/
-
-# Fuzzing
-python -m atheris test_fuzz_tiff_processor.py
-python -m atheris test_fuzz_vqai_input.py
-
 # Container scanning (if using Docker)
+# Install trivy: https://github.com/aquasecurity/trivy
 trivy image transformation_portal:latest
-docker scan transformation_portal:latest
 ```
+
+**Note**: These tools are not included in the project's dependencies. Install them separately as needed for security auditing.
 
 ## Responsible Disclosure
 
@@ -323,14 +311,13 @@ We support responsible disclosure and will:
 
 ## Additional Resources
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Secure contribution guidelines
-- [docs/security/](docs/security/) - Detailed security documentation
-- [tests/security/](tests/security/) - Security test suite
-- [CHANGELOG.md](CHANGELOG.md) - Security fixes by version
-- [.github/SECURITY.md](https://github.com/RC219805/Transformation_Portal/security/policy) - This policy on GitHub
+- [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md) - Secure contribution guidelines
+- [docs/version_history/changelog.md](docs/version_history/changelog.md) - Security fixes by version
+- [GitHub Security Policy Page](https://github.com/RC219805/Transformation_Portal/security/policy) - View this policy on GitHub
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and security considerations
 
 ---
 
-*Last Updated: January 2025*  
-*Next Review: April 2025*  
-*Version: 1.1.0*
+*Last Updated: November 2024*  
+*Next Review: February 2025*  
+*Security Policy Version: 1.0*
