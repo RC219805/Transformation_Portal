@@ -84,7 +84,6 @@ jobs:
         pip install --no-cache-dir "torch==2.5.1+cpu" "torchvision==0.20.1+cpu" --index-url https://download.pytorch.org/whl/cpu
 
         # Install core testing dependencies
-        # shellcheck disable=SC2261
         pip install --no-cache-dir "pytest>=7.0" "pytest-cov>=4.0" coverage hypothesis
 
         # Install minimal required dependencies for CI (skip heavy optional deps)
