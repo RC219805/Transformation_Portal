@@ -119,7 +119,18 @@ def build_material_rules(textures: dict[str, str]) -> List[MaterialRule]:
 
 
 def save_palette_assignments(assignments: dict[int, MaterialRule], out_path: Path):
-    data = {k: vars(v) for k, v in assignments.items()}
+    # Exclude score_fn (lambda function) which is not JSON serializable
+    data = {}
+    for k, v in assignments.items():
+        rule_dict = {
+            "name": v.name,
+            "texture": v.texture,
+            "blend": v.blend,
+            "min_score": v.min_score,
+            "tint": v.tint,
+            "tint_strength": v.tint_strength
+        }
+        data[k] = rule_dict
     with open(out_path, "w") as f:
         json.dump(data, f)
 

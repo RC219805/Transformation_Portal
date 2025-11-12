@@ -56,9 +56,11 @@ jobs:
           # Run pylint and capture exit code (set +e to prevent immediate exit)
           set +e
           if [ -z "$files" ]; then
+            # shellcheck disable=SC2046
             pylint $(git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/')
             PYLINT_EXIT=$?
           else
+            # shellcheck disable=SC2086
             pylint $files
             PYLINT_EXIT=$?
           fi
