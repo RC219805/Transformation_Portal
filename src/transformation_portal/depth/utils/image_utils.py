@@ -198,18 +198,37 @@ def resize_image(
     else:
         return image
 
-    # Interpolation method
-    interp_map = {
-        'nearest': cv2.INTER_NEAREST,
-        'bilinear': cv2.INTER_LINEAR,
-        'bicubic': cv2.INTER_CUBIC,
-        'lanczos': cv2.INTER_LANCZOS4,
-    }
-
-    if not CV2_AVAILABLE:
+    # Use cv2 if available, otherwise fall back to PIL
+    if CV2_AVAILABLE:
+        # Interpolation method for cv2
+        interp_map = {
+            'nearest': cv2.INTER_NEAREST,
+            'bilinear': cv2.INTER_LINEAR,
+            'bicubic': cv2.INTER_CUBIC,
+            'lanczos': cv2.INTER_LANCZOS4,
+        }
+        interp_flag = interp_map.get(interpolation, cv2.INTER_LINEAR)
+        
+        # Resize
+        resized = cv2.resize(
+            image,
+            (target_w, target_h),
+            interpolation=interp_flag
+        )
+        return resized
+    else:
         # Fallback to PIL
         from PIL import Image as PILImage
-        img = PILImage.fromarray(image)
+        
+        # Convert to uint8 if needed for PIL compatibility
+        is_float = image.dtype in (np.float32, np.float64)
+        if is_float:
+            # Assume normalized [0, 1] range, convert to uint8 [0, 255]
+            img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+            img = PILImage.fromarray(img_uint8)
+        else:
+            img = PILImage.fromarray(image)
+            
         pil_interp_map = {
             'nearest': PILImage.Resampling.NEAREST,
             'bilinear': PILImage.Resampling.BILINEAR,
@@ -218,18 +237,13 @@ def resize_image(
         }
         pil_interp = pil_interp_map.get(interpolation, PILImage.Resampling.BILINEAR)
         resized_img = img.resize((target_w, target_h), pil_interp)
-        return np.array(resized_img)
-
-    interp_flag = interp_map.get(interpolation, cv2.INTER_LINEAR)
-
-    # Resize
-    resized = cv2.resize(
-        image,
-        (target_w, target_h),
-        interpolation=interp_flag
-    )
-
-    return resized
+        resized_array = np.array(resized_img)
+        
+        # Convert back to float if input was float
+        if is_float:
+            resized_array = resized_array.astype(np.float32) / 255.0
+            
+        return resized_array
 
 
 def compute_image_hash(image: np.ndarray, method: str = "md5") -> str:
