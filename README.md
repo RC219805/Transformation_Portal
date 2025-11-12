@@ -165,8 +165,8 @@ make test-fast
 # Depth-aware enhancement
 python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
 
-# TIFF batch processing
-python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/ --preset signature
+# TIFF batch processing (after pip install -e .)
+luxury-tiff-batch input_folder/ output_folder/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input bedroom.jpg --out ./enhanced --prompt "luxury bedroom interior" --material-response
@@ -410,7 +410,11 @@ High-end workflow for polishing large-format TIFF photography with metadata pres
 
 **Usage:**
 ```bash
-python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/ --preset signature
+# After installing the package (pip install -e .)
+luxury-tiff-batch input_folder/ output_folder/ --preset signature
+
+# Or using Python module syntax
+python -m luxury_tiff_batch_processor.cli input_folder/ output_folder/ --preset signature
 ```
 
 ---
@@ -603,8 +607,8 @@ python lux_render_pipeline.py \
 ### Example 4: Batch TIFF Processing
 
 ```bash
-# Process folder of high-res TIFFs with Signature preset
-python luxury_tiff_batch_processor_cli.py \
+# Process folder of high-res TIFFs with Signature preset (after pip install -e .)
+luxury-tiff-batch \
   ./source_photography/ \
   ./output_enhanced/ \
   --preset signature
@@ -769,11 +773,11 @@ Includes:
 
 ### Console Scripts
 
-After installation, the following command-line tools are available:
+After installation (`pip install -e .`), the following command-line tools are available:
 
-- `luxury_tiff_batch_processor.py` - Batch TIFF processing
-- `luxury_video_master_grader.py` - Video color grading
-- `lux_render_pipeline.py` - AI render refinement
+- `luxury-tiff-batch` - Batch TIFF processing
+- `luxury_video_grader` - Video color grading (legacy)
+- `lux_render` - AI render refinement (legacy)
 - `decision_decay_dashboard.py` - Codebase auditing
 - `board_material_aerial_enhancer.py` - Aerial enhancement
 
@@ -834,7 +838,9 @@ Transformation_Portal/
 │   ├── models/                   # Depth estimation models
 │   ├── processors/               # Image processors
 │   └── utils/                    # Utilities and caching
-├── luxury_tiff_batch_processor/  # TIFF processing module
+├── src/
+│   ├── luxury_tiff_batch_processor/  # TIFF processing module
+│   └── transformation_portal/    # Core transformation package
 ├── presence_security_v1_2/       # Security and watermarking
 ├── tools/                        # Editorial and pipeline tools
 ├── tests/                        # Comprehensive test suite
@@ -974,8 +980,8 @@ python scripts/migrate_imports.py your_project/
 # Process image with depth pipeline
 python depth_pipeline/pipeline.py --input image.jpg --output enhanced.jpg
 
-# Batch process TIFFs
-python luxury_tiff_batch_processor_cli.py input/ output/ --preset signature
+# Batch process TIFFs (after pip install -e .)
+luxury-tiff-batch input/ output/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input render.jpg --out ./enhanced --prompt "luxury interior"
