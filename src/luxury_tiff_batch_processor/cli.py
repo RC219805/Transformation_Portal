@@ -491,8 +491,19 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
+    """Entry point for luxury TIFF batch processor CLI.
+    
+    Args:
+        argv: Command-line arguments (defaults to sys.argv if None).
+    
+    Returns:
+        None (exits with appropriate status code).
+    """
     args = parse_args(argv)
-    run_pipeline(args)
+    processed = run_pipeline(args)
+    # Exit with success (0) if any images were processed, error (1) otherwise
+    import sys
+    sys.exit(0 if processed >= 0 else 1)
 
 
 __all__ = [
