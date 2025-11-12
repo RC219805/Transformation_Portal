@@ -163,7 +163,7 @@ Content-Security-Policy: default-src 'self'
 # Recommended security configuration (not currently implemented)
 # These settings should be added to application configuration for production use
 security:
-  max_file_size: 536870912  # 512MB
+  max_file_size: 524288000  # 500MB
   allowed_extensions: ['.jpg', '.png', '.tiff', '.mp4', '.mov']
   temp_directory: '/tmp/transformation_portal'
   cleanup_interval: 3600  # seconds
