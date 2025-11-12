@@ -89,7 +89,8 @@ Given our image/video processing nature, special attention is required for:
 ### Dependencies
 
 - **Supply Chain**: 
-  - All dependencies are pinned to specific versions
+  - All dependencies use version constraints to balance security and compatibility
+  - For security-critical deployments, consider strict version pinning (e.g., via lock files)
   - Regular dependency audits via `pip-audit` and `safety`
   - Automated security scanning in CI/CD pipeline
 
@@ -163,7 +164,7 @@ Content-Security-Policy: default-src 'self'
 # Recommended security configuration (not currently implemented)
 # These settings should be added to application configuration for production use
 security:
-  max_file_size: 524288000  # 500MB
+  max_file_size: 524288000  # 500 MiB (500 * 1024 * 1024 bytes)
   allowed_extensions: ['.jpg', '.png', '.tiff', '.mp4', '.mov']
   temp_directory: '/tmp/transformation_portal'
   cleanup_interval: 3600  # seconds
@@ -255,7 +256,7 @@ This project aims to maintain compliance with:
 
 - **CWE Top 25**: Addressing most dangerous software weaknesses
 - **OWASP Top 10**: Web application security (if applicable)
-- **PCI DSS**: If processing payment card data
+- **PCI DSS**: Not applicable (no payment processing features)
 - **GDPR**: For EU user data protection (metadata handling)
 - **AI Security**: Following OWASP ML Security Top 10
 
@@ -303,10 +304,6 @@ We support responsible disclosure and will:
 **Primary**: Create a security advisory at https://github.com/RC219805/Transformation_Portal/security/advisories/new  
 **GitHub**: @RC219805  
 **Response Time**: 48 hours maximum
-
-## Security Badges
-
-[![Security Rating](https://img.shields.io/badge/security-A-green)](https://github.com/RC219805/Transformation_Portal/security)
 
 ## Additional Resources
 
