@@ -184,7 +184,7 @@ python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
 luxury-tiff-batch input_folder/ output_folder/ --preset signature
 
 # Alternative: Run as Python module
-python -m luxury_tiff_batch_processor.cli input_folder/ output_folder/ --preset signature
+python -m luxury_tiff_batch_processor input_folder/ output_folder/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input bedroom.jpg --out ./enhanced --prompt "luxury bedroom interior" --material-response
@@ -432,7 +432,7 @@ High-end workflow for polishing large-format TIFF photography with metadata pres
 luxury-tiff-batch input_folder/ output_folder/ --preset signature
 
 # Python module invocation (alternative)
-python -m luxury_tiff_batch_processor.cli input_folder/ output_folder/ --preset signature
+python -m luxury_tiff_batch_processor input_folder/ output_folder/ --preset signature
 
 # With additional options
 luxury-tiff-batch input_folder/ output_folder/ --preset vivid --verbose
@@ -455,7 +455,11 @@ FFmpeg-based video color grading with LUT application and batch processing.
 
 **Usage:**
 ```bash
-python luxury_video_master_grader.py input_video.mp4 output_video.mp4 --lut path/to/lut.cube
+# Using console script (after pip install -e .)
+luxury_video_grader input_video.mp4 output_video.mp4 --lut path/to/lut.cube
+
+# Using module invocation
+python -m transformation_portal.processors.luxury_video_master_grader input_video.mp4 output_video.mp4 --lut path/to/lut.cube
 ```
 
 ---
@@ -802,7 +806,7 @@ pip install -e .
 luxury-tiff-batch --help
 
 # Alternative: Use module invocation
-python -m luxury_tiff_batch_processor.cli --help
+python -m luxury_tiff_batch_processor --help
 ```
 
 #### "No module named 'luxury_tiff_batch_processor'"
@@ -847,8 +851,7 @@ ffmpeg -version
 
 **Cause**: Image dimensions must be multiples of 64 for Stable Diffusion.
 
-**Solution**: The pipeline now auto-corrects dimensions. Use valid sizes:
-- 512×512, 768×512, 512×768, 768×768, 1024×768, 1024×1024
+**Solution**: The pipeline now auto-corrects dimensions. Use valid sizes: 512×512, 768×512, 512×768, 768×768, 1024×768, 1024×1024
 
 **See**: [Complete Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more issues and solutions.
 
@@ -880,9 +883,9 @@ After installation with `pip install -e .`, the following command-line tools are
 **Python Module Invocation (Alternative):**
 ```bash
 # If console scripts are not available, use module syntax:
-python -m luxury_tiff_batch_processor.cli --help
-python luxury_video_master_grader.py --help
-python lux_render_pipeline.py --help
+python -m luxury_tiff_batch_processor --help
+python -m transformation_portal.processors.luxury_video_master_grader --help
+python -m transformation_portal.pipelines.lux_render_pipeline --help
 ```
 
 **Development Tools:**
@@ -1096,7 +1099,7 @@ python depth_pipeline/pipeline.py --input image.jpg --output enhanced.jpg
 luxury-tiff-batch input/ output/ --preset signature
 
 # Alternative: Run as module if console scripts not available
-python -m luxury_tiff_batch_processor.cli input/ output/ --preset signature
+python -m luxury_tiff_batch_processor input/ output/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input render.jpg --out ./enhanced --prompt "luxury interior"
