@@ -152,30 +152,16 @@ class TestAssetOrganization:
 
 
 class TestWrapperFiles:
-    """Tests for backward-compatible wrapper files."""
+    """Tests for console script entrypoints instead of wrapper files."""
 
-    def test_wrapper_files_are_thin(self):
-        """Test that wrapper files in root are thin wrappers."""
-        wrapper_files = [
-            "lux_render_pipeline.py",
-            "luxury_video_master_grader.py",
-            "luxury_tiff_batch_processor.py",
-            "depth_tools.py",
-        ]
+    def test_console_scripts_defined_in_pyproject(self):
+        """Test that console_scripts are properly defined in pyproject.toml."""
+        pyproject_path = _repo_root / "pyproject.toml"
+        assert pyproject_path.exists(), "pyproject.toml should exist"
 
-        for wrapper in wrapper_files:
-            wrapper_path = _repo_root / wrapper
-            if wrapper_path.exists():
-                # Wrapper should be small (< 100 non-comment, non-blank lines)
-                lines = wrapper_path.read_text().splitlines()
-                code_lines = [
-                    line for line in lines
-                    if line.strip() and not line.strip().startswith("#") and not line.strip().startswith('"""') and not line.strip().startswith("'''")
-                ]
-                assert len(code_lines) < 100, (
-                    f"{wrapper} should be a thin wrapper (< 100 non-comment, non-blank lines), "
-                    f"but has {len(code_lines)} code lines"
-                )
+        content = pyproject_path.read_text()
+        assert "[project.scripts]" in content, "project.scripts section should exist"
+        assert "luxury-tiff-batch" in content, "luxury-tiff-batch entrypoint should be defined"
 
 
 class TestGitignore:
