@@ -224,6 +224,12 @@ def resize_image(
         is_float = image.dtype in (np.float32, np.float64)
         if is_float:
             # Assume normalized [0, 1] range, convert to uint8 [0, 255]
+            if np.any(image < 0) or np.any(image > 1):
+                logger.warning(
+                    "Float image values outside [0, 1] detected during resize (min=%.4f, max=%.4f, shape=%s, dtype=%s). "
+                    "Clipping will occur. This may indicate an upstream normalization issue.",
+                    float(np.min(image)), float(np.max(image)), image.shape, image.dtype
+                )
             img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
             img = PILImage.fromarray(img_uint8)
         else:
