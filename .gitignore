@@ -135,7 +135,6 @@ input_images/**/*.tiff
 !input_images/.gitkeep
 
 # RAG system generated files
-index_stats.json
 .rag_cache/
 
 # JSON metadata (keep quality analysis JSON)
