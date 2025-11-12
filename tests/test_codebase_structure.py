@@ -158,7 +158,7 @@ class TestWrapperFiles:
         """Test that console_scripts are properly defined in pyproject.toml."""
         pyproject_path = _repo_root / "pyproject.toml"
         assert pyproject_path.exists(), "pyproject.toml should exist"
-        
+
         content = pyproject_path.read_text()
         assert "[project.scripts]" in content, "project.scripts section should exist"
         assert "luxury-tiff-batch" in content, "luxury-tiff-batch entrypoint should be defined"
