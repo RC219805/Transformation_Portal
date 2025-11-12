@@ -318,6 +318,6 @@ We support responsible disclosure and will:
 
 ---
 
-*Last Updated: November 2024*  
+*Last Updated: November 2025*  
 *Next Review: February 2025*  
 *Security Policy Version: 1.0*
