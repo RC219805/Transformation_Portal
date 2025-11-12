@@ -171,7 +171,7 @@ security:
   depth_processing:
     max_input_dimension: 4096
     max_vertices: 10000000
-    gpu_memory_limit: 8192  # MB (reference: optimization.memory_limit_gb in default_config.yaml)
+    memory_limit_gb: 8  # GB (see: optimization.memory_limit_gb in default_config.yaml)
 ```
 
 ### Sensitive Data
