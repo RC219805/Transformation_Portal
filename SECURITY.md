@@ -307,7 +307,6 @@ We support responsible disclosure and will:
 ## Security Badges
 
 [![Security Rating](https://img.shields.io/badge/security-A-green)](https://github.com/RC219805/Transformation_Portal/security)
-[![Dependencies](https://img.shields.io/badge/dependencies-up%20to%20date-green)](https://github.com/RC219805/Transformation_Portal/network/dependencies)
 
 ## Additional Resources
 
