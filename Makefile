@@ -85,6 +85,8 @@ clean:
 # --- Additional developer + CI helpers ---
 
 lint:
+	@echo "Installing package for linting..."
+	@$(PY) -m pip install -q -e . || echo "Warning: Package installation failed"
 	@echo "Running flake8 critical checks..."
 	@$(PY) -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated,scripts,examples || true
 	@echo "Running pylint (non-blocking)..."
