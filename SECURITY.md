@@ -157,20 +157,21 @@ Content-Security-Policy: default-src 'self'
 
 ### Configuration
 
-Security-related settings can be configured in your pipeline configuration files (e.g., `config/default_config.yaml`):
+**Note**: The project currently uses `config/default_config.yaml` for depth pipeline settings (see actual structure with `depth_model.variant`, `processing.zone_tone_mapping`, `optimization.memory_limit_gb`, etc.). The following represents recommended security-related configuration fields that should be implemented for production deployments:
 
 ```yaml
-# Example security-relevant configuration
-processing:
+# Recommended security configuration (not currently implemented)
+# These settings should be added to application configuration for production use
+security:
   max_file_size: 536870912  # 512MB
   allowed_extensions: ['.jpg', '.png', '.tiff', '.mp4', '.mov']
   temp_directory: '/tmp/transformation_portal'
   cleanup_interval: 3600  # seconds
   
-depth:
-  max_input_dimension: 4096
-  max_vertices: 10000000
-  gpu_memory_limit: 8192  # MB
+  depth_processing:
+    max_input_dimension: 4096
+    max_vertices: 10000000
+    gpu_memory_limit: 8192  # MB (reference: optimization.memory_limit_gb in default_config.yaml)
 ```
 
 ### Sensitive Data
