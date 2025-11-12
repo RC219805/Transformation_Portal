@@ -90,7 +90,7 @@ Given our image/video processing nature, special attention is required for:
 
 - **Supply Chain**: 
   - All dependencies use version constraints to balance security and compatibility
-  - For security-critical deployments, consider strict version pinning (e.g., via lockfiles)
+  - For security-critical deployments, consider strict version pinning (e.g., via lock files)
   - Regular dependency audits via `pip-audit` and `safety`
   - Automated security scanning in CI/CD pipeline
 
