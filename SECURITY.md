@@ -312,7 +312,7 @@ We support responsible disclosure and will:
 ## Additional Resources
 
 - [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md) - General best practices for contributors
-- [docs/version_history/changelog.md](docs/version_history/changelog.md) - Security fixes by version
+- [docs/version_history/changelog.md](docs/version_history/changelog.md) - Version history and security updates
 - [GitHub Security Policy Page](https://github.com/RC219805/Transformation_Portal/security/policy) - View this policy on GitHub
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and security considerations
 
