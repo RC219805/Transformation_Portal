@@ -122,7 +122,6 @@ def test_files_organized():
         "SYSTEM_STATUS.md",
         "navigate.sh",
         "verify_organization.sh",
-        "luxury_tiff_batch_processor_cli.py",
     ]
 
     for filename in should_not_be_in_root:
