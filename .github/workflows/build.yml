@@ -53,7 +53,8 @@ jobs:
           echo "Running flake8..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           echo "Running pylint..."
-          files=$(git diff --name-only origin/main...HEAD | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' || echo "")
+          # Get changed files, excluding deleted files (status 'D')
+          files=$(git diff --diff-filter=d --name-only origin/main...HEAD | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' || echo "")
           
           # Run pylint and capture exit code (set +e to prevent immediate exit)
           set +e
