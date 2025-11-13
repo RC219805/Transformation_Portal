@@ -13,7 +13,7 @@ scikit-learn>=1.0,<2
 tifffile>=2023.7.18,<2025
 imagecodecs>=2023.9.18,<2025
 tqdm>=4.66,<5
-typer>=0.10.0,<1          # keep <1 since 1.x may break APIs
+typer>=0.10.0,<1.0
 
 # ------------------------
 # Dev / linting / type checking

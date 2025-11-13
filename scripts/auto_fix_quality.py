@@ -115,10 +115,17 @@ class QualityFixer:
             )
             return True
 
-        fixed_lines = [line.rstrip(" \t") + ("\n" if line.endswith(("\n", "\r")) else "") for line in lines]
-
-        # Preserve final newline behavior: if original file had no trailing newline,
-        # we won't force-add an extra one beyond the stripping we do above.
+        # Track if original had final newline
+        has_final_newline = lines and lines[-1].endswith(('\n', '\r'))
+        
+        # Fix trailing whitespace on all lines
+        fixed_lines = [line.rstrip(" \t") + "\n" for line in lines[:-1]]
+        if lines:
+            # Handle last line specially to preserve final newline behavior
+            if has_final_newline:
+                fixed_lines.append(lines[-1].rstrip(" \t") + "\n")
+            else:
+                fixed_lines.append(lines[-1].rstrip(" \t"))
         try:
             path.write_text("".join(fixed_lines), encoding="utf-8")
         except (PermissionError, OSError) as e:
@@ -194,13 +201,6 @@ class QualityFixer:
     def _format_code_file(self, path: Path) -> bool:
         """Format a single Python file with autopep8. Returns True if changed."""
         if path.suffix != ".py" or not path.is_file():
-            return False
-
-        # Check autopep8 availability once per script, not per file
-        try:
-            subprocess.run(["autopep8", "--version"], capture_output=True, check=True)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            self.log("✗ autopep8 not found (install with: pip install autopep8)", "error")
             return False
 
         rel = path.relative_to(self.repo_root)
@@ -283,6 +283,14 @@ class QualityFixer:
     def format_code(self, paths: List[Path]) -> int:
         """Format Python code with autopep8."""
         self.log("\n→ Formatting code with autopep8...", "info")
+        
+        # Check autopep8 availability once before processing any files
+        try:
+            subprocess.run(["autopep8", "--version"], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            self.log("✗ autopep8 not found (install with: pip install autopep8)", "error")
+            return 0
+        
         count = self._run_per_file(self._format_code_file, paths, "format")
         if count > 0:
             self.log(f"✓ Formatted {count} files", "success")
