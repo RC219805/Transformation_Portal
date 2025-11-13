@@ -201,7 +201,7 @@ jobs:
                       )
                   except Exception as e:
                       print(f"Attempt {attempt+1} failed:", e)
-                      time.sleep(delay + random.random())
+                      time.sleep(min(delay + random.random(), 30))
                       delay *= 2
               return None
 
