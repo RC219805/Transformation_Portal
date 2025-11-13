@@ -69,6 +69,8 @@ jobs:
           import json
           import random
           import requests
+          import time
+          import random
           from openai import OpenAI
 
           api_key = os.getenv("OPENAI_API_KEY", "").strip()
@@ -103,49 +105,83 @@ jobs:
           allow = {".py", ".js", ".ts", ".jsx", ".tsx", ".yml", ".yaml", ".json", ".md"}
           code_files = [f for f in all_files if any(f["filename"].endswith(ext) for ext in allow)]
 
-          if not code_files:
-              print("No relevant code files changed.")
-              sys.exit(0)
+          Review the code changes and provide:
+          1. Code quality assessment (concise)
+          2. Potential bugs or issues (if any)
+          3. Security concerns (if any)
+          4. Performance improvements (if applicable)
+          5. Best practice suggestions (if needed)
 
-          print(f"{len(code_files)} relevant files detected.")
+          Be concise and actionable. Focus on meaningful feedback.
+          Use emojis for visual clarity: ✅ (good), ⚠️ (warning), 🐛 (bug), 🔒 (security), ⚡ (performance).
 
-          # Limit file count to avoid runaway cost
-          code_files = code_files[:10]
+          If the code looks good, say so briefly. Don't nitpick minor style issues."""
 
-          patches = []
-          for f in code_files:
-              patch = f.get("patch")
-              if patch:
-                  # Patch truncate for safety (GitHub can return massive diffs)
-                  patches.append(
-                      f"File: {f['filename']}\n```diff\n{patch[:5000]}\n```"
-                  )
+          user_prompt = f"""Review these code changes:
 
-          if not patches:
-              print("No patch content found to review.")
-              sys.exit(0)
+          {changes_text}
 
-          diff_text = "\n\n".join(patches)
+          Provide a brief, actionable code review."""
 
-          # --- AI Prompt -------------------------------------------------------
-          system_prompt = """
-          You are a senior software engineer performing a concise code review.
-          Provide:
-          - 🔍 High-value observations only
-          - 🐛 Potential bugs (if any)
-          - ⚠️ Risk areas
-          - 🔒 Security issues
-          - ⚡ Performance improvements
-          - 💡 Best practices
+          # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
+          print("🤖 Requesting AI review from GPT-4o-mini with retry logic...")
 
-          Avoid nitpicks. Avoid minor styling. Be helpful & to the point.
-          """
+          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
+              for attempt in range(1, max_retries + 1):
+                  try:
+                      return client.chat.completions.create(
+                          model=model,
+                          messages=messages,
+                          max_tokens=1000,
+                          temperature=0.3,
+                          **kwargs
+                      )
+                  except Exception as e:
+                      err_str = str(e)
+                      # Detect rate-limit / 429 occurrences (best-effort)
+                      status_is_429 = False
+                      status = getattr(e, "status_code", None) or getattr(e, "http_status", None) or getattr(e, "status", None)
+                      if status == 429:
+                          status_is_429 = True
+                      if "429" in err_str or "Rate limit" in err_str or "RateLimit" in err_str:
+                          status_is_429 = True
 
-          user_prompt = f"""
-          Review the following code changes and produce a clear, actionable summary:
+                      # If we are rate-limited and we have attempts left, wait and retry
+                      if status_is_429 and attempt < max_retries:
+                          # Exponential backoff with jitter, capped to avoid extremely long waits
+                          base_wait = min(60, 2 ** attempt)
+                          jitter = random.uniform(0.5, 1.5)
+                          wait = base_wait * jitter
+                          print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
+                          time.sleep(wait)
+                          continue
+                      # For non-rate-limit or last attempt, raise to be handled by caller
+                      raise
 
-          {diff_text}
-          """
+          messages = [
+              {"role": "system", "content": system_prompt},
+              {"role": "user", "content": user_prompt}
+          ]
+
+          review_text = None
+          try:
+              response = call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6)
+              # Parse response robustly across possible SDK shapes
+              if response and hasattr(response, "choices") and len(response.choices) > 0:
+                  try:
+                      review_text = response.choices[0].message.content
+                  except Exception:
+                      review_text = getattr(response.choices[0], "text", None) or str(response)
+              else:
+                  print("⚠️ OpenAI returned an unexpected response structure.")
+          except Exception as e:
+              # If retries exhausted or a non-retryable error occurred, provide a clear fallback review_text
+              print(f"⚠️ OpenAI request failed after retries: {str(e)}")
+              review_text = ("⚠️ AI review unavailable: the AI service returned errors (rate limits or other). "
+                             "Please retry or review manually. See CI logs for details.")
+
+          # Post comment on PR (attempt even if fallback review_text used)
+          comment_body = f"""## 🤖 AI Code Review
 
           print("Requesting AI review...")
 
@@ -196,14 +232,22 @@ jobs:
 
           echo "Posting AI review to PR #${PR_NUMBER}"
 
-          BODY=$(cat "$RESPONSE_FILE")
-          COMMENT="## 🤖 AI Code Review
+          comment_url = f'https://api.github.com/repos/{repo}/issues/{pr_number}/comments'
+          comment_data = {'body': comment_body}
 
-${BODY}
-
----
-
-*Automated review — human verification recommended.*"
+          try:
+              post_response = requests.post(comment_url, headers=headers, json=comment_data)
+              if post_response.status_code == 201:
+                  print("✅ AI review posted successfully!")
+                  print(f"\n{review_text}")
+              else:
+                  # print for diagnostics but do not fail the job for a posting error
+                  print(f"⚠️ Failed to post comment: {post_response.status_code}")
+                  print(post_response.text if hasattr(post_response, 'text') else '')
+                  print(review_text)
+          except Exception as e:
+              print(f"⚠️ Failed to post review comment due to: {str(e)}")
+              print(review_text)
 
           gh api repos/${REPO}/issues/${PR_NUMBER}/comments \
             -f body="${COMMENT}"
