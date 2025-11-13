@@ -51,7 +51,9 @@ Quick Start:
 # Organize repository (dry-run first)
 ./.auto-organize.sh --dry-run
 ./.auto-organize.sh
-Overview
+```
+
+## Overview
 
 Transformation Portal is a comprehensive suite of AI-powered tools and pipelines designed for high-end architectural rendering, real estate photography, and video post-production. It combines cutting-edge machine learning models, professional color grading techniques, and proprietary Material Response technology to transform raw renders and photographs into polished marketing visuals.
 
@@ -906,7 +908,7 @@ Email: info@racluxe.com
 
 ---
 
-**Last Updated: 2025-10-29**
+**Last Updated: 2025-11-13**
 
 ---
 
@@ -922,8 +924,9 @@ Email: info@racluxe.com
 - 🔄 Migration Guide - How to update your code
 - 🛠️ Depth Pipeline - Depth processing documentation
 
-Common Tasks
+### Common Tasks
 
+```bash
 # Install package
 pip install -e .
 
@@ -947,10 +950,11 @@ python -m luxury_tiff_batch_processor input/ output/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input render.jpg --out ./enhanced --prompt "luxury interior"
+```
 
+### Package Structure
 
-Package Structure
-
+```python
 # New modular imports (v0.1.0+)
 from transformation_portal.pipelines import lux_render_pipeline
 from transformation_portal.processors.material_response.core import MaterialResponse
