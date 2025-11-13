@@ -4,7 +4,7 @@ import types
 
 import pytest
 
-import coastal_estate_render as cer
+from transformation_portal.rendering import coastal_estate_render as cer
 
 # pylint: disable=redefined-outer-name  # pytest fixtures
 

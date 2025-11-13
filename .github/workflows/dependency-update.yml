@@ -18,24 +18,64 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
+      # Free up disk space before dependency operations
+      - name: Free disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          
+          # Remove large unnecessary tools and libraries
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /usr/local/share/boost || true
+          
+          # Clean Docker
+          sudo docker image prune --all --force || true
+          sudo docker container prune --force || true
+          
+          # Clean apt cache
+          sudo apt-get clean || true
+          
+          echo "Disk space after cleanup:"
+          df -h
 
       - name: Install pip-tools
         run: |
           pip install pip-tools
 
       - name: Update dependencies
+        env:
+          PIP_NO_CACHE_DIR: "1"  # Disable pip caching to save disk space
         run: |
-          # Compile updated requirements
-          pip-compile requirements.in -o requirements.txt --upgrade || true
-          pip-compile requirements-dev.in -o requirements-dev.txt --upgrade || true
-          pip-compile requirements-ci.in -o requirements-ci.txt --upgrade || true
+          # Note: This repository manages dependencies directly in requirements.txt files
+          # If .in files exist, compile them; otherwise skip this step
+          if [ -f "requirements.in" ]; then
+            pip-compile requirements.in -o requirements.txt --upgrade || echo "Warning: Failed to compile requirements.txt"
+          fi
+          
+          if [ -f "requirements-dev.in" ]; then
+            pip-compile requirements-dev.in -o requirements-dev.txt --upgrade || echo "Warning: Failed to compile requirements-dev.txt"
+          fi
+          
+          if [ -f "requirements-ci.in" ]; then
+            pip-compile requirements-ci.in -o requirements-ci.txt --upgrade || echo "Warning: Failed to compile requirements-ci.txt"
+          fi
+          
+          # If no .in files exist, check for dependency updates differently
+          if [ ! -f "requirements.in" ] && [ ! -f "requirements-dev.in" ] && [ ! -f "requirements-ci.in" ]; then
+            echo "No .in files found. Skipping pip-compile."
+            echo "This repository manages dependencies directly in pyproject.toml and requirements.txt files."
+          fi
 
       - name: Check for vulnerabilities
         run: |

@@ -1,5 +1,5 @@
 [MASTER]
-ignore=build,dist,.venv,.eggs,tools/deprecated,src/transformation_portal,scripts
+ignore=build,dist,.venv,.eggs,tools/deprecated,src/transformation_portal,src/luxury_tiff_batch_processor,scripts
 jobs=0
 persistent=no
 

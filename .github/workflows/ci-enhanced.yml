@@ -121,6 +121,7 @@ jobs:
               if [ "${{ github.event_name }}" = "pull_request" ]; then
                 files=$(git diff --name-only origin/main...HEAD | grep '\.py$' || echo "")
                 if [ -n "$files" ]; then
+                  # shellcheck disable=SC2086
                   ruff check $files --output-format=github || true
                 fi
               else
@@ -131,8 +132,10 @@ jobs:
             pylint)
               files=$(git diff --name-only origin/main...HEAD | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' || echo "")
               if [ -z "$files" ]; then
+                # shellcheck disable=SC2046
                 pylint $(git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'scripts/' | head -20) || true
               else
+                # shellcheck disable=SC2086
                 pylint $files || true
               fi
               ;;
@@ -140,10 +143,13 @@ jobs:
 
   # Job 3: Parallel testing with matrix
   test:
-    name: Test (Py${{ matrix.python }} on ${{ matrix.device }})
+    name: Test (Py${{ matrix.python-version }} on ${{ matrix.device }})
     runs-on: ubuntu-24.04
     needs: pre-checks
     timeout-minutes: 30
+    
+    permissions:
+      contents: read
 
     strategy:
       fail-fast: false

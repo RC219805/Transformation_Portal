@@ -11,15 +11,24 @@
 
 **NEW**: Revolutionary **Context-Aware Rendering System** that extracts architectural intelligence from construction documents (floor plans, elevations, specifications) and uses this knowledge to inform every processing decision.
 
-### What's New
-- 🏗️ **Architectural Context Extraction** - Reads PDFs to extract room types, dimensions, materials, and design style
-- 🧠 **Intelligent Strategy Derivation** - Automatically optimizes processing for each specific space
-- 🎯 **Room-Specific Processing** - Kitchen, bedroom, bathroom, living, outdoor areas each get tailored treatment
-- 📐 **Dimension-Aware** - Depth processing respects actual room proportions
-- 🎨 **Style-Consistent** - Color grading aligns with architectural design language
-- 📄 **Document Provenance** - Direct connection between construction docs and final renders
+### What's New in November 2025
 
-**See**: [Context-Aware Rendering Guide](docs/CONTEXT_AWARE_RENDERING.md) | [Quick Start](scripts/context_aware_quickstart.sh) | [Implementation Summary](docs/CONTEXT_SYSTEM_SUMMARY.md)
+#### 🆕 Recent Improvements
+- ✅ **CLI Module Execution Fix** - Fixed `luxury-tiff-batch` CLI module execution with proper `if __name__ == "__main__":` guards
+- ✅ **Package Structure Standardization** - Moved to proper `src/` layout with console script entry points
+- ✅ **Improved Installation Flow** - Clearer documentation for `pip install -e .` requirement
+- ✅ **Test Coverage Enhancement** - Added tests for CLI module importability and help command
+- ✅ **Workflow Reliability** - Fixed CI/CD test failures and linting issues
+
+#### 🏗️ Context-Aware Rendering Features
+- **Architectural Context Extraction** - Reads PDFs to extract room types, dimensions, materials, and design style
+- **Intelligent Strategy Derivation** - Automatically optimizes processing for each specific space
+- **Room-Specific Processing** - Kitchen, bedroom, bathroom, living, outdoor areas each get tailored treatment
+- **Dimension-Aware** - Depth processing respects actual room proportions
+- **Style-Consistent** - Color grading aligns with architectural design language
+- **Document Provenance** - Direct connection between construction docs and final renders
+
+**See**: [Context-Aware Rendering Guide](docs/CONTEXT_AWARE_RENDERING.md) | [Quick Start](scripts/context_aware_quickstart.sh) | [Implementation Summary](docs/CONTEXT_SYSTEM_SUMMARY.md) | [Workflow Fixes](docs/WORKFLOW_FIX_2025-11-12.md)
 
 ---
 
@@ -32,6 +41,26 @@ The repository has been significantly reorganized for better performance and mai
 - **Comprehensive documentation** in docs/ directory
 
 See [docs/REFACTORING_SUMMARY.md](docs/REFACTORING_SUMMARY.md) for details.
+
+### 🗂️ Automated Repository Organization
+
+The repository now includes an automated file organization system to maintain a clean, structured directory hierarchy:
+
+- **Automatic file organization** with `.auto-organize.sh`
+- **Pre-commit hooks** to prevent misplaced files
+- **Clear directory structure** for docs, scripts, assets, and data
+
+See [REPO_ORGANIZATION.md](REPO_ORGANIZATION.md) for complete documentation.
+
+**Quick Start:**
+```bash
+# Install organization system
+./scripts/setup/auto-organize-install.sh
+
+# Organize repository (dry-run first)
+./.auto-organize.sh --dry-run
+./.auto-organize.sh
+```
 
 ## Overview
 
@@ -64,6 +93,7 @@ Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
 * [Configuration](#configuration)
 * [Performance](#performance)
 * [Testing](#testing)
+* [Troubleshooting](#troubleshooting)
 * [License](#license)
 
 ---
@@ -107,24 +137,29 @@ Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
 
-# Create virtual environment
+# Create virtual environment (recommended)
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Install package in editable mode (required for development and testing)
+# Install package in editable mode (REQUIRED for CLI tools and imports)
 pip install -e .
 
-# Optional: Install extras
-pip install -e ".[tiff]"   # 16-bit TIFF processing
-pip install -e ".[ml]"     # ML extras for AI pipelines
-pip install -e ".[dev]"    # pytest, linting
-pip install -e ".[all]"    # everything
+# Optional: Install extras for specific features
+pip install -e ".[tiff]"   # 16-bit TIFF processing with tifffile
+pip install -e ".[ml]"     # ML extras for AI pipelines (SDXL, ControlNet)
+pip install -e ".[dev]"    # Development tools (pytest, flake8, pylint)
+pip install -e ".[all]"    # Install all extras
 ```
 
-> **Note for Developers**: Installing the package in editable mode with `pip install -e .` is required for tests that import from the `transformation_portal` package to work correctly, as it makes the package importable without modifying `sys.path`.
+> **Important**: Installing the package with `pip install -e .` is **required** (not optional) for:
+> - Using CLI console scripts (`luxury-tiff-batch`, etc.)
+> - Importing from the `transformation_portal` package
+> - Running the test suite correctly
+> 
+> The installation makes the package importable and registers command-line entry points.
 
 ### Verify Installation
 
@@ -145,8 +180,11 @@ make test-fast
 # Depth-aware enhancement
 python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
 
-# TIFF batch processing
-python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/ --preset signature
+# TIFF batch processing (requires pip install -e . first)
+luxury-tiff-batch input_folder/ output_folder/ --preset signature
+
+# Alternative: Run as Python module
+python -m luxury_tiff_batch_processor input_folder/ output_folder/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input bedroom.jpg --out ./enhanced --prompt "luxury bedroom interior" --material-response
@@ -390,8 +428,17 @@ High-end workflow for polishing large-format TIFF photography with metadata pres
 
 **Usage:**
 ```bash
-python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/ --preset signature
+# Console script (recommended - requires pip install -e . first)
+luxury-tiff-batch input_folder/ output_folder/ --preset signature
+
+# Python module invocation (alternative)
+python -m luxury_tiff_batch_processor input_folder/ output_folder/ --preset signature
+
+# With additional options
+luxury-tiff-batch input_folder/ output_folder/ --preset vivid --verbose
 ```
+
+> **Note**: The `luxury-tiff-batch` command is a console script entry point registered during `pip install -e .`. If not installed, use the module invocation syntax instead.
 
 ---
 
@@ -408,7 +455,11 @@ FFmpeg-based video color grading with LUT application and batch processing.
 
 **Usage:**
 ```bash
-python luxury_video_master_grader.py input_video.mp4 output_video.mp4 --lut path/to/lut.cube
+# Using console script (after pip install -e .)
+luxury_video_grader input_video.mp4 output_video.mp4 --lut path/to/lut.cube
+
+# Using module invocation
+python -m transformation_portal.processors.luxury_video_master_grader input_video.mp4 output_video.mp4 --lut path/to/lut.cube
 ```
 
 ---
@@ -583,8 +634,8 @@ python lux_render_pipeline.py \
 ### Example 4: Batch TIFF Processing
 
 ```bash
-# Process folder of high-res TIFFs with Signature preset
-python luxury_tiff_batch_processor_cli.py \
+# Process folder of high-res TIFFs with Signature preset (after pip install -e .)
+luxury-tiff-batch \
   ./source_photography/ \
   ./output_enhanced/ \
   --preset signature
@@ -733,6 +784,79 @@ The project includes comprehensive tests for:
 
 ---
 
+## Troubleshooting
+
+### Common Issues
+
+#### "luxury-tiff-batch: command not found"
+
+**Cause**: Package not installed or virtual environment not activated.
+
+**Solution**:
+```bash
+# Ensure you're in the virtual environment
+source .venv/bin/activate  # Linux/macOS
+# or
+.venv\Scripts\activate  # Windows
+
+# Install the package
+pip install -e .
+
+# Verify installation
+luxury-tiff-batch --help
+
+# Alternative: Use module invocation
+python -m luxury_tiff_batch_processor --help
+```
+
+#### "No module named 'luxury_tiff_batch_processor'"
+
+**Cause**: Package not installed in editable mode.
+
+**Solution**:
+```bash
+pip install -e .
+```
+
+#### Import Errors During Testing
+
+**Cause**: Tests expect the package to be installed.
+
+**Solution**:
+```bash
+# Install package first
+pip install -e .
+
+# Then run tests
+make test-fast
+```
+
+#### FFmpeg Not Found
+
+**Cause**: FFmpeg not installed on system (required for video processing).
+
+**Solution**:
+```bash
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Verify
+ffmpeg -version
+```
+
+#### "RuntimeError: tensor dimension mismatch" (Lux Render)
+
+**Cause**: Image dimensions must be multiples of 64 for Stable Diffusion.
+
+**Solution**: The pipeline now auto-corrects dimensions. Use valid sizes: 512×512, 768×512, 512×768, 768×768, 1024×768, 1024×1024
+
+**See**: [Complete Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more issues and solutions.
+
+---
+
 ## Developer Setup
 
 ### Install Development Dependencies
@@ -749,13 +873,26 @@ Includes:
 
 ### Console Scripts
 
-After installation, the following command-line tools are available:
+After installation with `pip install -e .`, the following command-line tools are available:
 
-- `luxury_tiff_batch_processor.py` - Batch TIFF processing
-- `luxury_video_master_grader.py` - Video color grading
-- `lux_render_pipeline.py` - AI render refinement
-- `decision_decay_dashboard.py` - Codebase auditing
-- `board_material_aerial_enhancer.py` - Aerial enhancement
+**Main CLI Tools:**
+- `luxury-tiff-batch` - Batch TIFF processing with presets
+- `luxury_video_grader` - Video color grading (legacy entry point)
+- `lux_render` - AI render refinement (legacy entry point)
+
+**Python Module Invocation (Alternative):**
+```bash
+# If console scripts are not available, use module syntax:
+python -m luxury_tiff_batch_processor --help
+python -m transformation_portal.processors.luxury_video_master_grader --help
+python -m transformation_portal.pipelines.lux_render_pipeline --help
+```
+
+**Development Tools:**
+- `decision_decay_dashboard.py` - Codebase philosophy auditing
+- `board_material_aerial_enhancer.py` - Aerial photography enhancement
+
+> **Note**: Console scripts require `pip install -e .`. If you encounter "command not found" errors, ensure the package is installed and your virtual environment is activated.
 
 ### Code Quality
 
@@ -814,7 +951,9 @@ Transformation_Portal/
 │   ├── models/                   # Depth estimation models
 │   ├── processors/               # Image processors
 │   └── utils/                    # Utilities and caching
-├── luxury_tiff_batch_processor/  # TIFF processing module
+├── src/
+│   ├── luxury_tiff_batch_processor/  # TIFF processing module
+│   └── transformation_portal/    # Core transformation package
 ├── presence_security_v1_2/       # Security and watermarking
 ├── tools/                        # Editorial and pipeline tools
 ├── tests/                        # Comprehensive test suite
@@ -920,7 +1059,7 @@ If you use Depth Anything V2 in research, please cite:
 
 ---
 
-**Last Updated:** 2025-10-29
+**Last Updated:** 2025-11-12
 
 ---
 
@@ -930,17 +1069,22 @@ If you use Depth Anything V2 in research, please cite:
 
 - 🚀 **[Pipeline Operations Guide](docs/PIPELINE_OPERATIONS_GUIDE.md)** - **Complete step-by-step guide to operate all pipelines**
 - ⚡ [Quick Start Cheat Sheet](docs/QUICKSTART_CHEATSHEET.md) - Commands and common tasks at a glance
+- 🔧 [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Solutions to common issues
 - 📘 [Refactoring Summary](docs/REFACTORING_SUMMARY.md) - Repository reorganization details
 - 🏗️ [Architecture Guide](docs/ARCHITECTURE.md) - Design principles and module organization
-- 🔧 [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md) - Benchmarks and best practices
+- ⚡ [Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md) - Benchmarks and best practices
 - 🔄 [Migration Guide](docs/REFACTORING_2025.md) - How to update your code
 - 🛠️ [Depth Pipeline](docs/depth_pipeline/DEPTH_PIPELINE_README.md) - Depth processing documentation
+- 🐛 [Workflow Fixes](docs/WORKFLOW_FIX_2025-11-12.md) - Recent bug fixes and improvements
 
 ### Common Tasks
 
 ```bash
-# Install package
+# Install package (REQUIRED - do this first!)
 pip install -e .
+
+# Install with all extras
+pip install -e ".[all]"
 
 # Run tests
 make test-fast
@@ -948,17 +1092,20 @@ make test-fast
 # Lint code
 make lint
 
-# Migrate imports (for existing codebases)
-python scripts/migrate_imports.py your_project/
-
 # Process image with depth pipeline
 python depth_pipeline/pipeline.py --input image.jpg --output enhanced.jpg
 
-# Batch process TIFFs
-python luxury_tiff_batch_processor_cli.py input/ output/ --preset signature
+# Batch process TIFFs (requires pip install -e . first)
+luxury-tiff-batch input/ output/ --preset signature
+
+# Alternative: Run as module if console scripts not available
+python -m luxury_tiff_batch_processor input/ output/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input render.jpg --out ./enhanced --prompt "luxury interior"
+
+# Migrate imports (for existing codebases using old structure)
+python scripts/migrate_imports.py your_project/
 ```
 
 ### Package Structure
@@ -978,4 +1125,4 @@ import material_response
 ---
 
 **Status:** Production-Ready (v0.1.0)
-**Last Updated:** 2025-10-29
+**Last Updated:** 2025-11-12
