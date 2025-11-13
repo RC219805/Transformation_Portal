@@ -98,15 +98,16 @@ Core Capabilities
 - ✅ Production-Ready - Comprehensive test suite, CI/CD, performance profiling
 
 Technology Stack
-Technology	Purpose
-Depth Anything V2	Monocular depth estimation (24ms @ 518px on M4 Max)
-Stable Diffusion XL	AI-powered render refinement
-ControlNet	Edge-preserving image-to-image translation
-Real-ESRGAN	Intelligent 4x upscaling
-FFmpeg	Video processing and LUT application
-PyTorch/CoreML	GPU acceleration (CUDA, MPS, Apple Neural Engine)
-Colour Science	Professional color space transformations
-⸻
+
+| Technology         | Purpose                                             |
+|--------------------|-----------------------------------------------------|
+| Depth Anything V2  | Monocular depth estimation (24ms @ 518px on M4 Max) |
+| Stable Diffusion XL| AI-powered render refinement                        |
+| ControlNet         | Edge-preserving image-to-image translation          |
+| Real-ESRGAN        | Intelligent 4x upscaling                            |
+| FFmpeg             | Video processing and LUT application                |
+| PyTorch/CoreML     | GPU acceleration (CUDA, MPS, Apple Neural Engine)   |
+| Colour Science     | Professional color space transformations            |
 Quick Start
 
 📖 New to the pipelines? Check out the complete Pipeline Operations Guide for step-by-step instructions on how to operate each pipeline, or see the Quick Start Cheat Sheet for common commands.
