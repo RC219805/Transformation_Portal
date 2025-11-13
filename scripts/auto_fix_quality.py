@@ -118,14 +118,33 @@ class QualityFixer:
         # Track if original had final newline
         has_final_newline = lines and lines[-1].endswith(('\n', '\r'))
         
-        # Fix trailing whitespace on all lines
-        fixed_lines = [line.rstrip(" \t") + "\n" for line in lines[:-1]]
+        # Fix trailing whitespace on all lines, preserving their line endings
+        fixed_lines = []
+        for line in lines[:-1]:
+            # Extract the line ending
+            if line.endswith('\r\n'):
+                ending = '\r\n'
+            elif line.endswith('\n'):
+                ending = '\n'
+            elif line.endswith('\r'):
+                ending = '\r'
+            else:
+                ending = ''  # shouldn't happen for lines[:-1] with keepends=True
+            fixed_lines.append(line.rstrip(" \t\n\r") + ending)
         if lines:
             # Handle last line specially to preserve final newline behavior
             if has_final_newline:
-                fixed_lines.append(lines[-1].rstrip(" \t") + "\n")
+                if lines[-1].endswith('\r\n'):
+                    ending = '\r\n'
+                elif lines[-1].endswith('\n'):
+                    ending = '\n'
+                elif lines[-1].endswith('\r'):
+                    ending = '\r'
+                else:
+                    ending = ''
+                fixed_lines.append(lines[-1].rstrip(" \t\n\r") + ending)
             else:
-                fixed_lines.append(lines[-1].rstrip(" \t"))
+                fixed_lines.append(lines[-1].rstrip(" \t\n\r"))
         try:
             path.write_text("".join(fixed_lines), encoding="utf-8")
         except (PermissionError, OSError) as e:
