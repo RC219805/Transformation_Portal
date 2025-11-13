@@ -188,7 +188,7 @@ class QualityFixer:
         try:
             tree = ast.parse(content)
         except SyntaxError:
-            # If file has syntax errors, fall back to string matching
+            # If file has syntax errors, skip import detection
             return set()
 
         imports = set()
