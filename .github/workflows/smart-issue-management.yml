@@ -155,7 +155,6 @@ jobs:
                   print("⚠️ OpenAI returned an unexpected response structure.")
                   analysis = None
 
-              analysis = None
 
               print(f"✅ Analysis complete:")
               print(f"   Category: {analysis.get('category', 'unknown')}")
