@@ -301,10 +301,10 @@ class ArchitecturalContextExtractor:
 
         # Try to import PDF parsing libraries
         try:
-            import PyPDF2
+            from pypdf import PdfReader
 
             with open(pdf_path, 'rb') as f:
-                pdf = PyPDF2.PdfReader(f)
+                pdf = PdfReader(f)
 
                 # Extract text from first few pages
                 text = ""
@@ -325,7 +325,7 @@ class ArchitecturalContextExtractor:
                 context.design_intent.extend(design_intent)
 
         except ImportError:
-            logger.warning("PyPDF2 not installed. Install with: pip install PyPDF2")
+            logger.warning("pypdf not installed. Install with: pip install pypdf")
         except Exception as e:
             logger.warning(f"Error parsing PDF: {e}")
 
