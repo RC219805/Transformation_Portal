@@ -32,8 +32,11 @@ The repository has been significantly reorganized for better performance and mai
 See docs/REFACTORING_SUMMARY.md for details.
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 ## Overview
 =======
+=======
+>>>>>>> Stashed changes
 🗂️ Automated Repository Organization
 
 The repository now includes an automated file organization system to maintain a clean, structured directory hierarchy:
@@ -52,6 +55,9 @@ Quick Start:
 ./.auto-organize.sh --dry-run
 ./.auto-organize.sh
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 Overview
@@ -361,7 +367,11 @@ python lux_render_pipeline.py \
   --brand_text "The Veridian | Penthouse 21B" --logo ./brand/logo.png
 
 
+<<<<<<< Updated upstream
 Material Response Mode:
+=======
+Material Response Mode:
+>>>>>>> Stashed changes
 Activates detail boosts, contact shadowing, and volumetric tinting that reinforce wood grain, textile separation, and atmospheric haze. Requires [ml] extras and GPU.
 ⸻
 Luxury TIFF Batch Processor
@@ -382,17 +392,23 @@ Presets:
 - Moody - Dramatic shadows and reduced saturation
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 **Usage:**
 ```bash
 python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/ --preset signature
 ```
 =======
+=======
+>>>>>>> Stashed changes
 Usage:
 # After installing the package (pip install -e .)
 luxury-tiff-batch input_folder/ output_folder/ --preset signature
 
 # Or using Python module syntax
 python -m luxury_tiff_batch_processor.cli input_folder/ output_folder/ --preset signature
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 ⸻
@@ -415,7 +431,11 @@ Material Response System
 
 Proprietary surface-aware rendering technology that analyzes and enhances how different materials interact with light.
 
+<<<<<<< Updated upstream
 Concept:
+=======
+Concept:
+>>>>>>> Stashed changes
 Traditional color grading applies global transforms uniformly. Material Response technology shifts to surface-aware rendering that respects highlights, midtones, and micro-contrast differently across materials (wood, metal, glass, fabric, stone).
 
 Implementation:
@@ -560,12 +580,15 @@ python lux_render_pipeline.py \
 Example 4: Batch TIFF Processing
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 ### Example 4: Batch TIFF Processing
 
 ```bash
 # Process folder of high-res TIFFs with Signature preset
 python luxury_tiff_batch_processor_cli.py \
 =======
+=======
+>>>>>>> Stashed changes
 # Process folder of high-res TIFFs with Signature preset (after pip install -e .)
 luxury-tiff-batch \
 >>>>>>> Stashed changes
@@ -717,6 +740,7 @@ Includes:
 Console Scripts
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 After installation, the following command-line tools are available:
 
 - `luxury_tiff_batch_processor.py` - Batch TIFF processing
@@ -734,6 +758,16 @@ After installation (pip install -e .), the following command-line tools are avai
 - board_material_aerial_enhancer.py - Aerial enhancement
 >>>>>>> Stashed changes
 
+=======
+After installation (pip install -e .), the following command-line tools are available:
+
+- luxury-tiff-batch - Batch TIFF processing
+- luxury_video_grader - Video color grading (legacy)
+- lux_render - AI render refinement (legacy)
+- decision_decay_dashboard.py - Codebase auditing
+- board_material_aerial_enhancer.py - Aerial enhancement
+
+>>>>>>> Stashed changes
 Code Quality
 
 # Linting
@@ -861,8 +895,13 @@ If you use Depth Anything V2 in research, please cite:
 ⸻
 Support and Contact
 
+<<<<<<< Updated upstream
 Author: Richard Cheetham
 Brand: Carolwood Estates · RACLuxe Division
+=======
+Author: Richard Cheetham
+Brand: Carolwood Estates · RACLuxe Division
+>>>>>>> Stashed changes
 Email: info@racluxe.com
 
 Resources:
@@ -929,5 +968,9 @@ import lux_render_pipeline  # Will show deprecation warning in future
 import material_response
 
 ⸻
+<<<<<<< Updated upstream
 Status: Production-Ready (v0.1.0)
+=======
+Status: Production-Ready (v0.1.0)
+>>>>>>> Stashed changes
 Last Updated: 2025-10-29
