@@ -69,7 +69,7 @@ Use it in Copilot Chat: @transformation-portal-specialist [your request]
 * [Quick Start](#quick-start)
 * [Installation](#installation)
 * [Supported File Formats](#supported-file-formats)
-* [📖 Pipeline Operations Guide ⬅️How to Operate](#-pipeline-operations-guide-how-to-operate)
+* [📖 Pipeline Operations Guide](#pipeline-operations-guide)
 * [Core Components](#core-components)
     * [Context-Aware Rendering 🆕](#context-aware-rendering-)
     * [Depth Pipeline](#depth-pipeline)
