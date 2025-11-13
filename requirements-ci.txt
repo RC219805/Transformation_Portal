@@ -1,19 +1,7 @@
-# Core runtime
-# Pin numpy <2.3.0 for opencv-python compatibility (until opencv-python supports 2.3+)
-# See: https://github.com/opencv/opencv-python/issues/954
-numpy>=1.24,<2.3.0
-Pillow>=10,<12
-scipy>=1.10,<2
-tifffile>=2023.7.18,<2025
-imagecodecs>=2023.9.18,<2025
+# CI environment: runtime + testing
+-r requirements.txt
 
-# Machine learning / clustering
-scikit-learn>=1.4.0,<2
-
-# Progress bars & CLI
-tqdm>=4.65,<5
-typer>=0.12,<1
-
-# Testing & fuzzing
+# Testing / coverage / property-based tests
 pytest>=8,<10
+pytest-cov>=4.0,<6
 hypothesis>=6,<7
