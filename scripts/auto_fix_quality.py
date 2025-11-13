@@ -22,11 +22,10 @@ Options:
 """
 
 import argparse
+import ast
 import concurrent.futures
 import logging
-import re
 import subprocess
-import sys
 from pathlib import Path
 from typing import List, Optional, Set
 
@@ -153,6 +152,66 @@ class QualityFixer:
         self.log(f"  ✓ Fixed trailing whitespace: {path.relative_to(self.repo_root)}", "success")
         return True
 
+    def _get_used_names(self, content: str) -> Set[str]:
+        """
+        Use AST to find names that are actually used in the code.
+        This excludes matches in comments, strings, and docstrings.
+        """
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            # If file has syntax errors, fall back to empty set
+            return set()
+
+        used_names = set()
+
+        class NameVisitor(ast.NodeVisitor):
+            def visit_Name(self, node):
+                used_names.add(node.id)
+                self.generic_visit(node)
+
+            def visit_Attribute(self, node):
+                # For attributes like np.array, we want to track 'np'
+                if isinstance(node.value, ast.Name):
+                    used_names.add(node.value.id)
+                self.generic_visit(node)
+
+        NameVisitor().visit(tree)
+        return used_names
+
+    def _get_existing_imports(self, content: str) -> Set[str]:
+        """
+        Use AST to find all existing import statements.
+        Returns the canonical import line for each import.
+        """
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            # If file has syntax errors, skip import detection
+            return set()
+
+        imports = set()
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.asname:
+                        imports.add(f"import {alias.name} as {alias.asname}")
+                    else:
+                        imports.add(f"import {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                # Handle relative imports: node.level gives number of leading dots
+                dots = '.' * node.level if hasattr(node, 'level') and node.level else ''
+                module = node.module or ""
+                from_part = f"{dots}{module}" if module else dots
+                for alias in node.names:
+                    if alias.asname:
+                        imports.add(f"from {from_part} import {alias.name} as {alias.asname}")
+                    else:
+                        imports.add(f"from {from_part} import {alias.name}")
+
+        return imports
+
     def _fix_imports_file(self, path: Path) -> bool:
         """Fix common import issues in a single Python file. Returns True if changed."""
         if path.suffix != ".py" or not path.is_file():
@@ -174,10 +233,14 @@ class QualityFixer:
             "Path": "from pathlib import Path",
         }
 
+        # Use AST-based analysis to find actually used names
+        used_names = self._get_used_names(content)
+        existing_imports = self._get_existing_imports(content)
+
         undefined = []
         for name, import_line in import_fixes.items():
-            # Check if name is used but its canonical import line is missing
-            if re.search(rf"\b{name}\b", content) and import_line not in content:
+            # Check if name is used in the AST but its canonical import line is missing
+            if name in used_names and import_line not in existing_imports:
                 undefined.append((name, import_line))
 
         if not undefined:
@@ -303,14 +366,14 @@ class QualityFixer:
     def format_code(self, paths: List[Path]) -> int:
         """Format Python code with autopep8."""
         self.log("\n→ Formatting code with autopep8...", "info")
-        
+
         # Check autopep8 availability once before processing any files
         try:
             subprocess.run(["autopep8", "--version"], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
             self.log("✗ autopep8 not found (install with: pip install autopep8)", "error")
             return 0
-        
+
         count = self._run_per_file(self._format_code_file, paths, "format")
         if count > 0:
             self.log(f"✓ Formatted {count} files", "success")
@@ -448,4 +511,3 @@ def main(argv: Optional[List[str]] = None) -> None:
 
 if __name__ == "__main__":
     main()
-    
