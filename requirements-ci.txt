@@ -1,19 +1,14 @@
-# Core runtime
-# Pin numpy <2.3.0 for opencv-python compatibility (until opencv-python supports 2.3+)
-# See: https://github.com/opencv/opencv-python/issues/954
-numpy>=1.24,<2.3.0
-Pillow>=10,<12
-scipy>=1.10,<2
-tifffile>=2023.7.18,<2025
-imagecodecs>=2023.9.18,<2025
+# Transformation Portal - CI Requirements
+#
+# This file points to the new layered dependency management system.
+# For detailed documentation, see requirements/README.md
+#
+# For CI/CD pipelines, install from pinned files:
+#   pip install -r requirements/base.txt -r requirements/ci.txt
+#
+# Or for full CI environment:
+#   pip install -r requirements/all.txt
 
-# Machine learning / clustering
-scikit-learn>=1.4.0,<2
-
-# Progress bars & CLI
-tqdm>=4.65,<5
-typer>=0.12,<1
-
-# Testing & fuzzing
-pytest>=8,<10
-hypothesis>=6,<7
+# Include pinned base and CI requirements
+-r requirements/base.txt
+-r requirements/ci.txt

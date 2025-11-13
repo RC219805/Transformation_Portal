@@ -1,30 +1,20 @@
-numpy>=1.24,<3
-Pillow>=10.0.0,<12
-scipy>=1.10,<2
-typer>=0.12,<1
-torch>=2.0,<3
-diffusers>=0.20,<1
-controlnet-aux>=0.0.6,<1
-realesrgan>=0.3.0,<1
-tifffile>=2023.7.18,<2025
-imagecodecs>=2023.1.23
-tqdm>=4.65,<5
-pytest>=7.0
-pytest-cov>=4.0,<6  # Coverage reporting for CI/CD
-accelerate>=0.20.0,<2  # Improves model loading speed and reduces memory usage (Issue #5)
+# Transformation Portal - Master Requirements File
+# 
+# This file points to the new layered dependency management system.
+# For detailed documentation, see requirements/README.md
+#
+# The requirements are now organized into layers:
+#   - base: Core runtime dependencies
+#   - ml: Optional ML and deep learning packages
+#   - dev: Development and testing tools
+#   - ci: CI/CD pipeline tools
+#   - all: Everything combined
+#
+# For reproducible builds, install from the pinned .txt files:
+#   pip install -r requirements/all.txt
+#
+# For the latest allowed versions, use package extras:
+#   pip install -e ".[all]"
 
-# Depth Anything V2 Pipeline Dependencies
-transformers>=4.35.0,<5
-huggingface-hub>=0.19.0,<2
-torchvision>=0.15.0,<1
-opencv-python>=4.8.0,<5
-scikit-learn>=1.4.0  # Updated to support numpy 2.x
-scikit-image>=0.21.0,<1.0  # Fixed version constraint
-PyYAML>=6.0,<7
-colour-science>=0.4.2,<0.5
-coremltools>=7.0,<10
-psutil>=5.9.0,<8
-memory-profiler>=0.61.0,<1
-pypdf>=3.9.0
-types-PyYAML>=6.0.12
-basicsr>=1.4.6,<2
+# Include all pinned requirements
+-r requirements/all.txt
