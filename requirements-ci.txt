@@ -1,4 +1,4 @@
-# CI environment: runtime + testing
+# CI environment: runtime + test deps
 -r requirements.txt
 
 # Testing / coverage / property-based tests
