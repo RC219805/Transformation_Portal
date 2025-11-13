@@ -129,14 +129,15 @@ jobs:
           # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
           print("🤖 Requesting AI review from GPT-4o-mini with retry logic...")
 
-          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6):
+          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
               for attempt in range(1, max_retries + 1):
                   try:
                       return client.chat.completions.create(
                           model=model,
                           messages=messages,
                           max_tokens=1000,
-                          temperature=0.3
+                          temperature=0.3,
+                          **kwargs
                       )
                   except Exception as e:
                       err_str = str(e)
