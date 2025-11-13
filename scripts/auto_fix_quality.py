@@ -97,7 +97,7 @@ class QualityFixer:
             return False
 
         try:
-            content = path.read_text(encoding="utf-8")
+            content = path.read_bytes().decode('utf-8')
         except (UnicodeDecodeError, PermissionError, OSError) as e:
             self.log(f"  ✗ Skipping (cannot read): {path} ({e})", "warning")
             return False
@@ -115,38 +115,29 @@ class QualityFixer:
             )
             return True
 
-        # Track if original had final newline
+        # Detect predominant line ending style in the file
+        line_ending = '\n'  # default to Unix-style
+        for line in lines:
+            if line.endswith('\r\n'):
+                line_ending = '\r\n'
+                break
+            elif line.endswith('\r'):
+                line_ending = '\r'
+                break
+        
+        # Check if file ends with a newline
         has_final_newline = lines and lines[-1].endswith(('\n', '\r'))
         
-        # Fix trailing whitespace on all lines, preserving their line endings
-        fixed_lines = []
-        for line in lines[:-1]:
-            # Extract the line ending
-            if line.endswith('\r\n'):
-                ending = '\r\n'
-            elif line.endswith('\n'):
-                ending = '\n'
-            elif line.endswith('\r'):
-                ending = '\r'
-            else:
-                ending = ''  # shouldn't happen for lines[:-1] with keepends=True
-            fixed_lines.append(line.rstrip(" \t\n\r") + ending)
-        if lines:
-            # Handle last line specially to preserve final newline behavior
-            if has_final_newline:
-                if lines[-1].endswith('\r\n'):
-                    ending = '\r\n'
-                elif lines[-1].endswith('\n'):
-                    ending = '\n'
-                elif lines[-1].endswith('\r'):
-                    ending = '\r'
-                else:
-                    ending = ''
-                fixed_lines.append(lines[-1].rstrip(" \t\n\r") + ending)
-            else:
-                fixed_lines.append(lines[-1].rstrip(" \t\n\r"))
+        # Strip trailing whitespace from all lines
+        fixed_lines = [line.rstrip() for line in lines]
+        
+        # Rejoin with consistent line ending, preserving final newline behavior
+        if has_final_newline:
+            content_fixed = line_ending.join(fixed_lines) + line_ending
+        else:
+            content_fixed = line_ending.join(fixed_lines)
         try:
-            path.write_text("".join(fixed_lines), encoding="utf-8")
+            path.write_bytes(content_fixed.encode('utf-8'))
         except (PermissionError, OSError) as e:
             self.log(f"  ✗ Failed to write file (read-only?): {path} ({e})", "error")
             return False
