@@ -208,7 +208,8 @@ jobs:
           result = call_with_retries()
 
           if not result or not result.choices:
-              review_text = "AI review failed: no response from model."
+              print("❌ AI review failed: no response from model. Exiting with error.")
+              sys.exit(1)
           else:
               review_text = result.choices[0].message.content.strip()
 
