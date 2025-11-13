@@ -211,9 +211,6 @@ jobs:
               except Exception as comment_err:
                   print(f"⚠️ Failed to post comment due to: {str(comment_err)}")
 
-              except Exception as comment_err:
-                  print(f"⚠️ Failed to post comment due to: {str(comment_err)}")
-
               # Check for duplicates (optional)
               if analysis and 'duplicate_check' in analysis and not is_pr:
                   search_terms = analysis['duplicate_check']
