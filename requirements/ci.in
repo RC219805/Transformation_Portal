@@ -1,0 +1,16 @@
+# CI pipeline tools (dynamic analysis & release)
+# These dependencies are typically only needed in continuous integration or release workflows.
+# This file contains abstract requirements with version ranges.
+# Run `make compile` in this directory to generate pinned ci.txt
+
+# Security and analysis tools
+bandit>=1.7,<2         # static security analyzer
+safety>=2.3,<3         # checks for known vulnerabilities
+
+# Packaging and release tools
+build>=1.0,<2          # build wheels/distributions
+twine>=4.0,<5          # upload distributions to PyPI
+tox>=4.5,<5            # test runner for multiple envs (future compatibility)
+
+# Additional CI utilities
+pypdf>=3.9.0           # PDF processing for reports
