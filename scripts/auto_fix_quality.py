@@ -247,8 +247,8 @@ class QualityFixer:
                 except Exception as e:  # Defensive: keep going
                     self.log(f"✗ Error while processing {path}: {e}", "error")
         else:
-            self.log(f"→ Running {label} with {self.jobs} worker processes...", "info")
-            with concurrent.futures.ProcessPoolExecutor(max_workers=self.jobs) as exe:
+            self.log(f"→ Running {label} with {self.jobs} worker threads...", "info")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as exe:
                 futures = {exe.submit(func, p): p for p in files}
                 for fut in concurrent.futures.as_completed(futures):
                     path = futures[fut]
@@ -378,7 +378,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         "--jobs",
         type=int,
         default=1,
-        help="Number of worker processes for per-file fixes (default: 1)",
+        help="Number of worker threads for per-file fixes (default: 1)",
     )
 
     args = parser.parse_args(argv)
