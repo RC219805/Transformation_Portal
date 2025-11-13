@@ -151,7 +151,6 @@ class QualityFixer:
             return False
 
         self.log(f"  ✓ Fixed trailing whitespace: {path.relative_to(self.repo_root)}", "success")
-        self.fixed_files.add(path)
         return True
 
     def _fix_imports_file(self, path: Path) -> bool:
@@ -213,7 +212,6 @@ class QualityFixer:
         self.log(f"  ✓ Fixed imports in: {path.relative_to(self.repo_root)}", "success")
         for _, import_line in undefined:
             self.log(f"    + {import_line}", "success")
-        self.fixed_files.add(path)
         return True
 
     def _format_code_file(self, path: Path) -> bool:
@@ -242,7 +240,6 @@ class QualityFixer:
             return False
 
         self.log(f"  ✓ Formatted: {rel}", "success")
-        self.fixed_files.add(path)
         return True
 
     # -------------------------------------------------------------------------
@@ -256,26 +253,31 @@ class QualityFixer:
             return 0
 
         changed_count = 0
+        changed_files = []
 
         if self.jobs <= 1:
             for path in files:
                 try:
                     if func(path):
                         changed_count += 1
+                        changed_files.append(path)
                 except Exception as e:  # Defensive: keep going
                     self.log(f"✗ Error while processing {path}: {e}", "error")
         else:
-            self.log(f"→ Running {label} with {self.jobs} worker threads...", "info")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self.jobs) as exe:
+            self.log(f"→ Running {label} with {self.jobs} worker processes...", "info")
+            with concurrent.futures.ProcessPoolExecutor(max_workers=self.jobs) as exe:
                 futures = {exe.submit(func, p): p for p in files}
                 for fut in concurrent.futures.as_completed(futures):
                     path = futures[fut]
                     try:
                         if fut.result():
                             changed_count += 1
+                            changed_files.append(path)
                     except Exception as e:
                         self.log(f"✗ Error in worker for {path}: {e}", "error")
 
+        # Update the set of fixed files
+        self.fixed_files.update(changed_files)
         return changed_count
 
     def fix_trailing_whitespace(self, paths: List[Path]) -> int:
@@ -404,7 +406,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         "--jobs",
         type=int,
         default=1,
-        help="Number of worker threads for per-file fixes (default: 1)",
+        help="Number of worker processes for per-file fixes (default: 1)",
     )
 
     args = parser.parse_args(argv)
