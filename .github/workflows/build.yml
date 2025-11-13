@@ -8,7 +8,41 @@ on:
     branches: [ main ]
 
 jobs:
+  check-requirements:
+    name: Check Requirements Consistency
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-tools
+        run: pip install pip-tools
+
+      - name: Check requirements are up-to-date
+        run: |
+          cd requirements/
+          echo "Checking if .txt files are up-to-date with .in files..."
+          
+          # Check each requirements file
+          for file in base ml dev ci; do
+            echo "Checking ${file}.txt..."
+            pip-compile --dry-run --quiet ${file}.in -o ${file}.txt 2>&1 | tee /tmp/check-${file}.log
+            
+            # Check if there were changes
+            if grep -q "would update" /tmp/check-${file}.log || grep -q "would write" /tmp/check-${file}.log; then
+              echo "❌ ${file}.txt is out of date!"
+              echo "Run 'cd requirements/ && make compile' to update"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All requirements files are up-to-date"
+
   lint-and-test:
+    needs: check-requirements
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -39,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements-ci.txt') }}
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements/all.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
@@ -48,7 +82,7 @@ jobs:
         if: matrix.task == 'lint'
         run: |
           pip install --no-cache-dir flake8 pylint
-          pip install -r requirements-ci.txt
+          pip install -r requirements/base.txt -r requirements/ci.txt
           echo "Running flake8..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           echo "Running pylint..."
@@ -102,11 +136,13 @@ jobs:
             echo "Installing PyTorch CPU-only packages..."
             pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           fi
-          pip install -r requirements-ci.txt
+          # Install base requirements
+          pip install -r requirements/base.txt
+          # Install dev requirements for testing
+          pip install -r requirements/dev.txt
           pip install -e .
-          pip install pytest
           # Install ML optional dependencies (including sentence-transformers for RAG vector search)
-          pip install -e ".[ml]"
+          pip install -r requirements/ml.txt
           # Workaround for numpy/scikit-learn ABI incompatibility:
           # Recent versions of numpy (>=1.26) and scikit-learn (<1.4) can result in
           # runtime ImportError due to ABI mismatch, especially when other dependencies
@@ -117,12 +153,12 @@ jobs:
           # it is built/linked against the correct numpy version. Remove this workaround
           # once all dependencies are compatible with scikit-learn >=1.4 or the upstream
           # issues are resolved.
-          # Extract scikit-learn version constraint from requirements-ci.txt and reinstall
-          SKLEARN_CONSTRAINT=$(grep -E '^scikit-learn[^#]*' requirements-ci.txt | head -n1)
+          # Extract scikit-learn version constraint from base.txt and reinstall
+          SKLEARN_CONSTRAINT=$(grep -E '^scikit-learn[^#]*' requirements/base.txt | head -n1)
           if [ -n "$SKLEARN_CONSTRAINT" ]; then
             pip install --no-cache-dir --force-reinstall "$SKLEARN_CONSTRAINT"
           else
-            echo "scikit-learn constraint not found in requirements-ci.txt" >&2
+            echo "scikit-learn constraint not found in requirements/base.txt" >&2
             exit 1
           fi
 
@@ -146,7 +182,7 @@ jobs:
       - name: Upgrade pip & install deps
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir -r requirements-ci.txt
+          pip install --no-cache-dir -r requirements/base.txt -r requirements/ci.txt
 
       - name: Run Montecito Manifest Tool
         id: manifest
