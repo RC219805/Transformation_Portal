@@ -840,7 +840,7 @@ Key Changes:
 **Core:**
 - numpy>=1.24,<3
 - Pillow>=10.0.0,<12
-- scipy>=1.10,<2
+- scipy>=1.15,<2
 - torch>=2.0,<3
 - typer>=0.12,<1
 
