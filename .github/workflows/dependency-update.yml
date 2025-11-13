@@ -57,30 +57,24 @@ jobs:
         env:
           PIP_NO_CACHE_DIR: "1"  # Disable pip caching to save disk space
         run: |
-          # Note: This repository manages dependencies directly in requirements.txt files
-          # If .in files exist, compile them; otherwise skip this step
-          if [ -f "requirements.in" ]; then
-            pip-compile requirements.in -o requirements.txt --upgrade || echo "Warning: Failed to compile requirements.txt"
-          fi
-          
-          if [ -f "requirements-dev.in" ]; then
-            pip-compile requirements-dev.in -o requirements-dev.txt --upgrade || echo "Warning: Failed to compile requirements-dev.txt"
-          fi
-          
-          if [ -f "requirements-ci.in" ]; then
-            pip-compile requirements-ci.in -o requirements-ci.txt --upgrade || echo "Warning: Failed to compile requirements-ci.txt"
-          fi
-          
-          # If no .in files exist, check for dependency updates differently
-          if [ ! -f "requirements.in" ] && [ ! -f "requirements-dev.in" ] && [ ! -f "requirements-ci.in" ]; then
-            echo "No .in files found. Skipping pip-compile."
-            echo "This repository manages dependencies directly in pyproject.toml and requirements.txt files."
+          # Use the new layered requirements system
+          if [ -d "requirements" ]; then
+            echo "Updating layered requirements with pip-compile..."
+            cd requirements
+            
+            # Update all requirements to latest versions within constraints
+            make update || echo "Warning: Failed to update all requirements"
+            
+            cd ..
+          else
+            echo "Warning: requirements/ directory not found. Skipping update."
           fi
 
       - name: Check for vulnerabilities
         run: |
           pip install safety
-          safety check -r requirements.txt --json > safety-report.json || true
+          # Check all requirement files for vulnerabilities
+          safety check -r requirements/all.txt --json > safety-report.json || true
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
@@ -91,7 +85,14 @@ jobs:
           body: |
             ## 📦 Dependency Updates
 
-            This PR contains automated dependency updates from pip-compile.
+            This PR contains automated dependency updates using the layered requirements system.
+
+            ### 📁 Updated Files
+            - `requirements/base.txt` - Core runtime dependencies
+            - `requirements/ml.txt` - ML and deep learning packages
+            - `requirements/dev.txt` - Development tools
+            - `requirements/ci.txt` - CI/CD tools
+            - `requirements/all.txt` - Combined requirements
 
             ### 🔍 Security Report
             See attached safety-report.json for vulnerability scan results.
