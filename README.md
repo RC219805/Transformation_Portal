@@ -724,7 +724,6 @@ The project includes comprehensive tests for:
 - Edge cases and error handling
 
 ---
-
 ## Developer Setup
 
 ### Install Development Dependencies
