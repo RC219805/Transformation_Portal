@@ -323,7 +323,7 @@ chmod +x .auto-organize.sh
 
 # Check for line ending issues (Windows)
 dos2unix .auto-organize.sh  # or
-sed -i 's/$//' .auto-organize.sh
+sed -i 's/\r$//' .auto-organize.sh
 ```
 
 ### Pre-Commit Hook Not Working
