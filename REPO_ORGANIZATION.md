@@ -302,7 +302,7 @@ The organization system uses these rules to classify files:
 
 ### For New Files
 
-1. Ask yourself: “Does this file need to be in the root?”
+1. Ask yourself: “Does this file need to be in the root?”.
 2. If no: place it in the appropriate subdirectory.
 3. If yes: ensure it fits one of the allowed root file categories.
 4. Add to `.auto-organize.sh`: if creating a new file type, add rules to the script.
