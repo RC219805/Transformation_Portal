@@ -18,166 +18,202 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
 
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+
     steps:
-      - name: Checkout code
+
+      - name: Check API Key
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "❌ OPENAI_API_KEY is not set. Skipping AI code review."
+            exit 0
+          fi
+
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v41
+        id: changes
+        uses: tj-actions/changed-files@v46
         with:
-          files: |
-            **/*.py
-            **/*.js
-            **/*.ts
-            **/*.jsx
-            **/*.tsx
-            **/*.md
+          files: "**/*.{py,js,ts,jsx,tsx,md,json,yml,yaml}"
 
       - name: Set up Python
-        if: steps.changed-files.outputs.any_changed == 'true'
+        if: steps.changes.outputs.any_changed == 'true'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.12"
 
       - name: Install dependencies
-        if: steps.changed-files.outputs.any_changed == 'true'
+        if: steps.changes.outputs.any_changed == 'true'
         run: |
+          pip install --upgrade pip
           pip install openai requests
-
-      - name: AI Code Review
-        if: steps.changed-files.outputs.any_changed == 'true'
+      
+      - name: Run AI Code Review
+        if: steps.changes.outputs.any_changed == 'true'
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPO_FULL_NAME: ${{ github.repository }}
+          OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          REPO: ${{ env.REPO }}
+          RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
         run: |
-          python << 'PYTHON_SCRIPT'
+          python << 'PY'
+
           import os
+          import sys
+          import time
           import json
+          import random
           import requests
           from openai import OpenAI
 
-          # Initialize OpenAI client
-          client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+          api_key = os.getenv("OPENAI_API_KEY", "").strip()
+          gh_token = os.getenv("GH_TOKEN")
+          pr_number = os.getenv("PR_NUMBER")
+          repo = os.getenv("REPO")
+          out_file = os.getenv("RESPONSE_FILE")
 
-          # GitHub API setup
-          github_token = os.environ['GITHUB_TOKEN']
-          pr_number = os.environ['PR_NUMBER']
-          repo = os.environ['REPO_FULL_NAME']
+          if not api_key:
+              print("No OPENAI_API_KEY provided; skipping.")
+              sys.exit(0)
+
+          client = OpenAI(api_key=api_key)
 
           headers = {
-              'Authorization': f'token {github_token}',
-              'Accept': 'application/vnd.github.v3+json'
+              "Authorization": f"token {gh_token}",
+              "Accept": "application/vnd.github.v3+json"
           }
 
-          # Get PR files
-          files_url = f'https://api.github.com/repos/{repo}/pulls/{pr_number}/files'
-          response = requests.get(files_url, headers=headers)
-          files = response.json()
+          # --- Fetch PR files ---------------------------------------------------
+          files_url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/files"
+          print(f"Fetching file list from {files_url}")
+          r = requests.get(files_url, headers=headers)
 
-          print(f"📊 Reviewing {len(files)} changed files...")
+          if r.status_code != 200:
+              print("GitHub API error fetching PR files:", r.status_code, r.text)
+              sys.exit(1)
 
-          # Filter to code files only
-          code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.yml', '.yaml', '.json'}
-          code_files = [f for f in files if any(f['filename'].endswith(ext) for ext in code_extensions)]
+          all_files = r.json()
+
+          # Filter allowable extensions
+          allow = {".py", ".js", ".ts", ".jsx", ".tsx", ".yml", ".yaml", ".json", ".md"}
+          code_files = [f for f in all_files if any(f["filename"].endswith(ext) for ext in allow)]
 
           if not code_files:
-              print("ℹ️  No code files to review")
-              exit(0)
+              print("No relevant code files changed.")
+              sys.exit(0)
 
-          print(f"🔍 Analyzing {len(code_files)} code files...")
+          print(f"{len(code_files)} relevant files detected.")
 
-          # Prepare review context
-          review_context = []
-          for file in code_files[:10]:  # Limit to 10 files to control costs
-              if file.get('patch'):
-                  review_context.append(f"File: {file['filename']}\n```diff\n{file['patch']}\n```\n")
+          # Limit file count to avoid runaway cost
+          code_files = code_files[:10]
 
-          if not review_context:
-              print("ℹ️  No code changes to review")
-              exit(0)
+          patches = []
+          for f in code_files:
+              patch = f.get("patch")
+              if patch:
+                  # Patch truncate for safety (GitHub can return massive diffs)
+                  patches.append(
+                      f"File: {f['filename']}\n```diff\n{patch[:5000]}\n```"
+                  )
 
-          changes_text = "\n\n".join(review_context)
+          if not patches:
+              print("No patch content found to review.")
+              sys.exit(0)
 
-          # Construct AI prompt
-          system_prompt = """You are an expert code reviewer for a luxury real estate rendering project.
+          diff_text = "\n\n".join(patches)
 
-          Review the code changes and provide:
-          1. Code quality assessment (concise)
-          2. Potential bugs or issues (if any)
-          3. Security concerns (if any)
-          4. Performance improvements (if applicable)
-          5. Best practice suggestions (if needed)
+          # --- AI Prompt -------------------------------------------------------
+          system_prompt = """
+          You are a senior software engineer performing a concise code review.
+          Provide:
+          - 🔍 High-value observations only
+          - 🐛 Potential bugs (if any)
+          - ⚠️ Risk areas
+          - 🔒 Security issues
+          - ⚡ Performance improvements
+          - 💡 Best practices
 
-          Be concise and actionable. Focus on meaningful feedback.
-          Use emojis for visual clarity: ✅ (good), ⚠️ (warning), 🐛 (bug), 🔒 (security), ⚡ (performance).
-
-          If the code looks good, say so briefly. Don't nitpick minor style issues."""
-
-          user_prompt = f"""Review these code changes:
-
-          {changes_text}
-
-          Provide a brief, actionable code review."""
-
-          print("🤖 Requesting AI review from GPT-4o-mini...")
-
-          # Call OpenAI API
-          try:
-              response = client.chat.completions.create(
-                  model="gpt-4o-mini",
-                  messages=[
-                      {"role": "system", "content": system_prompt},
-                      {"role": "user", "content": user_prompt}
-                  ],
-                  max_tokens=1000,
-                  temperature=0.3
-              )
-
-              review_text = response.choices[0].message.content
-
-              # Post comment on PR
-              comment_body = f"""## 🤖 AI Code Review
-
-          {review_text}
-
-          ---
-          *Powered by GPT-4o-mini | Phase 3 Productivity Automation*
-          *This review is automated. Please use your judgment and human review for final decisions.*
+          Avoid nitpicks. Avoid minor styling. Be helpful & to the point.
           """
 
-              comment_url = f'https://api.github.com/repos/{repo}/issues/{pr_number}/comments'
-              comment_data = {'body': comment_body}
+          user_prompt = f"""
+          Review the following code changes and produce a clear, actionable summary:
 
-              post_response = requests.post(comment_url, headers=headers, json=comment_data)
+          {diff_text}
+          """
 
-              if post_response.status_code == 201:
-                  print("✅ AI review posted successfully!")
-                  print(f"\n{review_text}")
-              else:
-                  print(f"⚠️  Failed to post comment: {post_response.status_code}")
-                  print(review_text)
+          print("Requesting AI review...")
 
-          except Exception as e:
-              print(f"❌ Error during AI review: {str(e)}")
-              exit(1)
+          # --- Retry wrapper ---------------------------------------------------
+          def call_with_retries():
+              delay = 1
+              for attempt in range(6):
+                  try:
+                      return client.chat.completions.create(
+                          model="gpt-4o-mini",
+                          messages=[
+                              {"role": "system", "content": system_prompt},
+                              {"role": "user", "content": user_prompt},
+                          ],
+                          max_tokens=800,
+                          temperature=0.2,
+                      )
+                  except Exception as e:
+                      print(f"Attempt {attempt+1} failed:", e)
+                      time.sleep(delay + random.random())
+                      delay *= 2
+              return None
 
-          PYTHON_SCRIPT
+          result = call_with_retries()
 
-      - name: Review Summary
-        if: steps.changed-files.outputs.any_changed == 'true'
+          if not result or not result.choices:
+              review_text = "AI review failed: no response from model."
+          else:
+              review_text = result.choices[0].message.content.strip()
+
+          with open(out_file, "w", encoding="utf-8") as f:
+              f.write(review_text)
+
+          PY
+
+      - name: Post Review Comment
+        if: steps.changes.outputs.any_changed == 'true'
+        env:
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          REPO: ${{ env.REPO }}
+          RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
         run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✅ AI Code Review Complete!"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "The AI has analyzed your code changes and posted a review comment."
-          echo "Check the PR conversation tab for the detailed review."
-          echo ""
-          echo "Model: GPT-4o-mini (cost-optimized)"
-          echo "Scope: Python, JavaScript, TypeScript, YAML, JSON files"
-          echo ""
+          if [ ! -s "$RESPONSE_FILE" ]; then
+            echo "Review empty or missing."
+            exit 0
+          fi
+
+          echo "Posting AI review to PR #${PR_NUMBER}"
+
+          BODY=$(cat "$RESPONSE_FILE")
+          COMMENT="## 🤖 AI Code Review
+
+${BODY}
+
+---
+
+*Automated review — human verification recommended.*"
+
+          gh api repos/${REPO}/issues/${PR_NUMBER}/comments \
+            -f body="${COMMENT}"
+
+      - name: Summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  🧠 AI Code Review Completed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
