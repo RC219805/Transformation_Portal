@@ -100,9 +100,9 @@ jobs:
           # Clean docker
           docker system prune -af --volumes || true
           
-          # Remove swap to free up space
-          sudo swapoff -a
-          sudo rm -f /swapfile
+          # [DISABLED] Swap removal skipped to avoid OOM errors during memory-intensive tests.
+          # sudo swapoff -a
+          # sudo rm -f /swapfile
           
           echo "Disk usage after cleanup:"
           df -h
