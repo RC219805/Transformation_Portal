@@ -48,7 +48,7 @@ jobs:
           EVENT_NAME: '${{ github.event_name }}'
         run: |
           python - <<'PY'
-          import os, sys, textwrap
+          import os, sys, textwrap, time, random
           RESPONSE_FILE = os.environ["RESPONSE_FILE"]
           OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -107,16 +107,60 @@ jobs:
               Body:
               {body}
               """)
+          
+          # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
+          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
+              for attempt in range(1, max_retries + 1):
+                  try:
+                      return client.chat.completions.create(
+                          model=model,
+                          messages=messages,
+                          **kwargs
+                      )
+                  except Exception as e:
+                      err_str = str(e)
+                      # Detect rate-limit / 429 occurrences (best-effort)
+                      status_is_429 = False
+                      status = getattr(e, "status_code", None) or getattr(e, "http_status", None) or getattr(e, "status", None)
+                      if status == 429:
+                          status_is_429 = True
+                      if "429" in err_str or "Rate limit" in err_str or "RateLimit" in err_str:
+                          status_is_429 = True
+
+                      # If we are rate-limited and we have attempts left, wait and retry
+                      if status_is_429 and attempt < max_retries:
+                          # Exponential backoff with jitter, capped to avoid extremely long waits
+                          base_wait = min(60, 2 ** attempt)
+                          jitter = random.uniform(0.5, 1.5)
+                          wait = base_wait * jitter
+                          print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...", file=sys.stderr)
+                          time.sleep(wait)
+                          continue
+                      # For non-rate-limit or last attempt, raise to be handled by caller
+                      raise
+
           try:
-              completion = client.chat.completions.create(
-                  model="gpt-4o-mini",
+              completion = call_openai_with_retries(
+                  client,
                   messages=[{"role":"user","content":prompt}],
-                  max_tokens=160, temperature=0.2
+                  model="gpt-4o-mini",
+                  max_retries=6,
+                  max_tokens=160,
+                  temperature=0.2
               )
-              summary = (completion.choices[0].message.content or "").strip()
+              # Parse response robustly
+              if completion and hasattr(completion, "choices") and len(completion.choices) > 0:
+                  try:
+                      summary = (completion.choices[0].message.content or "").strip()
+                  except AttributeError:
+                      summary = str(completion.choices[0]).strip() if completion.choices else "AI summarization failed."
+              else:
+                  summary = "AI summarization failed: unexpected response structure."
+              else:
+                  summary = "AI summarization failed: unexpected response structure."
           except Exception as e:
               # Write a short friendly failure message (no secrets) and log detailed error to stderr
-              summary = "AI summarization failed: an internal error occurred. See CI logs for details."
+              summary = "AI summarization failed: the AI service returned errors (rate limits or other). See CI logs for details."
               print("Detailed error (redacted for posting):", file=sys.stderr)
               print(repr(e), file=sys.stderr)
 
