@@ -69,7 +69,7 @@ Use it in Copilot Chat: @transformation-portal-specialist [your request]
 * [Quick Start](#quick-start)
 * [Installation](#installation)
 * [Supported File Formats](#supported-file-formats)
-* [📖 Pipeline Operations Guide ⬅️How to Operate](#-pipeline-operations-guide-how-to-operate)
+* [📖 Pipeline Operations Guide](#pipeline-operations-guide)
 * [Core Components](#core-components)
     * [Context-Aware Rendering 🆕](#context-aware-rendering-)
     * [Depth Pipeline](#depth-pipeline)
@@ -724,7 +724,6 @@ The project includes comprehensive tests for:
 - Edge cases and error handling
 
 ---
-
 ## Developer Setup
 
 ### Install Development Dependencies
@@ -965,6 +964,5 @@ from transformation_portal.utils import color_science
 import lux_render_pipeline  # Will show deprecation warning in future
 import material_response
 
-⸻
 Status: Production-Ready (v0.1.0)
 Last Updated: 2025-11-01
