@@ -109,36 +109,10 @@ jobs:
               """)
           
           # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
-          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
-              for attempt in range(1, max_retries + 1):
-                  try:
-                      return client.chat.completions.create(
-                          model=model,
-                          messages=messages,
-                          **kwargs
-                      )
-                  except Exception as e:
-                      err_str = str(e)
-                      # Detect rate-limit / 429 occurrences (best-effort)
-                      status_is_429 = False
-                      status = getattr(e, "status_code", None) or getattr(e, "http_status", None) or getattr(e, "status", None)
-                      if status == 429:
-                          status_is_429 = True
-                      if "429" in err_str or "Rate limit" in err_str or "RateLimit" in err_str:
-                          status_is_429 = True
-
-                      # If we are rate-limited and we have attempts left, wait and retry
-                      if status_is_429 and attempt < max_retries:
-                          # Exponential backoff with jitter, capped to avoid extremely long waits
-                          base_wait = min(60, 2 ** attempt)
-                          jitter = random.uniform(0.5, 1.5)
-                          wait = base_wait * jitter
-                          print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...", file=sys.stderr)
-                          time.sleep(wait)
-                          continue
-                      # For non-rate-limit or last attempt, raise to be handled by caller
-                      raise
-
+          import sys
+          import os
+          sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../scripts'))
+          from openai_utils import call_openai_with_retries
           try:
               completion = call_openai_with_retries(
                   client,
