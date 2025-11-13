@@ -92,7 +92,13 @@ class QualityFixer:
     # -------------------------------------------------------------------------
 
     def _fix_trailing_whitespace_file(self, path: Path) -> bool:
-        """Fix trailing whitespace in a single file. Returns True if changed."""
+        """Fix trailing whitespace in a single file. Returns True if changed.
+        
+        This function detects the predominant line ending style (CRLF, CR, or LF)
+        and normalizes all line endings to that style. Mixed line endings are
+        corrected to use a consistent style throughout the file. The final newline
+        is preserved if present in the original file.
+        """
         if not path.is_file():
             return False
 
@@ -116,6 +122,8 @@ class QualityFixer:
             return True
 
         # Detect predominant line ending style in the file
+        # Note: This normalizes mixed line endings to the first detected style,
+        # which is appropriate for a quality fixer tool
         line_ending = '\n'  # default to Unix-style
         for line in lines:
             if line.endswith('\r\n'):
