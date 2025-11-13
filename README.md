@@ -982,4 +982,3 @@ import lux_render_pipeline  # Will show deprecation warning in future
 import material_response
 
 Status: Production-Ready (v0.1.0)
-Last Updated: 2025-11-01
