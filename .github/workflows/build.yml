@@ -7,10 +7,15 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   check-requirements:
     name: Check Requirements Consistency
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
@@ -44,6 +49,8 @@ jobs:
   lint-and-test:
     needs: check-requirements
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     strategy:
       matrix:
         python-version: [ "3.10", "3.11", "3.12" ]
@@ -170,6 +177,8 @@ jobs:
     name: Build Montecito Manifest
     needs: [lint-and-test]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v5
