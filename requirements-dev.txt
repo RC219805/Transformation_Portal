@@ -1,24 +1,16 @@
-# Core deps for testing
-pytest>=8,<10
-pytest-cov>=4.0,<6
-hypothesis>=6,<7
+# Transformation Portal - Development Requirements
+#
+# This file points to the new layered dependency management system.
+# For detailed documentation, see requirements/README.md
+#
+# For reproducible development environments, install from pinned files:
+#   pip install -r requirements/base.txt -r requirements/dev.txt
+#   pip install -e .
+#
+# Or install everything:
+#   pip install -r requirements/all.txt
+#   pip install -e .
 
-# Image / array processing
-numpy>=1.24,<3
-Pillow>=10,<12
-scipy>=1.15,<2
-scikit-learn>=1.0,<2
-
-# Optional utilities
-tifffile>=2023.7.18,<2025
-imagecodecs>=2023.9.18,<2025
-tqdm>=4.66,<5
-typer>=0.10.0
-
-# ------------------------
-# Dev / linting / type checking
-# ------------------------
-mypy>=1.10
-flake8>=7
-pylint>=3
-black>=24.8
+# Include pinned base and dev requirements
+-r requirements/base.txt
+-r requirements/dev.txt
