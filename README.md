@@ -132,6 +132,26 @@ Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
 
 ### Installation
 
+#### Layered Dependency Management 🆕
+
+Transformation Portal uses a **layered dependency management system** for better organization and reproducibility:
+
+```
+requirements/
+├── base.in/.txt    # Core runtime dependencies
+├── ml.in/.txt      # Optional ML and deep learning packages
+├── dev.in/.txt     # Development and testing tools
+├── ci.in/.txt      # CI/CD pipeline tools
+└── all.in/.txt     # Everything combined
+```
+
+- **`.in` files**: Abstract requirements with version ranges (e.g., `numpy>=1.24,<2.3.0`)
+- **`.txt` files**: Pinned requirements with exact versions for reproducible builds
+
+See [requirements/README.md](requirements/README.md) for complete documentation.
+
+#### Quick Installation
+
 ```bash
 # Clone repository
 git clone https://github.com/RC219805/Transformation_Portal.git
@@ -141,18 +161,38 @@ cd Transformation_Portal
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Install package in editable mode (REQUIRED for CLI tools and imports)
+# Option 1: Install with pinned versions (recommended for reproducibility)
+pip install -r requirements/all.txt
 pip install -e .
 
-# Optional: Install extras for specific features
-pip install -e ".[tiff]"   # 16-bit TIFF processing with tifffile
-pip install -e ".[ml]"     # ML extras for AI pipelines (SDXL, ControlNet)
-pip install -e ".[dev]"    # Development tools (pytest, flake8, pylint)
-pip install -e ".[all]"    # Install all extras
+# Option 2: Install with latest allowed versions
+pip install -e ".[all]"
+
+# Option 3: Minimal install (base dependencies only)
+pip install -r requirements/base.txt
+pip install -e .
 ```
+
+> **Recommended**: Use Option 1 (`requirements/all.txt`) for reproducible builds that match the tested environment.
+
+#### Installation by Feature Set
+
+Install only what you need:
+
+```bash
+# Core runtime + specific features
+pip install -r requirements/base.txt              # Core only
+pip install -r requirements/base.txt -r requirements/ml.txt    # + ML features
+pip install -r requirements/base.txt -r requirements/dev.txt   # + Development tools
+
+# Or use package extras (latest versions)
+pip install -e ".[ml]"      # ML extras for AI pipelines (SDXL, ControlNet)
+pip install -e ".[dev]"     # Development tools (pytest, flake8, pylint)
+pip install -e ".[ci]"      # CI/CD tools
+pip install -e ".[all]"     # Install all extras
+```
+
+> **Note**: The extras install the latest allowed versions. For exact versions tested in CI, use the `.txt` files.
 
 > **Important**: Installing the package with `pip install -e .` is **required** (not optional) for:
 > - Using CLI console scripts (`luxury-tiff-batch`, etc.)
@@ -539,6 +579,65 @@ Revolutionary physics-based surface enhancement LUTs that analyze material inter
 - `assets/luts/film_emulation/` - Film stock emulation LUTs
 - `assets/luts/location_aesthetic/` - Location-specific color palettes
 - `assets/luts/material_response/` - Material-aware enhancement LUTs
+
+---
+
+## Managing Dependencies 🔧
+
+### For Contributors
+
+When working on the project, use pinned requirements for reproducibility:
+
+```bash
+# Install development environment
+pip install -r requirements/all.txt
+pip install -e .
+
+# Run tests
+make test-fast
+```
+
+### Adding New Dependencies
+
+1. Edit the appropriate `.in` file in `requirements/`:
+   - `base.in` - Core runtime dependencies
+   - `ml.in` - ML and deep learning packages
+   - `dev.in` - Development tools
+   - `ci.in` - CI/CD tools
+
+2. Recompile all requirements:
+   ```bash
+   cd requirements/
+   make compile
+   ```
+
+3. Commit both `.in` and `.txt` files:
+   ```bash
+   git add requirements/
+   git commit -m "Add new dependency: package-name"
+   ```
+
+### Updating Dependencies
+
+To update all dependencies to their latest allowed versions:
+
+```bash
+cd requirements/
+make update
+```
+
+This respects the version constraints in `.in` files while finding the newest compatible versions.
+
+### Checking for Drift
+
+Verify that `.txt` files are up-to-date with `.in` files:
+
+```bash
+cd requirements/
+make check
+```
+
+This is also checked automatically in CI.
 
 ---
 
