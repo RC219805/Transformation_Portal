@@ -20,7 +20,7 @@ What's New
 - 📄 Document Provenance - Direct connection between construction docs and final renders
 
 See: Context-Aware Rendering Guide | Quick Start | Implementation Summary
-⸻
+---
 🎉 Recent Update: Repository Refactored (October 2025)
 
 The repository has been significantly reorganized for better performance and maintainability:
