@@ -19,7 +19,7 @@ NEW: Revolutionary Context-Aware Rendering System that extracts architectural in
 - 🎨 Style-Consistent - Color grading aligns with architectural design language
 - 📄 Document Provenance - Direct connection between construction docs and final renders
 
-See: Context-Aware Rendering Guide | Quick Start | Implementation Summary
+See: [Context-Aware Rendering Guide](docs/CONTEXT_AWARE_RENDERING.md) | [Quick Start](#quick-start) | [Implementation Summary](docs/CONTEXT_AWARE_RENDERING.md#implementation-summary)
 
 ---
 
