@@ -29,8 +29,8 @@ jobs:
       - name: Check API Key
         run: |
           if [ -z "${OPENAI_API_KEY}" ]; then
-            echo "❌ OPENAI_API_KEY is not set. Skipping AI code review."
-            exit 0
+            echo "❌ OPENAI_API_KEY is not set. Failing AI code review."
+            exit 1
           fi
 
       - name: Checkout
