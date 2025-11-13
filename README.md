@@ -63,26 +63,26 @@ Use it in Copilot Chat: @transformation-portal-specialist [your request]
 
 ## Table of Contents
 
-* Features
-* Quick Start
-* Installation
-* Supported File Formats
-* 📖 Pipeline Operations Guide ⬅️How to Operate
-* Core Components)
-    * Context-Aware Rendering 🆕
-    * Depth Pipeline
-    * Lux Render Pipeline
-    * Luxury TIFF Batch Processor
-    * Luxury Video Master Grader
-    * Material Response System
-    * Board Material Aerial Enhancer
-* LUT Collection
-* Developer Tools
-* Usage Examples
-* Configuration
-* Performance
-* Testing
-* License
+* [Features](#features)
+* [Quick Start](#quick-start)
+* [Installation](#installation)
+* [Supported File Formats](#supported-file-formats)
+* [📖 Pipeline Operations Guide ⬅️How to Operate](#-pipeline-operations-guide-how-to-operate)
+* [Core Components](#core-components)
+    * [Context-Aware Rendering 🆕](#context-aware-rendering-)
+    * [Depth Pipeline](#depth-pipeline)
+    * [Lux Render Pipeline](#lux-render-pipeline)
+    * [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
+    * [Luxury Video Master Grader](#luxury-video-master-grader)
+    * [Material Response System](#material-response-system)
+    * [Board Material Aerial Enhancer](#board-material-aerial-enhancer)
+* [LUT Collection](#lut-collection)
+* [Developer Tools](#developer-tools)
+* [Usage Examples](#usage-examples)
+* [Configuration](#configuration)
+* [Performance](#performance)
+* [Testing](#testing)
+* [License](#license)
 
 ---
 
