@@ -11,3 +11,7 @@ diffusers>=0.20,<1
 controlnet-aux>=0.0.6,<1
 realesrgan>=0.3.0,<1
 tqdm>=4.65,<5
+
+# Commonly used TIFF utilities (match [project.optional-dependencies].tiff)
+tifffile>=2023.7.18,<2025
+imagecodecs>=2023.9.18,<2025

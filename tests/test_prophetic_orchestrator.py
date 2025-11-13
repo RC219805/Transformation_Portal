@@ -1,11 +1,18 @@
 # test_prophetic_orchestrator.py
 
-from prophetic_orchestrator import (
-    CausalityEngine,
-    PropheticOrchestrator,
-    TemporalAntibody,
-    WeakPoint,
-)
+import pytest
+
+pytestmark = pytest.mark.skip(reason="prophetic_orchestrator is deprecated and in archive")
+
+try:
+    from archive.deprecated.prophetic_orchestrator import (
+        CausalityEngine,
+        PropheticOrchestrator,
+        TemporalAntibody,
+        WeakPoint,
+    )
+except ImportError:
+    pass
 
 
 def test_causality_engine_normalizes_inputs() -> None:

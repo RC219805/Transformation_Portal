@@ -117,14 +117,14 @@ Installation
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
 
-# Create virtual environment
+# Create virtual environment (recommended)
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Install package in editable mode (required for development and testing)
+# Install package in editable mode (REQUIRED for CLI tools and imports)
 pip install -e .
 
 # Optional: Install extras
@@ -153,8 +153,8 @@ Process Your First Image
 # Depth-aware enhancement
 python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
 
-# TIFF batch processing
-python luxury_tiff_batch_processor_cli.py input_folder/ output_folder/ --preset signature
+# TIFF batch processing (requires pip install -e . first)
+luxury-tiff-batch input_folder/ output_folder/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input bedroom.jpg --out ./enhanced --prompt "luxury bedroom interior" --material-response
@@ -870,20 +870,23 @@ Common Tasks
 # Install package
 pip install -e .
 
+# Install with all extras
+pip install -e ".[all]"
+
 # Run tests
 make test-fast
 
 # Lint code
 make lint
 
-# Migrate imports (for existing codebases)
-python scripts/migrate_imports.py your_project/
-
 # Process image with depth pipeline
 python depth_pipeline/pipeline.py --input image.jpg --output enhanced.jpg
 
-# Batch process TIFFs
-python luxury_tiff_batch_processor_cli.py input/ output/ --preset signature
+# Batch process TIFFs (requires pip install -e . first)
+luxury-tiff-batch input/ output/ --preset signature
+
+# Alternative: Run as module if console scripts not available
+python -m luxury_tiff_batch_processor input/ output/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input render.jpg --out ./enhanced --prompt "luxury interior"
