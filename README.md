@@ -670,12 +670,13 @@ optimization:
 ## Performance
 
 ### Benchmarks (Apple M4 Max, 36GB RAM)
-Operation	Resolution	Time	Throughput
-Depth Estimation (ANE)	518×518	24ms	-
-Depth Estimation (ANE)	1024×1024	65ms	-
-Full Depth Pipeline	4K	855-950ms	400-600 img/hr
-AI Render Refinement	1024×768	45-90s	40-80 img/hr
-TIFF Batch Processing	16-bit 4K	2-5s	720-1800 img/hr
+| Operation                 | Resolution   | Time        | Throughput         |
+|---------------------------|--------------|-------------|--------------------|
+| Depth Estimation (ANE)    | 518×518      | 24ms        | -                  |
+| Depth Estimation (ANE)    | 1024×1024    | 65ms        | -                  |
+| Full Depth Pipeline       | 4K           | 855-950ms   | 400-600 img/hr     |
+| AI Render Refinement      | 1024×768     | 45-90s      | 40-80 img/hr       |
+| TIFF Batch Processing     | 16-bit 4K    | 2-5s        | 720-1800 img/hr    |
 
 ### Performance Optimization Tips
 
