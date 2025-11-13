@@ -201,12 +201,15 @@ class QualityFixer:
                     else:
                         imports.add(f"import {alias.name}")
             elif isinstance(node, ast.ImportFrom):
+                # Handle relative imports: node.level gives number of leading dots
+                dots = '.' * node.level if hasattr(node, 'level') and node.level else ''
                 module = node.module or ""
+                from_part = f"{dots}{module}" if module else dots
                 for alias in node.names:
                     if alias.asname:
-                        imports.add(f"from {module} import {alias.name} as {alias.asname}")
+                        imports.add(f"from {from_part} import {alias.name} as {alias.asname}")
                     else:
-                        imports.add(f"from {module} import {alias.name}")
+                        imports.add(f"from {from_part} import {alias.name}")
 
         return imports
 
