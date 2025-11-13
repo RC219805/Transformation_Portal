@@ -27,3 +27,4 @@ psutil>=5.9.0,<8
 memory-profiler>=0.61.0,<1
 pypdf>=3.9.0
 types-PyYAML>=6.0.12
+basicsr>=1.4.6,<2
