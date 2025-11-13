@@ -120,9 +120,10 @@ class QualityFixer:
             )
             return True
 
-        # Detect predominant line ending style in the file
-        # Note: This normalizes mixed line endings to the first detected style,
-        # which is appropriate for a quality fixer tool
+        # Detect the first line ending style encountered (CRLF, CR, or fallback to LF)
+        # Note: This normalizes all line endings in the file to maintain consistency.
+        # The implementation normalizes to the first non-LF ending found (CRLF or CR),
+        # falling back to LF only if no other endings are detected.
         line_ending = '\n'  # default to Unix-style
         for line in lines:
             if line.endswith('\r\n'):
