@@ -3,7 +3,7 @@
 PDF Specification Parser for Architectural Submittals
 Extracts material specs, color palettes, and design intent from PDF documents
 
-Uses PyPDF2 for text extraction with pattern matching for common architectural specs
+Uses pypdf for text extraction with pattern matching for common architectural specs
 """
 
 import json
@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
-import PyPDF2
+from pypdf import PdfReader
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ class PDFSpecParser:
         all_text = []
         try:
             with open(self.pdf_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
+                reader = PdfReader(f)
                 total_pages = len(reader.pages)
                 logger.info(f"Processing {total_pages} pages")
 
