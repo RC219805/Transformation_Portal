@@ -192,13 +192,14 @@ All formats are case-insensitive (.PNG, .Png, .png all accepted).
 - HDR support: PQ (HDR10), HLG (Hybrid Log-Gamma)
 
 ### Pipeline-Specific Recommendations
-Pipeline         Best Format      Notes
-TIFF Batch Processor      16-bit TIFF   Requires tifffile for full precision
-Depth Pipeline   PNG, TIFF       Lossless for architectural rendering
-Lux Render Pipeline      PNG, TIFF      AI enhancement works with any PIL format
-Material Response        TIFF, PNG      High-res input recommended (4K+)
-Video Grading    ProRes MOV      Master format for color grading
 
+| Pipeline               | Best Format      | Notes                                         |
+|------------------------|------------------|-----------------------------------------------|
+| TIFF Batch Processor   | 16-bit TIFF      | Requires tifffile for full precision          |
+| Depth Pipeline         | PNG, TIFF        | Lossless for architectural rendering          |
+| Lux Render Pipeline    | PNG, TIFF        | AI enhancement works with any PIL format      |
+| Material Response      | TIFF, PNG        | High-res input recommended (4K+)              |
+| Video Grading          | ProRes MOV       | Master format for color grading               |
 ### Installation for Full Format Support
 
 # Install base image support (included in requirements.txt)
