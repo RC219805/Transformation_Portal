@@ -41,6 +41,8 @@ jobs:
           import os
           import json
           import requests
+          import time
+          import random
           from openai import OpenAI
 
           # Initialize
@@ -93,22 +95,67 @@ jobs:
 
           Classify this {'pull request' if is_pr else 'issue'}."""
 
-          print("🤖 Requesting AI classification...")
+          # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
+          print("🤖 Requesting AI classification with retry logic...")
 
+          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
+              for attempt in range(1, max_retries + 1):
+                  try:
+                      return client.chat.completions.create(
+                          model=model,
+                          messages=messages,
+                          **kwargs
+                      )
+                  except Exception as e:
+                      err_str = str(e)
+                      # Detect rate-limit / 429 occurrences (best-effort)
+                      status_is_429 = False
+                      status = getattr(e, "status_code", None) or getattr(e, "http_status", None) or getattr(e, "status", None)
+                      if status == 429:
+                          status_is_429 = True
+                      if "429" in err_str or "Rate limit" in err_str or "RateLimit" in err_str:
+                          status_is_429 = True
+
+                      # If we are rate-limited and we have attempts left, wait and retry
+                      if status_is_429 and attempt < max_retries:
+                          # Exponential backoff with jitter, capped to avoid extremely long waits
+                          base_wait = min(60, 2 ** attempt)
+                          jitter = random.uniform(0.5, 1.5)
+                          wait = base_wait * jitter
+                          print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
+                          time.sleep(wait)
+                          continue
+                      # For non-rate-limit or last attempt, raise to be handled by caller
+                      raise
+
+          analysis = None
           try:
-              # Call OpenAI
-              response = client.chat.completions.create(
-                  model="gpt-4o-mini",
+              # Call OpenAI with retry logic
+              response = call_openai_with_retries(
+                  client,
                   messages=[
                       {"role": "system", "content": system_prompt},
                       {"role": "user", "content": user_prompt}
                   ],
+                  model="gpt-4o-mini",
+                  max_retries=6,
                   max_tokens=300,
                   temperature=0.2,
                   response_format={"type": "json_object"}
               )
 
-              analysis = json.loads(response.choices[0].message.content)
+              # Parse response robustly
+              if response and hasattr(response, "choices") and len(response.choices) > 0:
+                  try:
+                      analysis = json.loads(response.choices[0].message.content)
+                  except (json.JSONDecodeError, AttributeError) as parse_err:
+                      print(f"⚠️ Failed to parse OpenAI response: {parse_err}")
+                      analysis = None
+              else:
+                  print("⚠️ OpenAI returned an unexpected response structure.")
+                  analysis = None
+
+              analysis = None
 
               print(f"✅ Analysis complete:")
               print(f"   Category: {analysis.get('category', 'unknown')}")
@@ -127,12 +174,15 @@ jobs:
               labels_url = f'https://api.github.com/repos/{repo}/issues/{issue_number}/labels'
               labels_data = {'labels': all_labels}
 
-              label_response = requests.post(labels_url, headers=headers, json=labels_data)
+              try:
+                  label_response = requests.post(labels_url, headers=headers, json=labels_data)
 
-              if label_response.status_code in [200, 201]:
-                  print(f"✅ Applied labels: {', '.join(all_labels)}")
-              else:
-                  print(f"⚠️  Failed to apply labels: {label_response.status_code}")
+                  if label_response.status_code in [200, 201]:
+                      print(f"✅ Applied labels: {', '.join(all_labels)}")
+                  else:
+                      print(f"⚠️ Failed to apply labels: {label_response.status_code}")
+              except Exception as label_err:
+                  print(f"⚠️ Failed to apply labels due to: {str(label_err)}")
 
               # Post AI analysis comment
               comment_body = f"""## 🤖 AI Triage Analysis
@@ -152,51 +202,69 @@ jobs:
               comment_url = f'https://api.github.com/repos/{repo}/issues/{issue_number}/comments'
               comment_data = {'body': comment_body}
 
-              comment_response = requests.post(comment_url, headers=headers, json=comment_data)
+              try:
+                  comment_response = requests.post(comment_url, headers=headers, json=comment_data)
 
-              if comment_response.status_code == 201:
-                  print("✅ Posted analysis comment")
-              else:
-                  print(f"⚠️  Failed to post comment: {comment_response.status_code}")
+                  if comment_response.status_code == 201:
+                      print("✅ Posted analysis comment")
+                  else:
+                      print(f"⚠️ Failed to post comment: {comment_response.status_code}")
+              except Exception as comment_err:
+                  print(f"⚠️ Failed to post comment due to: {str(comment_err)}")
+
+              except Exception as comment_err:
+                  print(f"⚠️ Failed to post comment due to: {str(comment_err)}")
 
               # Check for duplicates (optional)
-              if 'duplicate_check' in analysis and not is_pr:
+              if analysis and 'duplicate_check' in analysis and not is_pr:
                   search_terms = analysis['duplicate_check']
                   search_url = f'https://api.github.com/search/issues?q=repo:{repo}+{search_terms}+is:issue'
-                  search_response = requests.get(search_url, headers=headers)
+                  
+                  try:
+                      search_response = requests.get(search_url, headers=headers)
 
-                  if search_response.status_code == 200:
-                      results = search_response.json()
-                      potential_dupes = [
-                          item for item in results.get('items', [])
-                          if item['number'] != int(issue_number)
-                      ][:3]
+                      if search_response.status_code == 200:
+                          results = search_response.json()
+                          potential_dupes = [
+                              item for item in results.get('items', [])
+                              if item['number'] != int(issue_number)
+                          ][:3]
 
-                      if potential_dupes:
-                          dupe_comment = "## 🔍 Potential Duplicate Issues\n\n"
-                          for dupe in potential_dupes:
-                              dupe_comment += f"- #{dupe['number']}: {dupe['title']}\n"
-                          dupe_comment += "\n*Check if this is a duplicate before proceeding.*"
+                          if potential_dupes:
+                              dupe_comment = "## 🔍 Potential Duplicate Issues\n\n"
+                              for dupe in potential_dupes:
+                                  dupe_comment += f"- #{dupe['number']}: {dupe['title']}\n"
+                              dupe_comment += "\n*Check if this is a duplicate before proceeding.*"
 
-                          requests.post(comment_url, headers=headers, json={'body': dupe_comment})
-                          print(f"⚠️  Found {len(potential_dupes)} potential duplicates")
+                              try:
+                                  requests.post(comment_url, headers=headers, json={'body': dupe_comment})
+                                  print(f"⚠️ Found {len(potential_dupes)} potential duplicates")
+                              except Exception as dupe_err:
+                                  print(f"⚠️ Failed to post duplicate warning: {str(dupe_err)}")
+                  except Exception as search_err:
+                      print(f"⚠️ Duplicate search failed: {str(search_err)}")
 
           except Exception as e:
-              print(f"❌ Error during triage: {str(e)}")
-              # Post error comment
+              print(f"⚠️ Error during triage: {str(e)}")
+              # Post error comment (non-blocking)
               error_comment = f"""## ⚠️ AI Triage Error
 
           Unable to automatically classify this {'PR' if is_pr else 'issue'}.
           Please manually add labels and priority.
 
           Error: {str(e)[:200]}
+
+          ---
+          *The AI service may be experiencing rate limits. Please retry or classify manually.*
           """
-              requests.post(
-                  f'https://api.github.com/repos/{repo}/issues/{issue_number}/comments',
-                  headers=headers,
-                  json={'body': error_comment}
-              )
-              exit(1)
+              try:
+                  requests.post(
+                      f'https://api.github.com/repos/{repo}/issues/{issue_number}/comments',
+                      headers=headers,
+                      json={'body': error_comment}
+                  )
+              except Exception as post_err:
+                  print(f"⚠️ Failed to post error comment: {str(post_err)}")
 
           print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
           print("✅ Smart Issue Triage Complete!")
