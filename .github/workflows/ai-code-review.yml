@@ -29,8 +29,8 @@ jobs:
       - name: Check API Key
         run: |
           if [ -z "${OPENAI_API_KEY}" ]; then
-            echo "❌ OPENAI_API_KEY is not set. Failing AI code review."
-            exit 1
+            echo "❌ OPENAI_API_KEY is not set. Skipping AI code review."
+            exit 0
           fi
 
       - name: Checkout
@@ -59,6 +59,10 @@ jobs:
       - name: Run AI Code Review
         if: steps.changes.outputs.any_changed == 'true'
         env:
+          OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          REPO: ${{ env.REPO }}
           RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
         run: |
           python << 'PY'
@@ -201,15 +205,14 @@ jobs:
                       )
                   except Exception as e:
                       print(f"Attempt {attempt+1} failed:", e)
-                      time.sleep(min(delay + random.random(), 30))
+                      time.sleep(delay + random.random())
                       delay *= 2
               return None
 
           result = call_with_retries()
 
           if not result or not result.choices:
-              print("❌ AI review failed: no response from model. Exiting with error.")
-              sys.exit(1)
+              review_text = "AI review failed: no response from model."
           else:
               review_text = result.choices[0].message.content.strip()
 
@@ -220,6 +223,11 @@ jobs:
 
       - name: Post Review Comment
         if: steps.changes.outputs.any_changed == 'true'
+        env:
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          REPO: ${{ env.REPO }}
+          RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
         run: |
           if [ ! -s "$RESPONSE_FILE" ]; then
             echo "Review empty or missing."
