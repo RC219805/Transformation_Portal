@@ -29,10 +29,17 @@ The repository organization system solves the recurring problem of files accumul
 
 ### Key Features
 
+<<<<<<< Updated upstream
 - ✅ **Automatic file organization** with `.auto-organize.sh`
 - ✅ **Pre-commit validation** to prevent misplaced files
 - ✅ **Dry-run mode** for safe testing
 - ✅ **Comprehensive logging** for transparency
+=======
+- ✅ **Automatic file organization** with `.auto-organize.sh`
+- ✅ **Pre-commit validation** to prevent misplaced files
+- ✅ **Dry-run mode** for safe testing
+- ✅ **Comprehensive logging** for transparency
+>>>>>>> Stashed changes
 - ✅ **Cross-platform compatibility** (Linux, macOS, Windows via WSL)
 
 ## Directory Structure
@@ -129,6 +136,7 @@ Only these files should remain in the repository root:
 
 To keep `.auto-organize.sh` focused and maintainable, the organization system is implemented as a set of modular helper scripts. In most cases you only run `.auto-organize.sh`; it delegates work to specialized helpers:
 
+<<<<<<< Updated upstream
 - **`organize_root_files.sh`**
   Ensures that only approved files live in the repository root. Moves stray Markdown, scripts, or data into their proper subdirectories and flags anything that doesn’t match known patterns.
 
@@ -142,6 +150,21 @@ To keep `.auto-organize.sh` focused and maintainable, the organization system is
   Moves generated artifacts (batch reports, logs, intermediate processing outputs) into `data/output/`, `data/cache/`, or project-specific output directories, instead of letting them accumulate in the root or random folders.
 
 - **`organize_remaining.sh`**
+=======
+- **`organize_root_files.sh`**
+  Ensures that only approved files live in the repository root. Moves stray Markdown, scripts, or data into their proper subdirectories and flags anything that doesn’t match known patterns.
+
+- **`organize_docs.sh`**
+  Organizes documentation into the appropriate `docs/` subfolders (guides, architecture, API, deployment, version history). Ensures the root only contains the main `README.md` and the small set of top-level docs.
+
+- **`organize_scripts.sh`**
+  Places scripts under `scripts/setup/`, `scripts/automation/`, or `scripts/utilities/` depending on their purpose (installation, automation, utilities). Helps keep `scripts/` discoverable and clean.
+
+- **`organize_outputs.sh`**
+  Moves generated artifacts (batch reports, logs, intermediate processing outputs) into `data/output/`, `data/cache/`, or project-specific output directories, instead of letting them accumulate in the root or random folders.
+
+- **`organize_remaining.sh`**
+>>>>>>> Stashed changes
   Performs a final pass over any files that do not match other rules. This script:
   - Flags suspicious or ambiguous locations.
   - Suggests candidate destinations.
@@ -172,10 +195,17 @@ The pre-commit hook (`scripts/setup/pre-commit-check.sh`) prevents commits with 
 
 ### How It Works
 
+<<<<<<< Updated upstream
 1. Runs automatically before each commit
 2. Checks for files in the root directory that should be elsewhere
 3. Provides helpful error messages with suggested destinations
 4. Allows bypass with `git commit --no-verify` (not recommended)
+=======
+1. Runs automatically before each commit
+2. Checks for files in the root directory that should be elsewhere
+3. Provides helpful error messages with suggested destinations
+4. Allows bypass with `git commit --no-verify` (not recommended)
+>>>>>>> Stashed changes
 
 ## Installation
 
@@ -294,6 +324,7 @@ The organization system uses these rules to classify files:
 
 ### For Developers
 
+<<<<<<< Updated upstream
 1. Run organization regularly: execute `.auto-organize.sh` before committing.
 2. Use dry-run first: always test with `--dry-run` before applying changes.
 3. Commit organized changes: commit organization changes separately from feature changes.
@@ -312,6 +343,26 @@ The organization system uses these rules to classify files:
 1. Validate organization: add a CI check that runs `.auto-organize.sh --dry-run`.
 2. Fail on violations: fail the build if organization is needed.
 3. Report violations: provide clear error messages about misplaced files.
+=======
+1. Run organization regularly: execute `.auto-organize.sh` before committing.
+2. Use dry-run first: always test with `--dry-run` before applying changes.
+3. Commit organized changes: commit organization changes separately from feature changes.
+4. Keep root clean: don’t create new files in root unless they belong there.
+5. Use correct directories: place files in their proper directories from the start.
+
+### For New Files
+
+1. Ask yourself: “Does this file need to be in the root?”
+2. If no: place it in the appropriate subdirectory.
+3. If yes: ensure it fits one of the allowed root file categories.
+4. Add to `.auto-organize.sh`: if creating a new file type, add rules to the script.
+
+### For CI/CD
+
+1. Validate organization: add a CI check that runs `.auto-organize.sh --dry-run`.
+2. Fail on violations: fail the build if organization is needed.
+3. Report violations: provide clear error messages about misplaced files.
+>>>>>>> Stashed changes
 
 ## Troubleshooting
 
@@ -380,18 +431,31 @@ git commit -m "Re-organize after merge"
 
 When contributing to the organization system:
 
+<<<<<<< Updated upstream
 1. Test thoroughly: test on multiple file types and edge cases.
 2. Update documentation: update this file with any new rules or patterns.
 3. Maintain backward compatibility: don’t break existing organization.
 4. Add tests: add test cases for new organization rules.
 5. Get review: have changes reviewed by maintainers.
+=======
+1. Test thoroughly: test on multiple file types and edge cases.
+2. Update documentation: update this file with any new rules or patterns.
+3. Maintain backward compatibility: don’t break existing organization.
+4. Add tests: add test cases for new organization rules.
+5. Get review: have changes reviewed by maintainers.
+>>>>>>> Stashed changes
 
 ## Support
 
 For questions or issues with the organization system:
 
+<<<<<<< Updated upstream
 - Create an issue in GitHub Issues.
 - Review this file and `scripts/setup/README.md`.
+=======
+- Create an issue in GitHub Issues.
+- Review this file and `scripts/setup/README.md`.
+>>>>>>> Stashed changes
 - Use GitHub Discussions if enabled.
 
 ## Version History
@@ -404,6 +468,11 @@ For questions or issues with the organization system:
 
 ---
 
+<<<<<<< Updated upstream
 **Last Updated**: November 2025
 **Maintained By**: Transformation Portal Team
+=======
+**Last Updated**: November 2025
+**Maintained By**: Transformation Portal Team
+>>>>>>> Stashed changes
 **License**: Same as main repository
