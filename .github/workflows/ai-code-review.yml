@@ -219,11 +219,6 @@ jobs:
 
       - name: Post Review Comment
         if: steps.changes.outputs.any_changed == 'true'
-        env:
-          GH_TOKEN: ${{ env.GH_TOKEN }}
-          PR_NUMBER: ${{ env.PR_NUMBER }}
-          REPO: ${{ env.REPO }}
-          RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
         run: |
           if [ ! -s "$RESPONSE_FILE" ]; then
             echo "Review empty or missing."
