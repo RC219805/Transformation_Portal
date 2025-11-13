@@ -1,6 +1,9 @@
 # Dev environment: runtime + testing + tooling
 -r requirements-ci.txt
 
+# Type stubs
+types-PyYAML>=6.0.12
+
 # Linters, formatters, type checkers
 mypy>=1.10
 flake8>=7
