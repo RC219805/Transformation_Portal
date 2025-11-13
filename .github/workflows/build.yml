@@ -162,7 +162,7 @@ jobs:
         run: |
           if [ "${{ matrix.test-type }}" = "core" ]; then
             # Run non-ML tests
-            pytest -v tests/ -k "not ml and not slow" || pytest_exit=$?
+            pytest -v tests/ -k "not (ml or slow)" || pytest_exit=$?
           else
             # Run ML tests
             pytest -v tests/ -k "ml or slow" || pytest_exit=$?
