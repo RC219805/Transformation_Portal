@@ -399,7 +399,7 @@ High-end workflow for polishing large-format TIFF photography with metadata pres
 luxury-tiff-batch input_folder/ output_folder/ --preset signature
 
 # Or using Python module syntax
-python -m luxury_tiff_batch_processor.cli input_folder/ output_folder/ --preset signature
+python -m luxury_tiff_batch_processor input_folder/ output_folder/ --preset signature
 
 ---
 
