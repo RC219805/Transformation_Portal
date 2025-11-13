@@ -12,15 +12,7 @@ scikit-learn>=1.0,<2
 
 # Progress bars & CLI
 tqdm>=4.66,<5
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-typer>=0.10.0
-=======
 typer>=0.10.0,<1
->>>>>>> Stashed changes
-=======
-typer>=0.10.0,<1
->>>>>>> Stashed changes
 
 # Testing & fuzzing
 pytest>=8,<10
