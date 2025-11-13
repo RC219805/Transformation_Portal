@@ -129,7 +129,7 @@ class QualityFixer:
         has_final_newline = lines and lines[-1].endswith(('\n', '\r'))
         
         # Strip trailing whitespace from all lines
-        fixed_lines = [line.rstrip() for line in lines]
+        fixed_lines = [line.rstrip(" \t\r\n") for line in lines]
         
         # Rejoin with consistent line ending, preserving final newline behavior
         if has_final_newline:
