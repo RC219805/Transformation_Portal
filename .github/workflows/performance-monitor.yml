@@ -9,6 +9,11 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   performance-test:
     name: Performance Regression Check
@@ -96,6 +101,7 @@ jobs:
           EOF
 
       - name: Upload results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: performance-results
@@ -103,13 +109,15 @@ jobs:
             current-benchmark.json
             memory-report.txt
             performance-summary.md
+          if-no-files-found: warn
 
       - name: Save as baseline (main branch only)
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && hashFiles('current-benchmark.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: baseline-benchmark
           path: current-benchmark.json
+          if-no-files-found: warn
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
@@ -117,7 +125,26 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const summary = fs.readFileSync('performance-summary.md', 'utf8');
+
+            let summary = '# 📊 Performance Test Results\n\n';
+
+            // Check if performance summary exists
+            if (fs.existsSync('performance-summary.md')) {
+              summary = fs.readFileSync('performance-summary.md', 'utf8');
+            } else {
+              summary += 'ℹ️  No performance benchmarks generated.\n\n';
+              summary += 'To enable performance tracking, add benchmark tests:\n';
+              summary += '```python\n';
+              summary += 'def test_performance(benchmark):\n';
+              summary += '    result = benchmark(your_function)\n';
+              summary += '```\n';
+            }
+
+            // Add memory report if available
+            if (fs.existsSync('memory-report.txt')) {
+              const memReport = fs.readFileSync('memory-report.txt', 'utf8');
+              summary += '\n## Memory Profile\n```\n' + memReport.slice(0, 500) + '\n```\n';
+            }
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,

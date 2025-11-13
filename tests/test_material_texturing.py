@@ -105,7 +105,7 @@ sys.modules.setdefault("controlnet_aux", controlnet_aux_stub)
 # pylint: disable=wrong-import-position
 # Import must be after stubs are in place to prevent lux_render_pipeline from loading
 # heavy ML dependencies during test setup
-from lux_render_pipeline import apply_material_response_finishing  # noqa: E402
+from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing  # noqa: E402
 
 
 def _make_texture(path: Path, color: tuple[int, int, int]) -> None:

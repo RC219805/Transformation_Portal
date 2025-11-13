@@ -10,6 +10,7 @@ tifffile>=2023.7.18,<2025
 imagecodecs>=2023.1.23
 tqdm>=4.65,<5
 pytest>=7.0
+pytest-cov>=4.0,<6  # Coverage reporting for CI/CD
 accelerate>=0.20.0,<2  # Improves model loading speed and reduces memory usage (Issue #5)
 
 # Depth Anything V2 Pipeline Dependencies
@@ -25,3 +26,4 @@ coremltools>=7.0,<10
 psutil>=5.9.0,<8
 memory-profiler>=0.61.0,<1
 PyPDF2
+types-PyYAML>=6.0.12
