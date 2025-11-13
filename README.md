@@ -43,17 +43,15 @@ The repository now includes an automated file organization system to maintain a 
 
 See REPO_ORGANIZATION.md for complete documentation.
 
-### Quick Start:
+Quick Start:
+```bash
 # Install organization system
 ./scripts/setup/auto-organize-install.sh
 
 # Organize repository (dry-run first)
 ./.auto-organize.sh --dry-run
 ./.auto-organize.sh
-
----
-
-## Overview
+Overview
 
 Transformation Portal is a comprehensive suite of AI-powered tools and pipelines designed for high-end architectural rendering, real estate photography, and video post-production. It combines cutting-edge machine learning models, professional color grading techniques, and proprietary Material Response technology to transform raw renders and photographs into polished marketing visuals.
 
