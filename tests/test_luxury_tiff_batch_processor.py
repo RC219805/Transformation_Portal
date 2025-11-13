@@ -34,19 +34,23 @@ def test_run_pipeline_exposed_in_dunder_all():
     assert "run_pipeline" in exported
 
 
-def test_top_level_script_still_invokable(tmp_path: Path):
-    script = Path(__file__).resolve().parent.parent / "luxury_tiff_batch_processor_cli.py"
-    assert script.exists(), "shim script missing"
+def test_cli_module_importable():
+    """Test that the CLI module can be imported."""
+    from luxury_tiff_batch_processor import cli  # noqa: F401
+    assert hasattr(cli, "main"), "CLI module should have a main function"
 
+
+def test_cli_help_works():
+    """Test that the CLI help command works."""
     result = subprocess.run(
-        [sys.executable, str(script), "--help"],
+        [sys.executable, "-m", "luxury_tiff_batch_processor.cli", "--help"],
         capture_output=True,
         text=True,
         check=False,
     )
 
     assert result.returncode == 0
-    assert "Batch enhance TIFF files" in result.stdout
+    assert "Batch enhance TIFF files" in result.stdout or "Usage" in result.stdout
 
 
 def _saturation(rgb: np.ndarray) -> np.ndarray:

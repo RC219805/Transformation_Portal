@@ -35,12 +35,14 @@ jobs:
         run: |
           files=$(find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*")
           if [ -n "$files" ]; then
+            # shellcheck disable=SC2086
             pylint $files --exit-zero
           fi
 
       - name: Check markdown file count
         run: |
           markdown_count=$(find . -maxdepth 1 -name "*.md" -type f | wc -l)
+          # shellcheck disable=SC2086
           if [ $markdown_count -gt 10 ]; then
             echo "ERROR: Too many markdown files in root ($markdown_count). Maximum allowed: 10"
             echo "Please move documentation files to docs/ subdirectories"
