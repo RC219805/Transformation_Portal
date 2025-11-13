@@ -92,7 +92,7 @@ jobs:
           sudo apt-get autoclean -y
           
           # Remove snap packages we don't need
-          sudo snap list | grep -E "lxd|snapd|core20|core22" | awk '{print $1}' | xargs -n1 sudo snap remove 2>/dev/null || true
+          sudo snap list --color=never | grep -E "lxd|snapd|core20|core22" | awk '{print $1}' | awk 'ORS="\\0"' | xargs -0 -n1 sudo snap remove 2>/dev/null || true
           
           # Clean docker
           docker system prune -af --volumes || true
