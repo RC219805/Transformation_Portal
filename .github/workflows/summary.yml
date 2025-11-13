@@ -156,8 +156,6 @@ jobs:
                       summary = str(completion.choices[0]).strip() if completion.choices else "AI summarization failed."
               else:
                   summary = "AI summarization failed: unexpected response structure."
-              else:
-                  summary = "AI summarization failed: unexpected response structure."
           except Exception as e:
               # Write a short friendly failure message (no secrets) and log detailed error to stderr
               summary = "AI summarization failed: the AI service returned errors (rate limits or other). See CI logs for details."
