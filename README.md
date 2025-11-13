@@ -122,6 +122,7 @@ Use it in Copilot Chat: @transformation-portal-specialist [your request]
 
 ### Installation
 
+```bash
 # Clone repository
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
@@ -141,12 +142,13 @@ pip install -e ".[tiff]"   # 16-bit TIFF processing
 pip install -e ".[ml]"     # ML extras for AI pipelines
 pip install -e ".[dev]"    # pytest, linting
 pip install -e ".[all]"    # everything
-
+```
 
 Note for Developers: Installing the package in editable mode with pip install -e . is required for tests that import from the transformation_portal package to work correctly, as it makes the package importable without modifying sys.path.
 
 ### Verify Installation
 
+```bash
 # Test depth pipeline
 python -c "from depth_pipeline import ArchitecturalDepthPipeline; print('✓ Depth Pipeline ready')"
 
@@ -155,9 +157,11 @@ python -c "from material_response import MaterialResponse; print('✓ Material R
 
 # Run test suite
 make test-fast
+```
 
 ### Process Your First Image
 
+```bash
 # Depth-aware enhancement
 python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
 
@@ -166,6 +170,7 @@ luxury-tiff-batch input_folder/ output_folder/ --preset signature
 
 # AI render refinement
 python lux_render_pipeline.py --input bedroom.jpg --out ./enhanced --prompt "luxury bedroom interior" --material-response
+```
 
 ---
 
@@ -204,6 +209,7 @@ All formats are case-insensitive (.PNG, .Png, .png all accepted).
 | Video Grading          | ProRes MOV       | Master format for color grading               |
 ### Installation for Full Format Support
 
+```bash
 # Install base image support (included in requirements.txt)
 pip install Pillow
 
@@ -213,6 +219,7 @@ pip install -e ".[tiff]"  # Includes tifffile + imagecodecs
 # FFmpeg required for video (system package)
 # Ubuntu/Debian: sudo apt install ffmpeg
 # macOS: brew install ffmpeg
+```
 
 
 📖 Complete Format Documentation - Detailed format specifications, constraints, and examples
@@ -239,6 +246,7 @@ Revolutionary intelligence-driven rendering that reads architectural documents a
 - ✅ Three Quality Tiers - Standard (30-45s), Premium (60-90s), Ultimate (3-5min with 4K)
 
 #### Example Workflow:
+```bash
 # Step 1: Extract architectural context from PDF
 python scripts/architectural_context_extractor.py \
     "750_Picacho_Plans.pdf" \
@@ -254,6 +262,7 @@ python scripts/premium_context_pipeline.py \
 
 # Or use shortcut:
 bash scripts/context_aware_quickstart.sh  # Interactive guide
+```
 
 
 #### What Gets Extracted:
@@ -290,6 +299,7 @@ Fully-integrated orchestrator combining all pipeline stages into a unified, prod
 - ✅ Performance Optimized - Apple Silicon (CoreML + MPS) + CUDA support
 
 #### Quick Start:
+```bash
 # Single image with preset
 python pro_pipeline.py process render.jpg --preset architectural-hero --out ./enhanced
 
@@ -298,6 +308,7 @@ python pro_pipeline.py batch ./renders --preset interior-dramatic --out ./final
 
 # List available presets
 python pro_pipeline.py list-presets
+```
 
 
 #### Available Presets:
@@ -332,6 +343,7 @@ State-of-the-art depth-aware image processing using Depth Anything V2 for archit
 - LRU caching for 10-20x speedup in iterative workflows
 
 #### Usage:
+```python
 from depth_pipeline import ArchitecturalDepthPipeline
 
 # Load preset configuration
@@ -344,6 +356,7 @@ pipeline.save_result(result, 'output/')
 # Batch process
 image_paths = Path('input/').glob('*.jpg')
 results = pipeline.batch_process(image_paths, output_dir='output/')
+```
 
 
 Performance: 855-950ms per 4K image | 400-600 images/hour batch throughput
@@ -398,11 +411,13 @@ High-end workflow for polishing large-format TIFF photography with metadata pres
 - Moody - Dramatic shadows and reduced saturation
 
 #### Usage:
+```bash
 # After installing the package (pip install -e .)
 luxury-tiff-batch input_folder/ output_folder/ --preset signature
 
 # Or using Python module syntax
 python -m luxury_tiff_batch_processor input_folder/ output_folder/ --preset signature
+```
 
 ---
 
@@ -430,6 +445,7 @@ Proprietary surface-aware rendering technology that analyzes and enhances how di
 Traditional color grading applies global transforms uniformly. Material Response technology shifts to surface-aware rendering that respects highlights, midtones, and micro-contrast differently across materials (wood, metal, glass, fabric, stone).
 
 #### Implementation:
+```python
 from material_response import MaterialResponse, SurfaceType
 
 # Initialize Material Response
@@ -441,6 +457,7 @@ result = mr.enhance(
     surfaces=[SurfaceType.WOOD, SurfaceType.METAL, SurfaceType.GLASS],
     strength=0.7
 )
+```
 
 
 #### Applications:
