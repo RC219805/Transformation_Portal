@@ -1,9 +1,9 @@
 name: Issue Summarizer
 
 on:
-  issue_comment: {}
-  pull_request: {}
-  pull_request_review: {}
+  issue_comment:
+  pull_request:
+  pull_request_review:
   issues:
     types: [opened, edited]
 
@@ -11,25 +11,61 @@ jobs:
   summarize:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       issues: write
       pull-requests: write
+
     env:
-      ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GH_TOKEN: ${{ github.token }}
-      # marker used to detect previously-posted diagnostic comments
+      EVENT_NAME: ${{ github.event_name }}
+      # Marker used to detect previously-posted diagnostic comments
       DIAGNOSTIC_MARKER: "<!-- ai-summarizer-missing-key -->"
-      # short, non-sensitive message to post when key is missing
+      # Short, non-sensitive message to post when key is missing
       DIAGNOSTIC_MSG: |
         AI summarizer skipped: OPENAI_API_KEY is not configured in CI.
         Repository maintainers can enable automated summaries by configuring the `OPENAI_API_KEY` secret.
         <!-- ai-summarizer-missing-key -->
+
+      # Safely derive the issue/PR number across event types
+      ISSUE_NUMBER: >-
+        ${
+          {{
+            github.event_name == 'pull_request' && github.event.pull_request.number
+            || github.event_name == 'pull_request_review' && github.event.pull_request.number
+            || github.event.issue.number
+            || ''
+          }}
+        }
+
+      # Safely derive a title and body across event types
+      ISSUE_TITLE: >-
+        ${
+          {{
+            github.event.pull_request.title
+            || github.event.issue.title
+            || github.event.review.body
+            || github.event.comment.body
+            || ''
+          }}
+        }
+      ISSUE_BODY: >-
+        ${
+          {{
+            github.event.pull_request.body
+            || github.event.issue.body
+            || github.event.review.body
+            || github.event.comment.body
+            || ''
+          }}
+        }
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -38,105 +74,149 @@ jobs:
           python -m pip install --upgrade pip
           pip install --no-cache-dir openai
 
-      - name: Run summarizer (safe Option B)
+      - name: Run summarizer
         id: summarizer
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
-          ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
-          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.comment.body || github.event.head_commit.message || '' }}
+          OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
+          ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          ISSUE_TITLE: ${{ env.ISSUE_TITLE }}
+          ISSUE_BODY: ${{ env.ISSUE_BODY }}
           REVIEW_STATE: ${{ github.event.review.state || '' }}
-          EVENT_NAME: '${{ github.event_name }}'
+          EVENT_NAME: ${{ env.EVENT_NAME }}
+          DIAGNOSTIC_MSG: ${{ env.DIAGNOSTIC_MSG }}
         run: |
-          python - <<'PY'
-          import os, sys, textwrap, time, random
-          RESPONSE_FILE = os.environ["RESPONSE_FILE"]
-          OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+          python - << 'PY'
+          import os
+          import sys
+          import textwrap
 
-          # When the key is missing, write only a short, safe message and exit 0
-          if not OPENAI_API_KEY:
-              msg = os.environ["DIAGNOSTIC_MSG"]
-              with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
-                  f.write(msg)
-              # DEBUG: print only the non-sensitive message to runner logs
-              print("AI summarizer skipped; diagnostic message written to RESPONSE_FILE.")
+          response_file = os.environ["RESPONSE_FILE"]
+          api_key = os.getenv("OPENAI_API_KEY", "").strip()
+          event_name = (os.getenv("EVENT_NAME") or "").strip()
+          issue_number = (os.getenv("ISSUE_NUMBER") or "").strip()
+
+          # If there's no associated issue/PR, do nothing and exit cleanly.
+          if not issue_number:
+              print(f"No ISSUE_NUMBER for event '{event_name}'. Skipping summarizer.")
               sys.exit(0)
 
-          # If key present: perform summarization (example; keep minimal)
-          from openai import OpenAI
-          client = OpenAI(api_key=OPENAI_API_KEY)
+          # If the key is missing, write only the diagnostic message and exit 0.
+          if not api_key:
+              msg = os.environ["DIAGNOSTIC_MSG"]
+              with open(response_file, "w", encoding="utf-8") as f:
+                  f.write(msg)
+              print("OPENAI_API_KEY missing; wrote diagnostic message to RESPONSE_FILE.")
+              sys.exit(0)
 
           title = (os.getenv("ISSUE_TITLE") or "").strip()
-          body  = (os.getenv("ISSUE_BODY") or "").strip()[:4000]
+          body = (os.getenv("ISSUE_BODY") or "").strip()
+          # Truncate body defensively so prompts stay within reasonable size
+          body = body[:4000]
+
           review_state = (os.getenv("REVIEW_STATE") or "").strip()
-          event_name = (os.getenv("EVENT_NAME") or "").strip()
-          
-          # Adjust prompt based on event type
+
           if event_name == "pull_request_review":
               prompt = textwrap.dedent(f"""
-              Summarize this pull request review in one concise paragraph (neutral tone).
+              Summarize this pull request review in one concise, neutral paragraph.
+
               Review state: {review_state}
-              PR title: {title}
-              Review comment:
+              Pull request title: {title}
+
+              Review body:
               {body}
               """)
           elif event_name == "issue_comment":
               prompt = textwrap.dedent(f"""
-              Summarize this GitHub issue comment in one concise paragraph (neutral tone).
+              Summarize this GitHub issue comment in one concise, neutral paragraph.
+
               Issue title: {title}
+
               Comment:
               {body}
               """)
           elif event_name == "pull_request":
               prompt = textwrap.dedent(f"""
-              Summarize this pull request in one concise paragraph (neutral tone).
-              PR title: {title}
+              Summarize this pull request in one concise, neutral paragraph.
+
+              Pull request title: {title}
+
               Description:
               {body}
               """)
           elif event_name == "issues":
               prompt = textwrap.dedent(f"""
-              Summarize this GitHub issue in one concise paragraph (neutral tone).
+              Summarize this GitHub issue in one concise, neutral paragraph.
+
               Issue title: {title}
+
               Description:
               {body}
               """)
           else:
               prompt = textwrap.dedent(f"""
-              Summarize this GitHub event in one concise paragraph (neutral tone).
+              Summarize this GitHub event in one concise, neutral paragraph.
+
               Title: {title}
+
               Body:
               {body}
               """)
-          
-          # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
-          import sys
-          import os
-          sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../scripts'))
-          from openai_utils import call_openai_with_retries
+
+          # Import retry helper from repo if available
+          from openai import OpenAI
+          client = OpenAI(api_key=api_key)
+
+          # Optionally use a local retry helper if present
+          def call_with_retries(client, messages, model, max_tokens=160, temperature=0.2, max_retries=6):
+              try:
+                  # Try to use the repository's helper if available
+                  import os as _os, sys as _sys
+                  _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "scripts"))
+                  from openai_utils import call_openai_with_retries  # type: ignore
+                  return call_openai_with_retries(
+                      client,
+                      messages=messages,
+                      model=model,
+                      max_retries=max_retries,
+                      max_tokens=max_tokens,
+                      temperature=temperature,
+                  )
+              except Exception:
+                  # Fallback: a simple direct call without complex retry logic
+                  return client.chat.completions.create(
+                      model=model,
+                      messages=messages,
+                      max_tokens=max_tokens,
+                      temperature=temperature,
+                  )
+
+          messages = [{"role": "user", "content": prompt}]
           try:
-              completion = call_openai_with_retries(
+              completion = call_with_retries(
                   client,
-                  messages=[{"role":"user","content":prompt}],
+                  messages=messages,
                   model="gpt-4o-mini",
-                  max_retries=6,
                   max_tokens=160,
-                  temperature=0.2
+                  temperature=0.2,
+                  max_retries=6,
               )
               # Parse response robustly
-              if completion and hasattr(completion, "choices") and len(completion.choices) > 0:
-                  try:
-                      summary = (completion.choices[0].message.content or "").strip()
-                  except AttributeError:
-                      summary = str(completion.choices[0]).strip() if completion.choices else "AI summarization failed."
-              else:
-                  summary = "AI summarization failed: unexpected response structure."
+              summary = "AI summarization failed: unexpected response structure."
+              if completion and hasattr(completion, "choices") and completion.choices:
+                  choice = completion.choices[0]
+                  content = getattr(getattr(choice, "message", None), "content", None)
+                  summary = (content or "").strip() or summary
           except Exception as e:
-              # Write a short friendly failure message (no secrets) and log detailed error to stderr
-              summary = "AI summarization failed: the AI service returned errors (rate limits or other). See CI logs for details."
-              print("Detailed error (redacted for posting):", file=sys.stderr)
+              # Log details to stderr, but write only a generic message to the comment
+              print("AI summarization failed with error (details redacted in comment):", file=sys.stderr)
               print(repr(e), file=sys.stderr)
+              summary = (
+                  "AI summarization failed: the AI service returned errors "
+                  "(rate limits or other). See CI logs for details."
+              )
 
-          with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
+          with open(response_file, "w", encoding="utf-8") as f:
               f.write(summary)
           PY
 
@@ -144,15 +224,28 @@ jobs:
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
         run: |
-          echo "RESPONSE_FILE size:"
-          stat -c "%s bytes" "$RESPONSE_FILE" || true
-          echo "First 5 lines of RESPONSE_FILE:"
-          head -n 5 "$RESPONSE_FILE" || true
+          if [ -f "$RESPONSE_FILE" ]; then
+            echo "RESPONSE_FILE exists."
+            # Cross-platform stat: GNU vs BSD
+            if stat --version >/dev/null 2>&1; then
+              # GNU stat
+              echo "Size:"
+              stat -c "%s bytes" "$RESPONSE_FILE"
+            else
+              # BSD / macOS stat
+              echo "Size:"
+              stat -f "%z bytes" "$RESPONSE_FILE"
+            fi
+            echo "First 5 lines of RESPONSE_FILE:"
+            head -n 5 "$RESPONSE_FILE" || true
+          else
+            echo "RESPONSE_FILE not found; nothing to debug."
+          fi
 
       - name: Post comment only if present and not previously posted
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ env.GH_TOKEN }}
           REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
           MARKER: ${{ env.DIAGNOSTIC_MARKER }}
@@ -160,16 +253,16 @@ jobs:
           set -euo pipefail
 
           if [ -z "$ISSUE_NUMBER" ]; then
-            echo "No ISSUE_NUMBER detected; skipping comment post."
+            echo "No ISSUE_NUMBER detected for event '${{ env.EVENT_NAME }}'; skipping comment post."
             exit 0
           fi
 
           if [ ! -s "$RESPONSE_FILE" ]; then
-            echo "No response to post."
+            echo "No response to post (empty or missing RESPONSE_FILE)."
             exit 0
           fi
 
-          # Check existing comments for the marker so we only post once
+          # Check existing comments for the marker so we only post one diagnostic per thread
           echo "Checking existing comments for diagnostic marker..."
           EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
           if echo "$EXISTING" | grep -Fq "$MARKER"; then
@@ -177,7 +270,5 @@ jobs:
             exit 0
           fi
 
-          # Post the comment using --body-file to avoid quoting issues.
-          # NOTE: use GH_TOKEN with minimal scope (issues:write)
           echo "Posting comment to issue/PR #$ISSUE_NUMBER"
           gh issue comment "$ISSUE_NUMBER" --body-file "$RESPONSE_FILE"
