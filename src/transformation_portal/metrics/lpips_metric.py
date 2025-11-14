@@ -14,7 +14,7 @@ Uses pre-trained networks (AlexNet, VGG, SqueezeNet) as perceptual backbones.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
@@ -158,7 +158,7 @@ class LPIPSMetric:
 
         return np.array(distances)
 
-    def interpret(self, distance: float) -> Dict[str, any]:
+    def interpret(self, distance: float) -> Dict[str, Any]:
         """Interpret LPIPS distance.
 
         Args:

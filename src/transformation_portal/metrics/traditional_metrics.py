@@ -10,9 +10,8 @@ Metrics:
 """
 
 import logging
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
-import cv2
 import numpy as np
 from PIL import Image
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
