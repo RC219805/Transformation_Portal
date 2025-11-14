@@ -124,18 +124,18 @@ Use it in Copilot Chat: `@transformation-portal-specialist [your request]`
 
 ### Dependency Management
 
-Transformation Portal uses a **three-tier dependency model** based on plain `requirements` files:
+Transformation Portal uses a **layered dependency system** managed in the `requirements/` directory. This system provides fine-grained control over core, ML, development, and CI dependencies, and is compatible with modern Python dependency management tools (e.g., `pip-tools`).
 
 ```text
-requirements.txt         # Core runtime dependencies
-requirements-ci.txt      # Runtime + test dependencies (used in CI)
-requirements-dev.txt     # Runtime + test + tooling (local development)
-```
-
-- `requirements.txt` is the single source of truth for production/runtime.
-- `requirements-ci.txt` includes `-r requirements.txt` and adds test-only packages.
-- `requirements-dev.txt` includes `-r requirements-ci.txt` and adds linters, formatters, and type-checkers.
-
+requirements/
+├── base.in      # Core runtime dependencies (human-editable)
+├── base.txt     # Core runtime dependencies (compiled, for pip install)
+├── ml.in        # ML/AI dependencies (human-editable)
+├── ml.txt       # ML/AI dependencies (compiled)
+├── dev.in       # Development tools (human-editable)
+├── dev.txt      # Development tools (compiled)
+├── ci.in        # CI/test dependencies (human-editable)
+└── ci.txt       # CI/test dependencies (compiled)
 ### Quick Installation
 
 ```bash
