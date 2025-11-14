@@ -48,7 +48,7 @@ class TestPyPIWorkflows:
         # Check triggers (YAML may parse 'on' as True boolean)
         triggers = workflow.get('on', workflow.get(True, {}))
         assert triggers, "Workflow should have triggers"
-        assert 'push' in triggers or 'tags' in triggers.get('push', {})
+        assert 'push' in triggers and 'tags' in triggers['push']
         assert 'workflow_dispatch' in triggers
         
         # Check required jobs
