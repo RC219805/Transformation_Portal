@@ -1,5 +1,5 @@
 name: Python CI/CD
-permissions: none
+permissions: {}
 
 on:
   push:
@@ -8,6 +8,40 @@ on:
     branches: [ main ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pylint mypy types-PyYAML
+
+    - name: Lint with flake8
+      continue-on-error: true
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || true
+
+    - name: Lint with pylint
+      continue-on-error: true
+      run: |
+        # Use .pylintrc configuration (ignores src/transformation_portal, src/luxury_tiff_batch_processor)
+        # Lint tools/ and root-level Python files
+        pylint tools/ *.py || true
+
+    - name: Type check with mypy
+      continue-on-error: true
+      run: |
+        # Use mypy.ini configuration
+        mypy tools/ *.py || true
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -107,19 +141,6 @@ jobs:
         # Show remaining disk space
         df -h
 
-    - name: Lint with flake8 (optional)
-      continue-on-error: true
-      run: |
-        pip install flake8
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || true
-
-    - name: Type check with mypy (optional)
-      continue-on-error: true
-      run: |
-        pip install mypy types-PyYAML
-        mypy src/ --ignore-missing-imports --no-strict-optional || true
-
     - name: Run tests with pytest
       run: |
         # Run tests with proper PYTHONPATH set
@@ -198,7 +219,7 @@ jobs:
 
   cleanup:
     name: Cleanup
-    needs: [test, deploy]
+    needs: [lint, test, deploy]
     runs-on: ubuntu-latest
     if: always()
     
