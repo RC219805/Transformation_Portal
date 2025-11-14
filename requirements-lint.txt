@@ -13,5 +13,5 @@ typer>=0.12,<1  # CLI framework
 reportlab>=4.0,<5  # PDF generation (used in some tools)
 rawpy>=0.18.0,<1  # RAW image processing (used in some tools)
 
-# Testing framework (for verify_rag_install.py)
+# Testing framework (needed for linting test files in tools/)
 pytest>=8,<10
