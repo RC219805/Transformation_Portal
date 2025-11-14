@@ -132,11 +132,11 @@ jobs:
     steps:
     - name: Clean up build artifacts
       run: |
-        echo "No cleanup required: this job runs on a fresh GitHub Actions runner."
+        echo "No cleanup required: this job runs on a fresh GitHub Actions runner." || true
         # Cleanup commands removed because each job runs on a new VM and there are no artifacts to clean.
         
     - name: Final cleanup verification
       run: |
-        echo "Disk usage after cleanup:"
-        df -h
-        echo "Workflow completed successfully!"
+        echo "Disk usage after cleanup:" || true
+        df -h || true
+        echo "Workflow completed successfully!" || true
