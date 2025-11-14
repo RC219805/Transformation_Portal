@@ -124,7 +124,7 @@ jobs:
 
   cleanup:
     name: Cleanup
-    needs: [build]
+    needs: [build, test-pypi, pypi]
     runs-on: ubuntu-latest
     permissions: {}
     if: always()
