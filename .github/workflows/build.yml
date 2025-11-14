@@ -8,6 +8,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -19,6 +22,7 @@ jobs:
   # Single lint job - no need to run on multiple Python versions
   lint:
     runs-on: ubuntu-24.04
+
     steps:
       - name: Maximize available disk space
         run: |
@@ -56,7 +60,11 @@ jobs:
       - name: Lint with minimal dependencies
         run: |
           python -m pip install --upgrade pip
+          # Lint tools
           pip install --no-cache-dir flake8 pylint
+          # Runtime + CI deps (this pulls in requirements.txt via -r in requirements-ci.txt)
+          pip install --no-cache-dir -r requirements-ci.txt
+
           echo "Running flake8..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           
@@ -88,7 +96,6 @@ jobs:
     strategy:
       fail-fast: true  # Stop all jobs if one fails
       matrix:
-        # Reduce to essential combinations only
         include:
           - python-version: "3.10"
             device: cpu
@@ -106,7 +113,7 @@ jobs:
           echo "Initial disk usage:"
           df -h
           
-          # Aggressive cleanup - free up to 30GB
+          # Aggressive cleanup - free up space
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/lib/android
@@ -115,20 +122,11 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo rm -rf /usr/local/.ghcup
           
-          # Clean apt cache
           sudo apt-get clean
           sudo apt-get autoremove -y
           sudo apt-get autoclean -y
           
-          # Remove snap packages we don't need
-          sudo snap list --color=never | grep -E "lxd|snapd|core20|core22" | awk '{print $1}' | awk 'ORS="\\0"' | xargs -0 -n1 sudo snap remove 2>/dev/null || true
-          
-          # Clean docker
           docker system prune -af --volumes || true
-          
-          # [DISABLED] Swap removal skipped to avoid OOM errors during memory-intensive tests.
-          # sudo swapoff -a
-          # sudo rm -f /swapfile
           
           echo "Disk usage after cleanup:"
           df -h
@@ -153,11 +151,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel
           
-          # Always install core deps
+          # Always install core test deps and runtime+CI deps
           pip install --no-cache-dir pytest pytest-cov
           pip install --no-cache-dir -r requirements-ci.txt
           
-          # Clear cache immediately
+          # Clear cache immediately to save space
           pip cache purge || true
 
       - name: Install ML dependencies (if needed)
@@ -168,15 +166,15 @@ jobs:
         run: |
           # Install CPU-only PyTorch to save space
           pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          # Install ML extras via editable install with extras
           pip install --no-cache-dir -e ".[ml]"
           
-          # Reinstall scikit-learn if needed
+          # Reinstall scikit-learn if needed (ensure ABI matches numpy)
           SKLEARN_CONSTRAINT=$(grep -E '^scikit-learn[^#]*' requirements-ci.txt | head -n1)
           if [ -n "$SKLEARN_CONSTRAINT" ]; then
             pip install --no-cache-dir --force-reinstall "$SKLEARN_CONSTRAINT"
           fi
           
-          # Clear cache again
           pip cache purge || true
           rm -rf ~/.cache/huggingface || true
 
@@ -204,7 +202,6 @@ jobs:
           rm -rf /tmp/transformers_cache || true
           rm -rf ~/.cache/huggingface || true
           
-          # Exit with pytest's exit code
           exit ${pytest_exit:-0}
 
       - name: Final disk usage
@@ -215,8 +212,11 @@ jobs:
 
   generate-manifest:
     name: Build Montecito Manifest
-    needs: [test]  # Changed dependency to test instead of lint-and-test
+    needs: [test]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
     steps:
       - uses: actions/checkout@v5
 
@@ -230,7 +230,7 @@ jobs:
           python -m pip install --upgrade pip
           # Only install what's needed for manifest generation
           pip install --no-cache-dir pandas numpy
-          
+
       - name: Run Montecito Manifest Tool
         id: manifest
         shell: bash
@@ -253,4 +253,5 @@ jobs:
           name: montecito-manifest
           path: ${{ steps.manifest.outputs.manifest_path }}
           if-no-files-found: error
-          retention-days: 7  # Reduce retention
+          retention-days: 7
+          
