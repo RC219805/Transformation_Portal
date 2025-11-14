@@ -1,4 +1,6 @@
 name: CI (Lint, Tests & Manifest)
+permissions:
+  contents: read
 
 on:
   push:
