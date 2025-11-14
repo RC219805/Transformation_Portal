@@ -167,7 +167,7 @@ class MaterialSystemReconstructor:
                     adjustment = target_color / (current_color.mean() + 1e-6)
                     adjustment = np.clip(adjustment, 0.8, 1.2)  # Conservative
                     enhanced[:, :, c] = np.where(
-                        mask[:, :, None] if len(mask.shape) == 2 else mask,
+                        mask[:, :, None],
                         current_color * adjustment * mask[:, :, None] + current_color * (1 - mask[:, :, None]),
                         current_color
                     )
