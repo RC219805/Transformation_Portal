@@ -27,12 +27,6 @@ from enum import Enum
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-try:
-    pass  # Removed unused imports: load_image, save_image, safe_execute
-except ImportError:
-    print("⚠️  Transformation Portal modules not found, using fallback implementations")
-
-
 # ============================================================================
 # 1. MATERIAL SYSTEM RECONSTRUCTION
 # ============================================================================
