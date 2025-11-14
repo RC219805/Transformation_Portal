@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.event.inputs.test_pypi == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_pypi != 'false')
+    if: github.event.inputs.test_pypi == 'true'
     
     steps:
     - name: Download build artifacts
