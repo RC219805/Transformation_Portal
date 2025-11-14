@@ -28,8 +28,7 @@ from enum import Enum
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 try:
-    from transformation_portal.utils.image_utils import load_image, save_image
-    from transformation_portal.utils.error_handling import safe_execute
+    pass  # Removed unused imports: load_image, save_image, safe_execute
 except ImportError:
     print("⚠️  Transformation Portal modules not found, using fallback implementations")
 
