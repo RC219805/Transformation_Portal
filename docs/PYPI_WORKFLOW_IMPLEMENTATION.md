@@ -142,6 +142,7 @@ Add the following secrets in repository settings (`Settings` → `Secrets and va
 pytest tests/test_pypi_workflows.py -v
 ```
 **Result:** 11/11 tests passing ✅
+> **Note:** These tests validate the structure and configuration of the workflow files, but may not catch all logical issues in job conditions and dependencies. Manual review or additional integration tests may be required to ensure full correctness.
 
 ### Workflow Structure Verified
 - ✅ Build job with distribution creation and validation
