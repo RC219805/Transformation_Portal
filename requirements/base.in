@@ -1,0 +1,17 @@
+# Core runtime essentials for Transformation Portal
+# This file contains abstract requirements with version ranges.
+# Run `make compile` in this directory to generate pinned base.txt
+
+# Core array and image processing
+numpy>=1.24,<2.3.0         # pinned <2.3.0 for opencv compatibility
+Pillow>=10.0.0,<12
+scipy>=1.15,<2
+scikit-learn>=1.0,<2       # classical ML (used in core features)
+
+# CLI framework and utilities
+typer>=0.10.0,<1           # CLI framework
+tqdm>=4.66,<5              # progress bar utility
+
+# TIFF image support (essential for batch processing)
+tifffile>=2023.7.18,<2025 
+imagecodecs>=2023.9.18,<2025
