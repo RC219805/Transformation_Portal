@@ -19,11 +19,10 @@ For luxury real estate:
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from PIL import Image
 from scipy import linalg
 
@@ -272,7 +271,7 @@ class FIDMetric:
 
         return float(fid)
 
-    def interpret(self, fid_score: float) -> Dict[str, any]:
+    def interpret(self, fid_score: float) -> Dict[str, Any]:
         """Interpret FID score.
 
         Args:

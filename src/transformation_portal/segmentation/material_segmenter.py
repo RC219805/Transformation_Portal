@@ -11,7 +11,7 @@ Enables context-aware enhancement that processes different materials appropriate
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image
@@ -288,7 +288,7 @@ class MaterialSegmenter:
     def get_enhancement_recommendations(
         self,
         segments: List[MaterialSegment]
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Get region-specific enhancement recommendations.
 
         Args:
