@@ -477,7 +477,12 @@ class PicachoPoolRemediationPipeline:
         )
 
     def _default_config(self) -> Dict:
-        """Return default pipeline configuration."""
+        """
+        Return default pipeline configuration.
+
+        Returns:
+            Dict: Default configuration with all pipeline stages enabled.
+        """
         return {
             'lighting_zones': 4,
             'darkness_preservation': 0.35,  # 35% of frame
