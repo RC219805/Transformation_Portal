@@ -27,13 +27,6 @@ from enum import Enum
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-try:
-    from transformation_portal.utils.image_utils import load_image, save_image
-    from transformation_portal.utils.error_handling import safe_execute
-except ImportError:
-    print("⚠️  Transformation Portal modules not found, using fallback implementations")
-
-
 # ============================================================================
 # 1. MATERIAL SYSTEM RECONSTRUCTION
 # ============================================================================
@@ -167,7 +160,7 @@ class MaterialSystemReconstructor:
                     adjustment = target_color / (current_color.mean() + 1e-6)
                     adjustment = np.clip(adjustment, 0.8, 1.2)  # Conservative
                     enhanced[:, :, c] = np.where(
-                        mask[:, :, None] if len(mask.shape) == 2 else mask,
+                        mask[:, :, None],
                         current_color * adjustment * mask[:, :, None] + current_color * (1 - mask[:, :, None]),
                         current_color
                     )
@@ -478,7 +471,12 @@ class PicachoPoolRemediationPipeline:
         )
 
     def _default_config(self) -> Dict:
-        """Return default pipeline configuration."""
+        """
+        Return default pipeline configuration.
+
+        Returns:
+            Dict: Default configuration with all pipeline stages enabled.
+        """
         return {
             'lighting_zones': 4,
             'darkness_preservation': 0.35,  # 35% of frame
@@ -574,8 +572,19 @@ class PicachoPoolRemediationPipeline:
             print(f"❌ Error loading image: {e}")
             return None
 
-    def _save_image(self, img: np.ndarray, path: Path) -> None:
-        """Save processed image."""
+    def _save_image(self, img: np.ndarray, path: Path):
+        """
+        Save the processed image as a 16-bit TIFF file with LZW compression.
+
+        The input image (float32, range [0, 1]) is clipped to [0, 1], scaled to 16-bit unsigned integer
+        (0-65535), and converted to a PIL Image in RGB mode. The image is then saved as a TIFF file
+        using LZW compression to reduce file size without loss of quality. This preserves high color
+        fidelity and is suitable for master deliverables in professional workflows.
+
+        Args:
+            img (np.ndarray): Image array in float32 format, values in [0, 1].
+            path (Path): Output file path (should have .tif or .tiff extension).
+        """
         # Ensure output directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
 
