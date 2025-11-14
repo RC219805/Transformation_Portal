@@ -55,21 +55,21 @@ Updated package configuration:
 - Synchronized version ranges with .in files
 - Added documentation comments pointing to requirements/
 
-### 5. Legacy File Migration ✅
+### 5. Legacy File Migration (Planned)
 
-Updated existing requirements files to bridge to new system:
-- `requirements.txt` → points to `requirements/all.txt`
-- `requirements-dev.txt` → includes `base.txt + dev.txt`
-- `requirements-ci.txt` → includes `base.txt + ci.txt`
+Migration of existing requirements files to bridge to the new system is planned:
+- `requirements.txt` will point to `requirements/all.txt` (not yet implemented)
+- `requirements-dev.txt` will include `base.txt + dev.txt` (not yet implemented)
+- `requirements-ci.txt` will include `base.txt + ci.txt` (not yet implemented)
 
-Maintains backward compatibility while encouraging new best practices.
+This will maintain backward compatibility while encouraging new best practices. (Pending future update)
 
-### 6. CI/CD Integration ✅
+### 6. CI/CD Integration (Partial)
 
-Updated GitHub Actions workflows:
+Updated GitHub Actions workflows (partial):
 
 **build.yml:**
-- Added `check-requirements` job to verify consistency
+- Planned: Add `check-requirements` job to verify consistency (not yet implemented)
 - Updated installations to use specific .txt files
 - Updated cache keys to use `requirements/all.txt` hash
 - Added explicit `permissions: contents: read` for security
