@@ -132,11 +132,8 @@ jobs:
     steps:
     - name: Clean up build artifacts
       run: |
-        echo "Cleaning up build artifacts..."
-        rm -rf dist/ || true
-        # Force cleanup of any cached files
-        docker system prune -f || true
-        sudo apt-get clean || true
+        echo "No cleanup required: this job runs on a fresh GitHub Actions runner."
+        # Cleanup commands removed because each job runs on a new VM and there are no artifacts to clean.
         
     - name: Final cleanup verification
       run: |
