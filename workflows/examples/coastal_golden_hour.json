@@ -1,0 +1,149 @@
+{
+  "last_node_id": 8,
+  "last_link_id": 7,
+  "nodes": {
+    "loadimage_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "coastal_estate.jpg"
+      },
+      "_meta": {
+        "title": "LoadImage"
+      }
+    },
+    "sceneanalysis_2": {
+      "class_type": "SceneAnalysis",
+      "inputs": {
+        "detailed": true,
+        "analyze_materials": true,
+        "analyze_style": true,
+        "analyze_lighting": true,
+        "image": [
+          "loadimage_1",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "SceneAnalysis"
+      }
+    },
+    "materialsegmentation_3": {
+      "class_type": "MaterialSegmentation",
+      "inputs": {
+        "use_sam": true,
+        "use_clip": true,
+        "filter_by_area": true,
+        "min_area": 500,
+        "image": [
+          "loadimage_1",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "MaterialSegmentation"
+      }
+    },
+    "fluxenhancement_4": {
+      "class_type": "FluxEnhancement",
+      "inputs": {
+        "strength": 0.42,
+        "num_steps": 4,
+        "guidance_scale": 3.5,
+        "variant": "dev",
+        "use_controlnet": true,
+        "image": [
+          "loadimage_1",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "FluxEnhancement"
+      }
+    },
+    "skygangenerator_5": {
+      "class_type": "SkyGANGenerator",
+      "inputs": {
+        "location": "montecito",
+        "season": "summer",
+        "time_of_day": "golden_hour",
+        "cloud_coverage": 0.2,
+        "update_reflections": true,
+        "image": [
+          "fluxenhancement_4",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "SkyGANGenerator"
+      }
+    },
+    "atmosphericmodel_6": {
+      "class_type": "AtmosphericModel",
+      "inputs": {
+        "apply_aerial_perspective": true,
+        "marine_layer": false,
+        "max_distance": 1500.0,
+        "image": [
+          "skygangenerator_5",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "AtmosphericModel"
+      }
+    },
+    "neuroaestheticsoptimization_7": {
+      "class_type": "NeuroaestheticsOptimization",
+      "inputs": {
+        "emotional_target": "aspiration",
+        "optimize_composition": true,
+        "optimize_color_harmony": true,
+        "optimize_spatial_frequency": true,
+        "image": [
+          "atmosphericmodel_6",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "NeuroaestheticsOptimization"
+      }
+    },
+    "qualityvalidation_8": {
+      "class_type": "QualityValidation",
+      "inputs": {
+        "pass_threshold": 7.5,
+        "warning_threshold": 6.0,
+        "check_realism": true,
+        "check_structural_accuracy": true,
+        "check_material_consistency": true,
+        "image": [
+          "neuroaestheticsoptimization_7",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "QualityValidation"
+      }
+    },
+    "saveimage_9": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename": "coastal_golden_hour_enhanced.jpg",
+        "format": "jpg",
+        "quality": 98,
+        "image": [
+          "neuroaestheticsoptimization_7",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "SaveImage"
+      }
+    }
+  },
+  "metadata": {
+    "name": "Coastal Golden Hour Enhancement",
+    "version": "1.0",
+    "description": "Complete enhancement pipeline for coastal properties at golden hour with scene analysis, FLUX enhancement, SkyGAN atmospheric rendering, and neuroaesthetics optimization"
+  }
+}
