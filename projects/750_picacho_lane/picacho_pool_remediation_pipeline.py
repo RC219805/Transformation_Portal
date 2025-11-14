@@ -579,7 +579,18 @@ class PicachoPoolRemediationPipeline:
             return None
 
     def _save_image(self, img: np.ndarray, path: Path):
-        """Save processed image."""
+        """
+        Save the processed image as a 16-bit TIFF file with LZW compression.
+
+        The input image (float32, range [0, 1]) is clipped to [0, 1], scaled to 16-bit unsigned integer
+        (0-65535), and converted to a PIL Image in RGB mode. The image is then saved as a TIFF file
+        using LZW compression to reduce file size without loss of quality. This preserves high color
+        fidelity and is suitable for master deliverables in professional workflows.
+
+        Args:
+            img (np.ndarray): Image array in float32 format, values in [0, 1].
+            path (Path): Output file path (should have .tif or .tiff extension).
+        """
         # Ensure output directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
 
