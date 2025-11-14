@@ -603,7 +603,7 @@ class PicachoPoolRemediationPipeline:
 # CLI ENTRY POINT
 # ============================================================================
 
-def main():
+def main() -> None:
     """Main entry point."""
     import argparse
 
