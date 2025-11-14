@@ -14,9 +14,8 @@ For luxury real estate:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-import cv2
 import numpy as np
 from PIL import Image
 import torch
@@ -210,7 +209,7 @@ class CLIPClassifier:
         categories: List[str],
         background_color: Tuple[int, int, int] = (0, 0, 0),
         temperature: float = 1.0
-    ) -> List[Dict[str, any]]:
+    ) -> List[Dict[str, Any]]:
         """Classify multiple image segments.
 
         Args:
@@ -452,8 +451,6 @@ class CLIPClassifier:
         Returns:
             Image with background masked
         """
-        result = image.copy()
-
         # Create background
         background = np.zeros_like(image)
         background[:] = background_color

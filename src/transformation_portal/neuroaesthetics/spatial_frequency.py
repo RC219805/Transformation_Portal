@@ -18,7 +18,7 @@ This module analyzes and optimizes spatial frequency content.
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -379,7 +379,7 @@ class SpatialFrequencyAnalyzer:
 
         # Normalize to [0, 255]
         spectrum_vis = ((spectrum_log - spectrum_log.min()) /
-                       (spectrum_log.max() - spectrum_log.min()) * 255)
+                        (spectrum_log.max() - spectrum_log.min()) * 255)
         spectrum_vis = spectrum_vis.astype(np.uint8)
 
         # Convert to RGB for colormap

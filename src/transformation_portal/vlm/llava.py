@@ -15,7 +15,7 @@ For luxury real estate applications:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 import numpy as np
@@ -252,7 +252,7 @@ Focus on luxury architectural materials."""
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
         custom_criteria: Optional[str] = None
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Assess image quality for luxury real estate.
 
         Evaluates:
@@ -286,7 +286,7 @@ Focus on luxury architectural materials."""
     def validate_materials(
         self,
         image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Validate material realism and consistency.
 
         Args:

@@ -27,7 +27,7 @@ for scientifically-informed aesthetic optimization.
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 from PIL import Image
@@ -79,7 +79,7 @@ class EmotionalProfile:
     emotional_scores: Dict[str, float]
     overall_quality: float
     optimization_priority: List[Tuple[str, float]]  # (aspect, importance)
-    enhancement_strategy: Dict[str, any]
+    enhancement_strategy: Dict[str, Any]
 
 
 class EmotionalOptimizer:
@@ -218,7 +218,7 @@ class EmotionalOptimizer:
         self,
         image: Union[str, np.ndarray, Image.Image],
         target_emotion: EmotionalTarget
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Generate optimization strategy for target emotion.
 
         Args:
@@ -277,7 +277,7 @@ class EmotionalOptimizer:
 
         # Overall quality affects luxury and aspiration
         overall = (golden_ratio.score + color_harmony.harmony_score +
-                  spatial_frequency.visual_comfort_score) / 3
+                   spatial_frequency.visual_comfort_score) / 3
 
         if overall > 0.8:
             scores["luxury"] = max(scores.get("luxury", 0), 0.85)
@@ -360,7 +360,7 @@ class EmotionalOptimizer:
         color_harmony: HarmonyAnalysis,
         spatial_frequency: SpatialFrequencyAnalysis,
         emotional_scores: Dict[str, float]
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Generate comprehensive enhancement strategy.
 
         Args:
@@ -416,7 +416,7 @@ class EmotionalOptimizer:
         self,
         profile: EmotionalProfile,
         requirements: Dict
-    ) -> List[Dict[str, any]]:
+    ) -> List[Dict[str, Any]]:
         """Identify gaps between current state and requirements.
 
         Args:
@@ -505,7 +505,7 @@ class EmotionalOptimizer:
     def _get_processing_parameters(
         self,
         requirements: Dict
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Get specific processing parameters for requirements.
 
         Args:

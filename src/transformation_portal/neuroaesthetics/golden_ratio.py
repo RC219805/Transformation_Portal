@@ -270,8 +270,7 @@ class GoldenRatioAnalyzer:
         """
         alignments = []
 
-        tolerance_px_x = width * self.tolerance
-        tolerance_px_y = height * self.tolerance
+        tolerance_px = width * self.tolerance
 
         for feat_x, feat_y in features:
             # Find closest grid point
@@ -286,8 +285,8 @@ class GoldenRatioAnalyzer:
 
             # Calculate alignment score
             # Score decreases with distance, 0 at tolerance threshold
-            if closest_distance < tolerance_px_x:
-                alignment_score = 1.0 - (closest_distance / tolerance_px_x)
+            if closest_distance < tolerance_px:
+                alignment_score = 1.0 - (closest_distance / tolerance_px)
             else:
                 alignment_score = 0.0
 
@@ -296,7 +295,7 @@ class GoldenRatioAnalyzer:
                 'closest_grid_point': tuple(closest_point),
                 'distance': closest_distance,
                 'alignment_score': alignment_score,
-                'is_aligned': closest_distance < tolerance_px_x
+                'is_aligned': closest_distance < tolerance_px
             })
 
         return alignments
