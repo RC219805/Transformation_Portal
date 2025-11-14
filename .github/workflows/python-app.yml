@@ -1,5 +1,5 @@
 name: Python CI/CD
-permissions: none
+permissions: {}
 
 on:
   push:
