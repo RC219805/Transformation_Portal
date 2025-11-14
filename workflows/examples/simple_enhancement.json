@@ -1,0 +1,52 @@
+{
+  "last_node_id": 3,
+  "last_link_id": 2,
+  "nodes": {
+    "loadimage_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "input.jpg"
+      },
+      "_meta": {
+        "title": "LoadImage"
+      }
+    },
+    "fluxenhancement_2": {
+      "class_type": "FluxEnhancement",
+      "inputs": {
+        "strength": 0.45,
+        "num_steps": 4,
+        "guidance_scale": 3.5,
+        "variant": "dev",
+        "use_controlnet": false,
+        "image": [
+          "loadimage_1",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "FluxEnhancement"
+      }
+    },
+    "saveimage_3": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename": "enhanced.jpg",
+        "format": "jpg",
+        "quality": 95,
+        "image": [
+          "fluxenhancement_2",
+          "0"
+        ]
+      },
+      "_meta": {
+        "title": "SaveImage"
+      }
+    }
+  },
+  "metadata": {
+    "name": "Simple Enhancement",
+    "version": "1.0",
+    "description": "Basic FLUX enhancement workflow"
+  }
+}
