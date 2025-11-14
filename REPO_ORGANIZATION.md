@@ -7,12 +7,16 @@
 - [Overview](#overview)
 - [Directory Structure](#directory-structure)
 - [Automated Organization](#automated-organization)
+- [Helper Scripts](#helper-scripts)
 - [Pre-Commit Hook](#pre-commit-hook)
 - [Installation](#installation)
 - [Usage](#usage)
 - [File Classification Rules](#file-classification-rules)
 - [Best Practices](#best-practices)
 - [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Support](#support)
+- [Version History](#version-history)
 
 ## Overview
 
@@ -29,13 +33,13 @@ The repository organization system solves the recurring problem of files accumul
 - ✅ **Pre-commit validation** to prevent misplaced files
 - ✅ **Dry-run mode** for safe testing
 - ✅ **Comprehensive logging** for transparency
-- ✅ **Cross-platform compatibility** (Linux, macOS, Windows with WSL)
+- ✅ **Cross-platform compatibility** (Linux, macOS, Windows via WSL)
 
 ## Directory Structure
 
 The repository follows this standardized structure:
 
-```
+```text
 Transformation_Portal/
 ├── .github/                    # GitHub workflows and actions
 │   ├── workflows/              # CI/CD workflow definitions
@@ -70,7 +74,8 @@ Transformation_Portal/
 │   ├── automation/             # Automation scripts
 │   └── utilities/              # Utility scripts
 ├── src/                        # Source code (installable package)
-│   └── transformation_portal/  # Main package
+│   ├── transformation_portal/  # Main package
+│   └── luxury_tiff_batch_processor/  # TIFF processing module
 ├── tests/                      # Test suite
 │   ├── unit/                   # Unit tests
 │   ├── integration/            # Integration tests
@@ -91,20 +96,20 @@ Transformation_Portal/
 
 ## Automated Organization
 
-The `.auto-organize.sh` script automatically organizes files based on their type and purpose:
+The `.auto-organize.sh` script automatically organizes files based on their type and purpose.
 
 ### What Gets Organized
 
-| File Type | Destination | Examples |
-|-----------|-------------|----------|
-| Strategy/Planning docs | `docs/guides/` | `*_PLAN.md`, `*_SUMMARY.md` |
-| Architecture docs | `docs/architecture/` | `ARCHITECTURE.md`, `*_DESIGN.md` |
-| Utility scripts | `scripts/utilities/` | `navigate.sh`, `verify_*.sh` |
-| Setup scripts | `scripts/setup/` | `install_*.sh`, `download_*.py` |
-| Data files | `data/` | `*.json`, `*.csv` |
-| Sample images | `data/sample_images/` | `*.jpg`, `*.png` |
-| Debug artifacts | `archive/` | `debug_*.jpg`, `test_*.png` |
-| Deprecated code | `archive/deprecated/` | Old implementations |
+| File Type              | Destination             | Examples                      |
+|------------------------|-------------------------|-------------------------------|
+| Strategy/Planning docs | `docs/guides/`          | `*_PLAN.md`, `*_SUMMARY.md`   |
+| Architecture docs      | `docs/architecture/`    | `ARCHITECTURE.md`, `*_DESIGN.md` |
+| Utility scripts        | `scripts/utilities/`    | `navigate.sh`, `verify_*.sh`  |
+| Setup scripts          | `scripts/setup/`        | `install_*.sh`, `download_*.py` |
+| Data files             | `data/`                | `*.json`, `*.csv`             |
+| Sample images          | `data/sample_images/`   | `*.jpg`, `*.png`              |
+| Debug artifacts        | `archive/`             | `debug_*.jpg`, `test_*.png`   |
+| Deprecated code        | `archive/deprecated/`   | Old implementations           |
 
 ### What Stays in Root
 
@@ -117,12 +122,53 @@ Only these files should remain in the repository root:
 - **Linting configuration**: `.pylintrc`, `.flake8`, `mypy.ini`
 - **Docker**: `Dockerfile`, `docker-compose.yml`
 - **Git**: `.gitignore`, `.gitattributes`
-- **CI/CD**: `.travis.yml`, `.circleci/` (but prefer `.github/workflows/`)
+- **CI/CD**: `.travis.yml`, `.circleci/` (prefer `.github/workflows/`)
 - **Organization system**: `.auto-organize.sh`, `REPO_ORGANIZATION.md`
+
+## Helper Scripts
+
+To keep `.auto-organize.sh` focused and maintainable, the organization system is implemented as a set of modular helper scripts. In most cases you only run `.auto-organize.sh`; it delegates work to specialized helpers:
+
+- **`organize_root_files.sh`**
+  Ensures that only approved files live in the repository root. Moves stray Markdown, scripts, or data into their proper subdirectories and flags anything that doesn’t match known patterns.
+
+- **`organize_docs.sh`**
+  Organizes documentation into the appropriate `docs/` subfolders (guides, architecture, API, deployment, version history). Ensures the root only contains the main `README.md` and the small set of top-level docs.
+
+- **`organize_scripts.sh`**
+  Places scripts under `scripts/setup/`, `scripts/automation/`, or `scripts/utilities/` depending on their purpose (installation, automation, utilities). Helps keep `scripts/` discoverable and clean.
+
+- **`organize_outputs.sh`**
+  Moves generated artifacts (batch reports, logs, intermediate processing outputs) into `data/output/`, `data/cache/`, or project-specific output directories, instead of letting them accumulate in the root or random folders.
+
+- **`organize_remaining.sh`**
+  Performs a final pass over any files that do not match other rules. This script:
+  - Flags suspicious or ambiguous locations.
+  - Suggests candidate destinations.
+  - Is intentionally conservative to avoid destructive moves.
+
+### Execution Model
+
+`.auto-organize.sh` orchestrates these helpers in a fixed sequence, for example:
+
+1. `organize_root_files.sh`
+2. `organize_docs.sh`
+3. `organize_scripts.sh`
+4. `organize_outputs.sh`
+5. `organize_remaining.sh`
+
+You should **not normally call the helper scripts directly**. Instead, run:
+
+```bash
+./.auto-organize.sh --dry-run      # Inspect proposed moves
+./.auto-organize.sh                # Apply moves once you're satisfied
+```
+
+This guarantees a consistent ordering of operations and a single point of control for organization behavior.
 
 ## Pre-Commit Hook
 
-The pre-commit hook (`scripts/setup/pre-commit-check.sh`) prevents commits with misplaced files:
+The pre-commit hook (`scripts/setup/pre-commit-check.sh`) prevents commits with misplaced files.
 
 ### How It Works
 
@@ -130,15 +176,6 @@ The pre-commit hook (`scripts/setup/pre-commit-check.sh`) prevents commits with 
 2. Checks for files in the root directory that should be elsewhere
 3. Provides helpful error messages with suggested destinations
 4. Allows bypass with `git commit --no-verify` (not recommended)
-
-### Installation
-
-```bash
-# Install the pre-commit hook
-./scripts/setup/auto-organize-install.sh
-```
-
-This creates a symbolic link from `.git/hooks/pre-commit` to `scripts/setup/pre-commit-check.sh`.
 
 ## Installation
 
@@ -225,60 +262,60 @@ The organization system uses these rules to classify files:
 
 ### Documentation Files (.md, .txt)
 
-- **Root README**: Stays in root (main entry point)
-- **Guide/Tutorial**: → `docs/guides/`
-- **Architecture**: → `docs/architecture/`
-- **API docs**: → `docs/api/`
-- **Deployment**: → `docs/deployment/`
-- **Version history**: → `docs/version_history/`
+- Root README: stays in root (main entry point)
+- Guide/Tutorial: → `docs/guides/`
+- Architecture: → `docs/architecture/`
+- API docs: → `docs/api/`
+- Deployment: → `docs/deployment/`
+- Version history: → `docs/version_history/`
 
 ### Scripts (.sh, .py)
 
-- **Setup/Installation**: → `scripts/setup/`
-- **Automation**: → `scripts/automation/`
-- **Utilities**: → `scripts/utilities/`
-- **Pipeline scripts**: Keep in project root or pipelines/
+- Setup/Installation: → `scripts/setup/`
+- Automation: → `scripts/automation/`
+- Utilities: → `scripts/utilities/`
+- Pipeline scripts: keep in project root or dedicated `scripts/pipelines/` if applicable
 
 ### Data Files
 
-- **Configuration**: → `config/`
-- **Input data**: → `data/input/`
-- **Output data**: → `data/output/`
-- **Cache**: → `data/cache/`
-- **Sample images**: → `data/sample_images/`
+- Configuration: → `config/`
+- Input data: → `data/input/`
+- Output data: → `data/output/`
+- Cache: → `data/cache/`
+- Sample images: → `data/sample_images/`
 
 ### Code Files
 
-- **Source code**: → `src/transformation_portal/`
-- **Tests**: → `tests/`
-- **Examples**: → `examples/`
+- Source code: → `src/transformation_portal/`
+- Tests: → `tests/`
+- Examples: → `examples/`
 
 ## Best Practices
 
 ### For Developers
 
-1. **Run organization regularly**: Execute `.auto-organize.sh` before committing
-2. **Use dry-run first**: Always test with `--dry-run` before applying changes
-3. **Commit organized changes**: Commit the organization changes separately from feature changes
-4. **Keep root clean**: Don't create new files in root unless they belong there
-5. **Use correct directories**: Place files in their proper directories from the start
+1. Run organization regularly: execute `.auto-organize.sh` before committing.
+2. Use dry-run first: always test with `--dry-run` before applying changes.
+3. Commit organized changes: commit organization changes separately from feature changes.
+4. Keep root clean: don’t create new files in root unless they belong there.
+5. Use correct directories: place files in their proper directories from the start.
 
 ### For New Files
 
-1. **Ask yourself**: "Does this file need to be in the root?"
-2. **If no**: Place it in the appropriate subdirectory
-3. **If yes**: Ensure it fits one of the allowed root file categories
-4. **Add to `.auto-organize.sh`**: If creating a new file type, add rules to the script
+1. Ask yourself: “Does this file need to be in the root?”.
+2. If no: place it in the appropriate subdirectory.
+3. If yes: ensure it fits one of the allowed root file categories.
+4. Add to `.auto-organize.sh`: if creating a new file type, add rules to the script.
 
 ### For CI/CD
 
-1. **Validate organization**: Add a CI check that runs `.auto-organize.sh --dry-run`
-2. **Fail on violations**: Fail the build if organization is needed
-3. **Report violations**: Provide clear error messages about misplaced files
+1. Validate organization: add a CI check that runs `.auto-organize.sh --dry-run`.
+2. Fail on violations: fail the build if organization is needed.
+3. Report violations: provide clear error messages about misplaced files.
 
 ## Troubleshooting
 
-### Script Won't Run
+### Script Won’t Run
 
 ```bash
 # Make sure script is executable
@@ -343,19 +380,19 @@ git commit -m "Re-organize after merge"
 
 When contributing to the organization system:
 
-1. **Test thoroughly**: Test on multiple file types and edge cases
-2. **Update documentation**: Update this file with any new rules or patterns
-3. **Maintain backward compatibility**: Don't break existing organization
-4. **Add tests**: Add test cases for new organization rules
-5. **Get review**: Have changes reviewed by maintainers
+1. Test thoroughly: test on multiple file types and edge cases.
+2. Update documentation: update this file with any new rules or patterns.
+3. Maintain backward compatibility: don’t break existing organization.
+4. Add tests: add test cases for new organization rules.
+5. Get review: have changes reviewed by maintainers.
 
 ## Support
 
 For questions or issues with the organization system:
 
-- **Create an issue**: [GitHub Issues](https://github.com/RC219805/Transformation_Portal/issues)
-- **Check documentation**: Review this file and `scripts/setup/README.md`
-- **Ask in discussions**: [GitHub Discussions](https://github.com/RC219805/Transformation_Portal/discussions)
+- Create an issue in GitHub Issues.
+- Review this file and `scripts/setup/README.md`.
+- Use GitHub Discussions if enabled.
 
 ## Version History
 
@@ -367,6 +404,6 @@ For questions or issues with the organization system:
 
 ---
 
-**Last Updated**: November 2025  
-**Maintained By**: Transformation Portal Team  
+**Last Updated**: November 2025
+**Maintained By**: Transformation Portal Team
 **License**: Same as main repository
