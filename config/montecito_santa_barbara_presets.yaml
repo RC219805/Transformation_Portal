@@ -1,0 +1,479 @@
+# Montecito & Santa Barbara Luxury Real Estate Enhancement Presets
+#
+# Location-specific atmospheric rendering optimized for coastal California
+# luxury properties (34.4°N latitude).
+#
+# Based on:
+# - Local atmospheric characteristics (marine layer, Sundowner winds)
+# - Coastal light quality (diffuse ocean atmosphere)
+# - Regional architectural styles (Mediterranean, coastal contemporary)
+# - Premium market positioning requirements
+
+# ==============================================================================
+# ATMOSPHERIC PARAMETERS
+# ==============================================================================
+
+atmospheric_model:
+  # Location coordinates
+  location:
+    latitude: 34.4
+    longitude: -119.7
+    elevation: 0  # Sea level to 500ft typical
+    timezone: "America/Los_Angeles"
+
+  # Marine layer characteristics (common morning/evening)
+  marine_layer:
+    typical_height: 500  # feet
+    density_range: [0.3, 0.7]  # 0=clear, 1=dense fog
+    seasonal_variation:
+      spring: 0.6  # High marine layer frequency
+      summer: 0.7  # Peak marine layer (June gloom)
+      fall: 0.3  # Lower frequency
+      winter: 0.4  # Moderate frequency
+
+  # Sundowner wind conditions (dramatic clarity)
+  sundowner:
+    frequency: "fall_winter"  # Most common seasons
+    characteristics:
+      clarity_boost: 1.3  # Exceptional atmospheric clarity
+      temperature_shift: +5  # Warmer color temperature
+      contrast_boost: 1.15  # Enhanced contrast
+
+  # Aerosol concentrations (coastal)
+  aerosols:
+    marine_aerosol: 0.6  # Ocean spray, salt
+    humidity_typical: 0.65  # 65% relative humidity
+    scattering_coefficient: 0.12  # Coastal atmosphere
+
+  # Sun path calculations (34.4°N)
+  sun_path:
+    golden_hour_duration:
+      summer: 45  # minutes
+      winter: 35  # minutes
+    optimal_shooting_times:
+      morning: ["7:30-9:00", "varies by season"]
+      evening: ["16:30-18:30", "varies by season"]
+
+# ==============================================================================
+# ENHANCEMENT PRESETS BY PROPERTY TYPE
+# ==============================================================================
+
+presets:
+
+  # --------------------------------------------------------------------------
+  # MONTECITO ESTATE - Mediterranean Luxury
+  # --------------------------------------------------------------------------
+  montecito_estate:
+    description: "Mediterranean-style estates with mountain and ocean views"
+
+    target_emotion: "nostalgia_luxury"
+
+    color_grading:
+      temperature: +8  # Warm Mediterranean light
+      tint: +2  # Slight magenta for sunset warmth
+      saturation: 1.05  # Subtle enhancement
+      vibrance: 1.08  # Natural color boost
+
+    lut: "mediterranean_golden.cube"  # Warm, sophisticated
+
+    atmospheric:
+      haze_amount: 0.2  # Subtle depth haze
+      haze_color: [240, 230, 210]  # Warm coastal haze
+      aerial_perspective: true
+      distance_desaturation: 0.15
+
+    material_emphasis:
+      stone: 1.15  # Enhance natural stone
+      tile: 1.1  # Mediterranean tile
+      wood: 1.08  # Warm wood tones
+      water: 1.2  # Pool/fountain features
+
+    composition:
+      golden_ratio_target: 0.80
+      enhance_views: true
+      frame_architecture: true
+
+    lighting:
+      preserve_golden_hour: true
+      enhance_natural_light: 1.15
+      window_glow_control: 0.85  # Prevent overexposure
+
+  # --------------------------------------------------------------------------
+  # SANTA BARBARA COASTAL CONTEMPORARY
+  # --------------------------------------------------------------------------
+  coastal_contemporary:
+    description: "Modern coastal architecture with ocean views"
+
+    target_emotion: "aspiration_serenity"
+
+    color_grading:
+      temperature: +3  # Neutral-warm
+      tint: 0  # Neutral tint
+      saturation: 0.98  # Slightly muted (sophisticated)
+      vibrance: 1.05  # Selective color boost
+
+    lut: "coastal_luxury.cube"  # Cool sophistication
+
+    atmospheric:
+      haze_amount: 0.15  # Light marine atmosphere
+      haze_color: [220, 235, 245]  # Cool coastal haze
+      aerial_perspective: true
+      distance_blue_shift: 0.1  # Ocean atmosphere
+
+    material_emphasis:
+      glass: 1.25  # Enhance modern glass
+      metal: 1.15  # Contemporary fixtures
+      concrete: 1.05  # Modern materials
+      water: 1.3  # Ocean/pool emphasis
+
+    composition:
+      golden_ratio_target: 0.85
+      enhance_views: true
+      minimize_clutter: true
+
+    lighting:
+      preserve_natural_light: true
+      enhance_indirect: 1.1  # Soft diffused light
+      sky_preservation: 0.95  # Prevent blown skies
+
+  # --------------------------------------------------------------------------
+  # HOPE RANCH TRADITIONAL
+  # --------------------------------------------------------------------------
+  hope_ranch_traditional:
+    description: "Traditional estates with mature landscapes"
+
+    target_emotion: "nostalgia_comfort"
+
+    color_grading:
+      temperature: +10  # Warm traditional
+      tint: +3  # Slight warm tint
+      saturation: 1.08  # Enhanced warmth
+      vibrance: 1.1  # Rich colors
+
+    lut: "traditional_warmth.cube"  # Classic warm tones
+
+    atmospheric:
+      haze_amount: 0.25  # Soft atmospheric depth
+      haze_color: [235, 225, 205]  # Warm heritage feel
+      aerial_perspective: true
+
+    material_emphasis:
+      wood: 1.2  # Traditional woodwork
+      brick: 1.15  # Heritage materials
+      stone: 1.12  # Natural stone
+      greenery: 1.15  # Mature landscaping
+
+    composition:
+      golden_ratio_target: 0.75
+      enhance_symmetry: true
+      frame_landscape: true
+
+    lighting:
+      preserve_golden_hour: true
+      enhance_warmth: 1.2
+      soft_shadows: true
+
+  # --------------------------------------------------------------------------
+  # RIVIERA HILLSIDE VIEW
+  # --------------------------------------------------------------------------
+  riviera_view:
+    description: "Hillside properties with panoramic ocean/city views"
+
+    target_emotion: "aspiration_energy"
+
+    color_grading:
+      temperature: +5  # Balanced warm
+      tint: 0
+      saturation: 1.03  # Natural
+      vibrance: 1.12  # View enhancement
+
+    lut: "panoramic_vista.cube"  # View-optimized
+
+    atmospheric:
+      haze_amount: 0.18  # Atmospheric depth for views
+      haze_color: [225, 230, 240]  # Distance atmosphere
+      aerial_perspective: true
+      distance_desaturation: 0.2  # Clear foreground, soft distance
+      depth_enhance: true
+
+    material_emphasis:
+      glass: 1.3  # View-framing windows
+      outdoor_materials: 1.1  # Decks, terraces
+      water: 1.25  # Pools with views
+
+    composition:
+      golden_ratio_target: 0.82
+      enhance_views: true
+      depth_of_field: "maximize"
+
+    lighting:
+      preserve_view_clarity: true
+      enhance_foreground: 1.15
+      sky_gradient: true  # Preserve sunset gradients
+
+  # --------------------------------------------------------------------------
+  # BEACH/COASTAL PROPERTY
+  # --------------------------------------------------------------------------
+  coastal_beach:
+    description: "Beachfront and near-beach properties"
+
+    target_emotion: "serenity_luxury"
+
+    color_grading:
+      temperature: +2  # Neutral-cool (beach light)
+      tint: -2  # Slight blue shift (ocean)
+      saturation: 1.0  # Natural
+      vibrance: 1.08  # Selective enhancement
+
+    lut: "coastal_clear.cube"  # Beach aesthetic
+
+    atmospheric:
+      haze_amount: 0.22  # Marine atmosphere
+      haze_color: [215, 230, 245]  # Ocean haze
+      aerial_perspective: true
+      ocean_color_enhance: true
+
+    material_emphasis:
+      wood: 1.1  # Beach decking
+      glass: 1.25  # Ocean views
+      water: 1.35  # Ocean prominence
+      sand: 1.05  # Beach elements
+
+    composition:
+      golden_ratio_target: 0.78
+      enhance_views: true
+      ocean_prominence: true
+
+    lighting:
+      preserve_beach_light: true
+      enhance_reflections: 1.2  # Water reflections
+      sand_glow_control: 0.9  # Prevent overexposure
+
+  # --------------------------------------------------------------------------
+  # GOLDEN HOUR UNIVERSAL (Time-of-Day Preset)
+  # --------------------------------------------------------------------------
+  santa_barbara_golden_hour:
+    description: "Optimized for California coastal golden hour light"
+
+    target_emotion: "nostalgia_aspiration"
+
+    color_grading:
+      temperature: +12  # Warm golden light
+      tint: +5  # Warm magenta glow
+      saturation: 1.08  # Enhanced warmth
+      vibrance: 1.15  # Glowing colors
+      highlights_warmth: 1.2
+      shadows_warmth: 0.95  # Cooler shadows (contrast)
+
+    lut: "california_golden_hour.cube"
+
+    atmospheric:
+      haze_amount: 0.15  # Light atmospheric glow
+      haze_color: [255, 235, 200]  # Golden haze
+      aerial_perspective: true
+      golden_glow: true
+
+    material_emphasis:
+      all_materials: 1.1  # Universal enhancement
+      reflective_surfaces: 1.25  # Catch golden light
+
+    composition:
+      preserve_light_direction: true
+      enhance_rim_lighting: true
+
+    lighting:
+      preserve_golden_quality: true
+      enhance_warmth: 1.25
+      sun_flare_artistic: 0.6  # Subtle sun glow
+      shadow_detail: 1.1  # Preserve shadow detail
+
+  # --------------------------------------------------------------------------
+  # MARINE LAYER MORNING
+  # --------------------------------------------------------------------------
+  marine_layer_morning:
+    description: "Soft diffused light through marine layer"
+
+    target_emotion: "serenity_comfort"
+
+    color_grading:
+      temperature: +3  # Slightly warm through haze
+      tint: 0
+      saturation: 0.95  # Muted through marine layer
+      vibrance: 1.02  # Subtle
+
+    lut: "soft_morning.cube"
+
+    atmospheric:
+      haze_amount: 0.35  # Significant marine layer
+      haze_color: [230, 235, 240]  # Cool morning haze
+      diffuse_light: true
+      soft_shadows: true
+
+    material_emphasis:
+      all_materials: 0.95  # Subtle through haze
+
+    composition:
+      soft_focus_background: true
+
+    lighting:
+      diffused_soft: true
+      eliminate_harsh_shadows: true
+      gentle_contrast: 0.85
+
+# ==============================================================================
+# SEASONAL ADJUSTMENTS
+# ==============================================================================
+
+seasonal_adjustments:
+
+  spring:
+    description: "March-May: Green landscapes, variable marine layer"
+    greenery_enhancement: 1.15
+    saturation_boost: 1.05
+    marine_layer_probability: 0.6
+
+  summer:
+    description: "June-August: June gloom transitioning to clear"
+    marine_layer_probability: 0.7  # Peak June gloom
+    clear_afternoon: true
+    temperature_shift: +3
+
+  fall:
+    description: "September-November: Sundowner season, exceptional clarity"
+    clarity_enhancement: 1.2
+    sundowner_probability: 0.4  # High
+    warmth_boost: 1.1
+    golden_hour_optimal: true
+
+  winter:
+    description: "December-February: Crisp light, rain-washed clarity"
+    clarity_enhancement: 1.15
+    saturation: 1.08  # Rich colors after rain
+    green_enhancement: 1.2  # Lush landscapes
+
+# ==============================================================================
+# PROCESSING PIPELINE SETTINGS
+# ==============================================================================
+
+processing:
+
+  # Depth processing for coastal views
+  depth:
+    model: "large"  # High quality for luxury
+    enhance_aerial_perspective: true
+    zone_based_processing: true
+    foreground_clarity: 1.15
+    background_softness: 1.1
+
+  # AI enhancement settings
+  ai_enhancement:
+    model: "stable_diffusion_xl"  # Or FLUX when available
+    strength: 0.45  # Balanced enhancement
+    controlnet:
+      - type: "depth"
+        weight: 0.75
+      - type: "canny"
+        weight: 0.70
+    prompt_templates:
+      montecito: "luxury Mediterranean estate, warm golden light, professional architectural photography, 8k, highly detailed"
+      coastal: "modern coastal luxury home, ocean views, natural light, professional real estate photography, 8k"
+      traditional: "elegant traditional estate, classic architecture, warm inviting atmosphere, professional photography, 8k"
+    negative_prompt: "oversaturated, artificial, fake, CGI, unrealistic, distorted, low quality, blurry"
+
+  # Material response
+  material_response:
+    enabled: true
+    strength: 0.70
+    materials:
+      marble: {clarity: 0.85, saturation: 0.92, preserve_veining: true}
+      wood: {clarity: 0.75, saturation: 1.08, warmth: 1.12}
+      glass: {clarity: 1.0, preserve_transparency: true, enhance_reflection: 1.2}
+      water: {clarity: 0.80, saturation: 1.18, enhance_reflection: 1.25}
+      stone: {clarity: 0.78, saturation: 1.02, preserve_texture: true}
+
+  # Neuroaesthetics optimization
+  neuroaesthetics:
+    enabled: true
+    target_golden_ratio_score: 0.75
+    target_color_harmony_score: 0.70
+    target_visual_comfort_score: 0.75
+    emotional_optimization: true
+
+  # Quality validation
+  quality_validation:
+    lpips_threshold: 0.20  # Max perceptual distance
+    fid_threshold: 30.0  # Max distribution distance
+    validate_with_llava: true
+    llava_quality_threshold: 7.0  # Out of 10
+    structural_preservation: true
+
+# ==============================================================================
+# OUTPUT FORMATS (Market-specific)
+# ==============================================================================
+
+output_formats:
+
+  # Master archive
+  master:
+    format: "tiff"
+    bit_depth: 16
+    compression: "lzw"
+    color_space: "adobe_rgb"
+    metadata: "preserve_all"
+
+  # MLS listing
+  mls:
+    format: "jpeg"
+    quality: 95
+    max_dimension: 4096
+    color_space: "srgb"
+    sharpening: "output_mild"
+
+  # Premium marketing
+  print:
+    format: "tiff"
+    bit_depth: 16
+    max_dimension: 8192
+    color_space: "adobe_rgb"
+    sharpening: "output_crisp"
+
+  # Web/social
+  web:
+    format: "jpeg"
+    quality: 92
+    max_dimension: 2048
+    color_space: "srgb"
+    optimization: true
+
+  # Instagram
+  social:
+    format: "jpeg"
+    quality: 90
+    dimensions: [1080, 1080]  # Square
+    color_space: "srgb"
+    optimization: true
+    sharpening: "output_moderate"
+
+# ==============================================================================
+# METADATA EMBEDDING
+# ==============================================================================
+
+metadata:
+  location_tags:
+    - "Montecito"
+    - "Santa Barbara"
+    - "California"
+    - "Coastal"
+
+  iptc_keywords_template:
+    - "luxury real estate"
+    - "architectural photography"
+    - "{property_type}"  # e.g., "estate", "contemporary"
+    - "{location}"  # e.g., "Montecito", "Hope Ranch"
+    - "{view_type}"  # e.g., "ocean view", "mountain view"
+
+  copyright: "© {year} {photographer}"
+
+  gps:
+    include: false  # Security consideration for luxury properties
+    approximate_only: true  # If included, use approximate location
