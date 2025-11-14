@@ -17,7 +17,8 @@ FAST_TESTS := \
 	tests/test_golden_hour_courtyard_workflow.py
 
 .PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
-        lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs
+        lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
+        lock lock-prod lock-ci lock-dev
 
 help:
 	@echo "Targets:"
@@ -40,6 +41,12 @@ help:
 	@echo "  fix-quality        Auto-fix common quality issues"
 	@echo "  validate-ci        Validate GitHub Actions workflow configs"
 	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
+	@echo ""
+	@echo "Dependency locking:"
+	@echo "  lock               Regenerate all requirements lockfiles (prod/ci/dev)"
+	@echo "  lock-prod          Regenerate requirements.lock.txt"
+	@echo "  lock-ci            Regenerate requirements-ci.lock.txt"
+	@echo "  lock-dev           Regenerate requirements-dev.lock.txt"
 
 venv:
 	@if [ ! -x .venv/bin/python ]; then \
@@ -153,3 +160,26 @@ organize-docs:
 check-docs:
 	@echo "Checking documentation organization..."
 	@./scripts/organize_docs.sh --dry-run
+
+# --- Dependency locking (pip-tools) ---
+
+lock: lock-prod lock-ci lock-dev
+	@echo "✓ Lockfiles updated (prod/ci/dev)"
+
+lock-prod:
+	@echo "Locking production requirements -> requirements.lock.txt"
+	@pip-compile --generate-hashes \
+		-o requirements.lock.txt \
+		requirements.txt
+
+lock-ci:
+	@echo "Locking CI requirements -> requirements-ci.lock.txt"
+	@pip-compile --generate-hashes \
+		-o requirements-ci.lock.txt \
+		requirements-ci.txt
+
+lock-dev:
+	@echo "Locking dev requirements -> requirements-dev.lock.txt"
+	@pip-compile --generate-hashes \
+		-o requirements-dev.lock.txt \
+		requirements-dev.txt
