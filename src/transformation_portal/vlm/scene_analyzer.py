@@ -9,11 +9,10 @@ Provides structured scene understanding using LLaVA-1.5:
 """
 
 import logging
-import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
@@ -301,7 +300,7 @@ Provide your analysis in this exact format with clear sections."""
     def get_processing_recommendations(
         self,
         analysis: SceneAnalysis
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Get processing recommendations based on scene analysis.
 
         Returns recommended settings for enhancement based on detected scene characteristics.
