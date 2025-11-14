@@ -467,23 +467,43 @@ This installs:
 
 ### Adding New Dependencies
 
-- **Runtime-only dependency** → add to `requirements.txt`.
-- **Test-only dependency** → add to `requirements-ci.txt`.
-- **Dev-only tooling** (lint/format/type-check) → add to `requirements-dev.txt`.
+The project uses a layered dependency system in the `requirements/` directory. To add a new dependency:
 
-After changes, refresh your environment as needed:
+1. **Edit the appropriate `.in` file** in the `requirements/` directory:
+   - **Core runtime dependency** → edit `requirements/base.in`
+   - **ML/AI dependency** → edit `requirements/ml.in`
+   - **Test-only dependency** → edit `requirements/dev.in`
+   - **CI/CD tooling** → edit `requirements/ci.in`
+
+2. **Recompile the pinned requirements**:
+   ```bash
+   cd requirements/
+   make compile
+   ```
+
+3. **Commit both `.in` and `.txt` files**:
+   ```bash
+   git add requirements/
+   git commit -m "Add new dependency: package-name"
+   ```
+
+After changes, refresh your environment:
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements/all.txt
+pip install -e .
 ```
 
 ### Updating Dependencies
 
-When bumping versions, keep constraints consistent across files:
+To update all dependencies to their latest allowed versions:
 
-- Update `requirements.txt` first.
-- Ensure `requirements-ci.txt` and `requirements-dev.txt` stay compatible and do not override runtime versions improperly.
-- Run the test suite and CI after non-trivial version changes.
+```bash
+cd requirements/
+make update
+```
+
+This respects the version constraints in `.in` files while finding the newest compatible versions. After updating, commit both `.in` and `.txt` files.
 
 ---
 
