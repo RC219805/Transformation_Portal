@@ -8,6 +8,38 @@ on:
     branches: [ main ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pylint mypy types-PyYAML
+
+    - name: Lint with flake8
+      continue-on-error: true
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || true
+
+    - name: Lint with pylint
+      continue-on-error: true
+      run: |
+        # Only lint src directory to avoid issues with test files
+        pylint src/ --max-args=8 --max-locals=20 --max-branches=15 --max-statements=60 || true
+
+    - name: Type check with mypy
+      continue-on-error: true
+      run: |
+        mypy src/ --ignore-missing-imports --no-strict-optional || true
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -107,19 +139,6 @@ jobs:
         # Show remaining disk space
         df -h
 
-    - name: Lint with flake8 (optional)
-      continue-on-error: true
-      run: |
-        pip install flake8
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || true
-
-    - name: Type check with mypy (optional)
-      continue-on-error: true
-      run: |
-        pip install mypy types-PyYAML
-        mypy src/ --ignore-missing-imports --no-strict-optional || true
-
     - name: Run tests with pytest
       run: |
         # Run tests with proper PYTHONPATH set
@@ -198,7 +217,7 @@ jobs:
 
   cleanup:
     name: Cleanup
-    needs: [test, deploy]
+    needs: [lint, test, deploy]
     runs-on: ubuntu-latest
     if: always()
     
