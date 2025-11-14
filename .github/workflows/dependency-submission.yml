@@ -81,7 +81,7 @@ jobs:
 import sys
 try:
     with open('$req_file') as f:
-        lines = [l.strip() for l in f if l.strip() and not l.strip().startswith('#')]
+        lines = [l.strip() for l in f if l.strip() and not l.strip().startswith('#') and not l.strip().startswith('-r')]
         print(f'✓ $req_file has {len(lines)} dependencies')
     sys.exit(0)
 except Exception as e:
@@ -94,7 +94,7 @@ except Exception as e:
           # Only validate lightweight requirements with pip-compile (saves disk space)
           if [ -f "requirements-lint.txt" ]; then
             echo "Validating requirements-lint.txt with pip-compile..."
-            pip-compile --dry-run -o /tmp/requirements-lint.out requirements-lint.txt 2>&1 | head -50 || true
+            pip-compile --dry-run --no-emit-index-url --no-emit-trusted-host -o /tmp/requirements-lint.out requirements-lint.txt 2>&1 | head -50 || true
           fi
 
           # Clean up temp files immediately
