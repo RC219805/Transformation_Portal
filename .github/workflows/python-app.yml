@@ -1,4 +1,5 @@
 name: Python CI/CD
+permissions: none
 
 on:
   push:
