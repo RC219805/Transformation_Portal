@@ -12,13 +12,15 @@ The repository includes multiple CI/CD and automation workflows to ensure code q
 **Purpose:** Main CI workflow for Python testing and linting.  
 **Triggers:** `push` and `pull_request` on `main`.  
 **Features:**
-- Multi-Python testing matrix (3.10–3.12).  
+- Currently runs on Python 3.11 only (to conserve CI resources).  
 - Lean CPU-only dependency installation (`requirements-ci.txt`) for fast CI.  
 - Linting via `flake8` (critical errors only).  
 - Unit testing and end-to-end tests with `pytest`.  
 - Montecito manifest generation with artifact upload.
 - Test PyPI deployment on main branch pushes for validation.
-- Comprehensive cleanup job to prevent disk space issues.  
+- Comprehensive cleanup job to prevent disk space issues.
+
+**Note:** Other workflows like `pylint.yml` use the full multi-Python matrix (3.10–3.12) for cross-version consistency testing.  
 
 ### 2. `submit-pypi.yml`
 **Purpose:** Package building and distribution to PyPI and Test PyPI.  
