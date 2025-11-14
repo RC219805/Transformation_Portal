@@ -128,15 +128,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     if: always()
-    
+
     steps:
     - name: Clean up build artifacts
+      continue-on-error: true
       run: |
-        echo "No cleanup required: this job runs on a fresh GitHub Actions runner." || true
+        echo "No cleanup required: this job runs on a fresh GitHub Actions runner."
         # Cleanup commands removed because each job runs on a new VM and there are no artifacts to clean.
-        
+
     - name: Final cleanup verification
+      continue-on-error: true
       run: |
-        echo "Disk usage after cleanup:" || true
+        echo "Disk usage after cleanup:"
         df -h || true
-        echo "Workflow completed successfully!" || true
+        echo "Workflow completed successfully!"
