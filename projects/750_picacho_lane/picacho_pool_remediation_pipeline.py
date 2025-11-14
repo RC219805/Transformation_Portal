@@ -574,7 +574,7 @@ class PicachoPoolRemediationPipeline:
             print(f"❌ Error loading image: {e}")
             return None
 
-    def _save_image(self, img: np.ndarray, path: Path):
+    def _save_image(self, img: np.ndarray, path: Path) -> None:
         """Save processed image."""
         # Ensure output directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -594,7 +594,7 @@ class PicachoPoolRemediationPipeline:
 # CLI ENTRY POINT
 # ============================================================================
 
-def main():
+def main() -> None:
     """Main entry point."""
     import argparse
 
