@@ -120,6 +120,7 @@ jobs:
     name: Cleanup
     needs: [build]
     runs-on: ubuntu-latest
+    permissions: {}
     if: always()
     
     steps:
