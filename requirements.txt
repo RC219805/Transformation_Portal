@@ -17,6 +17,16 @@ controlnet-aux>=0.0.6,<1
 transformers>=4.35.0,<5
 huggingface-hub>=0.19.0,<2
 accelerate>=0.20.0,<2
+bitsandbytes>=0.41.0,<1  # For LLaVA 4-bit quantization
+sentencepiece>=0.1.99,<1  # For LLaVA tokenization
+protobuf>=3.20.0,<5  # For model serialization
+
+# Semantic segmentation
+# SAM requires: pip install git+https://github.com/facebookresearch/segment-anything.git
+# Note: Install separately with above command, not included in requirements.txt
+
+# Quality metrics
+lpips>=0.1.4,<1  # Learned perceptual similarity
 
 # Super-resolution stack
 realesrgan>=0.3.0,<1
