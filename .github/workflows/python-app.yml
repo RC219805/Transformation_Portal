@@ -32,13 +32,15 @@ jobs:
     - name: Lint with pylint
       continue-on-error: true
       run: |
-        # Only lint src directory to avoid issues with test files
-        pylint src/ --max-args=8 --max-locals=20 --max-branches=15 --max-statements=60 || true
+        # Use .pylintrc configuration (ignores src/transformation_portal, src/luxury_tiff_batch_processor)
+        # Lint tools/ and root-level Python files
+        pylint tools/ *.py || true
 
     - name: Type check with mypy
       continue-on-error: true
       run: |
-        mypy src/ --ignore-missing-imports --no-strict-optional || true
+        # Use mypy.ini configuration
+        mypy tools/ *.py || true
 
   test:
     runs-on: ubuntu-latest
