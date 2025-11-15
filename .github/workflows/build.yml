@@ -8,15 +8,9 @@ on:
   pull_request:
     branches: [ main ]
 
-permissions:
-  contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-permissions:
-  contents: read
 
 jobs:
   # Single lint job - no need to run on multiple Python versions
