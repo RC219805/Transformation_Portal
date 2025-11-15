@@ -3,6 +3,10 @@ name: Dependency Submission
 # This workflow submits dependencies to GitHub's dependency graph
 # It overrides the automatic dependency submission to add comprehensive disk space management
 # and handle large ML dependencies properly.
+#
+# Note: GitHub's automatic dependency submission is disabled in the repository settings
+# to prevent duplicate or conflicting submissions. Only this workflow is responsible
+# for submitting dependencies to the dependency graph.
 
 on:
   push:
