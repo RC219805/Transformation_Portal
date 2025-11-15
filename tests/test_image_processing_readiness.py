@@ -21,10 +21,14 @@ processor_spec = importlib.util.find_spec('simple_image_processor')
 READINESS_AVAILABLE = readiness_spec is not None
 PROCESSOR_AVAILABLE = processor_spec is not None
 
+# Initialize to None for pylint
+readiness = None
+processor = None
+
 if READINESS_AVAILABLE:
-    import check_image_processing_readiness as readiness
+    import check_image_processing_readiness as readiness  # type: ignore[no-redef]
 if PROCESSOR_AVAILABLE:
-    import simple_image_processor as processor
+    import simple_image_processor as processor  # type: ignore[no-redef]
 
 
 @pytest.mark.skipif(not READINESS_AVAILABLE, reason="readiness check module not available")

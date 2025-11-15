@@ -22,11 +22,12 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
+      RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
 
     steps:
-
       - name: Check API Key
         run: |
           if [ -z "${OPENAI_API_KEY}" ]; then
@@ -56,26 +57,19 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install openai requests
-      
+
       - name: Run Enhanced AI Code Review
         if: steps.changes.outputs.any_changed == 'true'
-        env:
-          OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
-          GH_TOKEN: ${{ env.GH_TOKEN }}
-          PR_NUMBER: ${{ env.PR_NUMBER }}
-          REPO: ${{ env.REPO }}
-          RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
         run: |
           python << 'PY'
-
           import os
           import sys
-          import time
           import json
           import random
           import requests
-          from openai import OpenAI
+          import time
           from datetime import datetime
+          from openai import OpenAI
 
           api_key = os.getenv("OPENAI_API_KEY", "").strip()
           gh_token = os.getenv("GH_TOKEN")
@@ -113,7 +107,7 @@ jobs:
               print("No reviewable code files found.")
               sys.exit(0)
 
-          # Build changes text
+          # Build changes text and stats
           changes_text = ""
           total_additions = 0
           total_deletions = 0
@@ -154,8 +148,8 @@ jobs:
 
           **3. PERFORMANCE** ⚡
           - Detect potential bottlenecks or inefficiencies
-          - Identify N+1 query problems, unnecessary loops
-          - Check resource management (memory leaks, file handles, connections)
+          - Identify N+1 query problems and unnecessary loops
+          - Check resource management (memory, file handles, connections)
           - Suggest optimization opportunities
 
           **4. BUGS & ISSUES** 🐛
@@ -191,13 +185,19 @@ jobs:
           [Security findings or ✅ No security concerns]
 
           ## ⚡ Performance Impact
-          [Performance assessment with metrics where possible]
+          [Performance assessment]
 
           ## 🐛 Potential Issues
           [List of bugs/issues or ✅ No issues detected]
 
           ## ✨ Code Quality
           [Quality assessment and suggestions]
+
+          ## 🏗️ Architecture & Design
+          [High-level architectural feedback]
+
+          ## 🧪 Testing
+          [Testing gaps and suggestions]
 
           ## 🔧 Auto-Fix Suggestions
           [Specific code fixes with confidence scores]
@@ -221,7 +221,6 @@ jobs:
 
           Provide a comprehensive, structured code review following the format specified in the system prompt."""
 
-          # Enhanced retry logic with exponential backoff
           print("🤖 Requesting enhanced AI review from GPT-4o...")
 
           def call_openai_with_retries(client, messages, model="gpt-4o", max_retries=6, **kwargs):
@@ -234,7 +233,6 @@ jobs:
                       )
                   except Exception as e:
                       err_str = str(e)
-                      # Detect rate-limit / 429 occurrences
                       status_is_429 = False
                       status = getattr(e, "status_code", None) or getattr(e, "http_status", None) or getattr(e, "status", None)
                       if status == 429:
@@ -242,7 +240,6 @@ jobs:
                       if "429" in err_str or "Rate limit" in err_str or "RateLimit" in err_str:
                           status_is_429 = True
 
-                      # If rate-limited and have attempts left, wait and retry
                       if status_is_429 and attempt < max_retries:
                           base_wait = min(90, 2 ** attempt)
                           jitter = random.uniform(0.5, 1.5)
@@ -250,12 +247,13 @@ jobs:
                           print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s...")
                           time.sleep(wait)
                           continue
-                      # Non-rate-limit error or last attempt
+
                       if attempt < max_retries:
                           wait = min(30, 2 ** (attempt - 1))
                           print(f"⚠️ Request failed (attempt {attempt}/{max_retries}): {str(e)[:100]}. Retrying in {wait}s...")
                           time.sleep(wait)
                           continue
+
                       raise
 
           messages = [
@@ -263,7 +261,6 @@ jobs:
               {"role": "user", "content": user_prompt}
           ]
 
-          review_text = None
           try:
               response = call_openai_with_retries(
                   client,
@@ -271,7 +268,7 @@ jobs:
                   model="gpt-4o",
                   max_retries=6,
                   max_tokens=2500,
-                  temperature=0.2
+                  temperature=0.2,
               )
 
               if response and hasattr(response, "choices") and len(response.choices) > 0:
@@ -282,67 +279,64 @@ jobs:
               else:
                   print("⚠️ OpenAI returned unexpected response structure.")
                   review_text = "⚠️ AI review unavailable: unexpected response format."
-
           except Exception as e:
               print(f"⚠️ OpenAI request failed after all retries: {str(e)}")
-              review_text = f"""⚠️ **AI Review Unavailable**
+              review_text = (
+                  "⚠️ **AI Review Unavailable**\n\n"
+                  "The AI code review service encountered errors after multiple retry attempts.\n\n"
+                  f"**Error (truncated):** `{str(e)[:200]}`\n\n"
+                  "**Action Required:** Please review the code manually or retry the workflow."
+              )
 
-          The AI code review service encountered errors after multiple retry attempts.
-
-          **Error:** {str(e)[:200]}
-
-          **Action Required:** Please review the code manually or retry the workflow.
-
-          **Fallback Analysis:**
-          - Files changed: {len(code_files)}
-          - Total changes: +{total_additions} -{total_deletions}
-          - Manual review recommended for files: {', '.join(f['filename'] for f in code_files[:5])}
-          """
-
-          # Enhance review with metadata
           timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
           enhanced_review = f"""## 🤖 AI Code Review (Enhanced v3.0)
 
-          **Powered by:** GPT-4o
-          **Review Time:** {timestamp}
+          **Powered by:** GPT-4o  
+          **Review Time:** {timestamp}  
           **PR:** #{pr_number}
 
           {review_text}
 
           ---
 
-          *This review was generated by an AI system. While comprehensive, it should complement, not replace, human code review.*
+          *This review was generated by an AI system. While comprehensive, it should complement, not replace, human code review.*  
           *AI Agent Version: 3.0 | Model: GPT-4o | Enhanced Security & Performance Analysis*
           """
 
-          # Write to file
-          with open(out_file, "w", encoding="utf-8") as f:
-              f.write(enhanced_review)
+          # Post comment on PR
+          comment_url = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"
+          comment_data = {"body": enhanced_review}
 
-          print("✅ Enhanced AI review completed successfully!")
-          print(f"\n{enhanced_review}")
+          try:
+              post_response = requests.post(comment_url, headers=headers, json=comment_data)
+              if post_response.status_code == 201:
+                  print("✅ AI review posted successfully!")
+              else:
+                  print(f"⚠️ Failed to post comment: {post_response.status_code}")
+                  print(post_response.text)
+          except Exception as e:
+              print(f"⚠️ Exception while posting review comment: {str(e)}")
+
+          # Write review to file for log visibility
+          try:
+              if out_file:
+                  with open(out_file, "w", encoding="utf-8") as f:
+                      f.write(enhanced_review)
+          except Exception as e:
+              print(f"⚠️ Failed to write review to file: {str(e)}")
 
           PY
 
-      - name: Post Review Comment
+      - name: Display Review
         if: steps.changes.outputs.any_changed == 'true'
-        env:
-          GH_TOKEN: ${{ env.GH_TOKEN }}
-          PR_NUMBER: ${{ env.PR_NUMBER }}
-          REPO: ${{ env.REPO }}
-          RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
         run: |
-          if [ ! -s "$RESPONSE_FILE" ]; then
-            echo "Review empty or missing."
-            exit 0
-          fi
-
-          echo "📤 Posting enhanced AI review to PR #${PR_NUMBER}"
-
-          COMMENT=$(cat "$RESPONSE_FILE")
-
-          gh api repos/${REPO}/issues/${PR_NUMBER}/comments \
-            -f body="${COMMENT}" || echo "⚠️ Failed to post comment, but continuing..."
+          echo "📄 AI review completed. Summary:"
+          if [ -f "$RESPONSE_FILE" ]; then
+            echo "----------------------------------------"
+            cat "$RESPONSE_FILE"
+            echo "----------------------------------------"
+          else:
+            echo "No review file found (comment should still be on the PR)."
 
       - name: Summary
         run: |
