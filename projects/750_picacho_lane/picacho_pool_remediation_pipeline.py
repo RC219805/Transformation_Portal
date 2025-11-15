@@ -609,20 +609,22 @@ class PicachoPoolRemediationPipeline:
             img (np.ndarray): Image array in float32 format, values in [0, 1].
             path (Path): Output file path (should have .tif or .tiff extension).
         """
-        # Ensure output directory exists
-        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            # Ensure output directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Convert to 16-bit TIFF for master
-        img_clipped = np.clip(img, 0, 1)
-        img_uint16 = (img_clipped * 65535).astype(np.uint16)
+            # Convert to 16-bit TIFF for master
+            img_clipped = np.clip(img, 0, 1)
+            img_uint16 = (img_clipped * 65535).astype(np.uint16)
 
-        img_pil = Image.fromarray(img_uint16, mode='RGB')
-        img_pil.save(path, compression='lzw')
+            img_pil = Image.fromarray(img_uint16, mode='RGB')
+            img_pil.save(path, compression='lzw')
 
-        file_size_mb = path.stat().st_size / 1024 / 1024
-        print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 16-bit TIFF)")
-
-
+            file_size_mb = path.stat().st_size / 1024 / 1024
+            print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 16-bit TIFF)")
+        except Exception as e:
+            print(f"❌ Error saving image to {path}: {e}")
+            raise
 # ============================================================================
 # CLI ENTRY POINT
 # ============================================================================
