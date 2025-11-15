@@ -8,10 +8,13 @@ Pillow>=10.0.0,<12
 scipy>=1.15,<2
 scikit-learn>=1.0,<2       # classical ML (used in core features)
 
+# Configuration and data formats
+PyYAML>=6.0,<7             # YAML config file parsing
+
 # CLI framework and utilities
 typer>=0.10.0,<1           # CLI framework
 tqdm>=4.66,<5              # progress bar utility
 
 # TIFF image support (essential for batch processing)
-tifffile>=2023.7.18,<2025 
+tifffile>=2023.7.18,<2025
 imagecodecs>=2023.9.18,<2025

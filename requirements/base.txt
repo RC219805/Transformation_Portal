@@ -25,6 +25,8 @@ pillow==11.3.0
     # via -r base.in
 pygments==2.19.2
     # via rich
+pyyaml==6.0.3
+    # via -r base.in
 rich==14.2.0
     # via typer
 scikit-learn==1.7.2
