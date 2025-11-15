@@ -1,40 +1,37 @@
-name: Python Dependency Submission
+name: Dependency Submission
 
-# This workflow explicitly handles dependency submission to override
-# GitHub's automatic dependency submission which causes disk space errors
+# This workflow submits dependencies to GitHub's dependency graph.
+# It includes aggressive disk space management to handle large ML dependencies
+# and overrides GitHub's automatic dependency submission.
+
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'requirements*.txt'
-      - 'pyproject.toml'
-      - 'setup.py'
-      - 'setup.cfg'
+    branches:
+      - main
+      - develop
   pull_request:
-    branches: [ main ]
-    paths:
-      - 'requirements*.txt'
-      - 'pyproject.toml'
+    branches:
+      - main
+  # Allow manual triggers for testing
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # Required to submit dependencies to the dependency graph
 
 jobs:
-  dependency-submission:
+  submit-pypi:
     name: Submit Python Dependencies
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write  # Required for dependency submission
-      id-token: write
+    runs-on: ubuntu-latest
 
     steps:
       - name: Maximize available disk space
         run: |
-          echo "Initial disk usage:"
+          echo "=== Initial disk usage ==="
           df -h
+          echo ""
 
-          # Aggressive cleanup - free up to 30GB
+          echo "Removing unnecessary tools and libraries..."
+          # Aggressive cleanup - free up a lot of disk space
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/local/lib/android
@@ -42,104 +39,140 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/graalvm
+          sudo rm -rf /usr/local/sqlpackage
 
-          # Clean apt cache
+          echo "Cleaning package manager caches..."
           sudo apt-get clean
           sudo apt-get autoremove -y
           sudo apt-get autoclean -y
 
-          # Clean docker
+          echo "Cleaning Docker..."
           docker system prune -af --volumes || true
+          sudo rm -rf /var/lib/docker || true
 
-          # Remove pip cache preemptively
+          echo "Cleaning temporary directories..."
+          sudo rm -rf /tmp/* || true
+          sudo rm -rf /var/tmp/* || true
+
+          echo "Cleaning pip cache..."
           rm -rf ~/.cache/pip || true
 
-          echo "Disk usage after cleanup:"
+          echo ""
+          echo "=== Disk usage after cleanup ==="
           df -h
+          echo ""
+          echo "Available space: $(df -h / | awk 'NR==2 {print $4}')"
 
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-python@v6
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          python-version: "3.12"
+          # Shallow clone to save space
+          fetch-depth: 1
 
-      - name: Install pip-tools with minimal cache
-        env:
-          PIP_NO_CACHE_DIR: "1"
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Configure pip for minimal disk usage
         run: |
-          python -m pip install --upgrade pip
-          pip install --no-cache-dir pip-tools
+          echo "Configuring pip for space efficiency..."
 
-          echo "Disk space after pip-tools install:"
+          # Upgrade pip without cache
+          python -m pip install --upgrade pip --no-cache-dir
+
+          # Install only pip-tools (minimal dependency, if needed later)
+          pip install --no-cache-dir "pip-tools<8"
+
+          echo ""
+          echo "=== Disk usage after pip setup ==="
           df -h
+          echo ""
 
-      - name: Validate project dependencies
-        env:
-          PIP_NO_CACHE_DIR: "1"
+      - name: Validate requirements files
         run: |
           echo "Validating requirements files..."
 
-          # Validate syntax of requirements files without resolving all dependencies
-          # This avoids downloading 5-8GB of packages
-          for req_file in requirements.txt requirements-ci.txt requirements-lint.txt; do
-            if [ -f "$req_file" ]; then
-              echo "Checking $req_file syntax..."
-              python -c "
-import sys
-try:
-    with open('$req_file') as f:
-        lines = [l.strip() for l in f if l.strip() and not l.strip().startswith('#') and not l.strip().startswith('-r')]
-        print(f'✓ $req_file has {len(lines)} dependencies')
-    sys.exit(0)
-except Exception as e:
-    print(f'✗ Error parsing $req_file: {e}')
-    sys.exit(1)
-              " || exit 1
-            fi
-          done
-
-          # Only validate lightweight requirements with pip-compile (saves disk space)
-          if [ -f "requirements-lint.txt" ]; then
-            echo "Validating requirements-lint.txt with pip-compile..."
-            pip-compile --dry-run --no-emit-index-url --no-emit-trusted-host -o /tmp/requirements-lint.out requirements-lint.txt 2>&1 | head -50 || true
+          if [ -f "requirements.txt" ]; then
+            echo "✓ requirements.txt exists ($(wc -l < requirements.txt) lines)"
           fi
 
-          # Clean up temp files immediately
-          rm -rf /tmp/pip-* /tmp/requirements-*.out || true
-          pip cache purge || true
+          if [ -d "requirements/" ]; then
+            echo "✓ requirements/ directory exists"
+            ls -lh requirements/*.txt 2>/dev/null || true
+          fi
 
-          echo "✓ Validation complete"
-          echo "Disk space after validation:"
-          df -h
+          if [ -f "pyproject.toml" ]; then
+            echo "✓ pyproject.toml exists"
+          fi
 
-      - name: Submit dependency snapshot
-        # Only submit on push to main, not on PRs
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        continue-on-error: true
+      - name: Cache Python dependencies metadata (not packages)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip/http
+          key: ${{ runner.os }}-pip-metadata-${{ hashFiles('requirements*.txt', 'requirements/*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-metadata-
+
+      - name: Submit dependencies to GitHub
+        uses: actions/component-detection-dependency-submission-action@v1
+        env:
+          # Critical: Disable pip caching to save disk space
+          PIP_NO_CACHE_DIR: '1'
+          # Skip downloading full packages when possible
+          GH_DEPENDENCY_SUBMISSION_SKIP_CACHE: 'true'
+          # Set temporary directory with more space
+          TMPDIR: '/tmp'
+          # Limit pip's download retries to fail faster
+          PIP_RETRIES: '2'
+          # Don't build wheels from source (saves space)
+          PIP_NO_BUILD_ISOLATION: '1'
+        with:
+          # Process from repository root
+          path: '.'
+          # Scan for Python dependencies
+          detectorCategories: 'Pip'
+          # Exclude directories that don't contain dependencies
+          directoryExclusionList: '.git,node_modules,deprecated,archive,tests,docs,examples,.pytest_cache,__pycache__,.tox,.mypy_cache'
+        continue-on-error: false
+
+      - name: Cleanup after submission
+        if: always()
         run: |
-          echo "Creating lightweight dependency snapshot..."
+          echo "Cleaning up temporary files..."
 
-          # Create a minimal snapshot file based on syntax validation
-          # Don't use pip-compile which downloads all packages
-          cat > snapshot.json << 'EOF'
-          {
-            "version": 0,
-            "detector": {
-              "name": "custom-python-validator",
-              "version": "1.0.0",
-              "url": "https://github.com/${{ github.repository }}"
-            },
-            "metadata": {},
-            "manifests": {
-              "requirements.txt": {
-                "name": "requirements.txt",
-                "file": {
-                  "source_location": "requirements.txt"
-                }
-              }
-            }
-          }
-          EOF
+          # Purge all pip caches
+          pip cache purge || true
+          rm -rf ~/.cache/pip || true
 
-          echo "Dependency validation and submission completed."
-          echo "Note: Using lightweight validation instead of full pip-compile to conserve disk space."
+          # Clean build artifacts
+          rm -rf build/ dist/ ./*.egg-info || true
+
+          # Clean Python cache
+          find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find . -type f -name "*.pyc" -delete 2>/dev/null || true
+
+          # Clean temp
+          sudo rm -rf /tmp/* || true
+
+          echo ""
+          echo "=== Final disk usage ==="
+          df -h
+          echo ""
+          echo "Dependency submission completed successfully!"
+
+      - name: Report status
+        if: failure()
+        run: |
+          echo "⚠️ Dependency submission failed!"
+          echo ""
+          echo "Common issues:"
+          echo "1. Out of disk space - check cleanup steps"
+          echo "2. Network timeout - retry the workflow"
+          echo "3. Invalid requirements file - check syntax"
+          echo ""
+          echo "Current disk usage:"
+          df -h

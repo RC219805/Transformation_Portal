@@ -11,113 +11,342 @@
 #   cd requirements/
 #   make compile
 #
-
-# ML and deep learning core
-torch==2.4.1
-    # via
-    #   -r ml.in
-    #   accelerate
-    #   sentence-transformers
-    #   torchvision
-torchvision==0.19.1
-    # via -r ml.in
-diffusers==0.31.0
-    # via -r ml.in
-controlnet-aux==0.0.9
-    # via -r ml.in
-realesrgan==0.3.0
-    # via -r ml.in
-
-# HuggingFace ecosystem
-transformers==4.47.1
-    # via
-    #   -r ml.in
-    #   controlnet-aux
-    #   sentence-transformers
-huggingface-hub==0.27.1
-    # via
-    #   -r ml.in
-    #   sentence-transformers
-    #   transformers
-
-# Vision and image processing
-opencv-python==4.10.0.84
-    # via
-    #   -r ml.in
-    #   controlnet-aux
-scikit-image==0.24.0
-    # via
-    #   -r ml.in
-    #   controlnet-aux
-
-# Configuration and utilities
-pyyaml==6.0.2
-    # via
-    #   -r ml.in
-    #   huggingface-hub
-    #   transformers
-colour-science==0.4.6
-    # via -r ml.in
-
-# Performance and acceleration
-coremltools==8.3.0
-    # via -r ml.in
-psutil==6.1.1
-    # via -r ml.in
-memory-profiler==0.61.0
-    # via -r ml.in
+absl-py==2.3.1
+    # via tb-nightly
 accelerate==1.2.1
     # via -r ml.in
-
-# Vector search for RAG
-sentence-transformers==3.3.1
-    # via -r ml.in
-
-# Additional dependencies (transitive)
-filelock==3.16.1
+addict==2.4.0
+    # via basicsr
+attrs==25.4.0
     # via
-    #   huggingface-hub
-    #   torch
-    #   transformers
-fsspec==2024.10.0
+    #   cattrs
+    #   coremltools
+basicsr==1.4.2
     # via
-    #   huggingface-hub
-    #   torch
-jinja2==3.1.5
-    # via torch
-markupsafe==3.0.2
-    # via jinja2
-mpmath==1.3.0
-    # via sympy
-networkx==3.4.2
-    # via torch
-packaging==24.2
-    # via
-    #   huggingface-hub
-    #   transformers
-regex==2024.11.6
-    # via transformers
-requests==2.32.3
-    # via
-    #   huggingface-hub
-    #   transformers
-safetensors==0.5.2
-    # via
-    #   controlnet-aux
-    #   transformers
-sympy==1.13.3
-    # via torch
-tokenizers==0.21.0
-    # via transformers
-typing-extensions==4.12.2
-    # via
-    #   huggingface-hub
-    #   torch
-urllib3==2.3.0
-    # via requests
+    #   gfpgan
+    #   realesrgan
+cattrs==25.2.0
+    # via coremltools
 certifi==2024.12.14
     # via requests
 charset-normalizer==3.4.1
     # via requests
+colour-science==0.4.6
+    # via -r ml.in
+contourpy==1.3.3
+    # via matplotlib
+controlnet-aux==0.0.9
+    # via -r ml.in
+coremltools==8.3.0
+    # via -r ml.in
+cycler==0.12.1
+    # via matplotlib
+diffusers==0.31.0
+    # via -r ml.in
+einops==0.8.1
+    # via controlnet-aux
+facexlib==0.3.0
+    # via
+    #   gfpgan
+    #   realesrgan
+filelock==3.16.1
+    # via
+    #   controlnet-aux
+    #   diffusers
+    #   huggingface-hub
+    #   torch
+    #   transformers
+    #   triton
+filterpy==1.4.5
+    # via facexlib
+fonttools==4.60.1
+    # via matplotlib
+fsspec==2024.10.0
+    # via
+    #   huggingface-hub
+    #   torch
+future==1.0.0
+    # via basicsr
+gfpgan==1.3.8
+    # via realesrgan
+grpcio==1.76.0
+    # via tb-nightly
+hf-xet==1.2.0
+    # via huggingface-hub
+huggingface-hub==0.36.0
+    # via
+    #   -r ml.in
+    #   accelerate
+    #   controlnet-aux
+    #   diffusers
+    #   sentence-transformers
+    #   tokenizers
+    #   transformers
 idna==3.10
     # via requests
+imageio==2.37.2
+    # via
+    #   colour-science
+    #   scikit-image
+importlib-metadata==8.7.0
+    # via
+    #   controlnet-aux
+    #   diffusers
+jinja2==3.1.6
+    # via torch
+joblib==1.5.2
+    # via scikit-learn
+kiwisolver==1.4.9
+    # via matplotlib
+lazy-loader==0.4
+    # via scikit-image
+llvmlite==0.45.1
+    # via numba
+lmdb==1.7.5
+    # via
+    #   basicsr
+    #   gfpgan
+markdown==3.10
+    # via tb-nightly
+markupsafe==3.0.2
+    # via
+    #   jinja2
+    #   werkzeug
+matplotlib==3.10.7
+    # via filterpy
+memory-profiler==0.61.0
+    # via -r ml.in
+mpmath==1.3.0
+    # via sympy
+networkx==3.4.2
+    # via
+    #   scikit-image
+    #   torch
+numba==0.62.1
+    # via facexlib
+numpy==2.2.6
+    # via
+    #   accelerate
+    #   basicsr
+    #   colour-science
+    #   contourpy
+    #   controlnet-aux
+    #   coremltools
+    #   diffusers
+    #   facexlib
+    #   filterpy
+    #   gfpgan
+    #   imageio
+    #   matplotlib
+    #   numba
+    #   opencv-python
+    #   opencv-python-headless
+    #   realesrgan
+    #   scikit-image
+    #   scikit-learn
+    #   scipy
+    #   sentence-transformers
+    #   tb-nightly
+    #   tifffile
+    #   torchvision
+    #   transformers
+nvidia-cublas-cu12==12.1.3.1
+    # via
+    #   nvidia-cudnn-cu12
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-cuda-cupti-cu12==12.1.105
+    # via torch
+nvidia-cuda-nvrtc-cu12==12.1.105
+    # via torch
+nvidia-cuda-runtime-cu12==12.1.105
+    # via torch
+nvidia-cudnn-cu12==9.1.0.70
+    # via torch
+nvidia-cufft-cu12==11.0.2.54
+    # via torch
+nvidia-curand-cu12==10.3.2.106
+    # via torch
+nvidia-cusolver-cu12==11.4.5.107
+    # via torch
+nvidia-cusparse-cu12==12.1.0.106
+    # via
+    #   nvidia-cusolver-cu12
+    #   torch
+nvidia-nccl-cu12==2.20.5
+    # via torch
+nvidia-nvjitlink-cu12==12.9.86
+    # via
+    #   nvidia-cusolver-cu12
+    #   nvidia-cusparse-cu12
+nvidia-nvtx-cu12==12.1.105
+    # via torch
+opencv-python==4.10.0.84
+    # via
+    #   -r ml.in
+    #   basicsr
+    #   facexlib
+    #   gfpgan
+    #   realesrgan
+opencv-python-headless==4.12.0.88
+    # via controlnet-aux
+packaging==24.2
+    # via
+    #   accelerate
+    #   coremltools
+    #   huggingface-hub
+    #   lazy-loader
+    #   matplotlib
+    #   scikit-image
+    #   tb-nightly
+    #   transformers
+pillow==12.0.0
+    # via
+    #   basicsr
+    #   controlnet-aux
+    #   diffusers
+    #   facexlib
+    #   imageio
+    #   matplotlib
+    #   realesrgan
+    #   scikit-image
+    #   sentence-transformers
+    #   tb-nightly
+    #   torchvision
+platformdirs==4.5.0
+    # via yapf
+protobuf==6.33.1
+    # via
+    #   coremltools
+    #   tb-nightly
+psutil==6.1.1
+    # via
+    #   -r ml.in
+    #   accelerate
+    #   memory-profiler
+pyaml==25.7.0
+    # via coremltools
+pyparsing==3.2.5
+    # via matplotlib
+python-dateutil==2.9.0.post0
+    # via matplotlib
+pyyaml==6.0.2
+    # via
+    #   -r ml.in
+    #   accelerate
+    #   basicsr
+    #   gfpgan
+    #   huggingface-hub
+    #   pyaml
+    #   transformers
+realesrgan==0.3.0
+    # via -r ml.in
+regex==2024.11.6
+    # via
+    #   diffusers
+    #   transformers
+requests==2.32.4
+    # via
+    #   basicsr
+    #   diffusers
+    #   huggingface-hub
+    #   transformers
+safetensors==0.5.2
+    # via
+    #   accelerate
+    #   diffusers
+    #   transformers
+scikit-image==0.24.0
+    # via
+    #   -r ml.in
+    #   basicsr
+    #   controlnet-aux
+scikit-learn==1.7.2
+    # via sentence-transformers
+scipy==1.16.3
+    # via
+    #   basicsr
+    #   colour-science
+    #   controlnet-aux
+    #   facexlib
+    #   filterpy
+    #   gfpgan
+    #   scikit-image
+    #   scikit-learn
+    #   sentence-transformers
+sentence-transformers==2.7.0
+    # via -r ml.in
+six==1.17.0
+    # via python-dateutil
+sympy==1.13.3
+    # via
+    #   coremltools
+    #   torch
+tb-nightly==2.21.0a20251023
+    # via
+    #   basicsr
+    #   gfpgan
+tensorboard-data-server==0.7.2
+    # via tb-nightly
+threadpoolctl==3.6.0
+    # via scikit-learn
+tifffile==2025.10.16
+    # via scikit-image
+timm==0.6.7
+    # via controlnet-aux
+tokenizers==0.21.0
+    # via transformers
+torch==2.4.1
+    # via
+    #   -r ml.in
+    #   accelerate
+    #   basicsr
+    #   controlnet-aux
+    #   facexlib
+    #   gfpgan
+    #   realesrgan
+    #   sentence-transformers
+    #   timm
+    #   torchvision
+torchvision==0.19.1
+    # via
+    #   -r ml.in
+    #   basicsr
+    #   controlnet-aux
+    #   facexlib
+    #   gfpgan
+    #   realesrgan
+    #   timm
+tqdm==4.67.1
+    # via
+    #   basicsr
+    #   coremltools
+    #   facexlib
+    #   gfpgan
+    #   huggingface-hub
+    #   realesrgan
+    #   sentence-transformers
+    #   transformers
+transformers==4.53.0
+    # via
+    #   -r ml.in
+    #   sentence-transformers
+triton==3.0.0
+    # via torch
+typing-extensions==4.12.2
+    # via
+    #   cattrs
+    #   colour-science
+    #   grpcio
+    #   huggingface-hub
+    #   torch
+urllib3==2.5.0
+    # via requests
+werkzeug==3.1.3
+    # via tb-nightly
+yapf==0.43.0
+    # via
+    #   basicsr
+    #   gfpgan
+zipp==3.23.0
+    # via importlib-metadata
