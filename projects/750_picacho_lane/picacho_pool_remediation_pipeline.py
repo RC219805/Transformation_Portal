@@ -442,25 +442,24 @@ class DepthPostProcessor:
             shift_amount = aberration_strength * 2.0  # Max 2 pixels
 
             # Compute radial direction vectors
-            y_indices, x_indices = np.indices((h, w))
-            dy = y_indices - center_y
-            dx = x_indices - center_x
+            dy = y - center_y
+            dx = x - center_x
             norm = np.sqrt(dx**2 + dy**2) + EPSILON_TINY  # avoid division by zero
             unit_dy = dy / norm
             unit_dx = dx / norm
 
             # Red channel: shift outward
-            red_y = y_indices + unit_dy * shift_amount
-            red_x = x_indices + unit_dx * shift_amount
+            red_y = y + unit_dy * shift_amount
+            red_x = x + unit_dx * shift_amount
             # Blue channel: shift inward
-            blue_y = y_indices - unit_dy * shift_amount
-            blue_x = x_indices - unit_dx * shift_amount
+            blue_y = y - unit_dy * shift_amount
+            blue_x = x - unit_dx * shift_amount
 
             # For pixels not in aberration_mask, keep original positions
-            red_y = np.where(aberration_mask, red_y, y_indices)
-            red_x = np.where(aberration_mask, red_x, x_indices)
-            blue_y = np.where(aberration_mask, blue_y, y_indices)
-            blue_x = np.where(aberration_mask, blue_x, x_indices)
+            red_y = np.where(aberration_mask, red_y, y)
+            red_x = np.where(aberration_mask, red_x, x)
+            blue_y = np.where(aberration_mask, blue_y, y)
+            blue_x = np.where(aberration_mask, blue_x, x)
 
             # Remap channels using map_coordinates
             img_red = ndimage.map_coordinates(img[:, :, 0], [red_y.ravel(), red_x.ravel()], order=1, mode='nearest').reshape(h, w)
