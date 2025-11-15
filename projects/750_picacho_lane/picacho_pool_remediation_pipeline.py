@@ -506,6 +506,10 @@ class PicachoPoolRemediationPipeline:
             print("❌ Failed to load image")
             return False
 
+        # Validate image has 3 channels (RGB)
+        if img.ndim != 3 or img.shape[2] != 3:
+            print(f"❌ Image must be RGB (3 channels), got shape {img.shape}")
+            return False
         h, w = img.shape[:2]
         print(f"  ✓ Loaded: {w}x{h} pixels, {img.dtype}")
 
