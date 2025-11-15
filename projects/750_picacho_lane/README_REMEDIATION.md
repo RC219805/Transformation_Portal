@@ -44,8 +44,6 @@ This pipeline implements the complete technical remediation pathway with 5 stage
 The pipeline produces:
 - 16-bit TIFF master file (lossless LZW compression)
 - Specification-compliant photorealistic render
-- Full metadata preservation
-
 ## Files
 
 - `picacho_pool_remediation_pipeline.py` - Main pipeline implementation
