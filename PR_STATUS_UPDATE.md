@@ -119,8 +119,13 @@ The `__init__.py` file currently exists in main and was recently modified intent
 
 #### Validation Test:
 ```bash
-python -c "import sys; sys.path.insert(0, '.'); import __init__"
-# Currently passes without errors
+# To check for packaging/validation issues caused by a root-level __init__.py,
+# run the same build/validation step as CI/CD:
+python -m build
+# or
+python setup.py sdist
+# If these fail, the root-level __init__.py is likely the cause.
+# See ACTIVE_PR_ANALYSIS.md for details.
 ```
 
 ---
