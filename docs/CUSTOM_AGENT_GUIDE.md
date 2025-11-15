@@ -4,6 +4,8 @@
 
 The **Transformation Portal Specialist** is a custom GitHub Copilot agent specifically designed for this repository. It has deep expertise in luxury real estate rendering, architectural visualization, and professional image/video processing workflows.
 
+**NEW in v2.0**: The agent has been significantly enhanced with 8 advanced capabilities that transform it into an intelligent development platform. See [Agent Enhancements v2.0](../.github/agents/AGENT_ENHANCEMENTS_v2.md) for complete details.
+
 ## What Makes This Agent Special?
 
 Unlike general-purpose AI assistants, the Transformation Portal Specialist has:
@@ -13,6 +15,18 @@ Unlike general-purpose AI assistants, the Transformation Portal Specialist has:
 - **AI/ML Integration**: Stable Diffusion XL, ControlNet, Depth Anything V2, Real-ESRGAN
 - **Professional Color Science**: LUTs, HDR tone mapping, ACES ODT, color space transforms
 - **Hardware Optimization**: Apple Silicon (CoreML), CUDA, MPS acceleration strategies
+
+### 1b. **Advanced Capabilities (v2.0)** 🚀
+- **Multi-Modal Intelligence**: Analyze image/video artifacts and quality issues
+- **Proactive Automation**: Suggest next steps and optimize workflows
+- **Deep Debugging**: Root cause analysis with memory/GPU profiling
+- **Performance Engine**: Automated optimization recommendations
+- **CI/CD Intelligence**: Smart test selection and build optimization
+- **Interactive Learning**: Adapts to your expertise and preferences
+- **Context-Aware Responses**: Tailored formatting (tutorial/quick-ref/debug modes)
+- **Quality Assurance**: Automated code review and security scanning
+
+See [Enhancement Details](../.github/agents/AGENT_ENHANCEMENTS_v2.md) for comprehensive documentation.
 
 ### 2. **Repository Architecture Understanding**
 The agent knows the modular structure:
@@ -90,42 +104,51 @@ In GitHub Copilot Chat, prefix your prompt with the agent name:
 
 #### 1. **Implementing Features**
 ```
-@transformation-portal-specialist Add a depth-based atmospheric haze effect 
+@transformation-portal-specialist Add a depth-based atmospheric haze effect
 to the ArchitecturalDepthPipeline that increases with distance from camera
 ```
 
-**What you'll get**:
-- Context about the pipeline architecture
-- Complete implementation with proper integration points
-- Configuration YAML updates
-- Test cases
-- Performance considerations
+**What you'll get (v2.0 Enhanced)**:
+- 🔍 **Semantic Search**: Finds similar depth effects in codebase
+- 🧠 **Impact Analysis**: Shows what components will be affected
+- 💡 **Implementation**: Complete code with intelligent completion
+- 🎯 **Multiple Approaches**: Alternative implementations with trade-offs
+- ⚡ **Performance Baseline**: Sets monitoring for regression detection
+- 📚 **Auto-Documentation**: Generates API docs and usage examples
+- 🧪 **Smart Tests**: Creates tests for affected components only
+- 🚀 **Proactive Suggestions**: "Also consider adding depth-based vignette..."
 
-#### 2. **Optimizing Performance**
+#### 2. **Optimizing Performance** (Enhanced)
 ```
-@transformation-portal-specialist The batch processor is using 18GB RAM for 
+@transformation-portal-specialist The batch processor is using 18GB RAM for
 4K images. How can I reduce memory usage while maintaining quality?
 ```
 
-**What you'll get**:
-- Analysis of current memory patterns
-- Specific optimization strategies
-- Code examples with profiling
-- Trade-off discussions
-- Testing approach
+**What you'll get (v2.0 Enhanced)**:
+- 📊 **Automatic Profiling**: Memory breakdown by pipeline stage
+- 🎯 **Ranked Solutions**: 3-5 optimizations sorted by impact/effort
+- ⚡ **Expected Results**: Throughput and memory predictions
+- 🔬 **Bottleneck Identification**: GPU utilization, cache efficiency
+- 📈 **Baseline Setting**: Automatic regression detection setup
+- 💡 **Hardware-Specific**: CoreML vs CUDA recommendations based on system
+- ✅ **Validation Plan**: Step-by-step testing strategy
+- 🤖 **Proactive**: "I notice GPU utilization is only 42%, consider..."
 
-#### 3. **Troubleshooting**
+#### 3. **Troubleshooting** (Enhanced)
 ```
-@transformation-portal-specialist Getting "RuntimeError: CUDA out of memory" 
+@transformation-portal-specialist Getting "RuntimeError: CUDA out of memory"
 when processing more than 5 images in batch
 ```
 
-**What you'll get**:
-- Root cause analysis
-- Multiple solution approaches
-- Code fixes with explanations
-- Prevention strategies
-- Alternative approaches (CPU/MPS fallback)
+**What you'll get (v2.0 Enhanced)**:
+- 🔍 **Stack Trace Analysis**: Parses error with code citations
+- 🌳 **Diagnostic Decision Tree**: Probability-ranked causes
+- 📊 **Memory Profiling**: Real-time memory breakdown
+- 🎯 **Immediate Fix**: Quick solution to unblock you
+- 🔧 **Long-term Solution**: Prevents future occurrences
+- ⚡ **Performance Impact**: Quantified trade-offs for each solution
+- 🧪 **Validation Steps**: Test plan to verify fix
+- 📚 **Prevention**: Adds monitoring/alerts for similar issues
 
 #### 4. **Creating Presets**
 ```
