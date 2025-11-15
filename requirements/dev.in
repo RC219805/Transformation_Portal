@@ -1,0 +1,21 @@
+# Developer and testing tools
+# These are not needed in production environments.
+# This file contains abstract requirements with version ranges.
+# Run `make compile` in this directory to generate pinned dev.txt
+
+# Testing frameworks
+pytest>=8.0,<10
+pytest-cov>=4.0,<6
+hypothesis>=6.0,<7
+
+# Type checking and linting
+mypy>=1.10
+flake8>=7.0
+pylint>=3.0
+black>=24.8
+isort>=5.13,<6
+autopep8>=2.0,<3
+libcst>=1.2,<2
+
+# Additional development utilities
+types-PyYAML>=6.0.12

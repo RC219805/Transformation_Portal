@@ -1,0 +1,8 @@
+# Aggregate of all dependencies for full install
+# This file includes all other .in files for a complete development environment.
+# Run `make compile` in this directory to generate pinned all.txt
+
+-r base.in
+-r ml.in
+-r dev.in
+-r ci.in

@@ -9,19 +9,19 @@ description = "Professional image and video processing toolkit for luxury real e
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "RC219805" }]
+# Core dependencies - see requirements/base.in for pinned versions
 dependencies = [
     # Pin numpy <2.3.0 for opencv-python compatibility
     # See: https://github.com/opencv/opencv-python/issues/954
     "numpy>=1.24,<2.3.0",
     "Pillow>=10.0.0,<12",
-    "scipy>=1.10,<2",
-    "scikit-learn>=1.4.0,<2",
-    "typer>=0.12,<1",
-    "torch>=2.0,<3",
-    "diffusers>=0.20,<1",
-    "controlnet-aux>=0.0.6,<1",
-    "realesrgan>=0.3.0,<1",
-    "tqdm>=4.65,<5",
+    "scipy>=1.15,<2",
+    "scikit-learn>=1.0,<2",
+    "PyYAML>=6.0,<7",
+    "typer>=0.10.0,<1",
+    "tqdm>=4.66,<5",
+    "tifffile>=2023.7.18,<2025",
+    "imagecodecs>=2023.9.18,<2025",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -30,32 +30,51 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-tiff = [
-    "tifffile>=2023.7.18,<2025",
-    "imagecodecs>=2023.1.23",
-]
+# ML and deep learning - see requirements/ml.in for pinned versions
 ml = [
-    "transformers>=4.35.0",
-    "huggingface-hub>=0.19.0",
-    "torchvision>=0.15.0",
-    "opencv-python>=4.8.0",
-    "scikit-image>=0.21.0",
+    "torch>=2.0,<3",
+    "diffusers>=0.20,<1",
+    "controlnet-aux>=0.0.6,<1",
+    "realesrgan>=0.3.0,<1",
+    "transformers>=4.35.0,<5",
+    "huggingface-hub>=0.19.0,<1",
+    "torchvision>=0.15.0,<1",
+    "opencv-python>=4.8.0,<5",
+    "scikit-image>=0.21.0,<1",
     "PyYAML>=6.0",
     "colour-science>=0.4.2",
     "coremltools>=7.0",
     "psutil>=5.9.0",
     "memory-profiler>=0.61.0",
-    "sentence-transformers>=2.2.0",
+    "sentence-transformers>=2.2.0,<3",
+    "accelerate>=0.20.0,<2",
 ]
+# Development tools - see requirements/dev.in for pinned versions
 dev = [
-    "pytest>=8.3.3",
-    "pytest-cov>=5.0.0",
-    "hypothesis>=6.115.0",
+    "pytest>=8.0,<10",
+    "pytest-cov>=4.0,<6",
+    "hypothesis>=6.0,<7",
+    "mypy>=1.10",
     "flake8>=7.0",
-    "pylint>=3.2.0",
+    "pylint>=3.0",
+    "black>=24.8",
+    "isort>=5.13,<6",
+    "autopep8>=2.0,<3",
+    "libcst>=1.2,<2",
+    "types-PyYAML>=6.0.12",
 ]
+# CI/CD tools - see requirements/ci.in for pinned versions
+ci = [
+    "bandit>=1.7,<2",
+    "safety>=2.3,<3",
+    "build>=1.0,<2",
+    "twine>=4.0,<5",
+    "tox>=4.5,<5",
+    "pypdf>=3.9.0",
+]
+# All dependencies combined
 all = [
-    "transformation-portal[tiff,ml,dev]",
+    "transformation-portal[ml,dev,ci]",
 ]
 
 [project.scripts]
