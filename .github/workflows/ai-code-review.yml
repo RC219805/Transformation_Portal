@@ -1,4 +1,4 @@
-name: AI Code Review
+name: AI Code Review (Enhanced v3.0)
 
 on:
   pull_request:
@@ -11,10 +11,11 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  security-events: write
 
 jobs:
   ai-review:
-    name: AI-Powered Code Review
+    name: AI-Powered Code Review (GPT-4o Enhanced)
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
 
@@ -56,7 +57,7 @@ jobs:
           pip install --upgrade pip
           pip install openai requests
       
-      - name: Run AI Code Review
+      - name: Run Enhanced AI Code Review
         if: steps.changes.outputs.any_changed == 'true'
         env:
           OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
@@ -73,9 +74,8 @@ jobs:
           import json
           import random
           import requests
-          import time
-          import random
           from openai import OpenAI
+          from datetime import datetime
 
           api_key = os.getenv("OPENAI_API_KEY", "").strip()
           gh_token = os.getenv("GH_TOKEN")
@@ -96,7 +96,7 @@ jobs:
 
           # --- Fetch PR files ---------------------------------------------------
           files_url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/files"
-          print(f"Fetching file list from {files_url}")
+          print(f"📥 Fetching file list from {files_url}")
           r = requests.get(files_url, headers=headers)
 
           if r.status_code != 200:
@@ -109,40 +109,132 @@ jobs:
           allow = {".py", ".js", ".ts", ".jsx", ".tsx", ".yml", ".yaml", ".json", ".md"}
           code_files = [f for f in all_files if any(f["filename"].endswith(ext) for ext in allow)]
 
-          Review the code changes and provide:
-          1. Code quality assessment (concise)
-          2. Potential bugs or issues (if any)
-          3. Security concerns (if any)
-          4. Performance improvements (if applicable)
-          5. Best practice suggestions (if needed)
+          if not code_files:
+              print("No reviewable code files found.")
+              sys.exit(0)
 
-          Be concise and actionable. Focus on meaningful feedback.
-          Use emojis for visual clarity: ✅ (good), ⚠️ (warning), 🐛 (bug), 🔒 (security), ⚡ (performance).
+          # Build changes text
+          changes_text = ""
+          total_additions = 0
+          total_deletions = 0
 
-          If the code looks good, say so briefly. Don't nitpick minor style issues."""
+          for f in code_files[:15]:  # Limit to 15 files to avoid token limits
+              filename = f.get("filename", "unknown")
+              patch = f.get("patch", "")
+              additions = f.get("additions", 0)
+              deletions = f.get("deletions", 0)
+              total_additions += additions
+              total_deletions += deletions
 
-          user_prompt = f"""Review these code changes:
+              changes_text += f"\n{'='*80}\n"
+              changes_text += f"File: {filename}\n"
+              changes_text += f"Changes: +{additions} -{deletions}\n"
+              changes_text += f"{'='*80}\n"
+              changes_text += patch + "\n"
 
+          if len(code_files) > 15:
+              changes_text += f"\n... and {len(code_files) - 15} more files\n"
+
+          # Enhanced system prompt for GPT-4o
+          system_prompt = """You are an expert code reviewer with deep knowledge of software engineering best practices, security, performance optimization, and architectural patterns.
+
+          Analyze the code changes with a focus on:
+
+          **1. SECURITY ANALYSIS** 🔒
+          - Identify potential vulnerabilities (injection attacks, XSS, authentication issues, etc.)
+          - Check for hardcoded secrets or sensitive data exposure
+          - Verify input validation and sanitization
+          - Assess authorization and access control
+
+          **2. CODE QUALITY** ✨
+          - Evaluate code structure and organization
+          - Check naming conventions and readability
+          - Assess adherence to language-specific best practices
+          - Identify code smells and anti-patterns
+
+          **3. PERFORMANCE** ⚡
+          - Detect potential bottlenecks or inefficiencies
+          - Identify N+1 query problems, unnecessary loops
+          - Check resource management (memory leaks, file handles, connections)
+          - Suggest optimization opportunities
+
+          **4. BUGS & ISSUES** 🐛
+          - Identify logic errors or edge cases
+          - Check error handling and resilience
+          - Verify null/undefined safety
+          - Look for race conditions or concurrency issues
+
+          **5. ARCHITECTURE & DESIGN** 🏗️
+          - Evaluate design patterns and architectural decisions
+          - Check modularity and separation of concerns
+          - Assess scalability and maintainability
+          - Identify tight coupling or architectural violations
+
+          **6. TESTING** 🧪
+          - Suggest test coverage improvements
+          - Identify untested edge cases
+          - Recommend test types (unit, integration, e2e)
+
+          **7. AUTO-FIX SUGGESTIONS** 🔧
+          - Provide specific code snippets for fixes
+          - Include confidence scores (Low/Medium/High)
+          - Prioritize suggestions by impact
+
+          **OUTPUT FORMAT:**
+
+          Use this structured format:
+
+          ## 📊 Review Summary
+          [Brief 2-3 sentence overview]
+
+          ## 🔒 Security Analysis
+          [Security findings or ✅ No security concerns]
+
+          ## ⚡ Performance Impact
+          [Performance assessment with metrics where possible]
+
+          ## 🐛 Potential Issues
+          [List of bugs/issues or ✅ No issues detected]
+
+          ## ✨ Code Quality
+          [Quality assessment and suggestions]
+
+          ## 🔧 Auto-Fix Suggestions
+          [Specific code fixes with confidence scores]
+
+          ## 📈 Metrics
+          - Complexity: [Low/Medium/High]
+          - Risk Level: [Low/Medium/High]
+          - Review Confidence: [0-100%]
+
+          Be thorough but concise. If code is excellent, say so clearly. Focus on actionable, high-impact feedback."""
+
+          user_prompt = f"""Review these code changes from PR #{pr_number}:
+
+          **Change Statistics:**
+          - Files changed: {len(code_files)}
+          - Lines added: +{total_additions}
+          - Lines removed: -{total_deletions}
+
+          **Code Changes:**
           {changes_text}
 
-          Provide a brief, actionable code review."""
+          Provide a comprehensive, structured code review following the format specified in the system prompt."""
 
-          # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
-          print("🤖 Requesting AI review from GPT-4o-mini with retry logic...")
+          # Enhanced retry logic with exponential backoff
+          print("🤖 Requesting enhanced AI review from GPT-4o...")
 
-          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
+          def call_openai_with_retries(client, messages, model="gpt-4o", max_retries=6, **kwargs):
               for attempt in range(1, max_retries + 1):
                   try:
                       return client.chat.completions.create(
                           model=model,
                           messages=messages,
-                          max_tokens=1000,
-                          temperature=0.3,
                           **kwargs
                       )
                   except Exception as e:
                       err_str = str(e)
-                      # Detect rate-limit / 429 occurrences (best-effort)
+                      # Detect rate-limit / 429 occurrences
                       status_is_429 = False
                       status = getattr(e, "status_code", None) or getattr(e, "http_status", None) or getattr(e, "status", None)
                       if status == 429:
@@ -150,16 +242,20 @@ jobs:
                       if "429" in err_str or "Rate limit" in err_str or "RateLimit" in err_str:
                           status_is_429 = True
 
-                      # If we are rate-limited and we have attempts left, wait and retry
+                      # If rate-limited and have attempts left, wait and retry
                       if status_is_429 and attempt < max_retries:
-                          # Exponential backoff with jitter, capped to avoid extremely long waits
-                          base_wait = min(60, 2 ** attempt)
+                          base_wait = min(90, 2 ** attempt)
                           jitter = random.uniform(0.5, 1.5)
                           wait = base_wait * jitter
-                          print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
+                          print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s...")
                           time.sleep(wait)
                           continue
-                      # For non-rate-limit or last attempt, raise to be handled by caller
+                      # Non-rate-limit error or last attempt
+                      if attempt < max_retries:
+                          wait = min(30, 2 ** (attempt - 1))
+                          print(f"⚠️ Request failed (attempt {attempt}/{max_retries}): {str(e)[:100]}. Retrying in {wait}s...")
+                          time.sleep(wait)
+                          continue
                       raise
 
           messages = [
@@ -169,55 +265,62 @@ jobs:
 
           review_text = None
           try:
-              response = call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6)
-              # Parse response robustly across possible SDK shapes
+              response = call_openai_with_retries(
+                  client,
+                  messages,
+                  model="gpt-4o",
+                  max_retries=6,
+                  max_tokens=2500,
+                  temperature=0.2
+              )
+
               if response and hasattr(response, "choices") and len(response.choices) > 0:
                   try:
                       review_text = response.choices[0].message.content
                   except Exception:
                       review_text = getattr(response.choices[0], "text", None) or str(response)
               else:
-                  print("⚠️ OpenAI returned an unexpected response structure.")
+                  print("⚠️ OpenAI returned unexpected response structure.")
+                  review_text = "⚠️ AI review unavailable: unexpected response format."
+
           except Exception as e:
-              # If retries exhausted or a non-retryable error occurred, provide a clear fallback review_text
-              print(f"⚠️ OpenAI request failed after retries: {str(e)}")
-              review_text = ("⚠️ AI review unavailable: the AI service returned errors (rate limits or other). "
-                             "Please retry or review manually. See CI logs for details.")
+              print(f"⚠️ OpenAI request failed after all retries: {str(e)}")
+              review_text = f"""⚠️ **AI Review Unavailable**
 
-          # Post comment on PR (attempt even if fallback review_text used)
-          comment_body = f"""## 🤖 AI Code Review
+          The AI code review service encountered errors after multiple retry attempts.
 
-          print("Requesting AI review...")
+          **Error:** {str(e)[:200]}
 
-          # --- Retry wrapper ---------------------------------------------------
-          def call_with_retries():
-              delay = 1
-              for attempt in range(6):
-                  try:
-                      return client.chat.completions.create(
-                          model="gpt-4o-mini",
-                          messages=[
-                              {"role": "system", "content": system_prompt},
-                              {"role": "user", "content": user_prompt},
-                          ],
-                          max_tokens=800,
-                          temperature=0.2,
-                      )
-                  except Exception as e:
-                      print(f"Attempt {attempt+1} failed:", e)
-                      time.sleep(delay + random.random())
-                      delay *= 2
-              return None
+          **Action Required:** Please review the code manually or retry the workflow.
 
-          result = call_with_retries()
+          **Fallback Analysis:**
+          - Files changed: {len(code_files)}
+          - Total changes: +{total_additions} -{total_deletions}
+          - Manual review recommended for files: {', '.join(f['filename'] for f in code_files[:5])}
+          """
 
-          if not result or not result.choices:
-              review_text = "AI review failed: no response from model."
-          else:
-              review_text = result.choices[0].message.content.strip()
+          # Enhance review with metadata
+          timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+          enhanced_review = f"""## 🤖 AI Code Review (Enhanced v3.0)
 
+          **Powered by:** GPT-4o
+          **Review Time:** {timestamp}
+          **PR:** #{pr_number}
+
+          {review_text}
+
+          ---
+
+          *This review was generated by an AI system. While comprehensive, it should complement, not replace, human code review.*
+          *AI Agent Version: 3.0 | Model: GPT-4o | Enhanced Security & Performance Analysis*
+          """
+
+          # Write to file
           with open(out_file, "w", encoding="utf-8") as f:
-              f.write(review_text)
+              f.write(enhanced_review)
+
+          print("✅ Enhanced AI review completed successfully!")
+          print(f"\n{enhanced_review}")
 
           PY
 
@@ -234,30 +337,17 @@ jobs:
             exit 0
           fi
 
-          echo "Posting AI review to PR #${PR_NUMBER}"
+          echo "📤 Posting enhanced AI review to PR #${PR_NUMBER}"
 
-          comment_url = f'https://api.github.com/repos/{repo}/issues/{pr_number}/comments'
-          comment_data = {'body': comment_body}
-
-          try:
-              post_response = requests.post(comment_url, headers=headers, json=comment_data)
-              if post_response.status_code == 201:
-                  print("✅ AI review posted successfully!")
-                  print(f"\n{review_text}")
-              else:
-                  # print for diagnostics but do not fail the job for a posting error
-                  print(f"⚠️ Failed to post comment: {post_response.status_code}")
-                  print(post_response.text if hasattr(post_response, 'text') else '')
-                  print(review_text)
-          except Exception as e:
-              print(f"⚠️ Failed to post review comment due to: {str(e)}")
-              print(review_text)
+          COMMENT=$(cat "$RESPONSE_FILE")
 
           gh api repos/${REPO}/issues/${PR_NUMBER}/comments \
-            -f body="${COMMENT}"
+            -f body="${COMMENT}" || echo "⚠️ Failed to post comment, but continuing..."
 
       - name: Summary
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  🧠 AI Code Review Completed"
+          echo "  🧠 Enhanced AI Code Review Completed (v3.0)"
+          echo "  🚀 Powered by GPT-4o"
+          echo "  ✨ Security, Performance & Quality Analysis"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
