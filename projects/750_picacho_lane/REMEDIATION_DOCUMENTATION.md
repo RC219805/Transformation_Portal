@@ -350,7 +350,7 @@ After processing, verify:
 ## Dependencies
 
 ### Required
-- Python 3.9+
+- Python 3.10+
 - NumPy >= 1.20
 - Pillow (PIL) >= 9.0
 - SciPy >= 1.7 (for ndimage filters)
