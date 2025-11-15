@@ -1,0 +1,32 @@
+# Optional ML and deep learning dependencies
+# These are heavy dependencies for AI/ML features (not needed for basic use)
+# This file contains abstract requirements with version ranges.
+# Run `make compile` in this directory to generate pinned ml.txt
+
+# ML and deep learning libraries (optional)
+torch>=2.0,<3
+diffusers>=0.20,<1
+controlnet-aux>=0.0.6,<1
+realesrgan>=0.3.0,<1
+
+# HuggingFace ecosystem and vision utilities
+transformers>=4.35.0,<5
+huggingface-hub>=0.19.0,<1
+torchvision>=0.15.0,<1
+opencv-python>=4.8.0,<5
+scikit-image>=0.21.0,<1
+
+# Configuration and color science
+PyYAML>=6.0
+colour-science>=0.4.2
+
+# Apple Silicon acceleration and performance tools
+coremltools>=7.0
+psutil>=5.9.0
+memory-profiler>=0.61.0
+
+# Vector search for RAG system
+sentence-transformers>=2.2.0,<3
+
+# Additional ML support
+accelerate>=0.20.0,<2      # improves model loading speed

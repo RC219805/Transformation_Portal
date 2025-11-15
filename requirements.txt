@@ -1,40 +1,33 @@
-# Runtime / production dependencies
+# Transformation Portal - Core Runtime Dependencies
+# ==================================================
+# This is the main requirements file for production installations.
+# For a complete development environment, see requirements/ directory.
+#
+# Installation options:
+#   pip install -r requirements.txt           # Core functionality only (lightweight)
+#   pip install -r requirements/all.txt       # Full install with ML features (heavy)
+#   pip install -e ".[ml]"                    # Editable install with ML extras
+#
+# For CI/CD environments, use requirements-ci.txt
+# For development, use requirements-dev.txt
 
-# Core numeric + image stack
-# numpy <2.3.0 to avoid current opencv-python incompatibility
-# (see opencv-python issue tracker)
-numpy>=1.24,<2.3.0
-Pillow>=10,<12
-scipy>=1.10,<2
-tifffile>=2023.7.18,<2025
-imagecodecs>=2023.9.18,<2025
+# Core runtime essentials (base package)
+-r requirements/base.txt
 
-# Machine learning / vision
-torch>=2.0,<3
-torchvision>=0.15.0,<1
-diffusers>=0.20,<1
-controlnet-aux>=0.0.6,<1
-transformers>=4.35.0,<5
-huggingface-hub>=0.19.0,<2
-accelerate>=0.20.0,<2
+# Optional ML dependencies (comment out for lightweight install)
+# Uncomment the line below for full ML capabilities (adds ~10GB of packages)
+# -r requirements/ml.txt
 
-# Super-resolution stack
-realesrgan>=0.3.0,<1
-basicsr==1.4.2  # latest PyPI version compatible with Python 3.11
-
-# Classical ML / image processing
-scikit-learn>=1.4.0,<2
-scikit-image>=0.21.0,<1.0
-opencv-python>=4.8.0,<5
-
-# Config / color / conversion / system utils
-PyYAML>=6.0,<7
-colour-science>=0.4.2,<0.5
-coremltools>=7.0,<10
-psutil>=5.9.0,<8
-memory-profiler>=0.61.0,<1
-pypdf>=3.9.0,<4
-
-# CLI + progress
-typer>=0.12,<1
-tqdm>=4.66,<5
+# Installation notes:
+# 1. Base install (core features): ~500MB
+#    - Image processing, batch operations, basic color grading
+#    - No AI/ML features (depth estimation, upscaling, etc.)
+#
+# 2. Full install with ML (all features): ~10GB
+#    - Includes PyTorch, Diffusers, ControlNet, Real-ESRGAN
+#    - Enables: depth-aware processing, AI upscaling, ControlNet
+#    - To enable: uncomment the ml.txt line above OR use pyproject.toml extras
+#
+# 3. For development: use requirements-dev.txt or requirements/all.txt
+#
+# See requirements/README.md for detailed documentation on the layered system.
