@@ -111,6 +111,7 @@ The `__init__.py` file currently exists in main and was recently modified intent
 2. PR #308 needs updating to reflect new requirements
 3. There's a different approach to fixing validation issues
 
+> **Note:** This is a change from the recommendation in `ACTIVE_PR_ANALYSIS.md`, which advised removing `__init__.py` because it was incorrectly making the entire repository appear as a Python package. The current `__init__.py` now contains model wrapper code with lazy imports, and its retention appears to be an intentional design decision made after the prior analysis. This should be documented for future reference. If this is not the case, further clarification is needed to resolve the inconsistency.
 #### Next Steps:
 1. **Clarify intent** - Confirm if `__init__.py` should remain or be removed
 2. **Check validation** - Verify if Python validation is currently passing
