@@ -434,15 +434,35 @@ class DepthPostProcessor:
         aberration_strength = (dist_normalized - 0.7) / 0.3  # 0 to 1
 
         if aberration_mask.any():
-            # Shift red and blue channels slightly
+            # Shift red and blue channels slightly (radially-varying, per-pixel)
             shift_amount = aberration_strength * 2.0  # Max 2 pixels
 
+            # Compute radial direction vectors
+            y_indices, x_indices = np.indices((h, w))
+            dy = y_indices - center_y
+            dx = x_indices - center_x
+            norm = np.sqrt(dx**2 + dy**2) + 1e-8  # avoid division by zero
+            unit_dy = dy / norm
+            unit_dx = dx / norm
+
             # Red channel: shift outward
-            img[:, :, 0] = ndimage.shift(img[:, :, 0], (0, shift_amount.mean()), mode='nearest', order=1)
-
+            red_y = y_indices + unit_dy * shift_amount
+            red_x = x_indices + unit_dx * shift_amount
             # Blue channel: shift inward
-            img[:, :, 2] = ndimage.shift(img[:, :, 2], (0, -shift_amount.mean()), mode='nearest', order=1)
+            blue_y = y_indices - unit_dy * shift_amount
+            blue_x = x_indices - unit_dx * shift_amount
 
+            # For pixels not in aberration_mask, keep original positions
+            red_y = np.where(aberration_mask, red_y, y_indices)
+            red_x = np.where(aberration_mask, red_x, x_indices)
+            blue_y = np.where(aberration_mask, blue_y, y_indices)
+            blue_x = np.where(aberration_mask, blue_x, x_indices)
+
+            # Remap channels using map_coordinates
+            img_red = ndimage.map_coordinates(img[:, :, 0], [red_y.ravel(), red_x.ravel()], order=1, mode='nearest').reshape(h, w)
+            img_blue = ndimage.map_coordinates(img[:, :, 2], [blue_y.ravel(), blue_x.ravel()], order=1, mode='nearest').reshape(h, w)
+            img[:, :, 0] = img_red
+            img[:, :, 2] = img_blue
             print(f"  ✓ Chromatic aberration applied to peripheral elements (large-format simulation)")
 
         return img
