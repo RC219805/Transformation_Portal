@@ -675,6 +675,11 @@ def main() -> int:
     if args.config and args.config.exists():
         with open(args.config) as f:
             config = json.load(f)
+        # Validate required keys in config
+        required_keys = ['lighting_zones', 'darkness_preservation', 'scattering_threshold_m']
+        for key in required_keys:
+            if key not in config:
+                print(f"⚠️  Warning: '{key}' not found in config, using default")
 
     # Check input exists
     if not args.input.exists():
