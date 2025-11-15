@@ -46,11 +46,11 @@ class PBRMaterialProperties:
     """Physically-based rendering material properties."""
     name: str
     albedo_color: Tuple[float, float, float]  # Base color (RGB)
-    roughness: float  # 0.0 (mirror) to 1.0 (diffuse)
-    metallic: float  # 0.0 (dielectric) to 1.0 (metal)
-    subsurface_scattering: float  # 0.0 to 1.0
-    luminance_variation: float  # Texture variation 0.0 to 1.0
-    grain_intensity: float  # Visible grain/texture
+    roughness: float = 0.5  # 0.0 (mirror) to 1.0 (diffuse)
+    metallic: float = 0.0  # 0.0 (dielectric) to 1.0 (metal)
+    subsurface_scattering: float = 0.0  # 0.0 to 1.0
+    luminance_variation: float = 0.0  # Texture variation 0.0 to 1.0
+    grain_intensity: float = 0.0  # Visible grain/texture
 
 
 class MaterialSystemReconstructor:
