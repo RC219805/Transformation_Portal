@@ -23,9 +23,18 @@ import numpy as np
 from PIL import Image
 from dataclasses import dataclass
 from enum import Enum
+from scipy import ndimage
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+
+# Small epsilon values to avoid division by zero
+EPSILON_SMALL = 1e-6  # For general division safety
+EPSILON_TINY = 1e-8   # For geometric calculations requiring higher precision
 
 # ============================================================================
 # 1. MATERIAL SYSTEM RECONSTRUCTION
@@ -105,9 +114,6 @@ class MaterialSystemReconstructor:
 
         h, w = img.shape[:2]
 
-        # Convert to HSV for better color segmentation
-        from scipy import ndimage
-
         # Water detection: blue-dominant areas
         blue_mask = (img[:, :, 2] > img[:, :, 0] * 1.2) & (img[:, :, 2] > img[:, :, 1] * 1.1)
         water_mask = blue_mask.astype(float)
@@ -157,7 +163,7 @@ class MaterialSystemReconstructor:
                 for c in range(3):
                     target_color = props.albedo_color[c]
                     current_color = enhanced[:, :, c]
-                    adjustment = target_color / (current_color.mean() + 1e-6)
+                    adjustment = target_color / (current_color.mean() + EPSILON_SMALL)
                     adjustment = np.clip(adjustment, 0.8, 1.2)  # Conservative
                     enhanced[:, :, c] = np.where(
                         mask[:, :, None],
@@ -399,7 +405,7 @@ class DepthPostProcessor:
 
         # Selective luminance reduction (1-2 stops on background)
         background_mask = depth_normalized > 40
-        luminance_reduction = 0.5  # 1 stop = 0.5x
+        luminance_reduction = 0.5  # 1 stop reduction: 2^(-1) = 0.5x luminance
 
         for c in range(3):
             enhanced[:, :, c] = np.where(
@@ -418,8 +424,6 @@ class DepthPostProcessor:
 
     def _apply_chromatic_aberration(self, img: np.ndarray) -> np.ndarray:
         """Apply subtle chromatic aberration on extreme peripheral elements."""
-        from scipy import ndimage
-
         h, w = img.shape[:2]
 
         # Create radial distance map from center
@@ -441,7 +445,7 @@ class DepthPostProcessor:
             y_indices, x_indices = np.indices((h, w))
             dy = y_indices - center_y
             dx = x_indices - center_x
-            norm = np.sqrt(dx**2 + dy**2) + 1e-8  # avoid division by zero
+            norm = np.sqrt(dx**2 + dy**2) + EPSILON_TINY  # avoid division by zero
             unit_dy = dy / norm
             unit_dx = dx / norm
 
@@ -530,6 +534,16 @@ class PicachoPoolRemediationPipeline:
         if img.ndim != 3 or img.shape[2] != 3:
             print(f"❌ Image must be RGB (3 channels), got shape {img.shape}")
             return False
+
+        # Validate image value range for float images
+        if np.issubdtype(img.dtype, np.floating):
+            min_val = img.min()
+            max_val = img.max()
+            if min_val < 0.0 or max_val > 1.0:
+                print(f"❌ Image values out of expected [0, 1] range for float image: min={min_val:.4f}, max={max_val:.4f}")
+                print("   Please ensure the input image is normalized to [0, 1] for floating-point types.")
+                return False
+
         h, w = img.shape[:2]
         print(f"  ✓ Loaded: {w}x{h} pixels, {img.dtype}")
 
