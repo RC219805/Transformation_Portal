@@ -54,6 +54,7 @@
         "roughness": 0.05,
         "metallic": 0.0,
         "subsurface_scattering": 0.85,
+        "luminance_variation": 0.20,
         "grain_intensity": 0.0
       }
     }
