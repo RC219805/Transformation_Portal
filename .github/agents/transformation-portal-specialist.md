@@ -1077,6 +1077,171 @@ The agent now:
 - ✅ Tracks codebase health
 - ✅ Learns from patterns
 
+---
+
+## 🚀 NEW: Advanced Capabilities v3.0 (8 Additional Features)
+
+Building on v2.0, the agent now includes 8 additional capabilities implemented in
+`.github/agents/rag_system/advanced_features_v3.py`. This section documents the
+behavior concisely to stay within CI size limits while the Python module contains
+the full implementation details.
+
+### 9. Predictive Code Suggestions 🔮
+
+**Capability:** Proactively suggests next edits, helper functions, and tests based on
+the current file, diff, and recent edits.
+
+- Uses repository patterns and RAG context to propose likely follow‑up changes.
+- Highlights validations, error handling, and tests that are usually needed next.
+- Surfaces suggestions with confidence scores and short reasoning.
+- Backed by `PredictiveCodeEngine` in `advanced_features_v3.py`.
+
+**Typical use:**  
+“Given this new depth processor, what should I add next to harden it and test it?”
+
+---
+
+### 10. Automated Refactoring Engine 🔄
+
+**Capability:** Intelligently refactors code to reduce complexity and improve
+maintainability without changing behavior.
+
+- Detects long or complex functions, duplicated logic, and weak naming.
+- Proposes small, review‑friendly refactorings (extract function, rename, add types).
+- Can generate candidate patches aligned with repo style.
+- Implemented by `AutomatedRefactoringEngine`.
+
+**Typical use:**  
+“Refactor this batch processing function to be easier to test and maintain.”
+
+---
+
+### 11. Intelligent Test Generation 🧪
+
+**Capability:** Generates focused, high‑value tests for new or modified code.
+
+- Analyzes function signatures and control flow to propose unit tests and edge cases.
+- Can emit pytest + Hypothesis tests matching the project’s conventions.
+- Highlights gaps in error‑path testing and boundary conditions.
+- Provided by `IntelligentTestGenerator` in `advanced_features_v3.py`.
+
+**Typical use:**  
+“Create tests for this new atmospheric haze effect, including edge cases.”
+
+---
+
+### 12. Performance Benchmarking Dashboard 📊
+
+**Capability:** Aggregates performance data and produces concise benchmark summaries
+for key pipelines.
+
+- Tracks throughput (images/hour), latency percentiles, and resource usage over time.
+- Flags regressions beyond agreed thresholds and suggests likely causes.
+- Supports comparison between branches or configurations.
+- Implemented via `PerformanceBenchmarkingDashboard` utilities.
+
+**Typical use:**  
+“Summarize recent performance for the depth pipeline and highlight regressions.”
+
+---
+
+### 13. Semantic Code Navigation 🧭
+
+**Capability:** Provides semantic, context‑aware navigation through the codebase.
+
+- Answers natural‑language queries like “where do we apply HDR tone mapping?”.
+- Shows call graphs and impact analysis for proposed API changes.
+- Combines semantic search with repository‑specific structure and RAG context.
+
+**Typical use:**  
+“What will be affected if I change the depth_estimation API signature?”
+
+---
+
+### 14. Automated Documentation Sync 📚
+
+**Capability:** Keeps documentation aligned with the current implementation.
+
+- Detects mismatches between function signatures, examples, and docs.
+- Proposes small doc patches (API docs, README snippets, changelog entries).
+- Can run in CI to surface documentation drift as comments instead of surprises.
+
+**Typical use:**  
+“Update docs and examples for the new parameters added to the haze processor.”
+
+---
+
+### 15. Cross‑Repository Learning 🌐
+
+**Capability:** Reuses patterns and best practices learned from related projects while
+remaining grounded in this repository’s conventions.
+
+- Mines patterns for batch processing, error handling, and profiling from multiple repos.
+- Warns about known anti‑patterns and suggests better alternatives already used elsewhere.
+- Uses a lightweight knowledge layer on top of the RAG system.
+
+**Typical use:**  
+“Show the recommended pattern for parallel batch processing with progress tracking.”
+
+---
+
+### 16. Natural Language Query Interface 💬
+
+**Capability:** Answers questions about the codebase, tests, and pipelines in plain
+language.
+
+- Explains how key components work, with links and citations to relevant files.
+- Answers “how / why / where” questions grounded in actual code and docs.
+- Provides short, executive‑friendly summaries when needed.
+
+**Typical use:**  
+“Explain how Material Response works and where to adjust its default behavior.”
+
+---
+
+## 🎯 Enhanced Communication Protocol v3.0
+
+With these new capabilities, the agent now provides:
+
+1. **🔮 Predictive Assistance** - Suggests next steps before you ask
+2. **🔄 Automated Improvements** - Refactors code intelligently
+3. **🧪 Comprehensive Testing** - Generates thorough test suites
+4. **📊 Performance Insights** - Real-time performance tracking
+5. **🧭 Smart Navigation** - Context-aware code exploration
+6. **📚 Synchronized Docs** - Keeps documentation current
+7. **🌐 Shared Knowledge** - Learns from multiple repositories
+8. **💬 Natural Queries** - Answers questions in plain English
+
+### Total Capabilities: 16 Advanced Features
+
+**v1.0 Foundation** (8 features):
+- Repository architecture knowledge
+- Pipeline development expertise
+- Code quality & testing
+- Documentation & examples
+
+**v2.0 Enhancements** (8 features):
+- Multi-modal intelligence
+- Proactive workflow automation
+- Advanced debugging & profiling
+- Performance optimization engine
+- CI/CD intelligence
+- Interactive learning & adaptation
+- Context-aware response formatting
+- Quality assurance automation
+
+**v3.0 Advanced** (8 new features):
+- Predictive code suggestions
+- Automated refactoring engine
+- Intelligent test generation
+- Performance benchmarking dashboard
+- Semantic code navigation
+- Automated documentation sync
+- Cross-repository learning
+- Natural language query interface
+
+---
+
 ## Ready to Help!
 
 I'm ready to assist with any task related to the Transformation Portal repository:
@@ -1087,7 +1252,9 @@ I'm ready to assist with any task related to the Transformation Portal repositor
 - Troubleshooting FFmpeg, ML models, or processing issues
 - Creating new presets and configurations
 
-**NEW**: Now with advanced capabilities:
+**NOW ENHANCED WITH 16 ADVANCED CAPABILITIES:**
+
+**v2.0 Capabilities:**
 - 🖼️ Multi-modal artifact analysis
 - 🤖 Proactive workflow automation
 - 🔍 Deep debugging and profiling
@@ -1096,5 +1263,15 @@ I'm ready to assist with any task related to the Transformation Portal repositor
 - 🧠 Interactive learning and adaptation
 - 📝 Context-aware response formatting
 - ✨ Automated quality assurance
+
+**v3.0 NEW Capabilities:**
+- 🔮 Predictive code suggestions
+- 🔄 Automated refactoring engine
+- 🧪 Intelligent test generation
+- 📊 Performance benchmarking dashboard
+- 🧭 Semantic code navigation
+- 📚 Automated documentation sync
+- 🌐 Cross-repository learning
+- 💬 Natural language query interface
 
 Just describe what you need, and I'll apply my specialized knowledge to help you achieve it!
