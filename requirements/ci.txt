@@ -19,10 +19,7 @@ chardet==5.2.0
 charset-normalizer==3.4.4
     # via requests
 click==8.3.0
-    # via
-    #   -c base.txt
-    #   -c dev.txt
-    #   safety
+    # via safety
 colorama==0.4.6
     # via tox
 cryptography==46.0.3
@@ -54,13 +51,9 @@ jeepney==0.9.0
 keyring==25.6.0
     # via twine
 markdown-it-py==4.0.0
-    # via
-    #   -c base.txt
-    #   rich
+    # via rich
 mdurl==0.1.2
-    # via
-    #   -c base.txt
-    #   markdown-it-py
+    # via markdown-it-py
 more-itertools==10.8.0
     # via
     #   jaraco-classes
@@ -69,7 +62,6 @@ nh3==0.3.2
     # via readme-renderer
 packaging==25.0
     # via
-    #   -c dev.txt
     #   build
     #   dparse
     #   pyproject-api
@@ -79,19 +71,14 @@ pkginfo==1.12.1.2
     # via twine
 platformdirs==4.5.0
     # via
-    #   -c dev.txt
     #   tox
     #   virtualenv
 pluggy==1.6.0
-    # via
-    #   -c dev.txt
-    #   tox
+    # via tox
 pycparser==2.23
     # via cffi
 pygments==2.19.2
     # via
-    #   -c base.txt
-    #   -c dev.txt
     #   readme-renderer
     #   rich
 pypdf==6.2.0
@@ -101,9 +88,7 @@ pyproject-api==1.10.0
 pyproject-hooks==1.2.0
     # via build
 pyyaml==6.0.3
-    # via
-    #   -c dev.txt
-    #   bandit
+    # via bandit
 readme-renderer==44.0
     # via twine
 requests==2.32.5
@@ -117,7 +102,6 @@ rfc3986==2.0.0
     # via twine
 rich==14.2.0
     # via
-    #   -c base.txt
     #   bandit
     #   twine
 ruamel-yaml==0.18.16
