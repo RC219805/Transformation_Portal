@@ -636,7 +636,7 @@ class PicachoPoolRemediationPipeline:
         Notes
         -----
         - Input image is clipped to [0, 1] before conversion.
-        - Prints debug information and file size after saving.
+        - Prints file size and compression type after saving.
         - This function does not return a value; it writes the file to disk.
         """
         try:
