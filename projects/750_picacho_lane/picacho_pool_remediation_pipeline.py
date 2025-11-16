@@ -608,38 +608,70 @@ class PicachoPoolRemediationPipeline:
             return None
 
     def _save_image(self, img: np.ndarray, path: Path):
-        """Save processed image."""
-        # Ensure output directory exists
-        path.parent.mkdir(parents=True, exist_ok=True)
+        """
+        Save a processed image to disk in a professional, archival format.
 
-        # Convert to 16-bit TIFF for master
-        img_clipped = np.clip(img, 0, 1)
-        img_uint16 = (img_clipped * 65535).astype(np.uint16)
+        Parameters
+        ----------
+        img : np.ndarray
+            Image data as a NumPy array of type float32, with values in the range [0, 1].
+            Expected shape is (H, W, 3) for RGB images.
+        path : Path
+            Output file path. The file extension should be '.tif' or '.tiff'.
 
-        print(f"  Debug: img_uint16 shape={img_uint16.shape}, dtype={img_uint16.dtype}")
+        Output Format
+        -------------
+        - Attempts to save as a 16-bit TIFF (uint16) using the `tifffile` library.
+        - Uses LZW compression if available; falls back to deflate (zlib) if LZW is not supported.
+        - Sets photometric interpretation to 'rgb' for color images.
+        - If `tifffile` is not available, falls back to saving as 8-bit TIFF (uint8) using Pillow.
+        - In all cases, ensures the output directory exists.
 
-        # PIL has limited 16-bit support, use I;16 mode for grayscale or save channels separately
-        # For RGB 16-bit, we need to use tifffile or save as separate mode
+        Rationale
+        ---------
+        - 16-bit TIFF is preferred for professional workflows to preserve high dynamic range and avoid banding.
+        - LZW or deflate compression reduces file size without loss of quality.
+        - Fallback to 8-bit TIFF ensures compatibility if `tifffile` is not installed.
+
+        Notes
+        -----
+        - Input image is clipped to [0, 1] before conversion.
+        - Prints file size and compression type after saving.
+        - This function does not return a value; it writes the file to disk.
+        """
         try:
-            import tifffile
-            # Try LZW compression, fallback to deflate if imagecodecs not available
+            # Ensure output directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Convert to 16-bit TIFF for master
+            img_clipped = np.clip(img, 0, 1)
+            img_uint16 = (img_clipped * 65535).astype(np.uint16)
+
+            # PIL does not support 16-bit RGB TIFFs properly - use tifffile for true 16-bit RGB output.
             try:
-                tifffile.imwrite(path, img_uint16, compression='lzw', photometric='rgb')
-                compression_type = 'LZW'
-            except (KeyError, AttributeError):
-                # LZW not available, use deflate (zlib) instead
-                tifffile.imwrite(path, img_uint16, compression='deflate', photometric='rgb')
-                compression_type = 'deflate'
-            file_size_mb = path.stat().st_size / 1024 / 1024
-            print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 16-bit TIFF, {compression_type})")
-        except ImportError:
-            # Fallback: save as 8-bit if tifffile not available
-            print("  ⚠️  tifffile not available, saving as 8-bit TIFF")
-            img_uint8 = (img_clipped * 255).astype(np.uint8)
-            img_pil = Image.fromarray(img_uint8, mode='RGB')
-            img_pil.save(path, compression='lzw')
-            file_size_mb = path.stat().st_size / 1024 / 1024
-            print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 8-bit TIFF)")
+                import tifffile
+                # Try LZW compression, fallback to deflate if imagecodecs not available
+                try:
+                    tifffile.imwrite(path, img_uint16, compression='lzw', photometric='rgb')
+                    compression_type = 'LZW'
+                except (KeyError, AttributeError):
+                    # LZW not available, use deflate (zlib) instead
+                    tifffile.imwrite(path, img_uint16, compression='deflate', photometric='rgb')
+                    compression_type = 'deflate'
+                file_size_mb = path.stat().st_size / 1024 / 1024
+                print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 16-bit TIFF, {compression_type})")
+            except ImportError:
+                # Fallback: save as 8-bit if tifffile not available
+                print("  ⚠️  tifffile not available, **degrading to 8-bit** TIFF")
+                img_uint8 = (img_clipped * 255).astype(np.uint8)
+                img_pil = Image.fromarray(img_uint8, mode='RGB')
+                img_pil.save(path, compression='lzw')
+                file_size_mb = path.stat().st_size / 1024 / 1024
+                print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 8-bit TIFF)")
+        except Exception as e:
+            # Note: ImportError from tifffile is handled above; this block catches all other unexpected errors.
+            print(f"❌ Error saving image to {path}: {type(e).__name__}: {e}")
+            raise
 # ============================================================================
 # CLI ENTRY POINT
 # ============================================================================
