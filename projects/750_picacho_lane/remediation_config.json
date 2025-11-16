@@ -1,0 +1,196 @@
+{
+  "pipeline_name": "750_picacho_pool_technical_remediation",
+  "version": "1.0.0",
+  "description": "Technical remediation pathway for specification compliance",
+
+  "input": {
+    "file": "Final_Production_UltraQuality/750Picacho_Pool_UltraQuality.tif",
+    "format": "tiff",
+    "color_space": "srgb",
+    "bit_depth": 16
+  },
+
+  "output": {
+    "directory": "remediated_output",
+    "base_name": "750Picacho_Pool_Remediated_Master",
+    "format": "tiff",
+    "bit_depth": 16,
+    "compression": "lzw"
+  },
+
+  "stage_1_material_reconstruction": {
+    "enabled": true,
+    "materials": {
+      "plaster": {
+        "albedo_color": [0.88, 0.82, 0.72],
+        "description": "Warm beige with ochre undertones",
+        "roughness": 0.65,
+        "metallic": 0.0,
+        "subsurface_scattering": 0.15,
+        "luminance_variation": 0.08,
+        "grain_intensity": 0.25
+      },
+      "stone": {
+        "albedo_color": [0.85, 0.78, 0.68],
+        "description": "Travertine/warm limestone with 15-20% luminance variation",
+        "roughness": 0.55,
+        "metallic": 0.0,
+        "subsurface_scattering": 0.08,
+        "luminance_variation": 0.175,
+        "grain_intensity": 0.45
+      },
+      "wood": {
+        "albedo_color": [0.45, 0.32, 0.22],
+        "description": "Walnut/teak with visible grain at 50cm viewing distance",
+        "roughness": 0.45,
+        "metallic": 0.0,
+        "subsurface_scattering": 0.12,
+        "luminance_variation": 0.25,
+        "grain_intensity": 0.75
+      },
+      "water": {
+        "albedo_color": [0.15, 0.35, 0.45],
+        "description": "Pool water with transparency",
+        "roughness": 0.05,
+        "metallic": 0.0,
+        "subsurface_scattering": 0.85,
+        "luminance_variation": 0.20,
+        "grain_intensity": 0.0
+      }
+    }
+  },
+
+  "stage_2_atmospheric_integration": {
+    "enabled": true,
+    "hdri": {
+      "type": "site_specific",
+      "time": "blue_hour",
+      "location": "Santa Barbara, CA - 750 Picacho Lane",
+      "description": "Blue hour HDRI capture from property location",
+      "intensity": 0.7
+    },
+    "mountain_profile": {
+      "enabled": true,
+      "method": "geometric_projection",
+      "description": "Actual mountain profile as geometric element with projected photographic texture"
+    },
+    "color_temperature": {
+      "highlights": {
+        "kelvin": 6500,
+        "description": "Blue hour sky - cooler highlights"
+      },
+      "shadows": {
+        "kelvin": 2800,
+        "description": "Artificial interior lighting - warm shadows"
+      }
+    }
+  },
+
+  "stage_3_lighting_stratification": {
+    "enabled": true,
+    "multi_zone_interior_lighting": {
+      "num_zones": 4,
+      "falloff_model": "inverse_square",
+      "color_temperature_range": {
+        "min_kelvin": 2700,
+        "max_kelvin": 3200,
+        "description": "Varying color temperatures per zone"
+      },
+      "darkness_preservation": {
+        "enabled": true,
+        "percentage": 0.35,
+        "description": "Preserve darkness in 30-40% of visible interior volumes"
+      }
+    }
+  },
+
+  "stage_4_styling_rectification": {
+    "enabled": true,
+    "remove_prohibited_elements": {
+      "enabled": true,
+      "targets": [
+        "over_saturated_accessories",
+        "non_museum_quality_items",
+        "excessive_styling_objects"
+      ]
+    },
+    "add_accessories": {
+      "enabled": true,
+      "museum_quality_only": true,
+      "items": [
+        {
+          "name": "Paola Lenti outdoor seating",
+          "palette": "neutral",
+          "quantity": "singular",
+          "placement": "strategic"
+        },
+        {
+          "name": "Tom Dixon hurricane lanterns",
+          "max_visible": 2,
+          "description": "Maximum two visible in frame"
+        },
+        {
+          "name": "Sculptural object",
+          "quantity": 1,
+          "form": "organic",
+          "palette": "earth_tones"
+        }
+      ]
+    },
+    "color_palette": {
+      "target": "minimal_neutral",
+      "saturation_limit": 0.6,
+      "enforcement": "subtle"
+    }
+  },
+
+  "stage_5_post_production_depth": {
+    "enabled": true,
+    "atmospheric_scattering": {
+      "enabled": true,
+      "distance_threshold_m": 30,
+      "graduation": "smooth",
+      "description": "Graduated atmospheric scattering beyond 30-meter threshold"
+    },
+    "luminance_reduction": {
+      "enabled": true,
+      "target": "background_elements",
+      "distance_threshold_m": 40,
+      "reduction_stops": 1.5,
+      "description": "1-2 stop luminance reduction on background elements"
+    },
+    "chromatic_aberration": {
+      "enabled": true,
+      "target": "extreme_peripheral_elements",
+      "strength": "subtle",
+      "description": "Simulate large-format photography characteristics",
+      "radial_threshold": 0.7,
+      "max_shift_pixels": 2
+    }
+  },
+
+  "performance": {
+    "enable_gpu": true,
+    "batch_processing": false,
+    "verbose": true
+  },
+
+  "quality_control": {
+    "verification_checks": [
+      "material_differentiation",
+      "atmospheric_consistency",
+      "lighting_stratification_validation",
+      "styling_compliance",
+      "depth_processing_accuracy"
+    ]
+  },
+
+  "metadata": {
+    "project": "750 Picacho Lane - Pool Master",
+    "location": "Santa Barbara, CA 93103",
+    "date_created": "2025-11-14",
+    "specification_version": "Technical Remediation Pathway v1.0",
+    "artist": "Transformation Portal",
+    "copyright": "© 2025 750 Picacho Lane"
+  }
+}
