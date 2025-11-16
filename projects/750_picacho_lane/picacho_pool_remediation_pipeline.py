@@ -669,6 +669,7 @@ class PicachoPoolRemediationPipeline:
                 file_size_mb = path.stat().st_size / 1024 / 1024
                 print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 8-bit TIFF)")
         except Exception as e:
+            # Note: ImportError from tifffile is handled above; this block catches all other unexpected errors.
             print(f"❌ Error saving image to {path}: {type(e).__name__}: {e}")
             raise
 # ============================================================================
