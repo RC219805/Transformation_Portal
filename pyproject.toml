@@ -15,7 +15,7 @@ dependencies = [
     # See: https://github.com/opencv/opencv-python/issues/954
     "numpy>=1.24,<2.3.0",
     "Pillow>=10.0.0,<12",
-    "scipy>=1.15,<2",
+    "scipy>=1.15,<1.16",  # scipy 1.16+ requires Python 3.11+, constrain for Python 3.10 compatibility
     "scikit-learn>=1.0,<2",
     "PyYAML>=6.0,<7",
     "typer>=0.10.0,<1",
