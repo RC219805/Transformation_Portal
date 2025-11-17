@@ -5,5 +5,5 @@
 
 # Testing / coverage / property-based tests
 pytest>=8,<10
-pytest-cov>=4.0,<6
+pytest-cov>=4.0,<8
 hypothesis>=6,<7
