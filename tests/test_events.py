@@ -175,7 +175,7 @@ class TestEventReplayer:
             called_events.append(event.type)
             return event.type
 
-        results = replayer.replay(sample_events, on_event=callback)
+        replayer.replay(sample_events, on_event=callback)
 
         assert len(called_events) == 3
         assert called_events == ["image.enhanced", "depth.estimated", "image.enhanced"]
