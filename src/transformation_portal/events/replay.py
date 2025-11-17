@@ -128,8 +128,6 @@ class EventReplayer:
             events: Events to replay.
             on_event: Optional callback called for each event. The return value of the callback is appended to the
                 results list.
-            on_event: Optional callback called for each event. The return value of the callback is appended
-                to the results list.
             dry_run: If True, don't actually execute operations; only the callback (if provided) is called.
             skip_unregistered: If True, skip events without registered handlers.
                 If False, raise ValueError for unregistered events.
