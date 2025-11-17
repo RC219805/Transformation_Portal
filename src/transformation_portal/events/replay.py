@@ -1,8 +1,81 @@
 """Event replay for debugging and testing."""
 
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .store import Event, EventStore
+
+
+class OperationRegistry:
+    """Registry for operation handlers used during event replay.
+
+    Handlers are functions that take an Event and perform the actual
+    operation replay logic.
+
+    Example:
+        >>> registry = OperationRegistry()
+        >>>
+        >>> def handle_image_enhanced(event: Event) -> Any:
+        ...     # Extract data and re-run the operation
+        ...     print(f"Re-enhancing image: {event.data}")
+        ...     return {"replayed": True}
+        >>>
+        >>> registry.register("image.enhanced", handle_image_enhanced)
+    """
+
+    def __init__(self):
+        """Initialize the operation registry."""
+        self._handlers: Dict[str, Callable[[Event], Any]] = {}
+
+    def register(self, event_type: str, handler: Callable[[Event], Any]) -> None:
+        """Register a handler for an event type.
+
+        Args:
+            event_type: The event type to handle (e.g., "image.enhanced")
+            handler: Function that takes an Event and returns a result
+        """
+        self._handlers[event_type] = handler
+
+    def get_handler(self, event_type: str) -> Optional[Callable[[Event], Any]]:
+        """Get the handler for an event type.
+
+        Args:
+            event_type: The event type to look up
+
+        Returns:
+            Handler function if registered, None otherwise
+        """
+        return self._handlers.get(event_type)
+
+    def has_handler(self, event_type: str) -> bool:
+        """Check if a handler is registered for an event type.
+
+        Args:
+            event_type: The event type to check
+
+        Returns:
+            True if handler exists, False otherwise
+        """
+        return event_type in self._handlers
+
+    def unregister(self, event_type: str) -> None:
+        """Unregister a handler for an event type.
+
+        Args:
+            event_type: The event type to unregister
+        """
+        self._handlers.pop(event_type, None)
+
+    def clear(self) -> None:
+        """Clear all registered handlers."""
+        self._handlers.clear()
+
+    def get_registered_types(self) -> List[str]:
+        """Get list of all registered event types.
+
+        Returns:
+            List of event types with registered handlers
+        """
+        return list(self._handlers.keys())
 
 
 class EventReplayer:
@@ -11,24 +84,38 @@ class EventReplayer:
     Example:
         >>> replayer = EventReplayer(event_store)
         >>>
+        >>> # Register an operation handler
+        >>> def handle_image(event):
+        ...     print(f"Processing: {event.data}")
+        ...     return {"status": "replayed"}
+        >>> replayer.registry.register("image.enhanced", handle_image)
+        >>>
         >>> # Replay specific events
         >>> events = store.get_events_by_type("image.enhanced")
         >>> replayer.replay(events, on_event=lambda e: print(e.type))
     """
 
-    def __init__(self, event_store: EventStore):
+    def __init__(
+        self,
+        event_store: EventStore,
+        operation_registry: Optional[OperationRegistry] = None
+    ):
         """Initialize replayer.
 
         Args:
             event_store: Event store to replay from
+            operation_registry: Optional registry of operation handlers.
+                              If not provided, a new empty registry is created.
         """
         self.store = event_store
+        self.registry = operation_registry or OperationRegistry()
 
     def replay(
         self,
         events: List[Event],
         on_event: Optional[Callable[[Event], Any]] = None,
-        dry_run: bool = True
+        dry_run: bool = True,
+        skip_unregistered: bool = True
     ) -> List[Any]:
         """Replay events.
 
@@ -36,9 +123,14 @@ class EventReplayer:
             events: Events to replay
             on_event: Callback for each event
             dry_run: If True, don't actually execute operations
+            skip_unregistered: If True, skip events without registered handlers.
+                             If False, raise ValueError for unregistered events.
 
         Returns:
             List of replay results
+
+        Raises:
+            ValueError: If skip_unregistered is False and an event has no handler
         """
         results = []
 
@@ -48,9 +140,29 @@ class EventReplayer:
                 results.append(result)
 
             if not dry_run:
-                # TODO: Implement actual operation replay
-                # This would require a registry of operation handlers
-                pass
+                # Execute actual operation replay using registered handlers
+                handler = self.registry.get_handler(event.type)
+
+                if handler is not None:
+                    try:
+                        replay_result = handler(event)
+                        results.append({
+                            'event_id': event.id,
+                            'event_type': event.type,
+                            'status': 'success',
+                            'result': replay_result
+                        })
+                    except Exception as e:
+                        results.append({
+                            'event_id': event.id,
+                            'event_type': event.type,
+                            'status': 'error',
+                            'error': str(e)
+                        })
+                elif not skip_unregistered:
+                    raise ValueError(
+                        f"No handler registered for event type: {event.type}"
+                    )
 
         return results
 
