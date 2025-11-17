@@ -2036,14 +2036,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "sentence-transformers": {
             "name": "sentence-transformers",
-            "version": "2.7.0",
+            "version": "5.1.2",
             "requirements": [
                 {
-                    "raw": "sentence-transformers==2.7.0",
+                    "raw": "sentence-transformers==5.1.2",
                     "extras": [],
                     "marker": null,
                     "name": "sentence-transformers",
-                    "specifier": "==2.7.0",
+                    "specifier": "==5.1.2",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
