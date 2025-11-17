@@ -1,8 +1,11 @@
 """Event replay for debugging and testing."""
 
+import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from .store import Event, EventStore
+
+logger = logging.getLogger(__name__)
 
 
 class OperationRegistry:
@@ -121,7 +124,8 @@ class EventReplayer:
 
         Args:
             events: Events to replay.
-            on_event: Optional callback called for each event. The return value of the callback is appended to the results list.
+            on_event: Optional callback called for each event. The return value of the callback is appended to the
+                results list.
             dry_run: If True, don't actually execute operations; only the callback (if provided) is called.
             skip_unregistered: If True, skip events without registered handlers.
                 If False, raise ValueError for unregistered events.
@@ -129,7 +133,8 @@ class EventReplayer:
         Returns:
             List of replay results. The structure depends on the parameters:
             - In dry-run mode with callback: Returns callback results only.
-            - In replay mode (dry_run=False): Returns dicts with 'event_id', 'event_type', 'status', and either 'result' or 'error'.
+            - In replay mode (dry_run=False): Returns dicts with 'event_id', 'event_type', 'status', and either
+              'result' or 'error'.
             - With both callback and replay mode: Returns both callback results and handler result dicts.
         Raises:
             ValueError: If skip_unregistered is False and an event has no handler.
@@ -154,7 +159,12 @@ class EventReplayer:
                             'status': 'success',
                             'result': replay_result
                         })
+                    except (KeyboardInterrupt, SystemExit):
+                        raise
                     except Exception as e:
+                        logger.exception(
+                            f"Handler failed for event {event.id} (type: {event.type})"
+                        )
                         results.append({
                             'event_id': event.id,
                             'event_type': event.type,
