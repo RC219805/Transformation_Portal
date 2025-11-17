@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: performance-results
           path: |
@@ -113,7 +113,7 @@ jobs:
 
       - name: Save as baseline (main branch only)
         if: github.ref == 'refs/heads/main' && hashFiles('current-benchmark.json') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: baseline-benchmark
           path: current-benchmark.json
