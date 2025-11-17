@@ -4,6 +4,9 @@
 #
 #    pip-compile --output-file=all.txt all.in
 #
+# Note: scipy manually updated to 1.15.3 for Python 3.10 compatibility
+#       (scipy 1.16+ requires Python 3.11+)
+#
 absl-py==2.3.1
     # via tb-nightly
 accelerate==1.11.0
@@ -429,7 +432,7 @@ scikit-learn==1.7.2
     # via
     #   -r base.in
     #   sentence-transformers
-scipy==1.16.3
+scipy==1.15.3
     # via
     #   -r base.in
     #   basicsr
