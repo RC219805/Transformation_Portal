@@ -134,6 +134,34 @@ class TestOperationRegistry:
         types = registry.get_registered_types()
         assert set(types) == {"type1", "type2", "type3"}
 
+    def test_register_overwrites_existing_handler(self):
+        """Test that registering a handler for the same type overwrites the previous one."""
+        registry = OperationRegistry()
+
+        def handler1(event: Event):
+            return "result1"
+
+        def handler2(event: Event):
+            return "result2"
+
+        # Register first handler
+        registry.register("test.event", handler1)
+        assert registry.get_handler("test.event") == handler1
+
+        # Register second handler for same type - should overwrite
+        registry.register("test.event", handler2)
+        assert registry.get_handler("test.event") == handler2
+
+        # Verify the old handler is no longer active
+        event = Event(
+            id=str(uuid.uuid4()),
+            type="test.event",
+            timestamp=time.time(),
+            data={}
+        )
+        result = registry.get_handler("test.event")(event)
+        assert result == "result2"
+
 
 class TestEventReplayer:
     """Test the EventReplayer class."""
@@ -293,6 +321,46 @@ class TestEventReplayer:
         results = replayer.replay_correlation(correlation_id)
 
         assert isinstance(results, list)
+
+    def test_replay_propagates_keyboard_interrupt(self, temp_event_store):
+        """Test that KeyboardInterrupt is re-raised and not caught."""
+        replayer = EventReplayer(temp_event_store)
+
+        def interrupt_handler(event: Event):
+            raise KeyboardInterrupt()
+
+        replayer.registry.register("test.event", interrupt_handler)
+
+        event = Event(
+            id=str(uuid.uuid4()),
+            type="test.event",
+            timestamp=time.time(),
+            data={}
+        )
+
+        # KeyboardInterrupt should propagate
+        with pytest.raises(KeyboardInterrupt):
+            replayer.replay([event], dry_run=False)
+
+    def test_replay_propagates_system_exit(self, temp_event_store):
+        """Test that SystemExit is re-raised and not caught."""
+        replayer = EventReplayer(temp_event_store)
+
+        def exit_handler(event: Event):
+            raise SystemExit(1)
+
+        replayer.registry.register("test.event", exit_handler)
+
+        event = Event(
+            id=str(uuid.uuid4()),
+            type="test.event",
+            timestamp=time.time(),
+            data={}
+        )
+
+        # SystemExit should propagate
+        with pytest.raises(SystemExit):
+            replayer.replay([event], dry_run=False)
 
 
 def test_integration_with_event_store(temp_event_store):
