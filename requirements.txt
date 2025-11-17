@@ -1,20 +1,33 @@
-# Transformation Portal - Master Requirements File
-# 
-# This file points to the new layered dependency management system.
-# For detailed documentation, see requirements/README.md
+# Transformation Portal - Core Runtime Dependencies
+# ==================================================
+# This is the main requirements file for production installations.
+# For a complete development environment, see requirements/ directory.
 #
-# The requirements are now organized into layers:
-#   - base: Core runtime dependencies
-#   - ml: Optional ML and deep learning packages
-#   - dev: Development and testing tools
-#   - ci: CI/CD pipeline tools
-#   - all: Everything combined
+# Installation options:
+#   pip install -r requirements.txt           # Core functionality only (lightweight)
+#   pip install -r requirements/all.txt       # Full install with ML features (heavy)
+#   pip install -e ".[ml]"                    # Editable install with ML extras
 #
-# For reproducible builds, install from the pinned .txt files:
-#   pip install -r requirements/all.txt
-#
-# For the latest allowed versions, use package extras:
-#   pip install -e ".[all]"
+# For CI/CD environments, use requirements-ci.txt
+# For development, use requirements-dev.txt
 
-# Include all pinned requirements
--r requirements/all.txt
+# Core runtime essentials (base package)
+-r requirements/base.txt
+
+# Optional ML dependencies (comment out for lightweight install)
+# Uncomment the line below for full ML capabilities (adds ~10GB of packages)
+# -r requirements/ml.txt
+
+# Installation notes:
+# 1. Base install (core features): ~500MB
+#    - Image processing, batch operations, basic color grading
+#    - No AI/ML features (depth estimation, upscaling, etc.)
+#
+# 2. Full install with ML (all features): ~10GB
+#    - Includes PyTorch, Diffusers, ControlNet, Real-ESRGAN
+#    - Enables: depth-aware processing, AI upscaling, ControlNet
+#    - To enable: uncomment the ml.txt line above OR use pyproject.toml extras
+#
+# 3. For development: use requirements-dev.txt or requirements/all.txt
+#
+# See requirements/README.md for detailed documentation on the layered system.

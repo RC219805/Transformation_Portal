@@ -24,6 +24,10 @@ certifi==2025.11.12
     # via
     #   -c all.txt
     #   requests
+cffi==2.0.0
+    # via
+    #   -c all.txt
+    #   cryptography
 chardet==5.2.0
     # via
     #   -c all.txt
@@ -32,7 +36,7 @@ charset-normalizer==3.4.4
     # via
     #   -c all.txt
     #   requests
-click==8.3.0
+click==8.3.1
     # via
     #   -c all.txt
     #   safety
@@ -40,6 +44,10 @@ colorama==0.4.6
     # via
     #   -c all.txt
     #   tox
+cryptography==46.0.3
+    # via
+    #   -c all.txt
+    #   secretstorage
 distlib==0.4.0
     # via
     #   -c all.txt
@@ -64,7 +72,6 @@ idna==3.11
 importlib-metadata==8.7.0
     # via
     #   -c all.txt
-    #   keyring
     #   twine
 jaraco-classes==3.4.0
     # via
@@ -78,7 +85,12 @@ jaraco-functools==4.3.0
     # via
     #   -c all.txt
     #   keyring
-keyring==25.6.0
+jeepney==0.9.0
+    # via
+    #   -c all.txt
+    #   keyring
+    #   secretstorage
+keyring==25.7.0
     # via
     #   -c all.txt
     #   twine
@@ -120,12 +132,16 @@ pluggy==1.6.0
     # via
     #   -c all.txt
     #   tox
+pycparser==2.23
+    # via
+    #   -c all.txt
+    #   cffi
 pygments==2.19.2
     # via
     #   -c all.txt
     #   readme-renderer
     #   rich
-pypdf==6.2.0
+pypdf==6.3.0
     # via
     #   -c all.txt
     #   -r ci.in
@@ -168,7 +184,7 @@ ruamel-yaml==0.18.16
     # via
     #   -c all.txt
     #   safety
-ruamel-yaml-clib==0.2.14
+ruamel-yaml-clib==0.2.15
     # via
     #   -c all.txt
     #   ruamel-yaml
@@ -176,6 +192,10 @@ safety==2.3.4
     # via
     #   -c all.txt
     #   -r ci.in
+secretstorage==3.4.1
+    # via
+    #   -c all.txt
+    #   keyring
 stevedore==5.5.0
     # via
     #   -c all.txt

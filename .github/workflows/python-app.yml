@@ -1,4 +1,5 @@
 name: Python CI/CD
+permissions: {}
 
 on:
   push:
@@ -7,6 +8,40 @@ on:
     branches: [ main ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pylint mypy types-PyYAML
+
+    - name: Lint with flake8
+      continue-on-error: true
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || true
+
+    - name: Lint with pylint
+      continue-on-error: true
+      run: |
+        # Use .pylintrc configuration (ignores src/transformation_portal, src/luxury_tiff_batch_processor)
+        # Lint tools/ and root-level Python files
+        pylint tools/ *.py || true
+
+    - name: Type check with mypy
+      continue-on-error: true
+      run: |
+        # Use mypy.ini configuration
+        mypy tools/ *.py || true
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -106,19 +141,6 @@ jobs:
         # Show remaining disk space
         df -h
 
-    - name: Lint with flake8 (optional)
-      continue-on-error: true
-      run: |
-        pip install flake8
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || true
-
-    - name: Type check with mypy (optional)
-      continue-on-error: true
-      run: |
-        pip install mypy types-PyYAML
-        mypy src/ --ignore-missing-imports --no-strict-optional || true
-
     - name: Run tests with pytest
       run: |
         # Run tests with proper PYTHONPATH set
@@ -184,10 +206,34 @@ jobs:
       run: |
         twine check dist/*
 
-    # Uncomment when ready to publish to PyPI
-    # - name: Publish to PyPI
-    #   env:
-    #     TWINE_USERNAME: __token__
-    #     TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-    #   run: |
-    #     twine upload dist/*
+    - name: Publish to Test PyPI
+      # Only publish to Test PyPI on main branch for testing
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      run: |
+        twine upload --repository testpypi dist/* --skip-existing || echo "Upload to Test PyPI failed or package already exists"
+
+    # Note: Production PyPI uploads should use the dedicated submit-pypi.yml workflow
+    # triggered by version tags (e.g., v0.1.0)
+
+  cleanup:
+    name: Cleanup
+    needs: [lint, test, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Clean up temporary files
+      run: |
+        echo "Cleaning up temporary files..."
+        find /tmp -type f -mtime +1 -delete 2>/dev/null || true
+        rm -rf ~/.cache/pip || true
+        rm -rf ~/.cache/huggingface || true
+        docker system prune -f || true
+        
+    - name: Verify cleanup
+      run: |
+        echo "Final disk usage:"
+        df -h
+        echo "Cleanup completed successfully!"

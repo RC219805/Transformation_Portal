@@ -313,7 +313,7 @@ class UnifiedLuxuryPipeline:
             if torch.cuda.is_available():
                 log.info("CUDA GPU detected")
                 return "cuda"
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            elif hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 log.info("Apple Metal (MPS) detected")
                 return "mps"
         except ImportError:

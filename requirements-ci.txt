@@ -1,14 +1,9 @@
-# Transformation Portal - CI Requirements
-#
-# This file points to the new layered dependency management system.
-# For detailed documentation, see requirements/README.md
-#
-# For CI/CD pipelines, install from pinned files:
-#   pip install -r requirements/base.txt -r requirements/ci.txt
-#
-# Or for full CI environment:
-#   pip install -r requirements/all.txt
+# CI environment: runtime + test deps
+# Uses base (core) dependencies only for faster CI builds
+# ML tests run separately with requirements/ml.txt
+-r requirements.txt
 
-# Include pinned base and CI requirements
--r requirements/base.txt
--r requirements/ci.txt
+# Testing / coverage / property-based tests
+pytest>=8,<10
+pytest-cov>=4.0,<6
+hypothesis>=6,<7
