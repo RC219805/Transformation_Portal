@@ -12,7 +12,7 @@ realesrgan>=0.3.0,<1
 
 # HuggingFace ecosystem and vision utilities
 transformers>=4.35.0,<5
-huggingface-hub>=0.19.0,<1
+huggingface-hub>=0.19.0,<2
 torchvision>=0.15.0,<1
 opencv-python>=4.8.0,<5
 scikit-image>=0.21.0,<1
