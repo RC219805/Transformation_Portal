@@ -193,3 +193,19 @@ archive/legacy/
 !archive/README.md
 !archive/*/.gitkeep
 venv_py311/
+
+# Project-specific input/output images (large files)
+input_images/**/*.tiff
+input_images/**/*.tif
+output_images/**/*
+
+# Large asset files only (track small configs/metadata)
+assets/luts/**/*.cube
+assets/luts/**/*.3dl
+assets/hdr_toning/**/*.cube
+
+# But track configs, presets, and alias files
+!assets/luts/**/*.yaml
+!assets/luts/**/*.json
+!assets/luts/3DLUTs
+!assets/hdr_toning/HDR\ Toning
