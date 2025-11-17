@@ -105,7 +105,7 @@ class EventReplayer:
         Args:
             event_store: Event store to replay from
             operation_registry: Optional registry of operation handlers.
-                              If not provided, a new empty registry is created.
+                If not provided, a new empty registry is created.
         """
         self.store = event_store
         self.registry = operation_registry or OperationRegistry()
