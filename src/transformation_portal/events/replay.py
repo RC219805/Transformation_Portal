@@ -137,8 +137,6 @@ class EventReplayer:
             - In dry-run mode with callback: Returns callback results only.
             - In replay mode (dry_run=False): Returns dicts with 'event_id', 'event_type', 'status', and either
               'result' or 'error'.
-            - In replay mode (dry_run=False): Returns dicts with 'event_id', 'event_type', 'status',
-              and either 'result' or 'error'.
             - With both callback and replay mode: Returns both callback results and handler result dicts.
         Raises:
             ValueError: If skip_unregistered is False and an event has no handler.
