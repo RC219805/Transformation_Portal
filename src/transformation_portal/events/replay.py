@@ -69,13 +69,13 @@ class OperationRegistry:
         """Clear all registered handlers."""
         self._handlers.clear()
 
-    def get_registered_types(self) -> List[str]:
-        """Get list of all registered event types.
+    def get_registered_types(self) -> tuple[str, ...]:
+        """Get a tuple of all registered event types.
 
         Returns:
-            List of event types with registered handlers
+            Tuple of event types with registered handlers (immutable)
         """
-        return list(self._handlers.keys())
+        return tuple(self._handlers.keys())
 
 
 class EventReplayer:
