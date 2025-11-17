@@ -127,23 +127,10 @@ class EventReplayer:
                 If False, raise ValueError for unregistered events.
 
         Returns:
-            List of replay results. The structure of the list depends on the arguments:
-
-            - If ``dry_run=True`` and ``on_event`` is provided:
-                Returns a list of results from the callback (i.e., ``[on_event(event) for event in events]``).
-
-            - If ``dry_run=False`` and ``on_event`` is not provided:
-                Returns a list of dicts, one per event, each with keys:
-                    - ``event_id``: The event's ID.
-                    - ``event_type``: The event's type.
-                    - ``status``: "success" or "error".
-                    - ``result``: The handler's return value (if successful).
-                    - ``error``: The error message (if an exception occurred).
-
-            - If both ``on_event`` is provided and ``dry_run=False``:
-                Returns a list containing both callback results and handler result dicts, in the order they are appended.
-                For each event, the callback result is appended first (if any), then the handler result dict (if any).
-
+            List of replay results. The structure depends on the parameters:
+            - In dry-run mode with callback: Returns callback results only.
+            - In replay mode (dry_run=False): Returns dicts with 'event_id', 'event_type', 'status', and either 'result' or 'error'.
+            - With both callback and replay mode: Returns both callback results and handler result dicts.
         Raises:
             ValueError: If skip_unregistered is False and an event has no handler.
         """
