@@ -42,7 +42,7 @@ jobs:
 
       - name: Get changed files
         id: changes
-        uses: tj-actions/changed-files@v46
+        uses: tj-actions/changed-files@v47
         with:
           files: "**/*.{py,js,ts,jsx,tsx,md,json,yml,yaml}"
 
