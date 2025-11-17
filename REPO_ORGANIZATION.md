@@ -75,6 +75,10 @@ Transformation_Portal/
 │   ├── unit/                   # Unit tests
 │   ├── integration/            # Integration tests
 │   └── fixtures/               # Test fixtures
+├── projects/                   # Client/property-specific work
+│   ├── 750_picacho_lane/       # Pool processing examples
+│   ├── montecito_shores/       # Interior enhancement examples
+│   └── README.md               # Project guidelines
 ├── archive/                    # Historical and temporary files
 │   ├── deprecated/             # Deprecated code
 │   ├── experiments/            # Experimental features
@@ -252,6 +256,12 @@ The organization system uses these rules to classify files:
 - **Source code**: → `src/transformation_portal/`
 - **Tests**: → `tests/`
 - **Examples**: → `examples/`
+
+### Project Files
+
+- **Client/property work**: → `projects/<project_name>/`
+- **Reusable examples**: Consider `examples/` instead
+- **Experiments**: → `archive/experiments/`
 
 ## Best Practices
 
