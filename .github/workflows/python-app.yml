@@ -159,7 +159,7 @@ jobs:
     - name: Upload coverage reports
       if: matrix.python-version == '3.11'
       continue-on-error: true
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: coverage-report-py${{ matrix.python-version }}
         path: htmlcov/
