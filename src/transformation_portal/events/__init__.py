@@ -18,6 +18,7 @@ from .decorators import (
 )
 from .replay import (
     EventReplayer,
+    OperationRegistry,
     replay_events,
 )
 from .store import (
@@ -34,6 +35,7 @@ __all__ = [
     'tracked',
     'replay_events',
     'EventReplayer',
+    'OperationRegistry',
 ]
 
 __version__ = '1.0.0'

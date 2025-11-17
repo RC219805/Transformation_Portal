@@ -16,7 +16,7 @@ black==25.11.0
     # via
     #   -c all.txt
     #   -r dev.in
-click==8.3.0
+click==8.3.1
     # via
     #   -c all.txt
     #   black
@@ -32,7 +32,7 @@ flake8==7.3.0
     # via
     #   -c all.txt
     #   -r dev.in
-hypothesis==6.147.0
+hypothesis==6.148.1
     # via
     #   -c all.txt
     #   -r dev.in
