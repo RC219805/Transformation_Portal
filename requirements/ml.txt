@@ -389,7 +389,7 @@ scikit-learn==1.7.2
     # via
     #   -c all.txt
     #   sentence-transformers
-scipy==1.16.3
+scipy==1.15.3
     # via
     #   -c all.txt
     #   basicsr
