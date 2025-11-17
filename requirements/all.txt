@@ -443,7 +443,7 @@ scipy==1.16.3
     #   sentence-transformers
 secretstorage==3.4.1
     # via keyring
-sentence-transformers==2.7.0
+sentence-transformers==5.1.2
     # via -r ml.in
 shellingham==1.5.4
     # via typer
