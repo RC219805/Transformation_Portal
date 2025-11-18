@@ -9,6 +9,7 @@ diffusers>=0.20,<1
 controlnet-aux>=0.0.6,<1
 basicsr>=1.4.2,<2           # Explicit dependency (required by realesrgan)
 realesrgan>=0.3.0,<1
+kornia>=0.6.0,<1            # Computer vision library for hyper-reality enhancements
 
 # HuggingFace ecosystem and vision utilities
 transformers>=4.35.0,<5
