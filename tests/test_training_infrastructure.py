@@ -17,7 +17,6 @@ import shutil
 from pathlib import Path
 import torch
 import numpy as np
-from PIL import Image
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
