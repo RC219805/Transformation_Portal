@@ -10,6 +10,8 @@ Tests cover:
 - Model checkpoint saving/loading
 """
 
+# pylint: disable=possibly-used-before-assignment  # Conditional imports for optional dependencies
+
 import sys
 import pytest
 import tempfile
