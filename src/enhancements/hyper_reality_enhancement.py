@@ -21,12 +21,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchvision import transforms
-import cv2
 from PIL import Image
 from tqdm import tqdm
-import kornia
-from scipy import ndimage, signal
-from skimage import morphology, filters
 
 # Suppress warnings for clean output
 warnings.filterwarnings('ignore')
