@@ -15,28 +15,41 @@ import pytest
 import tempfile
 import shutil
 from pathlib import Path
-import torch
 import numpy as np
+
+# Check if PyTorch is available (required for training infrastructure)
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+# Skip all tests in this module if PyTorch is not available
+pytestmark = pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch not installed - training infrastructure tests require ML dependencies"
+)
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # pylint: disable=wrong-import-position
-from enhancements.train_hyper_reality import (
-    SyntheticDataGenerator,
-    EnhancementDataset,
-    PerceptualLoss,
-    StyleLoss,
-    HyperRealityTrainer,
-    TrainingConfig
-)
-from enhancements.model_loader import ModelLoader, load_pretrained_weights
-from enhancements.hyper_reality_enhancement import (
-    CausticGenerator,
-    AtmosphericSynthesizer,
-    MaterialTranscendence,
-    SpatialHarmonics,
-)
+if TORCH_AVAILABLE:
+    from enhancements.train_hyper_reality import (
+        SyntheticDataGenerator,
+        EnhancementDataset,
+        PerceptualLoss,
+        StyleLoss,
+        HyperRealityTrainer,
+        TrainingConfig
+    )
+    from enhancements.model_loader import ModelLoader, load_pretrained_weights
+    from enhancements.hyper_reality_enhancement import (
+        CausticGenerator,
+        AtmosphericSynthesizer,
+        MaterialTranscendence,
+        SpatialHarmonics,
+    )
 
 
 class TestSyntheticDataGeneration:
