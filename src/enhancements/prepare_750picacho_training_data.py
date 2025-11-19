@@ -291,8 +291,8 @@ class Picacho750DataPreparation:
             },
             'context_available': self.context is not None,
             'context_types': list(self.context.keys()) if self.context else [],
-            'rooms': list(self.context.get('bim', {}).get('rooms', {}).keys()) if self.context and 'bim' in self.context else [],
-            'materials': self.context.get('mbar', {}).get('rooms', [])[:5] if self.context and 'mbar' in self.context else [],
+            'rooms': list(self.context.get('bim', {}).get('rooms', {}).keys()) if self.context else [],
+            'materials': self.context.get('mbar', {}).get('rooms', [])[:5] if self.context else [],
             'degradation_types': [
                 'Room-specific contrast reduction',
                 'Gaussian noise addition',
