@@ -10,6 +10,8 @@ Tests:
 - Full pipeline integration
 """
 
+# pylint: disable=redefined-outer-name  # pytest fixtures pattern
+
 import sys
 import tempfile
 import time
@@ -21,6 +23,7 @@ import pytest
 agents_path = Path(__file__).parent.parent / '.github' / 'agents'
 sys.path.insert(0, str(agents_path))
 
+# pylint: disable=wrong-import-position
 from rag_system.citation import CitationGenerator  # noqa: E402
 from rag_system.config import Config, get_config, reset_config  # noqa: E402
 from rag_system.exceptions import IndexingError, RetrievalError  # noqa: E402
@@ -28,6 +31,7 @@ from rag_system.indexer import RepositoryIndexer  # noqa: E402
 from rag_system.logger import get_logger  # noqa: E402
 from rag_system.reranker import ResultReranker  # noqa: E402
 from rag_system.retriever import HybridRetriever  # noqa: E402
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -112,10 +116,10 @@ class TestConfiguration:
         monkeypatch.setenv('RAG_CITATION_MAX_RESULTS', '10')
         # String
         monkeypatch.setenv('RAG_INDEXER_CACHE_DIR', '.custom_cache')
-        
+
         reset_config()
         config = get_config()
-        
+
         assert config.get('indexer.cache_enabled') is True
         assert config.get('retriever.bm25_weight') == 0.9
         assert config.get('citation.max_results') == 10
