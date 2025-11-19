@@ -103,7 +103,7 @@ class EnhancementConfig:
     spatial_harmonics: Dict = field(default_factory=lambda: {
         'enable': True,
         'order': 9,
-        'negative_light': True,
+        'shadow_enhancement': True,
         'amplification': 1.5,
         'directional_boost': 1.8
     })
