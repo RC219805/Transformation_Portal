@@ -381,10 +381,6 @@ def main():
     
     # Create metadata
     metadata = preparer.create_metadata()
-    # Save metadata to JSON file in the output directory
-    metadata_path = os.path.join(args.output_dir, "metadata.json")
-    with open(metadata_path, "w") as f:
-        json.dump(metadata, f, indent=2)
     
     # Summary
     print("\n╔═══════════════════════════════════════════════════════════════╗")
