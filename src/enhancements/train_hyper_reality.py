@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Training Pipeline for Hyper-Reality Enhancement Models
-Trains neural networks to achieve 105/100+ quality through supervised learning
+Trains neural networks on internal quality metric through supervised learning
 
 This script provides:
 - Perceptual loss training (LPIPS + MSE + Style)
@@ -14,13 +14,10 @@ Author: Transformation_Portal Enhancement Team
 Version: 1.0.0
 """
 
-import os
 import sys
-import json
-import time
 import argparse
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Tuple, Optional
 from dataclasses import dataclass, asdict
 import warnings
 
@@ -37,13 +34,11 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from enhancements.hyper_reality_enhancement import (
-    HyperRealityProcessor,
-    EnhancementConfig,
-    QualityMode,
     CausticGenerator,
     AtmosphericSynthesizer,
     MaterialTranscendence,
     SpatialHarmonics,
+    EnhancementConfig,
     configure_device
 )
 
@@ -132,7 +127,22 @@ class SyntheticDataGenerator:
         print(f"  Low quality: {low_quality_dir}")
         
     def _create_synthetic_image(self, size: Tuple[int, int] = (512, 512)) -> np.ndarray:
-        """Create high-quality synthetic architectural image"""
+        """Create simplified synthetic architectural image
+        
+        Note: This generates basic architectural scenes with gradients and geometric shapes.
+        For production training targeting professional architectural quality, use real
+        high-quality renders (e.g., from 750 Picacho dataset) via prepare_750picacho_training_data.py
+        
+        Synthetic data is useful for:
+        - Initial model development and testing
+        - Rapid prototyping without requiring large datasets
+        - Learning basic enhancement patterns
+        
+        Limitations:
+        - Does not capture complex architectural details
+        - Simplified material properties
+        - Limited lighting scenarios
+        """
         h, w = size
         img = np.zeros((h, w, 3), dtype=np.uint8)
         

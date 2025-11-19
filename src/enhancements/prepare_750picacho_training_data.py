@@ -18,7 +18,7 @@ import sys
 import json
 import argparse
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, Optional
 import warnings
 
 import numpy as np
