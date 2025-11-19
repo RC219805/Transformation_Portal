@@ -209,3 +209,4 @@ assets/hdr_toning/**/*.cube
 !assets/luts/**/*.json
 !assets/luts/3DLUTs
 !assets/hdr_toning/HDR\ Toning
+data/training_demo/
