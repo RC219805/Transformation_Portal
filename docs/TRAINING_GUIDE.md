@@ -40,10 +40,21 @@ After training:
 
 ## Quick Start
 
-### 1. Generate Synthetic Training Data
+### Option A: Use Real 750 Picacho BIM Data (Recommended)
 
 ```bash
-# Create 1000 training pairs (takes ~5 minutes)
+# Train with real project data (best quality results)
+./scripts/train_with_750picacho.sh
+```
+
+This uses 6 UltraQuality renders + 500 BIM images from the 750 Picacho Lane project.
+
+**See**: `docs/750_PICACHO_TRAINING.md` for complete details.
+
+### Option B: Generate Synthetic Training Data
+
+```bash
+# Create 1000 synthetic training pairs (takes ~5 minutes)
 cd /home/runner/work/Transformation_Portal/Transformation_Portal
 python src/enhancements/train_hyper_reality.py --generate-data --num-pairs 1000
 ```
@@ -79,7 +90,28 @@ results = processor.process_image("input.jpg", "output.jpg")
 
 ## Training Data
 
-### Synthetic Data (Recommended for Getting Started)
+### Real Project Data (Best Quality - Recommended)
+
+**750 Picacho BIM Data**: Use real architectural data from an actual luxury project:
+
+```bash
+python src/enhancements/prepare_750picacho_training_data.py
+```
+
+**Includes:**
+- 6 UltraQuality TIFF renders (Kitchen, Pool, Aerial, etc.)
+- 2,488 BIM-extracted architectural images
+- Architectural context from BIM model
+
+**Advantages:**
+- ✅ Real materials and lighting
+- ✅ Professional architectural quality
+- ✅ Better generalization to real projects
+- ✅ Room-specific characteristics
+
+**See**: `docs/750_PICACHO_TRAINING.md` for complete guide.
+
+### Synthetic Data (Good for Getting Started)
 
 Generate synthetic architectural images automatically:
 
