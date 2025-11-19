@@ -11,6 +11,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
+# pylint: disable=wrong-import-position
 from enhancements import (
     HyperRealityProcessor,
     EnhancementConfig,
@@ -246,7 +247,7 @@ def example_selective_enhancement():
     )
 
     print(f"✓ Selective enhancement complete: {results['quality_score']}/100")
-    print(f"  Stages: Atmosphere + Harmonics + Synergistic only")
+    print("  Stages: Atmosphere + Harmonics + Synergistic only")
 
 
 if __name__ == "__main__":
