@@ -83,6 +83,43 @@ The module consists of five neural network-based enhancement stages:
 - 4K image: ~15s
 - 8K image: ~60s
 
+## ⚙️ Training Infrastructure (NEW!)
+
+The module now includes complete training infrastructure to actualize the neural networks and achieve the promised 105/100+ quality.
+
+### Why Training is Needed
+
+Neural networks are initially **randomly initialized**. Training teaches them to:
+- Enhance low-quality images to high-quality outputs
+- Preserve architectural details
+- Apply realistic material properties
+- Create convincing atmospheric effects
+
+### Quick Start Training
+
+```bash
+# Automated training (data generation + training)
+./scripts/quickstart_training.sh
+
+# Or manually:
+python src/enhancements/train_hyper_reality.py --generate-data --num-pairs 1000
+python src/enhancements/train_hyper_reality.py --epochs 50
+```
+
+### Using Trained Models
+
+```python
+from enhancements import HyperRealityProcessor
+
+# Automatically loads trained weights if available
+processor = HyperRealityProcessor()
+results = processor.process_image("input.jpg", "output.jpg")
+```
+
+**Training Time**: ~2-3 hours on M4 Max for 50 epochs with 1000 pairs
+
+**See**: `docs/TRAINING_GUIDE.md` for complete training instructions and `docs/MODEL_TRAINING_STATUS.md` for current status.
+
 ## Installation
 
 ### Automated
