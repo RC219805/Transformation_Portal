@@ -85,7 +85,7 @@ class EnhancementConfig:
         'enhancement_level': 1.8,
         'style_amplitude': 2.5,
         'layer_count': 9,
-        'impossible_colors': True,
+        'enhanced_saturation': True,
         'twilight_mode': 'blue_hour'
     })
 
