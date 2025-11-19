@@ -55,7 +55,7 @@ This uses 6 UltraQuality renders + 500 BIM images from the 750 Picacho Lane proj
 
 ```bash
 # Create 1000 synthetic training pairs (takes ~5 minutes)
-cd /home/runner/work/Transformation_Portal/Transformation_Portal
+# (Run this from the project root)
 python src/enhancements/train_hyper_reality.py --generate-data --num-pairs 1000
 ```
 
