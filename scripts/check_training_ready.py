@@ -5,7 +5,6 @@ Verifies that all requirements are met before starting training.
 """
 
 import sys
-import subprocess
 import shutil
 from pathlib import Path
 
@@ -126,7 +125,7 @@ def check_disk_space():
             print(f"   Free up disk space for checkpoints and logs")
         
         return passed
-    except Exception as e:
+    except (OSError, PermissionError) as e:
         print_check(False, f"Could not check disk space: {e}")
         return False
 
@@ -167,7 +166,6 @@ def check_memory():
             if Path('/proc/meminfo').exists():
                 with open('/proc/meminfo') as f:
                     lines = f.readlines()
-                    mem_total = int(lines[0].split()[1]) / (1024**2)  # GB
                     mem_avail = int(lines[2].split()[1]) / (1024**2)  # GB
                     
                     required_gb = 8
@@ -195,8 +193,11 @@ def check_training_data():
     # Check 750 Picacho data
     picacho_dirs = [
         Path("projects/750_picacho_lane/Final_Production_UltraQuality"),
-        Path("extracted_context/24098.00_750 PICACHO LANE_images"),
     ]
+    # Use glob to match variations like "24098.00_750 PICACHO LANE_images" with spaces
+    extracted_context = Path("extracted_context")
+    if extracted_context.exists():
+        picacho_dirs.extend(extracted_context.glob("*PICACHO*LANE*"))
     
     picacho_available = False
     for path in picacho_dirs:

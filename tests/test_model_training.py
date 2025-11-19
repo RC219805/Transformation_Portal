@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 import tempfile
 import shutil
+from packaging import version
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -236,8 +237,8 @@ def test_imports():
     import numpy as np
     from PIL import Image
     
-    # Verify versions
-    assert torch.__version__ >= "2.0.0"
+    # Verify versions using proper semantic versioning
+    assert version.parse(torch.__version__) >= version.parse("2.0.0")
 
 
 if __name__ == "__main__":
