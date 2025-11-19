@@ -33,6 +33,7 @@ PICACHO_PROJECT = REPO_ROOT / "projects" / "750_picacho_lane"
 ULTRAQUALITY_DIR = PICACHO_PROJECT / "Final_Production_UltraQuality"
 BIM_IMAGES_DIR = REPO_ROOT / "extracted_context" / "24098.00_750 PICACHO LANE_images"
 CONTEXT_JSON = REPO_ROOT / "extracted_context" / "24098.00_750 PICACHO LANE_context.json"
+MBAR_CONTEXT_JSON = REPO_ROOT / "extracted_context" / "mbar_submittal.json"
 
 
 class Picacho750DataPreparation:
@@ -53,17 +54,28 @@ class Picacho750DataPreparation:
         self.pairs_created = 0
     
     def _load_context(self) -> Optional[Dict]:
-        """Load architectural context from BIM"""
-        if not CONTEXT_JSON.exists():
-            print(f"⚠️  No context found at {CONTEXT_JSON}")
-            return None
+        """Load architectural context from BIM and MBAR submittal"""
+        context = {}
         
-        try:
-            with open(CONTEXT_JSON, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"⚠️  Failed to load context: {e}")
-            return None
+        # Load main BIM context
+        if CONTEXT_JSON.exists():
+            try:
+                with open(CONTEXT_JSON, 'r') as f:
+                    context['bim'] = json.load(f)
+                    print(f"✓ Loaded BIM context")
+            except Exception as e:
+                print(f"⚠️  Failed to load BIM context: {e}")
+        
+        # Load MBAR submittal context
+        if MBAR_CONTEXT_JSON.exists():
+            try:
+                with open(MBAR_CONTEXT_JSON, 'r') as f:
+                    context['mbar'] = json.load(f)
+                    print(f"✓ Loaded MBAR submittal context (materials, elevations, details)")
+            except Exception as e:
+                print(f"⚠️  Failed to load MBAR context: {e}")
+        
+        return context if context else None
     
     def prepare_ultraquality_renders(self):
         """Convert UltraQuality TIFFs to training pairs"""
@@ -264,21 +276,38 @@ class Picacho750DataPreparation:
         """Create metadata file with dataset information"""
         metadata = {
             'dataset_name': '750_Picacho_Training_Data',
-            'project': '750 Picacho Lane',
+            'project': '750 Picacho Lane, Montecito, CA',
+            'project_number': '24098.00',
             'total_pairs': self.pairs_created,
             'source_types': {
-                'ultraquality_renders': 'High-quality architectural renders',
-                'bim_images': 'Extracted from BIM architectural plans'
+                'ultraquality_renders': 'High-quality architectural renders (6 TIFFs)',
+                'bim_images': 'Extracted from BIM architectural plans (2,488 images)',
+                'mbar_submittal': 'Construction documents, elevations, material boards'
+            },
+            'data_sources': {
+                'ultraquality': str(ULTRAQUALITY_DIR),
+                'bim_images': str(BIM_IMAGES_DIR),
+                'bim_context': str(CONTEXT_JSON),
+                'mbar_context': str(MBAR_CONTEXT_JSON)
             },
             'context_available': self.context is not None,
-            'rooms': list(self.context.get('rooms', {}).keys()) if self.context else [],
+            'context_types': list(self.context.keys()) if self.context else [],
+            'rooms': list(self.context.get('bim', {}).get('rooms', {}).keys()) if self.context and 'bim' in self.context else [],
+            'materials': self.context.get('mbar', {}).get('rooms', [])[:5] if self.context and 'mbar' in self.context else [],
             'degradation_types': [
-                'Contrast reduction',
-                'Noise addition',
-                'Gaussian blur',
+                'Room-specific contrast reduction',
+                'Gaussian noise addition',
+                'Depth-aware blur',
                 'Saturation reduction',
-                'JPEG compression'
-            ]
+                'JPEG compression artifacts'
+            ],
+            'room_profiles': {
+                'Kitchen': 'Bright lighting, balanced depth, metal/stone/glass materials',
+                'Pool': 'Water reflections, atmospheric haze, outdoor lighting',
+                'Aerial': 'Distance blur, atmospheric effects, perspective',
+                'Bedroom': 'Soft lighting, fabric textures, warm tones',
+                'Bathroom': 'Stone/glass materials, spa aesthetic, neutral temperature'
+            }
         }
         
         metadata_path = self.output_dir / "dataset_metadata.json"
