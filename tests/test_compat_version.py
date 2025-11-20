@@ -106,6 +106,7 @@ class TestVersion:
         v2 = Version.from_string("1.0.1")
         assert v1 < v2
         assert v1 <= v2
+        assert not v2 <= v1
 
 
 class TestCheckVersionCompatibility:
