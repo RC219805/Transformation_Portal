@@ -98,14 +98,16 @@ class TestVersion:
         v1 = Version.from_string("1.0.0")
         v2 = Version.from_string("1.1.0")
         assert v1 < v2
-        assert v2 > v1
+        assert v1 <= v2
+        assert not v2 <= v1
 
     def test_version_patch_differences(self):
         """Test comparisons with patch version differences."""
         v1 = Version.from_string("1.0.0")
         v2 = Version.from_string("1.0.1")
         assert v1 < v2
-        assert v2 > v1
+        assert v1 <= v2
+        assert not v2 <= v1
 
 
 class TestCheckVersionCompatibility:

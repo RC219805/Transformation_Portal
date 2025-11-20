@@ -115,7 +115,7 @@ class TestCheckpointManager:
         """Test that initialization creates checkpoint directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             checkpoint_dir = Path(tmpdir) / "checkpoints" / "my_op"
-            manager = CheckpointManager("my_op", checkpoint_dir=checkpoint_dir)
+            CheckpointManager("my_op", checkpoint_dir=checkpoint_dir)
 
             assert checkpoint_dir.exists()
 
