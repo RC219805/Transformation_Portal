@@ -52,7 +52,7 @@ class TestVersion:
         v1 = Version.from_string("1.0.0")
         v2 = Version.from_string("2.0.0")
         assert v1 < v2
-        assert not (v1 < v1)  # Version is not less than itself
+        assert not v2 < v1
 
     def test_version_comparison_le(self):
         """Test less than or equal comparison."""
@@ -68,7 +68,7 @@ class TestVersion:
         v1 = Version.from_string("2.0.0")
         v2 = Version.from_string("1.0.0")
         assert v1 > v2
-        assert not (v1 > v1)  # Version is not greater than itself
+        assert not v2 > v1
 
     def test_version_comparison_ge(self):
         """Test greater than or equal comparison."""
@@ -99,6 +99,7 @@ class TestVersion:
         v2 = Version.from_string("1.1.0")
         assert v1 < v2
         assert v1 <= v2
+        assert not v2 <= v1
 
     def test_version_patch_differences(self):
         """Test comparisons with patch version differences."""
