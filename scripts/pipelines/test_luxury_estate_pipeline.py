@@ -104,7 +104,8 @@ print("\n[8/8] Checking Real-ESRGAN upscaler...")
 try:
     from realesrgan import RealESRGANer
     # Use vendored BasicSR-TP to avoid CVE-2024-27763 (command injection in SLURM utilities)
-    from basicsr_tp.archs.rrdbnet_arch import RRDBNet
+    # RRDBNet import tested separately to verify compatibility
+    from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F401
 
     # Check for weights
     weights_path = Path("weights/RealESRGAN_x4plus.pth")

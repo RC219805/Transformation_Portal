@@ -110,8 +110,8 @@ class TestSecurityValidation:
 
         # Search all Python files for actual executable SLURM code
         for py_file in basicsr_tp_dir.rglob("*.py"):
-            # Skip __init__.py and README files which contain security documentation
-            if py_file.name in ['__init__.py', 'README.md']:
+            # Skip __init__.py which contains security documentation
+            if py_file.name == '__init__.py':
                 continue
 
             with open(py_file, 'r', encoding='utf-8') as f:
@@ -122,9 +122,12 @@ class TestSecurityValidation:
                 for i, line in enumerate(lines, start=1):
                     stripped = line.strip()
 
-                    # Track docstring state
-                    if '"""' in stripped or "'''" in stripped:
-                        in_docstring = not in_docstring
+                    # Track docstring state more accurately
+                    triple_quote_count = stripped.count('"""') + stripped.count("'''")
+                    if triple_quote_count > 0:
+                        if triple_quote_count % 2 == 1:
+                            in_docstring = not in_docstring
+                        # Always skip lines containing triple quotes (docstring delimiters)
                         continue
 
                     # Skip comments and docstrings
@@ -134,11 +137,15 @@ class TestSecurityValidation:
                     # Check for actual vulnerable code patterns in executable lines
                     # (comments and docstrings already filtered above)
                     forbidden_patterns = [
-                        'scontrol show hostname',  # The actual vulnerable command
-                        'subprocess.getoutput',    # Shell execution method
-                        'os.environ[\'SLURM',      # Accessing SLURM environment
-                        'def init_dist',           # Distributed init function
-                        'def _init_dist_slurm',    # SLURM-specific init
+                        'scontrol show hostname',       # The actual vulnerable command
+                        'subprocess.getoutput',         # Shell execution method
+                        'os.environ[\'SLURM',           # Accessing SLURM environment (single quotes)
+                        'os.environ["SLURM',            # Accessing SLURM environment (double quotes)
+                        'os.environ.get(\'SLURM',       # Accessing SLURM environment via .get() (single quotes)
+                        'os.environ.get("SLURM',        # Accessing SLURM environment via .get() (double quotes)
+                        'SLURM_NODELIST',               # Direct reference to the vulnerable env var
+                        'def init_dist',                # Distributed init function
+                        'def _init_dist_slurm',         # SLURM-specific init
                     ]
 
                     for pattern in forbidden_patterns:
@@ -154,9 +161,13 @@ class TestSecurityValidation:
         basicsr_tp_dir = Path(__file__).parent.parent / "basicsr_tp"
 
         for py_file in basicsr_tp_dir.rglob("*.py"):
+            # Skip __init__.py which contains security documentation
+            if py_file.name == '__init__.py':
+                continue
+
             with open(py_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                # Check for subprocess imports/calls
+                # Check for subprocess imports/calls in actual code (not documentation)
                 forbidden = ['subprocess.', 'import subprocess', 'from subprocess']
                 for pattern in forbidden:
                     assert pattern not in content, \
