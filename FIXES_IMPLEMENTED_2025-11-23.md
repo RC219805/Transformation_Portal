@@ -271,8 +271,8 @@ The checkpoint system is critical for:
 ### Source Code Changes
 ```
 src/transformation_portal/streaming/checkpoint.py
-  - create_checkpoint() [Lines 131-162]
-  - get_latest() [Lines 173-204]
+  - create_checkpoint() [Lines 134-164]
+  - get_latest() [Lines 179-204]
   - list_checkpoints() [Lines 206-221]
   - __init__() [Lines 120-132]
 ```

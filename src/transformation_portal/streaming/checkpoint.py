@@ -194,9 +194,9 @@ class CheckpointManager:
             try:
                 checkpoint = Checkpoint.load(checkpoint_file)
                 loaded_checkpoints.append(checkpoint)
-            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError):
-                # Skip corrupted or inaccessible checkpoint files
-                pass
+            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError) as e:
+                # Log corrupted or inaccessible checkpoint files for consistency
+                print(f"Failed to load checkpoint {checkpoint_file}: {e}")
 
         if not loaded_checkpoints:
             return None
