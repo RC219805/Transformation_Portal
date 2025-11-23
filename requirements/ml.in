@@ -7,7 +7,8 @@
 torch>=2.0,<3
 diffusers>=0.20,<1
 controlnet-aux>=0.0.6,<1
-basicsr>=1.4.2,<2           # Explicit dependency (required by realesrgan)
+# basicsr>=1.4.2,<2 - REMOVED: CVE-2024-27763 command injection vulnerability
+# Replaced with vendored basicsr_tp package (no PyPI dependency needed)
 realesrgan>=0.3.0,<1
 
 # HuggingFace ecosystem and vision utilities
