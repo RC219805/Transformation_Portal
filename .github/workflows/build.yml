@@ -195,11 +195,9 @@ jobs:
           TRANSFORMERS_CACHE: "/tmp/transformers_cache"
         run: |
           if [ "${{ matrix.test-type }}" = "core" ]; then
-            # Run non-ML tests - ignore directories with ML dependencies
+            # Run non-ML tests - ignore test files with ML dependencies
             # Using --ignore to skip collection of ML test files that import torch
             pytest -v tests/ \
-              --ignore=tests/foundation/ \
-              --ignore=tests/perceptual/ \
               --ignore=tests/test_model_training.py \
               -k "not (ml or slow)" || pytest_exit=$?
           else
