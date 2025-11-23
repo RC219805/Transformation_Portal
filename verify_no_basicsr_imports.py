@@ -16,13 +16,17 @@ Exit Codes:
   1 - Vulnerable imports detected (failure)
 """
 
+import ast
 import sys
 from pathlib import Path
 
 
 def find_basicsr_imports(root_dir: Path) -> list[tuple[Path, int, str]]:
     """
-    Find all imports from basicsr (excluding basicsr_tp).
+    Find all imports from basicsr (excluding basicsr_tp) using AST parsing.
+
+    This uses Python's ast module for accurate import detection, avoiding
+    false positives from string literals, comments, or documentation.
 
     Returns:
         List of (file_path, line_number, line_content) tuples
@@ -41,14 +45,42 @@ def find_basicsr_imports(root_dir: Path) -> list[tuple[Path, int, str]]:
 
         try:
             with open(py_file, 'r', encoding='utf-8') as f:
-                for line_no, line in enumerate(f, start=1):
-                    line_stripped = line.strip()
+                content = f.read()
+                lines = content.splitlines()
 
-                    # Check for imports from basicsr (but not basicsr_tp)
+            # Parse the file using AST for accurate import detection
+            try:
+                tree = ast.parse(content, filename=str(py_file))
+
+                for node in ast.walk(tree):
+                    # Check for "from basicsr import ..." statements
+                    if isinstance(node, ast.ImportFrom):
+                        if node.module and node.module.startswith('basicsr') and 'basicsr_tp' not in node.module:
+                            line_no = node.lineno
+                            # Get the actual line content for reporting
+                            line_content = lines[line_no - 1] if line_no <= len(lines) else ""
+                            violations.append((py_file, line_no, line_content))
+
+                    # Check for "import basicsr" statements
+                    elif isinstance(node, ast.Import):
+                        for alias in node.names:
+                            if alias.name.startswith('basicsr') and 'basicsr_tp' not in alias.name:
+                                line_no = node.lineno
+                                line_content = lines[line_no - 1] if line_no <= len(lines) else ""
+                                violations.append((py_file, line_no, line_content))
+
+            except SyntaxError:
+                # If file has syntax errors, fall back to string matching
+                # (better to have false positives than miss actual imports)
+                for line_no, line in enumerate(lines, start=1):
+                    line_stripped = line.strip()
                     if ("from basicsr" in line or "import basicsr" in line) and "basicsr_tp" not in line:
-                        # Ignore comments
                         if not line_stripped.startswith("#"):
-                            violations.append((py_file, line_no, line.rstrip()))
+                            violations.append((py_file, line_no, line))
+
+        except (UnicodeDecodeError, PermissionError):
+            # Skip files that can't be read
+            continue
         except (UnicodeDecodeError, PermissionError):
             # Skip files that can't be read
             continue
