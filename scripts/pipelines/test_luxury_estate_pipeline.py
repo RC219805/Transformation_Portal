@@ -103,7 +103,8 @@ except ImportError:
 print("\n[8/8] Checking Real-ESRGAN upscaler...")
 try:
     from realesrgan import RealESRGANer
-    from basicsr.archs.rrdbnet_arch import RRDBNet
+    # Use vendored BasicSR-TP to avoid CVE-2024-27763 (command injection in SLURM utilities)
+    from basicsr_tp.archs.rrdbnet_arch import RRDBNet
 
     # Check for weights
     weights_path = Path("weights/RealESRGAN_x4plus.pth")
@@ -115,7 +116,7 @@ try:
         print("    URL: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth")
 except ImportError:
     print("  ⚠ Real-ESRGAN not available")
-    print("    Install with: pip install realesrgan basicsr")
+    print("    Install with: pip install realesrgan (basicsr-tp included)")
 
 # Test 9: Device detection
 print("\n[Device Detection]")
