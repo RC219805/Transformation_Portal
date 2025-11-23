@@ -223,7 +223,7 @@ class EnhancementTracker:
             logger.warning("No trajectories to plot")
             return
 
-        (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))[1]
+        _, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
         # Plot 1: Quality over steps
         for name, trajectory in self.trajectories.items():
