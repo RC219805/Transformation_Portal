@@ -14,7 +14,7 @@ from packaging import version
 
 # Check if PyTorch is available (required for training infrastructure)
 try:
-    import torch
+    import torch  # noqa: F401 - imported for availability check only
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
