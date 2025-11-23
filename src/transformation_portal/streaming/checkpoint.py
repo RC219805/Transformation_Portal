@@ -122,10 +122,13 @@ class CheckpointManager:
 
         Args:
             operation_id: Unique identifier for operation
-            checkpoint_dir: Directory for checkpoints (defaults to .checkpoints/)
+            checkpoint_dir: Base directory for checkpoints (defaults to .checkpoints/).
+                           The operation_id will be appended as a subdirectory.
         """
         self.operation_id = operation_id
-        self.checkpoint_dir = checkpoint_dir or Path('.checkpoints') / operation_id
+        # Always append operation_id to checkpoint_dir for isolation
+        base_dir = checkpoint_dir or Path('.checkpoints')
+        self.checkpoint_dir = base_dir / operation_id
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     def create_checkpoint(
@@ -144,13 +147,16 @@ class CheckpointManager:
         Returns:
             Checkpoint instance
         """
-        checkpoint_id = f"{self.operation_id}_{int(time.time())}"
+        # Use high-precision timestamp to avoid collisions when creating
+        # multiple checkpoints in rapid succession
+        timestamp = time.time()
+        checkpoint_id = f"{self.operation_id}_{timestamp:.6f}".replace('.', '_')
 
         return Checkpoint(
             id=checkpoint_id,
             progress=progress,
             state=state,
-            timestamp=time.time(),
+            timestamp=timestamp,
             metadata=metadata or {}
         )
 
@@ -173,14 +179,26 @@ class CheckpointManager:
         Returns:
             Latest checkpoint or None if no checkpoints exist
         """
-        checkpoints = list(self.checkpoint_dir.glob('*.json'))
+        checkpoint_files = list(self.checkpoint_dir.glob('*.json'))
 
-        if not checkpoints:
+        if not checkpoint_files:
             return None
 
-        # Sort by modification time
-        latest = max(checkpoints, key=lambda p: p.stat().st_mtime)
-        return Checkpoint.load(latest)
+        # Load all checkpoints and sort by their timestamp field
+        # (more reliable than file modification time for rapid succession)
+        loaded_checkpoints = []
+        for checkpoint_file in checkpoint_files:
+            try:
+                checkpoint = Checkpoint.load(checkpoint_file)
+                loaded_checkpoints.append(checkpoint)
+            except Exception:
+                # Skip corrupted checkpoints
+                pass
+
+        if not loaded_checkpoints:
+            return None
+
+        return max(loaded_checkpoints, key=lambda c: c.timestamp)
 
     def list_checkpoints(self) -> list[Checkpoint]:
         """List all checkpoints for this operation.
