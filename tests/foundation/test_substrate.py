@@ -91,6 +91,10 @@ class TestComputationalSubstrate:
         """Test memory optimization."""
         # Allocate tensors
         tensors = [substrate.allocate_tensor((100, 100)) for _ in range(10)]
+        # Assert all tensors are valid
+        for tensor in tensors:
+            assert tensor is not None
+            assert tensor.shape == (100, 100)
 
         # Run optimization
         substrate.optimize_memory()
