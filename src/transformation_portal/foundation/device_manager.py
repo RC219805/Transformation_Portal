@@ -16,7 +16,7 @@ import platform
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 import logging
 
 import torch
@@ -331,7 +331,7 @@ class DeviceManager:
             logger.debug(f"Could not get macOS memory: {e}")
             return {"total": 128.0}  # M4 Max default
 
-    def _get_cpu_core_counts(self) -> tuple[int, int]:
+    def _get_cpu_core_counts(self) -> Tuple[int, int]:
         """Get performance and efficiency core counts."""
         try:
             if platform.system() == "Darwin":
