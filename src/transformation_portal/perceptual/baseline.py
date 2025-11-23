@@ -13,7 +13,6 @@ import logging
 import json
 import time
 
-import torch
 from torch import Tensor
 
 from .image_loader import ImageLoader, ImageMetadata, ImageType
@@ -424,7 +423,6 @@ class PerceptualBaseline:
 
         try:
             from matplotlib import pyplot as plt
-            import numpy as np
 
             metrics = self.get_baseline_metrics()
             image_names = list(metrics.keys())
