@@ -390,7 +390,7 @@ class TensorProcessor:
                 return torch.autocast(device_type="cuda", dtype=torch.float16)
             elif self.device.type == "mps":
                 # MPS autocast support (PyTorch 2.0+)
-                return torch.autocast(device_type="cpu", dtype=torch.float16)
+                return torch.autocast(device_type="mps", dtype=torch.float16)
             else:
                 return torch.autocast(device_type="cpu", dtype=torch.bfloat16)
         else:
