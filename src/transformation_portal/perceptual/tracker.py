@@ -9,14 +9,12 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
 from pathlib import Path
 import logging
-import time
 import json
 
 import numpy as np
 from matplotlib import pyplot as plt
 
 from .analyzer import AnalysisResult
-from .metrics import MetricType
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +223,7 @@ class EnhancementTracker:
             logger.warning("No trajectories to plot")
             return
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        _, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
         # Plot 1: Quality over steps
         for name, trajectory in self.trajectories.items():

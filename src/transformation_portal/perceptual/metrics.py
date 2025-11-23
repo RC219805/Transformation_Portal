@@ -12,7 +12,7 @@ Implements various perceptual and statistical quality metrics:
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 import logging
 
 import torch
