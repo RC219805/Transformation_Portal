@@ -22,7 +22,7 @@ Usage:
     substrate = ComputationalSubstrate()
 
     # Get optimized device
-    device = substrate.get_optimal_device()
+    device = substrate.get_device()
 
     # Allocate tensors with optimal memory patterns
     tensor = substrate.allocate_tensor(shape=(1024, 1024, 3))
