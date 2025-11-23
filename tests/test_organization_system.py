@@ -35,7 +35,7 @@ def test_documentation_exists():
     repo_root = Path(__file__).parent.parent
 
     docs = [
-        "REPO_ORGANIZATION.md",
+        "docs/migrated/REPO_ORGANIZATION.md",
         "scripts/setup/README.md",
     ]
 
