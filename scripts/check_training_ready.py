@@ -273,7 +273,7 @@ def print_summary(checks):
         for name, passed in checks.items():
             if not passed:
                 print(f"   - {name}")
-        print("\nRefer to HOW_TO_TRAIN.md for detailed setup instructions")
+        print("\nRefer to docs/migrated/HOW_TO_TRAIN.md for detailed setup instructions")
         return False
 
 
@@ -296,9 +296,9 @@ def main():
     all_passed = print_summary(checks)
     
     print("\n📚 Documentation:")
-    print("   - Quick Guide: HOW_TO_TRAIN.md")
-    print("   - Quick Reference: TRAINING_QUICK_REFERENCE.md")
-    print("   - Detailed Guide: TRAINING_EXECUTION_GUIDE.md")
+    print("   - Quick Guide: docs/migrated/HOW_TO_TRAIN.md")
+    print("   - Quick Reference: docs/migrated/TRAINING_QUICK_REFERENCE.md")
+    print("   - Detailed Guide: docs/migrated/TRAINING_EXECUTION_GUIDE.md")
     print("   - Script Help: ./scripts/train_with_750picacho.sh --help")
     print()
     

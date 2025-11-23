@@ -187,7 +187,7 @@ python src/enhancements/train_hyper_reality.py \
 
 - **Training Guide:** `../docs/TRAINING_GUIDE.md`
 - **750 Picacho Guide:** `../docs/750_PICACHO_TRAINING.md`
-- **Execution Guide:** `../TRAINING_EXECUTION_GUIDE.md`
+- **Execution Guide:** `../docs/migrated/TRAINING_EXECUTION_GUIDE.md`
 - **Model Status:** `../docs/MODEL_TRAINING_STATUS.md`
 
 ## 🐛 Troubleshooting
