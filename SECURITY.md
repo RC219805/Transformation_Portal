@@ -45,7 +45,7 @@ We have implemented **Option A: Vendored Security-Hardened Fork**
 2. Extracted **only** the RRDBNet architecture (required for Real-ESRGAN)
 3. **Completely removed** all SLURM distributed utilities and vulnerable code
 4. Updated all scripts to use `basicsr_tp.archs.rrdbnet_arch` instead of `basicsr.archs.rrdbnet_arch`
-5. Removed `basicsr` from `requirements/ml.in` and `requirements/all.in`
+5. Removed `basicsr` from `requirements/ml.in` (which feeds into `requirements/all.txt`)
 
 **Files Changed:**
 - `basicsr_tp/` - New vendored package (self-contained, no external dependencies)
@@ -55,10 +55,10 @@ We have implemented **Option A: Vendored Security-Hardened Fork**
 
 **Verification:**
 ```bash
-# Verify no imports from original basicsr
-grep -r "from basicsr" --include="*.py" . | grep -v "basicsr_tp" | grep -v ".git"
+# Verify no imports from original basicsr using the dedicated verification script
+python verify_no_basicsr_imports.py
 
-# Should return no results (excluding vendored code and git history)
+# Should return success if mitigation is complete
 ```
 
 #### Benefits

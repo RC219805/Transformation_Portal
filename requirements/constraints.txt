@@ -1,8 +1,0 @@
-# Constraints for dependency resolution
-# This file excludes packages that we vendor or have security issues
-
-# SECURITY: CVE-2024-27763 - Command injection in BasicSR SLURM utilities
-# We vendor basicsr_tp instead (included in repository, no PyPI dependency needed)
-# Note: realesrgan and gfpgan both depend on basicsr, but we provide it via basicsr_tp
-# The RRDBNet architecture is API-compatible, so they work without the upstream package
-basicsr<0  # Exclude all versions - we use vendored basicsr_tp
