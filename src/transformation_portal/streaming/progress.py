@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass, field
-from threading import Lock
+from threading import RLock
 from typing import Any, Callable, Optional
 
 
@@ -70,7 +70,7 @@ class ProgressTracker:
         self.state = ProgressState(total=total, message=description)
         self._update_interval = update_interval
         self._callbacks: list[Callable[[ProgressState], None]] = []
-        self._lock = Lock()
+        self._lock = RLock()
 
     def update(self, n: int = 1, message: Optional[str] = None) -> None:
         """Update progress.
@@ -229,7 +229,7 @@ class MultiProgress:
     def __init__(self):
         """Initialize multi-progress tracker."""
         self.tasks: dict[str, ProgressTracker] = {}
-        self._lock = Lock()
+        self._lock = RLock()
 
     def add_task(
         self,

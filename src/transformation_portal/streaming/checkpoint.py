@@ -125,8 +125,9 @@ class CheckpointManager:
             checkpoint_dir: Directory for checkpoints (defaults to .checkpoints/)
         """
         self.operation_id = operation_id
-        self.checkpoint_dir = checkpoint_dir or Path('.checkpoints') / operation_id
+        self.checkpoint_dir = (checkpoint_dir or Path('.checkpoints')) / operation_id
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        self._counter = 0
 
     def create_checkpoint(
         self,
@@ -144,13 +145,15 @@ class CheckpointManager:
         Returns:
             Checkpoint instance
         """
-        checkpoint_id = f"{self.operation_id}_{int(time.time())}"
+        timestamp = time.time()
+        checkpoint_id = f"{self.operation_id}_{timestamp:.6f}_{self._counter}"
+        self._counter += 1
 
         return Checkpoint(
             id=checkpoint_id,
             progress=progress,
             state=state,
-            timestamp=time.time(),
+            timestamp=timestamp,
             metadata=metadata or {}
         )
 
@@ -178,9 +181,21 @@ class CheckpointManager:
         if not checkpoints:
             return None
 
-        # Sort by modification time
-        latest = max(checkpoints, key=lambda p: p.stat().st_mtime)
-        return Checkpoint.load(latest)
+        # Load all checkpoints and sort by timestamp
+        loaded_checkpoints = []
+        for checkpoint_file in checkpoints:
+            try:
+                checkpoint = Checkpoint.load(checkpoint_file)
+                loaded_checkpoints.append(checkpoint)
+            except Exception:
+                # Skip corrupted checkpoints
+                pass
+
+        if not loaded_checkpoints:
+            return None
+
+        # Return checkpoint with latest timestamp
+        return max(loaded_checkpoints, key=lambda c: c.timestamp)
 
     def list_checkpoints(self) -> list[Checkpoint]:
         """List all checkpoints for this operation.
