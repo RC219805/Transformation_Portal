@@ -41,7 +41,7 @@ The repository now includes an automated file organization system to maintain a 
 - Pre-commit hooks to prevent misplaced files
 - Clear directory structure for docs, scripts, assets, and data
 
-See `REPO_ORGANIZATION.md` for complete documentation.
+See `docs/migrated/REPO_ORGANIZATION.md` for complete documentation.
 
 Quick Start:
 ```bash
@@ -156,10 +156,10 @@ python scripts/check_training_ready.py
 
 | Guide | Purpose | Use When |
 |-------|---------|----------|
-| **[HOW_TO_TRAIN.md](HOW_TO_TRAIN.md)** | Complete implementation guide | You want step-by-step instructions |
-| **[TRAINING_QUICK_REFERENCE.md](TRAINING_QUICK_REFERENCE.md)** | Quick reference card | You need quick command lookup |
-| **[TRAINING_DECISION_TREE.md](TRAINING_DECISION_TREE.md)** | Choose training method | You're unsure which approach to use |
-| **[TRAINING_EXECUTION_GUIDE.md](TRAINING_EXECUTION_GUIDE.md)** | Detailed workflow | You want comprehensive details |
+| **[HOW_TO_TRAIN.md](docs/migrated/HOW_TO_TRAIN.md)** | Complete implementation guide | You want step-by-step instructions |
+| **[TRAINING_QUICK_REFERENCE.md](docs/migrated/TRAINING_QUICK_REFERENCE.md)** | Quick reference card | You need quick command lookup |
+| **[TRAINING_DECISION_TREE.md](docs/migrated/TRAINING_DECISION_TREE.md)** | Choose training method | You're unsure which approach to use |
+| **[TRAINING_EXECUTION_GUIDE.md](docs/migrated/TRAINING_EXECUTION_GUIDE.md)** | Detailed workflow | You want comprehensive details |
 
 ### 🎯 Training Options
 
