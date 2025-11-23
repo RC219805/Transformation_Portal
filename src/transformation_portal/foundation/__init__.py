@@ -28,20 +28,22 @@ Usage:
     tensor = substrate.allocate_tensor(shape=(1024, 1024, 3))
 """
 
-from .substrate import ComputationalSubstrate
+from .substrate import ComputationalSubstrate, SubstrateConfig
 from .device_manager import DeviceManager, DeviceInfo, DeviceCapabilities
-from .tensor_processor import TensorProcessor, TensorConfig
+from .tensor_processor import TensorProcessor, TensorConfig, PrecisionMode
 from .memory_manager import MemoryManager, AllocationStrategy
 from .hardware_abstraction import HardwareAbstraction, BackendType
 from .performance_monitor import PerformanceMonitor, MetricsCollector
 
 __all__ = [
     "ComputationalSubstrate",
+    "SubstrateConfig",
     "DeviceManager",
     "DeviceInfo",
     "DeviceCapabilities",
     "TensorProcessor",
     "TensorConfig",
+    "PrecisionMode",
     "MemoryManager",
     "AllocationStrategy",
     "HardwareAbstraction",

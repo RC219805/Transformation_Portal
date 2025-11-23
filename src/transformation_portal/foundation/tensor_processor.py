@@ -440,8 +440,20 @@ class TensorProcessor:
             logger.warning(f"Failed to compile function: {e}")
             return function
 
+    def get_dtype(self, precision: Optional[PrecisionMode] = None) -> torch.dtype:
+        """
+        Get torch dtype for precision mode.
+
+        Args:
+            precision: Optional precision mode override. If None, uses config precision.
+
+        Returns:
+            torch.dtype corresponding to the precision mode
+        """
+        return self._get_dtype(precision)
+
     def _get_dtype(self, precision: Optional[PrecisionMode] = None) -> torch.dtype:
-        """Get torch dtype for precision mode."""
+        """Get torch dtype for precision mode (internal)."""
         precision = precision or self.config.precision
 
         dtype_map = {
