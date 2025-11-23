@@ -450,7 +450,7 @@ class ComputationalSubstrate:
 
     def get_optimal_dtype(self) -> torch.dtype:
         """Get optimal data type for current configuration."""
-        return self.tensor_processor._get_dtype()
+        return self.tensor_processor.get_dtype()
 
     # ========================================================================
     # Utility Methods
