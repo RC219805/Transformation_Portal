@@ -150,7 +150,10 @@ class CheckpointManager:
         # Use high-precision timestamp to avoid collisions when creating
         # multiple checkpoints in rapid succession
         timestamp = time.time()
-        checkpoint_id = f"{self.operation_id}_{timestamp:.6f}".replace('.', '_')
+        # Format timestamp without decimal point for filesystem compatibility
+        # Uses integer seconds + microseconds to ensure uniqueness
+        timestamp_str = f"{int(timestamp)}{int((timestamp % 1) * 1000000):06d}"
+        checkpoint_id = f"{self.operation_id}_{timestamp_str}"
 
         return Checkpoint(
             id=checkpoint_id,
@@ -191,8 +194,8 @@ class CheckpointManager:
             try:
                 checkpoint = Checkpoint.load(checkpoint_file)
                 loaded_checkpoints.append(checkpoint)
-            except Exception:
-                # Skip corrupted checkpoints
+            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError):
+                # Skip corrupted or inaccessible checkpoint files
                 pass
 
         if not loaded_checkpoints:
@@ -212,7 +215,7 @@ class CheckpointManager:
             try:
                 checkpoint = Checkpoint.load(checkpoint_file)
                 checkpoints.append(checkpoint)
-            except Exception as e:
+            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError) as e:
                 print(f"Failed to load checkpoint {checkpoint_file}: {e}")
 
         return sorted(checkpoints, key=lambda c: c.timestamp)
