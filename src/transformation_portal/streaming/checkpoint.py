@@ -10,6 +10,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable, Dict, Optional
 
 
@@ -101,6 +102,10 @@ class Checkpoint:
 class CheckpointManager:
     """Manage checkpoints for resumable operations.
 
+    Thread-safe: The create_checkpoint() method can be safely called from
+    multiple threads concurrently. Each checkpoint will have a unique ID
+    combining timestamp and sequential counter.
+
     Example:
         >>> manager = CheckpointManager("batch_process")
         >>>
@@ -122,12 +127,16 @@ class CheckpointManager:
 
         Args:
             operation_id: Unique identifier for operation
-            checkpoint_dir: Directory for checkpoints (defaults to .checkpoints/)
+            checkpoint_dir: Base directory for checkpoints (defaults to .checkpoints/).
+                           The operation_id will be appended as a subdirectory.
         """
         self.operation_id = operation_id
-        self.checkpoint_dir = (checkpoint_dir or Path('.checkpoints')) / operation_id
+        # Always append operation_id to checkpoint_dir for isolation
+        base_dir = checkpoint_dir or Path('.checkpoints')
+        self.checkpoint_dir = base_dir / operation_id
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self._counter = 0
+        self._counter_lock = Lock()
 
     def create_checkpoint(
         self,
@@ -137,6 +146,9 @@ class CheckpointManager:
     ) -> Checkpoint:
         """Create a new checkpoint.
 
+        Thread-safe: Uses a lock to ensure unique checkpoint IDs even when
+        called concurrently from multiple threads.
+
         Args:
             progress: Progress percentage (0-100)
             state: State data to save
@@ -145,9 +157,19 @@ class CheckpointManager:
         Returns:
             Checkpoint instance
         """
+        # Use high-precision timestamp + counter to avoid collisions when creating
+        # multiple checkpoints in rapid succession, even from multiple threads
         timestamp = time.time()
-        checkpoint_id = f"{self.operation_id}_{timestamp:.6f}_{self._counter}"
-        self._counter += 1
+
+        # Increment counter with lock protection for thread-safety
+        with self._counter_lock:
+            counter_value = self._counter
+            self._counter += 1
+
+        # Format timestamp without decimal point for filesystem compatibility
+        # Uses integer seconds + microseconds + counter to ensure uniqueness
+        timestamp_str = f"{int(timestamp)}{int((timestamp % 1) * 1000000):06d}"
+        checkpoint_id = f"{self.operation_id}_{timestamp_str}_{counter_value}"
 
         return Checkpoint(
             id=checkpoint_id,
@@ -176,25 +198,25 @@ class CheckpointManager:
         Returns:
             Latest checkpoint or None if no checkpoints exist
         """
-        checkpoints = list(self.checkpoint_dir.glob('*.json'))
+        checkpoint_files = list(self.checkpoint_dir.glob('*.json'))
 
-        if not checkpoints:
+        if not checkpoint_files:
             return None
 
-        # Load all checkpoints and sort by timestamp
+        # Load all checkpoints and sort by their timestamp field
+        # (more reliable than file modification time for rapid succession)
         loaded_checkpoints = []
-        for checkpoint_file in checkpoints:
+        for checkpoint_file in checkpoint_files:
             try:
                 checkpoint = Checkpoint.load(checkpoint_file)
                 loaded_checkpoints.append(checkpoint)
-            except Exception:
-                # Skip corrupted checkpoints
-                pass
+            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError) as e:
+                # Log corrupted or inaccessible checkpoint files for consistency
+                print(f"Failed to load checkpoint {checkpoint_file}: {e}")
 
         if not loaded_checkpoints:
             return None
 
-        # Return checkpoint with latest timestamp
         return max(loaded_checkpoints, key=lambda c: c.timestamp)
 
     def list_checkpoints(self) -> list[Checkpoint]:
@@ -209,7 +231,7 @@ class CheckpointManager:
             try:
                 checkpoint = Checkpoint.load(checkpoint_file)
                 checkpoints.append(checkpoint)
-            except Exception as e:
+            except (json.JSONDecodeError, KeyError, FileNotFoundError, OSError) as e:
                 print(f"Failed to load checkpoint {checkpoint_file}: {e}")
 
         return sorted(checkpoints, key=lambda c: c.timestamp)
