@@ -195,20 +195,23 @@ jobs:
           TRANSFORMERS_CACHE: "/tmp/transformers_cache"
         run: |
           if [ "${{ matrix.test-type }}" = "core" ]; then
-            # Run non-ML tests
-            pytest -v tests/ -k "not (ml or slow)" || pytest_exit=$?
+            # Run non-ML tests - ignore test files with ML dependencies
+            # Using --ignore to skip collection of ML test files that import torch
+            pytest -v tests/ \
+              --ignore=tests/test_model_training.py \
+              -k "not (ml or slow)" || pytest_exit=$?
           else
             # Run ML tests
             pytest -v tests/ -k "ml or slow" || pytest_exit=$?
           fi
-          
+
           # Cleanup regardless of test outcome
           find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
           find . -type f -name "*.pyc" -delete
           find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
           rm -rf /tmp/transformers_cache || true
           rm -rf ~/.cache/huggingface || true
-          
+
           exit ${pytest_exit:-0}
 
       - name: Final disk usage
