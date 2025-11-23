@@ -10,6 +10,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable, Dict, Optional
 
 
@@ -101,6 +102,10 @@ class Checkpoint:
 class CheckpointManager:
     """Manage checkpoints for resumable operations.
 
+    Thread-safe: The create_checkpoint() method can be safely called from
+    multiple threads concurrently. Each checkpoint will have a unique ID
+    combining timestamp and sequential counter.
+
     Example:
         >>> manager = CheckpointManager("batch_process")
         >>>
@@ -131,6 +136,7 @@ class CheckpointManager:
         self.checkpoint_dir = base_dir / operation_id
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self._counter = 0
+        self._counter_lock = Lock()
 
     def create_checkpoint(
         self,
@@ -140,6 +146,9 @@ class CheckpointManager:
     ) -> Checkpoint:
         """Create a new checkpoint.
 
+        Thread-safe: Uses a lock to ensure unique checkpoint IDs even when
+        called concurrently from multiple threads.
+
         Args:
             progress: Progress percentage (0-100)
             state: State data to save
@@ -148,13 +157,19 @@ class CheckpointManager:
         Returns:
             Checkpoint instance
         """
-        # Use high-precision timestamp to avoid collisions when creating
-        # multiple checkpoints in rapid succession
+        # Use high-precision timestamp + counter to avoid collisions when creating
+        # multiple checkpoints in rapid succession, even from multiple threads
         timestamp = time.time()
+
+        # Increment counter with lock protection for thread-safety
+        with self._counter_lock:
+            counter_value = self._counter
+            self._counter += 1
+
         # Format timestamp without decimal point for filesystem compatibility
-        # Uses integer seconds + microseconds to ensure uniqueness
+        # Uses integer seconds + microseconds + counter to ensure uniqueness
         timestamp_str = f"{int(timestamp)}{int((timestamp % 1) * 1000000):06d}"
-        checkpoint_id = f"{self.operation_id}_{timestamp_str}"
+        checkpoint_id = f"{self.operation_id}_{timestamp_str}_{counter_value}"
 
         return Checkpoint(
             id=checkpoint_id,
