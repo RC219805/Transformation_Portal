@@ -14,7 +14,6 @@ Security Advisory: CVE-2024-27763
 """
 
 import pytest
-import sys
 from pathlib import Path
 
 
@@ -79,9 +78,9 @@ class TestRRDBNetArchitecture:
         import torch
 
         test_sizes = [
-            (32, 32),   # Small
-            (64, 64),   # Medium
-            (128, 128), # Large
+            (32, 32),    # Small
+            (64, 64),    # Medium
+            (128, 128),  # Large
         ]
 
         for h, w in test_sizes:
@@ -132,7 +131,8 @@ class TestSecurityValidation:
                     if in_docstring or stripped.startswith('#'):
                         continue
 
-                    # Check for actual vulnerable code in executable lines
+                    # Check for actual vulnerable code patterns in executable lines
+                    # (comments and docstrings already filtered above)
                     forbidden_patterns = [
                         'scontrol show hostname',  # The actual vulnerable command
                         'subprocess.getoutput',    # Shell execution method
@@ -142,7 +142,7 @@ class TestSecurityValidation:
                     ]
 
                     for pattern in forbidden_patterns:
-                        if pattern in line and not line.strip().startswith('#'):
+                        if pattern in line:
                             pytest.fail(
                                 f"Found vulnerable SLURM code in {py_file}:{i}\n"
                                 f"  Pattern: {pattern}\n"
@@ -225,37 +225,33 @@ class TestDocumentation:
         assert basicsr_tp.__license__ == 'Apache-2.0'
 
 
-@pytest.mark.skipif(
-    'torch' not in sys.modules and not pytest.importorskip("torch", reason="PyTorch not available"),
-    reason="PyTorch not installed"
-)
 class TestRealESRGANIntegration:
     """Test integration with Real-ESRGAN (if available)."""
 
     def test_realesrgan_can_use_vendored_rrdbnet(self):
         """Test that Real-ESRGAN can use our vendored RRDBNet."""
-        try:
-            from realesrgan import RealESRGANer
-            from basicsr_tp import RRDBNet
+        # Skip if dependencies not available
+        pytest.importorskip("torch")
+        pytest.importorskip("realesrgan")
 
-            # Create model
-            model = RRDBNet(num_in_ch=3, num_out_ch=3)
+        from realesrgan import RealESRGANer
+        from basicsr_tp import RRDBNet
 
-            # RealESRGANer should accept our model
-            # Note: This will fail without weights file, but constructor should work
-            upsampler = RealESRGANer(
-                scale=4,
-                model_path=None,  # Don't load weights
-                model=model,
-                tile=0,
-                tile_pad=10,
-                pre_pad=0,
-                half=False
-            )
-            assert upsampler is not None
+        # Create model
+        model = RRDBNet(num_in_ch=3, num_out_ch=3)
 
-        except ImportError:
-            pytest.skip("Real-ESRGAN not installed")
+        # RealESRGANer should accept our model
+        # Note: This will fail without weights file, but constructor should work
+        upsampler = RealESRGANer(
+            scale=4,
+            model_path=None,  # Don't load weights
+            model=model,
+            tile=0,
+            tile_pad=10,
+            pre_pad=0,
+            half=False
+        )
+        assert upsampler is not None
 
 
 if __name__ == '__main__':

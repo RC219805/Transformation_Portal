@@ -86,9 +86,11 @@ def main():
     print("  Replace 'from basicsr' with 'from basicsr_tp'")
     print("  Replace 'import basicsr' with 'import basicsr_tp'")
     print()
+    # Example code for fixing imports (using variable to avoid self-detection)
+    vulnerable_package = "basicsr"
     print("Example:")
     print("  # OLD (vulnerable):")
-    print("  from basic" + "sr.archs.rrdbnet_arch import RRDBNet")
+    print(f"  from {vulnerable_package}.archs.rrdbnet_arch import RRDBNet")
     print()
     print("  # NEW (secure):")
     print("  from basicsr_tp.archs.rrdbnet_arch import RRDBNet")
