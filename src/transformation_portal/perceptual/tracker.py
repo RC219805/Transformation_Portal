@@ -230,7 +230,8 @@ class EnhancementTracker:
                 "Install with: pip install matplotlib or pip install -e '.[ml]'"
             )
             raise ImportError(
-                "matplotlib not available. Install with: pip install matplotlib"
+                "matplotlib not available. "
+                "Install with: pip install matplotlib or pip install -e '.[ml]'"
             ) from e
 
         _, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
@@ -314,7 +315,8 @@ class EnhancementTracker:
                 "Install with: pip install matplotlib or pip install -e '.[ml]'"
             )
             raise ImportError(
-                "matplotlib not available. Install with: pip install matplotlib"
+                "matplotlib not available. "
+                "Install with: pip install matplotlib or pip install -e '.[ml]'"
             ) from e
 
         # Get all metric types
