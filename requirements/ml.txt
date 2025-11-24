@@ -411,6 +411,8 @@ scipy==1.15.3
     #   scikit-image
     #   scikit-learn
     #   sentence-transformers
+# NOTE: sentence-transformers downgraded from 5.1.2 to 2.7.0 due to
+# compatibility issues with torch and transformers version constraints
 sentence-transformers==2.7.0
     # via
     #   -c all.txt
