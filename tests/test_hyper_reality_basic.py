@@ -2,7 +2,7 @@
 """
 Basic tests for Hyper-Reality Enhancement Module
 
-These tests verify module structure and basic functionality without requiring PyTorch.
+These tests verify module structure and basic functionality and require PyTorch to be installed.
 For complete training infrastructure tests, see test_training_infrastructure.py
 
 NOTE: This test file expects the package to be installed via 'pip install -e .'
