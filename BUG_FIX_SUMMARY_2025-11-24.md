@@ -81,7 +81,8 @@ ImportError: cannot import name 'nn' from 'torch' (unknown location)
   - `test_helper_functions_exist`
   - `test_residual_blocks_exist`
   - `test_security_note_in_module`
-  - `test_no_dist_util_module` (3 tests)
+  - `test_no_dist_util_module`
+  - `test_package_init_has_metadata`
 
 - **4 test errors** (fixture setup failures):
   - `test_model_instantiation`
