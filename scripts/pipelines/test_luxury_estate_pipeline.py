@@ -107,7 +107,7 @@ try:
     # RRDBNet import tested separately to verify compatibility
     from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F401
 
-    # Explicitly reference to satisfy linter - this is an availability check
+    # Mark import as used to satisfy linter
     _ = RealESRGANer
 
     # Check for weights
