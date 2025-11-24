@@ -4,31 +4,27 @@
 #
 #    pip-compile --output-file=all.txt all.in
 #
-# SECURITY NOTE (CVE-2024-27763):
-# ================================
-# basicsr==1.4.2 appears below as a transitive dependency of realesrgan and gfpgan,
-# but it is NOT used at runtime. All imports use the vendored basicsr_tp package
-# located in the repository root (basicsr_tp/). The vendored version removes all
-# vulnerable SLURM distributed utilities while preserving the RRDBNet architecture.
-#
-# Verification: Run `python verify_no_basicsr_imports.py` to confirm no code
-# imports from the vulnerable basicsr package.
-#
 absl-py==2.3.1
     # via tb-nightly
-accelerate==1.11.0
+accelerate==1.12.0
     # via -r ml.in
 addict==2.4.0
     # via basicsr
+annotated-types==0.7.0
+    # via pydantic
+anyio==4.11.0
+    # via httpx
 astroid==4.0.2
     # via pylint
 attrs==25.4.0
     # via
     #   cattrs
     #   coremltools
+authlib==1.6.5
+    # via safety
 autopep8==2.3.2
     # via -r dev.in
-bandit==1.8.6
+bandit==1.9.2
     # via -r ci.in
 basicsr==1.4.2
     # via
@@ -43,7 +39,10 @@ cachetools==6.2.2
 cattrs==25.3.0
     # via coremltools
 certifi==2025.11.12
-    # via requests
+    # via
+    #   httpcore
+    #   httpx
+    #   requests
 cffi==2.0.0
     # via cryptography
 chardet==5.2.0
@@ -53,6 +52,7 @@ charset-normalizer==3.4.4
 click==8.3.1
     # via
     #   black
+    #   nltk
     #   safety
     #   typer
 colorama==0.4.6
@@ -65,10 +65,12 @@ controlnet-aux==0.0.10
     # via -r ml.in
 coremltools==9.0
     # via -r ml.in
-coverage[toml]==7.11.3
+coverage[toml]==7.12.0
     # via pytest-cov
 cryptography==46.0.3
-    # via secretstorage
+    # via
+    #   authlib
+    #   secretstorage
 cycler==0.12.1
     # via matplotlib
 diffusers==0.35.2
@@ -80,7 +82,9 @@ distlib==0.4.0
 docutils==0.22.3
     # via readme-renderer
 dparse==0.6.4
-    # via safety
+    # via
+    #   safety
+    #   safety-schemas
 einops==0.8.1
     # via controlnet-aux
 facexlib==0.3.0
@@ -92,6 +96,7 @@ filelock==3.20.0
     #   controlnet-aux
     #   diffusers
     #   huggingface-hub
+    #   safety
     #   torch
     #   tox
     #   transformers
@@ -112,8 +117,14 @@ gfpgan==1.3.8
     # via realesrgan
 grpcio==1.76.0
     # via tb-nightly
+h11==0.16.0
+    # via httpcore
 hf-xet==1.2.0
     # via huggingface-hub
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via safety
 huggingface-hub==0.36.0
     # via
     #   -r ml.in
@@ -124,10 +135,15 @@ huggingface-hub==0.36.0
     #   timm
     #   tokenizers
     #   transformers
-hypothesis==6.148.1
+hypothesis==6.148.2
     # via -r dev.in
+id==1.5.0
+    # via twine
 idna==3.11
-    # via requests
+    # via
+    #   anyio
+    #   httpx
+    #   requests
 imagecodecs==2024.12.30
     # via -r base.in
 imageio==2.37.2
@@ -138,10 +154,9 @@ importlib-metadata==8.7.0
     # via
     #   controlnet-aux
     #   diffusers
-    #   twine
 iniconfig==2.3.0
     # via pytest
-isort==5.13.2
+isort==7.0.0
     # via
     #   -r dev.in
     #   pylint
@@ -156,9 +171,13 @@ jeepney==0.9.0
     #   keyring
     #   secretstorage
 jinja2==3.1.6
-    # via torch
+    # via
+    #   safety
+    #   torch
 joblib==1.5.2
-    # via scikit-learn
+    # via
+    #   nltk
+    #   scikit-learn
 keyring==25.7.0
     # via twine
 kiwisolver==1.4.9
@@ -181,6 +200,8 @@ markupsafe==3.0.3
     # via
     #   jinja2
     #   werkzeug
+marshmallow==4.1.0
+    # via safety
 matplotlib==3.10.7
     # via filterpy
 mccabe==0.7.0
@@ -203,12 +224,14 @@ mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
-networkx==3.5
+networkx==3.6
     # via
     #   scikit-image
     #   torch
 nh3==0.3.2
     # via readme-renderer
+nltk==3.9.2
+    # via safety
 numba==0.62.1
     # via facexlib
 numpy==2.2.6
@@ -300,10 +323,12 @@ packaging==25.0
     #   pyproject-api
     #   pytest
     #   safety
+    #   safety-schemas
     #   scikit-image
     #   tb-nightly
     #   tox
     #   transformers
+    #   twine
 pathspec==0.12.1
     # via
     #   black
@@ -322,8 +347,6 @@ pillow==11.3.0
     #   sentence-transformers
     #   tb-nightly
     #   torchvision
-pkginfo==1.12.1.2
-    # via twine
 platformdirs==4.5.0
     # via
     #   black
@@ -334,6 +357,7 @@ platformdirs==4.5.0
 pluggy==1.6.0
     # via
     #   pytest
+    #   pytest-cov
     #   tox
 protobuf==6.33.1
     # via
@@ -352,6 +376,12 @@ pycodestyle==2.14.0
     #   flake8
 pycparser==2.23
     # via cffi
+pydantic==2.12.4
+    # via
+    #   safety
+    #   safety-schemas
+pydantic-core==2.41.5
+    # via pydantic
 pyflakes==3.4.0
     # via flake8
 pygments==2.19.2
@@ -363,7 +393,7 @@ pylint==4.0.3
     # via -r dev.in
 pyparsing==3.2.5
     # via matplotlib
-pypdf==6.3.0
+pypdf==6.4.0
     # via -r ci.in
 pyproject-api==1.10.0
     # via tox
@@ -373,7 +403,7 @@ pytest==9.0.1
     # via
     #   -r dev.in
     #   pytest-cov
-pytest-cov==5.0.0
+pytest-cov==7.0.0
     # via -r dev.in
 python-dateutil==2.9.0.post0
     # via matplotlib
@@ -399,12 +429,14 @@ realesrgan==0.3.0
 regex==2025.11.3
     # via
     #   diffusers
+    #   nltk
     #   transformers
 requests==2.32.5
     # via
     #   basicsr
     #   diffusers
     #   huggingface-hub
+    #   id
     #   requests-toolbelt
     #   safety
     #   transformers
@@ -419,17 +451,21 @@ rich==14.2.0
     #   twine
     #   typer
 ruamel-yaml==0.18.16
-    # via safety
+    # via
+    #   safety
+    #   safety-schemas
 ruamel-yaml-clib==0.2.15
     # via ruamel-yaml
-safetensors==0.6.2
+safetensors==0.7.0
     # via
     #   accelerate
     #   diffusers
     #   timm
     #   transformers
-safety==2.3.4
+safety==3.7.0
     # via -r ci.in
+safety-schemas==0.0.16
+    # via safety
 scikit-image==0.25.2
     # via
     #   -r ml.in
@@ -451,7 +487,7 @@ scipy==1.15.3
     #   scikit-image
     #   scikit-learn
     #   sentence-transformers
-secretstorage==3.4.1
+secretstorage==3.5.0
     # via keyring
 sentence-transformers==2.7.0
     # via -r ml.in
@@ -459,9 +495,11 @@ shellingham==1.5.4
     # via typer
 six==1.17.0
     # via python-dateutil
+sniffio==1.3.1
+    # via anyio
 sortedcontainers==2.4.0
     # via hypothesis
-stevedore==5.5.0
+stevedore==5.6.0
     # via bandit
 sympy==1.14.0
     # via
@@ -471,6 +509,8 @@ tb-nightly==2.21.0a20251023
     # via
     #   basicsr
     #   gfpgan
+tenacity==9.1.2
+    # via safety
 tensorboard-data-server==0.7.2
     # via tb-nightly
 threadpoolctl==3.6.0
@@ -484,7 +524,9 @@ timm==1.0.22
 tokenizers==0.22.1
     # via transformers
 tomlkit==0.13.3
-    # via pylint
+    # via
+    #   pylint
+    #   safety
 torch==2.9.1
     # via
     #   -r ml.in
@@ -516,6 +558,7 @@ tqdm==4.67.1
     #   facexlib
     #   gfpgan
     #   huggingface-hub
+    #   nltk
     #   realesrgan
     #   sentence-transformers
     #   transformers
@@ -525,21 +568,31 @@ transformers==4.57.1
     #   sentence-transformers
 triton==3.5.1
     # via torch
-twine==4.0.2
+twine==6.2.0
     # via -r ci.in
 typer==0.20.0
-    # via -r base.in
+    # via
+    #   -r base.in
+    #   safety
 types-pyyaml==6.0.12.20250915
     # via -r dev.in
 typing-extensions==4.15.0
     # via
+    #   anyio
     #   cattrs
     #   colour-science
     #   grpcio
     #   huggingface-hub
     #   mypy
+    #   pydantic
+    #   pydantic-core
+    #   safety
+    #   safety-schemas
     #   torch
     #   typer
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via pydantic
 urllib3==2.5.0
     # via
     #   requests

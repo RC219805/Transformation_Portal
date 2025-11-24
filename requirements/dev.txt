@@ -20,7 +20,7 @@ click==8.3.1
     # via
     #   -c all.txt
     #   black
-coverage[toml]==7.11.3
+coverage[toml]==7.12.0
     # via
     #   -c all.txt
     #   pytest-cov
@@ -32,7 +32,7 @@ flake8==7.3.0
     # via
     #   -c all.txt
     #   -r dev.in
-hypothesis==6.148.1
+hypothesis==6.148.2
     # via
     #   -c all.txt
     #   -r dev.in
@@ -40,7 +40,7 @@ iniconfig==2.3.0
     # via
     #   -c all.txt
     #   pytest
-isort==5.13.2
+isort==7.0.0
     # via
     #   -c all.txt
     #   -r dev.in
@@ -82,6 +82,7 @@ pluggy==1.6.0
     # via
     #   -c all.txt
     #   pytest
+    #   pytest-cov
 pycodestyle==2.14.0
     # via
     #   -c all.txt
@@ -104,7 +105,7 @@ pytest==9.0.1
     #   -c all.txt
     #   -r dev.in
     #   pytest-cov
-pytest-cov==5.0.0
+pytest-cov==7.0.0
     # via
     #   -c all.txt
     #   -r dev.in
