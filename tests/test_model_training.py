@@ -3,6 +3,8 @@ Tests for model training infrastructure
 Validates that training components work correctly
 """
 
+# pylint: disable=possibly-used-before-assignment  # Conditional imports for optional dependencies
+
 import pytest
 import sys
 from pathlib import Path
@@ -10,15 +12,35 @@ import tempfile
 import shutil
 from packaging import version
 
+# Check if PyTorch is available (required for training infrastructure)
+try:
+    import torch  # noqa: F401 - imported for availability check only
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from enhancements.train_hyper_reality import (
-    TrainingConfig,
-    SyntheticDataGenerator,
-    EnhancementDataset,
-    HyperRealityTrainer,
-    configure_device
+# pylint: disable=wrong-import-position
+# Try to import training modules - may fail if torch.nn not available
+if TORCH_AVAILABLE:
+    try:
+        from enhancements.train_hyper_reality import (
+            TrainingConfig,
+            SyntheticDataGenerator,
+            EnhancementDataset,
+            HyperRealityTrainer,
+            configure_device
+        )
+    except ImportError:
+        # torch exists but nn module or other dependencies not available
+        TORCH_AVAILABLE = False
+
+# Skip all tests in this module if PyTorch is not available
+pytestmark = pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch not installed - training tests require ML dependencies"
 )
 
 

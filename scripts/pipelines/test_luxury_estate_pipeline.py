@@ -22,17 +22,17 @@ print()
 print("[1/8] Checking Python version...")
 if sys.version_info < (3, 10):
     print(f"  ✗ Python {sys.version_info.major}.{sys.version_info.minor} detected")
-    print(f"  ✗ Python 3.10+ required")
+    print("  ✗ Python 3.10+ required")
     sys.exit(1)
 print(f"  ✓ Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
 
 # Test 2: Core dependencies
 print("\n[2/8] Checking core dependencies...")
 try:
-    import numpy as np
-    import cv2
-    import torch
-    from PIL import Image
+    import numpy as np  # noqa: F401
+    import cv2  # noqa: F401
+    import torch  # noqa: F401
+    from PIL import Image  # noqa: F401
     print("  ✓ NumPy, OpenCV, PyTorch, Pillow")
 except ImportError as e:
     print(f"  ✗ Missing core dependency: {e}")
@@ -50,8 +50,8 @@ except ImportError:
 # Test 4: Depth pipeline
 print("\n[4/8] Checking depth pipeline...")
 try:
-    from transformation_portal.depth.models import DepthAnythingV2Model, ModelBackend, ModelVariant
-    from transformation_portal.depth.processors import (
+    from transformation_portal.depth.models import DepthAnythingV2Model, ModelBackend, ModelVariant  # noqa: F401
+    from transformation_portal.depth.processors import (  # noqa: F401
         AtmosphericEffects,
         DepthAwareDenoise,
         DepthGuidedFilters,
@@ -65,7 +65,7 @@ except ImportError as e:
 # Test 5: Material Response
 print("\n[5/8] Checking Material Response...")
 try:
-    from transformation_portal.processors.material_response.core import (
+    from transformation_portal.processors.material_response.core import (  # noqa: F401
         MaterialAestheticProfile,
         LightingProfile,
     )
@@ -77,14 +77,14 @@ except ImportError:
 # Test 6: Tone mapping
 print("\n[6/8] Checking tone mapping...")
 try:
-    from tonemapper_agx_filmic import apply_filmic_hable, linear_to_srgb
+    from tonemapper_agx_filmic import apply_filmic_hable, linear_to_srgb  # noqa: F401
     print("  ✓ Filmic (Hable) tone mapper")
 except ImportError:
     print("  ✗ Tone mapping not available")
     sys.exit(1)
 
 try:
-    from tonemapper_agx_filmic import apply_agx_ocio
+    from tonemapper_agx_filmic import apply_agx_ocio  # noqa: F401
     print("  ✓ AgX OCIO tone mapper")
 except ImportError:
     print("  ⚠ AgX OCIO not available (requires PyOpenColorIO)")
@@ -92,8 +92,8 @@ except ImportError:
 # Test 7: AI enhancement
 print("\n[7/8] Checking AI enhancement...")
 try:
-    from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline
-    from controlnet_aux import CannyDetector
+    from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline  # noqa: F401
+    from controlnet_aux import CannyDetector  # noqa: F401
     print("  ✓ ControlNet + Stable Diffusion available")
 except ImportError:
     print("  ⚠ AI enhancement not available")
@@ -103,7 +103,12 @@ except ImportError:
 print("\n[8/8] Checking Real-ESRGAN upscaler...")
 try:
     from realesrgan import RealESRGANer
-    from basicsr.archs.rrdbnet_arch import RRDBNet
+    # Use vendored BasicSR-TP to avoid CVE-2024-27763 (command injection in SLURM utilities)
+    # RRDBNet import tested separately to verify compatibility
+    from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F401
+
+    # Mark import as used to satisfy linter
+    _ = RealESRGANer
 
     # Check for weights
     weights_path = Path("weights/RealESRGAN_x4plus.pth")
@@ -115,7 +120,7 @@ try:
         print("    URL: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth")
 except ImportError:
     print("  ⚠ Real-ESRGAN not available")
-    print("    Install with: pip install realesrgan basicsr")
+    print("    Install with: pip install realesrgan (basicsr-tp included)")
 
 # Test 9: Device detection
 print("\n[Device Detection]")
@@ -131,7 +136,7 @@ else:
 print("\n[Pipeline Test]")
 print("-" * 80)
 try:
-    from luxury_estate_master_pipeline import (
+    from luxury_estate_master_pipeline import (  # noqa: F401
         LuxuryEstateMasterPipeline,
         get_750_picacho_preset,
         get_aerial_preset,
@@ -182,39 +187,41 @@ if sys.version_info < (3, 10):
     critical_ok = False
 
 try:
-    import numpy, cv2, torch
-    from PIL import Image
+    import cv2  # noqa: F401, F811
+    import numpy  # noqa: F401
+    import torch  # noqa: F401, F811
+    from PIL import Image  # noqa: F401, F811
 except ImportError:
     critical_ok = False
 
 try:
-    from tonemapper_agx_filmic import apply_filmic_hable
+    from tonemapper_agx_filmic import apply_filmic_hable  # noqa: F401, F811
 except ImportError:
     critical_ok = False
 
 try:
-    from luxury_estate_master_pipeline import LuxuryEstateMasterPipeline
+    from luxury_estate_master_pipeline import LuxuryEstateMasterPipeline  # noqa: F401, F811
 except ImportError:
     critical_ok = False
 
 # Optional but recommended
 try:
-    import tifffile
+    import tifffile  # noqa: F401, F811
 except ImportError:
     warnings.append("tifffile missing - limited 16/32-bit TIFF support")
 
 try:
-    from transformation_portal.depth.models import DepthAnythingV2Model
+    from transformation_portal.depth.models import DepthAnythingV2Model  # noqa: F401, F811
 except ImportError:
     warnings.append("Depth pipeline unavailable - will skip depth processing")
 
 try:
-    from diffusers import StableDiffusionControlNetImg2ImgPipeline
+    from diffusers import StableDiffusionControlNetImg2ImgPipeline  # noqa: F401, F811
 except ImportError:
     warnings.append("AI enhancement unavailable - will skip AI stage")
 
 try:
-    from realesrgan import RealESRGANer
+    from realesrgan import RealESRGANer  # noqa: F401, F811
 except ImportError:
     warnings.append("Real-ESRGAN unavailable - will use Lanczos upscaling")
 

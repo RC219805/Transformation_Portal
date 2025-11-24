@@ -43,7 +43,8 @@ from tqdm import tqdm
 
 # Conditional imports with graceful degradation
 try:
-    from basicsr.archs.rrdbnet_arch import RRDBNet
+    # Use vendored BasicSR-TP to avoid CVE-2024-27763 (command injection in SLURM utilities)
+    from basicsr_tp.archs.rrdbnet_arch import RRDBNet
     from realesrgan import RealESRGANer
     ESRGAN_AVAILABLE = True
 except ImportError:
