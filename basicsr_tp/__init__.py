@@ -56,6 +56,12 @@ def __getattr__(name):
     package metadata or wants to check if basicsr_tp is available.
     """
     if name == "RRDBNet":
-        from basicsr_tp.archs.rrdbnet_arch import RRDBNet
-        return RRDBNet
+        try:
+            from basicsr_tp.archs.rrdbnet_arch import RRDBNet
+            return RRDBNet
+        except ImportError as e:
+            raise ImportError(
+                f"Cannot import '{name}' from basicsr_tp: torch is required. "
+                f"Install with: pip install torch\nOriginal error: {e}"
+            ) from e
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
