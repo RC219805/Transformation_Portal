@@ -5,218 +5,55 @@
 #    pip-compile --constraint=all.txt --output-file=ci.txt ci.in
 #
 bandit==1.8.6
-    # via
-    #   -c all.txt
-    #   -r ci.in
 build==1.3.0
-    # via
-    #   -c all.txt
-    #   -r ci.in
 cachetools==6.2.2
-    # via
-    #   -c all.txt
-    #   tox
 certifi==2025.11.12
-    # via
-    #   -c all.txt
-    #   requests
 cffi==2.0.0
-    # via
-    #   -c all.txt
-    #   cryptography
 chardet==5.2.0
-    # via
-    #   -c all.txt
-    #   tox
 charset-normalizer==3.4.4
-    # via
-    #   -c all.txt
-    #   requests
 click==8.3.1
-    # via
-    #   -c all.txt
-    #   safety
 colorama==0.4.6
-    # via
-    #   -c all.txt
-    #   tox
 cryptography==46.0.3
-    # via
-    #   -c all.txt
-    #   secretstorage
 distlib==0.4.0
-    # via
-    #   -c all.txt
-    #   virtualenv
 docutils==0.22.3
-    # via
-    #   -c all.txt
-    #   readme-renderer
 dparse==0.6.4
-    # via
-    #   -c all.txt
-    #   safety
 filelock==3.20.0
-    # via
-    #   -c all.txt
-    #   tox
-    #   virtualenv
 idna==3.11
-    # via
-    #   -c all.txt
-    #   requests
 importlib-metadata==8.7.0
-    # via
-    #   -c all.txt
-    #   twine
 jaraco-classes==3.4.0
-    # via
-    #   -c all.txt
-    #   keyring
 jaraco-context==6.0.1
-    # via
-    #   -c all.txt
-    #   keyring
 jaraco-functools==4.3.0
-    # via
-    #   -c all.txt
-    #   keyring
 jeepney==0.9.0
-    # via
-    #   -c all.txt
-    #   keyring
-    #   secretstorage
 keyring==25.7.0
-    # via
-    #   -c all.txt
-    #   twine
 markdown-it-py==4.0.0
-    # via
-    #   -c all.txt
-    #   rich
 mdurl==0.1.2
-    # via
-    #   -c all.txt
-    #   markdown-it-py
 more-itertools==10.8.0
-    # via
-    #   -c all.txt
-    #   jaraco-classes
-    #   jaraco-functools
 nh3==0.3.2
-    # via
-    #   -c all.txt
-    #   readme-renderer
 packaging==25.0
-    # via
-    #   -c all.txt
-    #   build
-    #   dparse
-    #   pyproject-api
-    #   safety
-    #   tox
 pkginfo==1.12.1.2
-    # via
-    #   -c all.txt
-    #   twine
 platformdirs==4.5.0
-    # via
-    #   -c all.txt
-    #   tox
-    #   virtualenv
 pluggy==1.6.0
-    # via
-    #   -c all.txt
-    #   tox
 pycparser==2.23
-    # via
-    #   -c all.txt
-    #   cffi
 pygments==2.19.2
-    # via
-    #   -c all.txt
-    #   readme-renderer
-    #   rich
-pypdf==6.3.0
-    # via
-    #   -c all.txt
-    #   -r ci.in
+pypdf==6.4.0
 pyproject-api==1.10.0
-    # via
-    #   -c all.txt
-    #   tox
 pyproject-hooks==1.2.0
-    # via
-    #   -c all.txt
-    #   build
 pyyaml==6.0.3
-    # via
-    #   -c all.txt
-    #   bandit
 readme-renderer==44.0
-    # via
-    #   -c all.txt
-    #   twine
 requests==2.32.5
-    # via
-    #   -c all.txt
-    #   requests-toolbelt
-    #   safety
-    #   twine
 requests-toolbelt==1.0.0
-    # via
-    #   -c all.txt
-    #   twine
 rfc3986==2.0.0
-    # via
-    #   -c all.txt
-    #   twine
 rich==14.2.0
-    # via
-    #   -c all.txt
-    #   bandit
-    #   twine
 ruamel-yaml==0.18.16
-    # via
-    #   -c all.txt
-    #   safety
 ruamel-yaml-clib==0.2.15
-    # via
-    #   -c all.txt
-    #   ruamel-yaml
 safety==2.3.4
-    # via
-    #   -c all.txt
-    #   -r ci.in
 secretstorage==3.4.1
-    # via
-    #   -c all.txt
-    #   keyring
 stevedore==5.5.0
-    # via
-    #   -c all.txt
-    #   bandit
 tox==4.32.0
-    # via
-    #   -c all.txt
-    #   -r ci.in
 twine==4.0.2
-    # via
-    #   -c all.txt
-    #   -r ci.in
 urllib3==2.5.0
-    # via
-    #   -c all.txt
-    #   requests
-    #   twine
 virtualenv==20.35.4
-    # via
-    #   -c all.txt
-    #   tox
 zipp==3.23.0
-    # via
-    #   -c all.txt
-    #   importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
