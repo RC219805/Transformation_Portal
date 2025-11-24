@@ -12,6 +12,13 @@ or for PYTHONPATH to be set correctly. See tests/conftest.py for details.
 import pytest
 from pathlib import Path
 
+# Check if PyTorch is available (required for some tests)
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 
 class TestModuleImports:
     """Test that the module can be imported and has the expected structure."""
@@ -129,20 +136,15 @@ class TestModuleStructure:
             pytest.skip(f"Cannot test enhance_image function: {e}")
 
 
+@pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch not installed - training module tests require ML dependencies"
+)
 class TestTrainingModuleAvailability:
-    """Test training module availability (may be skipped if PyTorch not installed)."""
+    """Test training module availability (skipped if PyTorch not installed)."""
 
     def test_training_module_import(self):
         """Test that training module can be imported when PyTorch is available."""
-        try:
-            import torch
-            pytorch_available = True
-        except ImportError:
-            pytorch_available = False
-
-        if not pytorch_available:
-            pytest.skip("PyTorch not available, training module tests skipped")
-
         try:
             from enhancements.train_hyper_reality import HyperRealityTrainer
             assert HyperRealityTrainer is not None
@@ -151,15 +153,6 @@ class TestTrainingModuleAvailability:
 
     def test_model_loader_import(self):
         """Test that model loader can be imported."""
-        try:
-            import torch
-            pytorch_available = True
-        except ImportError:
-            pytorch_available = False
-
-        if not pytorch_available:
-            pytest.skip("PyTorch not available, model loader tests skipped")
-
         try:
             from enhancements.model_loader import ModelLoader
             assert ModelLoader is not None
