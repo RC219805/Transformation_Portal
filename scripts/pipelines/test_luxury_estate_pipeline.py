@@ -102,7 +102,7 @@ except ImportError:
 # Test 8: Real-ESRGAN
 print("\n[8/8] Checking Real-ESRGAN upscaler...")
 try:
-    from realesrgan import RealESRGANer
+    from realesrgan import RealESRGANer  # noqa: F401
     # Use vendored BasicSR-TP to avoid CVE-2024-27763 (command injection in SLURM utilities)
     # RRDBNet import tested separately to verify compatibility
     from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F401
