@@ -22,11 +22,13 @@ class TestBasicSRTPImports:
 
     def test_import_from_archs(self):
         """Test importing RRDBNet from basicsr_tp.archs."""
+        pytest.importorskip("torch")
         from basicsr_tp.archs.rrdbnet_arch import RRDBNet
         assert RRDBNet is not None
 
     def test_import_from_package_level(self):
         """Test importing RRDBNet from package level."""
+        pytest.importorskip("torch")
         from basicsr_tp import RRDBNet
         assert RRDBNet is not None
 
@@ -44,6 +46,7 @@ class TestRRDBNetArchitecture:
     @pytest.fixture
     def model(self):
         """Create a basic RRDBNet model for testing."""
+        pytest.importorskip("torch")
         from basicsr_tp import RRDBNet
         return RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32)
 
@@ -179,6 +182,7 @@ class TestAPICompatibility:
 
     def test_rrdbnet_signature_matches(self):
         """Test that RRDBNet has the same constructor signature as original."""
+        pytest.importorskip("torch")
         from basicsr_tp import RRDBNet
         import inspect
 
@@ -191,6 +195,7 @@ class TestAPICompatibility:
 
     def test_helper_functions_exist(self):
         """Test that required helper functions are available."""
+        pytest.importorskip("torch")
         from basicsr_tp.archs.rrdbnet_arch import (
             default_init_weights,
             make_layer,
@@ -202,6 +207,7 @@ class TestAPICompatibility:
 
     def test_residual_blocks_exist(self):
         """Test that ResidualDenseBlock and RRDB classes exist."""
+        pytest.importorskip("torch")
         from basicsr_tp.archs.rrdbnet_arch import ResidualDenseBlock, RRDB
         assert ResidualDenseBlock is not None
         assert RRDB is not None
@@ -212,6 +218,7 @@ class TestDocumentation:
 
     def test_security_note_in_module(self):
         """Test that security advisory is in module docstring."""
+        pytest.importorskip("torch")
         import basicsr_tp.archs.rrdbnet_arch as module
         docstring = module.__doc__
         assert docstring is not None
