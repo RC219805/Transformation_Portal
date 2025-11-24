@@ -23,18 +23,18 @@ class TestBasicSRTPImports:
     def test_import_from_archs(self):
         """Test importing RRDBNet from basicsr_tp.archs."""
         pytest.importorskip("torch")
-        from basicsr_tp.archs.rrdbnet_arch import RRDBNet
+        from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F811
         assert RRDBNet is not None
 
     def test_import_from_package_level(self):
         """Test importing RRDBNet from package level."""
         pytest.importorskip("torch")
-        from basicsr_tp import RRDBNet
+        from basicsr_tp import RRDBNet  # noqa: F811
         assert RRDBNet is not None
 
     def test_package_version(self):
         """Test package has correct version."""
-        import basicsr_tp
+        import basicsr_tp  # noqa: F811
         assert hasattr(basicsr_tp, '__version__')
         assert 'tp' in basicsr_tp.__version__  # TP patch version
         assert '1.4.2' in basicsr_tp.__version__  # Based on BasicSR 1.4.2
@@ -47,7 +47,7 @@ class TestRRDBNetArchitecture:
     def model(self):
         """Create a basic RRDBNet model for testing."""
         pytest.importorskip("torch")
-        from basicsr_tp import RRDBNet
+        from basicsr_tp import RRDBNet  # noqa: F811
         return RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32)
 
     def test_model_instantiation(self, model):
@@ -99,7 +99,7 @@ class TestSecurityValidation:
 
     def test_no_dist_util_module(self):
         """Ensure dist_util.py (vulnerable file) is not present."""
-        import basicsr_tp
+        import basicsr_tp  # noqa: F811
         assert not hasattr(basicsr_tp, 'utils')
 
         # Try to import dist_util - should fail
@@ -219,7 +219,7 @@ class TestDocumentation:
     def test_security_note_in_module(self):
         """Test that security advisory is in module docstring."""
         pytest.importorskip("torch")
-        import basicsr_tp.archs.rrdbnet_arch as module
+        import basicsr_tp.archs.rrdbnet_arch as module  # noqa: F811
         docstring = module.__doc__
         assert docstring is not None
         assert 'CVE-2024-27763' in docstring
@@ -237,7 +237,7 @@ class TestDocumentation:
 
     def test_package_init_has_metadata(self):
         """Test that package __init__ has version and license."""
-        import basicsr_tp
+        import basicsr_tp  # noqa: F811
         assert hasattr(basicsr_tp, '__version__')
         assert hasattr(basicsr_tp, '__license__')
         assert basicsr_tp.__license__ == 'Apache-2.0'

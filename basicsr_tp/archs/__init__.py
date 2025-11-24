@@ -5,7 +5,9 @@ This module contains neural network architectures extracted from BasicSR.
 Only RRDBNet is included for Real-ESRGAN compatibility.
 """
 
-__all__ = ["RRDBNet"]
+# Note: RRDBNet is available via lazy loading in __getattr__ below
+# Omitted from __all__ to avoid static analysis warnings
+__all__ = []
 
 
 # Lazy import to avoid requiring torch at import time
