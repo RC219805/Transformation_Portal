@@ -363,7 +363,7 @@ pylint==4.0.3
     # via -r dev.in
 pyparsing==3.2.5
     # via matplotlib
-pypdf==6.3.0
+pypdf==6.4.0
     # via -r ci.in
 pyproject-api==1.10.0
     # via tox
