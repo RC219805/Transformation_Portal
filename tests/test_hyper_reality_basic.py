@@ -14,8 +14,10 @@ from pathlib import Path
 
 # Check if PyTorch is available (required for some tests)
 try:
-    import torch  # noqa: F401 - imported for availability check only
+    import torch
     TORCH_AVAILABLE = True
+    # Explicitly reference torch to satisfy linter
+    _ = torch.__version__
 except ImportError:
     TORCH_AVAILABLE = False
 

@@ -11,6 +11,10 @@ Validates that the security-hardened vendored BasicSR-TP package:
 Security Advisory: CVE-2024-27763
 - Tests ensure vulnerable code is NOT present
 - Tests verify secure alternative works correctly
+
+Note: This test file intentionally uses mixed import styles to validate
+that basicsr_tp can be imported in multiple ways. The noqa: F811 comments
+suppress warnings about redefinition and mixed import patterns.
 """
 
 import pytest
@@ -219,8 +223,9 @@ class TestDocumentation:
     def test_security_note_in_module(self):
         """Test that security advisory is in module docstring."""
         pytest.importorskip("torch")
-        import basicsr_tp.archs.rrdbnet_arch as module  # noqa: F811
-        docstring = module.__doc__
+        # Import at top of function to avoid mixing import styles at module level
+        from basicsr_tp.archs import rrdbnet_arch  # noqa: F811
+        docstring = rrdbnet_arch.__doc__
         assert docstring is not None
         assert 'CVE-2024-27763' in docstring
         assert 'security' in docstring.lower()

@@ -102,10 +102,13 @@ except ImportError:
 # Test 8: Real-ESRGAN
 print("\n[8/8] Checking Real-ESRGAN upscaler...")
 try:
-    from realesrgan import RealESRGANer  # noqa: F401
+    from realesrgan import RealESRGANer
     # Use vendored BasicSR-TP to avoid CVE-2024-27763 (command injection in SLURM utilities)
     # RRDBNet import tested separately to verify compatibility
     from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F401
+
+    # Explicitly reference to satisfy linter - this is an availability check
+    _ = RealESRGANer
 
     # Check for weights
     weights_path = Path("weights/RealESRGAN_x4plus.pth")
