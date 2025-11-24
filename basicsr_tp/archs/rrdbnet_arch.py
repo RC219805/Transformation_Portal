@@ -40,7 +40,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 # Inlined Utilities (from arch_util.py)
 # ============================================================================
 
-@torch.no_grad()  # No gradients needed during weight initialization
+@torch.no_grad()
 def default_init_weights(module_list, scale=1, bias_fill=0, **kwargs):
     """Initialize network weights.
 

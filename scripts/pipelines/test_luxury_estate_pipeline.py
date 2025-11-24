@@ -107,6 +107,9 @@ try:
     # RRDBNet import tested separately to verify compatibility
     from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F401
 
+    # Mark import as used to satisfy linter
+    _ = RealESRGANer
+
     # Check for weights
     weights_path = Path("weights/RealESRGAN_x4plus.pth")
     if weights_path.exists():
