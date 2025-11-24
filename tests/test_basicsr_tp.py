@@ -223,7 +223,7 @@ class TestDocumentation:
     def test_security_note_in_module(self):
         """Test that security advisory is in module docstring."""
         pytest.importorskip("torch")
-        # Import at top of function to avoid mixing import styles at module level
+        # Use 'from ... import' to avoid linter warning about mixing import patterns
         from basicsr_tp.archs import rrdbnet_arch  # noqa: F811
         docstring = rrdbnet_arch.__doc__
         assert docstring is not None
