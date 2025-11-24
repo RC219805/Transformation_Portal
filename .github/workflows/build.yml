@@ -199,6 +199,7 @@ jobs:
             # Using --ignore to skip collection of ML test files that import torch
             pytest -v tests/ \
               --ignore=tests/test_model_training.py \
+              --ignore=tests/test_basicsr_tp.py \
               -k "not (ml or slow)" || pytest_exit=$?
           else
             # Run ML tests
