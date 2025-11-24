@@ -12,6 +12,12 @@ __all__ = ["RRDBNet"]
 def __getattr__(name):
     """Lazy import RRDBNet only when accessed."""
     if name == "RRDBNet":
-        from basicsr_tp.archs.rrdbnet_arch import RRDBNet
-        return RRDBNet
+        try:
+            from basicsr_tp.archs.rrdbnet_arch import RRDBNet
+            return RRDBNet
+        except ImportError as e:
+            raise ImportError(
+                f"Cannot import '{name}': torch is required for basicsr_tp.archs. "
+                f"Install with: pip install torch\nOriginal error: {e}"
+            ) from e
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
