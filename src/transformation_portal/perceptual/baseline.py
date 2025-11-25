@@ -38,9 +38,9 @@ def _convert_to_json_serializable(obj: Any) -> Any:
         return {key: _convert_to_json_serializable(value) for key, value in obj.items()}
     elif isinstance(obj, (list, tuple)):
         return [_convert_to_json_serializable(item) for item in obj]
-    elif isinstance(obj, (np.floating, np.float32, np.float64)):
+    elif isinstance(obj, np.floating):
         return float(obj)
-    elif isinstance(obj, (np.integer, np.int32, np.int64)):
+    elif isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
