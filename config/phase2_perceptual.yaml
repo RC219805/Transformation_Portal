@@ -1,0 +1,303 @@
+# Phase 2: Perceptual Baseline Calibration Configuration
+
+# This configuration establishes the empirical foundation for measuring
+# enhancement trajectories beyond conventional photorealistic limitations.
+
+perceptual_baseline:
+  # Image Loading Configuration
+  image_loading:
+    target_size: null  # null for original, or [height, width] for resizing
+    normalize: true  # Normalize to [0, 1]
+    preserve_aspect: true  # Preserve aspect ratio when resizing
+
+  # Quality Metrics Configuration
+  metrics:
+    # Metric weights for overall quality calculation
+    weights:
+      brisque: 0.25  # Blind/Referenceless Image Spatial Quality Evaluator
+      niqe: 0.25     # Natural Image Quality Evaluator
+      psnr: 0.20     # Peak Signal-to-Noise Ratio
+      ssim: 0.15     # Structural Similarity Index
+      lpips: 0.15    # Learned Perceptual Image Patch Similarity
+
+    # LPIPS Configuration
+    lpips:
+      network: "alex"  # alex, vgg, or squeeze
+      cache_model: true
+
+    # SSIM Configuration
+    ssim:
+      window_size: 11
+      k1: 0.01
+      k2: 0.03
+
+  # Enhancement Tracking
+  tracking:
+    target_quality_multiplier: 1.3  # Target 30% improvement over baseline
+    track_intermediate_steps: true
+    save_trajectories: true
+
+  # Six Source Images (Montecito Estate)
+  source_images:
+    - name: "pool"
+      type: "pool"
+      priority: "high"
+      description: "Pool area with water reflections and atmospheric effects"
+
+    - name: "bedrooms"
+      type: "bedrooms"
+      priority: "high"
+      description: "Master bedrooms with natural lighting"
+
+    - name: "bathroom"
+      type: "bathroom"
+      priority: "high"
+      description: "Bathroom with marble and reflective surfaces"
+
+    - name: "aerial"
+      type: "aerial"
+      priority: "high"
+      description: "Aerial view of property and coastal setting"
+
+    - name: "kitchen"
+      type: "kitchen"
+      priority: "high"
+      description: "Kitchen with material variety and lighting"
+
+    - name: "great_room"
+      type: "great_room"
+      priority: "high"
+      description: "Great room with architectural details"
+
+  # Analysis Configuration
+  analysis:
+    compute_sharpness: true
+    compute_contrast: true
+    compute_colorfulness: true
+    compute_naturalness: true
+
+    # Feature extraction
+    extract_features:
+      enable: true
+      feature_types:
+        - "color_histogram"
+        - "edge_density"
+        - "texture_statistics"
+
+  # Output Configuration
+  output:
+    base_dir: "outputs/phase2_baseline"
+    save_reports: true
+    save_visualizations: true
+    save_baseline_data: true
+
+    # Report formats
+    report_formats:
+      - "txt"
+      - "json"
+      - "html"
+
+    # Visualization options
+    visualizations:
+      - "quality_distribution"
+      - "metric_breakdown"
+      - "trajectory_plots"
+      - "comparison_charts"
+
+    # Image outputs
+    save_thumbnails: true
+    thumbnail_size: [256, 256]
+    save_analyzed_images: false
+
+# Preset Configurations
+
+presets:
+  # Quick baseline for development
+  development:
+    image_loading:
+      target_size: [512, 512]
+    tracking:
+      target_quality_multiplier: 1.2
+    output:
+      save_visualizations: false
+
+  # Full quality baseline for production
+  production:
+    image_loading:
+      target_size: null  # Use original size
+    tracking:
+      target_quality_multiplier: 1.3
+    output:
+      save_visualizations: true
+      save_reports: true
+
+  # High quality for final analysis
+  high_quality:
+    image_loading:
+      target_size: [2048, 2048]
+    tracking:
+      target_quality_multiplier: 1.5  # Target 50% improvement
+    metrics:
+      weights:
+        lpips: 0.30  # More weight on perceptual metrics
+        brisque: 0.20
+        niqe: 0.20
+        ssim: 0.15
+        psnr: 0.15
+
+  # Fast calibration for testing
+  fast:
+    image_loading:
+      target_size: [256, 256]
+    tracking:
+      target_quality_multiplier: 1.1
+    output:
+      save_visualizations: false
+      save_reports: false
+
+# Quality Thresholds
+
+quality_thresholds:
+  # Minimum acceptable quality scores (normalized [0, 1])
+  minimum:
+    overall_quality: 0.6
+    sharpness: 0.5
+    contrast: 0.4
+    naturalness: 0.5
+
+  # Target quality scores for enhancements
+  target:
+    overall_quality: 0.85
+    sharpness: 0.8
+    contrast: 0.7
+    naturalness: 0.8
+
+  # Excellent quality scores (aspirational)
+  excellent:
+    overall_quality: 0.95
+    sharpness: 0.95
+    contrast: 0.9
+    naturalness: 0.95
+
+# Baseline Expectations
+
+baseline_expectations:
+  # Expected quality ranges for source images
+  pool:
+    overall_quality: [0.6, 0.8]
+    key_challenges:
+      - "water_reflections"
+      - "atmospheric_depth"
+      - "light_scattering"
+
+  bedrooms:
+    overall_quality: [0.65, 0.85]
+    key_challenges:
+      - "natural_lighting"
+      - "material_variety"
+      - "shadow_detail"
+
+  bathroom:
+    overall_quality: [0.65, 0.85]
+    key_challenges:
+      - "marble_reflections"
+      - "glass_transparency"
+      - "specular_highlights"
+
+  aerial:
+    overall_quality: [0.6, 0.8]
+    key_challenges:
+      - "atmospheric_haze"
+      - "scale_detail"
+      - "coastal_atmosphere"
+
+  kitchen:
+    overall_quality: [0.65, 0.85]
+    key_challenges:
+      - "mixed_materials"
+      - "appliance_reflections"
+      - "lighting_variety"
+
+  great_room:
+    overall_quality: [0.7, 0.9]
+    key_challenges:
+      - "architectural_detail"
+      - "spatial_depth"
+      - "texture_richness"
+
+# Enhancement Goals
+
+enhancement_goals:
+  # Beyond photorealistic improvements
+  hyper_reality_targets:
+    # Enhance atmospheric effects
+    atmospheric:
+      montecito_coastal_quality: 1.5  # 50% boost to coastal atmosphere
+      depth_perception: 1.4           # 40% improvement in depth
+      light_scattering: 1.3           # 30% enhancement in light quality
+
+    # Enhance material response
+    materials:
+      marble_luminosity: 1.4
+      water_clarity: 1.5
+      glass_transmission: 1.3
+      fabric_texture: 1.2
+
+    # Enhance spatial qualities
+    spatial:
+      depth_richness: 1.4
+      architectural_precision: 1.3
+      scale_perception: 1.2
+
+# Integration with Other Phases
+
+phase_integration:
+  # Prerequisites
+  requires:
+    - phase: 1
+      component: "foundation"
+      status: "completed"
+
+  # Provides to downstream phases
+  provides:
+    - baseline_metrics: "Quality baselines for all source images"
+    - enhancement_tracker: "Trajectory monitoring system"
+    - perceptual_analyzer: "Quality assessment tools"
+
+  # Shared with other phases
+  shared_resources:
+    quality_metrics: true
+    image_loader: true
+    analyzer: true
+
+# Validation
+
+validation:
+  # Run validation after calibration
+  run_on_calibration: true
+
+  # Validation checks
+  checks:
+    - "baseline_quality_in_expected_range"
+    - "all_metrics_computed_successfully"
+    - "trajectories_initialized"
+    - "reports_generated"
+
+  # Fail if validation fails
+  fail_on_error: false  # Warning only
+
+# Logging
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/phase2_perceptual.log"
+  console: true
+
+# Notes:
+# - Phase 2 builds upon Phase 1's computational substrate
+# - Establishes empirical foundation before any enhancement
+# - Provides baseline for measuring improvements in Phases 3-7
+# - Six source images represent key architectural spaces
+# - Target quality multiplier defines enhancement goals
+# - All quality scores normalized to [0, 1] for consistency

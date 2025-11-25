@@ -1,0 +1,197 @@
+# Phase 1: Foundation Architecture Configuration
+# Optimized for Apple Silicon M4 Max
+
+# This configuration establishes the computational substrate for all subsequent
+# operations, ensuring optimal performance before any model loading occurs.
+
+foundation:
+  # Device Configuration
+  device:
+    prefer_ane: true  # Prefer Apple Neural Engine when available
+    memory_fraction: 0.85  # Use 85% of available unified memory (128GB)
+    auto_detect: true  # Automatically detect optimal device
+
+  # Tensor Processing
+  tensor_processing:
+    precision: "fp16"  # fp32, fp16, bf16 - fp16 optimal for MPS
+    enable_amp: true  # Automatic Mixed Precision
+    enable_grad_checkpointing: false  # For memory-constrained training
+    enable_channels_last: true  # Optimize memory layout for images
+    compile_mode: null  # null, "default", "reduce-overhead", "max-autotune"
+    max_batch_size: 32  # Maximum batch size (auto-detected if null)
+
+  # Memory Management
+  memory:
+    allocation_strategy: "pooled"  # immediate, pooled, lazy, aggressive_cache, conservative
+    max_memory_gb: 108.0  # 85% of 128GB unified memory
+    high_watermark: 0.85  # Cleanup threshold
+    low_watermark: 0.70  # Target after cleanup
+    pool_size_mb: 2048  # Memory pool size per category
+    gc_interval_seconds: 60.0  # Garbage collection interval
+
+  # Hardware Abstraction
+  hardware:
+    enable_auto_fallback: true  # Automatic fallback to CPU on errors
+    fallback_chain:
+      - "mps"  # Metal Performance Shaders (primary)
+      - "coreml"  # Apple Neural Engine
+      - "cpu"  # CPU fallback
+
+  # Performance Monitoring
+  performance:
+    enable_profiling: false  # Enable for development, disable for production
+    enable_memory_tracking: true
+    max_metrics: 10000  # Maximum metrics to store
+    export_on_exit: false  # Export metrics on shutdown
+    export_path: "logs/performance_metrics.json"
+
+# Preset Configurations
+
+presets:
+  # Development: Enable profiling and debugging features
+  development:
+    tensor_processing:
+      compile_mode: null  # Disable compilation for debugging
+    performance:
+      enable_profiling: true
+      enable_memory_tracking: true
+      export_on_exit: true
+
+  # Production: Optimize for throughput and efficiency
+  production:
+    tensor_processing:
+      compile_mode: "reduce-overhead"  # Optimize for throughput
+    memory:
+      allocation_strategy: "pooled"
+      high_watermark: 0.90  # Allow higher memory usage
+    performance:
+      enable_profiling: false
+      enable_memory_tracking: false
+
+  # High Performance: Maximum performance settings
+  high_performance:
+    device:
+      memory_fraction: 0.90  # Use 90% of memory
+    tensor_processing:
+      compile_mode: "max-autotune"  # Maximum optimization
+      max_batch_size: 64
+    memory:
+      allocation_strategy: "aggressive_cache"
+      high_watermark: 0.95
+      pool_size_mb: 4096
+
+  # Conservative: Safe settings for stability
+  conservative:
+    device:
+      memory_fraction: 0.70
+    tensor_processing:
+      precision: "fp32"  # Full precision
+      enable_amp: false
+      max_batch_size: 16
+    memory:
+      allocation_strategy: "conservative"
+      high_watermark: 0.75
+      pool_size_mb: 512
+
+  # Inference Only: Optimized for inference workloads
+  inference:
+    device:
+      prefer_ane: true  # Prefer Neural Engine for efficiency
+    tensor_processing:
+      precision: "fp16"
+      enable_grad_checkpointing: false
+      compile_mode: "reduce-overhead"
+    memory:
+      allocation_strategy: "aggressive_cache"
+    performance:
+      enable_profiling: false
+
+  # Training: Optimized for training workloads
+  training:
+    device:
+      prefer_ane: false  # MPS better for training
+    tensor_processing:
+      precision: "fp16"
+      enable_amp: true
+      enable_grad_checkpointing: true  # Save memory during training
+    memory:
+      allocation_strategy: "pooled"
+      high_watermark: 0.85
+    performance:
+      enable_profiling: true
+      enable_memory_tracking: true
+
+# Hardware-Specific Optimizations
+
+hardware_optimizations:
+  # Apple Silicon M4 Max specific
+  m4_max:
+    gpu_cores: 40
+    performance_cores: 12
+    efficiency_cores: 4
+    unified_memory_gb: 128
+    metal_version: "3.1"
+    neural_engine: true
+
+    # Optimal settings discovered through benchmarking
+    optimal_batch_sizes:
+      depth_estimation: 8
+      diffusion_inference: 4
+      image_enhancement: 16
+      segmentation: 12
+
+    # Memory allocation patterns
+    memory_patterns:
+      small_tensors_mb: 256  # < 10MB
+      medium_tensors_mb: 512  # 10-100MB
+      large_tensors_mb: 1024  # > 100MB
+
+# Phase Integration Settings
+# How Phase 1 integrates with subsequent phases
+
+phase_integration:
+  # Ensure foundation is initialized before other phases
+  initialization_order:
+    - "foundation"  # Phase 1 (this config)
+    - "perceptual"  # Phase 2
+    - "depth"       # Phase 3
+    - "material"    # Phase 4
+    - "quantum"     # Phase 5
+    - "neural"      # Phase 6
+    - "hyper"       # Phase 7
+
+  # Share device and memory managers across phases
+  shared_resources:
+    device_manager: true
+    memory_manager: true
+    performance_monitor: true
+
+# Validation and Health Checks
+
+validation:
+  # Run validation on initialization
+  run_on_init: true
+
+  # Tests to run
+  tests:
+    - "device_detection"
+    - "memory_allocation"
+    - "tensor_operations"
+    - "backend_fallback"
+
+  # Fail if validation fails
+  fail_on_error: true
+
+# Logging Configuration
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/phase1_foundation.log"
+  console: true
+
+# Notes:
+# - This configuration is specifically optimized for Apple Silicon M4 Max
+# - Adjust memory_fraction and max_memory_gb based on your specific hardware
+# - Enable profiling during development, disable in production
+# - Use presets as starting points, then fine-tune for your workload
