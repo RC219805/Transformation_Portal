@@ -28,9 +28,11 @@ def requires_real_torch():
     This helper ensures we have the real torch module with nn support.
     """
     torch = pytest.importorskip("torch")
-    # Check if torch has 'nn' - stubs typically don't have this
-    if not hasattr(torch, 'nn'):
-        pytest.skip("torch is a stub module without nn support")
+    # Check if torch has essential attributes - stubs typically don't have these
+    required_attrs = ('nn', 'Tensor', 'device')
+    for attr in required_attrs:
+        if not hasattr(torch, attr):
+            pytest.skip(f"torch is a stub module without {attr} support")
     return torch
 
 
