@@ -225,10 +225,6 @@ class EnhancementTracker:
         try:
             from matplotlib import pyplot as plt
         except ImportError as e:
-            logger.error(
-                "matplotlib is required for plotting. "
-                "Install with: pip install matplotlib or pip install -e '.[ml]'"
-            )
             raise ImportError(
                 "matplotlib not available. "
                 "Install with: pip install matplotlib or pip install -e '.[ml]'"
@@ -310,10 +306,6 @@ class EnhancementTracker:
         try:
             from matplotlib import pyplot as plt
         except ImportError as e:
-            logger.error(
-                "matplotlib is required for plotting. "
-                "Install with: pip install matplotlib or pip install -e '.[ml]'"
-            )
             raise ImportError(
                 "matplotlib not available. "
                 "Install with: pip install matplotlib or pip install -e '.[ml]'"
