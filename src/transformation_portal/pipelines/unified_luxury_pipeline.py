@@ -72,7 +72,6 @@ except ImportError:
 from transformation_portal.utils.input_validation import (
     ImageValidator,
     ImageValidationError,
-    ValidationResult,
 )
 
 # Configure logging
@@ -585,9 +584,6 @@ class UnifiedLuxuryPipeline:
             FileNotFoundError: If input image not found
             ImageValidationError: If validation fails
         """
-        if not input_path.exists():
-            raise FileNotFoundError(f"Input image not found: {input_path}")
-
         log.info(f"Loading: {input_path.name}")
 
         # Validate input before loading
