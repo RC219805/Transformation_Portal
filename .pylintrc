@@ -1,4 +1,7 @@
 [MASTER]
+# Exclusions:
+# - .backup_local: Legacy backup code, not subject to current linting standards
+# - .github/agents: Agent configuration files managed separately
 ignore=build,dist,.venv,.eggs,tools/deprecated,src/transformation_portal,src/luxury_tiff_batch_processor,scripts,.backup_local,.github/agents
 jobs=0
 persistent=no
