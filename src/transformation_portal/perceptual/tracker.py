@@ -12,7 +12,6 @@ import logging
 import json
 
 import numpy as np
-from matplotlib import pyplot as plt
 
 from .analyzer import AnalysisResult
 
@@ -223,6 +222,14 @@ class EnhancementTracker:
             logger.warning("No trajectories to plot")
             return
 
+        try:
+            from matplotlib import pyplot as plt
+        except ImportError as e:
+            raise ImportError(
+                "matplotlib not available. "
+                "Install with: pip install matplotlib or pip install -e '.[ml]'"
+            ) from e
+
         _, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
         # Plot 1: Quality over steps
@@ -295,6 +302,14 @@ class EnhancementTracker:
         if not trajectory:
             logger.warning(f"No trajectory found for {image_name}")
             return
+
+        try:
+            from matplotlib import pyplot as plt
+        except ImportError as e:
+            raise ImportError(
+                "matplotlib not available. "
+                "Install with: pip install matplotlib or pip install -e '.[ml]'"
+            ) from e
 
         # Get all metric types
         metric_names = list(trajectory.points[0].metric_scores.keys())
