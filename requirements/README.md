@@ -178,6 +178,24 @@ Example CI workflow step:
     make check
 ```
 
+## 🔒 Security Constraints
+
+The `constraints.txt` file is used to exclude packages with known security vulnerabilities that don't yet have safe versions available on PyPI.
+
+### CVE-2024-27763: BasicSR Command Injection
+
+**Status**: Excluded from all requirements files
+
+**Vulnerability**: BasicSR <= 1.4.2 has a command injection vulnerability in SLURM distributed training code. An attacker with local access can exploit this by setting a malicious `SLURM_NODELIST` environment variable.
+
+**Mitigation**:
+- `basicsr` is excluded from requirements via `constraints.txt`
+- The repository uses a vendored `basicsr_tp` package containing only the necessary RRDBNet architecture
+- All Python imports use `basicsr_tp` instead of `basicsr`
+- The `verify_no_basicsr_imports.py` script validates no vulnerable imports exist
+
+**When to Update**: When BasicSR 1.4.3 or later (with the fix) is released on PyPI, update `constraints.txt` to allow the patched version.
+
 ## 📝 Notes
 
 - **ML dependencies**: Due to disk space constraints, `ml.txt` may need to be regenerated in environments with more resources. The CI environment should have sufficient space for PyTorch and related packages.
