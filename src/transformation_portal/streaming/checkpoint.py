@@ -166,10 +166,10 @@ class CheckpointManager:
             counter_value = self._counter
             self._counter += 1
 
-        # Format timestamp without decimal point for filesystem compatibility
-        # Uses integer seconds + microseconds + counter to ensure uniqueness
-        timestamp_str = f"{int(timestamp)}{int((timestamp % 1) * 1000000):06d}"
-        checkpoint_id = f"{self.operation_id}_{timestamp_str}_{counter_value}"
+        # Format timestamp with hyphens for better readability
+        # Uses integer seconds-microseconds-counter to ensure uniqueness
+        timestamp_str = f"{int(timestamp)}-{int((timestamp % 1) * 1000000):06d}"
+        checkpoint_id = f"{self.operation_id}_{timestamp_str}-{counter_value}"
 
         return Checkpoint(
             id=checkpoint_id,

@@ -16,6 +16,8 @@ from pathlib import Path
 try:
     import torch
     TORCH_AVAILABLE = True
+    # Mark import as used to satisfy linter
+    _ = torch
 except ImportError:
     TORCH_AVAILABLE = False
 

@@ -81,9 +81,6 @@ def find_basicsr_imports(root_dir: Path) -> list[tuple[Path, int, str]]:
         except (UnicodeDecodeError, PermissionError):
             # Skip files that can't be read
             continue
-        except (UnicodeDecodeError, PermissionError):
-            # Skip files that can't be read
-            continue
 
     return violations
 
