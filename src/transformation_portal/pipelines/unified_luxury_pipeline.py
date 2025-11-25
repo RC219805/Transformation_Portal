@@ -68,6 +68,13 @@ try:
 except ImportError:
     HAS_TIFFFILE = False
 
+# Input validation
+from transformation_portal.utils.input_validation import (
+    ImageValidator,
+    ImageValidationError,
+    ValidationResult,
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -566,18 +573,42 @@ class UnifiedLuxuryPipeline:
 
     def _load_image(self, input_path: Path) -> Tuple[Image.Image, Dict[str, Any]]:
         """
-        Load image and extract metadata.
+        Load image and extract metadata with comprehensive validation.
 
         Args:
             input_path: Path to input image
 
         Returns:
             Tuple of (PIL Image, metadata dict)
+
+        Raises:
+            FileNotFoundError: If input image not found
+            ImageValidationError: If validation fails
         """
         if not input_path.exists():
             raise FileNotFoundError(f"Input image not found: {input_path}")
 
         log.info(f"Loading: {input_path.name}")
+
+        # Validate input before loading
+        validator = ImageValidator(
+            min_width=256,
+            min_height=256,
+            max_width=16384,
+            max_height=16384,
+            max_file_size_mb=500,
+            allowed_formats={'JPEG', 'PNG', 'TIFF', 'WEBP', 'BMP', 'EXR'},
+            check_corruption=True,
+        )
+        validation_result = validator.validate(input_path)
+
+        if not validation_result.is_valid:
+            errors = "; ".join(str(e) for e in validation_result.errors)
+            raise ImageValidationError(f"Input validation failed: {errors}")
+
+        # Log warnings but continue
+        for warning in validation_result.warnings:
+            log.warning(f"  Validation: {warning}")
 
         # Load image
         image = Image.open(input_path)
@@ -588,6 +619,7 @@ class UnifiedLuxuryPipeline:
             'mode': image.mode,
             'size': image.size,
             'info': image.info.copy() if hasattr(image, 'info') else {},
+            'validation_warnings': len(validation_result.warnings),
         }
 
         # Convert to RGB if needed
