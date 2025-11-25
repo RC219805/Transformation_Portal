@@ -133,13 +133,13 @@ class TestPyPIWorkflows:
         with open(pypi_workflow, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Check for modern action versions
-        assert 'actions/checkout@v5' in content or 'actions/checkout@v4' in content, \
-            "Should use recent checkout action"
-        assert 'actions/setup-python@v6' in content or 'actions/setup-python@v5' in content, \
-            "Should use recent setup-python action"
-        assert 'actions/upload-artifact@v5' in content or 'actions/upload-artifact@v4' in content, \
-            "Should use recent upload-artifact action"
+        # Check for modern action versions (v4, v5, or v6 are acceptable)
+        assert any(f'actions/checkout@v{v}' in content for v in ['4', '5', '6']), \
+            "Should use recent checkout action (v4, v5, or v6)"
+        assert any(f'actions/setup-python@v{v}' in content for v in ['5', '6']), \
+            "Should use recent setup-python action (v5 or v6)"
+        assert any(f'actions/upload-artifact@v{v}' in content for v in ['4', '5']), \
+            "Should use recent upload-artifact action (v4 or v5)"
 
     def test_submit_pypi_has_package_verification(self, workflows_dir):
         """Test that submit-pypi.yml verifies package contents."""
