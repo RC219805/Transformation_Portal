@@ -200,6 +200,8 @@ jobs:
             pytest -v tests/ \
               --ignore=tests/test_model_training.py \
               --ignore=tests/test_basicsr_tp.py \
+              --ignore=tests/foundation/ \
+              --ignore=tests/perceptual/ \
               -k "not (ml or slow)" || pytest_exit=$?
           else
             # Run ML tests
