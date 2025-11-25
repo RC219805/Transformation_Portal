@@ -4,21 +4,11 @@
 #
 #    pip-compile --constraint=all.txt --output-file=ml.txt ml.in
 #
-# SECURITY NOTE (CVE-2024-27763):
-# ================================
-# basicsr==1.4.2 appears below as a transitive dependency of realesrgan and gfpgan,
-# but it is NOT used at runtime. All imports use the vendored basicsr_tp package
-# located in the repository root (basicsr_tp/). The vendored version removes all
-# vulnerable SLURM distributed utilities while preserving the RRDBNet architecture.
-#
-# Verification: Run `python verify_no_basicsr_imports.py` to confirm no code
-# imports from the vulnerable basicsr package.
-#
 absl-py==2.3.1
     # via
     #   -c all.txt
     #   tb-nightly
-accelerate==1.11.0
+accelerate==1.12.0
     # via
     #   -c all.txt
     #   -r ml.in
@@ -189,7 +179,7 @@ mpmath==1.3.0
     # via
     #   -c all.txt
     #   sympy
-networkx==3.5
+networkx==3.6
     # via
     #   -c all.txt
     #   scikit-image
@@ -382,7 +372,7 @@ requests==2.32.5
     #   diffusers
     #   huggingface-hub
     #   transformers
-safetensors==0.6.2
+safetensors==0.7.0
     # via
     #   -c all.txt
     #   accelerate
