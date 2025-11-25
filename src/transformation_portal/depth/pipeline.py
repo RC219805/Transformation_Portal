@@ -32,7 +32,6 @@ from .utils import (
     visualize_depth,
 )
 from transformation_portal.utils.input_validation import (
-    ImageValidator,
     ImageValidationError,
     validate_image_strict,
 )
