@@ -137,8 +137,8 @@ class TestPyPIWorkflows:
         # Note: setup-python v4 is excluded as it lacks Python 3.12+ support
         assert any(f'actions/checkout@v{v}' in content for v in ['4', '5', '6']), \
             "Should use recent checkout action (v4, v5, or v6)"
-        assert any(f'actions/setup-python@v{v}' in content for v in ['4', '5', '6']), \
-            "Should use recent setup-python action (v4, v5, or v6)"
+        assert any(f'actions/setup-python@v{v}' in content for v in ['5', '6']), \
+            "Should use recent setup-python action (v5 or v6)"
         assert any(f'actions/upload-artifact@v{v}' in content for v in ['4', '5']), \
             "Should use recent upload-artifact action (v4 or v5)"
 
