@@ -81,31 +81,36 @@ def _find_imports_in_ast(tree: ast.AST, py_file: Path, lines: list[str]) -> list
     violations = []
 
     for node in ast.walk(tree):
-        violation = _check_ast_node_for_import(node, py_file, lines)
-        if violation:
-            violations.append(violation)
+        node_violations = _check_ast_node_for_import(node, py_file, lines)
+        violations.extend(node_violations)
 
     return violations
 
 
-def _check_ast_node_for_import(node: ast.AST, py_file: Path, lines: list[str]) -> tuple[Path, int, str] | None:
-    """Check a single AST node for basicsr import."""
+def _check_ast_node_for_import(node: ast.AST, py_file: Path, lines: list[str]) -> list[tuple[Path, int, str]]:
+    """Check a single AST node for basicsr imports.
+
+    Returns a list of violations to handle cases like `import basicsr, basicsr.models`
+    where multiple vulnerable imports exist on the same line.
+    """
+    violations = []
+
     # Check for "from basicsr import ..." statements
     if isinstance(node, ast.ImportFrom):
         if node.module and node.module.startswith('basicsr') and 'basicsr_tp' not in node.module:
             line_no = node.lineno
             line_content = lines[line_no - 1] if line_no <= len(lines) else ""
-            return (py_file, line_no, line_content)
+            violations.append((py_file, line_no, line_content))
 
-    # Check for "import basicsr" statements
-    if isinstance(node, ast.Import):
+    # Check for "import basicsr" statements - check ALL aliases
+    elif isinstance(node, ast.Import):
         for alias in node.names:
             if alias.name.startswith('basicsr') and 'basicsr_tp' not in alias.name:
                 line_no = node.lineno
                 line_content = lines[line_no - 1] if line_no <= len(lines) else ""
-                return (py_file, line_no, line_content)
+                violations.append((py_file, line_no, line_content))
 
-    return None
+    return violations
 
 
 def _find_imports_via_string_matching(py_file: Path, lines: list[str]) -> list[tuple[Path, int, str]]:

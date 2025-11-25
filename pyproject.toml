@@ -123,6 +123,9 @@ disable = [
     "use-implicit-booleaness-not-comparison",
     # W0404 reimported - sometimes needed for conditional imports
     "reimported",
+    # W0201 attribute-defined-outside-init - plugin initialization pattern
+    # where attributes are set in initialize() method
+    "attribute-defined-outside-init",
 ]
 
 [tool.pytest.ini_options]
