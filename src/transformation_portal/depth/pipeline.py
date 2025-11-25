@@ -31,6 +31,11 @@ from .utils import (
     save_image,
     visualize_depth,
 )
+from transformation_portal.utils.input_validation import (
+    ImageValidator,
+    ImageValidationError,
+    validate_image_strict,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +201,7 @@ class ArchitecturalDepthPipeline:
         self,
         image_path: Union[str, Path],
         override_config: Optional[Dict] = None,
+        skip_validation: bool = False,
     ) -> Dict:
         """
         Process single architectural render.
@@ -203,14 +209,33 @@ class ArchitecturalDepthPipeline:
         Args:
             image_path: Path to input render
             override_config: Optional config overrides
+            skip_validation: Skip input validation (for pre-validated inputs)
 
         Returns:
             Result dictionary with:
                 - 'image': Enhanced image
                 - 'depth': Depth map
                 - 'metadata': Processing metadata
+
+        Raises:
+            ImageValidationError: If input validation fails
+            FileNotFoundError: If image file not found
         """
         start_time = time.time()
+        image_path = Path(image_path)
+
+        # Validate input image
+        if not skip_validation:
+            logger.debug(f"Validating input: {image_path}")
+            validation_result = validate_image_strict(image_path)
+            if not validation_result.is_valid:
+                error_details = "; ".join(str(e) for e in validation_result.errors)
+                raise ImageValidationError(
+                    f"Input validation failed for {image_path}: {error_details}"
+                )
+            # Log any warnings
+            for warning in validation_result.warnings:
+                logger.warning(f"Validation warning: {warning}")
 
         # Load image
         logger.info(f"Processing: {image_path}")
