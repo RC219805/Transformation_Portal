@@ -13,6 +13,7 @@ import logging
 import json
 import time
 
+import numpy as np
 from torch import Tensor
 
 from .image_loader import ImageLoader, ImageMetadata, ImageType
@@ -21,6 +22,32 @@ from .tracker import EnhancementTracker
 from .metrics import MetricType
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_to_json_serializable(obj: Any) -> Any:
+    """
+    Recursively convert numpy types to JSON-serializable Python types.
+
+    Args:
+        obj: Object to convert
+
+    Returns:
+        JSON-serializable object
+    """
+    if isinstance(obj, dict):
+        return {key: _convert_to_json_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_convert_to_json_serializable(item) for item in obj]
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    else:
+        return obj
 
 
 @dataclass
@@ -403,6 +430,9 @@ class PerceptualBaseline:
                 "quality": result.get_summary()
             }
             data["images"].append(image_data)
+
+        # Convert numpy types to JSON-serializable types
+        data = _convert_to_json_serializable(data)
 
         # Write JSON
         with open(output_path, 'w') as f:

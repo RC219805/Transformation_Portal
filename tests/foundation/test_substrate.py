@@ -155,7 +155,7 @@ class TestComputationalSubstrate:
         """Test human-readable string."""
         str_repr = str(substrate)
         assert "COMPUTATIONAL SUBSTRATE" in str_repr
-        assert "Phase 1" in str_repr.upper()
+        assert "PHASE 1" in str_repr
 
 
 class TestSubstrateConfig:
