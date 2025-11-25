@@ -20,12 +20,12 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 
-from .error_handling import FileValidationError, ProcessingError
+from .error_handling import ProcessingError
 
 logger = logging.getLogger(__name__)
 
