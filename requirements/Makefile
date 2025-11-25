@@ -1,8 +1,11 @@
 # Makefile for compiling layered requirements with pip-tools
 # This ensures consistent dependency resolution across all layers
+#
+# Security: Uses constraints.txt to exclude packages with known vulnerabilities
+# - See constraints.txt for details on excluded packages (e.g., basicsr CVE-2024-27763)
 
 SHELL := /bin/bash
-PIP_COMPILE := pip-compile -q --resolver=backtracking
+PIP_COMPILE := pip-compile -q --resolver=backtracking -c constraints.txt
 
 # Default target: compile all requirements
 .PHONY: all compile compile-all update help clean check
