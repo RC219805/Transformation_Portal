@@ -35,52 +35,88 @@ def find_basicsr_imports(root_dir: Path) -> list[tuple[Path, int, str]]:
     python_files = root_dir.rglob("*.py")
 
     for py_file in python_files:
-        # Skip vendored basicsr_tp code
-        if "basicsr_tp" in str(py_file):
-            continue
+        file_violations = _check_file_for_basicsr_imports(py_file)
+        violations.extend(file_violations)
 
-        # Skip git, cache, and virtual environment directories
-        if any(skip in str(py_file) for skip in [".git", "__pycache__", ".venv", "venv", ".tox"]):
-            continue
+    return violations
 
-        try:
-            with open(py_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                lines = content.splitlines()
 
-            # Parse the file using AST for accurate import detection
-            try:
-                tree = ast.parse(content, filename=str(py_file))
+def _should_skip_file(py_file: Path) -> bool:
+    """Check if a file should be skipped during import scanning."""
+    # Skip vendored basicsr_tp code
+    if "basicsr_tp" in str(py_file):
+        return True
 
-                for node in ast.walk(tree):
-                    # Check for "from basicsr import ..." statements
-                    if isinstance(node, ast.ImportFrom):
-                        if node.module and node.module.startswith('basicsr') and 'basicsr_tp' not in node.module:
-                            line_no = node.lineno
-                            # Get the actual line content for reporting
-                            line_content = lines[line_no - 1] if line_no <= len(lines) else ""
-                            violations.append((py_file, line_no, line_content))
+    # Skip git, cache, and virtual environment directories
+    skip_dirs = [".git", "__pycache__", ".venv", "venv", ".tox"]
+    if any(skip in str(py_file) for skip in skip_dirs):
+        return True
 
-                    # Check for "import basicsr" statements
-                    elif isinstance(node, ast.Import):
-                        for alias in node.names:
-                            if alias.name.startswith('basicsr') and 'basicsr_tp' not in alias.name:
-                                line_no = node.lineno
-                                line_content = lines[line_no - 1] if line_no <= len(lines) else ""
-                                violations.append((py_file, line_no, line_content))
+    return False
 
-            except SyntaxError:
-                # If file has syntax errors, fall back to string matching
-                # (better to have false positives than miss actual imports)
-                for line_no, line in enumerate(lines, start=1):
-                    line_stripped = line.strip()
-                    if ("from basicsr" in line or "import basicsr" in line) and "basicsr_tp" not in line:
-                        if not line_stripped.startswith("#"):
-                            violations.append((py_file, line_no, line))
 
-        except (UnicodeDecodeError, PermissionError):
-            # Skip files that can't be read
-            continue
+def _check_file_for_basicsr_imports(py_file: Path) -> list[tuple[Path, int, str]]:
+    """Check a single file for basicsr imports."""
+    if _should_skip_file(py_file):
+        return []
+
+    try:
+        with open(py_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+            lines = content.splitlines()
+    except (UnicodeDecodeError, PermissionError):
+        return []
+
+    # Parse the file using AST for accurate import detection
+    try:
+        tree = ast.parse(content, filename=str(py_file))
+        return _find_imports_in_ast(tree, py_file, lines)
+    except SyntaxError:
+        # Fall back to string matching for files with syntax errors
+        return _find_imports_via_string_matching(py_file, lines)
+
+
+def _find_imports_in_ast(tree: ast.AST, py_file: Path, lines: list[str]) -> list[tuple[Path, int, str]]:
+    """Find basicsr imports using AST parsing."""
+    violations = []
+
+    for node in ast.walk(tree):
+        violation = _check_ast_node_for_import(node, py_file, lines)
+        if violation:
+            violations.append(violation)
+
+    return violations
+
+
+def _check_ast_node_for_import(node: ast.AST, py_file: Path, lines: list[str]) -> tuple[Path, int, str] | None:
+    """Check a single AST node for basicsr import."""
+    # Check for "from basicsr import ..." statements
+    if isinstance(node, ast.ImportFrom):
+        if node.module and node.module.startswith('basicsr') and 'basicsr_tp' not in node.module:
+            line_no = node.lineno
+            line_content = lines[line_no - 1] if line_no <= len(lines) else ""
+            return (py_file, line_no, line_content)
+
+    # Check for "import basicsr" statements
+    if isinstance(node, ast.Import):
+        for alias in node.names:
+            if alias.name.startswith('basicsr') and 'basicsr_tp' not in alias.name:
+                line_no = node.lineno
+                line_content = lines[line_no - 1] if line_no <= len(lines) else ""
+                return (py_file, line_no, line_content)
+
+    return None
+
+
+def _find_imports_via_string_matching(py_file: Path, lines: list[str]) -> list[tuple[Path, int, str]]:
+    """Fall back to string matching for files with syntax errors."""
+    violations = []
+
+    for line_no, line in enumerate(lines, start=1):
+        line_stripped = line.strip()
+        if ("from basicsr" in line or "import basicsr" in line) and "basicsr_tp" not in line:
+            if not line_stripped.startswith("#"):
+                violations.append((py_file, line_no, line))
 
     return violations
 
