@@ -27,7 +27,12 @@ disable=
     E1123,                # unexpected-keyword-arg (false positives with optional deps)
     W0130,                # duplicate-value (acceptable in some contexts)
     W1203, W1201,         # logging-fstring-interpolation, logging-not-lazy (style preference)
-    W0212                 # protected-access (acceptable when intentional)
+    W0212,                # protected-access (acceptable when intentional)
+    W0621,                # redefined-outer-name (pytest fixtures are passed as function params)
+    C0413,                # wrong-import-position (needed for conditional imports after sys.path)
+    C1803,                # use-implicit-booleaness-not-comparison (explicit is clearer)
+    W0404,                # reimported (sometimes needed for conditional imports)
+    W0201                 # attribute-defined-outside-init (plugin initialization pattern)
 
 [FORMAT]
 max-line-length=127

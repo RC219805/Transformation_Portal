@@ -112,6 +112,20 @@ disable = [
     "missing-class-docstring",
     "duplicate-code",
     "fixme",
+    # W0621 redefined-outer-name is intentional in pytest fixtures
+    # where fixtures are passed as function parameters
+    "redefined-outer-name",
+    # C0413 wrong-import-position is needed for conditional imports
+    # after sys.path manipulation
+    "wrong-import-position",
+    # C1803 use-implicit-booleaness-not-comparison - explicit comparison
+    # to empty list is more readable in some contexts
+    "use-implicit-booleaness-not-comparison",
+    # W0404 reimported - sometimes needed for conditional imports
+    "reimported",
+    # W0201 attribute-defined-outside-init - plugin initialization pattern
+    # where attributes are set in initialize() method
+    "attribute-defined-outside-init",
 ]
 
 [tool.pytest.ini_options]
