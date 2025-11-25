@@ -194,7 +194,7 @@ The `constraints.txt` file is used to exclude packages with known security vulne
 - All Python imports use `basicsr_tp` instead of `basicsr`
 - The `verify_no_basicsr_imports.py` script validates no vulnerable imports exist
 
-**When to Update**: When BasicSR 1.4.3 or later (with the fix) is released on PyPI, update `constraints.txt` to allow the patched version.
+**When to Update**: When a patched version of BasicSR (with the fix for CVE-2024-27763) is released on PyPI, update `constraints.txt` to allow the patched version.
 
 ## 📝 Notes
 

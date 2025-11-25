@@ -10,13 +10,16 @@
 # Security Advisory: CVE-2024-27763
 # ----------------------------------
 # BasicSR <= 1.4.2 has a command injection vulnerability via SLURM_NODELIST.
-# No patched version (1.4.3) is available on PyPI yet.
+# No patched version is available on PyPI yet (as of November 2025).
 #
 # Mitigation:
 # - We vendor the necessary components in basicsr_tp/ (security-hardened)
 # - This constraint prevents basicsr from being installed as a transitive
 #   dependency from realesrgan or gfpgan
 #
-# The constraint below uses an impossible version specifier to exclude basicsr.
-# When a patched version is released, update this constraint to allow it.
-basicsr>=999.0.0  # Effectively excludes all versions (CVE-2024-27763)
+# The constraint below uses an intentionally impossible version specifier
+# to effectively exclude basicsr from being resolved. This pattern is
+# commonly used when no safe version exists on PyPI.
+# When a patched version is released, update this constraint to allow it
+# (e.g., basicsr>=1.4.3).
+basicsr>=999.0.0  # Impossible version to exclude all releases (CVE-2024-27763)
