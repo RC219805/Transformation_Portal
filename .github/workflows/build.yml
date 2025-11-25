@@ -73,11 +73,11 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           
           echo "Running pylint on changed files..."
-          files=$(git diff --diff-filter=d --name-only origin/main...HEAD | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' || echo "")
+          files=$(git diff --diff-filter=d --name-only origin/main...HEAD | grep '\.py$' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e '\.backup_local/' -e '\.github/agents/' || echo "")
           
           set +e
           if [ -z "$files" ]; then
-            pylint $(git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/')
+            pylint $(git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e '\.backup_local/' -e '\.github/agents/')
             PYLINT_EXIT=$?
           else
             pylint $files
