@@ -74,14 +74,19 @@ jobs:
           
           echo "Running pylint on changed files..."
           # Directories to exclude from linting (backup, agent, legacy, and project-specific code)
+          # Word splitting is intentional here for grep -e patterns
+          # shellcheck disable=SC2086
           EXCLUDE_PATTERNS='-e /deprecated/ -e src/transformation_portal/ -e src/luxury_tiff_batch_processor/ -e scripts/ -e \.backup_local/ -e \.github/agents/ -e basicsr_tp/ -e projects/ -e examples/'
+          # shellcheck disable=SC2086
           files=$(git diff --diff-filter=d --name-only origin/main...HEAD | grep '\.py$' | grep -v $EXCLUDE_PATTERNS || echo "")
           
           set +e
           if [ -z "$files" ]; then
+            # shellcheck disable=SC2046,SC2086
             pylint $(git ls-files '*.py' | grep -v $EXCLUDE_PATTERNS)
             PYLINT_EXIT=$?
           else
+            # shellcheck disable=SC2086
             pylint $files
             PYLINT_EXIT=$?
           fi
@@ -218,6 +223,7 @@ jobs:
           rm -rf /tmp/transformers_cache || true
           rm -rf ~/.cache/huggingface || true
 
+          # shellcheck disable=SC2086
           exit ${pytest_exit:-0}
 
       - name: Final disk usage
