@@ -74,16 +74,15 @@ jobs:
           
           echo "Running pylint on changed files..."
           # Directories to exclude from linting (backup, agent, legacy, and project-specific code)
-          # Word splitting is intentional here for grep -e patterns
-          # shellcheck disable=SC2086
-          EXCLUDE_PATTERNS='-e /deprecated/ -e src/transformation_portal/ -e src/luxury_tiff_batch_processor/ -e scripts/ -e \.backup_local/ -e \.github/agents/ -e basicsr_tp/ -e projects/ -e examples/'
-          # shellcheck disable=SC2086
-          files=$(git diff --diff-filter=d --name-only origin/main...HEAD | grep '\.py$' | grep -v $EXCLUDE_PATTERNS || echo "")
+          # Build grep arguments as an array for safe handling of patterns
+          grep_exclude_args=(-e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e '\.backup_local/' -e '\.github/agents/' -e 'basicsr_tp/' -e 'projects/' -e 'examples/')
+          
+          mapfile -t files < <(git diff --diff-filter=d --name-only origin/main...HEAD | grep '\.py$' | grep -v "${grep_exclude_args[@]}" || true)
           
           set +e
-          if [ -z "$files" ]; then
-            # Use array to safely handle filenames with spaces/special characters
-            mapfile -t files < <(git ls-files '*.py' | grep -v $EXCLUDE_PATTERNS)
+          if [ ${#files[@]} -eq 0 ]; then
+            # Fallback: lint all tracked Python files (excluding patterns)
+            mapfile -t files < <(git ls-files '*.py' | grep -v "${grep_exclude_args[@]}")
             if [ ${#files[@]} -gt 0 ]; then
               pylint "${files[@]}"
               PYLINT_EXIT=$?
@@ -92,8 +91,7 @@ jobs:
               PYLINT_EXIT=0
             fi
           else
-            # shellcheck disable=SC2086
-            pylint $files
+            pylint "${files[@]}"
             PYLINT_EXIT=$?
           fi
           set -e
