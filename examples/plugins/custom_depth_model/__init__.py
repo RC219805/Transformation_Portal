@@ -60,6 +60,7 @@ class SimpleDepthModel(DepthModelPlugin):
             plugin_type=PluginType.DEPTH_MODEL,
             description="Simple example depth model using gradient-based estimation",
             author="Transformation Portal Team",
+            license="MIT",
             tags=["example", "simple", "gradient-based"],
         )
 
