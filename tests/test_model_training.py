@@ -50,7 +50,7 @@ class TestTrainingConfig:
     def test_default_config(self):
         """Test default configuration values"""
         config = TrainingConfig()
-        
+
         assert config.batch_size == 4
         assert config.num_epochs == 50
         assert config.learning_rate == 1e-4
@@ -65,7 +65,7 @@ class TestTrainingConfig:
             learning_rate=5e-5,
             checkpoint_dir="custom/path"
         )
-        
+
         assert config.batch_size == 8
         assert config.num_epochs == 100
         assert config.learning_rate == 5e-5
@@ -87,18 +87,18 @@ class TestSyntheticDataGenerator:
         with tempfile.TemporaryDirectory() as tmpdir:
             generator = SyntheticDataGenerator(tmpdir, num_pairs=5)
             generator.generate_training_data()
-            
+
             # Check directories exist
             low_quality_dir = Path(tmpdir) / "low_quality"
             high_quality_dir = Path(tmpdir) / "high_quality"
-            
+
             assert low_quality_dir.exists()
             assert high_quality_dir.exists()
-            
+
             # Check images were created
             low_images = list(low_quality_dir.glob("*.png"))
             high_images = list(high_quality_dir.glob("*.png"))
-            
+
             assert len(low_images) == 5
             assert len(high_images) == 5
 
@@ -118,19 +118,19 @@ class TestEnhancementDataset:
     def test_dataset_loading(self, sample_dataset):
         """Test dataset can load images"""
         from torchvision import transforms
-        
+
         transform = transforms.Compose([
             transforms.Resize((256, 256)),
             transforms.ToTensor(),
         ])
-        
+
         low_quality_dir = Path(sample_dataset) / "low_quality"
         high_quality_dir = Path(sample_dataset) / "high_quality"
-        
+
         dataset = EnhancementDataset(low_quality_dir, high_quality_dir, transform)
-        
+
         assert len(dataset) == 5
-        
+
         # Test loading a sample
         low, high = dataset[0]
         assert low.shape == (3, 256, 256)  # RGB, 256x256
@@ -143,7 +143,7 @@ class TestDeviceConfiguration:
     def test_configure_device(self):
         """Test device configuration works"""
         device = configure_device()
-        
+
         # Should return a valid device (cpu, cuda, or mps)
         assert str(device) in ['cpu', 'cuda', 'mps', 'cuda:0']
 
@@ -158,15 +158,15 @@ class TestTrainerInitialization:
             batch_size=2,
             checkpoint_dir="weights/test"
         )
-        
+
         trainer = HyperRealityTrainer(config)
-        
+
         # Check models were created
         assert 'caustics' in trainer.models
         assert 'atmosphere' in trainer.models
         assert 'materials' in trainer.models
         assert 'harmonics' in trainer.models
-        
+
         # Check optimizer was created
         assert trainer.optimizer is not None
         assert trainer.scheduler is not None
@@ -182,12 +182,12 @@ class TestTrainingDemo:
         import os
         if not os.environ.get('RUN_SLOW_TESTS'):
             pytest.skip("Slow test - set RUN_SLOW_TESTS=1 to run")
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Generate tiny dataset
             generator = SyntheticDataGenerator(tmpdir, num_pairs=4)
             generator.generate_training_data()
-            
+
             # Configure minimal training
             config = TrainingConfig(
                 data_dir=tmpdir,
@@ -199,53 +199,53 @@ class TestTrainingDemo:
                 num_workers=0,  # No multiprocessing for test
                 use_mixed_precision=False
             )
-            
+
             # Create dataset and dataloaders
             from torchvision import transforms
             from torch.utils.data import DataLoader
             import torch
-            
+
             transform = transforms.Compose([
                 transforms.Resize((256, 256)),
                 transforms.ToTensor(),
             ])
-            
+
             low_quality_dir = Path(tmpdir) / "low_quality"
             high_quality_dir = Path(tmpdir) / "high_quality"
-            
+
             dataset = EnhancementDataset(low_quality_dir, high_quality_dir, transform)
-            
+
             # Split dataset
             val_size = 1
             train_size = len(dataset) - val_size
             train_dataset, val_dataset = torch.utils.data.random_split(
                 dataset, [train_size, val_size]
             )
-            
+
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=config.batch_size,
                 shuffle=True,
                 num_workers=0
             )
-            
+
             val_loader = DataLoader(
                 val_dataset,
                 batch_size=config.batch_size,
                 shuffle=False,
                 num_workers=0
             )
-            
+
             # Train for 1 epoch
             trainer = HyperRealityTrainer(config)
             initial_loss = trainer.best_val_loss
-            
+
             trainer.train(train_loader, val_loader)
-            
+
             # Check that training happened
             assert len(trainer.training_history) > 0
             assert trainer.best_val_loss < initial_loss or initial_loss == float('inf')
-            
+
             # Check checkpoint was saved
             checkpoint_path = Path(config.checkpoint_dir) / "checkpoint_epoch_1.pth"
             assert checkpoint_path.exists()
@@ -258,7 +258,7 @@ def test_imports():
     from tqdm import tqdm
     import numpy as np
     from PIL import Image
-    
+
     # Verify versions using proper semantic versioning
     assert version.parse(torch.__version__) >= version.parse("2.0.0")
 

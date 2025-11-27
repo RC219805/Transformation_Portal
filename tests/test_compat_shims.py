@@ -193,7 +193,6 @@ class TestCreateCompatibilityWrapper:
         """Test that wrapper preserves function metadata."""
         def old_func(x):
             """Old function documentation."""
-            pass
 
         def new_func(x):
             return x

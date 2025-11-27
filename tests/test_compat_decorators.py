@@ -110,7 +110,6 @@ class TestDeprecatedDecorator:
         @deprecated()
         def documented_function():
             """This is a documented function."""
-            pass
 
         assert documented_function.__name__ == "documented_function"
         assert documented_function.__doc__ == "This is a documented function."

@@ -133,7 +133,7 @@ class TestNumbaIntegration:
 
         # Validate
         assert result.shape == image.shape
-        assert result.dtype == np.float32 or result.dtype == np.float64
+        assert result.dtype in (np.float32, np.float64)
         assert np.all(result >= 0.0)
         assert np.all(result <= 1.0)
 
@@ -286,7 +286,7 @@ class TestPipelineParallelism:
         for seq_res, pipe_res in zip(seq_results, pipe_results):
             assert seq_res['depth'].shape == pipe_res['depth'].shape
 
-        print(f"\n✓ Pipelined and sequential results are consistent")
+        print("\n✓ Pipelined and sequential results are consistent")
 
 
 class TestProgressiveProcessing:
@@ -308,7 +308,7 @@ class TestProgressiveProcessing:
         assert 'metadata' in result
         assert result['metadata']['processing_scale'] == 1.0
 
-        print(f"\n✓ Progressive processing (highest quality) completed")
+        print("\n✓ Progressive processing (highest quality) completed")
 
     def test_process_render_progressive_all_levels(self, pipeline, dummy_images, temp_output_dir):
         """Test progressive processing returning all levels."""
@@ -375,7 +375,7 @@ class TestBackwardCompatibility:
         )
 
         assert len(results) == 2
-        print(f"\n✓ Original batch_process() still works")
+        print("\n✓ Original batch_process() still works")
 
     def test_single_image_processing_still_works(self, pipeline, dummy_images, temp_output_dir):
         """Test that process_render() still works."""
@@ -386,7 +386,7 @@ class TestBackwardCompatibility:
         assert 'depth' in result
         assert 'metadata' in result
 
-        print(f"\n✓ Original process_render() still works")
+        print("\n✓ Original process_render() still works")
 
 
 def test_phase3_integration_summary():
@@ -396,10 +396,11 @@ def test_phase3_integration_summary():
     print("\n" + "=" * 60)
     print("PHASE 3 OPTIMIZATIONS - INTEGRATION SUMMARY")
     print("=" * 60)
-    print(f"✓ Pipeline parallelism: IMPLEMENTED")
-    print(f"✓ Streaming processing: IMPLEMENTED")
-    print(f"✓ Progressive rendering: IMPLEMENTED")
-    print(f"✓ Numba JIT acceleration: {'AVAILABLE' if info['available'] else 'NOT AVAILABLE (fallback active)'}")
+    print("✓ Pipeline parallelism: IMPLEMENTED")
+    print("✓ Streaming processing: IMPLEMENTED")
+    print("✓ Progressive rendering: IMPLEMENTED")
+    numba_status = "AVAILABLE" if info['available'] else "NOT AVAILABLE (fallback active)"
+    print(f"✓ Numba JIT acceleration: {numba_status}")
 
     if info['available']:
         print(f"  - Numba version: {info['version']}")
