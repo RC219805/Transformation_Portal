@@ -365,12 +365,14 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
         """Detect best available device."""
         try:
             import torch
-            if torch.cuda.is_available():
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 return "cuda"
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                return "mps"
-        except ImportError:
-            # If torch is not installed, fall back to CPU for depth estimation.
+            # Check for MPS (Apple Silicon) - need to verify torch.backends exists first
+            if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps'):
+                if torch.backends.mps.is_available():
+                    return "mps"
+        except (ImportError, AttributeError):
+            # If torch is not installed or attributes missing, fall back to CPU
             pass
         return "cpu"
 
