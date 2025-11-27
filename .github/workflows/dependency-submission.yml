@@ -66,7 +66,7 @@ jobs:
           echo "Available space: $(df -h / | awk 'NR==2 {print $4}')"
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           # Shallow clone to save space
           fetch-depth: 1

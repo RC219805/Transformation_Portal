@@ -21,18 +21,33 @@ import pytest
 from pathlib import Path
 
 
+def requires_real_torch():
+    """Skip test if torch is not available or is a stub module.
+
+    Some tests in the suite create torch stubs for testing purposes.
+    This helper ensures we have the real torch module with nn support.
+    """
+    torch = pytest.importorskip("torch")
+    # Check if torch has essential attributes - stubs typically don't have these
+    required_attrs = ('nn', 'Tensor', 'device')
+    for attr in required_attrs:
+        if not hasattr(torch, attr):
+            pytest.skip(f"torch is a stub module without {attr} support")
+    return torch
+
+
 class TestBasicSRTPImports:
     """Test that BasicSR-TP imports work correctly."""
 
     def test_import_from_archs(self):
         """Test importing RRDBNet from basicsr_tp.archs."""
-        pytest.importorskip("torch")
+        requires_real_torch()
         from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F811
         assert RRDBNet is not None
 
     def test_import_from_package_level(self):
         """Test importing RRDBNet from package level."""
-        pytest.importorskip("torch")
+        requires_real_torch()
         from basicsr_tp import RRDBNet  # noqa: F811
         assert RRDBNet is not None
 
@@ -50,7 +65,7 @@ class TestRRDBNetArchitecture:
     @pytest.fixture
     def model(self):
         """Create a basic RRDBNet model for testing."""
-        pytest.importorskip("torch")
+        requires_real_torch()
         from basicsr_tp import RRDBNet  # noqa: F811
         return RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32)
 
@@ -186,7 +201,7 @@ class TestAPICompatibility:
 
     def test_rrdbnet_signature_matches(self):
         """Test that RRDBNet has the same constructor signature as original."""
-        pytest.importorskip("torch")
+        requires_real_torch()
         from basicsr_tp import RRDBNet
         import inspect
 
@@ -199,7 +214,7 @@ class TestAPICompatibility:
 
     def test_helper_functions_exist(self):
         """Test that required helper functions are available."""
-        pytest.importorskip("torch")
+        requires_real_torch()
         from basicsr_tp.archs.rrdbnet_arch import (
             default_init_weights,
             make_layer,
@@ -211,7 +226,7 @@ class TestAPICompatibility:
 
     def test_residual_blocks_exist(self):
         """Test that ResidualDenseBlock and RRDB classes exist."""
-        pytest.importorskip("torch")
+        requires_real_torch()
         from basicsr_tp.archs.rrdbnet_arch import ResidualDenseBlock, RRDB
         assert ResidualDenseBlock is not None
         assert RRDB is not None
@@ -222,7 +237,7 @@ class TestDocumentation:
 
     def test_security_note_in_module(self):
         """Test that security advisory is in module docstring."""
-        pytest.importorskip("torch")
+        requires_real_torch()
         # Use 'from ... import' to avoid linter warning about mixing import patterns
         from basicsr_tp.archs import rrdbnet_arch  # noqa: F811
         docstring = rrdbnet_arch.__doc__
@@ -254,7 +269,7 @@ class TestRealESRGANIntegration:
     def test_realesrgan_can_use_vendored_rrdbnet(self):
         """Test that Real-ESRGAN can use our vendored RRDBNet."""
         # Skip if dependencies not available
-        pytest.importorskip("torch")
+        requires_real_torch()
         pytest.importorskip("realesrgan")
 
         from realesrgan import RealESRGANer
