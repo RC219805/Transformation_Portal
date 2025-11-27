@@ -280,8 +280,8 @@ make test-structure
 | `quality-gate.yml` | Quality enforcement |
 | `dependency-submission.yml` | Dependency graph updates |
 | `smart-issue-management.yml` | Issue automation |
+| `summary.yml` | AI-powered issue/PR summarization (OpenAI) |
 | `submit-pypi.yml` | PyPI publishing |
-
 ### CI Pipeline Stages
 
 1. **Lint** (non-blocking): flake8 critical errors, pylint, mypy
