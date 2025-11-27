@@ -199,7 +199,7 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
     Example:
         >>> stage = ImageSaveStage(
         ...     output_dir="./output",
-        ...     format="TIFF",
+        ...     output_format="TIFF",
         ...     quality=95
         ... )
         >>> result = await stage(image_data)
@@ -370,6 +370,7 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
             elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 return "mps"
         except ImportError:
+            # If torch is not installed, fall back to CPU for depth estimation.
             pass
         return "cpu"
 
@@ -439,6 +440,7 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except ImportError:
+                # torch is optional; if not installed, skip GPU cache cleanup
                 pass
 
         await super().shutdown()
@@ -665,12 +667,9 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
             indices = array * (lut_size - 1)
             indices = np.clip(indices, 0, lut_size - 1.001)
 
-            # Floor indices
+            # Floor indices for nearest-neighbor lookup
+            # (trilinear interpolation would use idx1 and frac)
             idx0 = np.floor(indices).astype(np.int32)
-            idx1 = np.minimum(idx0 + 1, lut_size - 1)
-
-            # Fractional parts
-            frac = indices - idx0
 
             # Simple nearest-neighbor for now (full trilinear is more complex)
             r, g, b = idx0[..., 0], idx0[..., 1], idx0[..., 2]
