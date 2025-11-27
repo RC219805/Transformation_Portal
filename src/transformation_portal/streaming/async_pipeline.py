@@ -33,10 +33,8 @@ import asyncio
 import gc
 import os
 import time
-import weakref
 from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import partial
@@ -52,7 +50,6 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
-    Set,
     Tuple,
     TypeVar,
     Union,
@@ -825,6 +822,7 @@ class StreamingImageLoader:
             try:
                 await producer_task
             except asyncio.CancelledError:
+                # Cancellation is expected after producer_task.cancel(); safe to ignore.
                 pass
 
 

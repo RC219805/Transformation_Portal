@@ -13,10 +13,8 @@ Tests cover:
 - Factory function: create_luxury_pipeline_stages
 """
 
-import asyncio
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
