@@ -92,8 +92,9 @@ jobs:
               PYLINT_EXIT=0
             fi
           else
-            # shellcheck disable=SC2086
-            pylint $files
+            # Convert string to array safely to handle spaces/special characters
+            IFS=$'\n' read -r -d '' -a file_array <<< "$files" || true
+            pylint "${file_array[@]}"
             PYLINT_EXIT=$?
           fi
           set -e
