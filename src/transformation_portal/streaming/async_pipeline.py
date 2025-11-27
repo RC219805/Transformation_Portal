@@ -33,10 +33,8 @@ import asyncio
 import gc
 import os
 import time
-import weakref
 from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import partial
@@ -52,7 +50,6 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
-    Set,
     Tuple,
     TypeVar,
     Union,
@@ -322,15 +319,15 @@ class AsyncStageProtocol(Protocol[InputT, OutputT]):
 
     async def process(self, item: InputT) -> OutputT:
         """Process a single item."""
-        ...
+        ...  # pylint: disable=unnecessary-ellipsis
 
     async def startup(self) -> None:
         """Initialize stage resources."""
-        ...
+        ...  # pylint: disable=unnecessary-ellipsis
 
     async def shutdown(self) -> None:
         """Clean up stage resources."""
-        ...
+        ...  # pylint: disable=unnecessary-ellipsis
 
 
 class AsyncStage(ABC, Generic[InputT, OutputT]):
@@ -427,7 +424,6 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
         Returns:
             Processed output
         """
-        pass
 
     async def __call__(self, item: InputT) -> StageResult[OutputT]:
         """Execute stage processing with metrics and error handling.
@@ -826,6 +822,7 @@ class StreamingImageLoader:
             try:
                 await producer_task
             except asyncio.CancelledError:
+                # Cancellation is expected after producer_task.cancel(); safe to ignore.
                 pass
 
 

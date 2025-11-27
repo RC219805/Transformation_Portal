@@ -13,14 +13,15 @@ Tests cover:
 - Factory function: create_luxury_pipeline_stages
 """
 
-import asyncio
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 # Import stages - may require optional dependencies
+STAGES_AVAILABLE = False
+IMPORT_ERROR = ""
+
 try:
     from transformation_portal.streaming.stages import (
         ColorGradingStage,
@@ -35,14 +36,13 @@ try:
     )
     STAGES_AVAILABLE = True
 except ImportError as e:
-    STAGES_AVAILABLE = False
     IMPORT_ERROR = str(e)
 
 
 # Skip all tests if stages module dependencies not available
 pytestmark = pytest.mark.skipif(
     not STAGES_AVAILABLE,
-    reason=f"Stages module dependencies not available: {IMPORT_ERROR if not STAGES_AVAILABLE else ''}"
+    reason=f"Stages module dependencies not available: {IMPORT_ERROR}"
 )
 
 
@@ -195,7 +195,7 @@ class TestImageSaveStage:
         """Test stage initialization."""
         stage = ImageSaveStage(
             output_dir="/tmp/output",
-            format="JPEG",
+            output_format="JPEG",
             quality=90,
             suffix="_out"
         )
@@ -216,7 +216,7 @@ class TestImageSaveStage:
         with tempfile.TemporaryDirectory() as tmpdir:
             stage = ImageSaveStage(
                 output_dir=tmpdir,
-                format="JPEG",
+                output_format="JPEG",
                 quality=85
             )
             await stage.startup()
@@ -247,7 +247,7 @@ class TestImageSaveStage:
         with tempfile.TemporaryDirectory() as tmpdir:
             stage = ImageSaveStage(
                 output_dir=tmpdir,
-                format="PNG"
+                output_format="PNG"
             )
             await stage.startup()
 
@@ -667,7 +667,7 @@ class TestStagesIntegration:
             pipeline = AsyncPipeline()
             pipeline.add_stage(ImageLoadStage())
             pipeline.add_stage(ResizeStage(scale_factor=0.5))
-            pipeline.add_stage(ImageSaveStage(output_dir=output_dir, format="PNG"))
+            pipeline.add_stage(ImageSaveStage(output_dir=output_dir, output_format="PNG"))
 
             async with pipeline:
                 result = await pipeline.process_item(input_path)

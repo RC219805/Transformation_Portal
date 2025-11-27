@@ -11,11 +11,8 @@ Tests cover:
 """
 
 import asyncio
-import tempfile
 import time
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -157,7 +154,7 @@ class TestBackpressureQueue:
         await queue.put("item1")
 
         # Process item
-        item = await queue.get()
+        await queue.get()
         queue.task_done()
 
         # Join should complete immediately

@@ -175,20 +175,20 @@ class ImageLoadStage(AsyncStage[Path, ImageData]):
             metadata=metadata
         )
 
-    async def process(self, path: Path) -> ImageData:
+    async def process(self, item: Path) -> ImageData:
         """Load image asynchronously.
 
         Args:
-            path: Path to image file
+            item: Path to image file
 
         Returns:
             ImageData with loaded array
         """
         if self._worker_pool:
-            return await self._worker_pool.run_io(self._load_sync, path)
+            return await self._worker_pool.run_io(self._load_sync, item)
         else:
             loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, self._load_sync, path)
+            return await loop.run_in_executor(None, self._load_sync, item)
 
 
 class ImageSaveStage(AsyncStage[ImageData, ImageData]):
@@ -199,7 +199,7 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
     Example:
         >>> stage = ImageSaveStage(
         ...     output_dir="./output",
-        ...     format="TIFF",
+        ...     output_format="TIFF",
         ...     quality=95
         ... )
         >>> result = await stage(image_data)
@@ -208,7 +208,7 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
     def __init__(
         self,
         output_dir: Union[str, Path],
-        format: str = "TIFF",
+        output_format: str = "TIFF",
         quality: int = 95,
         suffix: str = "_processed",
         max_concurrent: int = 4,
@@ -218,7 +218,7 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
 
         Args:
             output_dir: Output directory
-            format: Output format (TIFF, JPEG, PNG, WebP)
+            output_format: Output format (TIFF, JPEG, PNG, WebP)
             quality: Quality for lossy formats (1-100)
             suffix: Suffix to add to filename
             max_concurrent: Maximum concurrent saves
@@ -231,7 +231,7 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
             required=True
         )
         self._output_dir = Path(output_dir)
-        self._format = format.upper()
+        self._format = output_format.upper()
         self._quality = quality
         self._suffix = suffix
         self._worker_pool = worker_pool
@@ -294,27 +294,27 @@ class ImageSaveStage(AsyncStage[ImageData, ImageData]):
 
         return output_path
 
-    async def process(self, image_data: ImageData) -> ImageData:
+    async def process(self, item: ImageData) -> ImageData:
         """Save image asynchronously.
 
         Args:
-            image_data: Image data to save
+            item: Image data to save
 
         Returns:
             ImageData with updated output path in metadata
         """
         if self._worker_pool:
             output_path = await self._worker_pool.run_io(
-                self._save_sync, image_data
+                self._save_sync, item
             )
         else:
             loop = asyncio.get_event_loop()
             output_path = await loop.run_in_executor(
-                None, self._save_sync, image_data
+                None, self._save_sync, item
             )
 
-        image_data.metadata['output_path'] = str(output_path)
-        return image_data
+        item.metadata['output_path'] = str(output_path)
+        return item
 
 
 class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
@@ -365,11 +365,16 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
         """Detect best available device."""
         try:
             import torch
-            if torch.cuda.is_available():
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 return "cuda"
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            # Check for MPS (Apple Silicon) - verify attribute chain exists
+            if (hasattr(torch, 'backends')
+                    and hasattr(torch.backends, 'mps')
+                    and torch.backends.mps.is_available()):
                 return "mps"
-        except ImportError:
+        except (ImportError, AttributeError):
+            # ImportError: torch not installed
+            # AttributeError: torch.cuda/backends/mps attributes missing (e.g., mock torch)
             pass
         return "cpu"
 
@@ -439,6 +444,7 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except ImportError:
+                # torch is optional; if not installed, skip GPU cache cleanup
                 pass
 
         await super().shutdown()
@@ -456,11 +462,11 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
 
         return image_data
 
-    async def process(self, image_data: ImageData) -> ImageData:
+    async def process(self, item: ImageData) -> ImageData:
         """Estimate depth map asynchronously.
 
         Args:
-            image_data: Image data
+            item: Image data
 
         Returns:
             ImageData with depth_map populated
@@ -469,11 +475,11 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
 
         if self._worker_pool:
             return await self._worker_pool.run_cpu(
-                self._estimate_sync, image_data
+                self._estimate_sync, item
             )
         else:
             return await loop.run_in_executor(
-                None, self._estimate_sync, image_data
+                None, self._estimate_sync, item
             )
 
 
@@ -553,11 +559,11 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
 
         return image_data
 
-    async def process(self, image_data: ImageData) -> ImageData:
+    async def process(self, item: ImageData) -> ImageData:
         """Apply material response enhancement.
 
         Args:
-            image_data: Image data
+            item: Image data
 
         Returns:
             Enhanced ImageData
@@ -566,11 +572,11 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
 
         if self._worker_pool:
             return await self._worker_pool.run_cpu(
-                self._enhance_sync, image_data
+                self._enhance_sync, item
             )
         else:
             return await loop.run_in_executor(
-                None, self._enhance_sync, image_data
+                None, self._enhance_sync, item
             )
 
 
@@ -644,6 +650,7 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
                                 continue
 
             if lut_size > 0 and len(lut_data) == lut_size ** 3:
+                # pylint: disable=too-many-function-args  # numpy reshape accepts multiple positional args
                 self._lut_data = np.array(lut_data).reshape(
                     lut_size, lut_size, lut_size, 3
                 )
@@ -664,12 +671,9 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
             indices = array * (lut_size - 1)
             indices = np.clip(indices, 0, lut_size - 1.001)
 
-            # Floor indices
+            # Floor indices for nearest-neighbor lookup
+            # (trilinear interpolation would use idx1 and frac)
             idx0 = np.floor(indices).astype(np.int32)
-            idx1 = np.minimum(idx0 + 1, lut_size - 1)
-
-            # Fractional parts
-            frac = indices - idx0
 
             # Simple nearest-neighbor for now (full trilinear is more complex)
             r, g, b = idx0[..., 0], idx0[..., 1], idx0[..., 2]
@@ -690,11 +694,11 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
 
         return image_data
 
-    async def process(self, image_data: ImageData) -> ImageData:
+    async def process(self, item: ImageData) -> ImageData:
         """Apply color grading.
 
         Args:
-            image_data: Image data
+            item: Image data
 
         Returns:
             Color graded ImageData
@@ -703,11 +707,11 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
 
         if self._worker_pool:
             return await self._worker_pool.run_cpu(
-                self._apply_lut_sync, image_data
+                self._apply_lut_sync, item
             )
         else:
             return await loop.run_in_executor(
-                None, self._apply_lut_sync, image_data
+                None, self._apply_lut_sync, item
             )
 
 
@@ -811,11 +815,11 @@ class ResizeStage(AsyncStage[ImageData, ImageData]):
 
         return image_data
 
-    async def process(self, image_data: ImageData) -> ImageData:
+    async def process(self, item: ImageData) -> ImageData:
         """Resize image.
 
         Args:
-            image_data: Image data
+            item: Image data
 
         Returns:
             Resized ImageData
@@ -824,11 +828,11 @@ class ResizeStage(AsyncStage[ImageData, ImageData]):
 
         if self._worker_pool:
             return await self._worker_pool.run_cpu(
-                self._resize_sync, image_data
+                self._resize_sync, item
             )
         else:
             return await loop.run_in_executor(
-                None, self._resize_sync, image_data
+                None, self._resize_sync, item
             )
 
 
@@ -881,48 +885,9 @@ class DenoiseStage(AsyncStage[ImageData, ImageData]):
         base_sigma = self._strength * 2.0
 
         if self._use_depth and image_data.depth_map is not None:
-            # Depth-adaptive denoising: more blur in background
-            depth = image_data.depth_map
-            if depth.max() > 1.0:
-                depth = depth / depth.max()
-
-            # Create per-pixel sigma map (more blur for distant pixels)
-            sigma_map = base_sigma * (1 + depth * 2)
-
-            # Apply spatially varying blur (simplified - use uniform regions)
-            denoised = np.zeros_like(array)
-            for sigma_level in [0.5, 1.0, 1.5, 2.0]:
-                mask = (sigma_map >= sigma_level - 0.25) & (sigma_map < sigma_level + 0.25)
-                if mask.any():
-                    sigma = base_sigma * sigma_level
-                    if len(array.shape) == 3:
-                        for c in range(array.shape[2]):
-                            blurred = gaussian_filter(array[..., c], sigma=sigma)
-                            if len(mask.shape) == 2:
-                                denoised[..., c][mask] = blurred[mask]
-                            else:
-                                denoised[..., c][mask[..., 0]] = blurred[mask[..., 0]]
-                    else:
-                        blurred = gaussian_filter(array, sigma=sigma)
-                        denoised[mask] = blurred[mask]
-
-            # Fill any remaining pixels
-            remaining = denoised.sum(axis=-1 if len(denoised.shape) == 3 else None) == 0
-            if remaining.any():
-                if len(array.shape) == 3:
-                    for c in range(array.shape[2]):
-                        denoised[..., c][remaining] = array[..., c][remaining]
-                else:
-                    denoised[remaining] = array[remaining]
-
-            array = denoised
+            array = self._apply_depth_adaptive_denoise(array, image_data.depth_map, base_sigma)
         else:
-            # Simple gaussian denoise
-            if len(array.shape) == 3:
-                for c in range(array.shape[2]):
-                    array[..., c] = gaussian_filter(array[..., c], sigma=base_sigma)
-            else:
-                array = gaussian_filter(array, sigma=base_sigma)
+            array = self._apply_simple_denoise(array, base_sigma)
 
         array = np.clip(array, 0, 1)
         image_data.array = array
@@ -931,11 +896,71 @@ class DenoiseStage(AsyncStage[ImageData, ImageData]):
 
         return image_data
 
-    async def process(self, image_data: ImageData) -> ImageData:
+    def _apply_depth_adaptive_denoise(self, array, depth_map, base_sigma):
+        """Apply depth-adaptive denoising with more blur in background."""
+        import numpy as np
+        from scipy.ndimage import gaussian_filter
+
+        depth = depth_map
+        if depth.max() > 1.0:
+            depth = depth / depth.max()
+
+        # Create per-pixel sigma map (more blur for distant pixels)
+        sigma_map = base_sigma * (1 + depth * 2)
+
+        # Apply spatially varying blur (simplified - use uniform regions)
+        denoised = np.zeros_like(array)
+        for sigma_level in [0.5, 1.0, 1.5, 2.0]:
+            mask = (sigma_map >= sigma_level - 0.25) & (sigma_map < sigma_level + 0.25)
+            if not mask.any():
+                continue
+            sigma = base_sigma * sigma_level
+            self._apply_blur_to_masked_region(array, denoised, mask, sigma)
+
+        # Fill any remaining pixels
+        remaining = denoised.sum(axis=-1 if len(denoised.shape) == 3 else None) == 0
+        if remaining.any():
+            self._fill_remaining_pixels(array, denoised, remaining)
+
+        return denoised
+
+    def _apply_blur_to_masked_region(self, array, denoised, mask, sigma):
+        """Apply gaussian blur to masked region of array."""
+        from scipy.ndimage import gaussian_filter
+
+        if len(array.shape) == 3:
+            for c in range(array.shape[2]):
+                blurred = gaussian_filter(array[..., c], sigma=sigma)
+                effective_mask = mask if len(mask.shape) == 2 else mask[..., 0]
+                denoised[..., c][effective_mask] = blurred[effective_mask]
+        else:
+            blurred = gaussian_filter(array, sigma=sigma)
+            denoised[mask] = blurred[mask]
+
+    def _fill_remaining_pixels(self, array, denoised, remaining):
+        """Fill remaining unprocessed pixels with original values."""
+        if len(array.shape) == 3:
+            for c in range(array.shape[2]):
+                denoised[..., c][remaining] = array[..., c][remaining]
+        else:
+            denoised[remaining] = array[remaining]
+
+    def _apply_simple_denoise(self, array, base_sigma):
+        """Apply simple gaussian denoise without depth awareness."""
+        from scipy.ndimage import gaussian_filter
+
+        if len(array.shape) == 3:
+            for c in range(array.shape[2]):
+                array[..., c] = gaussian_filter(array[..., c], sigma=base_sigma)
+        else:
+            array = gaussian_filter(array, sigma=base_sigma)
+        return array
+
+    async def process(self, item: ImageData) -> ImageData:
         """Apply denoising.
 
         Args:
-            image_data: Image data
+            item: Image data
 
         Returns:
             Denoised ImageData
@@ -944,11 +969,11 @@ class DenoiseStage(AsyncStage[ImageData, ImageData]):
 
         if self._worker_pool:
             return await self._worker_pool.run_cpu(
-                self._denoise_sync, image_data
+                self._denoise_sync, item
             )
         else:
             return await loop.run_in_executor(
-                None, self._denoise_sync, image_data
+                None, self._denoise_sync, item
             )
 
 
@@ -996,7 +1021,7 @@ def create_luxury_pipeline_stages(
 
     stages.append(ImageSaveStage(
         output_dir=output_dir,
-        format="TIFF",
+        output_format="TIFF",
         max_concurrent=4
     ))
 
