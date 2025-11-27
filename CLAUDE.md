@@ -29,7 +29,7 @@ Transformation_Portal/
 │   │   └── ...                      # Other submodules (events, compat, vlm, etc.)
 │   ├── luxury_tiff_batch_processor/ # TIFF batch processing CLI
 │   └── enhancements/                # Model training infrastructure
-├── tests/                            # pytest test suite (60+ test files)
+├── tests/                            # pytest test suite (~64 test files, 70+ test functions)
 │   ├── conftest.py                  # Shared pytest configuration
 │   ├── foundation/                  # Foundation layer tests
 │   └── perceptual/                  # Perceptual quality tests
