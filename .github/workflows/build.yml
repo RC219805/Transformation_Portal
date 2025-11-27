@@ -82,9 +82,15 @@ jobs:
           
           set +e
           if [ -z "$files" ]; then
-            # shellcheck disable=SC2046,SC2086
-            pylint $(git ls-files '*.py' | grep -v $EXCLUDE_PATTERNS)
-            PYLINT_EXIT=$?
+            # Use array to safely handle filenames with spaces/special characters
+            mapfile -t files < <(git ls-files '*.py' | grep -v $EXCLUDE_PATTERNS)
+            if [ ${#files[@]} -gt 0 ]; then
+              pylint "${files[@]}"
+              PYLINT_EXIT=$?
+            else
+              echo "No Python files found for linting."
+              PYLINT_EXIT=0
+            fi
           else
             # shellcheck disable=SC2086
             pylint $files
