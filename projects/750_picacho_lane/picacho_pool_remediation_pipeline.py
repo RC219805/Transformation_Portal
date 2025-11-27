@@ -464,7 +464,7 @@ class DepthPostProcessor:
             img_blue = ndimage.map_coordinates(img[:, :, 2], [blue_y.ravel(), blue_x.ravel()], order=1, mode='nearest').reshape(h, w)
             img[:, :, 0] = img_red
             img[:, :, 2] = img_blue
-            print(f"  ✓ Chromatic aberration applied to peripheral elements (large-format simulation)")
+            print("  ✓ Chromatic aberration applied to peripheral elements (large-format simulation)")
 
         return img
 
@@ -566,7 +566,7 @@ class PicachoPoolRemediationPipeline:
             img = self.depth_processor.apply_atmospheric_scattering(img)
 
         # Save output
-        print(f"\n💾 Saving remediated output...")
+        print("\n💾 Saving remediated output...")
         self._save_image(img, output_path)
 
         elapsed = time.time() - start_time

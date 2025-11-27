@@ -66,7 +66,7 @@ def enhance_luxury_interior(image_path, output_dir, preset='signature', auto_wb=
 
     # Apply auto white balance if requested
     if auto_wb:
-        print(f"  Applying auto white balance...")
+        print("  Applying auto white balance...")
         img = auto_white_balance(img)
 
     # Enhancement parameters for luxury interiors
@@ -105,7 +105,7 @@ def enhance_luxury_interior(image_path, output_dir, preset='signature', auto_wb=
 
     # Seaview-specific: Reduce warm cast before other enhancements
     if p.get('warmth_reduction', False):
-        print(f"  Reducing warm cast...")
+        print("  Reducing warm cast...")
         img_array = np.array(img, dtype=np.float32)
         # Reduce red channel by 5%, increase blue by 5%
         img_array[:, :, 0] = np.clip(img_array[:, :, 0] * 0.95, 0, 255)
@@ -186,14 +186,14 @@ def main():
         print(f"No images found matching '{args.pattern}' in {input_dir}")
         sys.exit(1)
 
-    print(f"\n{'='*70}")
-    print(f"LUXURY TIFF PROCESSOR - UHNW DELIVERABLES")
-    print(f"{'='*70}")
+    print("\n" + "=" * 70)
+    print("LUXURY TIFF PROCESSOR - UHNW DELIVERABLES")
+    print("=" * 70)
     print(f"Input: {input_dir}")
     print(f"Output: {output_dir}")
     print(f"Preset: {args.preset}")
     print(f"Images found: {len(images)}")
-    print(f"{'='*70}\n")
+    print("=" * 70 + "\n")
 
     # Process images
     processed = []
@@ -209,9 +209,9 @@ def main():
             failed.append((img_path, str(e)))
 
     # Summary
-    print(f"\n{'='*70}")
-    print(f"PROCESSING COMPLETE")
-    print(f"{'='*70}")
+    print("\n" + "=" * 70)
+    print("PROCESSING COMPLETE")
+    print("=" * 70)
     print(f"Successfully processed: {len(processed)}/{len(images)}")
     print(f"Output directory: {output_dir}")
 

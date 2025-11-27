@@ -12,7 +12,7 @@ def analyze_image(path):
     """Analyze image properties."""
     img = Image.open(path)
     arr = np.array(img)
-    
+
     return {
         'path': path.name,
         'size': f"{img.width}x{img.height}",
@@ -28,18 +28,18 @@ def analyze_image(path):
 
 if __name__ == "__main__":
     repo = Path(__file__).parent
-    
+
     original = repo / "input_images" / "V2_750Picacho_Pool.tiff"
     enhanced = repo / "output_images" / "V2_750Picacho_Pool_Luxury_Enhanced.jpg"
-    
+
     if not enhanced.exists():
         enhanced = repo / "output_images" / "V2_750Picacho_Pool_Luxury_Enhanced.tiff"
-    
+
     print("=" * 80)
     print("750 PICACHO POOL - LUXURY ENHANCEMENT ANALYSIS")
     print("=" * 80)
     print()
-    
+
     if original.exists():
         orig_stats = analyze_image(original)
         print(f"📷 ORIGINAL IMAGE: {orig_stats['path']}")
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         print(f"   Dynamic Range: {orig_stats['min']} - {orig_stats['max']}")
         print(f"   Contrast (StdDev): {orig_stats['std']:.2f}")
         print()
-    
+
     if enhanced.exists():
         enh_stats = analyze_image(enhanced)
         print(f"✨ ENHANCED IMAGE: {enh_stats['path']}")
@@ -59,24 +59,25 @@ if __name__ == "__main__":
         print(f"   Dynamic Range: {enh_stats['min']} - {enh_stats['max']}")
         print(f"   Contrast (StdDev): {enh_stats['std']:.2f}")
         print()
-        
+
         if original.exists():
             brightness_change = enh_stats['mean_overall'] - orig_stats['mean_overall']
             contrast_change = enh_stats['std'] - orig_stats['std']
-            
+
             print("📊 ENHANCEMENT IMPACT:")
             print(f"   Brightness Shift: {brightness_change:+.1f} ({brightness_change/orig_stats['mean_overall']*100:+.1f}%)")
             print(f"   Contrast Change: {contrast_change:+.2f} ({contrast_change/orig_stats['std']*100:+.1f}%)")
             print(f"   Red Channel: {enh_stats['mean_r'] - orig_stats['mean_r']:+.1f}")
             print(f"   Green Channel: {enh_stats['mean_g'] - orig_stats['mean_g']:+.1f}")
             print(f"   Blue Channel: {enh_stats['mean_b'] - orig_stats['mean_b']:+.1f}")
-            
+
             # Color balance shift
             orig_temp = orig_stats['mean_r'] / orig_stats['mean_b']
             enh_temp = enh_stats['mean_r'] / enh_stats['mean_b']
-            print(f"   Color Temperature Shift: {orig_temp:.3f} → {enh_temp:.3f} (cooler)" if enh_temp < orig_temp else f" (warmer)")
+            temp_direction = "(cooler)" if enh_temp < orig_temp else "(warmer)"
+            print(f"   Color Temperature Shift: {orig_temp:.3f} → {enh_temp:.3f} {temp_direction}")
             print()
-    
+
     print("=" * 80)
     print("🎨 APPLIED ENHANCEMENTS:")
     print("=" * 80)
