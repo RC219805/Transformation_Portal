@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Command-line interface for the RAG system.
 
@@ -14,7 +13,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Add current directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -349,7 +347,7 @@ def main():
     analyze_parser.add_argument('--feedback-file', required=True, help='Feedback JSON file')
     analyze_parser.add_argument('--pipeline', help='Analyze specific pipeline')
     analyze_parser.add_argument('--recommendations', action='store_true',
-                               help='Generate recommendations')
+                                help='Generate recommendations')
     analyze_parser.add_argument('--query', help='Natural language query')
     analyze_parser.add_argument('--export', help='Export knowledge base to JSON')
 

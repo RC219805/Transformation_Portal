@@ -41,7 +41,7 @@ class ModelLoader:
             return None
 
         try:
-            checkpoint = torch.load(best_path, map_location=self.device)
+            checkpoint = torch.load(best_path, map_location=self.device, weights_only=True)
             return checkpoint
         except Exception as e:
             warnings.warn(f"Failed to load checkpoint from {best_path}: {e}")
@@ -55,13 +55,14 @@ class ModelLoader:
             return None
 
         try:
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
             return checkpoint
         except Exception as e:
             warnings.warn(f"Failed to load checkpoint from {checkpoint_path}: {e}")
             return None
 
-    def load_model_weights(self, models: Dict[str, torch.nn.Module],
+    def load_model_weights(self,
+                          models: Dict[str, torch.nn.Module],
                           checkpoint: Optional[Dict[str, Any]] = None) -> bool:
         """
         Load weights into models
@@ -120,8 +121,8 @@ class ModelLoader:
 
 
 def load_pretrained_weights(models: Dict[str, torch.nn.Module],
-                           checkpoint_dir: str = "weights/hyper_reality",
-                           verbose: bool = True) -> bool:
+                            checkpoint_dir: str = "weights/hyper_reality",
+                            verbose: bool = True) -> bool:
     """
     Convenience function to load pre-trained weights into models
 

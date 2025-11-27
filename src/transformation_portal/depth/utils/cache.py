@@ -231,8 +231,8 @@ class DepthCache:
         else:
             image_bytes = image.tobytes()
 
-        # Compute hash
-        hash_obj = hashlib.md5(image_bytes)
+        # Compute hash (MD5 is used only for cache keying, not security)
+        hash_obj = hashlib.md5(image_bytes, usedforsecurity=False)
         cache_key = hash_obj.hexdigest()
 
         return cache_key
@@ -280,7 +280,7 @@ class DepthCache:
                 return None
 
             with open(cache_file, 'rb') as f:
-                result = pickle.load(f)
+                result = pickle.load(f)  # nosec B301 - loading self-generated cache
 
             # Convert back to FP32
             if 'depth' in result:
