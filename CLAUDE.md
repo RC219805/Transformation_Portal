@@ -209,7 +209,7 @@ def apply_zone_tone_mapping(image, depth_map):
 # .pylintrc ignore list:
 - build, dist, .venv, .eggs
 - tools/deprecated
-- src/transformation_portal, src/luxury_tiff_batch_processor  # Still maturing
+- src/transformation_portal, src/luxury_tiff_batch_processor  # Separate packages with own linting config
 - scripts
 - .backup_local, .github/agents
 ```
