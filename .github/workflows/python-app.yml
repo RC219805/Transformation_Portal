@@ -40,7 +40,7 @@ jobs:
       continue-on-error: true
       run: |
         # Use mypy.ini configuration
-        mypy tools/ *.py || true
+        mypy tools/ ./*.py || true
 
   test:
     runs-on: ubuntu-latest
