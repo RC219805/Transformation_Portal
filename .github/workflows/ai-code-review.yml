@@ -25,7 +25,6 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      RESPONSE_FILE: ${{ runner.temp }}/ai_review.txt
 
     steps:
       - name: Check API Key
@@ -36,7 +35,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -75,7 +74,7 @@ jobs:
           gh_token = os.getenv("GH_TOKEN")
           pr_number = os.getenv("PR_NUMBER")
           repo = os.getenv("REPO")
-          out_file = os.getenv("RESPONSE_FILE")
+          out_file = os.getenv("RUNNER_TEMP", "/tmp") + "/ai_review.txt"
 
           if not api_key:
               print("No OPENAI_API_KEY provided; skipping.")
@@ -330,13 +329,15 @@ jobs:
       - name: Display Review
         if: steps.changes.outputs.any_changed == 'true'
         run: |
+          RESPONSE_FILE="${RUNNER_TEMP}/ai_review.txt"
           echo "📄 AI review completed. Summary:"
           if [ -f "$RESPONSE_FILE" ]; then
             echo "----------------------------------------"
             cat "$RESPONSE_FILE"
             echo "----------------------------------------"
-          else:
+          else
             echo "No review file found (comment should still be on the PR)."
+          fi
 
       - name: Summary
         run: |

@@ -351,108 +351,19 @@ class ContextAwareRenderingPipeline:
 
         print(f"\n✓ Strategy saved: {strategy_path}")
 
-        # Execute processing pipelines with derived configurations
-        output_path = self._execute_processing(
-            image_path=image_path,
-            strategy=strategy,
-            depth_config=depth_config,
-            material_config=material_config,
-            color_config=color_config,
-            apply_depth=apply_depth,
-            apply_material=apply_material,
-            apply_color=apply_color,
-        )
+        # TODO: Integrate with actual processing pipelines
+        # This would call:
+        # 1. depth_pipeline with depth_config
+        # 2. material_response with material_config
+        # 3. luxury_tiff_batch_processor with color_config
 
-        return output_path
+        print("\n💡 Next steps:")
+        print(f"  1. Apply depth pipeline with: {strategy_path}")
+        print("  2. Apply material response")
+        print(f"  3. Apply color grading with LUT: {strategy.lut_preset}")
 
-    def _execute_processing(
-        self,
-        image_path: Path,
-        strategy: RenderingStrategy,
-        depth_config: Optional[Dict],
-        material_config: Optional[Dict],
-        color_config: Optional[Dict],
-        apply_depth: bool = True,
-        apply_material: bool = True,
-        apply_color: bool = True,
-    ) -> Path:
-        """
-        Execute the processing pipeline stages.
-
-        Args:
-            image_path: Path to input image
-            strategy: Derived rendering strategy
-            depth_config: Depth pipeline configuration
-            material_config: Material response configuration
-            color_config: Color grading configuration
-            apply_depth: Whether to apply depth processing
-            apply_material: Whether to apply material response
-            apply_color: Whether to apply color grading
-
-        Returns:
-            Path to processed output
-        """
-        from transformation_portal.utils.input_validation import (
-            validate_image_strict,
-            ImageValidationError,
-        )
-
-        # Validate input
-        print("\n📋 Validating input...")
-        validation = validate_image_strict(image_path)
-        if not validation.is_valid:
-            errors = "; ".join(str(e) for e in validation.errors)
-            raise ImageValidationError(f"Input validation failed: {errors}")
-
-        for warning in validation.warnings:
-            print(f"  ⚠ {warning}")
-
-        # Load image
-        print("\n🖼️  Loading image...")
-        image = Image.open(image_path).convert('RGB')
-        current_image = np.array(image, dtype=np.float32) / 255.0
-
-        # Stage 1: Depth Processing
-        if apply_depth and depth_config:
-            print("\n🔍 Stage 1: Depth-Aware Processing")
-            print(f"   Tone mapping: {depth_config.get('tone_map', 'agx')}")
-            print(f"   Zone weights: {depth_config.get('zone_weights', {})}")
-            # In production, this would call:
-            # current_image = depth_pipeline.process(current_image, depth_config)
-            print("   ✓ Depth processing complete (simulated)")
-
-        # Stage 2: Material Response
-        if apply_material and material_config:
-            print("\n✨ Stage 2: Material Response")
-            print(f"   Surfaces: {', '.join(material_config.get('enabled_surfaces', []))}")
-            print(f"   Global strength: {material_config.get('global_strength', 0.7):.2f}")
-            # In production, this would call:
-            # current_image = material_response.apply(current_image, material_config)
-            print("   ✓ Material response complete (simulated)")
-
-        # Stage 3: Color Grading
-        if apply_color and color_config:
-            print("\n🎨 Stage 3: Color Grading")
-            print(f"   LUT preset: {color_config.get('lut_preset', 'none')}")
-            print(f"   Saturation: {color_config.get('saturation', 1.0):.2f}")
-            # In production, this would call:
-            # current_image = color_grader.grade(current_image, color_config)
-            print("   ✓ Color grading complete (simulated)")
-
-        # Save output
-        output_filename = f"{image_path.stem}_context_aware.jpg"
-        output_path = self.output_dir / output_filename
-
-        # Convert back to PIL and save
-        output_array = (np.clip(current_image, 0, 1) * 255).astype(np.uint8)
-        output_image = Image.fromarray(output_array)
-        output_image.save(output_path, quality=95)
-
-        print(f"\n✅ Output saved: {output_path}")
-        print(f"   Strategy: {strategy.room_type}")
-        print(f"   Temperature: {strategy.color_temperature}")
-
-        return output_path
+        # For now, return strategy path
+        return strategy_path
 
 
 def main():
