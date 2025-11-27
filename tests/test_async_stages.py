@@ -21,6 +21,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import stages - may require optional dependencies
+STAGES_AVAILABLE = False
+IMPORT_ERROR = ""
+
 try:
     from transformation_portal.streaming.stages import (
         ColorGradingStage,
@@ -35,14 +38,13 @@ try:
     )
     STAGES_AVAILABLE = True
 except ImportError as e:
-    STAGES_AVAILABLE = False
     IMPORT_ERROR = str(e)
 
 
 # Skip all tests if stages module dependencies not available
 pytestmark = pytest.mark.skipif(
     not STAGES_AVAILABLE,
-    reason=f"Stages module dependencies not available: {IMPORT_ERROR if not STAGES_AVAILABLE else ''}"
+    reason=f"Stages module dependencies not available: {IMPORT_ERROR}"
 )
 
 
