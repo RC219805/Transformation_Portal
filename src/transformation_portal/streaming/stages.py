@@ -367,12 +367,14 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
             import torch
             if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 return "cuda"
-            # Check for MPS (Apple Silicon) - need to verify torch.backends exists first
-            if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps'):
-                if torch.backends.mps.is_available():
-                    return "mps"
+            # Check for MPS (Apple Silicon) - verify attribute chain exists
+            if (hasattr(torch, 'backends')
+                    and hasattr(torch.backends, 'mps')
+                    and torch.backends.mps.is_available()):
+                return "mps"
         except (ImportError, AttributeError):
-            # If torch is not installed or attributes missing, fall back to CPU
+            # ImportError: torch not installed
+            # AttributeError: torch.cuda/backends/mps attributes missing (e.g., mock torch)
             pass
         return "cpu"
 
