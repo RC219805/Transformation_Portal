@@ -7,12 +7,10 @@ Author: Transformation_Portal Enhancement System
 Version: 3.0.0
 """
 
-import os
-import sys
 import time
 import warnings
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Union, Any
+from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -22,12 +20,11 @@ from torch import nn
 import torch.nn.functional as F
 from torchvision import transforms
 from PIL import Image
-from tqdm import tqdm
 
 # Suppress warnings for clean output
 warnings.filterwarnings('ignore')
 
-# Configure for Apple Silicon optimization
+
 def configure_device():
     """Optimally configure device for M4 Max architecture"""
     if torch.backends.mps.is_available():
@@ -45,7 +42,9 @@ def configure_device():
     print("⚠ Running on CPU (slower performance expected)")
     return dev
 
+
 device = configure_device()
+
 
 class QualityMode(Enum):
     """Enhancement quality targeting modes"""
@@ -122,6 +121,7 @@ class EnhancementConfig:
         'pin_memory': True
     })
 
+
 class CausticGenerator(nn.Module):
     """Quantum-inspired caustic pattern generator"""
 
@@ -188,6 +188,7 @@ class CausticGenerator(nn.Module):
         waves = torch.clamp(waves, 0, 1) * self.config['caustic_intensity']
 
         return waves
+
 
 class AtmosphericSynthesizer(nn.Module):
     """Neural atmospheric synthesis for impossible skies"""
@@ -279,6 +280,7 @@ class AtmosphericSynthesizer(nn.Module):
 
         return torch.clamp(feat, 0, 1.5)  # Allow super-bright regions
 
+
 class MaterialTranscendence(nn.Module):
     """Physics-violating material response system"""
 
@@ -352,6 +354,7 @@ class MaterialTranscendence(nn.Module):
 
         return torch.clamp(result, 0, 1.5)
 
+
 class SpatialHarmonics(nn.Module):
     """Impossible illumination through spherical harmonics"""
 
@@ -399,6 +402,7 @@ class SpatialHarmonics(nn.Module):
         illumination = torch.sign(illumination) * torch.pow(torch.abs(illumination), 0.7)
 
         return illumination
+
 
 class HyperRealityProcessor:
     """Main processing pipeline for 105/100 quality achievement"""
@@ -618,11 +622,11 @@ class HyperRealityProcessor:
         result.save(path, quality=95)
         print(f"  Saved: {path}")
 
-# Convenience function for command-line usage
+
 def enhance_image(image_path: str,
-                 output_path: Optional[str] = None,
-                 target_quality: int = 105,
-                 save_intermediate: bool = False) -> Dict[str, Any]:
+                  output_path: Optional[str] = None,
+                  target_quality: int = 105,
+                  save_intermediate: bool = False) -> Dict[str, Any]:
     """
     Enhance a single image to hyper-reality quality
 
@@ -644,6 +648,7 @@ def enhance_image(image_path: str,
         output_path=output_path,
         save_intermediate=save_intermediate
     )
+
 
 if __name__ == "__main__":
     import argparse

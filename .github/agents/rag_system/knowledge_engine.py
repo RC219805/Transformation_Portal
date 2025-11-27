@@ -433,7 +433,10 @@ class KnowledgeIntegrationEngine:
 
             if mentioned_pipeline:
                 analysis = self.analyze_patterns(mentioned_pipeline)
-                return f"The success rate for {mentioned_pipeline} is {analysis.success_rate:.1%} over the last 30 days ({analysis.total_runs} runs)."
+                rate = f"{analysis.success_rate:.1%}"
+                runs = analysis.total_runs
+                return (f"The success rate for {mentioned_pipeline} is {rate} "
+                        f"over the last 30 days ({runs} runs).")
             else:
                 # Overall success rate
                 total_runs = len(self.feedback_records)
@@ -452,7 +455,11 @@ class KnowledgeIntegrationEngine:
 
             if mentioned_pipeline:
                 analysis = self.analyze_patterns(mentioned_pipeline)
-                return f"Performance for {mentioned_pipeline}: Average {analysis.avg_processing_time:.2f}s, Median {analysis.median_processing_time:.2f}s, P95 {analysis.p95_processing_time:.2f}s. Trend: {analysis.time_trend}."
+                avg = f"{analysis.avg_processing_time:.2f}s"
+                med = f"{analysis.median_processing_time:.2f}s"
+                p95 = f"{analysis.p95_processing_time:.2f}s"
+                return (f"Performance for {mentioned_pipeline}: Average {avg}, "
+                        f"Median {med}, P95 {p95}. Trend: {analysis.time_trend}.")
             else:
                 # Overall performance
                 all_times = [r.processing_time for r in self.feedback_records]
@@ -508,7 +515,8 @@ class KnowledgeIntegrationEngine:
             else:
                 return "No specific recommendations at this time. All pipelines are performing well."
 
-        return "I understand queries about success rates, performance, errors, and recommendations. Please rephrase your question."
+        return ("I understand queries about success rates, performance, errors, "
+                "and recommendations. Please rephrase your question.")
 
     def get_kpi_summary(self, pipeline: Optional[str] = None, days: int = 7) -> Dict:
         """

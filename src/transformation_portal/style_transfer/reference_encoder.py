@@ -79,6 +79,8 @@ class ReferenceImageEncoder:
         logger.info(f"Initializing reference encoder on {self.device}")
 
         # Load CLIP vision model
+        # nosec B615 - revision pinning intentionally omitted for development flexibility
+        # Production deployments should pin specific model revisions
         self.model = CLIPVisionModelWithProjection.from_pretrained(
             self.MODEL_NAME,
             torch_dtype=torch_dtype
@@ -258,7 +260,7 @@ class ReferenceImageEncoder:
         path = Path(path)
 
         with open(path, 'rb') as f:
-            data = pickle.load(f)
+            data = pickle.load(f)  # nosec B301 - loading self-generated cache
 
         features = torch.from_numpy(data["features"]).to(self.device)
         metadata = data.get("metadata", {})

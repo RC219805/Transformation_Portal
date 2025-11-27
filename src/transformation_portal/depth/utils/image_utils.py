@@ -272,9 +272,9 @@ def compute_image_hash(image: np.ndarray, method: str = "md5") -> str:
     else:
         image_bytes = image.tobytes()
 
-    # Compute hash
+    # Compute hash (MD5 is used for cache keying, not security)
     if method == "md5":
-        hash_obj = hashlib.md5(image_bytes)
+        hash_obj = hashlib.md5(image_bytes, usedforsecurity=False)
     elif method == "sha256":
         hash_obj = hashlib.sha256(image_bytes)
     else:

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from indexer import DocumentChunk, RepositoryIndexer
+from indexer import RepositoryIndexer
 from retriever import HybridRetriever
 
 
@@ -104,8 +104,9 @@ class CodeParser:
 
                 elif isinstance(node, ast.FunctionDef):
                     # Only top-level functions (not methods)
-                    if not any(isinstance(parent, ast.ClassDef)
-                              for parent in ast.walk(tree)):
+                    is_method = any(isinstance(parent, ast.ClassDef)
+                                    for parent in ast.walk(tree))
+                    if not is_method:
                         entity = self._parse_function(node, file_path, imports)
                         entities.append(entity)
 
@@ -320,8 +321,8 @@ class SemanticCodeSearch:
         """
         results = []
 
-        # Step 1: Extract intent from query
-        intent = self._analyze_query_intent(query)
+        # Step 1: Extract intent from query (for future use)
+        self._analyze_query_intent(query)
 
         # Step 2: Search by different strategies
         name_matches = self._search_by_name(query, entity_type)
@@ -538,8 +539,9 @@ class SemanticCodeSearch:
                 if entity.file_path == file_path:
                     if not entity_type or entity.entity_type == entity_type:
                         # Check if entity is in the retrieved chunk
-                        if (entity.line_number >= retrieval_result.start_line and
-                            entity.line_number <= retrieval_result.end_line):
+                        in_range = (entity.line_number >= retrieval_result.start_line and
+                                    entity.line_number <= retrieval_result.end_line)
+                        if in_range:
                             results.append((
                                 entity,
                                 retrieval_result.score * 0.5,
@@ -710,10 +712,10 @@ def main():
     parser.add_argument('--repo-root', default='.', help='Repository root')
     parser.add_argument('--query', required=True, help='Search query')
     parser.add_argument('--type', choices=['function', 'class', 'method'],
-                       help='Filter by entity type')
+                        help='Filter by entity type')
     parser.add_argument('--top-k', type=int, default=10, help='Number of results')
     parser.add_argument('--discover-api', action='store_true',
-                       help='Discover API for task')
+                        help='Discover API for task')
     parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     args = parser.parse_args()

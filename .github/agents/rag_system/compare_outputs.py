@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 750 Picacho Lane - Quick Visual Comparison Tool
 Generates side-by-side comparisons and quality metrics
@@ -9,7 +8,7 @@ Usage:
 
 import argparse
 from pathlib import Path
-from typing import List, Tuple
+from typing import Tuple
 import sys
 
 try:
@@ -30,7 +29,7 @@ def analyze_channels(img: Image.Image) -> dict:
     if len(arr.shape) != 3 or arr.shape[2] < 3:
         return {"error": "Not RGB image"}
 
-    r, g, b = arr[:,:,0], arr[:,:,1], arr[:,:,2]
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
 
     return {
         "R": {"mean": float(np.mean(r)), "std": float(np.std(r)), "max": int(np.max(r))},
