@@ -50,8 +50,8 @@ class SimpleDepthModel(DepthModelPlugin):
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
         # Access the class attribute set by @plugin decorator
-        if hasattr(self.__class__, '_decorator_metadata'):
-            return self.__class__._decorator_metadata
+        if hasattr(self, '_decorator_metadata'):
+            return self._decorator_metadata
 
         # Fallback if decorator wasn't used
         return PluginMetadata(
