@@ -448,11 +448,13 @@ class ImageValidator:
         # Check data type and range
         if array.dtype in (np.float32, np.float64):
             # Float images should be in [0, 1] range
-            if array.min() < -0.1 or array.max() > 1.1:
+            arr_min = array.min()
+            arr_max = array.max()
+            if arr_min < -0.1 or arr_max > 1.1:
                 result.add_warning(
                     "FLOAT_RANGE_WARNING",
                     f"{prefix}Float array values outside [0, 1] range "
-                    f"(min={array.min():.2f}, max={array.max():.2f})",
+                    f"(min={arr_min:.2f}, max={arr_max:.2f})",
                     suggestion="Normalize values to [0, 1] range",
                 )
         elif array.dtype not in (np.uint8, np.uint16):
