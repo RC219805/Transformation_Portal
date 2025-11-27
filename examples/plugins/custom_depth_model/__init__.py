@@ -49,7 +49,8 @@ class SimpleDepthModel(DepthModelPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
-        return self._decorator_metadata
+        # Access the class attribute set by @plugin decorator
+        return self.__class__._decorator_metadata  # pylint: disable=no-member
 
     def initialize(self, config: Optional[Dict[str, Any]] = None) -> None:
         """Initialize the depth model.
