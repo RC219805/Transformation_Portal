@@ -986,7 +986,6 @@ def main():
                         choices=['evolution', 'performance', 'dependencies', 'quality'],
                         help='Analysis mode')
     parser.add_argument('--output', help='Output file for report')
-    parser.add_argument('--output', help='Output file for report')
 
     args = parser.parse_args()
 
