@@ -33,8 +33,7 @@ from tqdm import tqdm
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# pylint: disable=wrong-import-position
-from enhancements.hyper_reality_enhancement import (
+from enhancements.hyper_reality_enhancement import (  # noqa: E402
     CausticGenerator,
     AtmosphericSynthesizer,
     MaterialTranscendence,
