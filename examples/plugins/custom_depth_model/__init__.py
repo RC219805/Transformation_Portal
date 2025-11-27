@@ -49,7 +49,20 @@ class SimpleDepthModel(DepthModelPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
-        return self._decorator_metadata
+        # Access the class attribute set by @plugin decorator
+        if hasattr(self, '_decorator_metadata'):
+            return self._decorator_metadata
+
+        # Fallback if decorator wasn't used
+        return PluginMetadata(
+            name="simple_depth_model",
+            version="1.0.0",
+            plugin_type=PluginType.DEPTH_MODEL,
+            description="Simple example depth model using gradient-based estimation",
+            author="Transformation Portal Team",
+            license="MIT",
+            tags=["example", "simple", "gradient-based"],
+        )
 
     def initialize(self, config: Optional[Dict[str, Any]] = None) -> None:
         """Initialize the depth model.
