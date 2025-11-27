@@ -254,7 +254,7 @@ make test-structure
 ### Test Best Practices
 
 1. **Mock external dependencies** (FFmpeg, ML models, file I/O) to avoid CI timeouts
-2. **Use pytest fixtures** from `tests/__init__.py` for common setup
+2. **Use pytest fixtures** from `tests/conftest.py` for common setup
 3. **Use hypothesis** for property-based testing of mathematical functions
 4. **Keep tests fast**: Avoid loading large ML models unless necessary
 5. **Document optional dependencies**: Mark tests requiring `tifffile`, `torch`, etc.
