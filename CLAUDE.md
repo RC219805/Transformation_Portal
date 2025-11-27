@@ -63,7 +63,7 @@ Transformation_Portal/
 ## Development Setup
 
 ### Prerequisites
-- Python 3.10+ (CI tests on 3.11)
+- Python 3.10+ (CI currently tests on 3.11 to conserve resources)
 - FFmpeg 6+ (for video processing)
 - Git
 - Optional: CUDA-capable GPU or Apple Silicon (M1/M2/M3/M4) with MPS
