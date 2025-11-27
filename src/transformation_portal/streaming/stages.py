@@ -644,7 +644,7 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
                                 continue
 
             if lut_size > 0 and len(lut_data) == lut_size ** 3:
-                # pylint: disable=too-many-function-args
+                # pylint: disable=too-many-function-args  # numpy reshape accepts multiple positional args
                 self._lut_data = np.array(lut_data).reshape(
                     lut_size, lut_size, lut_size, 3
                 )
