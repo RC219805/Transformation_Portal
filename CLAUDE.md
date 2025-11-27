@@ -19,7 +19,7 @@
 ```
 Transformation_Portal/
 ├── src/                              # Main installable packages
-│   ├── transformation_portal/        # Core package (25+ submodules)
+│   ├── transformation_portal/        # Core package (23 submodules)
 │   │   ├── depth/                   # Depth pipeline (models, processors, utils)
 │   │   ├── pipelines/               # Processing pipelines (lux_render, unified_luxury)
 │   │   ├── processors/              # Material response, video grading
