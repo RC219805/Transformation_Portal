@@ -34,13 +34,13 @@ jobs:
       run: |
         # Use .pylintrc configuration (ignores src/transformation_portal, src/luxury_tiff_batch_processor)
         # Lint tools/ and root-level Python files
-        pylint tools/ *.py || true
+        pylint tools/ ./*.py || true
 
     - name: Type check with mypy
       continue-on-error: true
       run: |
         # Use mypy.ini configuration
-        mypy tools/ *.py || true
+        mypy tools/ ./*.py || true
 
   test:
     runs-on: ubuntu-latest
