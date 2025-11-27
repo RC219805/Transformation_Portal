@@ -558,8 +558,10 @@ class HyperRealityProcessor:
         sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3).to(device)
         sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3).to(device)
 
+        # pylint: disable=not-callable  # F.conv2d is callable in torch.nn.functional
         dx = F.conv2d(depth, sobel_x, padding=1)
         dy = F.conv2d(depth, sobel_y, padding=1)
+        # pylint: enable=not-callable
         dz = torch.ones_like(dx) * 0.5
 
         normals = torch.cat([dx, dy, dz], dim=1)
@@ -586,12 +588,16 @@ class HyperRealityProcessor:
             kernel = torch.tensor([[-1, -1, -1],
                                   [-1,  9, -1],
                                   [-1, -1, -1]], dtype=torch.float32).view(1, 1, 3, 3).to(device)
+            # pylint: disable=not-callable  # F.conv2d is callable in torch.nn.functional
             edges = F.conv2d(img, kernel.repeat(3, 1, 1, 1), padding=1, groups=3)
+            # pylint: enable=not-callable
             img = img + edges * (self.config.synergistic['edge_enhancement'] - 1.0)
 
         # Local contrast enhancement
         if self.config.synergistic['local_contrast'] > 1.0:
+            # pylint: disable=not-callable  # F.avg_pool2d is callable in torch.nn.functional
             local_mean = F.avg_pool2d(img, kernel_size=15, stride=1, padding=7)
+            # pylint: enable=not-callable
             img = (img - local_mean) * self.config.synergistic['local_contrast'] + local_mean
 
         # Saturation boost

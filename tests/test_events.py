@@ -70,6 +70,7 @@ class TestOperationRegistry:
         retrieved = registry.get_handler("test.event")
 
         assert retrieved is not None
+        # pylint: disable=comparison-with-callable  # Intentional: verify same function object
         assert retrieved == handler
 
     def test_get_nonexistent_handler(self):
@@ -146,11 +147,13 @@ class TestOperationRegistry:
 
         # Register first handler
         registry.register("test.event", handler1)
+        # pylint: disable=comparison-with-callable  # Intentional: verify same function object
         assert registry.get_handler("test.event") == handler1
 
         # Register second handler for same type - should overwrite
         registry.register("test.event", handler2)
         assert registry.get_handler("test.event") == handler2
+        # pylint: enable=comparison-with-callable
 
         # Verify the old handler is no longer active
         event = Event(
