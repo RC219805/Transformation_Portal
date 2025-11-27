@@ -448,8 +448,7 @@ class ImageValidator:
         # Check data type and range
         if array.dtype in (np.float32, np.float64):
             # Float images should be in [0, 1] range
-            arr_min = array.min()
-            arr_max = array.max()
+            arr_min, arr_max = np.nanmin(array), np.nanmax(array)
             if arr_min < -0.1 or arr_max > 1.1:
                 result.add_warning(
                     "FLOAT_RANGE_WARNING",
