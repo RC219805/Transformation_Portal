@@ -261,7 +261,7 @@ make test-structure
 
 ### CI Test Configuration
 
-- Python 3.11 only (conserving CI resources)
+- Python 3.11 only in CI (conserving resources; Python 3.10+ supported)
 - CPU-only PyTorch (`torch+cpu`) to save ~6GB disk space
 - Coverage threshold: 35%
 - Tests skipped: `test_realesrgan_integration.py`, `test_coreml_integration.py`
