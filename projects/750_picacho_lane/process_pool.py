@@ -71,7 +71,7 @@ def load_exr_to_array(exr_path: Path) -> np.ndarray:
             return img_linear
 
         except Exception as e:
-            raise ImportError(f"Could not load EXR file: {e}")
+            raise ImportError(f"Could not load EXR file: {e}") from e
 
 
 def linear_to_srgb(linear: np.ndarray) -> np.ndarray:

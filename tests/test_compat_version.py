@@ -52,7 +52,7 @@ class TestVersion:
         v1 = Version.from_string("1.0.0")
         v2 = Version.from_string("2.0.0")
         assert v1 < v2
-        assert not v2 < v1
+        assert v2 >= v1
 
     def test_version_comparison_le(self):
         """Test less than or equal comparison."""
@@ -61,14 +61,14 @@ class TestVersion:
         v3 = Version.from_string("1.0.0")
         assert v1 <= v2
         assert v1 <= v3
-        assert not v2 <= v1
+        assert v2 > v1
 
     def test_version_comparison_gt(self):
         """Test greater than comparison."""
         v1 = Version.from_string("2.0.0")
         v2 = Version.from_string("1.0.0")
         assert v1 > v2
-        assert not v2 > v1
+        assert v2 <= v1
 
     def test_version_comparison_ge(self):
         """Test greater than or equal comparison."""
@@ -77,7 +77,7 @@ class TestVersion:
         v3 = Version.from_string("2.0.0")
         assert v1 >= v2
         assert v1 >= v3
-        assert not v2 >= v1
+        assert v2 < v1
 
     def test_version_comparison_eq(self):
         """Test equality comparison."""
@@ -85,13 +85,13 @@ class TestVersion:
         v2 = Version.from_string("1.2.3")
         v3 = Version.from_string("1.2.4")
         assert v1 == v2
-        assert not v1 == v3
+        assert v1 != v3
 
     def test_version_comparison_with_different_type(self):
         """Test that equality with different type returns False."""
         v = Version.from_string("1.0.0")
-        assert not v == "1.0.0"
-        assert not v == 1
+        assert v != "1.0.0"
+        assert v != 1
 
     def test_version_minor_differences(self):
         """Test comparisons with minor version differences."""
@@ -99,7 +99,7 @@ class TestVersion:
         v2 = Version.from_string("1.1.0")
         assert v1 < v2
         assert v1 <= v2
-        assert not v2 <= v1
+        assert v2 > v1
 
     def test_version_patch_differences(self):
         """Test comparisons with patch version differences."""
@@ -107,7 +107,7 @@ class TestVersion:
         v2 = Version.from_string("1.0.1")
         assert v1 < v2
         assert v1 <= v2
-        assert not v2 <= v1
+        assert v2 > v1
 
 
 class TestCheckVersionCompatibility:
@@ -231,7 +231,6 @@ class TestRequireVersion:
         @require_version(min_version="0.0.1")
         def documented_function():
             """This function is documented."""
-            pass
 
         assert documented_function.__name__ == "documented_function"
         assert documented_function.__doc__ == "This function is documented."

@@ -53,6 +53,7 @@ ml = [
 dev = [
     "pytest>=8.0,<10",
     "pytest-cov>=4.0,<8",
+    "pytest-asyncio>=0.23,<1",
     "hypothesis>=6.0,<7",
     "mypy>=1.10",
     "flake8>=7.0",
