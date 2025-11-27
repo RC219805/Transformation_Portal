@@ -787,7 +787,10 @@ class TestPluginDecorators:
         )
         class DecoratedPlugin(ProcessorPlugin):
             def _create_metadata(self):
-                return self._decorator_metadata
+                # The decorator adds _decorator_metadata at class level
+                if hasattr(self, '_decorator_metadata'):
+                    return self._decorator_metadata
+                return super()._create_metadata()
 
             def initialize(self, config=None):
                 self._initialized = True

@@ -11,7 +11,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -34,13 +34,13 @@ jobs:
       run: |
         # Use .pylintrc configuration (ignores src/transformation_portal, src/luxury_tiff_batch_processor)
         # Lint tools/ and root-level Python files
-        pylint tools/ *.py || true
+        pylint tools/ ./*.py || true
 
     - name: Type check with mypy
       continue-on-error: true
       run: |
         # Use mypy.ini configuration
-        mypy tools/ *.py || true
+        mypy tools/ ./*.py || true
 
   test:
     runs-on: ubuntu-latest
@@ -51,7 +51,7 @@ jobs:
         python-version: ['3.11']
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6
@@ -187,7 +187,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python
       uses: actions/setup-python@v6
