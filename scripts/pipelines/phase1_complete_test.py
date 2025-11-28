@@ -148,8 +148,15 @@ def test_depth_processing_on_real_image():
         output_dir = Path("output_phase1_test")
         output_dir.mkdir(exist_ok=True)
 
-        # Normalize depth map for visualization
-        depth_normalized = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min())
+        # Normalize depth map for visualization (with safe division)
+        depth_min = depth_map.min()
+        depth_max = depth_map.max()
+        depth_range = depth_max - depth_min
+        if depth_range > 0:
+            depth_normalized = (depth_map - depth_min) / depth_range
+        else:
+            # All values equal - use 0.5 (mid-gray) for visualization
+            depth_normalized = np.full_like(depth_map, 0.5, dtype=np.float32)
         depth_normalized = (depth_normalized * 255).astype(np.uint8)
 
         # Apply colormap
