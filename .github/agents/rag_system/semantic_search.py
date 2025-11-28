@@ -103,12 +103,9 @@ class CodeParser:
                             entities.append(method_entity)
 
                 elif isinstance(node, ast.FunctionDef):
-                    # Only top-level functions (not methods)
-                    is_method = any(isinstance(parent, ast.ClassDef)
-                                    for parent in ast.walk(tree))
-                    if not is_method:
-                        entity = self._parse_function(node, file_path, imports)
-                        entities.append(entity)
+                    # Top-level functions only - methods are already handled in ClassDef branch
+                    entity = self._parse_function(node, file_path, imports)
+                    entities.append(entity)
 
         except Exception as e:
             print(f"Warning: Could not parse {file_path}: {e}")

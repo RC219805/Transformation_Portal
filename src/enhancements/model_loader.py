@@ -41,7 +41,8 @@ class ModelLoader:
             return None
 
         try:
-            checkpoint = torch.load(best_path, map_location=self.device, weights_only=True)
+            # nosec B614 - loading self-generated training checkpoints with optimizer state
+            checkpoint = torch.load(best_path, map_location=self.device, weights_only=False)
             return checkpoint
         except Exception as e:
             warnings.warn(f"Failed to load checkpoint from {best_path}: {e}")
@@ -55,15 +56,17 @@ class ModelLoader:
             return None
 
         try:
-            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
+            # nosec B614 - loading self-generated training checkpoints with optimizer state
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
             return checkpoint
         except Exception as e:
             warnings.warn(f"Failed to load checkpoint from {checkpoint_path}: {e}")
             return None
 
-    def load_model_weights(self,
-                          models: Dict[str, torch.nn.Module],
-                          checkpoint: Optional[Dict[str, Any]] = None) -> bool:
+    def load_model_weights(
+            self,
+            models: Dict[str, torch.nn.Module],
+            checkpoint: Optional[Dict[str, Any]] = None) -> bool:
         """
         Load weights into models
 
