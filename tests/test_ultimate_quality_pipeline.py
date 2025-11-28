@@ -27,14 +27,19 @@ def safe_normalize_depth(depth_array: np.ndarray) -> np.ndarray:
         depth_array: Raw depth array from depth estimation
 
     Returns:
-        Normalized depth array with values in [0, 1] range
+        Normalized depth array with values in [0, 1] range.
+        Returns 0.5 (midground) for uniform depth to prevent neutral gray bug.
     """
     depth_min = depth_array.min()
     depth_max = depth_array.max()
     depth_range = depth_max - depth_min
 
-    # Use epsilon pattern for consistency with production code
-    return (depth_array - depth_min) / (depth_range + 1e-6)
+    # Handle uniform depth case to prevent division by zero
+    if depth_range > 0:
+        return (depth_array - depth_min) / depth_range
+    else:
+        # Return 0.5 (midground) for uniform depth
+        return np.full_like(depth_array, 0.5)
 
 
 def apply_depth_aware_clarity(
