@@ -162,7 +162,7 @@ jobs:
           python -m pip install --upgrade pip wheel
           
           # Always install core test deps and runtime+CI deps
-          pip install --no-cache-dir pytest pytest-cov
+          pip install --no-cache-dir pytest pytest-cov pytest-asyncio
           pip install --no-cache-dir -r requirements-ci.txt
 
           # Clear cache and temp files immediately to save space
