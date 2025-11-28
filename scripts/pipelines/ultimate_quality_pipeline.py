@@ -54,13 +54,8 @@ def estimate_depth_mps(image: Image.Image, device: str = "mps") -> np.ndarray:
     depth_max = depth_array.max()
     depth_range = depth_max - depth_min
 
-    # Safe normalization: avoid division by zero when all depth values are equal
-    if depth_range > 0:
-        depth_array = (depth_array - depth_min) / depth_range
-    else:
-        # All values are equal - use a uniform depth of 0.5 (midground)
-        # This ensures depth-aware functions still process the image correctly
-        depth_array = np.full_like(depth_array, 0.5)
+    # Normalize using epsilon to avoid division by zero and ensure consistency
+    depth_array = (depth_array - depth_min) / (depth_range + 1e-6)
 
     return depth_array
 
