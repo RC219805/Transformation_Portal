@@ -2,7 +2,7 @@
 
 This allows the package to be invoked via:
     python -m luxury_tiff_batch_processor --help
-    
+
 For the CLI module specifically:
     python -m luxury_tiff_batch_processor.cli --help
 """

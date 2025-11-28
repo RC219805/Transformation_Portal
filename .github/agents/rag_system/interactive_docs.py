@@ -9,14 +9,12 @@ Automatically generates and maintains documentation:
 - Architecture diagrams from code
 """
 
-import ast
-import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from semantic_search import CodeEntity, SemanticCodeSearch
 

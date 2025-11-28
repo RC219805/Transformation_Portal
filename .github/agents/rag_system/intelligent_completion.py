@@ -9,13 +9,12 @@ Provides context-aware code completions based on:
 - Parameter completion with type hints
 """
 
-import ast
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
-from semantic_search import CodeEntity, CodeParser, SemanticCodeSearch
+from semantic_search import CodeEntity, SemanticCodeSearch
 
 
 @dataclass
@@ -524,8 +523,8 @@ def main():
     parser = argparse.ArgumentParser(description='Intelligent Code Completion')
     parser.add_argument('--repo-root', default='.', help='Repository root')
     parser.add_argument('--mode', required=True,
-                       choices=['import', 'function', 'parameter', 'snippet', 'pipeline'],
-                       help='Completion mode')
+                        choices=['import', 'function', 'parameter', 'snippet', 'pipeline'],
+                        help='Completion mode')
     parser.add_argument('--context', help='Code context')
     parser.add_argument('--function', help='Function name (for parameter mode)')
     parser.add_argument('--params', nargs='*', default=[], help='Existing parameters')
