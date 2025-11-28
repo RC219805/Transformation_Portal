@@ -33,11 +33,8 @@ def safe_normalize_depth(depth_array: np.ndarray) -> np.ndarray:
     depth_max = depth_array.max()
     depth_range = depth_max - depth_min
 
-    if depth_range > 0:
-        return (depth_array - depth_min) / depth_range
-    else:
-        # All values are equal - use a uniform depth of 0.5 (midground)
-        return np.full_like(depth_array, 0.5)
+    # Use epsilon pattern for consistency with production code
+    return (depth_array - depth_min) / (depth_range + 1e-6)
 
 
 def apply_depth_aware_clarity(
