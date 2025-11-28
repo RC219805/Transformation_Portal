@@ -50,7 +50,12 @@ def estimate_depth_mps(image: Image.Image, device: str = "mps") -> np.ndarray:
 
     # Convert to numpy array and normalize
     depth_array = np.array(depth, dtype=np.float32)
-    depth_array = (depth_array - depth_array.min()) / (depth_array.max() - depth_array.min())
+    depth_min = depth_array.min()
+    depth_max = depth_array.max()
+    depth_range = depth_max - depth_min
+
+    # Normalize using epsilon to avoid division by zero and ensure consistency
+    depth_array = (depth_array - depth_min) / (depth_range + 1e-6)
 
     return depth_array
 

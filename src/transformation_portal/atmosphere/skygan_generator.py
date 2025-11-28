@@ -375,8 +375,11 @@ class SkyGANGenerator:
 
             cloud_map += noise_full * amplitude
 
-        # Normalize
-        cloud_map = (cloud_map - cloud_map.min()) / (cloud_map.max() - cloud_map.min())
+        # Normalize (epsilon pattern for consistency)
+        cloud_min = cloud_map.min()
+        cloud_max = cloud_map.max()
+        cloud_range = cloud_max - cloud_min
+        cloud_map = (cloud_map - cloud_min) / (cloud_range + 1e-6)
 
         # Apply coverage threshold
         threshold = 1.0 - coverage
