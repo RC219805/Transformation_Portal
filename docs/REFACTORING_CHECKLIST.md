@@ -38,7 +38,7 @@ This document tracks the progress of the Transformation Portal repository refact
 
 - [x] Identify versioned duplicates (v1, v2, v3)
 - [x] Create `tools/deprecated/` directory
-- [x] Create `presence_security_v1_2/deprecated/` directory
+- [x] Create `src/presence_security/deprecated/` directory
 - [x] Move old versions to deprecated directories:
   - [x] `ad_editorial_post_pipeline_v2.py`
   - [x] `ad_editorial_post_pipeline_v3.py`
