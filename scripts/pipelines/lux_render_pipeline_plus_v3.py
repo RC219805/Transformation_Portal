@@ -136,6 +136,10 @@ def _bilinear(img: np.ndarray, uvx: np.ndarray, uvy: np.ndarray) -> np.ndarray:
     c10 = img[y0, x1]
     c01 = img[y1, x0]
     c11 = img[y1, x1]
+    # Add axis for broadcasting when img is 3D (H, W, C)
+    if img.ndim == 3:
+        wx = wx[..., None]
+        wy = wy[..., None]
     return (c00*(1-wx)*(1-wy) + c10*wx*(1-wy) + c01*(1-wx)*wy + c11*wx*wy)
 
 # ------------- core PBR -------------
@@ -204,9 +208,20 @@ def apply_pbr_overlays(
             m = float(np.clip(variant_mix, 0.0, 1.0))
             alb_np = alb_np*(1-m) + v2_np*m
         if normal is not None and enable_displacement and pom_scale > 1e-6:
-            # POM uses height map if provided; fallback to normal Z
-            raise NotImplementedError("Parallax Occlusion Mapping (POM) is not yet implemented in this pipeline. "
-                                      "Please disable POM by omitting --enable-displacement or set --pom-scale 0.")
+            # POM uses height map derived from normal Z (higher Z = closer to viewer = higher)
+            n_pom = _open_rgb(normal)
+            n_pom = _resize(n_pom, (w, h))
+            n_pom_np = _as_f32_rgb(n_pom)
+            # Derive height from normal map Z channel (blue component, index 2)
+            # Normal map Z: 0.5 = flat, >0.5 = pointing up, <0.5 = pointing down
+            # Convert to height: higher Z means more prominent surface (higher)
+            pom_height = n_pom_np[..., 2]  # Z channel
+            # Normalize to 0-1 range for parallax calculation
+            pom_height = np.clip(pom_height, 0.0, 1.0)
+            # Compute parallax UV offsets
+            uvx, uvy = _parallax_uv(pom_height, view_dir_xy, pom_scale, pom_steps)
+            # Apply bilinear sampling with parallax offsets to albedo
+            alb_np = _bilinear(alb_np, uvx, uvy)
         t = float(np.clip(albedo_blend, 0, 1))
         base = alb_np*t + base*(1.0-t)
 
