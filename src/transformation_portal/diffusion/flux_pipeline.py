@@ -314,13 +314,18 @@ class FLUXPipeline:
         # Note: control_img is prepared for future FluxControlNetPipeline integration
         if control_image is None:
             logger.info(f"Generating {controlnet_type} control image")
-            control_img = controlnet.generate_control_image(  # noqa: F841
+            control_img = controlnet.generate_control_image(
                 pil_image,
                 controlnet_type,
                 **kwargs
             )
         else:
-            control_img = self._load_image(control_image)  # noqa: F841
+            control_img = self._load_image(control_image)
+
+        # Log control image generation for debugging/validation
+        logger.debug(
+            f"Control image prepared: {control_img.size}, mode={control_img.mode}"
+        )
 
         # Use defaults if prompt not provided
         if prompt is None:
@@ -337,8 +342,8 @@ class FLUXPipeline:
         )
 
         # NOTE: When official FLUX ControlNet models are released, this will use
-        # FluxControlNetPipeline directly. For now, we use the standard pipeline
-        # with structure-aware prompting as a fallback.
+        # FluxControlNetPipeline directly with control_img. For now, we use the
+        # standard pipeline with structure-aware prompting as a fallback.
         #
         # Future implementation with official models:
         # result = self.controlnet_pipe(
@@ -351,6 +356,7 @@ class FLUXPipeline:
         #     guidance_scale=guidance_scale,
         #     generator=generator,
         # )
+        _ = control_img  # Explicitly mark as intentionally unused for now
 
         enhanced_image = self.enhance(
             image=pil_image,
