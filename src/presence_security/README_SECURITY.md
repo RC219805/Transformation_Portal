@@ -17,13 +17,13 @@ This package contains code and artifacts to harden the Presence Compiler and pla
 ## Quickstart
 ```bash
 # params
-python presence_security_v1_2/presence_cli_v1_2.py params --session "demo-session" --locale US_EN
+python src/presence_security/deprecated/presence_cli_v1_2.py params --session "demo-session" --locale US_EN
 # anchor
-python presence_security_v1_2/presence_cli_v1_2.py anchor --manifest presence_manifest_example.json \
+python src/presence_security/deprecated/presence_cli_v1_2.py anchor --manifest presence_manifest_example.json \
   --hero In-Command_In-Conversation_2400x3000.jpg \
   --web In-Command_In-Conversation_1065x1330.jpg
 # watermark (DCT)
-python presence_security_v1_2/presence_cli_v1_2.py watermark --image In-Command_In-Conversation_2400x3000.jpg \
+python src/presence_security/deprecated/presence_cli_v1_2.py watermark --image In-Command_In-Conversation_2400x3000.jpg \
   --manifest presence_manifest_example.json --session "demo-session" --mode dct --out hero_wm.jpg
 ```
 

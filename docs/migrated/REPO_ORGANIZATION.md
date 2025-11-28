@@ -50,46 +50,50 @@ Transformation_Portal/
 │   │   ├── film_emulation/     # Film stock emulations
 │   │   ├── location_aesthetic/ # Location-specific profiles
 │   │   └── material_response/  # Material Response LUTs
-│   ├── images/                 # Sample and reference images
-│   ├── videos/                 # Sample videos
-│   ├── renders/                # Sample renders
-│   ├── models/                 # 3D models and textures
-│   └── textures/               # Texture maps
-├── config/                     # Configuration files
-│   ├── presets/                # Processing presets (YAML)
-│   └── profiles/               # User profiles
+│   ├── projects/               # Project-specific assets
+│   ├── textures/               # Texture maps and board materials
+│   └── hdr_toning/             # HDR toning assets
+├── config/                     # Configuration files (YAML presets)
 ├── data/                       # Data files
-│   ├── input/                  # Input data
-│   ├── output/                 # Output data
-│   ├── cache/                  # Cached results
-│   └── sample_images/          # Sample images for testing
+│   ├── luts/                   # LUT data files
+│   ├── sample_images/          # Sample images for testing
+│   └── extracted_context/      # Extracted architectural context
 ├── docs/                       # Documentation
 │   ├── guides/                 # How-to guides and tutorials
 │   ├── architecture/           # Architecture documentation
 │   ├── api/                    # API documentation
-│   ├── deployment/             # Deployment guides
+│   ├── comfyui/                # ComfyUI workflow documentation
+│   ├── productivity/           # Productivity tools documentation
+│   ├── scripts/                # Scripts documentation
+│   ├── session_summaries/      # Session and fix summaries
 │   └── version_history/        # Changelogs and version notes
-├── scripts/                    # All scripts
+├── scripts/                    # All scripts (lowercase with underscores)
 │   ├── setup/                  # Installation and setup scripts
 │   ├── automation/             # Automation scripts
+│   ├── analysis/               # Analysis scripts
+│   ├── pipelines/              # Pipeline scripts
 │   └── utilities/              # Utility scripts
-├── src/                        # Source code (installable package)
+├── src/                        # Source code (installable packages)
 │   ├── transformation_portal/  # Main package
-│   └── luxury_tiff_batch_processor/  # TIFF processing module
+│   ├── luxury_tiff_batch_processor/  # TIFF processing module
+│   ├── enhancements/           # Enhancement modules
+│   └── presence_security/      # Security module
 ├── tests/                      # Test suite
-│   ├── unit/                   # Unit tests
-│   ├── integration/            # Integration tests
-│   └── fixtures/               # Test fixtures
+│   ├── foundation/             # Foundation tests
+│   └── perceptual/             # Perceptual tests
+├── tools/                      # Developer tools
+│   └── bin/                    # Binary tools (actionlint)
 ├── projects/                   # Client/property-specific work
 │   ├── 750_picacho_lane/       # Pool processing examples
 │   ├── montecito_shores/       # Interior enhancement examples
 │   └── README.md               # Project guidelines
 ├── archive/                    # Historical and temporary files
-│   ├── deprecated/             # Deprecated code
-│   ├── experiments/            # Experimental features
 │   └── legacy/                 # Legacy code
+├── basicsr_tp/                 # Security-patched BasicSR components
+├── examples/                   # Example scripts and workflows
 └── [root files]                # Configuration and build files only
     ├── README.md
+    ├── SECURITY.md
     ├── Makefile
     ├── pyproject.toml
     ├── requirements*.txt

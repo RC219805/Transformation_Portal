@@ -3,7 +3,7 @@
 import numpy as np
 from PIL import Image
 
-from presence_security_v1_2.presence_params import PresenceParameters
+from .presence_params import PresenceParameters
 
 
 def add_dither(img: Image.Image, sigma: float, seed: int = 42) -> Image.Image:
