@@ -3,7 +3,9 @@ Tests for Computational Substrate - Phase 1 Foundation Architecture
 """
 
 import pytest
-import torch
+
+# Skip if torch not available (optional ML dependency)
+torch = pytest.importorskip("torch")
 
 from transformation_portal.foundation import (
     ComputationalSubstrate,

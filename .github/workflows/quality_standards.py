@@ -49,7 +49,8 @@ class QualityEnforcer:
             ["grep", "-r", "-n", 'f"[^{]*"', "--include=*.py", "."],
             cwd=self.repo_root,
             capture_output=True,
-            text=True
+            text=True,
+            check=False
         )
 
         # Filter out false positives
@@ -78,7 +79,8 @@ class QualityEnforcer:
                 ["grep", "-r", "-n", "-E", pattern, "--include=*.py", "."],
                 cwd=self.repo_root,
                 capture_output=True,
-                text=True
+                text=True,
+                check=False
             )
 
             if result.stdout and result.returncode == 0:
@@ -133,7 +135,8 @@ class QualityEnforcer:
              "--exclude=deprecated/,src/transformation_portal/,.venv/"],
             cwd=self.repo_root,
             capture_output=True,
-            text=True
+            text=True,
+            check=False
         )
 
         if result.returncode != 0:

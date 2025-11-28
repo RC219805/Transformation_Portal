@@ -89,7 +89,7 @@ def check_dataclass_errors():
             print(f"⚠️  Could not check {py_file}: {e}")
 
     if issues:
-        print(f"⚠️  Potential dataclass issues:\n" + "\n".join(issues))
+        print("⚠️  Potential dataclass issues:\n" + "\n".join(issues))
     else:
         print("✅ Dataclass definitions look good")
     return True

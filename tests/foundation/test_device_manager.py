@@ -3,7 +3,9 @@ Tests for Device Manager
 """
 
 import pytest
-import torch
+
+# Skip if torch not available (optional ML dependency)
+torch = pytest.importorskip("torch")
 
 from transformation_portal.foundation.device_manager import (
     DeviceManager,
