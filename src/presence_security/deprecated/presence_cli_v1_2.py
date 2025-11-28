@@ -10,8 +10,8 @@ import json
 
 from PIL import Image
 
-from src.presence_security.watermarking import embed_dct_luma, embed_lsb_rgb
-from src.presence_security.presence_params import PresenceParameters
+from ..watermarking import embed_dct_luma, embed_lsb_rgb
+from ..presence_params import PresenceParameters
 
 
 def sha256_file(path):
