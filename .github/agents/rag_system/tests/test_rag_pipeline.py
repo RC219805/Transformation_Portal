@@ -16,12 +16,12 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
-from citation import CitationGenerator
-from indexer import DocumentChunk, RepositoryIndexer
-from reranker import ResultReranker
-from retriever import HybridRetriever
-from templates import CodeModificationResponse, PromptTemplates
+import pytest  # noqa: E402
+from citation import CitationGenerator  # noqa: E402
+from indexer import DocumentChunk, RepositoryIndexer  # noqa: E402
+from reranker import ResultReranker  # noqa: E402
+from retriever import HybridRetriever  # noqa: E402
+from templates import CodeModificationResponse, PromptTemplates  # noqa: E402
 
 
 @pytest.fixture

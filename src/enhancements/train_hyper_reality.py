@@ -33,8 +33,7 @@ from tqdm import tqdm
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# pylint: disable=wrong-import-position
-from enhancements.hyper_reality_enhancement import (
+from enhancements.hyper_reality_enhancement import (  # noqa: E402
     CausticGenerator,
     AtmosphericSynthesizer,
     MaterialTranscendence,
@@ -528,19 +527,19 @@ class HyperRealityTrainer:
 def main():
     parser = argparse.ArgumentParser(description="Train Hyper-Reality Enhancement Models")
     parser.add_argument("--data-dir", type=str, default="data/training",
-                       help="Directory for training data")
+                        help="Directory for training data")
     parser.add_argument("--generate-data", action="store_true",
-                       help="Generate synthetic training data")
+                        help="Generate synthetic training data")
     parser.add_argument("--num-pairs", type=int, default=1000,
-                       help="Number of synthetic pairs to generate")
+                        help="Number of synthetic pairs to generate")
     parser.add_argument("--epochs", type=int, default=50,
-                       help="Number of training epochs")
+                        help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=4,
-                       help="Training batch size")
+                        help="Training batch size")
     parser.add_argument("--lr", type=float, default=1e-4,
-                       help="Learning rate")
+                        help="Learning rate")
     parser.add_argument("--checkpoint-dir", type=str, default="weights/hyper_reality",
-                       help="Directory for checkpoints")
+                        help="Directory for checkpoints")
 
     args = parser.parse_args()
 

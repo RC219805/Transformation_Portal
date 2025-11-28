@@ -126,6 +126,8 @@ Focus on luxury architectural materials."""
         """Load LLaVA model and processor."""
         try:
             # Load processor
+            # nosec B615 - revision pinning intentionally omitted for development flexibility
+            # Production deployments should pin specific model revisions
             self.processor = AutoProcessor.from_pretrained(
                 self.model_id,
                 cache_dir=self.cache_dir

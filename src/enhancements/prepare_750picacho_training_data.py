@@ -267,7 +267,7 @@ class Picacho750DataPreparation:
 
             self.pairs_created += 1
 
-        except Exception as e:
+        except Exception:  # pylint: disable=broad-exception-caught
             # Skip problematic images silently
             pass
 
@@ -379,7 +379,7 @@ def main():
         preparer.prepare_bim_images(max_images=args.max_bim_images)
 
     # Create metadata
-    metadata = preparer.create_metadata()
+    preparer.create_metadata()
 
     # Summary
     print("\n╔═══════════════════════════════════════════════════════════════╗")

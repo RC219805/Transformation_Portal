@@ -18,11 +18,11 @@ Version: 3.0.0
 import ast
 import json
 import re
-from collections import defaultdict, deque
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 # Import from existing RAG components
 try:
@@ -447,7 +447,7 @@ class IntelligentTestGenerator:
                 (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)),
                 None
             )
-        except:
+        except SyntaxError:
             return tests
 
         if not func_node:
@@ -794,8 +794,8 @@ def main():
 
     parser = argparse.ArgumentParser(description='Advanced RAG Features v3.0')
     parser.add_argument('--mode', required=True,
-                       choices=['predict', 'refactor', 'test-gen', 'benchmark'],
-                       help='Operation mode')
+                        choices=['predict', 'refactor', 'test-gen', 'benchmark'],
+                        help='Operation mode')
     parser.add_argument('--file', help='File to analyze')
     parser.add_argument('--function', help='Function name for test generation')
     parser.add_argument('--output', help='Output file for report')

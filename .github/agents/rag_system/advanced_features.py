@@ -10,7 +10,6 @@ Combines multiple high-impact capabilities:
 """
 
 import ast
-import hashlib
 import json
 import re
 from collections import defaultdict
@@ -19,7 +18,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from knowledge_engine import FeedbackRecord, KnowledgeIntegrationEngine
 from semantic_search import CodeEntity, SemanticCodeSearch
 
 
@@ -985,8 +983,8 @@ def main():
     parser = argparse.ArgumentParser(description='Advanced RAG Features')
     parser.add_argument('--repo-root', default='.', help='Repository root')
     parser.add_argument('--mode', required=True,
-                       choices=['evolution', 'performance', 'dependencies', 'quality'],
-                       help='Analysis mode')
+                        choices=['evolution', 'performance', 'dependencies', 'quality'],
+                        help='Analysis mode')
     parser.add_argument('--output', help='Output file for report')
 
     args = parser.parse_args()
@@ -1003,10 +1001,10 @@ def main():
         tracker = CodebaseEvolutionTracker(args.repo_root)
         tracker.take_snapshot(search)
         metrics = tracker.analyze_evolution()
-        debt = tracker.detect_technical_debt(search)
+        tracker.detect_technical_debt(search)
         suggestions = tracker.suggest_refactoring(metrics)
 
-        print(f"\nEvolution Metrics:")
+        print("\nEvolution Metrics:")
         print(f"  Entities: {metrics.total_entities}")
         print(f"  Complexity trend: {metrics.complexity_trend}")
         print(f"  Technical debt: {metrics.technical_debt_hours:.1f} hours")
@@ -1020,10 +1018,10 @@ def main():
         regression = detector.check_regression('depth_pipeline', 'throughput', 350)
 
         if regression:
-            print(f"\nRegression detected!")
+            print("\nRegression detected!")
             print(f"  {regression.degradation_percent:.1f}% degradation")
             print(f"  Severity: {regression.severity}")
-            print(f"\nPossible causes:")
+            print("\nPossible causes:")
             for cause in regression.possible_causes:
                 print(f"  - {cause}")
 

@@ -144,6 +144,8 @@ class CLIPClassifier:
         logger.info(f"Initializing CLIP on {self.device}")
 
         # Load model and processor
+        # nosec B615 - revision pinning intentionally omitted for development flexibility
+        # Production deployments should pin specific model revisions
         self.processor = CLIPProcessor.from_pretrained(
             model_name,
             cache_dir=cache_dir
