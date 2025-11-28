@@ -165,8 +165,10 @@ pretrained/
 RealESRGAN_*.pth
 realesr-*.pth
 
-# Local backup directory (client-specific work)
+# Local backup directories (client-specific work)
 .local_backup/
+.backup_local/
+.branch_cleanup_backup/
 
 # Additional PNG exclusions
 input_images/**/*.png
