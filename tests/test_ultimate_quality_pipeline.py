@@ -5,6 +5,10 @@ Tests for Ultimate Quality Pipeline
 ====================================
 
 Tests focusing on the neutral gray bug fix and depth normalization.
+
+Note: The helper functions in this test file are intentionally duplicated
+from the pipeline module to allow testing without heavy ML dependencies
+(torch, transformers) that would significantly slow down the test suite.
 """
 
 import numpy as np
