@@ -57,6 +57,16 @@ class MockProjectContext:
     extracted_images: List[str] = None
     raw_text: Optional[str] = None
 
+    def __post_init__(self):
+        if self.floors is None:
+            self.floors = []
+        if self.rooms is None:
+            self.rooms = {}
+        if self.materials_palette is None:
+            self.materials_palette = []
+        if self.extracted_images is None:
+            self.extracted_images = []
+
 
 @pytest.fixture
 def sample_image(tmp_path):
