@@ -244,60 +244,154 @@ class EnhancementDataset(Dataset):
         return low_img, high_img
 
 
-class PerceptualLoss(nn.Module):
-    """Perceptual loss using VGG features (simplified - no lpips dependency)"""
+class VGGFeatureExtractor(nn.Module):
+    """Extract features from pretrained VGG19 for perceptual loss"""
 
-    def __init__(self):
+    def __init__(self, layers: list = None, use_input_norm: bool = True):
+        """
+        Args:
+            layers: VGG layer indices to extract features from
+                   Default: [2, 7, 12, 21, 30] (conv1_2, conv2_2, conv3_2, conv4_2, conv5_2)
+            use_input_norm: Normalize input to ImageNet statistics
+        """
         super().__init__()
-        # Simple perceptual loss using conv features
-        self.features = nn.Sequential(
-            nn.Conv2d(3, 64, 3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, 3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 256, 3, padding=1),
-            nn.ReLU(),
-        ).to(device)
+        self.use_input_norm = use_input_norm
 
-        # Freeze features
+        # Default to standard perceptual loss layers
+        if layers is None:
+            layers = [2, 7, 12, 21, 30]  # relu1_2, relu2_2, relu3_2, relu4_2, relu5_2
+
+        try:
+            from torchvision.models import vgg19, VGG19_Weights
+            vgg = vgg19(weights=VGG19_Weights.IMAGENET1K_V1).features
+        except (ImportError, TypeError):
+            # Fallback for older torchvision versions
+            from torchvision.models import vgg19
+            vgg = vgg19(pretrained=True).features
+
+        # Extract required layers
+        self.layers = sorted(layers)
+        max_layer = max(self.layers) + 1
+        self.features = nn.Sequential(*list(vgg.children())[:max_layer])
+
+        # Freeze all parameters
         for param in self.features.parameters():
             param.requires_grad = False
 
+        self.features.eval()
+        self.features.to(device)
+
+        # ImageNet normalization
+        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+
+    def forward(self, x):
+        """Extract multi-scale VGG features"""
+        # Normalize input
+        if self.use_input_norm:
+            x = (x - self.mean.to(x.device)) / self.std.to(x.device)
+
+        features = []
+        for i, layer in enumerate(self.features):
+            x = layer(x)
+            if i in self.layers:
+                features.append(x)
+
+        return features
+
+
+class PerceptualLoss(nn.Module):
+    """
+    Perceptual loss using pretrained VGG19 features
+
+    Compares feature representations at multiple VGG layers to measure
+    perceptual similarity. More effective than pixel-wise MSE for image
+    enhancement tasks.
+
+    References:
+        - Johnson et al., "Perceptual Losses for Real-Time Style Transfer"
+        - Zhang et al., "The Unreasonable Effectiveness of Deep Features"
+    """
+
+    def __init__(self, layers: list = None, weights: list = None):
+        """
+        Args:
+            layers: VGG layer indices for feature extraction
+            weights: Weight for each layer's contribution to loss
+        """
+        super().__init__()
+
+        if layers is None:
+            layers = [2, 7, 12, 21, 30]
+
+        if weights is None:
+            # Default weights emphasizing mid-level features
+            weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+
+        self.weights = weights
+        self.vgg = VGGFeatureExtractor(layers=layers)
+
     def forward(self, pred, target):
-        pred_features = self.features(pred)
-        target_features = self.features(target)
-        return F.mse_loss(pred_features, target_features)
+        """Compute perceptual loss between prediction and target"""
+        pred_features = self.vgg(pred)
+        target_features = self.vgg(target)
+
+        loss = 0.0
+        for w, pred_feat, target_feat in zip(self.weights, pred_features, target_features):
+            loss += w * F.mse_loss(pred_feat, target_feat)
+
+        return loss / len(self.weights)
 
 
 class StyleLoss(nn.Module):
-    """Style loss using Gram matrices"""
+    """
+    Style loss using Gram matrices of pretrained VGG19 features
 
-    def __init__(self):
+    Compares style patterns by matching Gram matrices at multiple VGG layers.
+    Essential for texture and style transfer in image enhancement.
+
+    References:
+        - Gatys et al., "A Neural Algorithm of Artistic Style"
+        - Johnson et al., "Perceptual Losses for Real-Time Style Transfer"
+    """
+
+    def __init__(self, layers: list = None, weights: list = None):
+        """
+        Args:
+            layers: VGG layer indices for style extraction
+            weights: Weight for each layer's contribution to loss
+        """
         super().__init__()
-        self.features = nn.Sequential(
-            nn.Conv2d(3, 64, 3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, 3, padding=1),
-            nn.ReLU(),
-        ).to(device)
 
-        for param in self.features.parameters():
-            param.requires_grad = False
+        if layers is None:
+            # Style layers (conv1_1, conv2_1, conv3_1, conv4_1, conv5_1)
+            layers = [0, 5, 10, 19, 28]
+
+        if weights is None:
+            weights = [1.0, 1.0, 1.0, 1.0, 1.0]
+
+        self.weights = weights
+        self.vgg = VGGFeatureExtractor(layers=layers)
 
     def gram_matrix(self, features):
+        """Compute Gram matrix for style representation"""
         b, c, h, w = features.shape
         features = features.view(b, c, h * w)
         gram = torch.bmm(features, features.transpose(1, 2))
         return gram / (c * h * w)
 
     def forward(self, pred, target):
-        pred_features = self.features(pred)
-        target_features = self.features(target)
+        """Compute style loss between prediction and target"""
+        pred_features = self.vgg(pred)
+        target_features = self.vgg(target)
 
-        pred_gram = self.gram_matrix(pred_features)
-        target_gram = self.gram_matrix(target_features)
+        loss = 0.0
+        for w, pred_feat, target_feat in zip(self.weights, pred_features, target_features):
+            pred_gram = self.gram_matrix(pred_feat)
+            target_gram = self.gram_matrix(target_feat)
+            loss += w * F.mse_loss(pred_gram, target_gram)
 
-        return F.mse_loss(pred_gram, target_gram)
+        return loss / len(self.weights)
 
 
 class HyperRealityTrainer:
