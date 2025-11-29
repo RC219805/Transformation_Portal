@@ -9,6 +9,7 @@ actual ONNX runtime or models to be installed.
 """
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -20,6 +21,7 @@ from scripts.utilities.depth_anything_v2 import (
     ModelVariant,
     DepthAnythingV2Model,
     ONNX_AVAILABLE,
+    ONNX_MODEL_FILENAMES,
 )
 
 
@@ -108,24 +110,52 @@ class TestAutoDetectDevice:
 class TestONNXDownloadMapping:
     """Test ONNX model download mapping."""
 
-    def test_onnx_filename_mapping(self):
-        """Test that ONNX filename mapping is correct."""
-        # Verify the expected mapping from _download_onnx_model method
+    def test_onnx_filename_mapping_constant_exists(self):
+        """Test that ONNX_MODEL_FILENAMES constant is defined correctly."""
         expected_mapping = {
             ModelVariant.SMALL: "depth_anything_v2_vits.onnx",
             ModelVariant.BASE: "depth_anything_v2_vitb.onnx",
             ModelVariant.LARGE: "depth_anything_v2_vitl.onnx",
         }
 
-        # Create a model instance and check the mapping exists in the method
+        # Verify the constant matches expected mapping
+        assert ONNX_MODEL_FILENAMES == expected_mapping
+
+    def test_onnx_download_uses_correct_filename(self):
+        """Test that _download_onnx_model uses correct filename for each variant."""
+        pytest.importorskip('huggingface_hub')
+
         model = DepthAnythingV2Model.__new__(DepthAnythingV2Model)
 
-        for variant, expected_filename in expected_mapping.items():
-            model.variant = variant
-            # The method should have this mapping internally
-            # We can't easily test the actual mapping without calling the method
-            # but we verify the variant is supported
-            assert variant in expected_mapping
+        with patch('huggingface_hub.hf_hub_download') as mock_download:
+            mock_download.return_value = '/fake/path/model.onnx'
+
+            # Test SMALL variant
+            model.variant = ModelVariant.SMALL
+            model._download_onnx_model()
+            mock_download.assert_called_with(
+                repo_id='onnx/Depth-Anything-V2',
+                filename='depth_anything_v2_vits.onnx',
+                cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+            )
+
+            # Test BASE variant
+            model.variant = ModelVariant.BASE
+            model._download_onnx_model()
+            mock_download.assert_called_with(
+                repo_id='onnx/Depth-Anything-V2',
+                filename='depth_anything_v2_vitb.onnx',
+                cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+            )
+
+            # Test LARGE variant
+            model.variant = ModelVariant.LARGE
+            model._download_onnx_model()
+            mock_download.assert_called_with(
+                repo_id='onnx/Depth-Anything-V2',
+                filename='depth_anything_v2_vitl.onnx',
+                cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+            )
 
 
 class TestLoadModelRouting:

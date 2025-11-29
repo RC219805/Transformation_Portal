@@ -77,6 +77,14 @@ class ModelVariant(Enum):
     BASE_COREML = "apple/coreml-depth-anything-v2-base"
 
 
+# ONNX model filename mapping for HuggingFace Hub downloads
+ONNX_MODEL_FILENAMES = {
+    ModelVariant.SMALL: "depth_anything_v2_vits.onnx",
+    ModelVariant.BASE: "depth_anything_v2_vitb.onnx",
+    ModelVariant.LARGE: "depth_anything_v2_vitl.onnx",
+}
+
+
 class DepthAnythingV2Model:
     """
     Depth Anything V2 depth estimation model with multi-backend support.
@@ -211,7 +219,23 @@ class DepthAnythingV2Model:
             logger.info("Loaded PyTorch model manually: %s", self.variant.value)
 
     def _load_onnx_model(self) -> None:
-        """Load ONNX model for cross-platform inference."""
+        """
+        Load ONNX model for cross-platform inference.
+
+        Expected ONNX model format:
+        - Input tensor name: first input from model.get_inputs()
+        - Input tensor shape: (1, 3, H, W) in NCHW format
+        - Input normalization: ImageNet mean/std
+            - mean: [0.485, 0.456, 0.406]
+            - std:  [0.229, 0.224, 0.225]
+            - Input pixel values should be float32 in range [0, 1],
+              normalized as (x - mean) / std per channel
+        - Output: depth map as float32, shape varies by model
+
+        If providing a custom ONNX model via `model_path`, ensure it
+        matches these specifications. Incompatible models may fail to
+        load or produce incorrect results.
+        """
         if not ONNX_AVAILABLE:
             raise ImportError(
                 "onnxruntime required for ONNX backend. "
@@ -270,16 +294,11 @@ class DepthAnythingV2Model:
             hf_hub_download,
         )
 
-        # Map variant to ONNX model file
         # Depth Anything V2 ONNX models are available from various sources
         onnx_repo = "onnx/Depth-Anything-V2"
 
-        # Map variant to filename
-        onnx_filename = {
-            ModelVariant.SMALL: "depth_anything_v2_vits.onnx",
-            ModelVariant.BASE: "depth_anything_v2_vitb.onnx",
-            ModelVariant.LARGE: "depth_anything_v2_vitl.onnx",
-        }.get(self.variant)
+        # Get filename from module-level constant
+        onnx_filename = ONNX_MODEL_FILENAMES.get(self.variant)
 
         if not onnx_filename:
             raise ValueError(
@@ -287,7 +306,8 @@ class DepthAnythingV2Model:
                 "Use SMALL, BASE, or LARGE."
             )
 
-        # Download model
+        # nosec B615 - revision pinning intentionally omitted for development flexibility
+        # Production deployments should pin specific model revisions
         model_path = hf_hub_download(
             repo_id=onnx_repo,
             filename=onnx_filename,
