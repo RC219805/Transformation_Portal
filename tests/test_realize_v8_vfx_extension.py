@@ -25,16 +25,19 @@ try:
     )
     from scripts.utilities.realize_v8_unified_cli_extension import (
         VFX_PRESETS,
+        _process_single_image_vfx,
         apply_color_grade_zones,
         apply_depth_bloom,
         apply_depth_fog,
         apply_depth_of_field,
         apply_lut_with_depth,
+        batch_process_vfx,
         enhance_with_vfx,
         estimate_depth_fast,
     )
 except ImportError:
     pass
+
 
 # ==================== Fixtures ====================
 
@@ -415,6 +418,142 @@ class TestPerformance:
         # Should complete in under 5 seconds for small test image
         assert elapsed < 5000
         assert result["metrics"]["total_ms"] > 0
+
+
+# ==================== Batch Processing Tests ====================
+
+class TestBatchProcessing:
+    """Tests for batch processing functionality."""
+
+    @pytest.fixture
+    def temp_input_dir(self, sample_image):
+        """Create a temporary directory with sample images."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_dir = Path(tmpdir) / "input"
+            input_dir.mkdir()
+
+            # Create 4 test images
+            for i in range(4):
+                img_path = input_dir / f"test_{i}.jpg"
+                sample_image.save(img_path)
+
+            yield input_dir
+
+    def test_batch_process_sequential(self, temp_input_dir):
+        """Test sequential batch processing (jobs=1)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+
+            results = batch_process_vfx(
+                input_dir=temp_input_dir,
+                output_dir=output_dir,
+                base_preset="signature_estate",
+                vfx_preset="subtle_estate",
+                material_response=False,
+                pattern="*.jpg",
+                jobs=1,
+                out_bitdepth=8
+            )
+
+            # Verify results
+            assert len(results) == 4
+            assert all(r[1] for r in results)  # All succeeded
+            assert all(r[2] is not None for r in results)  # All have timing
+
+            # Verify output files exist
+            output_files = list(output_dir.glob("*.jpg"))
+            assert len(output_files) == 4
+
+    def test_batch_process_parallel(self, temp_input_dir):
+        """Test parallel batch processing (jobs>1)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+
+            results = batch_process_vfx(
+                input_dir=temp_input_dir,
+                output_dir=output_dir,
+                base_preset="signature_estate",
+                vfx_preset="subtle_estate",
+                material_response=False,
+                pattern="*.jpg",
+                jobs=2,
+                out_bitdepth=8
+            )
+
+            # Verify results
+            assert len(results) == 4
+            assert all(r[1] for r in results)  # All succeeded
+            assert all(r[2] is not None for r in results)  # All have timing
+
+            # Verify output files exist
+            output_files = list(output_dir.glob("*.jpg"))
+            assert len(output_files) == 4
+
+    def test_batch_process_empty_directory(self):
+        """Test batch processing with empty directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_dir = Path(tmpdir) / "empty"
+            output_dir = Path(tmpdir) / "output"
+            input_dir.mkdir()
+
+            results = batch_process_vfx(
+                input_dir=input_dir,
+                output_dir=output_dir,
+                pattern="*.jpg",
+                jobs=1
+            )
+
+            # Should return empty list for empty directory
+            assert results == []
+
+    def test_batch_process_returns_list(self, temp_input_dir):
+        """Test that batch processing returns a list of results."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+
+            results = batch_process_vfx(
+                input_dir=temp_input_dir,
+                output_dir=output_dir,
+                jobs=1
+            )
+
+            assert isinstance(results, list)
+            for result in results:
+                assert len(result) == 4
+                path, success, proc_time, error = result
+                assert isinstance(path, Path)
+                assert isinstance(success, bool)
+                if success:
+                    assert isinstance(proc_time, int)
+                    assert error is None
+                else:
+                    assert error is not None
+
+    def test_process_single_image_vfx(self, temp_input_dir):
+        """Test the single image processing helper function."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_dir.mkdir(exist_ok=True)
+
+            img_path = list(temp_input_dir.glob("*.jpg"))[0]
+
+            result = _process_single_image_vfx(
+                img_path=img_path,
+                output_dir=output_dir,
+                base_preset="signature_estate",
+                vfx_preset="subtle_estate",
+                material_response=False,
+                out_bitdepth=8
+            )
+
+            path, success, proc_time, error = result
+            assert success is True
+            assert proc_time is not None
+            assert error is None
+
+            # Verify output file exists
+            output_files = list(output_dir.glob("*.jpg"))
+            assert len(output_files) == 1
 
 
 if __name__ == "__main__":
