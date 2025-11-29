@@ -16,13 +16,35 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from scripts.utilities.depth_anything_v2 import (
-    ModelBackend,
-    ModelVariant,
-    DepthAnythingV2Model,
-    ONNX_AVAILABLE,
-    ONNX_MODEL_FILENAMES,
+# Check if torch is available before importing the module
+try:
+    import torch  # noqa: F401
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+# Skip all tests in this module if torch is not available
+pytestmark = pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="torch is required for depth_anything_v2 module"
 )
+
+# Guard the import - only import if torch is available
+if TORCH_AVAILABLE:
+    from scripts.utilities.depth_anything_v2 import (
+        ModelBackend,
+        ModelVariant,
+        DepthAnythingV2Model,
+        ONNX_AVAILABLE,
+        ONNX_MODEL_FILENAMES,
+    )
+else:
+    # Provide dummy values to prevent NameError during test collection
+    ModelBackend = None  # type: ignore
+    ModelVariant = None  # type: ignore
+    DepthAnythingV2Model = None  # type: ignore
+    ONNX_AVAILABLE = False
+    ONNX_MODEL_FILENAMES = {}  # type: ignore
 
 
 @pytest.fixture
