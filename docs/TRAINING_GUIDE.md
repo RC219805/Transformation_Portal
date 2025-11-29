@@ -271,21 +271,29 @@ Training saves:
 
 ### Loss Functions
 
-Training uses a combination of three losses:
+Training uses a combination of three losses with pretrained VGG19 features:
 
 1. **MSE Loss** (weight: 1.0)
    - Pixel-wise accuracy
    - Ensures color fidelity
 
-2. **Perceptual Loss** (weight: 1.0)
-   - Feature-space similarity
-   - Preserves high-level structure
+2. **Perceptual Loss** (weight: 1.0) - VGG19-based
+   - Uses pretrained ImageNet weights (VGG19_Weights.IMAGENET1K_V1)
+   - Extracts features at 5 layers: relu1_2, relu2_2, relu3_2, relu4_2, relu5_2
+   - Computes multi-scale feature similarity
+   - Preserves high-level structure and semantic content
 
-3. **Style Loss** (weight: 0.5)
-   - Gram matrix matching
-   - Maintains texture patterns
+3. **Style Loss** (weight: 0.5) - VGG19-based
+   - Uses pretrained ImageNet weights
+   - Extracts features at 5 layers: conv1_1, conv2_1, conv3_1, conv4_1, conv5_1
+   - Computes Gram matrices for texture pattern matching
+   - Maintains texture patterns and style characteristics
 
 **Total Loss**: `L = MSE + Perceptual + 0.5 * Style`
+
+**References**:
+- Johnson et al., "Perceptual Losses for Real-Time Style Transfer"
+- Gatys et al., "A Neural Algorithm of Artistic Style"
 
 ## Using Trained Models
 
@@ -536,5 +544,5 @@ For questions or issues:
 
 ---
 
-**Last Updated**: 2025-11-19
-**Version**: 1.0.0
+**Last Updated**: 2025-11-29
+**Version**: 1.1.0
