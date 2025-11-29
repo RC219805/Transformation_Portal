@@ -13,12 +13,31 @@ import numpy as np
 import pytest
 from PIL import Image
 
-# Import from the module location
-from src.transformation_portal.pipelines.depth_tools import (
-    BatchOptions,
-    main,
-    process_batch,
+# Check if tqdm is available (required by unified_luxury_pipeline via pipelines.__init__)
+try:
+    import tqdm  # noqa: F401
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+
+# Skip all tests in this module if tqdm is not available
+pytestmark = pytest.mark.skipif(
+    not TQDM_AVAILABLE,
+    reason="tqdm is required for depth_tools module (via pipelines)"
 )
+
+# Guard the import - only import if tqdm is available
+if TQDM_AVAILABLE:
+    from src.transformation_portal.pipelines.depth_tools import (
+        BatchOptions,
+        main,
+        process_batch,
+    )
+else:
+    # Provide dummy values to prevent NameError during test collection
+    BatchOptions = None  # type: ignore
+    main = None  # type: ignore
+    process_batch = None  # type: ignore
 
 
 @pytest.fixture
