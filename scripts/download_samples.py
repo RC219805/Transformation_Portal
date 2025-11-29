@@ -97,7 +97,8 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
     # ========================================================================
     "sample_render_4k": {
         "category": "full",
-        "url": "https://via.placeholder.com/3840x2160.jpg",  # Placeholder until GitHub Release
+        # Placeholder: JPEG served, will be replaced with actual TIFF from GitHub Release
+        "url": "https://via.placeholder.com/3840x2160.jpg",
         "size": "25MB",
         "path": "data/sample_images/sample_render_4k.tif",
         "sha256": None,
@@ -105,7 +106,8 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
     },
     "sample_depth_anything_v2": {
         "category": "full",
-        "url": "https://via.placeholder.com/1024x1024.jpg",  # Placeholder until GitHub Release
+        # Placeholder: JPEG served, will be replaced with actual .npy from GitHub Release
+        "url": "https://via.placeholder.com/1024x1024.jpg",
         "size": "2MB",
         "path": "data/sample_images/depth_maps/sample_depth.npy",
         "sha256": None,
