@@ -30,8 +30,9 @@ Usage:
 """
 
 import argparse
+import os
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import BrokenExecutor, ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -606,8 +607,12 @@ def batch_process_vfx(
 
     results: List[Tuple[Path, bool, Optional[int], Optional[str]]] = []
 
-    # Ensure jobs is at least 1
-    jobs = max(1, jobs)
+    # Validate and constrain jobs parameter
+    # Ensure at least 1, and cap at CPU count to prevent resource exhaustion
+    max_workers = os.cpu_count() or 4
+    jobs = max(1, min(jobs, max_workers))
+    if jobs > 1:
+        _info(f"Using {jobs} parallel workers (max available: {max_workers})")
 
     if jobs == 1:
         # Sequential processing
@@ -631,40 +636,60 @@ def batch_process_vfx(
                 _error(f"Failed to process {img_path.name}: {error}")
     else:
         # Parallel processing using ProcessPoolExecutor
-        _info(f"Using {jobs} parallel workers")
+        try:
+            with ProcessPoolExecutor(max_workers=jobs) as executor:
+                # Submit all tasks
+                futures = {
+                    executor.submit(
+                        _process_single_image_vfx,
+                        img_path,
+                        output_dir,
+                        base_preset,
+                        vfx_preset,
+                        material_response,
+                        out_bitdepth
+                    ): img_path for img_path in image_files
+                }
 
-        with ProcessPoolExecutor(max_workers=jobs) as executor:
-            # Submit all tasks
-            futures = {
-                executor.submit(
-                    _process_single_image_vfx,
-                    img_path,
-                    output_dir,
-                    base_preset,
-                    vfx_preset,
-                    material_response,
-                    out_bitdepth
-                ): img_path for img_path in image_files
-            }
+                # Collect results as they complete
+                completed = 0
+                for future in as_completed(futures):
+                    completed += 1
+                    img_path = futures[future]
 
-            # Collect results as they complete
-            completed = 0
-            for future in as_completed(futures):
-                completed += 1
-                img_path = futures[future]
+                    try:
+                        result = future.result()
+                        results.append(result)
 
-                try:
-                    result = future.result()
+                        path, success, proc_time, error = result
+                        if success:
+                            _info(f"[{completed}/{total_images}] Completed {path.name} in {proc_time}ms")
+                        else:
+                            _error(f"[{completed}/{total_images}] Failed to process {path.name}: {error}")
+                    except BrokenExecutor as e:
+                        _error(f"Process pool broken: {e}")
+                        # Mark remaining unprocessed images as failed
+                        for f, p in futures.items():
+                            if f not in [r[0] for r in results]:
+                                results.append((p, False, None, f"Process pool broken: {e}"))
+                        break
+                    except Exception as e:
+                        _error(f"[{completed}/{total_images}] Worker exception for {img_path.name}: {e}")
+                        results.append((img_path, False, None, str(e)))
+        except BrokenExecutor as e:
+            _error(f"Failed to create process pool: {e}")
+            # Fall back to sequential processing for remaining images
+            for img_path in image_files:
+                if img_path not in [r[0] for r in results]:
+                    result = _process_single_image_vfx(
+                        img_path,
+                        output_dir,
+                        base_preset,
+                        vfx_preset,
+                        material_response,
+                        out_bitdepth
+                    )
                     results.append(result)
-
-                    path, success, proc_time, error = result
-                    if success:
-                        _info(f"[{completed}/{total_images}] Completed {path.name} in {proc_time}ms")
-                    else:
-                        _error(f"[{completed}/{total_images}] Failed to process {path.name}: {error}")
-                except Exception as e:
-                    _error(f"[{completed}/{total_images}] Worker exception for {img_path.name}: {e}")
-                    results.append((img_path, False, None, str(e)))
 
     # Summary
     successful = sum(1 for r in results if r[1])
