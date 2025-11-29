@@ -90,8 +90,14 @@ results = processor.process_image("input.jpg", "output.jpg")
 **Combined Loss**: `L = MSE + Perceptual + 0.5 * Style`
 
 - **MSE Loss** (weight: 1.0): Pixel-wise accuracy
-- **Perceptual Loss** (weight: 1.0): Feature-space similarity
-- **Style Loss** (weight: 0.5): Texture pattern matching
+- **Perceptual Loss** (weight: 1.0): Multi-scale VGG19 feature similarity
+  - Uses pretrained ImageNet weights (VGG19_Weights.IMAGENET1K_V1)
+  - Extracts features at layers: relu1_2, relu2_2, relu3_2, relu4_2, relu5_2
+  - Proper ImageNet normalization applied
+- **Style Loss** (weight: 0.5): Gram matrix matching with VGG19 features
+  - Uses pretrained ImageNet weights
+  - Extracts features at layers: conv1_1, conv2_1, conv3_1, conv4_1, conv5_1
+  - Computes Gram matrices for texture pattern comparison
 
 ### Training Configuration
 
@@ -131,7 +137,8 @@ After training on 1000 pairs for 50 epochs:
 ### What Works Now
 ✅ Complete training infrastructure
 ✅ Synthetic data generation
-✅ Perceptual loss training
+✅ **VGG19-based perceptual loss** with pretrained ImageNet features
+✅ **VGG19-based style loss** with Gram matrix matching
 ✅ Model checkpoint management
 ✅ Automatic weight loading
 ✅ Comprehensive documentation
@@ -140,7 +147,6 @@ After training on 1000 pairs for 50 epochs:
 ### What Needs Improvement
 ⚠️ **No pre-trained weights included**: Users must train from scratch
 ⚠️ **Synthetic data only**: Real architectural data not included
-⚠️ **Simplified perceptual loss**: Full LPIPS not implemented (dependency issues)
 ⚠️ **Quality claims unverified**: 105/100 quality needs validation with trained models
 
 ## Next Steps
@@ -154,8 +160,7 @@ After training on 1000 pairs for 50 epochs:
 1. **Collect real data**: Gather architectural image pairs
 2. **Train production models**: Use large-scale real data
 3. **Publish weights**: Share pre-trained weights with community
-4. **Improve losses**: Integrate full LPIPS or other perceptual metrics
-5. **Validate claims**: Measure actual quality improvements
+4. **Validate claims**: Measure actual quality improvements
 
 ## Files Added/Modified
 
@@ -209,7 +214,7 @@ src/enhancements/hyper_reality_enhancement.py     # Added weight loading
 
 ---
 
-**Status**: ✅ Ready for training  
-**Version**: 1.0.0  
-**Date**: 2025-11-19  
+**Status**: ✅ Ready for training
+**Version**: 1.1.0
+**Date**: 2025-11-29
 **Author**: Transformation Portal Enhancement Team
