@@ -13,7 +13,20 @@ from the pipeline module to allow testing without heavy ML dependencies
 
 import numpy as np
 import pytest
-from scipy.ndimage import gaussian_filter
+
+# Check if scipy is available
+try:
+    from scipy.ndimage import gaussian_filter
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    gaussian_filter = None  # type: ignore
+
+# Skip all tests in this module if scipy is not available
+pytestmark = pytest.mark.skipif(
+    not SCIPY_AVAILABLE,
+    reason="scipy is required for ultimate_quality_pipeline tests"
+)
 
 
 def safe_normalize_depth(depth_array: np.ndarray) -> np.ndarray:

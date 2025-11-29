@@ -12,9 +12,28 @@ import numpy as np
 import pytest
 from PIL import Image
 
-# Import Phase 3 features
-from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
-from transformation_portal.depth.processors.numba_kernels import get_numba_info, NUMBA_AVAILABLE
+# Check if tqdm is available (required by depth/pipeline.py)
+try:
+    import tqdm  # noqa: F401
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+
+# Skip all tests in this module if tqdm is not available
+pytestmark = pytest.mark.skipif(
+    not TQDM_AVAILABLE,
+    reason="tqdm is required for depth pipeline module"
+)
+
+# Guard the import - only import if tqdm is available
+if TQDM_AVAILABLE:
+    from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
+    from transformation_portal.depth.processors.numba_kernels import get_numba_info, NUMBA_AVAILABLE
+else:
+    # Provide dummy values to prevent NameError during test collection
+    ArchitecturalDepthPipeline = None  # type: ignore
+    get_numba_info = None  # type: ignore
+    NUMBA_AVAILABLE = False
 
 
 @pytest.fixture

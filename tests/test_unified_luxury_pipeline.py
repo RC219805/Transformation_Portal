@@ -24,17 +24,43 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from transformation_portal.pipelines.unified_luxury_pipeline import (
-    OutputFormat,
-    PipelineStage,
-    PipelineStatistics,
-    ProcessingProfile,
-    SceneType,
-    UnifiedLuxuryPipeline,
-    UnifiedPipelineConfig,
-    batch_process_luxury_renders,
-    process_luxury_render,
+# Check if tqdm is available (required by unified_luxury_pipeline)
+try:
+    import tqdm  # noqa: F401
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+
+# Skip all tests in this module if tqdm is not available
+pytestmark = pytest.mark.skipif(
+    not TQDM_AVAILABLE,
+    reason="tqdm is required for unified_luxury_pipeline module"
 )
+
+# Guard the import - only import if tqdm is available
+if TQDM_AVAILABLE:
+    from transformation_portal.pipelines.unified_luxury_pipeline import (
+        OutputFormat,
+        PipelineStage,
+        PipelineStatistics,
+        ProcessingProfile,
+        SceneType,
+        UnifiedLuxuryPipeline,
+        UnifiedPipelineConfig,
+        batch_process_luxury_renders,
+        process_luxury_render,
+    )
+else:
+    # Provide dummy values to prevent NameError during test collection
+    OutputFormat = None  # type: ignore
+    PipelineStage = None  # type: ignore
+    PipelineStatistics = None  # type: ignore
+    ProcessingProfile = None  # type: ignore
+    SceneType = None  # type: ignore
+    UnifiedLuxuryPipeline = None  # type: ignore
+    UnifiedPipelineConfig = None  # type: ignore
+    batch_process_luxury_renders = None  # type: ignore
+    process_luxury_render = None  # type: ignore
 
 
 @pytest.fixture
