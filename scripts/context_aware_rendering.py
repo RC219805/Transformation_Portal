@@ -14,14 +14,80 @@ Uses extracted architectural intelligence to inform every processing decision.
 """
 
 import json
-import re
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 from architectural_context_extractor import ArchitecturalContextExtractor, ProjectContext, RoomContext
 from PIL import Image
+
+# Optional imports for processing pipelines - lazy loaded for startup performance
+_depth_pipeline_available = None
+_tiff_processor_available = None
+
+logger = logging.getLogger(__name__)
+
+
+def _check_depth_pipeline():
+    """Check if depth pipeline is available."""
+    global _depth_pipeline_available
+    if _depth_pipeline_available is None:
+        try:
+            from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline  # noqa: F401
+            _depth_pipeline_available = True
+        except ImportError:
+            _depth_pipeline_available = False
+            logger.warning("Depth pipeline not available - install transformation_portal[ml]")
+    return _depth_pipeline_available
+
+
+def _check_tiff_processor():
+    """Check if TIFF processor is available."""
+    global _tiff_processor_available
+    if _tiff_processor_available is None:
+        try:
+            from luxury_tiff_batch_processor.adjustments import AdjustmentSettings  # noqa: F401
+            from luxury_tiff_batch_processor.adjustments import apply_adjustments  # noqa: F401
+            _tiff_processor_available = True
+        except ImportError:
+            _tiff_processor_available = False
+            logger.warning("TIFF processor not available - install luxury_tiff_batch_processor")
+    return _tiff_processor_available
+    return _tiff_processor_available
+
+
+def _image_to_array(image_path: Path) -> np.ndarray:
+    """Load image as normalized float32 array.
+
+    Args:
+        image_path: Path to input image
+
+    Returns:
+        Normalized float32 array (H, W, C) with values in [0, 1]
+    """
+    with Image.open(image_path) as img:
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        arr = np.array(img, dtype=np.float32) / 255.0
+    return arr
+
+
+def _array_to_image(arr: np.ndarray, output_path: Path, quality: int = 95):
+    """Save float32 array as image.
+
+    Args:
+        arr: Float32 array (H, W, C) with values in [0, 1]
+        output_path: Output path
+        quality: JPEG quality (if applicable)
+    """
+    arr_clipped = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
+    img = Image.fromarray(arr_clipped)
+    if output_path.suffix.lower() in ('.jpg', '.jpeg'):
+        img.save(output_path, quality=quality)
+    else:
+        img.save(output_path)
 
 
 @dataclass
@@ -187,8 +253,8 @@ class ContextAwareRenderingPipeline:
         if not base_strategy:
             return self.derive_strategy(image_path)  # Fallback to default
 
-        # Customize based on project context
-        room_context = self.get_room_context(room_type)
+        # Get room-specific context (reserved for future material/feature customization)
+        _ = self.get_room_context(room_type)
 
         # Adjust materials based on project palette
         if self.context.materials_palette:
@@ -306,18 +372,18 @@ class ContextAwareRenderingPipeline:
         apply_depth: bool = True,
         apply_material: bool = True,
         apply_color: bool = True,
-    ) -> Path:
+    ) -> Union[Path, Dict]:
         """
         Process render with context-aware intelligence.
 
         Args:
             image_path: Path to rendering
             apply_depth: Apply depth-aware processing
-            apply_material: Apply material response
+            apply_material: Apply material response (not yet implemented)
             apply_color: Apply color grading
 
         Returns:
-            Path to processed output
+            Path to processed output image, or dict with processing details
         """
         print(f"\n{'='*70}")
         print(f"PROCESSING: {image_path.name}")
@@ -351,19 +417,227 @@ class ContextAwareRenderingPipeline:
 
         print(f"\n✓ Strategy saved: {strategy_path}")
 
-        # TODO: Integrate with actual processing pipelines
-        # This would call:
-        # 1. depth_pipeline with depth_config
-        # 2. material_response with material_config
-        # 3. luxury_tiff_batch_processor with color_config
+        # Load image for processing
+        image_arr = _image_to_array(image_path)
+        processing_log = []
 
-        print("\n💡 Next steps:")
-        print(f"  1. Apply depth pipeline with: {strategy_path}")
-        print("  2. Apply material response")
-        print(f"  3. Apply color grading with LUT: {strategy.lut_preset}")
+        # 1. Apply depth-aware processing if enabled and available
+        if apply_depth and depth_config:
+            result = self._apply_depth_processing(image_arr, depth_config, image_path)
+            if result is not None:
+                image_arr = result
+                processing_log.append("depth_processing")
+                print("✓ Applied depth-aware processing")
+            else:
+                print("⚠ Depth processing skipped (pipeline unavailable)")
 
-        # For now, return strategy path
-        return strategy_path
+        # 2. Apply color grading if enabled and available
+        if apply_color and color_config:
+            result = self._apply_color_grading(image_arr, color_config, strategy)
+            if result is not None:
+                image_arr = result
+                processing_log.append("color_grading")
+                print("✓ Applied color grading")
+            else:
+                print("⚠ Color grading skipped (processor unavailable)")
+
+        # 3. Material response integration (placeholder - complex integration)
+        if apply_material and material_config:
+            print("💡 Material response config generated (manual integration available)")
+            processing_log.append("material_config_generated")
+
+        # Determine output format based on input
+        input_suffix = image_path.suffix.lower()
+        output_suffix = input_suffix if input_suffix in ('.png', '.jpg', '.jpeg', '.tif', '.tiff') else '.png'
+        output_path = self.output_dir / f"{image_path.stem}_enhanced{output_suffix}"
+
+        # Save processed result
+        _array_to_image(image_arr, output_path)
+        print(f"\n✓ Enhanced image saved: {output_path}")
+
+        # Return result with metadata
+        return {
+            'output_path': output_path,
+            'strategy_path': strategy_path,
+            'strategy': strategy,
+            'processing_applied': processing_log,
+            'depth_config': depth_config,
+            'material_config': material_config,
+            'color_config': color_config,
+        }
+
+    def _apply_depth_processing(
+        self,
+        image_arr: np.ndarray,
+        depth_config: Dict,
+        image_path: Path,
+    ) -> Optional[np.ndarray]:
+        """Apply depth-aware processing using ArchitecturalDepthPipeline.
+
+        Args:
+            image_arr: Input image array (H, W, C) normalized to [0, 1]
+            depth_config: Depth processing configuration
+            image_path: Original image path (for temporary file handling)
+
+        Returns:
+            Processed image array, or None if pipeline unavailable
+        """
+        if not _check_depth_pipeline():
+            return None
+
+        try:
+            from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
+
+            # Build YAML-compatible config for the pipeline
+            pipeline_config = self._build_depth_pipeline_config(depth_config)
+
+            # Create pipeline instance
+            pipeline = ArchitecturalDepthPipeline(pipeline_config)
+
+            # Process the image
+            result = pipeline.process_render(image_path)
+
+            return result['image']
+
+        except Exception as e:
+            logger.warning(f"Depth processing failed: {e}")
+            return None
+
+    def _build_depth_pipeline_config(self, depth_config: Dict) -> Dict:
+        """Build full pipeline config from context-derived depth config.
+
+        Args:
+            depth_config: Simplified depth config from generate_depth_config
+
+        Returns:
+            Full configuration dict for ArchitecturalDepthPipeline
+        """
+        # Map tone mapping method to pipeline config
+        tone_method = depth_config.get('tone_map', 'agx')
+        zone_weights = depth_config.get('zone_weights', {
+            'foreground': 0.8,
+            'midground': 1.0,
+            'background': 0.8,
+        })
+
+        return {
+            'depth_model': {
+                'variant': depth_config.get('model_size', 'small'),
+                'backend': depth_config.get('device', 'pytorch_cpu'),
+                'precision': 'fp16',
+                'cache_size': 50,
+                'enable_disk_cache': False,
+            },
+            'processing': {
+                'depth_aware_denoise': {
+                    'enabled': True,
+                    'sigma_spatial': 3.0,
+                    'sigma_range': 0.1,
+                    'edge_threshold': 0.05,
+                    'preserve_strength': 0.8,
+                },
+                'zone_tone_mapping': {
+                    'enabled': True,
+                    'num_zones': 3,
+                    'method': tone_method,
+                    'transition_sigma': 2.0,
+                    'zone_params': {
+                        'foreground': {'exposure': zone_weights.get('foreground', 0.8)},
+                        'midground': {'exposure': zone_weights.get('midground', 1.0)},
+                        'background': {'exposure': zone_weights.get('background', 0.8)},
+                    },
+                },
+                'atmospheric_effects': {
+                    'enabled': depth_config.get('device') != 'foreground',
+                    'haze_density': 0.015,
+                    'haze_color': [0.7, 0.8, 0.9],
+                    'desaturation_strength': 0.3,
+                    'depth_scale': 100.0,
+                    'enable_color_shift': True,
+                },
+                'depth_guided_filters': {
+                    'enabled': True,
+                    'clarity_strength': 0.5,
+                    'edge_preserve_threshold': 0.05,
+                    'scale_count': 3,
+                    'adaptive_to_depth': True,
+                },
+            },
+            'output': {
+                'output_format': 'png',
+                'jpeg_quality': 95,
+                'depth_colormap': 'turbo',
+            },
+        }
+
+    def _apply_color_grading(
+        self,
+        image_arr: np.ndarray,
+        color_config: Dict,
+        strategy: RenderingStrategy,
+    ) -> Optional[np.ndarray]:
+        """Apply color grading using luxury_tiff_batch_processor adjustments.
+
+        Args:
+            image_arr: Input image array (H, W, C) normalized to [0, 1]
+            color_config: Color grading configuration
+            strategy: Rendering strategy for additional context
+
+        Returns:
+            Color-graded image array, or None if processor unavailable
+        """
+        if not _check_tiff_processor():
+            return None
+
+        try:
+            from luxury_tiff_batch_processor.adjustments import (
+                AdjustmentSettings,
+                apply_adjustments,
+            )
+
+            # Map strategy to adjustment settings
+            saturation_delta = (color_config.get('saturation', 1.05) - 1.0)
+            tint = color_config.get('tint', 0)
+
+            # Base adjustment settings informed by strategy
+            adjustments = AdjustmentSettings(
+                exposure=0.08 if strategy.lighting_style == 'bright' else 0.0,
+                white_balance_temp=self._get_temp_from_strategy(strategy),
+                white_balance_tint=float(tint),
+                shadow_lift=0.18 if strategy.lighting_style in ('soft', 'ambient') else 0.12,
+                highlight_recovery=0.15,
+                midtone_contrast=0.08,
+                vibrance=0.18 * strategy.enhancement_strength,
+                saturation=np.clip(saturation_delta, -1.0, 1.0),
+                clarity=0.16 * strategy.enhancement_strength,
+                chroma_denoise=0.08,
+                glow=0.05 if strategy.lighting_style == 'soft' else 0.02,
+            )
+
+            # Apply adjustments
+            result = apply_adjustments(image_arr, adjustments)
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Color grading failed: {e}")
+            return None
+
+    def _get_temp_from_strategy(self, strategy: RenderingStrategy) -> float:
+        """Map color temperature strategy to Kelvin value.
+
+        Args:
+            strategy: Rendering strategy
+
+        Returns:
+            Color temperature in Kelvin
+        """
+        temp_map = {
+            'warm': 5600.0,
+            'neutral': 6500.0,
+            'cool': 7500.0,
+        }
+        return temp_map.get(strategy.color_temperature, 6500.0)
 
 
 def main():
@@ -432,7 +706,12 @@ def main():
     )
 
     print("\n✓ Processing complete")
-    print(f"  Strategy: {output}")
+    if isinstance(output, dict):
+        print(f"  Output: {output.get('output_path', 'N/A')}")
+        print(f"  Strategy: {output.get('strategy_path', 'N/A')}")
+        print(f"  Processing applied: {', '.join(output.get('processing_applied', []))}")
+    else:
+        print(f"  Strategy: {output}")
 
     return 0
 
