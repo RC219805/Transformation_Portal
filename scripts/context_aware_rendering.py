@@ -57,11 +57,14 @@ def _get_device():
     """
     try:
         import torch
-        if torch.cuda.is_available():
+        # Check CUDA availability
+        if hasattr(torch, 'cuda') and torch.cuda.is_available():
             return 'pytorch_cuda'
-        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            return 'pytorch_mps'
-    except ImportError:
+        # Check MPS availability (Apple Silicon)
+        if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps'):
+            if torch.backends.mps.is_available():
+                return 'pytorch_mps'
+    except (ImportError, AttributeError):
         pass
     return 'pytorch_cpu'
 
