@@ -2,12 +2,15 @@
 """Tests for context-aware rendering pipeline integration.
 
 Tests the integration of context-aware rendering with actual processing pipelines.
+These tests mock the architectural_context_extractor to avoid PyMuPDF dependency.
 """
 
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import patch
+from typing import Dict, List, Optional, Tuple
+from unittest.mock import patch, MagicMock
 
 import numpy as np
 import pytest
@@ -18,12 +21,50 @@ scripts_dir = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(scripts_dir))
 
 
+# Mock classes for architectural_context_extractor
+@dataclass
+class MockRoomContext:
+    """Mock room context for testing."""
+    name: str
+    dimensions: Optional[Tuple[float, float]] = None
+    floor_level: Optional[str] = None
+    ceiling_height: Optional[float] = None
+    materials: List[str] = None
+    features: List[str] = None
+    adjacent_rooms: List[str] = None
+
+    def __post_init__(self):
+        if self.materials is None:
+            self.materials = []
+        if self.features is None:
+            self.features = []
+        if self.adjacent_rooms is None:
+            self.adjacent_rooms = []
+
+
+@dataclass
+class MockProjectContext:
+    """Mock project context for testing."""
+    project_name: str
+    project_number: Optional[str] = None
+    address: Optional[str] = None
+    architect: Optional[str] = None
+    total_sqft: Optional[float] = None
+    floors: List[str] = None
+    rooms: Dict[str, MockRoomContext] = None
+    materials_palette: List[str] = None
+    design_style: Optional[str] = None
+    extracted_images: List[str] = None
+    raw_text: Optional[str] = None
+
+
 @pytest.fixture
 def sample_image(tmp_path):
     """Create a sample test image."""
     img_path = tmp_path / "test_kitchen.jpg"
-    # Create a simple RGB image (100x100)
-    arr = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+    # Create a simple RGB image (100x100) with fixed seed for reproducibility
+    rng = np.random.default_rng(seed=42)
+    arr = rng.integers(0, 255, (100, 100, 3), dtype=np.uint8)
     img = Image.fromarray(arr)
     img.save(img_path)
     return img_path
@@ -32,22 +73,20 @@ def sample_image(tmp_path):
 @pytest.fixture
 def sample_context():
     """Create a sample project context."""
-    from architectural_context_extractor import ProjectContext, RoomContext
-
     rooms = {
-        "kitchen_main": RoomContext(
+        "kitchen_main": MockRoomContext(
             name="Kitchen",
             materials=["metal", "stone", "wood"],
             features=["island", "pantry"],
         ),
-        "living_room": RoomContext(
+        "living_room": MockRoomContext(
             name="Living Room",
             materials=["wood", "fabric"],
             features=["fireplace"],
         ),
     }
 
-    return ProjectContext(
+    return MockProjectContext(
         project_name="Test Project",
         project_number="TP-001",
         rooms=rooms,
@@ -59,12 +98,19 @@ def sample_context():
 @pytest.fixture
 def pipeline(sample_context, tmp_path):
     """Create a ContextAwareRenderingPipeline instance."""
-    from context_aware_rendering import ContextAwareRenderingPipeline
+    # Mock the architectural_context_extractor module
+    mock_module = MagicMock()
+    mock_module.ProjectContext = MockProjectContext
+    mock_module.RoomContext = MockRoomContext
+    mock_module.ArchitecturalContextExtractor = MagicMock()
 
-    return ContextAwareRenderingPipeline(
-        project_context=sample_context,
-        output_dir=tmp_path / "output",
-    )
+    with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+        # Import after mocking
+        from context_aware_rendering import ContextAwareRenderingPipeline
+        return ContextAwareRenderingPipeline(
+            project_context=sample_context,
+            output_dir=tmp_path / "output",
+        )
 
 
 class TestRenderingStrategy:
@@ -72,21 +118,28 @@ class TestRenderingStrategy:
 
     def test_strategy_creation(self):
         """Test creating a RenderingStrategy."""
-        from context_aware_rendering import RenderingStrategy
+        # Mock the architectural_context_extractor module before import
+        mock_module = MagicMock()
+        mock_module.ProjectContext = MockProjectContext
+        mock_module.RoomContext = MockRoomContext
+        mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        strategy = RenderingStrategy(
-            room_type="kitchen",
-            primary_materials=["metal", "stone"],
-            lighting_style="bright",
-            depth_emphasis="balanced",
-            color_temperature="neutral",
-            enhancement_strength=0.75,
-            lut_preset="signature_estate",
-        )
+        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+            from context_aware_rendering import RenderingStrategy
 
-        assert strategy.room_type == "kitchen"
-        assert "metal" in strategy.primary_materials
-        assert strategy.enhancement_strength == 0.75
+            strategy = RenderingStrategy(
+                room_type="kitchen",
+                primary_materials=["metal", "stone"],
+                lighting_style="bright",
+                depth_emphasis="balanced",
+                color_temperature="neutral",
+                enhancement_strength=0.75,
+                lut_preset="signature_estate",
+            )
+
+            assert strategy.room_type == "kitchen"
+            assert "metal" in strategy.primary_materials
+            assert strategy.enhancement_strength == 0.75
 
 
 class TestContextAwareRenderingPipeline:
@@ -125,9 +178,10 @@ class TestContextAwareRenderingPipeline:
 
     def test_derive_strategy_with_design_style(self, pipeline, tmp_path):
         """Test strategy adapts to design style."""
-        # Create bedroom image (traditional style would affect it)
+        # Create bedroom image (traditional style would affect it) with fixed seed
         img_path = tmp_path / "bedroom_test.jpg"
-        arr = np.random.randint(0, 255, (50, 50, 3), dtype=np.uint8)
+        rng = np.random.default_rng(seed=42)
+        arr = rng.integers(0, 255, (50, 50, 3), dtype=np.uint8)
         Image.fromarray(arr).save(img_path)
 
         strategy = pipeline.derive_strategy(img_path)
@@ -261,43 +315,73 @@ class TestHelperFunctions:
 
     def test_image_to_array(self, sample_image):
         """Test image loading as normalized array."""
-        from context_aware_rendering import _image_to_array
+        # Mock the architectural_context_extractor module before import
+        mock_module = MagicMock()
+        mock_module.ProjectContext = MockProjectContext
+        mock_module.RoomContext = MockRoomContext
+        mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        arr = _image_to_array(sample_image)
+        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+            from context_aware_rendering import _image_to_array
 
-        assert arr.dtype == np.float32
-        assert arr.min() >= 0.0
-        assert arr.max() <= 1.0
-        assert arr.shape == (100, 100, 3)
+            arr = _image_to_array(sample_image)
+
+            assert arr.dtype == np.float32
+            assert arr.min() >= 0.0
+            assert arr.max() <= 1.0
+            assert arr.shape == (100, 100, 3)
 
     def test_array_to_image(self, tmp_path):
         """Test saving array as image."""
-        from context_aware_rendering import _array_to_image
+        # Mock the architectural_context_extractor module before import
+        mock_module = MagicMock()
+        mock_module.ProjectContext = MockProjectContext
+        mock_module.RoomContext = MockRoomContext
+        mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        arr = np.random.rand(50, 50, 3).astype(np.float32)
-        output_path = tmp_path / "output.png"
+        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+            from context_aware_rendering import _array_to_image
 
-        _array_to_image(arr, output_path)
+            # Use fixed seed for reproducibility
+            rng = np.random.default_rng(seed=42)
+            arr = rng.random((50, 50, 3)).astype(np.float32)
+            output_path = tmp_path / "output.png"
 
-        assert output_path.exists()
-        with Image.open(output_path) as img:
-            assert img.size == (50, 50)
+            _array_to_image(arr, output_path)
+
+            assert output_path.exists()
+            with Image.open(output_path) as img:
+                assert img.size == (50, 50)
 
     def test_check_depth_pipeline(self):
         """Test depth pipeline availability check."""
-        from context_aware_rendering import _check_depth_pipeline
+        # Mock the architectural_context_extractor module before import
+        mock_module = MagicMock()
+        mock_module.ProjectContext = MockProjectContext
+        mock_module.RoomContext = MockRoomContext
+        mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        # Should return True or False without raising
-        result = _check_depth_pipeline()
-        assert isinstance(result, bool)
+        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+            from context_aware_rendering import _check_depth_pipeline
+
+            # Should return True or False without raising
+            result = _check_depth_pipeline()
+            assert isinstance(result, bool)
 
     def test_check_tiff_processor(self):
         """Test TIFF processor availability check."""
-        from context_aware_rendering import _check_tiff_processor
+        # Mock the architectural_context_extractor module before import
+        mock_module = MagicMock()
+        mock_module.ProjectContext = MockProjectContext
+        mock_module.RoomContext = MockRoomContext
+        mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        # Should return True when luxury_tiff_batch_processor is installed
-        result = _check_tiff_processor()
-        assert isinstance(result, bool)
+        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+            from context_aware_rendering import _check_tiff_processor
+
+            # Should return True when luxury_tiff_batch_processor is installed
+            result = _check_tiff_processor()
+            assert isinstance(result, bool)
 
 
 class TestDepthPipelineIntegration:
@@ -415,9 +499,10 @@ class TestEndToEnd:
 
     def test_pipeline_with_unknown_room(self, pipeline, tmp_path):
         """Test pipeline handles unknown room gracefully."""
-        # Create image with unrecognizable name
+        # Create image with unrecognizable name using fixed seed
         img_path = tmp_path / "random_space_xyz.jpg"
-        arr = np.random.randint(0, 255, (50, 50, 3), dtype=np.uint8)
+        rng = np.random.default_rng(seed=42)
+        arr = rng.integers(0, 255, (50, 50, 3), dtype=np.uint8)
         Image.fromarray(arr).save(img_path)
 
         result = pipeline.process_render(

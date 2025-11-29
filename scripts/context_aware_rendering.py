@@ -17,17 +17,53 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 import numpy as np
-from architectural_context_extractor import ArchitecturalContextExtractor, ProjectContext, RoomContext
 from PIL import Image
+
+# Lazy import for architectural_context_extractor (requires PyMuPDF in some cases)
+ArchitecturalContextExtractor = None
+ProjectContext = None
+RoomContext = None
+
+
+def _ensure_context_imports():
+    """Lazily import architectural context extractor to handle missing PyMuPDF."""
+    global ArchitecturalContextExtractor, ProjectContext, RoomContext
+    if ProjectContext is None:
+        from architectural_context_extractor import (
+            ArchitecturalContextExtractor as _ACE,
+            ProjectContext as _PC,
+            RoomContext as _RC,
+        )
+        ArchitecturalContextExtractor = _ACE
+        ProjectContext = _PC
+        RoomContext = _RC
+
 
 # Optional imports for processing pipelines - lazy loaded for startup performance
 _depth_pipeline_available = None
 _tiff_processor_available = None
 
 logger = logging.getLogger(__name__)
+
+
+def _get_device():
+    """Detect available compute device for depth processing.
+
+    Returns:
+        Device string for depth pipeline ('pytorch_cuda', 'pytorch_mps', or 'pytorch_cpu')
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return 'pytorch_cuda'
+        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            return 'pytorch_mps'
+    except ImportError:
+        pass
+    return 'pytorch_cpu'
 
 
 def _check_depth_pipeline():
@@ -253,7 +289,7 @@ class ContextAwareRenderingPipeline:
             return self.derive_strategy(image_path)  # Fallback to default
 
         # Get room-specific context (reserved for future material/feature customization)
-        _ = self.get_room_context(room_type)
+        room_context = self.get_room_context(room_type)  # noqa: F841
 
         # Adjust materials based on project palette
         if self.context.materials_palette:
@@ -288,7 +324,7 @@ class ContextAwareRenderingPipeline:
         """Generate depth pipeline configuration from strategy."""
         base_config = {
             'model_size': 'small',
-            'device': 'mps',  # Apple Silicon
+            'device': _get_device(),  # Auto-detect CUDA/MPS/CPU
             'depth_emphasis': strategy.depth_emphasis,  # Store for pipeline config building
         }
 
@@ -372,7 +408,7 @@ class ContextAwareRenderingPipeline:
         apply_depth: bool = True,
         apply_material: bool = True,
         apply_color: bool = True,
-    ) -> Union[Path, Dict]:
+    ) -> Dict:
         """
         Process render with context-aware intelligence.
 
@@ -383,7 +419,8 @@ class ContextAwareRenderingPipeline:
             apply_color: Apply color grading
 
         Returns:
-            Path to processed output image, or dict with processing details
+            Dict with processing results including output_path, strategy_path,
+            strategy, processing_applied, and config details.
         """
         print(f"\n{'='*70}")
         print(f"PROCESSING: {image_path.name}")
@@ -474,10 +511,14 @@ class ContextAwareRenderingPipeline:
     ) -> Optional[np.ndarray]:
         """Apply depth-aware processing using ArchitecturalDepthPipeline.
 
+        Note: The depth pipeline currently requires a file path as input.
+        This method saves the current image_arr state to a temp file before
+        processing to preserve any prior modifications in the processing chain.
+
         Args:
             image_arr: Input image array (H, W, C) normalized to [0, 1]
             depth_config: Depth processing configuration
-            image_path: Original image path (for temporary file handling)
+            image_path: Original image path (used for naming)
 
         Returns:
             Processed image array, or None if pipeline unavailable
@@ -494,10 +535,19 @@ class ContextAwareRenderingPipeline:
             # Create pipeline instance
             pipeline = ArchitecturalDepthPipeline(pipeline_config)
 
-            # Process the image
-            result = pipeline.process_render(image_path)
+            # Save current image state to temp file for depth pipeline
+            # This preserves any prior processing in the chain
+            temp_path = self.output_dir / f"_temp_{image_path.name}"
+            _array_to_image(image_arr, temp_path)
 
-            return result['image']
+            try:
+                # Process the image
+                result = pipeline.process_render(temp_path)
+                return result['image']
+            finally:
+                # Clean up temp file
+                if temp_path.exists():
+                    temp_path.unlink()
 
         except Exception as e:
             logger.warning(f"Depth processing failed: {e}")
