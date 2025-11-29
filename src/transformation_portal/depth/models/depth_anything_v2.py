@@ -494,7 +494,7 @@ class DepthAnythingV2Model:
         # Prepare input - resize and normalize
         # Default input size for Depth Anything V2 is 518x518
         target_size = (518, 518)
-        if input_shape and len(input_shape) == 4 and input_shape[2] is not None:
+        if input_shape and len(input_shape) == 4 and input_shape[2] is not None and input_shape[3] is not None:
             target_size = (input_shape[2], input_shape[3])
 
         image_resized = image.resize(target_size, Image.Resampling.BILINEAR)
