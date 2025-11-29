@@ -19,8 +19,15 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
-import torch
 from PIL import Image
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None  # type: ignore
+    logging.warning("torch not available, install with: pip install torch")
 
 try:
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation, pipeline
@@ -46,6 +53,14 @@ except ImportError:
     resize = None  # type: ignore
     logging.warning("scikit-image not available, install with: pip install scikit-image")
 
+try:
+    import onnxruntime as ort
+    ONNX_AVAILABLE = True
+except ImportError:
+    ONNX_AVAILABLE = False
+    ort = None  # type: ignore
+    logging.warning("onnxruntime not available, install with: pip install onnxruntime")
+
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +82,14 @@ class ModelVariant(Enum):
     # CoreML optimized versions
     SMALL_COREML = "apple/coreml-depth-anything-v2-small"
     BASE_COREML = "apple/coreml-depth-anything-v2-base"
+
+
+# ONNX model filename mapping for HuggingFace Hub downloads
+ONNX_MODEL_FILENAMES = {
+    ModelVariant.SMALL: "depth_anything_v2_vits.onnx",
+    ModelVariant.BASE: "depth_anything_v2_vitb.onnx",
+    ModelVariant.LARGE: "depth_anything_v2_vitl.onnx",
+}
 
 
 class DepthAnythingV2Model:
@@ -135,23 +158,31 @@ class DepthAnythingV2Model:
     def _auto_detect_backend(self) -> ModelBackend:
         """Auto-detect optimal backend for current hardware."""
         # Prefer CoreML on Apple Silicon for best performance
-        if COREML_AVAILABLE and torch.backends.mps.is_available():
+        if TORCH_AVAILABLE and COREML_AVAILABLE and torch.backends.mps.is_available():
             return ModelBackend.COREML
 
         # Fallback to PyTorch with MPS acceleration
-        if torch.backends.mps.is_available():
+        if TORCH_AVAILABLE and torch.backends.mps.is_available():
             return ModelBackend.PYTORCH_MPS
 
-        # CPU fallback
-        return ModelBackend.PYTORCH_CPU
+        # CPU fallback (or ONNX if torch not available)
+        if TORCH_AVAILABLE:
+            return ModelBackend.PYTORCH_CPU
+        if ONNX_AVAILABLE:
+            return ModelBackend.ONNX
+        raise RuntimeError(
+            "No backend available. Install torch or onnxruntime."
+        )
 
     def _auto_detect_device(self) -> str:
         """Auto-detect optimal device for PyTorch."""
         if self.backend == ModelBackend.COREML:
             return "coreml"
+        if self.backend == ModelBackend.ONNX:
+            return "onnx"
         if self.backend == ModelBackend.PYTORCH_MPS:
             return "mps"
-        if torch.cuda.is_available():
+        if TORCH_AVAILABLE and torch.cuda.is_available():
             return "cuda"
         return "cpu"
 
@@ -159,6 +190,8 @@ class DepthAnythingV2Model:
         """Load model based on backend."""
         if self.backend == ModelBackend.COREML:
             self._load_coreml_model()
+        elif self.backend == ModelBackend.ONNX:
+            self._load_onnx_model()
         elif self.backend in [ModelBackend.PYTORCH_CPU, ModelBackend.PYTORCH_MPS]:
             self._load_pytorch_model()
         else:
@@ -166,6 +199,11 @@ class DepthAnythingV2Model:
 
     def _load_pytorch_model(self) -> None:
         """Load PyTorch model using transformers."""
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "torch required for PyTorch backend. "
+                "Install with: pip install torch"
+            )
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError(
                 "transformers required for PyTorch backend. "
@@ -197,6 +235,104 @@ class DepthAnythingV2Model:
                 self.model = self.model.to("cuda")
 
             logger.info("Loaded PyTorch model manually: %s", self.variant.value)
+
+    def _load_onnx_model(self) -> None:
+        """
+        Load ONNX model for cross-platform inference.
+
+        Expected ONNX model format:
+        - Input tensor name: first input from model.get_inputs()
+        - Input tensor shape: (1, 3, H, W) in NCHW format
+        - Input normalization: ImageNet mean/std
+            - mean: [0.485, 0.456, 0.406]
+            - std:  [0.229, 0.224, 0.225]
+            - Input pixel values should be float32 in range [0, 1],
+              normalized as (x - mean) / std per channel
+        - Output: depth map as float32, shape varies by model
+
+        If providing a custom ONNX model via `model_path`, ensure it
+        matches these specifications. Incompatible models may fail to
+        load or produce incorrect results.
+        """
+        if not ONNX_AVAILABLE:
+            raise ImportError(
+                "onnxruntime required for ONNX backend. "
+                "Install with: pip install onnxruntime"
+            )
+
+        # Check if local model exists
+        if self.model_path and self.model_path.exists():
+            model_path = self.model_path
+        else:
+            # Download from HuggingFace Hub
+            model_path = self._download_onnx_model()
+
+        try:
+            # Configure session options for optimal performance
+            sess_options = ort.SessionOptions()
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+            # Select execution providers based on available hardware
+            providers = self._get_onnx_providers()
+
+            self.model = ort.InferenceSession(
+                str(model_path),
+                sess_options=sess_options,
+                providers=providers
+            )
+            logger.info("Loaded ONNX model: %s with providers: %s", model_path, providers)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to load ONNX model: %s", e)
+            logger.info("Falling back to PyTorch CPU backend")
+            self.backend = ModelBackend.PYTORCH_CPU
+            self.device = "cpu"
+            self._load_pytorch_model()
+
+    def _get_onnx_providers(self) -> list:
+        """Get available ONNX execution providers in priority order."""
+        available_providers = ort.get_available_providers()
+        preferred_order = [
+            'CUDAExecutionProvider',
+            'CoreMLExecutionProvider',
+            'DmlExecutionProvider',
+            'CPUExecutionProvider'
+        ]
+        providers = []
+        for provider in preferred_order:
+            if provider in available_providers:
+                providers.append(provider)
+        # Ensure at least CPU provider is included
+        if not providers:
+            providers = ['CPUExecutionProvider']
+        return providers
+
+    def _download_onnx_model(self) -> Path:
+        """Download ONNX model from HuggingFace Hub."""
+        from huggingface_hub import (  # pylint: disable=import-outside-toplevel
+            hf_hub_download,
+        )
+
+        # Depth Anything V2 ONNX models are available from various sources
+        onnx_repo = "onnx/Depth-Anything-V2"
+
+        # Get filename from module-level constant
+        onnx_filename = ONNX_MODEL_FILENAMES.get(self.variant)
+
+        if not onnx_filename:
+            raise ValueError(
+                f"ONNX model not available for variant {self.variant}. "
+                "Use SMALL, BASE, or LARGE."
+            )
+
+        # nosec B615 - revision pinning intentionally omitted for development flexibility
+        # Production deployments should pin specific model revisions
+        model_path = hf_hub_download(
+            repo_id=onnx_repo,
+            filename=onnx_filename,
+            cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+        )
+
+        return Path(model_path)
 
     def _load_coreml_model(self) -> None:
         """Load CoreML model for Apple Neural Engine."""
@@ -284,6 +420,8 @@ class DepthAnythingV2Model:
         # Estimate depth based on backend
         if self.backend == ModelBackend.COREML:
             result = self._estimate_depth_coreml(image)
+        elif self.backend == ModelBackend.ONNX:
+            result = self._estimate_depth_onnx(image)
         else:
             result = self._estimate_depth_pytorch(image)
 
@@ -304,6 +442,9 @@ class DepthAnythingV2Model:
 
     def _estimate_depth_pytorch(self, image: Image.Image) -> dict:
         """Estimate depth using PyTorch backend."""
+        if not TORCH_AVAILABLE:
+            raise ImportError("torch required for PyTorch inference")
+
         start_time = time.time()
 
         # Run inference
@@ -313,7 +454,7 @@ class DepthAnythingV2Model:
             depth_raw = prediction['depth']
 
             # Convert to numpy
-            if isinstance(depth_raw, torch.Tensor):
+            if TORCH_AVAILABLE and isinstance(depth_raw, torch.Tensor):
                 depth_raw = depth_raw.cpu().numpy()
             elif isinstance(depth_raw, Image.Image):
                 depth_raw = np.array(depth_raw)
@@ -378,6 +519,58 @@ class DepthAnythingV2Model:
                 'backend': 'coreml',
                 'variant': self.variant.name,
                 'device': 'ane',
+                'inference_time_ms': inference_time * 1000,
+                'shape': depth_normalized.shape,
+            }
+        }
+
+    def _estimate_depth_onnx(self, image: Image.Image) -> dict:
+        """Estimate depth using ONNX runtime backend."""
+        start_time = time.time()
+
+        # Get model input details
+        input_name = self.model.get_inputs()[0].name
+        input_shape = self.model.get_inputs()[0].shape
+
+        # Prepare input - resize and normalize
+        # Default input size for Depth Anything V2 is 518x518
+        target_size = (518, 518)
+        if input_shape and len(input_shape) == 4 and input_shape[2] is not None and input_shape[3] is not None:
+            target_size = (input_shape[2], input_shape[3])
+
+        image_resized = image.resize(target_size, Image.Resampling.BILINEAR)
+        image_array = np.array(image_resized).astype(np.float32) / 255.0
+
+        # Normalize with ImageNet mean and std
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        image_array = (image_array - mean) / std
+
+        # Convert to NCHW format (batch, channels, height, width)
+        image_array = image_array.transpose(2, 0, 1)
+        image_array = np.expand_dims(image_array, axis=0)
+
+        # Run inference
+        outputs = self.model.run(None, {input_name: image_array})
+        depth_raw = outputs[0]
+
+        # Remove batch dimension and squeeze
+        depth_raw = np.squeeze(depth_raw)
+
+        # Normalize to [0, 1]
+        depth_min = depth_raw.min()
+        depth_max = depth_raw.max()
+        depth_normalized = (depth_raw - depth_min) / (depth_max - depth_min + 1e-8)
+
+        inference_time = time.time() - start_time
+
+        return {
+            'depth': depth_normalized.astype(np.float32),
+            'depth_raw': depth_raw.astype(np.float32),
+            'metadata': {
+                'backend': 'onnx',
+                'variant': self.variant.name,
+                'device': self.device,
                 'inference_time_ms': inference_time * 1000,
                 'shape': depth_normalized.shape,
             }
