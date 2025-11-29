@@ -30,9 +30,11 @@ Usage:
 """
 
 import argparse
+import os
 import time
+from concurrent.futures import BrokenExecutor, ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from PIL import Image
@@ -508,6 +510,60 @@ def enhance_with_vfx(
 
 # ==================== Batch Processing ====================
 
+def _process_single_image_vfx(
+    img_path: Path,
+    output_dir: Path,
+    base_preset: str,
+    vfx_preset: str,
+    material_response: bool,
+    out_bitdepth: int
+) -> Tuple[Path, bool, Optional[int], Optional[str]]:
+    """
+    Process a single image with VFX (helper for parallel processing).
+
+    This function is designed to be called from a ProcessPoolExecutor.
+    It processes a single image and returns the result status.
+
+    Args:
+        img_path: Path to the input image
+        output_dir: Output directory
+        base_preset: Base enhancement preset
+        vfx_preset: VFX preset name
+        material_response: Enable material response
+        out_bitdepth: Output bit depth (8, 16, or 32)
+
+    Returns:
+        Tuple of (img_path, success, processing_time_ms, error_message)
+    """
+    try:
+        # Open image
+        img, meta = _open_any(img_path)
+
+        # Process with VFX
+        result = enhance_with_vfx(
+            img,
+            base_preset=base_preset,
+            vfx_preset=vfx_preset,
+            material_response=material_response,
+            save_depth=False
+        )
+
+        # Save
+        output_path = output_dir / f"{img_path.stem}_{vfx_preset}{img_path.suffix}"
+        _save_with_meta(
+            result["image"],
+            result["array"],
+            output_path,
+            meta,
+            out_bitdepth=out_bitdepth
+        )
+
+        return (img_path, True, result["metrics"]["total_ms"], None)
+
+    except Exception as e:
+        return (img_path, False, None, str(e))
+
+
 def batch_process_vfx(
     input_dir: Path,
     output_dir: Path,
@@ -517,7 +573,7 @@ def batch_process_vfx(
     pattern: str = "*.jpg",
     jobs: int = 4,
     out_bitdepth: int = 16
-) -> None:
+) -> List[Tuple[Path, bool, Optional[int], Optional[str]]]:
     """
     Batch process images with VFX.
 
@@ -528,16 +584,13 @@ def batch_process_vfx(
         vfx_preset: VFX preset
         material_response: Enable material response
         pattern: File pattern to match
-        jobs: Number of parallel jobs (NOT YET IMPLEMENTED - processing is sequential)
+        jobs: Number of parallel jobs (1 for sequential, >1 for parallel processing)
         out_bitdepth: Output bit depth
 
-    Note:
-        Parallel processing via the 'jobs' parameter is planned but not yet implemented.
-        All processing is currently sequential. This parameter is accepted for forward
-        compatibility but has no effect on performance.
+    Returns:
+        List of tuples containing (path, success, processing_time_ms, error_message)
+        for each processed image.
     """
-    if jobs > 1:
-        _warn(f"Parallel processing not yet implemented. Requested {jobs} jobs, using 1 (sequential).")
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -547,49 +600,103 @@ def batch_process_vfx(
 
     if not image_files:
         _error(f"No images found matching {pattern} in {input_dir}")
-        return
+        return []
 
-    _info(f"Processing {len(image_files)} images...")
+    total_images = len(image_files)
+    _info(f"Processing {total_images} images...")
 
-    for i, img_path in enumerate(image_files, 1):
-        _info(f"[{i}/{len(image_files)}] Processing {img_path.name}")
+    results: List[Tuple[Path, bool, Optional[int], Optional[str]]] = []
 
+    # Validate and constrain jobs parameter
+    # Ensure at least 1, and cap at CPU count to prevent resource exhaustion
+    max_workers = os.cpu_count() or 4
+    jobs = max(1, min(jobs, max_workers))
+    if jobs > 1:
+        _info(f"Using {jobs} parallel workers (max available: {max_workers})")
+
+    if jobs == 1:
+        # Sequential processing
+        for i, img_path in enumerate(image_files, 1):
+            _info(f"[{i}/{total_images}] Processing {img_path.name}")
+
+            result = _process_single_image_vfx(
+                img_path,
+                output_dir,
+                base_preset,
+                vfx_preset,
+                material_response,
+                out_bitdepth
+            )
+            results.append(result)
+
+            path, success, proc_time, error = result
+            if success:
+                _info(f"  Completed in {proc_time}ms")
+            else:
+                _error(f"Failed to process {img_path.name}: {error}")
+    else:
+        # Parallel processing using ProcessPoolExecutor
         try:
-            # Open image
-            img, meta = _open_any(img_path)
+            with ProcessPoolExecutor(max_workers=jobs) as executor:
+                # Submit all tasks
+                futures = {
+                    executor.submit(
+                        _process_single_image_vfx,
+                        img_path,
+                        output_dir,
+                        base_preset,
+                        vfx_preset,
+                        material_response,
+                        out_bitdepth
+                    ): img_path for img_path in image_files
+                }
 
-            # Process with VFX
-            result = enhance_with_vfx(
-                img,
-                base_preset=base_preset,
-                vfx_preset=vfx_preset,
-                material_response=material_response,
-                save_depth=False
-            )
+                # Collect results as they complete
+                completed = 0
+                for future in as_completed(futures):
+                    completed += 1
+                    img_path = futures[future]
 
-            # Save
-            output_path = output_dir / f"{img_path.stem}_{vfx_preset}{img_path.suffix}"
-            _save_with_meta(
-                result["image"],
-                result["array"],
-                output_path,
-                meta,
-                out_bitdepth=out_bitdepth
-            )
+                    try:
+                        result = future.result()
+                        results.append(result)
 
-            # Save depth map if requested
-            if result["depth"] is not None:
-                depth_path = output_dir / f"{img_path.stem}_depth.png"
-                depth_img = (result["depth"] * 65535).astype(np.uint16)
-                Image.fromarray(depth_img, mode='I;16').save(depth_path)
+                        path, success, proc_time, error = result
+                        if success:
+                            _info(f"[{completed}/{total_images}] Completed {path.name} in {proc_time}ms")
+                        else:
+                            _error(f"[{completed}/{total_images}] Failed to process {path.name}: {error}")
+                    except BrokenExecutor as e:
+                        _error(f"Process pool broken: {e}")
+                        # Mark remaining unprocessed images as failed
+                        for f, p in futures.items():
+                            if f not in [r[0] for r in results]:
+                                results.append((p, False, None, f"Process pool broken: {e}"))
+                        break
+                    except Exception as e:
+                        _error(f"[{completed}/{total_images}] Worker exception for {img_path.name}: {e}")
+                        results.append((img_path, False, None, str(e)))
+        except BrokenExecutor as e:
+            _error(f"Failed to create process pool: {e}")
+            # Fall back to sequential processing for remaining images
+            for img_path in image_files:
+                if img_path not in [r[0] for r in results]:
+                    result = _process_single_image_vfx(
+                        img_path,
+                        output_dir,
+                        base_preset,
+                        vfx_preset,
+                        material_response,
+                        out_bitdepth
+                    )
+                    results.append(result)
 
-            _info(f"  Completed in {result['metrics']['total_ms']}ms")
+    # Summary
+    successful = sum(1 for r in results if r[1])
+    failed = len(results) - successful
+    _info(f"Batch processing complete! {successful} succeeded, {failed} failed")
 
-        except Exception as e:
-            _error(f"Failed to process {img_path.name}: {e}")
-            continue
-
-    _info("Batch processing complete!")
+    return results
 
 
 # ==================== CLI ====================
