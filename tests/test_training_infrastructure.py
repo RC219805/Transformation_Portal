@@ -38,6 +38,7 @@ if TORCH_AVAILABLE:
             EnhancementDataset,
             PerceptualLoss,
             StyleLoss,
+            VGGFeatureExtractor,
             HyperRealityTrainer,
             TrainingConfig
         )
@@ -179,10 +180,41 @@ class TestEnhancementDataset:
 
 
 class TestLossFunctions:
-    """Test loss functions"""
+    """Test loss functions with pretrained VGG features"""
+
+    @pytest.fixture(autouse=True)
+    def check_torchvision(self):
+        """Check if torchvision is available for VGG-based tests"""
+        try:
+            import torchvision  # noqa: F401
+            self.has_torchvision = True
+        except ImportError:
+            self.has_torchvision = False
+
+    def test_vgg_feature_extractor(self):
+        """Test VGG feature extraction"""
+        if not self.has_torchvision:
+            pytest.skip("torchvision not available")
+
+        # Test with specific layers
+        extractor = VGGFeatureExtractor(layers=[2, 7, 12])
+
+        # Create dummy input
+        x = torch.randn(1, 3, 64, 64)
+
+        # Extract features
+        features = extractor(x)
+
+        assert len(features) == 3
+        for feat in features:
+            assert isinstance(feat, torch.Tensor)
+            assert feat.ndim == 4  # batch, channels, height, width
 
     def test_perceptual_loss(self):
-        """Test perceptual loss computation"""
+        """Test perceptual loss computation with VGG features"""
+        if not self.has_torchvision:
+            pytest.skip("torchvision not available")
+
         loss_fn = PerceptualLoss()
 
         # Create dummy tensors
@@ -196,7 +228,10 @@ class TestLossFunctions:
         assert loss.item() >= 0
 
     def test_style_loss(self):
-        """Test style loss computation"""
+        """Test style loss computation with VGG features"""
+        if not self.has_torchvision:
+            pytest.skip("torchvision not available")
+
         loss_fn = StyleLoss()
 
         pred = torch.randn(2, 3, 64, 64)
@@ -209,7 +244,10 @@ class TestLossFunctions:
         assert loss.item() >= 0
 
     def test_loss_backprop(self):
-        """Test loss can backpropagate"""
+        """Test loss can backpropagate through VGG features"""
+        if not self.has_torchvision:
+            pytest.skip("torchvision not available")
+
         loss_fn = PerceptualLoss()
 
         # Create tensor with gradient tracking
@@ -221,6 +259,34 @@ class TestLossFunctions:
 
         assert pred.grad is not None
         assert pred.grad.shape == pred.shape
+
+    def test_perceptual_loss_identical_images(self):
+        """Test that identical images have zero perceptual loss"""
+        if not self.has_torchvision:
+            pytest.skip("torchvision not available")
+
+        loss_fn = PerceptualLoss()
+
+        # Create identical tensors
+        img = torch.randn(1, 3, 64, 64)
+        loss = loss_fn(img, img.clone())
+
+        # Loss should be very close to zero for identical images
+        assert loss.item() < 1e-6
+
+    def test_style_loss_identical_images(self):
+        """Test that identical images have zero style loss"""
+        if not self.has_torchvision:
+            pytest.skip("torchvision not available")
+
+        loss_fn = StyleLoss()
+
+        # Create identical tensors
+        img = torch.randn(1, 3, 64, 64)
+        loss = loss_fn(img, img.clone())
+
+        # Loss should be very close to zero for identical images
+        assert loss.item() < 1e-6
 
 
 class TestModelCheckpoints:
