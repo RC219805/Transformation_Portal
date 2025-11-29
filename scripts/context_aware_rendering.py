@@ -55,7 +55,6 @@ def _check_tiff_processor():
             _tiff_processor_available = False
             logger.warning("TIFF processor not available - install luxury_tiff_batch_processor")
     return _tiff_processor_available
-    return _tiff_processor_available
 
 
 def _image_to_array(image_path: Path) -> np.ndarray:
@@ -290,6 +289,7 @@ class ContextAwareRenderingPipeline:
         base_config = {
             'model_size': 'small',
             'device': 'mps',  # Apple Silicon
+            'depth_emphasis': strategy.depth_emphasis,  # Store for pipeline config building
         }
 
         # Depth emphasis
@@ -548,7 +548,7 @@ class ContextAwareRenderingPipeline:
                     },
                 },
                 'atmospheric_effects': {
-                    'enabled': depth_config.get('device') != 'foreground',
+                    'enabled': depth_config.get('depth_emphasis') != 'foreground',
                     'haze_density': 0.015,
                     'haze_color': [0.7, 0.8, 0.9],
                     'desaturation_strength': 0.3,
