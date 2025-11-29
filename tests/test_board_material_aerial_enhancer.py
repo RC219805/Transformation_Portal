@@ -2,22 +2,51 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import pytest
 
-# Import from installed package
-from transformation_portal.enhancers.board_material_aerial_enhancer import (
-    _kmeans,
-    compute_cluster_stats,
-    ClusterStats,
-    MaterialRule,
-    relabel,
-    relabel_safe,
-    build_material_rules,
-    save_palette_assignments,
-    load_palette_assignments,
-    auto_assign_materials_by_stats,
-    enhance_aerial,
-    DEFAULT_TEXTURES,
+# Check if sklearn is available before importing the module
+try:
+    import sklearn  # noqa: F401
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+
+# Skip all tests in this module if sklearn is not available
+pytestmark = pytest.mark.skipif(
+    not SKLEARN_AVAILABLE,
+    reason="sklearn is required for board_material_aerial_enhancer module"
 )
+
+# Guard the import - only import if sklearn is available
+if SKLEARN_AVAILABLE:
+    from transformation_portal.enhancers.board_material_aerial_enhancer import (
+        _kmeans,
+        compute_cluster_stats,
+        ClusterStats,
+        MaterialRule,
+        relabel,
+        relabel_safe,
+        build_material_rules,
+        save_palette_assignments,
+        load_palette_assignments,
+        auto_assign_materials_by_stats,
+        enhance_aerial,
+        DEFAULT_TEXTURES,
+    )
+else:
+    # Provide dummy values to prevent NameError during test collection
+    _kmeans = None  # type: ignore
+    compute_cluster_stats = None  # type: ignore
+    ClusterStats = None  # type: ignore
+    MaterialRule = None  # type: ignore
+    relabel = None  # type: ignore
+    relabel_safe = None  # type: ignore
+    build_material_rules = None  # type: ignore
+    save_palette_assignments = None  # type: ignore
+    load_palette_assignments = None  # type: ignore
+    auto_assign_materials_by_stats = None  # type: ignore
+    enhance_aerial = None  # type: ignore
+    DEFAULT_TEXTURES = None  # type: ignore
 
 # ==========================
 # Test K-means

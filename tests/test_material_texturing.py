@@ -7,105 +7,114 @@ import types
 from pathlib import Path
 
 import numpy as np
+import pytest
 from PIL import Image
 
-# Import after stubs are in place to prevent lux_render_pipeline from loading
-# heavy ML dependencies during test setup - this will be done after stub setup
-# to avoid ImportError
+# Check if tqdm is available (required by unified_luxury_pipeline via pipelines.__init__)
+try:
+    import tqdm  # noqa: F401
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
 
-# ``lux_render_pipeline`` depends on heavy diffusion stacks. Provide small stubs
-# so we can import the module and exercise the finishing helpers without the
-# runtime dependencies.
-torch_stub = types.ModuleType("torch")
-torch_cuda = types.ModuleType("torch.cuda")
+# Skip all tests in this module if tqdm is not available
+pytestmark = pytest.mark.skipif(
+    not TQDM_AVAILABLE,
+    reason="tqdm is required for lux_render_pipeline module (via pipelines)"
+)
 
-torch_cuda.is_available = lambda: False  # type: ignore[attr-defined]
-torch_cuda.manual_seed_all = lambda seed: None  # type: ignore[attr-defined]
+# Only set up stubs and import if tqdm is available
+if TQDM_AVAILABLE:
+    # Import after stubs are in place to prevent lux_render_pipeline from loading
+    # heavy ML dependencies during test setup - this will be done after stub setup
+    # to avoid ImportError
 
+    # ``lux_render_pipeline`` depends on heavy diffusion stacks. Provide small stubs
+    # so we can import the module and exercise the finishing helpers without the
+    # runtime dependencies.
+    torch_stub = types.ModuleType("torch")
+    torch_cuda = types.ModuleType("torch.cuda")
 
-class _Generator:
-    def __init__(self, device: str = "cpu") -> None:
-        self.device = device
+    torch_cuda.is_available = lambda: False  # type: ignore[attr-defined]
+    torch_cuda.manual_seed_all = lambda seed: None  # type: ignore[attr-defined]
 
-    def manual_seed(self, seed: int) -> "_Generator":
-        return self
+    class _Generator:
+        def __init__(self, device: str = "cpu") -> None:
+            self.device = device
 
+        def manual_seed(self, seed: int) -> "_Generator":
+            return self
 
-torch_stub.cuda = torch_cuda
-torch_stub.Generator = _Generator
-torch_stub.manual_seed = lambda seed: None
-torch_stub.float16 = float
-torch_stub.float32 = float
-torch_stub.inference_mode = lambda: (lambda fn: fn)
+    torch_stub.cuda = torch_cuda
+    torch_stub.Generator = _Generator
+    torch_stub.manual_seed = lambda seed: None
+    torch_stub.float16 = float
+    torch_stub.float32 = float
+    torch_stub.inference_mode = lambda: (lambda fn: fn)
 
-sys.modules.setdefault("torch", torch_stub)
-sys.modules.setdefault("torch.cuda", torch_cuda)
+    sys.modules.setdefault("torch", torch_stub)
+    sys.modules.setdefault("torch.cuda", torch_cuda)
 
+    diffusers_stub = types.ModuleType("diffusers")
 
-diffusers_stub = types.ModuleType("diffusers")
+    class _DummyPipeline:
+        def __init__(self) -> None:
+            self.scheduler = types.SimpleNamespace(config={})
 
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):  # type: ignore[override]
+            return cls()
 
-class _DummyPipeline:
-    def __init__(self) -> None:
-        self.scheduler = types.SimpleNamespace(config={})
+        def to(self, device: str):  # pragma: no cover - unused in tests
+            return self
 
-    @classmethod
-    def from_pretrained(cls, *args, **kwargs):  # type: ignore[override]
-        return cls()
+        def __call__(self, *args, **kwargs):  # pragma: no cover - unused in tests
+            dummy_image = Image.new("RGB", (8, 8), color=0)
+            return types.SimpleNamespace(images=[dummy_image])
 
-    def to(self, device: str):  # pragma: no cover - unused in tests
-        return self
+    class _DummyScheduler:
+        config: dict[str, object] = {}
 
-    def __call__(self, *args, **kwargs):  # pragma: no cover - unused in tests
-        dummy_image = Image.new("RGB", (8, 8), color=0)
-        return types.SimpleNamespace(images=[dummy_image])
+        @classmethod
+        def from_config(cls, config):  # type: ignore[override]
+            inst = cls()
+            inst.config = config
+            return inst
 
+    diffusers_stub.ControlNetModel = _DummyPipeline
+    diffusers_stub.StableDiffusionControlNetImg2ImgPipeline = _DummyPipeline
+    diffusers_stub.StableDiffusionLatentUpscalePipeline = _DummyPipeline
+    diffusers_stub.UniPCMultistepScheduler = _DummyScheduler
+    diffusers_stub.StableDiffusionXLControlNetPipeline = _DummyPipeline
+    diffusers_stub.StableDiffusionXLImg2ImgPipeline = _DummyPipeline
 
-class _DummyScheduler:
-    config: dict[str, object] = {}
+    sys.modules.setdefault("diffusers", diffusers_stub)
 
-    @classmethod
-    def from_config(cls, config):  # type: ignore[override]
-        inst = cls()
-        inst.config = config
-        return inst
+    controlnet_aux_stub = types.ModuleType("controlnet_aux")
 
+    class _CannyDetector:
+        def __call__(self, image: Image.Image) -> Image.Image:
+            return image
 
-diffusers_stub.ControlNetModel = _DummyPipeline
-diffusers_stub.StableDiffusionControlNetImg2ImgPipeline = _DummyPipeline
-diffusers_stub.StableDiffusionLatentUpscalePipeline = _DummyPipeline
-diffusers_stub.UniPCMultistepScheduler = _DummyScheduler
-diffusers_stub.StableDiffusionXLControlNetPipeline = _DummyPipeline
-diffusers_stub.StableDiffusionXLImg2ImgPipeline = _DummyPipeline
+    class _MidasDetector:
+        def __init__(self, model_type: str = "dpt_large") -> None:
+            self.model_type = model_type
 
-sys.modules.setdefault("diffusers", diffusers_stub)
+        def __call__(self, image: Image.Image) -> Image.Image:
+            return image
 
+    controlnet_aux_stub.CannyDetector = _CannyDetector
+    controlnet_aux_stub.MidasDetector = _MidasDetector
 
-controlnet_aux_stub = types.ModuleType("controlnet_aux")
+    sys.modules.setdefault("controlnet_aux", controlnet_aux_stub)
 
-
-class _CannyDetector:
-    def __call__(self, image: Image.Image) -> Image.Image:
-        return image
-
-
-class _MidasDetector:
-    def __init__(self, model_type: str = "dpt_large") -> None:
-        self.model_type = model_type
-
-    def __call__(self, image: Image.Image) -> Image.Image:
-        return image
-
-
-controlnet_aux_stub.CannyDetector = _CannyDetector
-controlnet_aux_stub.MidasDetector = _MidasDetector
-
-sys.modules.setdefault("controlnet_aux", controlnet_aux_stub)
-
-# pylint: disable=wrong-import-position
-# Import must be after stubs are in place to prevent lux_render_pipeline from loading
-# heavy ML dependencies during test setup
-from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing  # noqa: E402
+    # pylint: disable=wrong-import-position
+    # Import must be after stubs are in place to prevent lux_render_pipeline from loading
+    # heavy ML dependencies during test setup
+    from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing  # noqa: E402
+else:
+    # Provide dummy value to prevent NameError during test collection
+    apply_material_response_finishing = None  # type: ignore
 
 
 def _make_texture(path: Path, color: tuple[int, int, int]) -> None:
