@@ -19,8 +19,15 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
-import torch
 from PIL import Image
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None  # type: ignore
+    logging.warning("torch not available, install with: pip install torch")
 
 try:
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation, pipeline
@@ -151,15 +158,21 @@ class DepthAnythingV2Model:
     def _auto_detect_backend(self) -> ModelBackend:
         """Auto-detect optimal backend for current hardware."""
         # Prefer CoreML on Apple Silicon for best performance
-        if COREML_AVAILABLE and torch.backends.mps.is_available():
+        if TORCH_AVAILABLE and COREML_AVAILABLE and torch.backends.mps.is_available():
             return ModelBackend.COREML
 
         # Fallback to PyTorch with MPS acceleration
-        if torch.backends.mps.is_available():
+        if TORCH_AVAILABLE and torch.backends.mps.is_available():
             return ModelBackend.PYTORCH_MPS
 
-        # CPU fallback
-        return ModelBackend.PYTORCH_CPU
+        # CPU fallback (or ONNX if torch not available)
+        if TORCH_AVAILABLE:
+            return ModelBackend.PYTORCH_CPU
+        if ONNX_AVAILABLE:
+            return ModelBackend.ONNX
+        raise RuntimeError(
+            "No backend available. Install torch or onnxruntime."
+        )
 
     def _auto_detect_device(self) -> str:
         """Auto-detect optimal device for PyTorch."""
@@ -169,7 +182,7 @@ class DepthAnythingV2Model:
             return "onnx"
         if self.backend == ModelBackend.PYTORCH_MPS:
             return "mps"
-        if torch.cuda.is_available():
+        if TORCH_AVAILABLE and torch.cuda.is_available():
             return "cuda"
         return "cpu"
 
@@ -186,6 +199,11 @@ class DepthAnythingV2Model:
 
     def _load_pytorch_model(self) -> None:
         """Load PyTorch model using transformers."""
+        if not TORCH_AVAILABLE:
+            raise ImportError(
+                "torch required for PyTorch backend. "
+                "Install with: pip install torch"
+            )
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError(
                 "transformers required for PyTorch backend. "
@@ -424,6 +442,9 @@ class DepthAnythingV2Model:
 
     def _estimate_depth_pytorch(self, image: Image.Image) -> dict:
         """Estimate depth using PyTorch backend."""
+        if not TORCH_AVAILABLE:
+            raise ImportError("torch required for PyTorch inference")
+
         start_time = time.time()
 
         # Run inference
@@ -433,7 +454,7 @@ class DepthAnythingV2Model:
             depth_raw = prediction['depth']
 
             # Convert to numpy
-            if isinstance(depth_raw, torch.Tensor):
+            if TORCH_AVAILABLE and isinstance(depth_raw, torch.Tensor):
                 depth_raw = depth_raw.cpu().numpy()
             elif isinstance(depth_raw, Image.Image):
                 depth_raw = np.array(depth_raw)
