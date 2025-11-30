@@ -1,0 +1,227 @@
+# =============================================================================
+# Transformation Portal RAG System Configuration - Phase 1 Enhancement
+# =============================================================================
+# Strategic Configuration: Activating semantic vector search and persistence
+# Version: 2.0.0 (Phase 1 Implementation)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Indexer Configuration - Enhanced with Persistence
+# -----------------------------------------------------------------------------
+indexer:
+  # Chunking parameters (optimized for code/documentation hybrid)
+  chunk_size_tokens: 750
+  overlap_tokens: 75
+  chars_per_token: 4.0
+
+  # PERSISTENCE ACTIVATION (Phase 1 Core Enhancement)
+  cache_enabled: true
+  cache_dir: .rag_cache
+  cache_format: pickle  # Options: pickle, json, msgpack
+
+  # Incremental indexing configuration
+  incremental_enabled: true
+  content_hash_algorithm: sha256
+  invalidation_strategy: content_hash  # Options: content_hash, mtime, always
+
+  # File patterns for indexing
+  include_patterns:
+    - "*.py"
+    - "*.md"
+    - "*.yaml"
+    - "*.yml"
+    - "*.json"
+    - "*.txt"
+    - "*.rst"
+
+  exclude_patterns:
+    - "deprecated/*"
+    - ".venv/*"
+    - "__pycache__/*"
+    - "*.pyc"
+    - ".git/*"
+    - "node_modules/*"
+    - ".rag_cache/*"
+    - "*.egg-info/*"
+
+  # Directories to index (priority order)
+  index_directories:
+    - docs/
+    - depth_pipeline/
+    - tests/
+    - .github/agents/
+    - config/
+    - tools/
+    - scripts/
+
+# -----------------------------------------------------------------------------
+# Retriever Configuration - Vector Search ACTIVATED
+# -----------------------------------------------------------------------------
+retriever:
+  # VECTOR SEARCH ACTIVATION (Phase 1 Core Enhancement)
+  enable_vector_search: true
+
+  # Hybrid retrieval weight tuning (optimized for code/documentation corpus)
+  # Higher vector weight improves conceptual/semantic queries
+  # Higher BM25 weight improves exact keyword matching
+  bm25_weight: 0.6
+  vector_weight: 0.4
+
+  # BM25 parameters (Okapi BM25)
+  bm25_k1: 1.5
+  bm25_b: 0.75
+
+  # Vector search configuration
+  vector_model: all-MiniLM-L6-v2  # 22MB, 384 dimensions, fast inference
+  # Alternative models (uncomment to use):
+  # vector_model: all-mpnet-base-v2  # 438MB, 768 dimensions, higher accuracy
+  # vector_model: multi-qa-MiniLM-L6-cos-v1  # Optimized for questions
+
+  vector_dimensions: 384
+  similarity_metric: cosine  # Options: cosine, euclidean, dot_product
+
+  # Embedding cache configuration
+  embedding_cache_enabled: true
+  embedding_cache_dir: .rag_cache/embeddings
+  embedding_batch_size: 32
+
+  # Query configuration
+  top_k_default: 10
+  query_cache_size: 100
+  query_expansion_enabled: false  # Future enhancement
+
+  # Performance optimization
+  use_gpu: auto  # Options: auto, true, false
+  model_warmup: true  # Pre-load model on initialization
+
+# -----------------------------------------------------------------------------
+# Reranker Configuration
+# -----------------------------------------------------------------------------
+reranker:
+  enabled: true
+
+  # Multi-signal scoring weights
+  exact_match_bonus: 2.0
+  code_quality_bonus: 0.3      # Docstrings, type hints
+  documentation_bonus: 0.2      # Titles, examples, links
+  test_relevance_bonus: 0.1     # Test function name matches
+
+  # Code-specific scoring
+  function_signature_bonus: 0.25
+  class_definition_bonus: 0.2
+  import_statement_bonus: 0.1
+
+  # Recency scoring (for evolution tracking)
+  recency_enabled: false  # Future enhancement
+  recency_decay_days: 30
+
+# -----------------------------------------------------------------------------
+# Citation Configuration
+# -----------------------------------------------------------------------------
+citation:
+  snippet_max_lines: 10
+  snippet_max_chars: 500
+  default_max_citations: 5
+
+  # Confidence thresholds
+  high_confidence_threshold: 0.85
+  medium_confidence_threshold: 0.65
+  low_confidence_threshold: 0.40
+
+  # Citation formatting
+  include_line_numbers: true
+  include_function_context: true
+  include_relevance_notes: true
+
+# -----------------------------------------------------------------------------
+# Knowledge Engine Configuration
+# -----------------------------------------------------------------------------
+knowledge_engine:
+  # Feedback collection
+  auto_feedback_enabled: true
+  feedback_retention_days: 90
+
+  # Pattern analysis
+  min_samples_for_pattern: 10
+  success_rate_threshold: 0.90
+  performance_degradation_threshold: 0.10
+
+  # Recommendations
+  auto_recommendations_enabled: true
+  recommendation_confidence_threshold: 0.75
+
+# -----------------------------------------------------------------------------
+# Persistence Configuration (Phase 1 Core)
+# -----------------------------------------------------------------------------
+persistence:
+  # Index persistence
+  index_path: .rag_cache/index.pkl
+  metadata_path: .rag_cache/metadata.json
+
+  # Embedding persistence
+  embeddings_path: .rag_cache/embeddings.npy
+  embeddings_index_path: .rag_cache/embeddings_index.pkl
+
+  # Knowledge base persistence
+  knowledge_base_path: .rag_cache/knowledge_base.json
+  feedback_path: .rag_cache/feedback.json
+
+  # Auto-save configuration
+  auto_save_enabled: true
+  auto_save_interval_seconds: 300  # 5 minutes
+
+  # Backup configuration
+  backup_enabled: true
+  backup_count: 3
+  backup_dir: .rag_cache/backups
+
+# -----------------------------------------------------------------------------
+# Logging Configuration
+# -----------------------------------------------------------------------------
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_to_file: true
+  log_file: .rag_cache/rag_system.log
+  log_rotation_size_mb: 10
+  log_retention_count: 5
+
+  # Performance logging
+  log_query_times: true
+  log_cache_hits: true
+  slow_query_threshold_ms: 500
+
+# -----------------------------------------------------------------------------
+# Performance Tuning
+# -----------------------------------------------------------------------------
+performance:
+  # Threading configuration
+  indexing_threads: 4
+  embedding_threads: 2
+
+  # Memory management
+  max_memory_mb: 512
+  chunk_batch_size: 100
+
+  # Lazy loading
+  lazy_model_loading: true
+  model_unload_timeout_seconds: 300
+
+# -----------------------------------------------------------------------------
+# Feature Flags (Phase 1 Status)
+# -----------------------------------------------------------------------------
+feature_flags:
+  # Phase 1 - ACTIVATED
+  vector_search: true
+  persistent_cache: true
+  embedding_cache: true
+  query_cache: true
+
+  # Phase 2 - Future
+  incremental_indexing: false  # Requires git hook integration
+  cross_pipeline_analysis: false
+  auto_feedback_collection: false
+
+  # Phase 3 - Future
+  knowledge_evolution_tracking: false
+  multi_repo_search: false
+  real_time_collaborative: false
