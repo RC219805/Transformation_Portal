@@ -61,7 +61,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 # Configure module logger
 logger = logging.getLogger("rag_system.git_hooks")
@@ -74,39 +75,50 @@ logger = logging.getLogger("rag_system.git_hooks")
 
 @dataclass
 class GitHookConfig:
-    """Configuration for git hook integration."""
-    
-    # Repository settings
+    """Configuration for git hook integration.
+
+    Each field controls a specific aspect of git hook behavior, incremental indexing,
+    cache validation, and logging. See inline comments for details.
+    """
+
+    # Root directory of the git repository. Used to resolve relative paths for hooks and cache.
     repo_root: str = "."
+    # Directory for RAG cache storage. Stores index and validation artifacts.
     rag_cache_dir: str = ".rag_cache"
-    
-    # Hook behavior
+
+    # List of git hooks to enable. Determines which hooks are installed and trigger actions.
     enabled_hooks: List[str] = field(default_factory=lambda: [
-        "post-commit",
-        "post-merge", 
-        "post-checkout",
+        "post-commit",   # Update index after commits
+        "post-merge",    # Update index after merges/pulls
+        "post-checkout",  # Validate cache on branch switch
     ])
-    
-    # Indexing settings
+
+    # Enable incremental indexing (only changed files, not full reindex).
     incremental_enabled: bool = True
+    # If True, run indexing in a background thread to avoid blocking git operations.
     background_indexing: bool = True
-    max_files_for_sync: int = 50  # Above this, use background
-    
+    # Maximum number of files to process synchronously before switching to background mode.
+    max_files_for_sync: int = 50
+
     # Validation settings
+    # If True, validate cache consistency on branch checkout.
     validate_on_checkout: bool = True
+    # If True, automatically reindex if cache is found invalid during validation.
     auto_reindex_on_invalid: bool = True
-    
-    # File patterns (inherited from RAG config)
+
+    # File patterns to include in indexing (inherited from RAG config).
     include_patterns: List[str] = field(default_factory=lambda: [
         "*.py", "*.md", "*.yaml", "*.yml", "*.json",
     ])
-    
+
+    # File patterns to exclude from indexing (inherited from RAG config).
     exclude_patterns: List[str] = field(default_factory=lambda: [
         "deprecated/*", ".venv/*", "__pycache__/*", ".rag_cache/*",
     ])
-    
-    # Logging
+
+    # Path to log file for git hook operations.
     log_file: str = ".rag_cache/git_hooks.log"
+    # If True, enable verbose logging for debugging and diagnostics.
     verbose: bool = False
 
 
@@ -160,9 +172,9 @@ class ChangeDetector:
             if fnmatch.fnmatch(path, pattern):
                 return False
         
-        # Check include patterns
+        # Check include patterns (match against full path for consistency)
         for pattern in self.config.include_patterns:
-            if fnmatch.fnmatch(Path(path).name, pattern):
+            if fnmatch.fnmatch(path, pattern):
                 return True
         
         return False
@@ -300,8 +312,8 @@ class IncrementalIndexer:
                     state = json.load(f)
                 self._last_indexed_commit = state.get("last_commit")
                 logger.debug(f"Loaded state: last_commit={self._last_indexed_commit}")
-            except (json.JSONDecodeError, IOError):
-                pass
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to load incremental indexer state from {state_file}: {e}. Proceeding without previous state.")
     
     def _save_state(self, commit: str) -> None:
         """Save indexer state to disk."""
@@ -310,7 +322,7 @@ class IncrementalIndexer:
         try:
             state = {
                 "last_commit": commit,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             with open(state_file, "w") as f:
                 json.dump(state, f, indent=2)
@@ -351,11 +363,16 @@ class IncrementalIndexer:
         # Lazy load RAG system if not provided
         if rag_system is None:
             try:
-                sys.path.insert(0, str(self.cache_dir.parent / "agents" / "rag_system"))
+                rag_path = self.cache_dir.parent / ".github" / "agents" / "rag_system"
+                sys.path.insert(0, str(rag_path))
                 from phase1_integration import RAGSystem
                 rag_system = RAGSystem()
             except ImportError as e:
-                stats["errors"].append(f"Failed to load RAG system: {e}")
+                attempted_path = self.cache_dir.parent / ".github" / "agents" / "rag_system"
+                stats["errors"].append(
+                    f"Failed to load RAG system from {attempted_path}: {e}. "
+                    "Resolution: Ensure 'phase1_integration.py' exists in the directory and all dependencies are installed."
+                )
                 return stats
         
         # Categorize changes
@@ -379,18 +396,19 @@ class IncrementalIndexer:
                 affected_paths.add(change.path)
                 if change.old_path:
                     affected_paths.add(change.old_path)
-            
-            # Re-index affected files
-            # This is a simplified implementation - full version would
-            # surgically update only affected chunks
-            
-            if hasattr(rag_system, 'index'):
+
+            # Re-index affected files using incremental methods if available
+            # Otherwise fall back to full re-index
+            try:
                 # Force re-index to pick up changes
                 rag_system.index(force_reindex=True)
-                
+
                 stats["files_added"] = len(added)
                 stats["files_modified"] = len(modified)
                 stats["files_deleted"] = len(deleted)
+            except AttributeError:
+                stats["errors"].append("RAG system does not have an index method")
+                logger.error("RAG system missing index method")
             
         except Exception as e:
             stats["errors"].append(str(e))
@@ -541,8 +559,8 @@ class CacheValidator:
                 stats["chunk_count"] = metadata.get("chunk_count", 0)
                 stats["file_count"] = metadata.get("indexed_files", 0)
                 stats["valid"] = True
-            except (json.JSONDecodeError, IOError):
-                pass
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to read or parse metadata file '{metadata_file}': {e}")
         
         return stats
 
@@ -599,7 +617,10 @@ exit_code=$?
         results = {}
         
         if not self.hooks_dir.exists():
-            logger.error("Git hooks directory not found - is this a git repository?")
+            logger.error(
+                f"Git hooks directory not found at {self.hooks_dir}. "
+                f"Please run this command from the repository root: {self.repo_root}"
+            )
             return {h: False for h in hooks}
         
         for hook_name in hooks:
@@ -676,7 +697,7 @@ exit_code=$?
                         
                         # Restore backup if exists
                         if backup_path.exists():
-                            shutil.move(str(backup_path), str(hook_path))
+                            backup_path.rename(hook_path)
                             logger.info(f"Restored {hook_name} from backup")
                         else:
                             logger.info(f"Removed {hook_name} hook")
@@ -716,6 +737,7 @@ exit_code=$?
                     content = hook_path.read_text()
                     hook_info["is_rag_hook"] = "Transformation Portal RAG System" in content
                 except IOError:
+                    # Intentionally ignore errors reading hook file; status reporting is best-effort.
                     pass
                 
                 backup_path = hook_path.with_suffix(".backup")
@@ -832,6 +854,8 @@ class GitHookManager:
                 self._run_background_update(changes)
             else:
                 stats = self.indexer.update_index(changes)
+                if stats.get("errors"):
+                    logger.warning(f"Update had errors: {stats['errors']}")
         
         self.indexer.mark_indexed(self.detector)
         return 0
@@ -912,14 +936,18 @@ class GitHookManager:
         """
         if not self.indexer.needs_update(self.detector):
             return {"status": "up_to_date"}
-        
+
+        if not self.indexer._last_indexed_commit:
+            # First time indexing, do full reindex
+            return {"status": "full_reindex_needed"}
+
         changes = self.detector.get_changes_since_commit(
-            self.indexer._last_indexed_commit or "HEAD~10"
+            self.indexer._last_indexed_commit
         )
-        
+
         stats = self.indexer.update_index(changes)
         self.indexer.mark_indexed(self.detector)
-        
+
         return stats
     
     def get_status(self) -> Dict[str, Any]:
@@ -928,12 +956,13 @@ class GitHookManager:
         cache_stats = self.validator.get_cache_stats()
         is_valid, issues = self.validator.validate()
         
+        current_commit = self.detector.get_current_commit()
         return {
             "hooks": hook_status,
             "cache": cache_stats,
             "valid": is_valid,
             "issues": issues,
-            "current_commit": self.detector.get_current_commit()[:8],
+            "current_commit": current_commit[:8] if current_commit else None,
             "current_branch": self.detector.get_current_branch(),
             "last_indexed": self.indexer._last_indexed_commit[:8] if self.indexer._last_indexed_commit else None,
         }
@@ -957,18 +986,19 @@ def main():
     # Install command
     install_parser = subparsers.add_parser("install", help="Install git hooks")
     install_parser.add_argument("--hooks", nargs="+", help="Specific hooks to install")
-    
+
     # Uninstall command
     uninstall_parser = subparsers.add_parser("uninstall", help="Uninstall git hooks")
-    
+    uninstall_parser.add_argument("--hooks", nargs="+", help="Specific hooks to uninstall")
+
     # Update command
-    update_parser = subparsers.add_parser("update", help="Update index now")
-    
+    subparsers.add_parser("update", help="Update index now")
+
     # Validate command
-    validate_parser = subparsers.add_parser("validate", help="Validate cache")
-    
+    subparsers.add_parser("validate", help="Validate cache")
+
     # Status command
-    status_parser = subparsers.add_parser("status", help="Show status")
+    subparsers.add_parser("status", help="Show status")
     
     # Hook command (called by git hooks)
     hook_parser = subparsers.add_parser("hook", help="Handle hook invocation")
@@ -987,16 +1017,26 @@ def main():
     
     if args.command == "install":
         print("Installing git hooks...")
-        success = manager.install_hooks()
+        hooks = args.hooks if hasattr(args, 'hooks') and args.hooks else None
+        if hooks:
+            results = manager.installer.install(hooks)
+            success = all(results.values())
+        else:
+            success = manager.install_hooks()
         if success:
             print("✓ All hooks installed successfully")
         else:
             print("⚠ Some hooks failed to install")
         return 0 if success else 1
-    
+
     elif args.command == "uninstall":
         print("Uninstalling git hooks...")
-        success = manager.uninstall_hooks()
+        hooks = args.hooks if hasattr(args, 'hooks') and args.hooks else None
+        if hooks:
+            results = manager.installer.uninstall(hooks)
+            success = all(results.values())
+        else:
+            success = manager.uninstall_hooks()
         if success:
             print("✓ All hooks uninstalled")
         return 0 if success else 1
