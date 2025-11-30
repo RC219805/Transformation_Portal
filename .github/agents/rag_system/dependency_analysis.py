@@ -411,10 +411,8 @@ class WorkflowGraphBuilder:
         graph: DependencyGraph
     ) -> None:
         """Analyze a single workflow file."""
-        try:
-            import yaml  # noqa: F401 - imported here to check availability
-        except ImportError:
-            return
+        # yaml was already imported and validated in build() method
+        import yaml  # noqa: F401 - re-import since we're in a different method
 
         rel_path = str(workflow_path.relative_to(self.repo_root))
 
