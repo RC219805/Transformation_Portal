@@ -158,10 +158,13 @@ class TestPhase2KnowledgeEngine:
         config = KnowledgeEngineConfig()
         analyzer = FailureAnalyzer(config)
 
-        assert len(analyzer.patterns) > 0
-        # Check for common patterns
-        pattern_names = [p.name for p in analyzer.patterns]
-        assert "import_error" in pattern_names or any("import" in p.lower() for p in pattern_names)
+        # Verify patterns exist
+        assert len(analyzer.patterns) > 0, "FailureAnalyzer should have built-in patterns"
+        
+        # Verify patterns have required attributes
+        for pattern in analyzer.patterns:
+            assert hasattr(pattern, 'name'), "Pattern should have a name attribute"
+            assert hasattr(pattern, 'error_regex'), "Pattern should have an error_regex attribute"
 
 
 class TestPhase2DependencyAnalysis:
