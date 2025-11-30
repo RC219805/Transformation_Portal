@@ -1477,7 +1477,7 @@ def main():
     if args.command == "ingest":
         result = engine.ingest_test_run(
             junit_path=args.junit,
-            pytest_json_path=getattr(args, 'pytest_json', None),
+            pytest_json_path=args.pytest_json,
             coverage_path=args.coverage,
         )
         print("\n✓ Ingestion complete:")
