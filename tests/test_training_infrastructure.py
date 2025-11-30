@@ -5,7 +5,7 @@ Tests for Hyper-Reality Enhancement Training Infrastructure
 Tests cover:
 - Synthetic data generation
 - Dataset loading
-- Loss functions
+- Loss functions (including LPIPS)
 - Training loop
 - Model checkpoint saving/loading
 """
@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # pylint: disable=wrong-import-position
 # Try to import training modules - may fail if torch.nn not available
+LPIPS_AVAILABLE = False
 if TORCH_AVAILABLE:
     try:
         from enhancements.train_hyper_reality import (
@@ -40,7 +41,8 @@ if TORCH_AVAILABLE:
             StyleLoss,
             VGGFeatureExtractor,
             HyperRealityTrainer,
-            TrainingConfig
+            TrainingConfig,
+            LPIPS_AVAILABLE
         )
         from enhancements.model_loader import ModelLoader, load_pretrained_weights
         from enhancements.hyper_reality_enhancement import (
@@ -409,6 +411,76 @@ class TestTrainingIntegration:
             assert trainer.current_epoch == 0  # 0-indexed
 
 
+class TestDepthNormalsIntegration:
+    """Test depth/normals integration in training pipeline"""
+
+    def test_estimate_depth(self):
+        """Test depth estimation helper method"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Create test input
+            img = torch.rand(2, 3, 64, 64)
+
+            # Estimate depth
+            depth = trainer._estimate_depth(img)
+
+            assert depth.shape == (2, 1, 64, 64)
+            assert depth.min() >= 0
+            assert depth.max() <= 1
+
+    def test_compute_normals(self):
+        """Test normal computation from depth"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Create test depth
+            depth = torch.rand(2, 1, 64, 64)
+
+            # Compute normals
+            normals = trainer._compute_normals(depth)
+
+            assert normals.shape == (2, 3, 64, 64)
+            # Normals should be unit vectors (approximately)
+            norms = torch.norm(normals, dim=1)
+            assert torch.allclose(norms, torch.ones_like(norms), atol=0.01)
+
+    def test_training_uses_harmonics_model(self):
+        """Test that training loop uses SpatialHarmonics model with normals"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Verify harmonics model exists and is included in training
+            assert 'harmonics' in trainer.models
+            assert isinstance(trainer.models['harmonics'], SpatialHarmonics)
+
+            # Verify harmonics parameters are in optimizer
+            harmonics_params = set(id(p) for p in trainer.models['harmonics'].parameters())
+            optimizer_params = set(id(p) for pg in trainer.optimizer.param_groups for p in pg['params'])
+
+            assert harmonics_params.issubset(optimizer_params), (
+                "SpatialHarmonics parameters should be included in optimizer"
+            )
+
+    def test_caustics_receives_depth(self):
+        """Test that caustics model receives depth during forward pass"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Create test input
+            img = torch.rand(1, 3, 64, 64)
+            depth = trainer._estimate_depth(img)
+
+            # Call caustics with depth (should not raise)
+            caustics = trainer.models['caustics'](img, depth)
+
+            assert caustics.shape == img.shape
+
+
 class TestModelLoader:
     """Test model loader functionality"""
 
@@ -466,6 +538,56 @@ def test_load_pretrained_weights_fallback():
         # Should return False when no weights found
         success = load_pretrained_weights(models, tmpdir, verbose=False)
         assert success is False
+
+
+class TestLPIPSIntegration:
+    """Test LPIPS loss integration"""
+
+    def test_trainer_has_lpips_config(self):
+        """Test that TrainingConfig has lpips_weight parameter"""
+        config = TrainingConfig()
+        assert hasattr(config, 'lpips_weight')
+        assert config.lpips_weight == 1.0
+
+    def test_trainer_history_includes_lpips(self):
+        """Test that training history tracks LPIPS loss"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Training history should have lpips key
+            assert 'lpips' in trainer.training_history
+
+    def test_trainer_lpips_fn_attribute(self):
+        """Test that trainer has lpips_fn attribute"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # lpips_fn should exist (may be None if lpips not installed)
+            assert hasattr(trainer, 'lpips_fn')
+
+    @pytest.mark.skipif(not LPIPS_AVAILABLE, reason="LPIPS not installed")
+    def test_lpips_loss_computation(self):
+        """Test LPIPS loss computation when available"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Create test tensors
+            img1 = torch.rand(1, 3, 64, 64)
+            img2 = torch.rand(1, 3, 64, 64)
+
+            # LPIPS expects [-1, 1] range
+            img1_scaled = img1 * 2 - 1
+            img2_scaled = img2 * 2 - 1
+
+            # Compute LPIPS loss
+            lpips_loss = trainer.lpips_fn(img1_scaled, img2_scaled).mean()
+
+            assert isinstance(lpips_loss, torch.Tensor)
+            assert lpips_loss.ndim == 0  # scalar
+            assert lpips_loss.item() >= 0
 
 
 if __name__ == "__main__":
