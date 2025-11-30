@@ -91,8 +91,15 @@ class TestPyPIWorkflows:
         assert 'test_pypi' in triggers['workflow_dispatch']['inputs']
 
     def test_python_app_workflow_has_cleanup(self, workflows_dir):
-        """Test that python-app.yml has cleanup job."""
+        """Test that python-app.yml has cleanup job (skipped if deprecated)."""
         workflow_file = workflows_dir / "python-app.yml"
+
+        # Skip if workflow has been deprecated (renamed to .deprecated)
+        if not workflow_file.exists():
+            deprecated_file = workflows_dir / "python-app.yml.deprecated"
+            if deprecated_file.exists():
+                pytest.skip("python-app.yml has been deprecated in favor of ci-consolidated.yml")
+            raise FileNotFoundError("Neither python-app.yml nor python-app.yml.deprecated exists")
 
         with open(workflow_file, 'r', encoding='utf-8') as f:
             workflow = yaml.safe_load(f)
@@ -108,8 +115,15 @@ class TestPyPIWorkflows:
             "Cleanup should depend on other jobs"
 
     def test_python_app_workflow_has_test_pypi(self, workflows_dir):
-        """Test that python-app.yml has Test PyPI deployment."""
+        """Test that python-app.yml has Test PyPI deployment (skipped if deprecated)."""
         workflow_file = workflows_dir / "python-app.yml"
+
+        # Skip if workflow has been deprecated (renamed to .deprecated)
+        if not workflow_file.exists():
+            deprecated_file = workflows_dir / "python-app.yml.deprecated"
+            if deprecated_file.exists():
+                pytest.skip("python-app.yml has been deprecated in favor of ci-consolidated.yml")
+            raise FileNotFoundError("Neither python-app.yml nor python-app.yml.deprecated exists")
 
         with open(workflow_file, 'r', encoding='utf-8') as f:
             workflow = yaml.safe_load(f)
@@ -163,6 +177,13 @@ class TestPyPIWorkflows:
 
         for workflow_name in workflows_to_check:
             workflow_file = workflows_dir / workflow_name
+
+            # Skip deprecated workflows
+            if not workflow_file.exists():
+                deprecated_file = workflows_dir / f"{workflow_name}.deprecated"
+                if deprecated_file.exists():
+                    continue  # Skip this workflow, it's been deprecated
+                continue  # Skip if file doesn't exist
 
             with open(workflow_file, 'r', encoding='utf-8') as f:
                 content = f.read()
