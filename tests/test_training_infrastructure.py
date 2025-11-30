@@ -409,6 +409,76 @@ class TestTrainingIntegration:
             assert trainer.current_epoch == 0  # 0-indexed
 
 
+class TestDepthNormalsIntegration:
+    """Test depth/normals integration in training pipeline"""
+
+    def test_estimate_depth(self):
+        """Test depth estimation helper method"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Create test input
+            img = torch.rand(2, 3, 64, 64)
+
+            # Estimate depth
+            depth = trainer._estimate_depth(img)
+
+            assert depth.shape == (2, 1, 64, 64)
+            assert depth.min() >= 0
+            assert depth.max() <= 1
+
+    def test_compute_normals(self):
+        """Test normal computation from depth"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Create test depth
+            depth = torch.rand(2, 1, 64, 64)
+
+            # Compute normals
+            normals = trainer._compute_normals(depth)
+
+            assert normals.shape == (2, 3, 64, 64)
+            # Normals should be unit vectors (approximately)
+            norms = torch.norm(normals, dim=1)
+            assert torch.allclose(norms, torch.ones_like(norms), atol=0.01)
+
+    def test_training_uses_harmonics_model(self):
+        """Test that training loop uses SpatialHarmonics model with normals"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Verify harmonics model exists and is included in training
+            assert 'harmonics' in trainer.models
+            assert isinstance(trainer.models['harmonics'], SpatialHarmonics)
+
+            # Verify harmonics parameters are in optimizer
+            harmonics_params = set(id(p) for p in trainer.models['harmonics'].parameters())
+            optimizer_params = set(id(p) for pg in trainer.optimizer.param_groups for p in pg['params'])
+
+            assert harmonics_params.issubset(optimizer_params), (
+                "SpatialHarmonics parameters should be included in optimizer"
+            )
+
+    def test_caustics_receives_depth(self):
+        """Test that caustics model receives depth during forward pass"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Create test input
+            img = torch.rand(1, 3, 64, 64)
+            depth = trainer._estimate_depth(img)
+
+            # Call caustics with depth (should not raise)
+            caustics = trainer.models['caustics'](img, depth)
+
+            assert caustics.shape == img.shape
+
+
 class TestModelLoader:
     """Test model loader functionality"""
 
