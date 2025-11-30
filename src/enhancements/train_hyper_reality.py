@@ -498,6 +498,36 @@ class HyperRealityTrainer:
         print(f"Best validation loss: {self.best_val_loss:.6f}")
         print(f"Checkpoint directory: {self.config.checkpoint_dir}")
 
+    def _estimate_depth(self, img: torch.Tensor) -> torch.Tensor:
+        """Estimate depth map from image"""
+        # Simplified depth estimation using luminance
+        gray = torch.mean(img, dim=1, keepdim=True)
+        depth = 1.0 - gray
+        return depth
+
+    def _compute_normals(self, depth: torch.Tensor) -> torch.Tensor:
+        """Compute surface normals from depth"""
+        # Sobel filters for gradients
+        sobel_x = torch.tensor(
+            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+            dtype=torch.float32
+        ).view(1, 1, 3, 3).to(depth.device)
+        sobel_y = torch.tensor(
+            [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
+            dtype=torch.float32
+        ).view(1, 1, 3, 3).to(depth.device)
+
+        # pylint: disable=not-callable  # F.conv2d is callable in torch.nn.functional
+        dx = F.conv2d(depth, sobel_x, padding=1)
+        dy = F.conv2d(depth, sobel_y, padding=1)
+        # pylint: enable=not-callable
+        dz = torch.ones_like(dx) * 0.5
+
+        normals = torch.cat([dx, dy, dz], dim=1)
+        normals = F.normalize(normals, dim=1)
+
+        return normals
+
     def _train_epoch(self, train_loader: DataLoader, epoch: int) -> float:
         """Train for one epoch"""
         total_loss = 0.0
@@ -512,9 +542,13 @@ class HyperRealityTrainer:
             # Forward pass through enhancement stages
             enhanced = low_img
 
-            # Stage 1: Caustics
+            # Estimate depth and compute normals for depth-aware processing
+            depth = self._estimate_depth(enhanced)
+            normals = self._compute_normals(depth)
+
+            # Stage 1: Caustics (with depth information)
             with torch.set_grad_enabled(True):
-                caustics = self.models['caustics'](enhanced)
+                caustics = self.models['caustics'](enhanced, depth)
                 enhanced = enhanced + caustics * 0.3
 
             # Stage 2: Atmosphere
@@ -524,6 +558,11 @@ class HyperRealityTrainer:
             # Stage 3: Materials
             with torch.set_grad_enabled(True):
                 enhanced = self.models['materials'](enhanced)
+
+            # Stage 4: Spatial Harmonics (illumination from normals)
+            with torch.set_grad_enabled(True):
+                illumination = self.models['harmonics'](normals)
+                enhanced = enhanced * (1 + illumination * 0.3)
 
             # Compute losses
             mse = self.mse_loss(enhanced, high_img)
@@ -577,10 +616,24 @@ class HyperRealityTrainer:
 
                 # Forward pass
                 enhanced = low_img
-                caustics = self.models['caustics'](enhanced)
+
+                # Estimate depth and compute normals
+                depth = self._estimate_depth(enhanced)
+                normals = self._compute_normals(depth)
+
+                # Stage 1: Caustics (with depth information)
+                caustics = self.models['caustics'](enhanced, depth)
                 enhanced = enhanced + caustics * 0.3
+
+                # Stage 2: Atmosphere
                 enhanced = self.models['atmosphere'](enhanced)
+
+                # Stage 3: Materials
                 enhanced = self.models['materials'](enhanced)
+
+                # Stage 4: Spatial Harmonics (illumination from normals)
+                illumination = self.models['harmonics'](normals)
+                enhanced = enhanced * (1 + illumination * 0.3)
 
                 # Compute loss
                 loss = self.mse_loss(enhanced, high_img)
