@@ -343,8 +343,17 @@ class VectorRetriever:
 
             if torch.cuda.is_available():
                 return "cuda"
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return "mps"
+            # Check MPS availability with proper version handling
+            try:
+                if (
+                    hasattr(torch.backends, "mps") and
+                    hasattr(torch.backends.mps, "is_available") and
+                    torch.backends.mps.is_available()
+                ):
+                    return "mps"
+            except (AttributeError, RuntimeError):
+                # Older PyTorch versions or MPS not supported
+                pass
         except ImportError:
             pass
 
@@ -525,8 +534,9 @@ class EnhancedHybridRetriever:
         # Statistics
         self.stats = RetrievalStats()
 
-        # Query cache
-        self._query_cache: Dict[str, List[RetrievalResult]] = {}
+        # Query cache - using OrderedDict for proper LRU behavior
+        from collections import OrderedDict
+        self._query_cache: OrderedDict[str, List[RetrievalResult]] = OrderedDict()
 
         self._indexed = False
 
@@ -600,10 +610,13 @@ class EnhancedHybridRetriever:
         Args:
             embeddings: Cached embeddings array
             chunk_ids: Corresponding chunk IDs
+
+        Returns:
+            True if embeddings were loaded successfully, False otherwise
         """
         if not self.config.enable_vector_search or not self.vector:
             logger.warning("Vector search disabled, ignoring cached embeddings")
-            return
+            return False
 
         # Validate chunk IDs match
         if chunk_ids != self.chunk_ids:
@@ -611,10 +624,11 @@ class EnhancedHybridRetriever:
                 "Cached embeddings chunk IDs don't match indexed chunks. "
                 "Recomputing embeddings."
             )
-            return
+            return False
 
         self.vector.set_embeddings(embeddings, chunk_ids)
         logger.info("Loaded cached embeddings successfully")
+        return True
 
     def _normalize_scores(
         self,
@@ -807,13 +821,16 @@ class EnhancedHybridRetriever:
             / self.stats.total_queries
         )
 
-        # Cache results
+        # Cache results using OrderedDict for proper LRU
         if self.config.query_cache_enabled:
-            if len(self._query_cache) >= self.config.query_cache_size:
-                # Simple eviction: remove oldest
-                oldest_key = next(iter(self._query_cache))
-                del self._query_cache[oldest_key]
-            self._query_cache[cache_key] = results
+            # Move to end if exists (most recently used)
+            if cache_key in self._query_cache:
+                self._query_cache.move_to_end(cache_key)
+            else:
+                # Evict oldest (first) if cache is full
+                if len(self._query_cache) >= self.config.query_cache_size:
+                    self._query_cache.popitem(last=False)
+                self._query_cache[cache_key] = results
 
         logger.debug(
             f"Retrieved {len(results)} results for '{query[:50]}...' "

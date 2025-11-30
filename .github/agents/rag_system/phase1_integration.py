@@ -147,10 +147,13 @@ class RAGConfig:
             flat["cache_enabled"] = data["feature_flags"].get("persistent_cache", True)
 
         # Map to dataclass fields
+        import dataclasses
+        valid_fields = {f.name for f in dataclasses.fields(cls)}
         config_dict = {}
         for key, value in flat.items():
-            if hasattr(cls, key.replace("-", "_")):
-                config_dict[key.replace("-", "_")] = value
+            normalized_key = key.replace("-", "_")
+            if normalized_key in valid_fields:
+                config_dict[normalized_key] = value
 
         return cls(**config_dict)
 
@@ -587,14 +590,21 @@ class RAGSystem:
         """Get current repository files for cache validation."""
         files = {}
         repo_root = Path(self.config.repo_root)
+        import fnmatch
 
         for pattern in self.config.include_patterns:
-            for file_path in repo_root.rglob(pattern.lstrip("*")):
+            # Handle glob patterns properly - rglob expects patterns without '*'
+            # but we need to match filenames with fnmatch
+            ext = pattern.lstrip("*.")
+            for file_path in repo_root.rglob(f"*.{ext}"):
                 if file_path.is_file():
                     rel_path = str(file_path.relative_to(repo_root))
 
+                    # Check if file matches include pattern
+                    if not fnmatch.fnmatch(file_path.name, pattern):
+                        continue
+
                     # Check exclude patterns
-                    import fnmatch
                     excluded = False
                     for excl in self.config.exclude_patterns:
                         if fnmatch.fnmatch(rel_path, excl):

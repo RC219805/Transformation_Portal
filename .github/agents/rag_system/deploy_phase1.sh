@@ -207,7 +207,7 @@ check_dependencies() {
         TORCH_DEVICE="cpu"
         if python3 -c "import torch; exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
             TORCH_DEVICE="cuda"
-        elif python3 -c "import torch; exit(0 if torch.backends.mps.is_available() else 1)" 2>/dev/null; then
+        elif python3 -c "import torch; exit(0 if hasattr(torch.backends, 'mps') and hasattr(torch.backends.mps, 'is_available') and torch.backends.mps.is_available() else 1)" 2>/dev/null; then
             TORCH_DEVICE="mps"
         fi
         echo "   ✓ PyTorch available (device: $TORCH_DEVICE)"
