@@ -5,7 +5,7 @@ Tests for Hyper-Reality Enhancement Training Infrastructure
 Tests cover:
 - Synthetic data generation
 - Dataset loading
-- Loss functions
+- Loss functions (including LPIPS)
 - Training loop
 - Model checkpoint saving/loading
 """
@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # pylint: disable=wrong-import-position
 # Try to import training modules - may fail if torch.nn not available
+LPIPS_AVAILABLE = False
 if TORCH_AVAILABLE:
     try:
         from enhancements.train_hyper_reality import (
@@ -40,7 +41,8 @@ if TORCH_AVAILABLE:
             StyleLoss,
             VGGFeatureExtractor,
             HyperRealityTrainer,
-            TrainingConfig
+            TrainingConfig,
+            LPIPS_AVAILABLE
         )
         from enhancements.model_loader import ModelLoader, load_pretrained_weights
         from enhancements.hyper_reality_enhancement import (
@@ -536,6 +538,56 @@ def test_load_pretrained_weights_fallback():
         # Should return False when no weights found
         success = load_pretrained_weights(models, tmpdir, verbose=False)
         assert success is False
+
+
+class TestLPIPSIntegration:
+    """Test LPIPS loss integration"""
+
+    def test_trainer_has_lpips_config(self):
+        """Test that TrainingConfig has lpips_weight parameter"""
+        config = TrainingConfig()
+        assert hasattr(config, 'lpips_weight')
+        assert config.lpips_weight == 1.0
+
+    def test_trainer_history_includes_lpips(self):
+        """Test that training history tracks LPIPS loss"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Training history should have lpips key
+            assert 'lpips' in trainer.training_history
+
+    def test_trainer_lpips_fn_attribute(self):
+        """Test that trainer has lpips_fn attribute"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # lpips_fn should exist (may be None if lpips not installed)
+            assert hasattr(trainer, 'lpips_fn')
+
+    @pytest.mark.skipif(not LPIPS_AVAILABLE, reason="LPIPS not installed")
+    def test_lpips_loss_computation(self):
+        """Test LPIPS loss computation when available"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = TrainingConfig(checkpoint_dir=tmpdir)
+            trainer = HyperRealityTrainer(config)
+
+            # Create test tensors
+            img1 = torch.rand(1, 3, 64, 64)
+            img2 = torch.rand(1, 3, 64, 64)
+
+            # LPIPS expects [-1, 1] range
+            img1_scaled = img1 * 2 - 1
+            img2_scaled = img2 * 2 - 1
+
+            # Compute LPIPS loss
+            lpips_loss = trainer.lpips_fn(img1_scaled, img2_scaled).mean()
+
+            assert isinstance(lpips_loss, torch.Tensor)
+            assert lpips_loss.ndim == 0  # scalar
+            assert lpips_loss.item() >= 0
 
 
 if __name__ == "__main__":

@@ -42,6 +42,13 @@ from enhancements.hyper_reality_enhancement import (  # noqa: E402
     configure_device
 )
 
+# Optional LPIPS import for enhanced perceptual loss
+try:
+    import lpips
+    LPIPS_AVAILABLE = True
+except ImportError:
+    LPIPS_AVAILABLE = False
+
 warnings.filterwarnings('ignore')
 
 # Configure device
@@ -67,6 +74,7 @@ class TrainingConfig:
     mse_weight: float = 1.0
     perceptual_weight: float = 1.0
     style_weight: float = 0.5
+    lpips_weight: float = 1.0  # Weight for LPIPS loss (if available)
 
     # Progressive training
     progressive: bool = True
@@ -411,6 +419,19 @@ class HyperRealityTrainer:
         self.perceptual_loss = PerceptualLoss()
         self.style_loss = StyleLoss()
 
+        # Initialize LPIPS loss if available
+        self.lpips_fn = None
+        if LPIPS_AVAILABLE:
+            try:
+                self.lpips_fn = lpips.LPIPS(net='vgg').to(device)
+                self.lpips_fn.eval()  # LPIPS should be in eval mode
+                print("✓ LPIPS loss initialized (using VGG backbone)")
+            except Exception as e:
+                print(f"⚠ LPIPS initialization failed: {e}")
+                self.lpips_fn = None
+        else:
+            print("⚠ LPIPS not available, using VGG perceptual loss only")
+
         # Initialize optimizer
         all_params = []
         for model in self.models.values():
@@ -436,7 +457,8 @@ class HyperRealityTrainer:
             'val_loss': [],
             'mse': [],
             'perceptual': [],
-            'style': []
+            'style': [],
+            'lpips': []
         }
 
     def _init_models(self):
@@ -499,14 +521,33 @@ class HyperRealityTrainer:
         print(f"Checkpoint directory: {self.config.checkpoint_dir}")
 
     def _estimate_depth(self, img: torch.Tensor) -> torch.Tensor:
-        """Estimate depth map from image"""
-        # Simplified depth estimation using luminance
+        """Estimate depth map from image using luminance inversion.
+
+        This is a simplified heuristic that assumes darker regions are farther
+        away. While not geometrically accurate, it provides a useful proxy for
+        depth-aware effects during training. For production use with real
+        architectural images, consider using Depth Anything V2 or similar
+        learned depth estimation models.
+
+        Args:
+            img: Input image tensor [B, C, H, W] in [0, 1] range
+
+        Returns:
+            Estimated depth map [B, 1, H, W] where higher values = closer
+        """
         gray = torch.mean(img, dim=1, keepdim=True)
         depth = 1.0 - gray
         return depth
 
     def _compute_normals(self, depth: torch.Tensor) -> torch.Tensor:
-        """Compute surface normals from depth"""
+        """Compute surface normals from depth map using Sobel gradients.
+
+        Args:
+            depth: Depth map tensor [B, 1, H, W]
+
+        Returns:
+            Surface normals [B, 3, H, W] as unit vectors (x, y, z components)
+        """
         # Sobel filters for gradients
         sobel_x = torch.tensor(
             [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
@@ -517,10 +558,10 @@ class HyperRealityTrainer:
             dtype=torch.float32
         ).view(1, 1, 3, 3).to(depth.device)
 
-        # pylint: disable=not-callable  # F.conv2d is callable in torch.nn.functional
         dx = F.conv2d(depth, sobel_x, padding=1)
         dy = F.conv2d(depth, sobel_y, padding=1)
-        # pylint: enable=not-callable
+        # Z-component fixed at 0.5 to ensure normals point mostly upward,
+        # providing a reasonable default for surface-facing direction
         dz = torch.ones_like(dx) * 0.5
 
         normals = torch.cat([dx, dy, dz], dim=1)
@@ -569,11 +610,20 @@ class HyperRealityTrainer:
             perceptual = self.perceptual_loss(enhanced, high_img)
             style = self.style_loss(enhanced, high_img)
 
+            # Compute LPIPS loss if available
+            lpips_loss = torch.tensor(0.0, device=device)
+            if self.lpips_fn is not None:
+                # LPIPS expects input in [-1, 1] range, scale from [0, 1]
+                enhanced_scaled = enhanced * 2 - 1
+                high_img_scaled = high_img * 2 - 1
+                lpips_loss = self.lpips_fn(enhanced_scaled, high_img_scaled).mean()
+
             # Combined loss
             loss = (
                 self.config.mse_weight * mse +
                 self.config.perceptual_weight * perceptual +
-                self.config.style_weight * style
+                self.config.style_weight * style +
+                self.config.lpips_weight * lpips_loss
             )
 
             # Backward pass
@@ -591,11 +641,14 @@ class HyperRealityTrainer:
             total_loss += loss.item()
 
             # Update progress bar
-            pbar.set_postfix({
+            postfix = {
                 'loss': f'{loss.item():.4f}',
                 'mse': f'{mse.item():.4f}',
                 'percep': f'{perceptual.item():.4f}',
-            })
+            }
+            if self.lpips_fn is not None:
+                postfix['lpips'] = f'{lpips_loss.item():.4f}'
+            pbar.set_postfix(postfix)
 
         avg_loss = total_loss / num_batches
         return avg_loss
