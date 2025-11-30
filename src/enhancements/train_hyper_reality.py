@@ -688,8 +688,25 @@ class HyperRealityTrainer:
                 illumination = self.models['harmonics'](normals)
                 enhanced = enhanced * (1 + illumination * 0.3)
 
-                # Compute loss
-                loss = self.mse_loss(enhanced, high_img)
+                # Compute losses (consistent with training)
+                mse = self.mse_loss(enhanced, high_img)
+                perceptual = self.perceptual_loss(enhanced, high_img)
+                style = self.style_loss(enhanced, high_img)
+
+                # Compute LPIPS loss if available
+                lpips_loss = torch.tensor(0.0, device=device)
+                if self.lpips_fn is not None:
+                    enhanced_scaled = enhanced * 2 - 1
+                    high_img_scaled = high_img * 2 - 1
+                    lpips_loss = self.lpips_fn(enhanced_scaled, high_img_scaled).mean()
+
+                # Combined loss (same formula as training)
+                loss = (
+                    self.config.mse_weight * mse +
+                    self.config.perceptual_weight * perceptual +
+                    self.config.style_weight * style +
+                    self.config.lpips_weight * lpips_loss
+                )
                 total_loss += loss.item()
 
         # Set back to train mode
