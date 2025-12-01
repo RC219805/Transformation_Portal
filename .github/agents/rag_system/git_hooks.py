@@ -364,9 +364,9 @@ class IncrementalIndexer:
         # Lazy load RAG system if not provided
         if rag_system is None:
             try:
-                rag_path = self.cache_dir.parent / ".github" / "agents" / "rag_system"
+                rag_path = self.cache_dir.parent / ".github" / "agents"
                 sys.path.insert(0, str(rag_path))
-                from phase1_integration import RAGSystem
+                from rag_system.phase1_integration import RAGSystem, RAGConfig
                 rag_system = RAGSystem()
             except ImportError as e:
                 attempted_path = self.cache_dir.parent / ".github" / "agents" / "rag_system"
@@ -895,8 +895,8 @@ class GitHookManager:
                 logger.info("Triggering automatic re-index")
                 # Full re-index needed
                 try:
-                    sys.path.insert(0, str(self.repo_root / ".github" / "agents" / "rag_system"))
-                    from phase1_integration import RAGSystem
+                    sys.path.insert(0, str(self.repo_root / ".github" / "agents"))
+                    from rag_system.phase1_integration import RAGSystem, RAGConfig
                     rag = RAGSystem()
                     rag.index(force_reindex=True)
                 except Exception as e:
