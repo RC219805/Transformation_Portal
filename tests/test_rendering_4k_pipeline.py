@@ -881,6 +881,8 @@ class TestBatchProcessingMemoryManagement:
 
     def test_batch_process_clears_memory_periodically(self, sample_image_pil, temp_output_dir):
         """Test batch processing triggers memory cleanup at expected intervals."""
+        from unittest.mock import MagicMock
+
         # Create multiple test images
         input_paths = []
         for i in range(6):  # More than 5 to trigger cleanup
@@ -894,14 +896,9 @@ class TestBatchProcessingMemoryManagement:
 
         pipeline = Rendering4KPipeline.from_preset("preview")
 
-        # Mock the memory manager's clear_cache method
+        # Use MagicMock with wraps to track calls while preserving original behavior
         original_clear_cache = pipeline.memory_manager.clear_cache
-        clear_cache_call_count = [0]
-
-        def mock_clear_cache():
-            clear_cache_call_count[0] += 1
-            original_clear_cache()
-
+        mock_clear_cache = MagicMock(side_effect=original_clear_cache)
         pipeline.memory_manager.clear_cache = mock_clear_cache
 
         results = pipeline.batch_process(input_paths, output_dir, show_progress=False)
@@ -915,13 +912,15 @@ class TestBatchProcessingMemoryManagement:
         # - Once after image 5 (periodic cleanup every 5 images)
         # - Once at final cleanup
         # Total: at least 2 calls
-        assert clear_cache_call_count[0] >= 2, (
+        assert mock_clear_cache.call_count >= 2, (
             f"Expected at least 2 clear_cache calls (periodic + final), "
-            f"got {clear_cache_call_count[0]}"
+            f"got {mock_clear_cache.call_count}"
         )
 
     def test_batch_process_clears_depth_cache_on_high_memory(self, sample_image_pil, temp_output_dir):
         """Test that depth cache is cleared when memory threshold exceeded."""
+        from unittest.mock import MagicMock
+
         # Create test images
         input_paths = []
         for i in range(3):
@@ -938,8 +937,8 @@ class TestBatchProcessingMemoryManagement:
         for i in range(30):  # Half of default cache_max_size (50)
             pipeline._depth_cache[f"test_key_{i}"] = np.zeros((10, 10))
 
-        # Mock check_memory_threshold to simulate high memory usage
-        pipeline.memory_manager.check_memory_threshold = lambda threshold: False
+        # Use MagicMock to simulate high memory usage
+        pipeline.memory_manager.check_memory_threshold = MagicMock(return_value=False)
 
         results = pipeline.batch_process(input_paths, output_dir, show_progress=False)
 
