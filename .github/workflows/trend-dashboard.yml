@@ -83,6 +83,7 @@ jobs:
           FLAKINESS_MIN_THRESHOLD = 0.2  # Tests failing less than 20% are not flaky
           FLAKINESS_MAX_THRESHOLD = 0.8  # Tests failing more than 80% are consistently failing
           MAX_TEST_ID_LENGTH = 50  # Maximum characters for test_id display in tables
+          INFINITE_CHANGE_PERCENT = 999999.0  # Sentinel value for infinite regression
           
           knowledge_dir = Path(".rag_cache/knowledge")
           analysis_days = int(os.environ.get("ANALYSIS_PERIOD_DAYS", "30"))
@@ -195,7 +196,7 @@ jobs:
                   report["trends"]["execution_time"] = {
                       "current_seconds": round(last_val, 2),
                       "average_seconds": round(avg, 2),
-                      "change_percent": 999999.0 if is_infinite else round(change_pct, 1),
+                      "change_percent": INFINITE_CHANGE_PERCENT if is_infinite else round(change_pct, 1),
                       "is_infinite_regression": is_infinite,
                       "direction": direction
                   }
@@ -206,7 +207,7 @@ jobs:
                       report["regressions"].append({
                           "type": "performance_regression",
                           "severity": "critical",
-                          "change_percent": 999999.0,
+                          "change_percent": INFINITE_CHANGE_PERCENT,
                           "is_infinite_regression": True,
                           "message": "Test execution time increased from 0 to measurable duration"
                       })

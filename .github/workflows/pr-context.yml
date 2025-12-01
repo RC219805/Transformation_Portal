@@ -103,20 +103,27 @@ jobs:
           failure_history = {}
           
           # Precompute stems for all changed files for O(1) lookup
-          changed_file_stems = {Path(f).stem for f in changed_files}
+          # Include both the original stem and with 'test_' prefix for matching test files
+          changed_file_stems = set()
+          for f in changed_files:
+              stem = Path(f).stem
+              changed_file_stems.add(stem)
+              # Also add with 'test_' prefix to match test files
+              changed_file_stems.add(f"test_{stem}")
           
           # Find related tests efficiently using set membership
           for result in test_results:
               test_file = result.get("test_file", "")
               test_file_stem = Path(test_file).stem
               
-              # Check for direct stem match or with 'test_' prefix removed
-              # This prevents false positives like 'user' matching 'test_user_authentication'
+              # Check for matches:
+              # - Direct stem match (test_file_stem in changed_file_stems)
+              # - Stem without 'test_' prefix matches changed file
               stem_variants = {test_file_stem}
               if test_file_stem.startswith("test_"):
                   stem_variants.add(test_file_stem[5:])
               
-              # Match if any changed file stem matches the test file variants
+              # Match if any variant matches any changed file stem
               if changed_file_stems & stem_variants:
                   affected_tests.add(result.get("test_id", ""))
                   
