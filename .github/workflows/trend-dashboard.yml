@@ -237,8 +237,8 @@ jobs:
                       total = pass_count + fail_count
                       
                       # Flaky if neither consistently passes nor fails
-                      # Tests failing less than MIN_THRESHOLD are stable passing
-                      # Tests failing more than MAX_THRESHOLD are stable failing
+                      # Tests failing less than FLAKINESS_MIN_THRESHOLD are stable passing
+                      # Tests failing more than FLAKINESS_MAX_THRESHOLD are stable failing
                       fail_ratio = fail_count / total
                       if FLAKINESS_MIN_THRESHOLD < fail_ratio < FLAKINESS_MAX_THRESHOLD:
                           report["flaky_tests"].append({
