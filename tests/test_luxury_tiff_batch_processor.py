@@ -11,7 +11,6 @@ import pytest
 # pylint: disable=no-member  # False positives with package imports
 
 
-
 # NOTE: Tests assume package is installed with: pip install -e .
 
 try:

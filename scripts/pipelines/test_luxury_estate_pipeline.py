@@ -13,9 +13,9 @@ Usage:
 import sys
 from pathlib import Path
 
-print("="*80)
+print("=" * 80)
 print("LUXURY ESTATE MASTER PIPELINE - VALIDATION TEST")
-print("="*80)
+print("=" * 80)
 print()
 
 # Test 1: Python version
@@ -175,9 +175,9 @@ else:
     print(f"  ⚠ Source directory not found: {source_dir}")
 
 # Summary
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("VALIDATION COMPLETE")
-print("="*80)
+print("=" * 80)
 
 # Check critical requirements
 critical_ok = True

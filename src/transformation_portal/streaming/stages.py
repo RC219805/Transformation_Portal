@@ -875,7 +875,6 @@ class DenoiseStage(AsyncStage[ImageData, ImageData]):
     def _denoise_sync(self, image_data: ImageData) -> ImageData:
         """Synchronous denoising."""
         import numpy as np
-        from scipy.ndimage import gaussian_filter
 
         array = image_data.array.astype(np.float32)
         if array.max() > 1.0:
@@ -899,7 +898,6 @@ class DenoiseStage(AsyncStage[ImageData, ImageData]):
     def _apply_depth_adaptive_denoise(self, array, depth_map, base_sigma):
         """Apply depth-adaptive denoising with more blur in background."""
         import numpy as np
-        from scipy.ndimage import gaussian_filter
 
         depth = depth_map
         if depth.max() > 1.0:

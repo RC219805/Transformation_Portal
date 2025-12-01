@@ -629,7 +629,7 @@ class TestConvenienceFunctions:
         mock_instance.process.return_value = {'master': temp_dir / 'test.tiff'}
         mock_pipeline_class.return_value = mock_instance
 
-        result = process_luxury_render(
+        _result = process_luxury_render(  # noqa: F841
             sample_image_file,
             output_dir=temp_dir,
             profile=ProcessingProfile.PREMIUM

@@ -2,6 +2,7 @@
 """
 Process 750 Picacho Lane source JPEGs through the luxury pipeline
 """
+from transformation_portal.pipelines.lux_render_pipeline import LuxRenderPipeline
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -9,7 +10,6 @@ from datetime import datetime
 # Add the src directory to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from transformation_portal.pipelines.lux_render_pipeline import LuxRenderPipeline
 
 # Scene definitions with their source files
 SCENES = [
@@ -21,6 +21,7 @@ SCENES = [
     "PrimaryBedroom"
 ]
 
+
 def process_750_picacho():
     """Process all 6 source images for 750 Picacho Lane"""
 
@@ -30,9 +31,9 @@ def process_750_picacho():
     output_dir = Path(f"/Users/rc/Desktop/Cache/750_Picacho_Processed_{timestamp}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("="*80)
+    print("=" * 80)
     print("750 PICACHO LANE - LUXURY PIPELINE PROCESSING")
-    print("="*80)
+    print("=" * 80)
     print(f"\nSource Directory: {source_dir}")
     print(f"Output Directory: {output_dir}")
     print(f"Timestamp: {timestamp}\n")
@@ -65,7 +66,7 @@ def process_750_picacho():
             # Process the image
             print(f"📥 Input: {source_file.name}")
             print(f"📤 Output: {output_file.name}")
-            print(f"⚙️  Processing...")
+            print("⚙️  Processing...")
 
             result = pipeline.process_image(
                 input_path=str(source_file),
@@ -77,7 +78,7 @@ def process_750_picacho():
                 print(f"✅ Success! Output size: {size_mb:.2f} MB")
                 results[scene] = "SUCCESS"
             else:
-                print(f"❌ Processing failed")
+                print("❌ Processing failed")
                 results[scene] = "FAILED"
 
         except Exception as e:
@@ -102,6 +103,7 @@ def process_750_picacho():
     print(f"{'='*80}\n")
 
     return success_count == total_count
+
 
 if __name__ == "__main__":
     success = process_750_picacho()

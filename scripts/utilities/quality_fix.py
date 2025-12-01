@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Automated quality fixer for common issues."""
-import os
-import re
 from pathlib import Path
+
 
 def fix_trailing_whitespace(file_path):
     """Remove trailing whitespace from file."""
@@ -15,9 +14,11 @@ def fix_trailing_whitespace(file_path):
     with open(file_path, 'w', encoding='utf-8') as f:
         f.writelines(fixed_lines)
 
+
 def fix_imports_order(file_path):
     """Move imports to top of file (basic fix)."""
     # This is handled better by isort, skip for now
+
 
 def main():
     """Fix common issues in Python files."""
@@ -61,6 +62,7 @@ def main():
             fix_trailing_whitespace(file_path)
         else:
             print(f"Skip (not found): {file_rel}")
+
 
 if __name__ == '__main__':
     main()

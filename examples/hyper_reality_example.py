@@ -5,6 +5,12 @@ Demonstrates how to integrate quantum caustics and neural atmosphere synthesis
 with existing Transformation_Portal pipelines
 """
 
+from enhancements import (
+    HyperRealityProcessor,
+    EnhancementConfig,
+    QualityMode,
+    enhance_image
+)
 import sys
 from pathlib import Path
 
@@ -12,12 +18,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 # pylint: disable=wrong-import-position
-from enhancements import (
-    HyperRealityProcessor,
-    EnhancementConfig,
-    QualityMode,
-    enhance_image
-)
 
 
 def example_basic_enhancement():
@@ -25,9 +25,9 @@ def example_basic_enhancement():
     Example 1: Basic enhancement with default settings
     Target: 105/100 quality
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("EXAMPLE 1: Basic Hyper-Reality Enhancement")
-    print("="*60)
+    print("=" * 60)
 
     # Simple one-line enhancement
     results = enhance_image(
@@ -46,9 +46,9 @@ def example_custom_configuration():
     Example 2: Custom configuration for specific effects
     Target: Maximum quantum effects
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("EXAMPLE 2: Custom Configuration")
-    print("="*60)
+    print("=" * 60)
 
     # Create custom configuration
     config = EnhancementConfig(
@@ -82,9 +82,9 @@ def example_material_specific():
     Example 3: Material-specific enhancement
     Focus on stucco and architectural materials
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("EXAMPLE 3: Material-Specific Enhancement")
-    print("="*60)
+    print("=" * 60)
 
     config = EnhancementConfig(target_quality=110)
 
@@ -114,9 +114,9 @@ def example_batch_processing():
     Example 4: Batch process multiple images
     Process entire estate photo set
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("EXAMPLE 4: Batch Processing")
-    print("="*60)
+    print("=" * 60)
 
     # Estate image set
     images = [
@@ -168,9 +168,9 @@ def example_batch_processing():
             print(f"  ❌ Failed: {e}")
 
     # Summary
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("BATCH PROCESSING SUMMARY")
-    print("="*60)
+    print("=" * 60)
     for r in results_summary:
         print(f"  {r['name']:40s} {r['quality']:3d}/100  {r['time']:5.1f}s")
 
@@ -185,9 +185,9 @@ def example_integration_with_existing_pipeline():
     Example 5: Integration with existing Transformation_Portal pipelines
     Demonstrates layering hyper-reality on top of existing processing
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("EXAMPLE 5: Integration with Existing Pipeline")
-    print("="*60)
+    print("=" * 60)
 
     # This example shows how to integrate with your existing pipelines
     # Uncomment and adapt to your actual pipeline code:
@@ -215,9 +215,9 @@ def example_selective_enhancement():
     """
     Example 6: Selective enhancement (enable/disable specific stages)
     """
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("EXAMPLE 6: Selective Enhancement")
-    print("="*60)
+    print("=" * 60)
 
     # Create config with only specific enhancements enabled
     config = EnhancementConfig(target_quality=95)
@@ -255,9 +255,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Hyper-Reality Enhancement Examples")
     parser.add_argument("--example", type=int, choices=range(1, 7),
-                       help="Run specific example (1-6)")
+                        help="Run specific example (1-6)")
     parser.add_argument("--all", action="store_true",
-                       help="Run all examples")
+                        help="Run all examples")
 
     args = parser.parse_args()
 

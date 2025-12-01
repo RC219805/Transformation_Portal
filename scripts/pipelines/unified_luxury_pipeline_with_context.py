@@ -7,6 +7,8 @@ Usage:
     python3 unified_luxury_pipeline_with_context.py [--source-dir PATH] [--output-dir PATH]
 """
 
+from architectural_context_engine_enhanced import ArchitecturalContextEngine
+from unified_luxury_pipeline import process_single_view
 import sys
 import json
 import logging
@@ -16,8 +18,6 @@ import numpy as np
 
 # Import pipeline and context engine
 sys.path.insert(0, str(Path(__file__).parent))
-from unified_luxury_pipeline import process_single_view
-from architectural_context_engine_enhanced import ArchitecturalContextEngine
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -71,9 +71,9 @@ class ContextAwarePipeline:
         return canonical_name
 
     def apply_architectural_context(self,
-                                   view_filename: str,
-                                   image: np.ndarray,
-                                   config: Dict[str, Any]) -> np.ndarray:
+                                    view_filename: str,
+                                    image: np.ndarray,
+                                    config: Dict[str, Any]) -> np.ndarray:
         """
         Apply architectural context enhancements to image.
 
@@ -92,7 +92,7 @@ class ContextAwarePipeline:
             return image
 
         # Extract enhancement parameters
-        enhancement_params = config.get('enhancement_params', {})
+        _enhancement_params = config.get('enhancement_params', {})  # noqa: F841
 
         # Material response strength adjustment
         material_config = config.get('material_response', {})
@@ -115,7 +115,7 @@ class ContextAwarePipeline:
             if saturation != 1.0:
                 # Convert to HSV for saturation adjustment
                 from PIL import Image
-                img_pil = Image.fromarray((np.clip(image, 0, 1) * 255).astype(np.uint8))
+                _img_pil = Image.fromarray((np.clip(image, 0, 1) * 255).astype(np.uint8))  # noqa: F841
 
                 # Note: Full implementation would apply saturation in LAB or HSV space
                 # For now, we document the intended adjustment
@@ -229,20 +229,20 @@ def main():
         description='Unified Luxury Pipeline with Architectural Context Integration'
     )
     parser.add_argument('--source-dir', type=Path,
-                       default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs"),
-                       help='Source directory with JPEG files')
+                        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs"),
+                        help='Source directory with JPEG files')
     parser.add_argument('--output-dir', type=Path,
-                       default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production"),
-                       help='Output directory')
+                        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production"),
+                        help='Output directory')
     parser.add_argument('--metadata', type=Path,
-                       default=Path('750_picacho_metadata.json'),
-                       help='Architectural metadata JSON')
+                        default=Path('750_picacho_metadata.json'),
+                        help='Architectural metadata JSON')
     parser.add_argument('--save-jpeg', action='store_true', default=True,
-                       help='Save JPEG outputs')
+                        help='Save JPEG outputs')
     parser.add_argument('--save-tif', action='store_true', default=True,
-                       help='Save 16-bit TIFF outputs')
+                        help='Save 16-bit TIFF outputs')
     parser.add_argument('--export-configs', type=Path,
-                       help='Export view configs to directory')
+                        help='Export view configs to directory')
 
     args = parser.parse_args()
 
@@ -267,10 +267,10 @@ def main():
         return 1
 
     # Print header
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("  750 PICACHO LANE - CONTEXT-AWARE LUXURY PIPELINE")
     print("  BIM/PDF Metadata Integration Active")
-    print("="*80)
+    print("=" * 80)
     print(f"\nSource: {args.source_dir}")
     print(f"Output: {args.output_dir}")
     print(f"Files to process: {len(source_files)}")
@@ -280,7 +280,7 @@ def main():
     # Process each view
     all_outputs = []
     for i, source_file in enumerate(source_files, 1):
-        print(f"\n[{i}/{len(source_files)}] " + "-"*70)
+        print(f"\n[{i}/{len(source_files)}] " + "-" * 70)
         try:
             outputs = pipeline.process_view_with_context(
                 input_path=source_file,
@@ -296,9 +296,9 @@ def main():
             continue
 
     # Performance summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("  PROCESSING COMPLETE")
-    print("="*80)
+    print("=" * 80)
 
     summary = pipeline.get_performance_summary()
 

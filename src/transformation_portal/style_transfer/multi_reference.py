@@ -19,12 +19,9 @@ Example:
 """
 
 import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
-import numpy as np
 import torch
-from PIL import Image
 
 
 logger = logging.getLogger(__name__)
@@ -364,7 +361,7 @@ class MultiReferenceBlender:
         palette = [base_features]  # Include base
 
         # Create interpolations to each variation
-        for variation in variations[:num_samples-1]:
+        for variation in variations[:num_samples - 1]:
             # Sample at midpoint
             interpolated = self.interpolate_blend(
                 base_features,

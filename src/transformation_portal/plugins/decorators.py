@@ -2,11 +2,11 @@
 
 import functools
 import warnings
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from packaging import version as pkg_version
 
-from .interface import PluginInterface, PluginMetadata, PluginType
+from .interface import PluginMetadata, PluginType
 from .registry import get_global_registry
 
 

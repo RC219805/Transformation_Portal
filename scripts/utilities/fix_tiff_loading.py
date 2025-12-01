@@ -96,7 +96,7 @@ def verify_and_fix_directory(input_dir: Union[str, Path], output_dir: Union[str,
     """
     Verify all TIFFs in a directory and re-save any that are incorrectly 8-bit.
     """
-    from fix_tiff_saving import verify_tiff_depth, save_16bit_tiff
+    from fix_tiff_saving import verify_tiff_depth
 
     input_dir = Path(input_dir)
     output_dir = Path(output_dir) if output_dir else input_dir / "fixed_16bit"

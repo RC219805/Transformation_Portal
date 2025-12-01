@@ -15,22 +15,19 @@ Date: November 11, 2025
 Version: Refined 2.0
 """
 
-import sys
+from skimage import color
+from scipy.ndimage import gaussian_filter
+import cv2
+from PIL import Image, ImageEnhance
+import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 import logging
 from datetime import datetime
 import json
 import warnings
 warnings.filterwarnings('ignore')
 
-import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter
-import cv2
-from scipy import ndimage
-from scipy.ndimage import gaussian_filter
-from skimage import exposure, color, filters, metrics
-from skimage.metrics import structural_similarity as ssim
 
 # Configure logging
 logging.basicConfig(
@@ -369,8 +366,8 @@ class RefinedPremiumPipeline:
         # Gentle S-curve for luxury images
         def curve(x):
             return np.where(x < 0.5,
-                0.5 * np.power(2 * x, 0.95),
-                1.0 - 0.5 * np.power(2 * (1 - x), 0.95))
+                            0.5 * np.power(2 * x, 0.95),
+                            1.0 - 0.5 * np.power(2 * (1 - x), 0.95))
 
         return np.clip(curve(image), 0, 1)
 
@@ -560,7 +557,7 @@ class RefinedPremiumPipeline:
             return []
 
         logger.info(f"\n{'='*80}")
-        logger.info(f"REFINED PREMIUM 100/100 QUALITY PIPELINE V2")
+        logger.info("REFINED PREMIUM 100/100 QUALITY PIPELINE V2")
         logger.info(f"{'='*80}")
         logger.info(f"Input:  {self.input_dir}")
         logger.info(f"Output: {self.output_dir}")
@@ -589,7 +586,7 @@ class RefinedPremiumPipeline:
     def print_summary(self, results: List[Dict]):
         """Print summary."""
         logger.info(f"\n{'='*80}")
-        logger.info(f"PROCESSING COMPLETE - QUALITY REPORT V2")
+        logger.info("PROCESSING COMPLETE - QUALITY REPORT V2")
         logger.info(f"{'='*80}\n")
 
         if not results:
@@ -602,14 +599,14 @@ class RefinedPremiumPipeline:
             logger.info(f"{i}. {result['input']}")
             logger.info(f"   Scene: {result['scene']}")
             logger.info(f"   Quality: {result['initial_metrics']['overall_quality']:.2f} → "
-                       f"{result['final_metrics']['overall_quality']:.2f} "
-                       f"({result['improvement']:+.2f})")
+                        f"{result['final_metrics']['overall_quality']:.2f} "
+                        f"({result['improvement']:+.2f})")
 
             # Show detailed metrics
             final = result['final_metrics']
             logger.info(f"   Details: Sharpness={final['sharpness']:.1f}, "
-                       f"Contrast={final['contrast']:.1f}, "
-                       f"Detail={final['detail_preservation']:.1f}")
+                        f"Contrast={final['contrast']:.1f}, "
+                        f"Detail={final['detail_preservation']:.1f}")
             logger.info("")
 
         # Overall stats
@@ -618,7 +615,7 @@ class RefinedPremiumPipeline:
         avg_improvement = avg_final - avg_initial
 
         logger.info(f"{'='*80}")
-        logger.info(f"OVERALL STATISTICS")
+        logger.info("OVERALL STATISTICS")
         logger.info(f"{'='*80}")
         logger.info(f"Average Initial Quality:  {avg_initial:.2f}/100")
         logger.info(f"Average Final Quality:    {avg_final:.2f}/100")
@@ -629,16 +626,16 @@ class RefinedPremiumPipeline:
         excellent = sum(1 for r in results if r['final_metrics']['overall_quality'] >= 90)
         good = sum(1 for r in results if 80 <= r['final_metrics']['overall_quality'] < 90)
 
-        logger.info(f"Quality Distribution:")
+        logger.info("Quality Distribution:")
         logger.info(f"  Excellent (≥90): {excellent}/{len(results)}")
         logger.info(f"  Good (80-89):    {good}/{len(results)}")
 
         if avg_final >= 90:
-            logger.info(f"\n✅ EXCELLENT: Average quality ≥90/100!")
+            logger.info("\n✅ EXCELLENT: Average quality ≥90/100!")
         elif avg_final >= 80:
-            logger.info(f"\n🎯 GOOD: Average quality ≥80/100 - Approaching excellence")
+            logger.info("\n🎯 GOOD: Average quality ≥80/100 - Approaching excellence")
         else:
-            logger.info(f"\n📈 IMPROVING: Continued refinement recommended")
+            logger.info("\n📈 IMPROVING: Continued refinement recommended")
 
         logger.info(f"\n📁 Output: {self.output_dir}\n")
 

@@ -103,9 +103,9 @@ def test_shadow_clipping_fix(image_paths: List[Path]) -> Dict:
     Returns:
         Test results dictionary
     """
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("TEST 1: Shadow Clipping Reduction")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     results = {}
     outdoor_clipping = []
@@ -127,32 +127,32 @@ def test_shadow_clipping_fix(image_paths: List[Path]) -> Dict:
             indoor_clipping.append(stats['shadow_clipped_pct'])
 
     # Summary
-    logger.info("\n" + "-"*80)
+    logger.info("\n" + "-" * 80)
     logger.info("SUMMARY:")
 
     if outdoor_clipping:
         avg_outdoor = np.mean(outdoor_clipping)
         max_outdoor = np.max(outdoor_clipping)
-        logger.info(f"  Outdoor scenes:")
+        logger.info("  Outdoor scenes:")
         logger.info(f"    Average shadow clipping: {avg_outdoor:.2f}%")
         logger.info(f"    Maximum shadow clipping: {max_outdoor:.2f}%")
-        logger.info(f"    Target: <5.0%")
+        logger.info("    Target: <5.0%")
 
         if avg_outdoor < 5.0:
-            logger.info(f"    ✅ PASS - Average clipping below target")
+            logger.info("    ✅ PASS - Average clipping below target")
         else:
-            logger.info(f"    ⚠️  WARN - Average clipping above target")
+            logger.info("    ⚠️  WARN - Average clipping above target")
 
     if indoor_clipping:
         avg_indoor = np.mean(indoor_clipping)
-        logger.info(f"  Indoor scenes:")
+        logger.info("  Indoor scenes:")
         logger.info(f"    Average shadow clipping: {avg_indoor:.2f}%")
-        logger.info(f"    Target: <6.5% (maintained from baseline)")
+        logger.info("    Target: <6.5% (maintained from baseline)")
 
         if avg_indoor < 6.5:
-            logger.info(f"    ✅ PASS - Indoor quality maintained")
+            logger.info("    ✅ PASS - Indoor quality maintained")
         else:
-            logger.info(f"    ⚠️  WARN - Indoor clipping increased")
+            logger.info("    ⚠️  WARN - Indoor clipping increased")
 
     return {
         'outdoor_clipping': outdoor_clipping,
@@ -170,9 +170,9 @@ def test_ai_enhancement_compatibility() -> Dict:
     Returns:
         Test results dictionary
     """
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("TEST 2: AI Enhancement Tensor Compatibility")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     results = {'tests': []}
 
@@ -226,8 +226,9 @@ def test_ai_enhancement_compatibility() -> Dict:
         all_passed = all(t['status'] == 'PASS' for t in results['tests'])
         results['overall_status'] = 'PASS' if all_passed else 'FAIL'
 
-        logger.info("\n" + "-"*80)
-        logger.info(f"OVERALL: {'✅ PASS' if all_passed else '❌ FAIL'} - {len(results['tests'])}/{len(results['tests'])} tests passed")
+        logger.info("\n" + "-" * 80)
+        logger.info(
+            f"OVERALL: {'✅ PASS' if all_passed else '❌ FAIL'} - {len(results['tests'])}/{len(results['tests'])} tests passed")
 
     except Exception as e:
         logger.error(f"Test failed with error: {e}")
@@ -244,9 +245,9 @@ def test_depth_model_download() -> Dict:
     Returns:
         Test results dictionary
     """
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("TEST 3: Depth Model Auto-Download")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     results = {'checks': []}
 
@@ -283,8 +284,8 @@ def test_depth_model_download() -> Dict:
             logger.info(f"Cache directory: {cache_dir}")
 
             # This will use cached version if available, or download
-            processor = AutoImageProcessor.from_pretrained(model_id)
-            model = AutoModelForDepthEstimation.from_pretrained(model_id)
+            _processor = AutoImageProcessor.from_pretrained(model_id)  # noqa: F841
+            _model = AutoModelForDepthEstimation.from_pretrained(model_id)  # noqa: F841
 
             logger.info("✅ Depth Anything V2 model accessible")
             results['checks'].append({
@@ -305,7 +306,7 @@ def test_depth_model_download() -> Dict:
     all_passed = all(c['status'] == 'PASS' for c in results['checks'])
     results['overall_status'] = 'PASS' if all_passed else 'FAIL'
 
-    logger.info("\n" + "-"*80)
+    logger.info("\n" + "-" * 80)
     logger.info(f"OVERALL: {'✅ PASS' if all_passed else '⚠️  PARTIAL'}")
 
     return results
@@ -338,9 +339,9 @@ def main():
 
     args = parser.parse_args()
 
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("LUXURY ESTATE MASTER PIPELINE - FIX VALIDATION")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     report = {
         'test_suite': 'Pipeline Fixes Validation',
@@ -373,9 +374,9 @@ def main():
     logger.info(f"\n📄 Test report saved: {args.output_report}")
 
     # Summary
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("TEST SUMMARY")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     for test_name, test_results in report['tests'].items():
         status = test_results.get('overall_status', 'N/A')

@@ -7,7 +7,6 @@ Demonstrates architectural context integration with 750 Picacho Kitchen renderin
 from pathlib import Path
 
 from architectural_context_engine import (
-    ArchitecturalContext,
     ArchitecturalContextExtractor,
     DimensionInfo,
     MaterialSpec,

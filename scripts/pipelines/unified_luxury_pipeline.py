@@ -4,6 +4,8 @@ Unified Luxury Pipeline - 750 Picacho Lane
 Maximum quality processing with proper 16-bit TIFF output
 """
 
+from fix_tiff_16bit import save_16bit_tiff_tifffile
+from transformation_portal.utils.format_utils import normalize_extension
 import sys
 from pathlib import Path
 from typing import Tuple
@@ -14,8 +16,6 @@ import tifffile
 
 # Import existing utilities
 sys.path.insert(0, str(Path(__file__).parent))
-from transformation_portal.utils.format_utils import normalize_extension
-from fix_tiff_16bit import save_16bit_tiff_tifffile
 
 
 def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
@@ -102,9 +102,6 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
         print(f"✓ Loaded {ext}: {img.size}")
 
         return img_array, metadata
-
-
-
 
 
 def apply_luxury_enhancements(img_array: np.ndarray, scene_name: str) -> np.ndarray:
@@ -238,7 +235,7 @@ def main():
     # Process each view
     all_outputs = []
     for i, exr_file in enumerate(exr_files, 1):
-        print(f"\n[{i}/{len(exr_files)}] " + "="*70)
+        print(f"\n[{i}/{len(exr_files)}] " + "=" * 70)
         try:
             outputs = process_single_view(
                 input_path=exr_file,

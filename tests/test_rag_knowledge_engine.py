@@ -114,7 +114,7 @@ class TestPatternAnalysis:
         analysis = engine.analyze_patterns('depth_pipeline')
 
         assert analysis.total_runs == 3
-        assert analysis.success_rate == pytest.approx(2/3, rel=0.01)
+        assert analysis.success_rate == pytest.approx(2 / 3, rel=0.01)
         assert analysis.avg_processing_time > 0
         assert analysis.median_processing_time > 0
 

@@ -44,7 +44,7 @@ class TestDimensionValidation:
         invalid_dims = [
             (1024, 770),  # Not multiple of 64
             (800, 600),   # Not multiple of 64
-            (1000, 1000), # Not multiple of 64
+            (1000, 1000),  # Not multiple of 64
         ]
 
         for width, height in invalid_dims:

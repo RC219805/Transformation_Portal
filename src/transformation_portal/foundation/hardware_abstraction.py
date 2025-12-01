@@ -87,7 +87,6 @@ class BackendRegistry:
 
         # CoreML (Apple Neural Engine)
         try:
-            import coremltools
             self.backends[BackendType.COREML] = BackendCapability(
                 backend=BackendType.COREML,
                 available=True,

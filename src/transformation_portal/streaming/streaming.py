@@ -1,7 +1,6 @@
 """Streaming processing utilities."""
 
 import time
-from pathlib import Path
 from typing import Any, Callable, Iterator, List, Optional
 
 

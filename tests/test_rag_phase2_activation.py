@@ -9,7 +9,6 @@ and intelligent test selection.
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
 
 import pytest
 
@@ -21,8 +20,6 @@ from rag_system.phase2_activation import (  # noqa: E402
     Phase2Activator,
     TestResultEntry,
     QualityMetricEntry,
-    DependencyGraphStats,
-    KnowledgeBaseState,
     OBSERVED_CI_RESULTS,
 )
 
@@ -221,7 +218,7 @@ class TestPhase2Activator:
         activator.build_dependency_graph()
 
         # Export to temp directory
-        export_report = activator.export_knowledge_base(tmp_path)
+        _export_report = activator.export_knowledge_base(tmp_path)  # noqa: F841
 
         # Check files were created
         assert (tmp_path / "test_results.json").exists()

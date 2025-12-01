@@ -244,7 +244,7 @@ class GradientDepthEstimator(DepthModelPlugin):
             self._config = config
 
         self._initialized = True
-        logger.info(f"GradientDepthEstimator initialized")
+        logger.info("GradientDepthEstimator initialized")
 
     @measure_performance
     def estimate_depth(

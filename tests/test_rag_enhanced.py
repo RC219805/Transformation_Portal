@@ -126,7 +126,6 @@ class TestConfiguration:
         assert config.get('indexer.cache_dir') == '.custom_cache'
 
 
-
 class TestPersistentCaching:
     """Test persistent caching functionality."""
 

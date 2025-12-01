@@ -155,9 +155,9 @@ def batch_process_canonical_sources(
     Returns:
         Batch processing summary
     """
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("750 Picacho Lane - Optimized Batch Processing")
-    print("="*80)
+    print("=" * 80)
 
     # Load manifest
     print("\n📋 Loading canonical manifest...")
@@ -269,9 +269,9 @@ def batch_process_canonical_sources(
         json.dump(results_summary, f, indent=2)
 
     # Print summary
-    print("\n\n" + "="*80)
+    print("\n\n" + "=" * 80)
     print("BATCH PROCESSING COMPLETE")
-    print("="*80)
+    print("=" * 80)
     print("\n📊 Summary:")
     print(f"   Total scenes: {results_summary['summary']['total_scenes']}")
     print(f"   Processed: {results_summary['summary']['processed']}")

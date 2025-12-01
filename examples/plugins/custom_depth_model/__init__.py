@@ -13,7 +13,6 @@ from transformation_portal.plugins import (
     DepthModelPlugin,
     PluginMetadata,
     PluginType,
-    cached_execution,
     measure_performance,
     plugin,
 )
@@ -182,7 +181,7 @@ class SimpleDepthModel(DepthModelPlugin):
 # Example usage
 if __name__ == "__main__":
     # This demonstrates using the plugin directly
-    from PIL import Image
+    # (Image already imported at top of file)
 
     # Create plugin instance
     model = SimpleDepthModel()

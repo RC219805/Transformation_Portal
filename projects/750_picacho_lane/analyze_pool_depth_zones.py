@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 # Configure matplotlib for non-interactive backend
 plt.switch_backend('Agg')
 
+
 def analyze_depth_zones(depth_map_path, output_dir):
     """Analyze and visualize depth zones."""
 
@@ -68,7 +69,7 @@ def analyze_depth_zones(depth_map_path, output_dir):
     for i, (zone_name, z_min, z_max) in enumerate(zones):
         if i < len(zones) - 1:
             ax.axvline(z_max, color=colors[i], linestyle='--', linewidth=2,
-                      label=f'{zone_name} boundary')
+                       label=f'{zone_name} boundary')
 
     ax.set_xlabel('Depth Value (0=near, 1=far)', fontsize=12)
     ax.set_ylabel('Pixel Count', fontsize=12)
@@ -167,7 +168,7 @@ def analyze_depth_zones(depth_map_path, output_dir):
             table[(i, j)].set_facecolor(color)
 
     ax.set_title('Depth Zone Statistics - 750 Picacho Luxury Pool\n',
-                fontsize=14, fontweight='bold', pad=20)
+                 fontsize=14, fontweight='bold', pad=20)
 
     stats_path = output_dir / 'depth_statistics_table.png'
     plt.savefig(stats_path, dpi=150, bbox_inches='tight')
@@ -181,6 +182,7 @@ def analyze_depth_zones(depth_map_path, output_dir):
     print()
     print(f"All visualizations saved to: {output_dir}")
     print()
+
 
 if __name__ == "__main__":
     # Define paths (relative to project directory)

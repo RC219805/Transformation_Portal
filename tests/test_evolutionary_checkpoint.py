@@ -48,7 +48,7 @@ def test_today_defaults_to_current_date(monkeypatch: pytest.MonkeyPatch) -> None
     )
 
     # Patch the datetime module's date class
-    original_date = dt_module.date
+    _original_date = dt_module.date  # noqa: F841
     monkeypatch.setattr(dt_module, "date", _FrozenDate)
 
     message = checkpoint.evolve_or_alert()

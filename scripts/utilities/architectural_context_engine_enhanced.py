@@ -14,7 +14,7 @@ import json
 import logging
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -434,7 +434,7 @@ class ArchitecturalContextEngine:
 
         Target: < 5% overhead as specified
         """
-        context = self.get_context_for_view(view_name)
+        _context = self.get_context_for_view(view_name)  # noqa: F841
 
         # Metadata lookup: ~0.5ms
         # Material response config: ~1ms
@@ -466,7 +466,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Architectural Context Engine')
     parser.add_argument('--metadata', type=Path, default=Path('750_picacho_metadata.json'),
-                       help='Path to unified metadata JSON')
+                        help='Path to unified metadata JSON')
     parser.add_argument('--view', type=str, help='Get config for specific view')
     parser.add_argument('--export-all', type=Path, help='Export all configs to directory')
     parser.add_argument('--performance', action='store_true', help='Show performance estimates')

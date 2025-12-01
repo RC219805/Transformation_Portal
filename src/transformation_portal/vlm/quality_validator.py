@@ -518,8 +518,8 @@ List any critical issues found."""
             Formatted summary string
         """
         summary = []
-        summary.append(f"Quality Validation Report")
-        summary.append(f"=" * 50)
+        summary.append("Quality Validation Report")
+        summary.append("=" * 50)
         summary.append(f"Overall Status: {report.overall_status.value.upper()}")
         summary.append(f"Overall Score: {report.overall_score:.1f}/10")
         summary.append(f"Passed: {'✓ YES' if report.passed_validation else '✗ NO'}")

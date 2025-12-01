@@ -6,7 +6,6 @@ Proactively catches common code quality issues before commit.
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 
 class QualityChecker:
@@ -131,8 +130,10 @@ class QualityChecker:
             with open(py_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
 
-            fixed_lines = [line.rstrip() + '\n' if line.endswith('\n') else line.rstrip()
-                          for line in lines]
+            fixed_lines = [
+                line.rstrip() + '\n' if line.endswith('\n') else line.rstrip()
+                for line in lines
+            ]
 
             if lines != fixed_lines:
                 with open(py_file, 'w', encoding='utf-8') as f:

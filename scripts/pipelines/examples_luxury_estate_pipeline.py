@@ -36,9 +36,9 @@ from luxury_estate_master_pipeline import (
 
 def example_1_basic_single_image():
     """Example 1: Process single image with default preset."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 1: Basic Single Image Processing")
-    print("="*80)
+    print("=" * 80)
 
     # Initialize pipeline with default preset
     preset = get_750_picacho_preset()
@@ -49,7 +49,7 @@ def example_1_basic_single_image():
 
     if image_path.exists():
         result = pipeline.process_image(image_path, room_type="great_room")
-        print(f"\n✓ Processing complete!")
+        print("\n✓ Processing complete!")
         print(f"  Output: {result['output_paths']}")
     else:
         print(f"⚠ Image not found: {image_path}")
@@ -57,9 +57,9 @@ def example_1_basic_single_image():
 
 def example_2_aerial_preset():
     """Example 2: Process aerial image with optimized preset."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 2: Aerial Photography with Specialized Preset")
-    print("="*80)
+    print("=" * 80)
 
     # Use aerial-optimized preset
     preset = get_aerial_preset()
@@ -69,7 +69,7 @@ def example_2_aerial_preset():
 
     if image_path.exists():
         result = pipeline.process_image(image_path, room_type="aerial")
-        print(f"\n✓ Aerial processing complete with atmospheric effects!")
+        print("\n✓ Aerial processing complete with atmospheric effects!")
         print(f"  Total time: {result['total_time']:.1f}s")
     else:
         print(f"⚠ Image not found: {image_path}")
@@ -77,9 +77,9 @@ def example_2_aerial_preset():
 
 def example_3_batch_processing():
     """Example 3: Batch process all images with room type mapping."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 3: Batch Processing with Room Type Detection")
-    print("="*80)
+    print("=" * 80)
 
     preset = get_750_picacho_preset()
     pipeline = LuxuryEstateMasterPipeline(preset)
@@ -105,7 +105,7 @@ def example_3_batch_processing():
     # Batch process
     results = pipeline.batch_process(image_paths, room_types)
 
-    print(f"\n✓ Batch processing complete!")
+    print("\n✓ Batch processing complete!")
     print(f"  Processed: {len(results)} images")
     print(f"  Total time: {pipeline.stats['total_time']:.1f}s")
     print(f"  Average: {pipeline.stats['total_time']/len(results):.1f}s per image")
@@ -113,9 +113,9 @@ def example_3_batch_processing():
 
 def example_4_custom_preset():
     """Example 4: Create and use custom preset."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 4: Custom Preset Configuration")
-    print("="*80)
+    print("=" * 80)
 
     # Create custom preset optimized for speed
     custom_preset = PipelinePreset(
@@ -163,20 +163,20 @@ def example_4_custom_preset():
     )
 
     # Use custom preset
-    pipeline = LuxuryEstateMasterPipeline(custom_preset)
+    _pipeline = LuxuryEstateMasterPipeline(custom_preset)  # noqa: F841
 
     print(f"Custom preset created: {custom_preset.name}")
     print(f"  Depth: {custom_preset.depth.enabled}")
     print(f"  AI Enhancement: {custom_preset.ai_enhancement.enabled}")
     print(f"  Upscaling: {custom_preset.upscaling.enabled}")
-    print(f"\nExpected speedup: 8-10x faster (~10s per image)")
+    print("\nExpected speedup: 8-10x faster (~10s per image)")
 
 
 def example_5_quality_optimized():
     """Example 5: Maximum quality configuration."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 5: Maximum Quality Configuration")
-    print("="*80)
+    print("=" * 80)
 
     # Start with default preset
     preset = get_750_picacho_preset()
@@ -188,24 +188,24 @@ def example_5_quality_optimized():
     preset.output.master_bit_depth = 16  # 16-bit master
     preset.material_response.strength = 0.85  # Enhanced material response
 
-    pipeline = LuxuryEstateMasterPipeline(preset)
+    _pipeline = LuxuryEstateMasterPipeline(preset)  # noqa: F841
 
     print("Quality-optimized preset created:")
     print(f"  AI steps: {preset.ai_enhancement.num_inference_steps}")
     print(f"  AI guidance: {preset.ai_enhancement.guidance_scale}")
     print(f"  Upscaling: {preset.upscaling.scale_factor}x")
     print(f"  Material strength: {preset.material_response.strength}")
-    print(f"\nExpected time: ~120s per image (highest quality)")
+    print("\nExpected time: ~120s per image (highest quality)")
 
 
 def example_6_stage_by_stage():
     """Example 6: Access individual processing stages."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 6: Stage-by-Stage Processing")
-    print("="*80)
+    print("=" * 80)
 
     preset = get_750_picacho_preset()
-    pipeline = LuxuryEstateMasterPipeline(preset)
+    _pipeline = LuxuryEstateMasterPipeline(preset)  # noqa: F841
 
     image_path = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs/750Picacho_Kitchen_HDR_32-bit.tif")
 
@@ -226,9 +226,9 @@ def example_6_stage_by_stage():
 
 def example_7_output_comparison():
     """Example 7: Generate comparison outputs."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 7: Output Comparison (Multiple Presets)")
-    print("="*80)
+    print("=" * 80)
 
     image_path = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs/750Picacho_Pool_HDR_32-bit.tif")
 
@@ -270,9 +270,9 @@ def example_7_output_comparison():
 
 def example_8_report_analysis():
     """Example 8: Analyze processing report."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 8: Processing Report Analysis")
-    print("="*80)
+    print("=" * 80)
 
     import json
 
@@ -284,7 +284,7 @@ def example_8_report_analysis():
             report = json.load(f)
 
         print(f"Report loaded: {report_path}")
-        print(f"\nBatch Statistics:")
+        print("\nBatch Statistics:")
         print(f"  Preset: {report['preset']}")
         print(f"  Images processed: {report['images_processed']}")
         print(f"  Total time: {report['total_time']:.1f}s")
@@ -294,7 +294,7 @@ def example_8_report_analysis():
         if report['results']:
             first_result = report['results'][0]
             if 'stages' in first_result:
-                print(f"\nStage breakdown (first image):")
+                print("\nStage breakdown (first image):")
                 for stage, duration in first_result['stages'].items():
                     print(f"    {stage}: {duration:.2f}s")
     else:
@@ -305,9 +305,9 @@ def example_8_report_analysis():
 
 def main():
     """Run all examples."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("LUXURY ESTATE MASTER PIPELINE - USAGE EXAMPLES")
-    print("="*80)
+    print("=" * 80)
     print("\nThis script demonstrates various pipeline usage patterns.")
     print("Uncomment example calls in main() to run specific examples.")
 
@@ -322,11 +322,11 @@ def main():
     example_7_output_comparison()
     # example_8_report_analysis()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("For full documentation, see:")
     print("  docs/LUXURY_ESTATE_PIPELINE.md")
     print("  LUXURY_ESTATE_PIPELINE_QUICKSTART.md")
-    print("="*80)
+    print("=" * 80)
 
 
 if __name__ == '__main__':

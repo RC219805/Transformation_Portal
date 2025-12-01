@@ -19,7 +19,7 @@ Reference:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -188,7 +188,7 @@ class IPAdapterStyleTransfer:
         content_pil = self._load_image(content_image)
 
         # Encode reference style
-        style_features = self.encode_reference_image(style_reference)
+        _style_features = self.encode_reference_image(style_reference)  # noqa: F841
 
         # Generate prompt if not provided
         if prompt is None:
@@ -277,7 +277,7 @@ class IPAdapterStyleTransfer:
         weights = weights / weights.sum()
 
         # Blend style features
-        blended_style = sum(
+        _blended_style = sum(  # noqa: F841
             style * weight
             for style, weight in zip(encoded_styles, weights)
         )
@@ -457,7 +457,7 @@ class IPAdapterStyleTransfer:
 
         for alpha in alphas:
             # Interpolate style features
-            interpolated_style = (1 - alpha) * features1 + alpha * features2
+            _interpolated_style = (1 - alpha) * features1 + alpha * features2  # noqa: F841
 
             # Apply interpolated style
             # (Simplified - full implementation would inject interpolated_style)

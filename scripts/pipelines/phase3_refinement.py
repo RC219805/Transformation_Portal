@@ -168,7 +168,7 @@ def process_scene(
         img_float = enhance_water_clarity(img_float, config['water_clarity'])
 
     # Convert back to uint16
-    img_16bit = (img_float * 65535).astype(np.uint16)
+    _img_16bit = (img_float * 65535).astype(np.uint16)  # noqa: F841
 
     # Apply PIL enhancements (contrast, saturation) on 8-bit for compatibility
     img_8bit = (img_float * 255).astype(np.uint8)
@@ -265,7 +265,7 @@ def main():
         # Process
         try:
             process_scene(tiff_path, output_path, scene_type)
-            print(f"✅ Success!")
+            print("✅ Success!")
         except Exception as e:
             print(f"❌ Error processing {tiff_path.name}: {e}")
             import traceback

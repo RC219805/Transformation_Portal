@@ -15,11 +15,10 @@ For luxury real estate:
 """
 
 import logging
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
-from PIL import Image
 
 
 logger = logging.getLogger(__name__)

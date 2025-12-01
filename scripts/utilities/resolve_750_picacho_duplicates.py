@@ -112,7 +112,7 @@ class DuplicateResolver:
 
     def create_canonical_manifest(self) -> Dict[str, Dict]:
         """Create manifest of canonical source files for batch processing."""
-        duplicates = self.find_duplicates()
+        _duplicates = self.find_duplicates()  # noqa: F841
         manifest = {
             'created': datetime.now().isoformat(),
             'base_directory': str(self.base_dir),

@@ -3,7 +3,7 @@
 import time
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 
 @dataclass
@@ -297,10 +297,9 @@ def create_progress(
     if use_rich:
         try:
             # Try to use rich library if available
-            from rich.progress import Progress
+            pass
 
             # Could wrap rich.Progress here
-            pass
         except ImportError:
             pass
 

@@ -41,12 +41,11 @@ License: Attribution (see LICENSE)
 
 import argparse
 import hashlib
-import os
 import shutil
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 try:
     from tqdm import tqdm
@@ -129,6 +128,7 @@ SD_MODELS = [
 # ============================================================================
 # Utilities
 # ============================================================================
+
 
 class DownloadProgressBar:
     """Progress bar for downloads with fallback."""
@@ -303,7 +303,7 @@ def install_depth_models(install_all: bool = False, dry_run: bool = False) -> in
     installed = 0
 
     try:
-        from transformers import AutoImageProcessor
+        pass
 
         for name, config in DEPTH_MODELS.items():
             if not config["required"] and not install_all:
@@ -405,7 +405,7 @@ def install_controlnet_models(dry_run: bool = False) -> int:
     installed = 0
 
     try:
-        from diffusers import ControlNetModel
+        pass
 
         for config in CONTROLNET_MODELS:
             model_id = config["model_id"]

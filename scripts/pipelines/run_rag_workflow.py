@@ -4,6 +4,12 @@ Run RAG workflow end-to-end for the Transformation Portal.
 This wrapper handles proper imports and demonstrates all RAG capabilities.
 """
 
+from rag_system.templates import PromptTemplates
+from rag_system.classifier import ArtifactClassifier
+from rag_system.citation import CitationGenerator
+from rag_system.reranker import ResultReranker
+from rag_system.retriever import HybridRetriever
+from rag_system.indexer import RepositoryIndexer
 import sys
 from pathlib import Path
 
@@ -12,13 +18,6 @@ rag_path = Path(__file__).parent / '.github' / 'agents'
 sys.path.insert(0, str(rag_path))
 
 # Now import RAG components
-from rag_system.indexer import RepositoryIndexer
-from rag_system.retriever import HybridRetriever
-from rag_system.reranker import ResultReranker
-from rag_system.citation import CitationGenerator
-from rag_system.classifier import ArtifactClassifier
-from rag_system.knowledge_engine import KnowledgeIntegrationEngine
-from rag_system.templates import PromptTemplates, CodeModificationResponse, FileModification
 
 
 def run_workflow():
@@ -127,7 +126,7 @@ def run_workflow():
     print(f"\n✓ Indexed {len(chunks)} code chunks")
     print(f"✓ Executed {len(queries)} search queries")
     print(f"✓ Generated {len(citations)} citations")
-    print(f"✓ Created prompt template with context")
+    print("✓ Created prompt template with context")
     print("\nThe RAG system is fully operational and ready for use!")
 
     return 0

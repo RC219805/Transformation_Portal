@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).parent.parent
 WEIGHTS_DIR = REPO_ROOT / "weights"
 WEIGHTS_DIR.mkdir(exist_ok=True)
 
+
 def download_file(url, output_path):
     """Download file with progress."""
     print(f"\nDownloading: {output_path.name}")
@@ -31,6 +32,7 @@ def download_file(url, output_path):
     except Exception as e:
         print(f"\n✗ Failed: {e}")
         return False
+
 
 # Check Depth Anything V2
 print("\n[1/4] Checking Depth Anything V2...")

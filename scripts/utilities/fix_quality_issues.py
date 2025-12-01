@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def run_command(cmd, description):
     """Run a command and report results."""
     print(f"\n{'='*60}")
@@ -19,6 +20,7 @@ def run_command(cmd, description):
     if result.stderr and result.returncode != 0:
         print("STDERR:", result.stderr)
     return result.returncode
+
 
 def main():
     """Fix quality issues."""
@@ -77,13 +79,14 @@ def main():
         "Import order check"
     )
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     if flake8_result == 0:
         print("✅ All critical issues fixed!")
         return 0
     else:
         print("⚠️  Some issues remain - check output above")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

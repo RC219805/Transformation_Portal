@@ -6,10 +6,8 @@ Preserves full dynamic range and applies luxury real estate grading
 import OpenEXR
 import Imath
 import numpy as np
-from PIL import Image
 from pathlib import Path
 import typer
-from typing import Optional
 
 app = typer.Typer()
 

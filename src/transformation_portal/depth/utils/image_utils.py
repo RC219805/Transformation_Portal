@@ -208,7 +208,7 @@ def resize_image(
             'lanczos': cv2.INTER_LANCZOS4,
         }
         interp_flag = interp_map.get(interpolation, cv2.INTER_LINEAR)
-        
+
         # Resize
         resized = cv2.resize(
             image,
@@ -219,7 +219,7 @@ def resize_image(
     else:
         # Fallback to PIL
         from PIL import Image as PILImage
-        
+
         # Convert to uint8 if needed for PIL compatibility
         is_float = image.dtype in (np.float32, np.float64)
         if is_float:
@@ -234,7 +234,7 @@ def resize_image(
             img = PILImage.fromarray(img_uint8)
         else:
             img = PILImage.fromarray(image)
-            
+
         pil_interp_map = {
             'nearest': PILImage.Resampling.NEAREST,
             'bilinear': PILImage.Resampling.BILINEAR,
@@ -244,11 +244,11 @@ def resize_image(
         pil_interp = pil_interp_map.get(interpolation, PILImage.Resampling.BILINEAR)
         resized_img = img.resize((target_w, target_h), pil_interp)
         resized_array = np.array(resized_img)
-        
+
         # Convert back to float if input was float
         if is_float:
             resized_array = resized_array.astype(np.float32) / 255.0
-            
+
         return resized_array
 
 
