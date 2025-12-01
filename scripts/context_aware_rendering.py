@@ -15,7 +15,7 @@ Uses extracted architectural intelligence to inform every processing decision.
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -287,9 +287,16 @@ class ContextAwareRenderingPipeline:
             )
 
         # Get base strategy for room type
-        base_strategy = self.ROOM_STRATEGIES.get(room_type)
-        if not base_strategy:
+        base_strategy_ref = self.ROOM_STRATEGIES.get(room_type)
+        if not base_strategy_ref:
             return self.derive_strategy(image_path)  # Fallback to default
+
+        # Create a copy of the strategy to avoid mutating class-level defaults
+        # Use replace() to copy the dataclass and list() to copy the materials list
+        strategy = replace(
+            base_strategy_ref,
+            primary_materials=list(base_strategy_ref.primary_materials)
+        )
 
         # Get room-specific context (reserved for future material/feature customization)
         room_context = self.get_room_context(room_type)  # noqa: F841
@@ -298,30 +305,30 @@ class ContextAwareRenderingPipeline:
         if self.context.materials_palette:
             # Prioritize materials that appear in both strategy and project
             matched_materials = [
-                mat for mat in base_strategy.primary_materials
+                mat for mat in strategy.primary_materials
                 if mat in self.context.materials_palette
             ]
             if matched_materials:
-                base_strategy.primary_materials = matched_materials
+                strategy.primary_materials = matched_materials
 
         # Adjust based on design style
         if self.context.design_style:
             style_lower = self.context.design_style.lower()
             if 'modern' in style_lower or 'contemporary' in style_lower:
-                base_strategy.color_temperature = 'neutral'
-                base_strategy.enhancement_strength = min(base_strategy.enhancement_strength + 0.1, 1.0)
+                strategy.color_temperature = 'neutral'
+                strategy.enhancement_strength = min(strategy.enhancement_strength + 0.1, 1.0)
             elif 'traditional' in style_lower:
-                base_strategy.color_temperature = 'warm'
-                base_strategy.enhancement_strength = max(base_strategy.enhancement_strength - 0.1, 0.5)
+                strategy.color_temperature = 'warm'
+                strategy.enhancement_strength = max(strategy.enhancement_strength - 0.1, 0.5)
 
         print(f"\n✓ Derived strategy for {room_type}:")
-        print(f"  Materials: {', '.join(base_strategy.primary_materials)}")
-        print(f"  Lighting: {base_strategy.lighting_style}")
-        print(f"  Depth: {base_strategy.depth_emphasis}")
-        print(f"  Temperature: {base_strategy.color_temperature}")
-        print(f"  Enhancement: {base_strategy.enhancement_strength:.2f}")
+        print(f"  Materials: {', '.join(strategy.primary_materials)}")
+        print(f"  Lighting: {strategy.lighting_style}")
+        print(f"  Depth: {strategy.depth_emphasis}")
+        print(f"  Temperature: {strategy.color_temperature}")
+        print(f"  Enhancement: {strategy.enhancement_strength:.2f}")
 
-        return base_strategy
+        return strategy
 
     def generate_depth_config(self, strategy: RenderingStrategy) -> Dict:
         """Generate depth pipeline configuration from strategy."""
