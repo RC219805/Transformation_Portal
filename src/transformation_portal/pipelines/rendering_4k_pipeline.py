@@ -89,6 +89,14 @@ except ImportError:
     HAS_TORCH = False
     torch = None  # noqa: F841 - placeholder for optional import
 
+# Optional: ControlNet auxiliary processors
+try:
+    from controlnet_aux import CannyDetector
+    HAS_CONTROLNET_AUX = True
+except ImportError:
+    HAS_CONTROLNET_AUX = False
+    CannyDetector = None
+
 # Optional: PerceptualQualityAssessor for advanced quality metrics
 try:
     from ...enhancements.perceptual_quality_assessment import (
@@ -221,6 +229,7 @@ class AIEnhancementConfig:
     strength: float = 0.3
     guidance_scale: float = 7.5
     num_steps: int = 25
+    seed: int = 42  # For reproducibility
 
 
 @dataclass
@@ -335,6 +344,86 @@ class ProcessingResult:
         if self.quality_metrics:
             return self.quality_metrics.overall_score
         return 0.0
+
+
+# =============================================================================
+# GPU Memory Management
+# =============================================================================
+
+class GPUMemoryManager:
+    """GPU memory monitoring and management for preventing OOM errors."""
+
+    def __init__(self, device: DeviceType):
+        """Initialize GPU memory manager.
+
+        Args:
+            device: The compute device type (CPU, CUDA, MPS)
+        """
+        self.device = device
+        self._torch_available = HAS_TORCH
+
+    def get_memory_stats(self) -> Dict[str, float]:
+        """Get current GPU memory statistics.
+
+        Returns:
+            Dictionary with memory stats (allocated_gb, reserved_gb, total_gb, usage_percent)
+        """
+        if not self._torch_available or self.device == DeviceType.CPU:
+            return {}
+
+        stats: Dict[str, float] = {}
+        try:
+            if self.device == DeviceType.CUDA:
+                import torch
+                stats['allocated_gb'] = torch.cuda.memory_allocated() / 1e9
+                stats['reserved_gb'] = torch.cuda.memory_reserved() / 1e9
+                stats['total_gb'] = torch.cuda.get_device_properties(0).total_memory / 1e9
+                stats['usage_percent'] = (stats['allocated_gb'] / stats['total_gb']) * 100
+            elif self.device == DeviceType.MPS:
+                import torch
+                stats['allocated_gb'] = torch.mps.current_allocated_memory() / 1e9
+                stats['total_gb'] = 16.0  # Conservative estimate for Apple Silicon
+                stats['usage_percent'] = (stats['allocated_gb'] / stats['total_gb']) * 100
+        except Exception as e:
+            logger.debug(f"Failed to get memory stats: {e}")
+        return stats
+
+    def clear_cache(self):
+        """Clear GPU memory cache."""
+        if not self._torch_available or self.device == DeviceType.CPU:
+            return
+        try:
+            import torch
+            if self.device == DeviceType.CUDA:
+                torch.cuda.empty_cache()
+            elif self.device == DeviceType.MPS:
+                torch.mps.empty_cache()
+        except Exception:
+            pass
+
+    def check_memory_threshold(self, threshold: float = 0.85) -> bool:
+        """Check if memory usage is below threshold.
+
+        Args:
+            threshold: Maximum acceptable memory usage ratio (0.0-1.0)
+
+        Returns:
+            True if memory usage is below threshold, False otherwise
+        """
+        stats = self.get_memory_stats()
+        if not stats:
+            return True
+        usage = stats.get('usage_percent', 0) / 100.0
+        return usage < threshold
+
+    def log_memory_status(self):
+        """Log current memory status."""
+        stats = self.get_memory_stats()
+        if stats:
+            logger.info(
+                f"  GPU Memory: {stats['allocated_gb']:.2f}GB / "
+                f"{stats['total_gb']:.2f}GB ({stats['usage_percent']:.1f}%)"
+            )
 
 
 # =============================================================================
@@ -1293,9 +1382,22 @@ class Rendering4KPipeline:
         # Detect compute device
         self.device = self._detect_device()
 
+        # Initialize GPU memory manager
+        self.memory_manager = GPUMemoryManager(self.device)
+
+        # Initialize ML models (lazy loading)
+        self._depth_model = None
+        self._depth_model_initialized = False
+        self._controlnet_pipe = None
+        self._controlnet_initialized = False
+
         logger.info(f"Initialized Rendering4KPipeline: {config.name}")
         logger.info(f"Device: {self.device.value}")
         logger.info(f"Quality Level: {config.quality_level.value}")
+
+        # Log GPU status if available
+        if self.device != DeviceType.CPU:
+            self.memory_manager.log_memory_status()
 
     @classmethod
     def from_preset(cls, preset_name: str) -> "Rendering4KPipeline":
@@ -1519,23 +1621,36 @@ class Rendering4KPipeline:
             True,
         ))
 
+        # Convert to PIL for AI enhancement and upscaling
+        result_pil = np_to_pil(processed)
+
         # Stage 6: AI Enhancement (optional, requires ML deps)
         stage_start = time.time()
         logger.info("[6/9] AI Enhancement")
         if self.config.ai_enhancement.enabled:
-            logger.info("  AI enhancement requires optional ML dependencies")
-            logger.info("  Skipped (dependencies not loaded)")
+            try:
+                result_pil = self._apply_ai_enhancement(result_pil, depth_map)
+                logger.info("  ✓ ControlNet enhancement complete")
+                stage_metrics.append(StageMetrics(
+                    "ai_enhancement",
+                    (time.time() - stage_start) * 1000,
+                    True,
+                ))
+            except Exception as e:
+                logger.warning(f"  AI enhancement failed: {e}")
+                stage_metrics.append(StageMetrics(
+                    "ai_enhancement",
+                    (time.time() - stage_start) * 1000,
+                    False,
+                    notes=str(e),
+                ))
         else:
             logger.info("  Skipped (disabled)")
-        stage_metrics.append(StageMetrics(
-            "ai_enhancement",
-            (time.time() - stage_start) * 1000,
-            False,
-            notes="Optional ML dependencies required",
-        ))
-
-        # Convert to PIL for upscaling
-        result_pil = np_to_pil(processed)
+            stage_metrics.append(StageMetrics(
+                "ai_enhancement",
+                (time.time() - stage_start) * 1000,
+                False,
+            ))
 
         # Stage 7: Upscaling to 4K
         stage_start = time.time()
@@ -1652,22 +1767,53 @@ class Rendering4KPipeline:
             config_used=self.config,
         )
 
+    def _get_or_load_depth_model(self):
+        """Lazy-load Depth Anything V2 model.
+
+        Returns:
+            Hugging Face depth estimation pipeline, or None if unavailable
+        """
+        if self._depth_model_initialized:
+            return self._depth_model
+
+        try:
+            from transformers import pipeline as hf_pipeline
+
+            model_map = {
+                "small": "depth-anything/Depth-Anything-V2-Small",
+                "base": "depth-anything/Depth-Anything-V2-Base",
+                "large": "depth-anything/Depth-Anything-V2-Large",
+            }
+            model_id = model_map.get(self.config.depth.model_variant, model_map["small"])
+            device_id = 0 if self.device != DeviceType.CPU else -1
+
+            logger.info(f"Loading Depth Anything V2 ({self.config.depth.model_variant})...")
+            self._depth_model = hf_pipeline("depth-estimation", model=model_id, device=device_id)
+            logger.info("✓ Depth Anything V2 loaded")
+        except Exception as e:
+            logger.warning(f"Depth Anything V2 unavailable: {e}. Using fallback.")
+            self._depth_model = None
+
+        self._depth_model_initialized = True
+        return self._depth_model
+
     def _estimate_depth(
         self,
         image: np.ndarray,
         input_path: Path,
     ) -> np.ndarray:
         """
-        Estimate depth map with caching.
+        Estimate depth map using Depth Anything V2 or fallback with caching.
 
         Args:
             image: RGB image as float32 array
             input_path: Path for cache key
 
         Returns:
-            Depth map as float32 array
+            Depth map as float32 array [0, 1]
         """
         # Check cache
+        cache_key = None
         if self.config.depth.cache_enabled:
             cache_key = self._compute_cache_key(image)
             if cache_key in self._depth_cache:
@@ -1676,24 +1822,173 @@ class Rendering4KPipeline:
                 self._depth_cache.move_to_end(cache_key)
                 return self._depth_cache[cache_key]
 
-        # Use simple depth estimation (fallback)
-        # Full implementation would use Depth Anything V2
-        depth = estimate_depth_simple(image)
+        # Try Depth Anything V2
+        depth_model = self._get_or_load_depth_model()
+        if depth_model is not None:
+            try:
+                image_pil = np_to_pil(image)
+                result = depth_model(image_pil)
+                # Validate result structure
+                if "depth" not in result:
+                    logger.warning("Depth model returned unexpected format, using fallback")
+                    depth_map = estimate_depth_simple(image)
+                else:
+                    depth_map = np.array(result["depth"]).astype(np.float32)
+                    # Normalize to [0, 1], handling edge case of constant depth
+                    depth_range = depth_map.max() - depth_map.min()
+                    if depth_range > 1e-8:
+                        depth_map = (depth_map - depth_map.min()) / depth_range
+                    else:
+                        # Constant depth map - set to mid-range
+                        depth_map = np.full_like(depth_map, 0.5)
+            except Exception as e:
+                logger.warning(f"Depth inference failed: {e}")
+                depth_map = estimate_depth_simple(image)
+        else:
+            depth_map = estimate_depth_simple(image)
 
         # Cache result
-        if self.config.depth.cache_enabled:
+        if self.config.depth.cache_enabled and cache_key is not None:
             if len(self._depth_cache) >= self.config.depth.cache_max_size:
                 # Remove oldest (least recently used) entry
                 self._depth_cache.popitem(last=False)
-            self._depth_cache[cache_key] = depth
+            self._depth_cache[cache_key] = depth_map
 
-        return depth
+        return depth_map
 
     def _compute_cache_key(self, image: np.ndarray) -> str:
         """Compute cache key from image content (non-security, non-cryptographic)."""
         # Use SHA-256 for cache key (non-cryptographic; safe for content hashing)
         data = image.tobytes()[:4096]  # First 4KB for speed
         return hashlib.sha256(data).hexdigest()
+
+    def _get_or_load_controlnet_pipe(self):
+        """Lazy-load ControlNet pipeline for AI enhancement.
+
+        Returns:
+            StableDiffusionControlNetImg2ImgPipeline, or None if unavailable
+        """
+        if self._controlnet_initialized:
+            return self._controlnet_pipe
+
+        try:
+            from diffusers import (
+                ControlNetModel,
+                StableDiffusionControlNetImg2ImgPipeline,
+                UniPCMultistepScheduler,
+            )
+            import torch
+
+            logger.info("Loading ControlNet pipeline...")
+            controlnets = []
+            dtype = torch.float16 if self.device != DeviceType.CPU else torch.float32
+
+            if self.config.ai_enhancement.use_controlnet:
+                controlnets.append(
+                    ControlNetModel.from_pretrained(
+                        "lllyasviel/sd-controlnet-canny",
+                        torch_dtype=dtype,
+                    )
+                )
+            if self.config.ai_enhancement.use_depth_guidance:
+                controlnets.append(
+                    ControlNetModel.from_pretrained(
+                        "lllyasviel/sd-controlnet-depth",
+                        torch_dtype=dtype,
+                    )
+                )
+
+            if not controlnets:
+                logger.warning("No ControlNet models configured")
+                self._controlnet_pipe = None
+                self._controlnet_initialized = True
+                return None
+
+            self._controlnet_pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
+                "runwayml/stable-diffusion-v1-5",
+                controlnet=controlnets if len(controlnets) > 1 else controlnets[0],
+                torch_dtype=dtype,
+                safety_checker=None,
+            )
+            self._controlnet_pipe.scheduler = UniPCMultistepScheduler.from_config(
+                self._controlnet_pipe.scheduler.config
+            )
+
+            device_str = {"cuda": "cuda", "mps": "mps", "cpu": "cpu"}[self.device.value]
+            self._controlnet_pipe.to(device_str)
+
+            if self.device == DeviceType.CUDA:
+                self._controlnet_pipe.enable_attention_slicing()
+                self._controlnet_pipe.enable_vae_slicing()
+
+            logger.info("✓ ControlNet pipeline loaded")
+        except Exception as e:
+            logger.warning(f"ControlNet unavailable: {e}")
+            self._controlnet_pipe = None
+
+        self._controlnet_initialized = True
+        return self._controlnet_pipe
+
+    def _apply_ai_enhancement(
+        self,
+        image: Image.Image,
+        depth_map: Optional[np.ndarray],
+    ) -> Image.Image:
+        """Apply ControlNet AI enhancement.
+
+        Args:
+            image: PIL Image to enhance
+            depth_map: Optional depth map for depth-guided enhancement
+
+        Returns:
+            Enhanced PIL Image
+        """
+        pipe = self._get_or_load_controlnet_pipe()
+        if pipe is None or not HAS_CONTROLNET_AUX:
+            return image
+
+        try:
+            import torch
+
+            control_images = []
+
+            # Generate Canny edge map if ControlNet is enabled
+            if self.config.ai_enhancement.use_controlnet and CannyDetector is not None:
+                canny = CannyDetector()
+                control_images.append(canny(image))
+
+            # Use depth map if depth guidance is enabled
+            if self.config.ai_enhancement.use_depth_guidance and depth_map is not None:
+                # Convert depth map directly to RGB image for ControlNet
+                depth_uint8 = (depth_map * 255).astype(np.uint8)
+                # Stack grayscale to RGB channels directly
+                depth_rgb = np.stack([depth_uint8, depth_uint8, depth_uint8], axis=-1)
+                depth_pil = Image.fromarray(depth_rgb, mode='RGB').resize(image.size)
+                control_images.append(depth_pil)
+
+            if not control_images:
+                logger.warning("No control images available for ControlNet")
+                return image
+
+            generator = torch.Generator(device=pipe.device).manual_seed(
+                self.config.ai_enhancement.seed
+            )
+
+            result = pipe(
+                prompt=self.config.ai_enhancement.prompt,
+                negative_prompt=self.config.ai_enhancement.negative_prompt,
+                image=image,
+                control_image=control_images if len(control_images) > 1 else control_images[0],
+                num_inference_steps=self.config.ai_enhancement.num_steps,
+                guidance_scale=self.config.ai_enhancement.guidance_scale,
+                strength=self.config.ai_enhancement.strength,
+                generator=generator,
+            ).images[0]
+
+            return result
+        except Exception as e:
+            logger.error(f"ControlNet failed: {e}")
+            return image
 
     def _save_outputs(
         self,
@@ -1774,7 +2069,7 @@ class Rendering4KPipeline:
         show_progress: bool = True,
     ) -> List[ProcessingResult]:
         """
-        Process multiple images in batch.
+        Process multiple images in batch with GPU memory management.
 
         Args:
             input_paths: List of input image paths
@@ -1796,12 +2091,39 @@ class Rendering4KPipeline:
 
         for i, path in enumerate(iterator):
             try:
+                # Memory check before processing
+                # Check GPU memory before processing (75% threshold is conservative
+                # to allow headroom for spikes during inference)
+                if not self.memory_manager.check_memory_threshold(0.75):
+                    logger.warning("High GPU memory usage, clearing cache...")
+                    self.memory_manager.clear_cache()
+                    # Clear depth cache when over half full to prevent memory accumulation
+                    # while preserving recent entries for potential cache hits
+                    if len(self._depth_cache) > self.config.depth.cache_max_size // 2:
+                        self._depth_cache.clear()
+
                 if show_progress and not HAS_TQDM:
                     logger.info(f"Processing {i+1}/{len(input_paths)}: {Path(path).name}")
                 result = self.process(path, output_dir)
                 results.append(result)
+
+                # Periodic cleanup every 5 images to prevent memory fragmentation
+                # and ensure consistent performance across batch
+                if (i + 1) % 5 == 0:
+                    self.memory_manager.clear_cache()
+
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                    logger.error(f"OOM on {path}, clearing cache and skipping")
+                    self.memory_manager.clear_cache()
+                    self.clear_cache()
+                else:
+                    logger.error(f"Failed to process {path}: {e}")
             except Exception as e:
                 logger.error(f"Failed to process {path}: {e}")
+
+        # Final cleanup
+        self.memory_manager.clear_cache()
 
         # Print summary
         self._print_batch_summary(results)
