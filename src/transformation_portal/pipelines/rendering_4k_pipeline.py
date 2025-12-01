@@ -1828,9 +1828,19 @@ class Rendering4KPipeline:
             try:
                 image_pil = np_to_pil(image)
                 result = depth_model(image_pil)
-                depth_map = np.array(result["depth"]).astype(np.float32)
-                # Normalize to [0, 1]
-                depth_map = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min() + 1e-8)
+                # Validate result structure
+                if "depth" not in result:
+                    logger.warning("Depth model returned unexpected format, using fallback")
+                    depth_map = estimate_depth_simple(image)
+                else:
+                    depth_map = np.array(result["depth"]).astype(np.float32)
+                    # Normalize to [0, 1], handling edge case of constant depth
+                    depth_range = depth_map.max() - depth_map.min()
+                    if depth_range > 1e-8:
+                        depth_map = (depth_map - depth_map.min()) / depth_range
+                    else:
+                        # Constant depth map - set to mid-range
+                        depth_map = np.full_like(depth_map, 0.5)
             except Exception as e:
                 logger.warning(f"Depth inference failed: {e}")
                 depth_map = estimate_depth_simple(image)
@@ -1949,10 +1959,11 @@ class Rendering4KPipeline:
 
             # Use depth map if depth guidance is enabled
             if self.config.ai_enhancement.use_depth_guidance and depth_map is not None:
-                # Convert depth map to RGB image for ControlNet
-                depth_pil = Image.fromarray(
-                    (depth_map * 255).astype(np.uint8), mode='L'
-                ).resize(image.size).convert('RGB')
+                # Convert depth map directly to RGB image for ControlNet
+                depth_uint8 = (depth_map * 255).astype(np.uint8)
+                # Stack grayscale to RGB channels directly
+                depth_rgb = np.stack([depth_uint8, depth_uint8, depth_uint8], axis=-1)
+                depth_pil = Image.fromarray(depth_rgb, mode='RGB').resize(image.size)
                 control_images.append(depth_pil)
 
             if not control_images:
@@ -2081,10 +2092,13 @@ class Rendering4KPipeline:
         for i, path in enumerate(iterator):
             try:
                 # Memory check before processing
+                # Check GPU memory before processing (75% threshold is conservative
+                # to allow headroom for spikes during inference)
                 if not self.memory_manager.check_memory_threshold(0.75):
                     logger.warning("High GPU memory usage, clearing cache...")
                     self.memory_manager.clear_cache()
-                    # Also clear depth cache if it's getting large
+                    # Clear depth cache when over half full to prevent memory accumulation
+                    # while preserving recent entries for potential cache hits
                     if len(self._depth_cache) > self.config.depth.cache_max_size // 2:
                         self._depth_cache.clear()
 
@@ -2093,7 +2107,8 @@ class Rendering4KPipeline:
                 result = self.process(path, output_dir)
                 results.append(result)
 
-                # Periodic cleanup every 5 images
+                # Periodic cleanup every 5 images to prevent memory fragmentation
+                # and ensure consistent performance across batch
                 if (i + 1) % 5 == 0:
                     self.memory_manager.clear_cache()
 
