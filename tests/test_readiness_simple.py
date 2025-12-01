@@ -169,9 +169,9 @@ def test_simple_processor():
 
 def main():
     """Run all tests."""
-    print("="*70)
+    print("=" * 70)
     print("TRANSFORMATION PORTAL - IMAGE PROCESSING TESTS")
-    print("="*70)
+    print("=" * 70)
 
     all_passed = True
 
@@ -193,14 +193,14 @@ def main():
         traceback.print_exc()
         all_passed = False
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     if all_passed:
         print("✓ ALL TESTS PASSED!")
-        print("="*70)
+        print("=" * 70)
         return 0
     else:
         print("✗ SOME TESTS FAILED")
-        print("="*70)
+        print("=" * 70)
         return 1
 
 

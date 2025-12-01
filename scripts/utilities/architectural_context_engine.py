@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -237,7 +237,7 @@ class ArchitecturalContextExtractor:
         # Example: "Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright"
         # Example: "250930_MBAR_SUBMITTAL_2.pd"
 
-        parts = Path(filename).stem.split('_')
+        _parts = Path(filename).stem.split('_')  # noqa: F841
 
         context = ArchitecturalContext(
             project_name="Unknown Project",
@@ -404,8 +404,8 @@ class ContextAwareRenderingPipeline:
         self.extractor = ArchitecturalContextExtractor()
 
     def prepare_context(self,
-                       image_path: Path,
-                       pdf_documents: Optional[List[Path]] = None) -> ArchitecturalContext:
+                        image_path: Path,
+                        pdf_documents: Optional[List[Path]] = None) -> ArchitecturalContext:
         """Prepare architectural context for an image."""
 
         # Check cache
@@ -435,9 +435,9 @@ class ContextAwareRenderingPipeline:
         return context
 
     def enhance_prompt(self,
-                      base_prompt: str,
-                      image_path: Path,
-                      pdf_documents: Optional[List[Path]] = None) -> str:
+                       base_prompt: str,
+                       image_path: Path,
+                       pdf_documents: Optional[List[Path]] = None) -> str:
         """Generate context-enhanced prompt."""
 
         context = self.prepare_context(image_path, pdf_documents)

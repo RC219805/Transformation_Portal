@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - package not installed
     _HAS_REALESRGAN_IMPORT = False
     # Provide helpful installation instructions if user tries to use Real-ESRGAN
     # The actual fallback to Pillow happens in the pipeline code that checks _HAS_REALESRGAN_IMPORT
+
     class RealESRGANer:  # minimal CI stub for type compatibility
         def __init__(self, *_, **__):
             raise RuntimeError(
@@ -52,7 +53,6 @@ except Exception as e:  # pragma: no cover - other import errors (e.g., missing 
                 "Try reinstalling: pip install --force-reinstall realesrgan"
             )
 import glob
-import importlib.util
 import math
 import random
 from dataclasses import asdict, dataclass
@@ -268,8 +268,8 @@ def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.n
 
 
 def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too-many-positional-arguments
-                                      # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-                                      # pylint: disable=unused-argument
+    # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    # pylint: disable=unused-argument
         rgb: np.ndarray,
         texture_boost: float = 0.25,
         ambient_occlusion: float = 0.12,

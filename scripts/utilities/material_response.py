@@ -24,7 +24,6 @@ from transformation_portal.processors.material_response.core import (
     MaterialResponsePrinciple,
     MaterialResponseValidator,
     NeuroAestheticEngine,
-    QuantumMaterialResponse,
     ViewerProfile,
     apply_transformation_tensor,
     compose_operations,

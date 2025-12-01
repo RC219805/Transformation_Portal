@@ -11,7 +11,6 @@ Maximum quality processing with all available tools:
 
 import sys
 from pathlib import Path
-from typing import Optional, List
 import logging
 
 import numpy as np
@@ -195,9 +194,9 @@ def main():
             traceback.print_exc()
 
     # Summary
-    logger.info("\n" + "="*60)
+    logger.info("\n" + "=" * 60)
     logger.info("PROCESSING COMPLETE")
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info(f"Successfully processed: {len(all_stats)}/{len(jpeg_files)} images")
     logger.info(f"Output location: {output_dir}")
     logger.info("\nGenerated files for each view:")

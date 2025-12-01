@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 
+
 def analyze_image(path):
     """Analyze image properties."""
     img = Image.open(path)
@@ -17,14 +18,15 @@ def analyze_image(path):
         'path': path.name,
         'size': f"{img.width}x{img.height}",
         'mode': img.mode,
-        'mean_r': np.mean(arr[:,:,0]),
-        'mean_g': np.mean(arr[:,:,1]),
-        'mean_b': np.mean(arr[:,:,2]),
+        'mean_r': np.mean(arr[:, :, 0]),
+        'mean_g': np.mean(arr[:, :, 1]),
+        'mean_b': np.mean(arr[:, :, 2]),
         'mean_overall': np.mean(arr),
         'std': np.std(arr),
         'min': np.min(arr),
         'max': np.max(arr),
     }
+
 
 if __name__ == "__main__":
     repo = Path(__file__).parent

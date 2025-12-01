@@ -311,8 +311,9 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
         # Stage 1: Grading Pipeline (if preset specified)
         if self.config.grading_preset or self.config.grading_lut:
             raise ValueError(
-                "Grading pipeline for frame-based workflows is not implemented in VideoEnhanceWorkflow. "
-                "Please use luxury_video_master_grader.py before frame extraction, or use FullStackWorkflow for post-processing grading."
+                "Grading pipeline for frame-based workflows is not implemented in "
+                "VideoEnhanceWorkflow. Please use luxury_video_master_grader.py before "
+                "frame extraction, or use FullStackWorkflow for post-processing grading."
             )
 
         source_dir = self.config.input_dir

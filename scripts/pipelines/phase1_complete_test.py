@@ -77,7 +77,7 @@ def test_depth_processing_on_real_image():
         logger.info(f"  Resized for testing: {orig_size} -> {test_image.size}")
 
     # Load depth model
-    logger.info(f"\n✓ Loading Depth Anything V2 model...")
+    logger.info("\n✓ Loading Depth Anything V2 model...")
 
     try:
         from transformers import AutoImageProcessor, AutoModelForDepthEstimation
@@ -93,13 +93,13 @@ def test_depth_processing_on_real_image():
         if torch.backends.mps.is_available():
             device = "mps"
             model = model.to(device)
-            logger.info(f"  Using MPS acceleration (M4 Max)")
+            logger.info("  Using MPS acceleration (M4 Max)")
         elif torch.cuda.is_available():
             device = "cuda"
             model = model.to(device)
-            logger.info(f"  Using CUDA acceleration")
+            logger.info("  Using CUDA acceleration")
         else:
-            logger.info(f"  Using CPU")
+            logger.info("  Using CPU")
 
         load_time = time.time() - start_time
         logger.info(f"  ✓ Model loaded in {load_time:.2f}s")
@@ -109,7 +109,7 @@ def test_depth_processing_on_real_image():
         return False
 
     # Generate depth map
-    logger.info(f"\n✓ Generating depth map...")
+    logger.info("\n✓ Generating depth map...")
 
     try:
         start_time = time.time()
@@ -129,7 +129,7 @@ def test_depth_processing_on_real_image():
 
         inference_time = time.time() - start_time
 
-        logger.info(f"  ✓ Depth map generated")
+        logger.info("  ✓ Depth map generated")
         logger.info(f"  Output shape: {depth_map.shape}")
         logger.info(f"  Depth range: [{depth_map.min():.3f}, {depth_map.max():.3f}]")
         logger.info(f"  Inference time: {inference_time*1000:.1f}ms")
@@ -142,7 +142,7 @@ def test_depth_processing_on_real_image():
         return False
 
     # Save depth map visualization
-    logger.info(f"\n✓ Saving depth map visualization...")
+    logger.info("\n✓ Saving depth map visualization...")
 
     try:
         output_dir = Path("output_phase1_test")
@@ -178,7 +178,7 @@ def test_depth_processing_on_real_image():
         logger.warning(f"Failed to save visualization: {e}")
 
     # Test depth-aware processing features
-    logger.info(f"\n✓ Testing depth-aware features...")
+    logger.info("\n✓ Testing depth-aware features...")
 
     try:
         # Zone-based segmentation

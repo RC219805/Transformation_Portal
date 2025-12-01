@@ -435,12 +435,12 @@ class GoldenRatioAnalyzer:
         phi_reciprocal = 1 / PHI
 
         # Vertical lines
-        for x_ratio in [phi_reciprocal, 1 - phi_reciprocal, 1/3, 2/3]:
+        for x_ratio in [phi_reciprocal, 1 - phi_reciprocal, 1 / 3, 2 / 3]:
             x = int(w * x_ratio)
             cv2.line(image_np, (x, 0), (x, h), line_color, line_thickness)
 
         # Horizontal lines
-        for y_ratio in [phi_reciprocal, 1 - phi_reciprocal, 1/3, 2/3]:
+        for y_ratio in [phi_reciprocal, 1 - phi_reciprocal, 1 / 3, 2 / 3]:
             y = int(h * y_ratio)
             cv2.line(image_np, (0, y), (w, y), line_color, line_thickness)
 

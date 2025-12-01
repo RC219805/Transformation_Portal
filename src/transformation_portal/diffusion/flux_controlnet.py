@@ -11,7 +11,7 @@ cannot be compromised during aesthetic improvement.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import cv2
 import numpy as np
@@ -19,10 +19,6 @@ import torch
 from PIL import Image
 
 try:
-    from diffusers import (
-        FluxControlNetPipeline,
-        FluxControlNetModel
-    )
     from controlnet_aux import CannyDetector, MidasDetector
     FLUX_CONTROLNET_AVAILABLE = True
 except ImportError:
@@ -376,7 +372,6 @@ class FLUXControlNet:
             Grid image
         """
         import PIL.ImageDraw as ImageDraw
-        import PIL.ImageFont as ImageFont
 
         n_images = len(images)
         cols = min(n_images, 3)

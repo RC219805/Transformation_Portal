@@ -19,7 +19,7 @@ import sys
 import argparse
 import json
 from pathlib import Path
-from typing import Tuple, Optional, Dict, Any, List
+from typing import Tuple, Optional, Dict, List
 from dataclasses import dataclass, asdict, field
 import warnings
 
@@ -64,7 +64,7 @@ class EnhancedTrainingConfig:
     num_epochs: int = 50
     learning_rate: float = 1e-4
     weight_decay: float = 1e-5
-    
+
     # Per-model learning rates (relative to base LR)
     model_lr_scales: Dict[str, float] = field(default_factory=lambda: {
         'caustics': 1.0,
@@ -79,7 +79,7 @@ class EnhancedTrainingConfig:
     lpips_weight: float = 1.5            # NEW: Direct LPIPS loss
     style_weight: float = 0.5
     material_weight: float = 0.3         # NEW: Material-specific loss
-    depth_consistency_weight: float = 0.2 # NEW: Depth-aware consistency
+    depth_consistency_weight: float = 0.2  # NEW: Depth-aware consistency
 
     # Progressive training
     progressive: bool = True
@@ -101,7 +101,7 @@ class EnhancedTrainingConfig:
     # Optimization
     use_mixed_precision: bool = True
     gradient_clip: float = 1.0
-    
+
     # Multi-scale training
     multi_scale: bool = True
     scales: List[float] = field(default_factory=lambda: [0.5, 0.75, 1.0])
@@ -110,14 +110,14 @@ class EnhancedTrainingConfig:
 class DepthEstimator(nn.Module):
     """
     Lightweight depth estimation network for training
-    
+
     Provides depth maps for caustic application and normal computation
     without requiring external models during training.
     """
-    
+
     def __init__(self):
         super().__init__()
-        
+
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 32, 7, stride=2, padding=3),
             nn.BatchNorm2d(32),
@@ -132,7 +132,7 @@ class DepthEstimator(nn.Module):
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
         )
-        
+
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1),
             nn.BatchNorm2d(128),
@@ -146,16 +146,16 @@ class DepthEstimator(nn.Module):
             nn.ConvTranspose2d(32, 1, 4, stride=2, padding=1),
             nn.Sigmoid(),
         )
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Estimate depth map from RGB image"""
         features = self.encoder(x)
         depth = self.decoder(features)
-        
+
         # Ensure output matches input spatial size
         if depth.shape[-2:] != x.shape[-2:]:
             depth = F.interpolate(depth, size=x.shape[-2:], mode='bilinear', align_corners=False)
-        
+
         return depth
 
 
@@ -164,26 +164,26 @@ class NormalEstimator(nn.Module):
     Compute surface normals from depth map
     Uses Sobel filters for gradient estimation
     """
-    
+
     def __init__(self):
         super().__init__()
-        
+
         # Sobel kernels
         sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32)
         sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32)
-        
+
         self.register_buffer('sobel_x', sobel_x.view(1, 1, 3, 3))
         self.register_buffer('sobel_y', sobel_y.view(1, 1, 3, 3))
-    
+
     def forward(self, depth: torch.Tensor) -> torch.Tensor:
         """Compute surface normals from depth"""
         dx = F.conv2d(depth, self.sobel_x, padding=1)
         dy = F.conv2d(depth, self.sobel_y, padding=1)
         dz = torch.ones_like(dx) * 0.5
-        
+
         normals = torch.cat([dx, dy, dz], dim=1)
         normals = F.normalize(normals, dim=1)
-        
+
         return normals
 
 
@@ -293,16 +293,16 @@ class StyleLoss(nn.Module):
 class LPIPSLoss(nn.Module):
     """
     LPIPS-based perceptual loss
-    
+
     Uses the official LPIPS package if available, otherwise falls back
     to a VGG-based approximation with learned channel weights.
     """
-    
+
     def __init__(self, net: str = 'vgg'):
         super().__init__()
-        
+
         self.use_official = False
-        
+
         try:
             import lpips
             self.lpips_fn = lpips.LPIPS(net=net).to(device)
@@ -314,11 +314,11 @@ class LPIPSLoss(nn.Module):
         except ImportError:
             print("⚠ LPIPS package not found, using approximation")
             self._init_approximation()
-    
+
     def _init_approximation(self):
         """Initialize VGG-based LPIPS approximation"""
         self.vgg = VGGFeatureExtractor(layers=[2, 7, 12, 21, 30])
-        
+
         # Learned channel weights (approximated from LPIPS)
         self.weights = nn.ParameterList([
             nn.Parameter(torch.ones(64) / 64),
@@ -327,46 +327,46 @@ class LPIPSLoss(nn.Module):
             nn.Parameter(torch.ones(512) / 512),
             nn.Parameter(torch.ones(512) / 512),
         ])
-        
+
         # Layer weights
         self.layer_weights = nn.Parameter(torch.tensor([0.1, 0.1, 0.3, 0.3, 0.2]))
-    
+
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Compute LPIPS loss"""
         if self.use_official:
             return self.lpips_fn(pred, target).mean()
-        
+
         # Approximation
         pred_features = self.vgg(pred)
         target_features = self.vgg(target)
-        
+
         loss = 0.0
         for i, (pf, tf) in enumerate(zip(pred_features, target_features)):
             # Normalize features
             pf_norm = F.normalize(pf, dim=1)
             tf_norm = F.normalize(tf, dim=1)
-            
+
             # Compute weighted difference
             diff = (pf_norm - tf_norm) ** 2
-            
+
             # Channel weighting
             weights = self.weights[i].view(1, -1, 1, 1)
             diff_weighted = (diff * weights).sum(dim=1, keepdim=True)
-            
+
             # Spatial mean with layer weight
             loss += self.layer_weights[i] * diff_weighted.mean()
-        
+
         return loss
 
 
 class MaterialConsistencyLoss(nn.Module):
     """
     Material-specific consistency loss
-    
+
     Ensures that different materials are enhanced appropriately
     by computing per-material reconstruction quality.
     """
-    
+
     MATERIAL_COLORS = torch.tensor([
         [0.85, 0.80, 0.75],  # quartzite
         [0.55, 0.40, 0.25],  # oak
@@ -377,34 +377,34 @@ class MaterialConsistencyLoss(nn.Module):
         [0.25, 0.45, 0.20],  # vegetation
         [0.60, 0.75, 0.95],  # sky
     ])
-    
+
     def __init__(self):
         super().__init__()
         self.register_buffer('material_colors', self.MATERIAL_COLORS.T)
-    
+
     def get_material_masks(self, x: torch.Tensor) -> torch.Tensor:
         """Get soft material masks based on color similarity"""
         b, c, h, w = x.shape
-        
+
         x_flat = x.view(b, c, -1)
         colors = self.material_colors.unsqueeze(0).unsqueeze(-1).to(x.device)
-        
+
         x_expanded = x_flat.unsqueeze(2)
         dists = ((x_expanded - colors) ** 2).sum(dim=1)
-        
+
         masks = F.softmax(-dists * 10, dim=1)
         masks = masks.view(b, -1, h, w)
-        
+
         return masks
-    
+
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Compute material-weighted reconstruction loss"""
         # Get material masks from target
         masks = self.get_material_masks(target)
-        
+
         # Compute per-material reconstruction error
         error = (pred - target) ** 2
-        
+
         # Weight by material importance
         material_weights = torch.tensor([
             1.2,  # quartzite - high fidelity needed
@@ -416,26 +416,26 @@ class MaterialConsistencyLoss(nn.Module):
             0.8,  # vegetation
             0.7,  # sky
         ]).to(pred.device).view(1, -1, 1, 1)
-        
+
         # Weighted material loss
         weighted_masks = masks * material_weights
         weighted_error = (error.unsqueeze(2) * weighted_masks.unsqueeze(1)).sum(dim=2)
-        
+
         return weighted_error.mean()
 
 
 class DepthConsistencyLoss(nn.Module):
     """
     Depth-aware consistency loss
-    
+
     Ensures that depth relationships are preserved through enhancement
     and that depth-dependent effects (e.g., atmospheric perspective) are coherent.
     """
-    
+
     def __init__(self):
         super().__init__()
         self.depth_estimator = DepthEstimator().to(device)
-    
+
     def forward(
         self,
         pred: torch.Tensor,
@@ -449,19 +449,19 @@ class DepthConsistencyLoss(nn.Module):
             pred_depth = self.depth_estimator(pred)
         if target_depth is None:
             target_depth = self.depth_estimator(target)
-        
+
         # Depth reconstruction loss
         depth_recon = F.l1_loss(pred_depth, target_depth)
-        
+
         # Depth gradient consistency (preserve edges)
         pred_grad_x = pred_depth[:, :, :, 1:] - pred_depth[:, :, :, :-1]
         pred_grad_y = pred_depth[:, :, 1:, :] - pred_depth[:, :, :-1, :]
-        
+
         target_grad_x = target_depth[:, :, :, 1:] - target_depth[:, :, :, :-1]
         target_grad_y = target_depth[:, :, 1:, :] - target_depth[:, :, :-1, :]
-        
+
         grad_loss = F.l1_loss(pred_grad_x, target_grad_x) + F.l1_loss(pred_grad_y, target_grad_y)
-        
+
         return depth_recon + 0.5 * grad_loss
 
 
@@ -553,9 +553,9 @@ class SyntheticDataGenerator:
         for window_x in range(50, w - 50, 100):
             for window_y in range(building_y + 30, h - 30, 80):
                 window_w, window_h = 60, 50
-                img[window_y:window_y+window_h, window_x:window_x+window_w, 2] = 140
-                img[window_y:window_y+window_h, window_x:window_x+window_w, 1] = 120
-                img[window_y:window_y+window_h, window_x:window_x+window_w, 0] = 100
+                img[window_y:window_y + window_h, window_x:window_x + window_w, 2] = 140
+                img[window_y:window_y + window_h, window_x:window_x + window_w, 1] = 120
+                img[window_y:window_y + window_h, window_x:window_x + window_w, 0] = 100
 
         x_gradient = np.linspace(0.9, 1.1, w)
         for c in range(3):
@@ -587,7 +587,7 @@ class SyntheticDataGenerator:
 class EnhancedHyperRealityTrainer:
     """
     Enhanced training pipeline for hyper-reality models
-    
+
     Key improvements:
     - All four networks trained end-to-end
     - Depth and normal maps computed during forward pass
@@ -651,7 +651,7 @@ class EnhancedHyperRealityTrainer:
     def _init_optimizer(self):
         """Initialize optimizer with per-model learning rates"""
         param_groups = []
-        
+
         for name, model in self.models.items():
             lr_scale = self.config.model_lr_scales.get(name, 1.0)
             param_groups.append({
@@ -659,7 +659,7 @@ class EnhancedHyperRealityTrainer:
                 'lr': self.config.learning_rate * lr_scale,
                 'name': name
             })
-        
+
         # Add depth estimator
         param_groups.append({
             'params': self.depth_estimator.parameters(),
@@ -681,10 +681,10 @@ class EnhancedHyperRealityTrainer:
         """Get active training stages for progressive training"""
         if not self.config.progressive:
             return ['caustics', 'atmosphere', 'materials', 'harmonics']
-        
+
         stages = []
         stage_epochs = self.config.stage_epochs
-        
+
         if epoch >= 0:
             stages.append('caustics')
         if epoch >= stage_epochs[0]:
@@ -693,7 +693,7 @@ class EnhancedHyperRealityTrainer:
             stages.append('materials')
         if epoch >= stage_epochs[2]:
             stages.append('harmonics')
-        
+
         return stages
 
     def _forward_pass(
@@ -703,45 +703,45 @@ class EnhancedHyperRealityTrainer:
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Forward pass through enhancement pipeline
-        
+
         Returns enhanced image and auxiliary outputs (depth, normals, etc.)
         """
         enhanced = low_img
         aux_outputs = {}
-        
+
         # Estimate depth and normals
         depth = self.depth_estimator(enhanced)
         normals = self.normal_estimator(depth)
         aux_outputs['depth'] = depth
         aux_outputs['normals'] = normals
-        
+
         # Stage 1: Caustics (depth-aware)
         if 'caustics' in active_stages:
             caustics = self.models['caustics'](enhanced, depth)
             # Apply caustics to water regions
             water_mask = (enhanced[:, 2:3] > enhanced[:, 0:1] * 1.2) & \
-                        (enhanced[:, 2:3] > enhanced[:, 1:2] * 1.1)
+                (enhanced[:, 2:3] > enhanced[:, 1:2] * 1.1)
             water_mask = water_mask.float()
             enhanced = enhanced + caustics * water_mask * 0.3
             aux_outputs['caustics'] = caustics
-        
+
         # Stage 2: Atmosphere
         if 'atmosphere' in active_stages:
             enhanced = self.models['atmosphere'](enhanced)
-        
+
         # Stage 3: Materials
         if 'materials' in active_stages:
             enhanced = self.models['materials'](enhanced)
-        
+
         # Stage 4: Spatial Harmonics (normal-aware)
         if 'harmonics' in active_stages:
             illumination = self.models['harmonics'](normals)
             enhanced = enhanced * (1 + illumination * 0.3)
             aux_outputs['illumination'] = illumination
-        
+
         # Clamp to valid range
         enhanced = torch.clamp(enhanced, 0, 1)
-        
+
         return enhanced, aux_outputs
 
     def _compute_loss(
@@ -752,32 +752,32 @@ class EnhancedHyperRealityTrainer:
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         """Compute combined loss with all components"""
         losses = {}
-        
+
         # MSE loss
         mse = self.mse_loss(enhanced, target)
         losses['mse'] = mse.item()
-        
+
         # Perceptual loss
         perceptual = self.perceptual_loss(enhanced, target)
         losses['perceptual'] = perceptual.item()
-        
+
         # LPIPS loss
         lpips = self.lpips_loss(enhanced, target)
         losses['lpips'] = lpips.item()
-        
+
         # Style loss
         style = self.style_loss(enhanced, target)
         losses['style'] = style.item()
-        
+
         # Material consistency loss
         material = self.material_loss(enhanced, target)
         losses['material'] = material.item()
-        
+
         # Depth consistency loss
         target_depth = self.depth_estimator(target)
         depth = self.depth_loss(enhanced, target, aux_outputs.get('depth'), target_depth)
         losses['depth'] = depth.item()
-        
+
         # Combined loss
         total_loss = (
             self.config.mse_weight * mse +
@@ -787,9 +787,9 @@ class EnhancedHyperRealityTrainer:
             self.config.material_weight * material +
             self.config.depth_consistency_weight * depth
         )
-        
+
         losses['total'] = total_loss.item()
-        
+
         return total_loss, losses
 
     def train(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None):
@@ -811,13 +811,13 @@ class EnhancedHyperRealityTrainer:
         for epoch in range(self.config.num_epochs):
             self.current_epoch = epoch
             active_stages = self._get_active_stages(epoch)
-            
+
             print(f"\nEpoch {epoch+1}/{self.config.num_epochs} - Active stages: {active_stages}")
 
             # Training phase
             train_loss, train_metrics = self._train_epoch(train_loader, epoch, active_stages)
             self.training_history['train_loss'].append(train_loss)
-            
+
             for key, value in train_metrics.items():
                 if key not in self.training_history:
                     self.training_history[key] = []
@@ -843,7 +843,7 @@ class EnhancedHyperRealityTrainer:
         print(f"{'='*60}")
         print(f"Best validation loss: {self.best_val_loss:.6f}")
         print(f"Checkpoint directory: {self.config.checkpoint_dir}")
-        
+
         # Save training history
         history_path = Path(self.config.checkpoint_dir) / "training_history.json"
         with open(history_path, 'w') as f:
@@ -895,13 +895,13 @@ class EnhancedHyperRealityTrainer:
             for name in active_stages:
                 all_params.extend(self.models[name].parameters())
             all_params.extend(self.depth_estimator.parameters())
-            
+
             torch.nn.utils.clip_grad_norm_(all_params, self.config.gradient_clip)
 
             self.optimizer.step()
 
             total_loss += loss.item()
-            
+
             for key, value in metrics.items():
                 if key not in total_metrics:
                     total_metrics[key] = 0.0
@@ -915,7 +915,7 @@ class EnhancedHyperRealityTrainer:
 
         avg_loss = total_loss / num_batches
         avg_metrics = {k: v / num_batches for k, v in total_metrics.items()}
-        
+
         return avg_loss, avg_metrics
 
     def _validate(

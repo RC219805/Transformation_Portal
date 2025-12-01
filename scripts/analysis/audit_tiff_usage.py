@@ -7,6 +7,7 @@ Identifies any files still using PIL for TIFF saving (should use tifffile instea
 import re
 from pathlib import Path
 
+
 def audit_file(filepath):
     """Check a Python file for TIFF saving methods."""
     with open(filepath, 'r') as f:
@@ -33,6 +34,7 @@ def audit_file(filepath):
         'uses_correct_func': has_correct_function,
         'is_good': (has_tifffile_write or has_correct_function) and not issues
     }
+
 
 def main():
     repo_root = Path.cwd()
@@ -103,6 +105,7 @@ def main():
     else:
         print("\n✅ All TIFF-related code uses optimal saving methods")
         return 0
+
 
 if __name__ == "__main__":
     exit(main())

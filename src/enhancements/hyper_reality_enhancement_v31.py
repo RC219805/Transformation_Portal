@@ -117,7 +117,7 @@ class EnhancementConfig:
         'num_workers': 8,
         'pin_memory': True
     })
-    
+
     # Model loading
     checkpoint_dir: str = "weights/hyper_reality"
     auto_load_weights: bool = True
@@ -160,7 +160,7 @@ class CausticGenerator(nn.Module):
                 phase = torch.randn(b, 1, h, w).to(x.device) * k
                 wave_pattern = torch.sin(phase) * torch.cos(phase * 1.3)
                 coherence = torch.exp(-torch.abs(wave_pattern) * self.config['coherence_length'])
-                interference[:, i:i+1] = wave_pattern * coherence
+                interference[:, i:i + 1] = wave_pattern * coherence
 
             waves = waves * 0.7 + interference * 0.3
 
@@ -246,7 +246,7 @@ class AtmosphericSynthesizer(nn.Module):
 
         for i, decoder in enumerate(self.decoder):
             if 0 < i < len(skips):
-                skip = skips[-(i+1)]
+                skip = skips[-(i + 1)]
                 if feat.shape[-2:] != skip.shape[-2:]:
                     feat = F.interpolate(feat, size=skip.shape[-2:], mode='bilinear', align_corners=True)
                 feat = torch.cat([feat, skip], dim=1)
@@ -297,7 +297,7 @@ class MaterialTranscendence(nn.Module):
         result = torch.zeros_like(x)
 
         for i, (name, net) in enumerate(self.material_responses.items()):
-            mask = materials[:, i:i+1]
+            mask = materials[:, i:i + 1]
             response = net(x)
 
             if name == 'stucco' and self.config['energy_violation'] > 1.0:
@@ -361,13 +361,13 @@ class SpatialHarmonics(nn.Module):
 class EnhancedDepthEstimator(nn.Module):
     """
     Improved depth estimation network
-    
+
     Provides better depth maps for caustic application and spatial harmonics.
     """
-    
+
     def __init__(self):
         super().__init__()
-        
+
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 32, 7, stride=2, padding=3),
             nn.BatchNorm2d(32),
@@ -379,7 +379,7 @@ class EnhancedDepthEstimator(nn.Module):
             nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
         )
-        
+
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1),
             nn.BatchNorm2d(64),
@@ -390,21 +390,21 @@ class EnhancedDepthEstimator(nn.Module):
             nn.ConvTranspose2d(32, 1, 4, stride=2, padding=1),
             nn.Sigmoid(),
         )
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         features = self.encoder(x)
         depth = self.decoder(features)
-        
+
         if depth.shape[-2:] != x.shape[-2:]:
             depth = F.interpolate(depth, size=x.shape[-2:], mode='bilinear', align_corners=False)
-        
+
         return depth
 
 
 class HyperRealityProcessor:
     """
     Enhanced processing pipeline for 105/100+ quality achievement
-    
+
     Version 3.1.0 improvements:
     - Automatic model weight loading from checkpoints
     - True perceptual quality measurement via PerceptualQualityAssessor
@@ -419,7 +419,7 @@ class HyperRealityProcessor:
         self.atmosphere_syn = AtmosphericSynthesizer(self.config.neural_atmosphere).to(device)
         self.material_trans = MaterialTranscendence(self.config.material_transcendence).to(device)
         self.spatial_harm = SpatialHarmonics(self.config.spatial_harmonics).to(device)
-        
+
         # Depth estimation
         self.depth_estimator = EnhancedDepthEstimator().to(device)
 
@@ -438,22 +438,22 @@ class HyperRealityProcessor:
         # Quality assessment
         self.quality_assessor = None
         self._init_quality_assessor()
-        
+
         # Track enhancements
         self.enhancements_applied = []
 
     def _load_trained_weights(self):
         """Load trained model weights from checkpoint"""
         from .model_loader import ModelLoader
-        
+
         loader = ModelLoader(self.config.checkpoint_dir)
         checkpoint = loader.load_best_model()
-        
+
         if checkpoint is None:
             print("⚠ No trained weights found. Using random initialization.")
-            print(f"   Train models with: python src/enhancements/train_hyper_reality_v2.py")
+            print("   Train models with: python src/enhancements/train_hyper_reality_v2.py")
             return
-        
+
         try:
             models = {
                 'caustics': self.caustic_gen,
@@ -461,26 +461,26 @@ class HyperRealityProcessor:
                 'materials': self.material_trans,
                 'harmonics': self.spatial_harm,
             }
-            
+
             model_states = checkpoint.get('models', {})
-            
+
             for name, model in models.items():
                 if name in model_states:
                     model.load_state_dict(model_states[name])
                     print(f"✓ Loaded weights for {name}")
-            
+
             # Load depth estimator if available
             if 'depth_estimator' in checkpoint:
                 self.depth_estimator.load_state_dict(checkpoint['depth_estimator'])
                 print("✓ Loaded weights for depth_estimator")
-            
+
             self.weights_loaded = True
-            
+
             # Report checkpoint info
             epoch = checkpoint.get('epoch', 'unknown')
             val_loss = checkpoint.get('best_val_loss', 'N/A')
             print(f"✓ Loaded checkpoint from epoch {epoch} (val_loss: {val_loss})")
-            
+
         except Exception as e:
             print(f"⚠ Failed to load some weights: {e}")
 
@@ -525,7 +525,7 @@ class HyperRealityProcessor:
         """Apply final synergistic enhancements"""
         if self.config.synergistic['edge_enhancement'] > 1.0:
             kernel = torch.tensor([[-1, -1, -1],
-                                  [-1,  9, -1],
+                                  [-1, 9, -1],
                                   [-1, -1, -1]], dtype=torch.float32).view(1, 1, 3, 3).to(device)
             edges = F.conv2d(img, kernel.repeat(3, 1, 1, 1), padding=1, groups=3)
             img = img + edges * (self.config.synergistic['edge_enhancement'] - 1.0)
@@ -550,13 +550,13 @@ class HyperRealityProcessor:
                       save_intermediate: bool = False) -> Dict[str, Any]:
         """
         Process image to achieve target quality level with true perceptual measurement
-        
+
         Args:
             image_path: Path to input image
             output_path: Path for output (auto-generated if None)
             reference_path: Optional reference image for quality comparison
             save_intermediate: Save intermediate enhancement stages
-        
+
         Returns:
             Dictionary containing results, metrics, and quality assessment
         """
@@ -640,7 +640,7 @@ class HyperRealityProcessor:
         # Compute true perceptual quality
         quality_report = None
         quality_score = 0.0
-        
+
         if self.quality_assessor is not None:
             print("\n→ Computing Perceptual Quality Assessment...")
             quality_report = self.quality_assessor.assess(
@@ -681,7 +681,7 @@ class HyperRealityProcessor:
             'enhancements': self.enhancements_applied,
             'weights_loaded': self.weights_loaded,
         }
-        
+
         if quality_report is not None:
             results['quality_report'] = quality_report.to_dict()
 
@@ -704,14 +704,14 @@ def enhance_image(image_path: str,
                   save_intermediate: bool = False) -> Dict[str, Any]:
     """
     Enhance a single image to hyper-reality quality with true perceptual measurement
-    
+
     Args:
         image_path: Path to input image
         output_path: Optional output path
         reference_path: Optional reference for quality comparison
         target_quality: Target quality score (default: 105)
         save_intermediate: Save intermediate stages
-    
+
     Returns:
         Processing results dictionary with quality assessment
     """
@@ -743,9 +743,9 @@ if __name__ == "__main__":
         target_quality=args.quality,
         auto_load_weights=not args.no_weights
     )
-    
+
     processor = HyperRealityProcessor(config)
-    
+
     results = processor.process_image(
         image_path=args.input,
         output_path=args.output,

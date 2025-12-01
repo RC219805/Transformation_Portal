@@ -16,7 +16,6 @@ For Montecito/Santa Barbara:
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
 
 import numpy as np
 
@@ -132,9 +131,9 @@ class AtmosphericModel:
         for i, color in enumerate(['red', 'green', 'blue']):
             channel_transmission = transmission ** self.RAYLEIGH_COEFFICIENTS[color]
 
-            atmospheric[:, :, 2-i] = (
-                atmospheric[:, :, 2-i] * channel_transmission +
-                atmo_color[2-i] * (1 - channel_transmission)
+            atmospheric[:, :, 2 - i] = (
+                atmospheric[:, :, 2 - i] * channel_transmission +
+                atmo_color[2 - i] * (1 - channel_transmission)
             )
 
         # Desaturate with distance

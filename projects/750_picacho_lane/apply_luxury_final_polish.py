@@ -54,7 +54,7 @@ class LuxuryPoolEnhancer:
         img_array = np.array(img, dtype=np.float32) / 255.0
 
         # Split into RGB channels
-        r, g, b = img_array[:,:,0], img_array[:,:,1], img_array[:,:,2]
+        r, g, b = img_array[:, :, 0], img_array[:, :, 1], img_array[:, :, 2]
 
         # Sky enhancement: boost blue channel in bright blue areas
         sky_mask = (b > 0.5) & (b > r) & (b > g) & (r + g + b > 1.5)
@@ -128,12 +128,12 @@ class LuxuryPoolEnhancer:
         log.info("Optimizing sky and clouds...")
 
         img_array = np.array(img, dtype=np.float32) / 255.0
-        r, g, b = img_array[:,:,0], img_array[:,:,1], img_array[:,:,2]
+        r, g, b = img_array[:, :, 0], img_array[:, :, 1], img_array[:, :, 2]
 
         # Identify sky regions (upper third, blue-biased)
         height = img_array.shape[0]
         sky_region = np.zeros_like(r, dtype=bool)
-        sky_region[:height//2, :] = True
+        sky_region[:height // 2, :] = True
         sky_mask = sky_region & (b > 0.4) & (b > r * 1.1) & (b > g * 1.05)
 
         # Enhance blue in sky
@@ -169,7 +169,7 @@ class LuxuryPoolEnhancer:
         log.info("Refining pool water appearance...")
 
         img_array = np.array(img, dtype=np.float32) / 255.0
-        r, g, b = img_array[:,:,0], img_array[:,:,1], img_array[:,:,2]
+        r, g, b = img_array[:, :, 0], img_array[:, :, 1], img_array[:, :, 2]
 
         # Identify water regions (blue-green, mid-brightness)
         water_mask = (
@@ -214,7 +214,7 @@ class LuxuryPoolEnhancer:
         log.info("Optimizing landscape and vegetation...")
 
         img_array = np.array(img, dtype=np.float32) / 255.0
-        r, g, b = img_array[:,:,0], img_array[:,:,1], img_array[:,:,2]
+        r, g, b = img_array[:, :, 0], img_array[:, :, 1], img_array[:, :, 2]
 
         # Identify vegetation (green-dominant)
         vegetation_mask = (g > r * 1.1) & (g > b * 1.05) & (g > 0.2)
@@ -246,7 +246,7 @@ class LuxuryPoolEnhancer:
         img_array = np.array(img, dtype=np.float32) / 255.0
 
         # Calculate luminance
-        luminance = 0.299 * img_array[:,:,0] + 0.587 * img_array[:,:,1] + 0.114 * img_array[:,:,2]
+        luminance = 0.299 * img_array[:, :, 0] + 0.587 * img_array[:, :, 1] + 0.114 * img_array[:, :, 2]
 
         # S-curve tone mapping: compress highlights/shadows, expand mid-tones
         # This creates the HDR "pop" while preserving detail
@@ -437,20 +437,20 @@ def main():
     # Create enhancer and process
     enhancer = LuxuryPoolEnhancer(output_dir)
 
-    log.info("\n" + "="*70)
+    log.info("\n" + "=" * 70)
     log.info("LUXURY POOL ENHANCEMENT - FINAL POLISH PIPELINE")
-    log.info("="*70)
+    log.info("=" * 70)
     log.info(f"Input: {input_path}")
     log.info(f"Output: {output_dir}/")
-    log.info("="*70 + "\n")
+    log.info("=" * 70 + "\n")
 
     outputs = enhancer.process(input_path, base_name="V3")
 
     # Summary
     elapsed = time.time() - start_time
-    log.info("\n" + "="*70)
+    log.info("\n" + "=" * 70)
     log.info("PROCESSING COMPLETE")
-    log.info("="*70)
+    log.info("=" * 70)
     log.info(f"Total time: {elapsed:.1f} seconds")
     log.info(f"Outputs generated: {len(outputs)}")
     log.info("\nFinal outputs:")
@@ -461,7 +461,7 @@ def main():
     for stage, path in sorted(outputs.items()):
         if not stage.startswith('final') and stage != 'comparison':
             log.info(f"  {stage}: {path.name}")
-    log.info("="*70)
+    log.info("=" * 70)
 
 
 if __name__ == '__main__':

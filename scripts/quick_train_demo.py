@@ -14,12 +14,9 @@ Usage:
     python scripts/quick_train_demo.py
 """
 
-import sys
-from pathlib import Path
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
+from torchvision import transforms
+import torch
+from torch.utils.data import DataLoader
 from enhancements.train_hyper_reality import (
     TrainingConfig,
     SyntheticDataGenerator,
@@ -27,9 +24,12 @@ from enhancements.train_hyper_reality import (
     EnhancementDataset,
     configure_device
 )
-from torch.utils.data import DataLoader
-import torch
-from torchvision import transforms
+import sys
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 
 def main():
     """Run a quick training demonstration"""
@@ -42,27 +42,27 @@ def main():
     print("  - ./scripts/train_with_750picacho.sh (recommended - real data)")
     print("  - ./scripts/quickstart_training.sh (synthetic data)")
     print()
-    
+
     # Configure device
     device = configure_device()
     print(f"Using device: {device}")
     print()
-    
+
     # Step 1: Generate small synthetic dataset
     print("Step 1: Generating synthetic dataset (50 pairs)...")
     print("-" * 70)
-    
+
     output_dir = "data/training_demo"
     generator = SyntheticDataGenerator(output_dir, num_pairs=50)
     generator.generate_training_data()
-    
+
     print(f"✓ Generated 50 training pairs in {output_dir}")
     print()
-    
+
     # Step 2: Configure training for quick demo
     print("Step 2: Configuring training (3 epochs for demo)...")
     print("-" * 70)
-    
+
     config = TrainingConfig(
         data_dir=output_dir,
         synthetic_data=False,  # Data already generated
@@ -76,36 +76,36 @@ def main():
         num_workers=2,
         use_mixed_precision=False  # Disable for CPU
     )
-    
-    print(f"Training config:")
+
+    print("Training config:")
     print(f"  - Dataset: {config.data_dir} (50 pairs)")
     print(f"  - Epochs: {config.num_epochs}")
     print(f"  - Batch size: {config.batch_size}")
     print(f"  - Learning rate: {config.learning_rate}")
     print(f"  - Checkpoints: {config.checkpoint_dir}")
     print()
-    
+
     # Step 3: Create datasets and dataloaders
     print("Step 3: Preparing datasets...")
     print("-" * 70)
-    
+
     transform = transforms.Compose([
         transforms.Resize((512, 512)),
         transforms.ToTensor(),
     ])
-    
+
     low_quality_dir = Path(output_dir) / "low_quality"
     high_quality_dir = Path(output_dir) / "high_quality"
-    
+
     dataset = EnhancementDataset(low_quality_dir, high_quality_dir, transform)
-    
+
     # Split into train/val
     val_size = int(config.val_split * len(dataset))
     train_size = len(dataset) - val_size
     train_dataset, val_dataset = torch.utils.data.random_split(
         dataset, [train_size, val_size]
     )
-    
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=config.batch_size,
@@ -113,7 +113,7 @@ def main():
         num_workers=config.num_workers,
         pin_memory=False  # Disable for CPU
     )
-    
+
     val_loader = DataLoader(
         val_dataset,
         batch_size=config.batch_size,
@@ -121,17 +121,17 @@ def main():
         num_workers=config.num_workers,
         pin_memory=False  # Disable for CPU
     )
-    
-    print(f"✓ Created dataloaders:")
+
+    print("✓ Created dataloaders:")
     print(f"  - Training samples: {train_size}")
     print(f"  - Validation samples: {val_size}")
     print()
-    
+
     # Step 4: Train models
     print("Step 4: Training models (this will take a few minutes)...")
     print("-" * 70)
     print()
-    
+
     try:
         trainer = HyperRealityTrainer(config)
         trainer.train(train_loader, val_loader)
@@ -150,7 +150,7 @@ def main():
         print("  3. Check trained models in:")
         print(f"     {config.checkpoint_dir}/")
         print()
-        
+
     except Exception as e:
         print()
         print("=" * 70)
@@ -169,7 +169,7 @@ def main():
         print("  - GPU with CUDA or Apple Silicon with MPS (recommended)")
         print()
         return 1
-    
+
     return 0
 
 

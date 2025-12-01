@@ -68,26 +68,26 @@ def _as_f32_L(im: Image.Image) -> np.ndarray:
 
 
 def _srgb_to_linear(x: np.ndarray) -> np.ndarray:
-    return np.where(x <= 0.04045, x/12.92, ((x+0.055)/1.055)**2.4)
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055)**2.4)
 
 
 def _linear_to_srgb(x: np.ndarray) -> np.ndarray:
-    return np.where(x <= 0.0031308, 12.92*x, 1.055*np.power(x, 1/2.4) - 0.055)
+    return np.where(x <= 0.0031308, 12.92 * x, 1.055 * np.power(x, 1 / 2.4) - 0.055)
 
 # ------------- math helpers -------------
 
 
 def _normalize(v: np.ndarray, eps=1e-6) -> np.ndarray:
-    n = np.sqrt(np.sum(v*v, axis=-1, keepdims=True)) + eps
+    n = np.sqrt(np.sum(v * v, axis=-1, keepdims=True)) + eps
     return v / n
 
 
 def _sobel_dxdy(h: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     p = np.pad(h, ((1, 1), (1, 1)), mode="edge")
-    dx = (p[1:-1, 2:] - p[1:-1, :-2]) + 2*(p[2:, 2:] - p[2:, :-2]) + (p[:-2, 2:] - p[:-2, :-2])
-    dy = (p[2:, 1:-1] - p[:-2, 1:-1]) + 2*(p[2:, 2:] - p[:-2, 2:]) + (p[2:, :-2] - p[:-2, :-2])
-    k = 1.0/8.0
-    return np.require(dx*k, np.float32, ["C", "A"]), np.require(dy*k, np.float32, ["C", "A"])
+    dx = (p[1:-1, 2:] - p[1:-1, :-2]) + 2 * (p[2:, 2:] - p[2:, :-2]) + (p[:-2, 2:] - p[:-2, :-2])
+    dy = (p[2:, 1:-1] - p[:-2, 1:-1]) + 2 * (p[2:, 2:] - p[:-2, 2:]) + (p[2:, :-2] - p[:-2, :-2])
+    k = 1.0 / 8.0
+    return np.require(dx * k, np.float32, ["C", "A"]), np.require(dy * k, np.float32, ["C", "A"])
 
 
 def _sample_env(env: Optional[np.ndarray], dir3: np.ndarray) -> np.ndarray:
@@ -96,11 +96,11 @@ def _sample_env(env: Optional[np.ndarray], dir3: np.ndarray) -> np.ndarray:
     x, y, z = dir3[..., 0], dir3[..., 1], dir3[..., 2]
     theta = np.arctan2(x, z)
     phi = np.arccos(np.clip(y, -1, 1))
-    u = (theta/(2*np.pi) + 0.5)
-    v = phi/np.pi
+    u = (theta / (2 * np.pi) + 0.5)
+    v = phi / np.pi
     H, W, _ = env.shape
-    uu = np.clip((u*W).astype(np.int32), 0, W-1)
-    vv = np.clip((v*H).astype(np.int32), 0, H-1)
+    uu = np.clip((u * W).astype(np.int32), 0, W - 1)
+    vv = np.clip((v * H).astype(np.int32), 0, H - 1)
     return env[vv, uu]
 
 
@@ -110,26 +110,26 @@ def _parallax_uv(height: np.ndarray, view_xy: Tuple[float, float], scale: float,
     uvx = xx.copy()
     uvy = yy.copy()
     if steps <= 1 or scale <= 1e-6:
-        uvx += height * (scale*view_xy[0]) * W
-        uvy += height * (scale*view_xy[1]) * H
+        uvx += height * (scale * view_xy[0]) * W
+        uvy += height * (scale * view_xy[1]) * H
         return uvx, uvy
-    step = 1.0/steps
+    step = 1.0 / steps
     accum = np.zeros_like(height)
     for _ in range(steps):
         accum += height
-        uvx += accum * (scale*view_xy[0])*W*step
-        uvy += accum * (scale*view_xy[1])*H*step
+        uvx += accum * (scale * view_xy[0]) * W * step
+        uvy += accum * (scale * view_xy[1]) * H * step
     return uvx, uvy
 
 
 def _bilinear(img: np.ndarray, uvx: np.ndarray, uvy: np.ndarray) -> np.ndarray:
     H, W = img.shape[:2]
-    x = np.clip(uvx, 0, W-1)
-    y = np.clip(uvy, 0, H-1)
+    x = np.clip(uvx, 0, W - 1)
+    y = np.clip(uvy, 0, H - 1)
     x0 = np.floor(x).astype(np.int32)
     y0 = np.floor(y).astype(np.int32)
-    x1 = np.clip(x0+1, 0, W-1)
-    y1 = np.clip(y0+1, 0, H-1)
+    x1 = np.clip(x0 + 1, 0, W - 1)
+    y1 = np.clip(y0 + 1, 0, H - 1)
     wx = x - x0
     wy = y - y0
     c00 = img[y0, x0]
@@ -140,7 +140,7 @@ def _bilinear(img: np.ndarray, uvx: np.ndarray, uvy: np.ndarray) -> np.ndarray:
     if img.ndim == 3:
         wx = wx[..., None]
         wy = wy[..., None]
-    return (c00*(1-wx)*(1-wy) + c10*wx*(1-wy) + c01*(1-wx)*wy + c11*wx*wy)
+    return (c00 * (1 - wx) * (1 - wy) + c10 * wx * (1 - wy) + c01 * (1 - wx) * wy + c11 * wx * wy)
 
 # ------------- core PBR -------------
 
@@ -166,7 +166,7 @@ def apply_pbr_overlays(
     elif isinstance(image, Image.Image):
         pil_in = image.convert("RGB")
     else:
-        pil_in = Image.fromarray((np.clip(image, 0, 1)*255.0+0.5).astype(np.uint8), "RGB")
+        pil_in = Image.fromarray((np.clip(image, 0, 1) * 255.0 + 0.5).astype(np.uint8), "RGB")
 
     W, H = pil_in.size
     base_hi_srgb = _as_f32_rgb(pil_in)
@@ -183,7 +183,7 @@ def apply_pbr_overlays(
         pass
 
     scale = float(np.clip(proc_scale, 0.1, 1.0))
-    w, h = max(1, int(W*scale)), max(1, int(H*scale))
+    w, h = max(1, int(W * scale)), max(1, int(H * scale))
 
     # Mask (process region)
     mask_np = None
@@ -193,8 +193,8 @@ def apply_pbr_overlays(
         mask_np = _as_f32_L(m)
 
     # Start from input (linear)
-    base = np.asarray(Image.fromarray((np.clip(base_hi, 0, 1)*255).astype(np.uint8)
-                      ).resize((w, h), Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+    base = np.asarray(Image.fromarray((np.clip(base_hi, 0, 1) * 255).astype(np.uint8)
+                                      ).resize((w, h), Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32) / 255.0
 
     # Albedo
     if albedo is not None:
@@ -206,7 +206,7 @@ def apply_pbr_overlays(
             v2 = _resize(v2, (w, h))
             v2_np = _srgb_to_linear(_as_f32_rgb(v2))
             m = float(np.clip(variant_mix, 0.0, 1.0))
-            alb_np = alb_np*(1-m) + v2_np*m
+            alb_np = alb_np * (1 - m) + v2_np * m
         if normal is not None and enable_displacement and pom_scale > 1e-6:
             # POM uses height map derived from normal Z (higher Z = closer to viewer = higher)
             n_pom = _open_rgb(normal)
@@ -223,7 +223,7 @@ def apply_pbr_overlays(
             # Apply bilinear sampling with parallax offsets to albedo
             alb_np = _bilinear(alb_np, uvx, uvy)
         t = float(np.clip(albedo_blend, 0, 1))
-        base = alb_np*t + base*(1.0-t)
+        base = alb_np * t + base * (1.0 - t)
 
     # Height from displacement not provided; we approximate with roughness/normal if needed
     height = None
@@ -234,7 +234,7 @@ def apply_pbr_overlays(
         n_im = _resize(n_im, (w, h))
         n_np = _as_f32_rgb(n_im)  # assumed normal map in tangent space
         # Convert normal map (0..1)->(-1..1)
-        n_ts = (n_np*2.0 - 1.0)
+        n_ts = (n_np * 2.0 - 1.0)
         n_ts = _normalize(n_ts)
     else:
         n_ts = np.dstack([np.zeros_like(base[..., 0]), np.zeros_like(base[..., 0]), np.ones_like(base[..., 0])])
@@ -270,9 +270,9 @@ def apply_pbr_overlays(
     # Height-based shading (Sobel from height if available)
     if height is not None and height_strength > 1e-6:
         dx, dy = _sobel_dxdy(height)
-        z = np.full_like(dx, 1.0/max(1e-3, 1.0-0.5*height_strength))
+        z = np.full_like(dx, 1.0 / max(1e-3, 1.0 - 0.5 * height_strength))
         n_from_h = _normalize(np.stack([-dx, -dy, z], axis=-1))
-        n_ts = _normalize(n_ts*(1.0-height_strength) + n_from_h*height_strength)
+        n_ts = _normalize(n_ts * (1.0 - height_strength) + n_from_h * height_strength)
 
     # Lighting: simple multi-light lambert + specular; fresnel approx
     if lights is None:
@@ -284,18 +284,18 @@ def apply_pbr_overlays(
 
     for Ldir, Lcol, I in lights:
         L = np.array(Ldir, dtype=np.float32)
-        L = L/(np.linalg.norm(L)+1e-6)
-        ndotl = np.clip(np.sum(N*L[None, None, :], axis=-1, keepdims=True), 0.0, 1.0)
+        L = L / (np.linalg.norm(L) + 1e-6)
+        ndotl = np.clip(np.sum(N * L[None, None, :], axis=-1, keepdims=True), 0.0, 1.0)
         diff = base * ndotl * I
         diff_acc += diff * Lcol
         # GGX-ish spec (very simplified)
         half_vec = _normalize(N + view)
-        ndoth = np.clip(np.sum(N*half_vec, axis=-1), 0.0, 1.0)
+        ndoth = np.clip(np.sum(N * half_vec, axis=-1), 0.0, 1.0)
         # perceptual roughness -> shininess
-        shin = 2.0*(1.0 - rough)
-        spec = (ndoth[..., None] ** (1.0 + 32.0*shin[..., None]))
+        shin = 2.0 * (1.0 - rough)
+        spec = (ndoth[..., None] ** (1.0 + 32.0 * shin[..., None]))
         # Fresnel
-        F0 = 0.04*(1.0-metal)[..., None] + base*metal[..., None]  # dielectrics vs metals
+        F0 = 0.04 * (1.0 - metal)[..., None] + base * metal[..., None]  # dielectrics vs metals
         spec_rgb = F0 + (1.0 - F0) * (1.0 - ndoth[..., None])**5
         spec_acc += spec * spec_rgb * I
 
@@ -312,39 +312,46 @@ def apply_pbr_overlays(
         refl = _sample_env(env, N) * (1.0 - rough[..., None])
         spec_acc += refl * float(reflection_strength)
 
-    shaded = np.clip(diff_acc + spec_acc*float(reflection_strength), 0.0, 1.0)
+    shaded = np.clip(diff_acc + spec_acc * float(reflection_strength), 0.0, 1.0)
 
     # Mask application
     if mask_np is not None:
         m = mask_np[..., None]
-        shaded = shaded*m + base*(1.0-m)
+        shaded = shaded * m + base * (1.0 - m)
 
     # Upscale + detail restore
     if scale < 1.0:
-        up = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W, H),
-                        Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
-        hf = np.clip(base_hi - np.asarray(Image.fromarray((base_hi*255).astype(np.uint8)
-                     ).resize((W, H), Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0, -1, 1)
-        shaded = np.clip(up + 0.12*hf, 0.0, 1.0)
+        up_img = Image.fromarray((shaded * 255).astype(np.uint8)).resize(
+            (W, H), Image.Resampling.BICUBIC
+        )
+        up = np.asarray(up_img, dtype=np.uint8).astype(np.float32) / 255.0
+        base_hi_resized = Image.fromarray(
+            (base_hi * 255).astype(np.uint8)
+        ).resize((W, H), Image.Resampling.BICUBIC)
+        hf = np.clip(
+            base_hi - np.asarray(base_hi_resized, dtype=np.uint8).astype(np.float32) / 255.0,
+            -1, 1
+        )
+        shaded = np.clip(up + 0.12 * hf, 0.0, 1.0)
     else:
-        shaded = np.asarray(Image.fromarray((shaded*255).astype(np.uint8)).resize((W, H),
-                            Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32)/255.0
+        shaded = np.asarray(Image.fromarray((shaded * 255).astype(np.uint8)).resize((W, H),
+                            Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32) / 255.0
 
     # Finishing
     # exposure/clamp
     if exposure != 0.0 or clamp_low > 0 or clamp_high < 1:
         def _lut_u8(exposure, lo, hi):
-            x = (np.arange(256, dtype=np.float32)/255.0)
+            x = (np.arange(256, dtype=np.float32) / 255.0)
             if exposure != 0.0:
                 x *= 2.0**float(exposure)
             lo, hi = float(np.clip(lo, 0, 1)), float(np.clip(hi, 0, 1))
             hi = max(hi, lo)
-            x = np.zeros_like(x) if hi == lo else (x-lo)/max(1e-6, hi-lo)
-            return (np.clip(x, 0, 1)*255.0+0.5).astype(np.uint8)
+            x = np.zeros_like(x) if hi == lo else (x - lo) / max(1e-6, hi - lo)
+            return (np.clip(x, 0, 1) * 255.0 + 0.5).astype(np.uint8)
         lut = _lut_u8(exposure, clamp_low, clamp_high)
-        arr8 = (np.clip(shaded, 0, 1)*255.0+0.5).astype(np.uint8)
+        arr8 = (np.clip(shaded, 0, 1) * 255.0 + 0.5).astype(np.uint8)
         shaded = _as_f32_rgb(Image.fromarray(lut[arr8]))
-    out = Image.fromarray((_linear_to_srgb(np.clip(shaded, 0, 1))*255.0+0.5).astype(np.uint8), "RGB")
+    out = Image.fromarray((_linear_to_srgb(np.clip(shaded, 0, 1)) * 255.0 + 0.5).astype(np.uint8), "RGB")
     if contrast != 1 or saturation != 1:
         if contrast != 1:
             out = ImageEnhance.Contrast(out).enhance(float(contrast))

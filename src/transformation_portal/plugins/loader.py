@@ -9,15 +9,12 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Set, Type
+from typing import Any, Dict, List, Optional
 
 from .interface import (
-    PluginExecutionError,
-    PluginInitializationError,
     PluginInterface,
     PluginMetadata,
     PluginType,
-    PluginValidationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -243,7 +240,7 @@ class PluginLoader:
             if plugin_json.exists():
                 try:
                     manifest = PluginManifest.from_json_file(plugin_json)
-                    manifest_path = plugin_json
+                    manifest_path = plugin_json  # noqa: F841
                 except Exception as e:
                     logger.warning(f"Failed to parse {plugin_json}: {e}")
 
@@ -253,7 +250,7 @@ class PluginLoader:
                 if pyproject.exists():
                     try:
                         manifest = PluginManifest.from_pyproject(pyproject)
-                        manifest_path = pyproject
+                        _manifest_path = pyproject  # noqa: F841
                     except Exception as e:
                         logger.warning(f"Failed to parse {pyproject}: {e}")
 
@@ -429,7 +426,7 @@ class PluginLoader:
             for name, obj in inspect.getmembers(module, inspect.isclass):
                 if (issubclass(obj, PluginInterface) and
                     obj is not PluginInterface and
-                    not inspect.isabstract(obj)):
+                        not inspect.isabstract(obj)):
 
                     try:
                         plugin_instance = obj()
@@ -485,7 +482,7 @@ class PluginLoader:
                 continue
 
             package_name = match.group(1)
-            version_spec = match.group(2)
+            _version_spec = match.group(2)  # noqa: F841
 
             try:
                 # Try to import the package

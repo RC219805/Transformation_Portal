@@ -9,7 +9,7 @@ and generates detailed quality assessment report.
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Dict, Any
 import numpy as np
 from PIL import Image
 import time
@@ -121,7 +121,7 @@ class ImageQualityAnalyzer:
 
         # Comparative analysis
         if master_path.exists() and delivery_path.exists():
-            print(f"  - Running comparative analysis (master vs delivery)...")
+            print("  - Running comparative analysis (master vs delivery)...")
             try:
                 result["comparison"] = self.compare_images(master_path, delivery_path)
             except Exception as e:
@@ -479,13 +479,13 @@ def generate_markdown_report(analysis_results: Dict, output_path: Path):
             total = sum(stages.values())
 
             md.append(f"| {room_name} | {total:.2f} | "
-                     f"{stages.get('1_load', 0):.3f} | "
-                     f"{stages.get('2_depth', 0):.3f} | "
-                     f"{stages.get('3_material', 0):.2f} | "
-                     f"{stages.get('4_tonemap', 0):.3f} | "
-                     f"{stages.get('5_color', 0):.3f} | "
-                     f"{stages.get('6_ai', 0):.2f} | "
-                     f"{stages.get('7_upscale', 0):.2f} |")
+                      f"{stages.get('1_load', 0):.3f} | "
+                      f"{stages.get('2_depth', 0):.3f} | "
+                      f"{stages.get('3_material', 0):.2f} | "
+                      f"{stages.get('4_tonemap', 0):.3f} | "
+                      f"{stages.get('5_color', 0):.3f} | "
+                      f"{stages.get('6_ai', 0):.2f} | "
+                      f"{stages.get('7_upscale', 0):.2f} |")
 
         md.append("")
         md.append("**Key Insights:**")
@@ -513,10 +513,10 @@ def generate_markdown_report(analysis_results: Dict, output_path: Path):
             if key in data:
                 img_data = data[key]
                 md.append(f"| {img_type.title()} | "
-                         f"{img_data.get('file_size_mb', 'N/A')} MB | "
-                         f"{img_data.get('width', 0)}x{img_data.get('height', 0)} | "
-                         f"{img_data.get('bit_depth', 'N/A')} | "
-                         f"{img_data.get('format', 'N/A')} |")
+                          f"{img_data.get('file_size_mb', 'N/A')} MB | "
+                          f"{img_data.get('width', 0)}x{img_data.get('height', 0)} | "
+                          f"{img_data.get('bit_depth', 'N/A')} | "
+                          f"{img_data.get('format', 'N/A')} |")
 
         md.append("")
 
@@ -635,7 +635,10 @@ def generate_markdown_report(analysis_results: Dict, output_path: Path):
     else:
         rating = "Needs Improvement"
 
-    md.append(f"The 750 Picacho Elite Pipeline demonstrates **{rating}** performance with an overall quality score of **{score}/100**.")
+    md.append(
+        f"The 750 Picacho Elite Pipeline demonstrates **{rating}** performance "
+        f"with an overall quality score of **{score}/100**."
+    )
     md.append("")
     md.append("The pipeline successfully:")
     md.append("- Upscaled images 4x (2048×1229 → 8192×4916) with excellent detail preservation")

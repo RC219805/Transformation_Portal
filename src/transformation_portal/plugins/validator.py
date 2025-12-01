@@ -4,18 +4,15 @@ import importlib
 import inspect
 import logging
 import re
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from .interface import (
     DepthModelPlugin,
     EnhancerPlugin,
     PluginInterface,
-    PluginMetadata,
     PluginType,
-    PluginValidationError,
     ProcessorPlugin,
 )
 from .loader import LoadedPlugin, PluginManifest

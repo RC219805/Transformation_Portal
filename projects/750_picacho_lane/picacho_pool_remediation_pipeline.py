@@ -40,6 +40,7 @@ EPSILON_TINY = 1e-8   # For geometric calculations requiring higher precision
 # 1. MATERIAL SYSTEM RECONSTRUCTION
 # ============================================================================
 
+
 class MaterialType(Enum):
     """Physically-based material types."""
     PLASTER = "plaster"
@@ -209,19 +210,19 @@ class AtmosphericIntegrator:
 
         # Cool highlights (higher color temp ~6500K)
         enhanced[:, :, 2] = np.where(highlight_mask[:, :, 0],
-                                      enhanced[:, :, 2] * 1.08,  # Boost blue
-                                      enhanced[:, :, 2])
+                                     enhanced[:, :, 2] * 1.08,  # Boost blue
+                                     enhanced[:, :, 2])
         enhanced[:, :, 0] = np.where(highlight_mask[:, :, 0],
-                                      enhanced[:, :, 0] * 0.95,  # Reduce red
-                                      enhanced[:, :, 0])
+                                     enhanced[:, :, 0] * 0.95,  # Reduce red
+                                     enhanced[:, :, 0])
 
         # Warm shadows (lower color temp ~2800K)
         enhanced[:, :, 0] = np.where(shadow_mask[:, :, 0],
-                                      enhanced[:, :, 0] * 1.12,  # Boost red
-                                      enhanced[:, :, 0])
+                                     enhanced[:, :, 0] * 1.12,  # Boost red
+                                     enhanced[:, :, 0])
         enhanced[:, :, 2] = np.where(shadow_mask[:, :, 0],
-                                      enhanced[:, :, 2] * 0.92,  # Reduce blue
-                                      enhanced[:, :, 2])
+                                     enhanced[:, :, 2] * 0.92,  # Reduce blue
+                                     enhanced[:, :, 2])
 
         print("  ✓ Blue hour color temperature applied (2700-3200K range)")
         print("  ✓ Mountain profile geometric integration (simulated)")
@@ -460,8 +461,10 @@ class DepthPostProcessor:
             blue_x = np.where(aberration_mask, blue_x, x)
 
             # Remap channels using map_coordinates
-            img_red = ndimage.map_coordinates(img[:, :, 0], [red_y.ravel(), red_x.ravel()], order=1, mode='nearest').reshape(h, w)
-            img_blue = ndimage.map_coordinates(img[:, :, 2], [blue_y.ravel(), blue_x.ravel()], order=1, mode='nearest').reshape(h, w)
+            img_red = ndimage.map_coordinates(img[:, :, 0], [red_y.ravel(), red_x.ravel()],
+                                              order=1, mode='nearest').reshape(h, w)
+            img_blue = ndimage.map_coordinates(img[:, :, 2], [blue_y.ravel(), blue_x.ravel()],
+                                               order=1, mode='nearest').reshape(h, w)
             img[:, :, 0] = img_red
             img[:, :, 2] = img_blue
             print("  ✓ Chromatic aberration applied to peripheral elements (large-format simulation)")
@@ -675,6 +678,7 @@ class PicachoPoolRemediationPipeline:
 # ============================================================================
 # CLI ENTRY POINT
 # ============================================================================
+
 
 def main() -> int:
     """Main entry point."""

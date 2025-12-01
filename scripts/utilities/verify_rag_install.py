@@ -28,6 +28,8 @@ from typing import List, Tuple
 REPO_DEFAULT = "/Users/rc/Transformation_Portal"
 
 # --- UI helpers ---
+
+
 class UI:
     GREEN = "\033[92m"
     YELLOW = "\033[93m"
@@ -56,7 +58,15 @@ def check_python(args) -> Tuple[bool, str]:
     ok = True
     msgs: List[str] = []
     ver = sys.version.split()[0]
-    in_venv = (hasattr(sys, "real_prefix") or (getattr(sys, "base_prefix", "") != sys.prefix) or bool(os.environ.get("VIRTUAL_ENV")))
+    in_venv = (
+        hasattr(
+            sys,
+            "real_prefix") or (
+            getattr(
+                sys,
+                "base_prefix",
+                "") != sys.prefix) or bool(
+                    os.environ.get("VIRTUAL_ENV")))
     msgs.append(f"Python: {ver}")
     msgs.append(f"Virtualenv active: {in_venv} (sys.prefix={sys.prefix})")
 
@@ -109,9 +119,9 @@ def check_faiss(args) -> Tuple[bool, str]:
         x = np.array([[0.0, 0.1, 0.2, 0.3],
                       [0.9, 0.8, 0.7, 0.6]], dtype="float32")
         idx.add(x)
-        D, I = idx.search(x, 1)
-        ok = I.shape == (2, 1)
-        msgs.append(f"FAISS search: OK (neighbors={I.ravel().tolist()})" if ok else "FAISS search: FAILED")
+        distances, indices = idx.search(x, 1)
+        ok = indices.shape == (2, 1)
+        msgs.append(f"FAISS search: OK (neighbors={indices.ravel().tolist()})" if ok else "FAISS search: FAILED")
         return ok, "\n".join(msgs)
     except Exception as e:
         return False, f"FAISS check failed: {e}"
@@ -187,9 +197,9 @@ def check_rag_imports(args, repo_root: Path) -> Tuple[bool, str]:
                 return False, f"RAG import fix failed: {msg}"
             # Retry after fix
             try:
-                from github.agents.rag_system.retriever import HybridRetriever  # type: ignore
-                from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore
-                from github.agents.rag_system.citation import CitationGenerator  # type: ignore
+                from github.agents.rag_system.retriever import HybridRetriever  # type: ignore  # noqa: F401
+                from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore  # noqa: F401
+                from github.agents.rag_system.citation import CitationGenerator  # type: ignore  # noqa: F401
                 return True, f"RAG modules import OK after fix.\n{msg}"
             except Exception as e2:
                 return False, f"RAG modules still not importable after fix: {e2}"
@@ -201,7 +211,10 @@ def check_rag_imports(args, repo_root: Path) -> Tuple[bool, str]:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", default=REPO_DEFAULT, help="Repository root path")
-    parser.add_argument("--fix-imports", action="store_true", help="Create 'github'->'.github' symlink and missing __init__.py files if needed")
+    parser.add_argument(
+        "--fix-imports",
+        action="store_true",
+        help="Create 'github'->'.github' symlink and missing __init__.py files if needed")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 

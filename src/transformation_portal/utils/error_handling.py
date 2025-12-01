@@ -16,22 +16,18 @@ T = TypeVar('T')
 
 class ProcessingError(Exception):
     """Base exception for processing errors."""
-    pass
 
 
 class FileValidationError(ProcessingError):
     """Exception raised when file validation fails."""
-    pass
 
 
 class DependencyError(ProcessingError):
     """Exception raised when required dependencies are missing."""
-    pass
 
 
 class ConfigurationError(ProcessingError):
     """Exception raised when configuration is invalid."""
-    pass
 
 
 def validate_file_path(

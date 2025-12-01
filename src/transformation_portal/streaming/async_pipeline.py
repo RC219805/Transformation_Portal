@@ -52,7 +52,6 @@ from typing import (
     Sequence,
     Tuple,
     TypeVar,
-    Union,
     runtime_checkable,
 )
 

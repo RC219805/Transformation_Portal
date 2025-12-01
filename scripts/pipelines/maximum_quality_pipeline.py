@@ -17,7 +17,6 @@ import numpy as np
 from PIL import Image
 import torch
 from transformers import pipeline as transformers_pipeline
-from typing import Optional, Tuple
 import warnings
 
 # Suppress less critical warnings
@@ -39,7 +38,7 @@ class MaximumQualityPipeline:
 
         # Initialize depth estimation
         depth_model = ("depth-anything/Depth-Anything-V2-Large-hf" if use_large_depth_model
-                      else "depth-anything/Depth-Anything-V2-Small-hf")
+                       else "depth-anything/Depth-Anything-V2-Small-hf")
 
         print(f"Loading {depth_model}...")
         self.depth_pipe = transformers_pipeline(
@@ -83,7 +82,7 @@ class MaximumQualityPipeline:
                 if tiff_path.exists():
                     image_path = tiff_path
                 else:
-                    raise RuntimeError(f"Could not load EXR file and no TIFF alternative found")
+                    raise RuntimeError("Could not load EXR file and no TIFF alternative found")
 
         # Handle standard formats with PIL
         img = Image.open(image_path)
@@ -157,7 +156,7 @@ class MaximumQualityPipeline:
 
         # Define depth zones
         foreground_mask = depth > 0.6  # Closest
-        midground_mask = (depth > 0.3) & (depth <= 0.6)
+        _midground_mask = (depth > 0.3) & (depth <= 0.6)  # noqa: F841
         background_mask = depth <= 0.3  # Farthest
 
         # FOREGROUND: Subtle clarity enhancement
@@ -376,15 +375,15 @@ def main():
     parser = argparse.ArgumentParser(description='Maximum Quality Pipeline for 750 Picacho Lane')
     parser.add_argument('input', type=str, help='Input image path or directory')
     parser.add_argument('--output', '-o', type=str, default='Maximum_Quality_Output',
-                       help='Output directory')
+                        help='Output directory')
     parser.add_argument('--tif', action='store_true', default=True,
-                       help='Save 16-bit TIFF (default: True)')
+                        help='Save 16-bit TIFF (default: True)')
     parser.add_argument('--jpeg', action='store_true', default=True,
-                       help='Save high-quality JPEG (default: True)')
+                        help='Save high-quality JPEG (default: True)')
     parser.add_argument('--depth', action='store_true',
-                       help='Save depth map visualization')
+                        help='Save depth map visualization')
     parser.add_argument('--small-model', action='store_true',
-                       help='Use smaller/faster depth model')
+                        help='Use smaller/faster depth model')
 
     args = parser.parse_args()
 

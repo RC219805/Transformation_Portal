@@ -66,8 +66,6 @@ def analyze_tiff(tiff_path: Path) -> Dict:
     # Deep analysis with tifffile
     if has_tifffile:
         try:
-            import tifffile
-
             with tifffile.TiffFile(str(tiff_path)) as tif:
                 page = tif.pages[0]
                 results['tiff_dtype'] = str(page.dtype)

@@ -15,7 +15,6 @@ Key Features:
 
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
-import warnings
 import numpy as np
 from PIL import Image
 import tifffile
@@ -86,7 +85,7 @@ class TIFFQualityOptimizer:
                         for tag in page.tags.values():
                             try:
                                 metadata[tag.name] = tag.value
-                            except:
+                            except BaseException:
                                 pass
 
                     # Convert to float for processing if needed
@@ -112,7 +111,7 @@ class TIFFQualityOptimizer:
                     exif = img.getexif()
                     if exif:
                         metadata['exif'] = {k: str(v)[:200] for k, v in exif.items()}
-                except:
+                except BaseException:
                     pass
 
                 # Convert to numpy with max precision
@@ -186,7 +185,7 @@ class TIFFQualityOptimizer:
         if metadata and 'exi' in metadata:
             try:
                 save_kwargs['exi'] = metadata['exif']
-            except:
+            except BaseException:
                 pass
 
         img.save(output_path, **save_kwargs)
@@ -251,7 +250,7 @@ class TIFFQualityOptimizer:
                 photometric = 'rgb'
             elif save_array.shape[2] == 4:
                 photometric = 'rgb'
-                extrasamples = [1]  # Associated alpha
+                _extrasamples = [1]  # Associated alpha  # noqa: F841
             else:
                 photometric = 'minisblack'
         else:
@@ -300,7 +299,7 @@ class TIFFQualityOptimizer:
             array = (array * 65535).astype(np.uint16)
 
         # Encode with high-quality codec
-        encoded = imagecodecs.png_encode(array, level=compression_level)
+        _encoded = imagecodecs.png_encode(array, level=compression_level)  # noqa: F841
 
         # For now, fall back to tifffile (imagecodecs is mainly for reading)
         # This method demonstrates the concept but uses tifffile backend
