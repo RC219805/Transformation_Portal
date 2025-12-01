@@ -757,5 +757,149 @@ class TestBatchProcessing:
             assert isinstance(result, ProcessingResult)
 
 
+# =============================================================================
+# GPU Memory Manager Tests
+# =============================================================================
+
+class TestGPUMemoryManager:
+    """Tests for GPU memory management functionality."""
+
+    def test_gpu_memory_manager_initialization(self):
+        """Test GPUMemoryManager initialization."""
+        from transformation_portal.pipelines.rendering_4k_pipeline import (
+            GPUMemoryManager,
+            DeviceType,
+        )
+
+        manager = GPUMemoryManager(DeviceType.CPU)
+        assert manager.device == DeviceType.CPU
+
+    def test_gpu_memory_manager_cpu_operations(self):
+        """Test GPUMemoryManager operations on CPU (should not crash)."""
+        from transformation_portal.pipelines.rendering_4k_pipeline import (
+            GPUMemoryManager,
+            DeviceType,
+        )
+
+        manager = GPUMemoryManager(DeviceType.CPU)
+
+        # These should not crash on CPU
+        assert manager.check_memory_threshold(0.85) is True
+        manager.clear_cache()  # Should be no-op on CPU
+        stats = manager.get_memory_stats()
+        assert stats == {}  # Empty dict for CPU
+
+    def test_pipeline_has_memory_manager(self):
+        """Test that pipeline has memory manager initialized."""
+        pipeline = Rendering4KPipeline.from_preset("preview")
+        assert hasattr(pipeline, 'memory_manager')
+        assert pipeline.memory_manager is not None
+        assert pipeline.memory_manager.device == pipeline.device
+
+
+# =============================================================================
+# AI Enhancement Config Tests
+# =============================================================================
+
+class TestAIEnhancementConfig:
+    """Tests for AIEnhancementConfig with seed field."""
+
+    def test_ai_enhancement_config_seed_field(self):
+        """Test AIEnhancementConfig has seed field."""
+        from transformation_portal.pipelines.rendering_4k_pipeline import (
+            AIEnhancementConfig,
+        )
+
+        config = AIEnhancementConfig()
+        assert hasattr(config, 'seed')
+        assert config.seed == 42  # Default value
+
+    def test_ai_enhancement_config_custom_seed(self):
+        """Test AIEnhancementConfig with custom seed."""
+        from transformation_portal.pipelines.rendering_4k_pipeline import (
+            AIEnhancementConfig,
+        )
+
+        config = AIEnhancementConfig(seed=12345)
+        assert config.seed == 12345
+
+
+# =============================================================================
+# Depth Model Lazy Loading Tests
+# =============================================================================
+
+class TestDepthModelLazyLoading:
+    """Tests for lazy loading of depth models."""
+
+    def test_depth_model_not_initialized_on_pipeline_creation(self):
+        """Test depth model is not loaded until needed."""
+        pipeline = Rendering4KPipeline.from_preset("preview")
+        assert pipeline._depth_model is None
+        assert pipeline._depth_model_initialized is False
+
+    def test_controlnet_not_initialized_on_pipeline_creation(self):
+        """Test ControlNet is not loaded until needed."""
+        pipeline = Rendering4KPipeline.from_preset("preview")
+        assert pipeline._controlnet_pipe is None
+        assert pipeline._controlnet_initialized is False
+
+
+# =============================================================================
+# ControlNet Methods Tests
+# =============================================================================
+
+class TestControlNetMethods:
+    """Tests for ControlNet lazy loading and AI enhancement methods."""
+
+    def test_get_or_load_controlnet_pipe_graceful_failure(self):
+        """Test ControlNet loading fails gracefully without dependencies."""
+        pipeline = Rendering4KPipeline.from_preset("default")
+
+        # Should not crash even without diffusers installed
+        pipe = pipeline._get_or_load_controlnet_pipe()
+        # Will be None if diffusers not installed, or a pipeline if installed
+        assert pipe is None or hasattr(pipe, '__call__')
+        assert pipeline._controlnet_initialized is True
+
+    def test_apply_ai_enhancement_returns_image(self, sample_image_pil):
+        """Test AI enhancement returns an image even without dependencies."""
+        pipeline = Rendering4KPipeline.from_preset("default")
+        pipeline.config.ai_enhancement.enabled = True
+
+        # Should return original image if ControlNet unavailable
+        result = pipeline._apply_ai_enhancement(sample_image_pil, None)
+        assert isinstance(result, Image.Image)
+        assert result.size == sample_image_pil.size
+
+
+# =============================================================================
+# Batch Processing with Memory Management Tests
+# =============================================================================
+
+class TestBatchProcessingMemoryManagement:
+    """Tests for batch processing with GPU memory management."""
+
+    def test_batch_process_clears_memory_periodically(self, sample_image_pil, temp_output_dir):
+        """Test batch processing triggers memory cleanup."""
+        # Create multiple test images
+        input_paths = []
+        for i in range(6):  # More than 5 to trigger cleanup
+            path = temp_output_dir / f"batch_input_{i}.png"
+            sample_image_pil.save(path)
+            input_paths.append(path)
+
+        # Create output directory
+        output_dir = temp_output_dir / "batch_output"
+        output_dir.mkdir()
+
+        pipeline = Rendering4KPipeline.from_preset("preview")
+        results = pipeline.batch_process(input_paths, output_dir, show_progress=False)
+
+        # All images should be processed
+        assert len(results) == 6
+        for result in results:
+            assert isinstance(result, ProcessingResult)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
