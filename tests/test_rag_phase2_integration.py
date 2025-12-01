@@ -33,6 +33,9 @@ class TestPhase2GitHooks:
         assert config.repo_root == "."
         assert config.rag_cache_dir == ".rag_cache"
         assert "post-commit" in config.enabled_hooks
+        assert "post-merge" in config.enabled_hooks
+        assert "post-checkout" in config.enabled_hooks
+        assert "pre-push" in config.enabled_hooks
         assert config.incremental_enabled is True
         assert config.background_indexing is True
 

@@ -134,11 +134,9 @@ else
     cd "$REPO_ROOT"
     
     # Run the Python hook installer
-    if $VERBOSE; then
-        python3 "$GIT_HOOKS_PY" install --verbose
-    else
-        python3 "$GIT_HOOKS_PY" install
-    fi
+    # Note: The install command doesn't support --verbose, but we can get
+    # additional output from the status command if verbose is enabled
+    python3 "$GIT_HOOKS_PY" install
     
     INSTALL_STATUS=$?
     
@@ -166,7 +164,7 @@ for hook in "${EXPECTED_HOOKS[@]}"; do
         if $VERBOSE; then
             log_info "✓ $hook hook installed and executable"
         fi
-        ((INSTALLED_COUNT++))
+        INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
     else
         if ! $DRY_RUN; then
             log_warning "✗ $hook hook not found or not executable"
