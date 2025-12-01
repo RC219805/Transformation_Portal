@@ -20,6 +20,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Constants for display and retention limits
+MAX_TEST_ID_LENGTH = 50
+MAX_FLAKY_TESTS_DISPLAY = 10
+MAX_METRICS_SAMPLE_SIZE = 10
+
 
 def load_knowledge_base(cache_dir: Path) -> Dict:
     """Load knowledge base from cache directory."""
@@ -272,7 +277,7 @@ def generate_markdown_report(report: Dict) -> str:
         ])
         for ft in report["flaky_tests"][:5]:
             lines.append(
-                f"| `{ft['test_id'][:50]}` | {ft['pass_count']} | {ft['fail_count']} | {ft['flakiness_score']:.0%} |"
+                f"| `{ft['test_id'][:MAX_TEST_ID_LENGTH]}` | {ft['pass_count']} | {ft['fail_count']} | {ft['flakiness_score']:.0%} |"
             )
         lines.append("")
     

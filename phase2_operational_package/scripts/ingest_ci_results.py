@@ -20,6 +20,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Constants for retention limits
+MAX_RESULTS_RETENTION = 1000
+MAX_METRICS_RETENTION = 100
+
 
 def parse_junit_xml(junit_path: Path) -> List[Dict[str, Any]]:
     """Parse JUnit XML file and extract test results."""
@@ -121,9 +125,9 @@ def update_knowledge_base(
     # Append new results
     existing_results.extend(test_results)
     
-    # Keep last 1000 results
-    if len(existing_results) > 1000:
-        existing_results = existing_results[-1000:]
+    # Keep last MAX_RESULTS_RETENTION results
+    if len(existing_results) > MAX_RESULTS_RETENTION:
+        existing_results = existing_results[-MAX_RESULTS_RETENTION:]
     
     with open(results_file, "w") as f:
         json.dump(existing_results, f, indent=2)
@@ -174,9 +178,9 @@ def update_knowledge_base(
     
     existing_metrics.extend(new_metrics)
     
-    # Keep last 100 metric entries
-    if len(existing_metrics) > 100:
-        existing_metrics = existing_metrics[-100:]
+    # Keep last MAX_METRICS_RETENTION metric entries
+    if len(existing_metrics) > MAX_METRICS_RETENTION:
+        existing_metrics = existing_metrics[-MAX_METRICS_RETENTION:]
     
     with open(metrics_file, "w") as f:
         json.dump(existing_metrics, f, indent=2)

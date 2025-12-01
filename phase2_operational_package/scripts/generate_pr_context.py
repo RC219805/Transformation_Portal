@@ -20,6 +20,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
+# Constants for display limits
+MAX_ERROR_MESSAGE_LENGTH = 100
+MAX_AFFECTED_TESTS_DISPLAY = 10
+MAX_FAILURE_HISTORY_DISPLAY = 5
+
 
 def get_changed_files_from_git() -> List[str]:
     """Get changed files from git diff against main branch."""
@@ -160,10 +165,10 @@ def generate_context_markdown(
         lines.append("The following tests have failed previously when similar files were changed:")
         lines.append("")
         
-        for test_id, failures in list(analysis["failure_history"].items())[:5]:
+        for test_id, failures in list(analysis["failure_history"].items())[:MAX_FAILURE_HISTORY_DISPLAY]:
             lines.append(f"- **`{test_id}`**: {len(failures)} historical failure(s)")
             if failures and failures[0].get("message"):
-                msg = failures[0]["message"][:100]
+                msg = failures[0]["message"][:MAX_ERROR_MESSAGE_LENGTH]
                 lines.append(f"  - Last failure: `{msg}...`")
         
         lines.append("")
