@@ -1972,7 +1972,7 @@ class Rendering4KPipeline:
                 return image
 
             # Use CPU generator for MPS as PyTorch's Generator doesn't support MPS directly
-            device_for_gen = "cpu" if str(pipe.device).lower() == "mps" else pipe.device
+            device_for_gen = "cpu" if self.device == DeviceType.MPS else pipe.device
             generator = torch.Generator(device=device_for_gen).manual_seed(
                 self.config.ai_enhancement.seed
             )
