@@ -3,11 +3,6 @@
 """Tests for Parallax Occlusion Mapping (POM) in lux_render_pipeline_plus_v3."""
 
 from __future__ import annotations
-from lux_render_pipeline_plus_v3 import (
-    apply_pbr_overlays,
-    _parallax_uv,
-    _bilinear,
-)
 
 import sys
 from pathlib import Path
@@ -18,6 +13,12 @@ import pytest
 
 # Add scripts/pipelines to path for direct import
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "pipelines"))
+
+from lux_render_pipeline_plus_v3 import (  # noqa: E402
+    apply_pbr_overlays,
+    _parallax_uv,
+    _bilinear,
+)
 
 
 @pytest.fixture
