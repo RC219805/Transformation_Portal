@@ -47,29 +47,20 @@ try:
     from .pipelines.quality_feedback_bridge import (
         QualityFeedbackBridge,
         QualityTargets,
-        UnifiedQualityMetrics,
     )
     HAS_QUALITY_BRIDGE = True
 except ImportError:
     HAS_QUALITY_BRIDGE = False
     QualityFeedbackBridge = None
     QualityTargets = None
-    UnifiedQualityMetrics = None
 
 try:
-    from .pipelines.rendering_4k_pipeline import (
-        Rendering4KPipeline,
-        PipelineConfig as Rendering4KConfig,
-        ProcessingResult as Rendering4KResult,
-        QualityMetrics,
-    )
+    # Check if 4K pipeline is available (imports not used directly yet,
+    # but availability is checked via HAS_4K_PIPELINE flag)
+    from .pipelines.rendering_4k_pipeline import Rendering4KPipeline  # noqa: F401
     HAS_4K_PIPELINE = True
 except ImportError:
     HAS_4K_PIPELINE = False
-    Rendering4KPipeline = None
-    Rendering4KConfig = None
-    Rendering4KResult = None
-    QualityMetrics = None
 
 # Configure logging
 logging.basicConfig(
@@ -368,6 +359,7 @@ class UnifiedPipeline:
                     # MPS availability check can raise RuntimeError
                     pass
         except ImportError:
+            # PyTorch not installed; fall back to CPU processing.
             pass
         return "cpu"
 
@@ -454,7 +446,7 @@ class UnifiedPipeline:
         self,
         input_glob: str,
         output_dir: Union[str, Path],
-        mode: str = "default",
+        mode: str = "auto",
         dry_run: bool = False
     ) -> BatchResult:
         """Process multiple images matching a glob pattern.
@@ -462,7 +454,8 @@ class UnifiedPipeline:
         Args:
             input_glob: Glob pattern for input files (e.g., "inputs/*.jpg").
             output_dir: Output directory path.
-            mode: Processing mode ("default", "parallel").
+            mode: Processing mode ("auto", "image", "video"). Currently "auto" detects
+                file type; "image" and "video" modes are reserved for future use.
             dry_run: If True, preview processing plan without executing.
 
         Returns:

@@ -156,8 +156,11 @@ class MaterialResponseEngine:
             # Circular import - use empty defaults
             profile_defaults = {}
         except KeyError:
-            # Invalid profile name - use empty defaults
-            profile_defaults = {}
+            # Invalid profile name - raise error to notify user
+            raise KeyError(
+                f"MaterialResponseEngine.from_config: Invalid profile name '{profile_name}'. "
+                "Available profiles can be found in transformation_portal.processors.material_response.profiles."
+            )
 
         # Merge profile defaults with explicit config
         merged = {**profile_defaults, **config_dict}

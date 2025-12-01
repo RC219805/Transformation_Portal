@@ -14,11 +14,10 @@ import pytest
 from PIL import Image
 
 
-# Check if scipy is available (required by pipeline)
+# Check if scipy.ndimage is available (required by pipeline)
 try:
-    from scipy.ndimage import gaussian_filter
+    import scipy.ndimage  # noqa: F401
     HAS_SCIPY = True
-    del gaussian_filter  # Clean up - not needed in this module
 except ImportError:
     HAS_SCIPY = False
 

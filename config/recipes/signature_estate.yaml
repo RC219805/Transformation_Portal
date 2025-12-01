@@ -78,6 +78,7 @@ quality_feedback:
   perceptual_percentile_target: 95.0
   material_fidelity_target: 0.98
   rag_indexing_enabled: false
+  # When RAG indexing is enabled, specify the path where quality metrics will be stored in JSON Lines format for retrieval.
   # rag_index_path: "output/rag_quality_index.jsonl"
 
 # Output configuration

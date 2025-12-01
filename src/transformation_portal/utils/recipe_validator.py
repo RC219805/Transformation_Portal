@@ -19,12 +19,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
-    from jsonschema import Draft7Validator, ValidationError
+    from jsonschema import Draft7Validator
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
     Draft7Validator = None  # type: ignore
-    ValidationError = None  # type: ignore
 
 
 # Default schema path relative to repo root
@@ -65,7 +64,8 @@ def get_recipe_schema() -> Dict[str, Any]:
                         "color_grading",
                         "photo_finishing",
                         "branding",
-                        "output"
+                        "upscaling_4k",
+                        "quality_assessment"
                     ]
                 },
                 "minItems": 1,
