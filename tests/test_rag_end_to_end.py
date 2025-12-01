@@ -36,7 +36,6 @@ from rag_system.knowledge_engine import (  # noqa: E402
     PatternAnalysis,
     Recommendation,
 )
-from rag_system.phase1_integration import RAGConfig, RAGSystem  # noqa: E402,F401
 from rag_system.reranker import ResultReranker  # noqa: E402
 from rag_system.retriever import HybridRetriever  # noqa: E402
 from rag_system.templates import (  # noqa: E402
@@ -869,13 +868,11 @@ class TestEndToEndArtifactClassifier:
         """Test artifact hierarchy building."""
         classifier = ArtifactClassifier()
 
-        # Add parent artifact - add_artifact returns ArtifactNode, has artifact_id
-        parent_node = classifier.add_artifact(
-            file_path="input/original.jpg",
-        )
+        # Add parent artifact
+        parent_node = classifier.add_artifact(file_path="input/original.jpg")
         parent_id = parent_node.artifact_id
 
-        # Add child artifact with parent
+        # Add child artifact with parent reference
         child_node = classifier.add_artifact(
             file_path="output/depth_map.png",
             parent_id=parent_id,
@@ -1459,8 +1456,9 @@ class TestPhase2Integration:
         # Setup knowledge feedback engine
         engine = KnowledgeFeedbackEngine()
 
-        # Simulate workflow: analyze dependencies -> get stats
-        _ = analyzer.get_stats()  # Get stats (used for verification)
+        # Verify dependency analyzer can get stats (graph may not be built yet)
+        stats = analyzer.get_stats()
+        assert isinstance(stats, dict)
 
         # Engine should be operational
         status = engine.get_status()
@@ -1500,12 +1498,10 @@ class TestPhase2ConsolidatedCI:
     """Test Phase 2 Vector 2: Consolidated CI/CD verification."""
 
     def test_consolidated_workflow_exists(self):
-        """Test that consolidated CI workflow exists."""
+        """Test that consolidated CI workflow is documented in Phase 2 status."""
         repo_root = Path(__file__).parent.parent
-        # workflow_path is checked but may not exist if not deployed
-        _ = repo_root / '.github' / 'workflows' / 'ci-consolidated.yml'  # noqa: F841
 
-        # May not exist if not deployed, check for status doc
+        # Check documentation exists and references consolidated CI
         status_file = repo_root / '.github' / 'agents' / 'rag_system' / 'PHASE2_IMPLEMENTATION_STATUS.md'
         content = status_file.read_text()
 
