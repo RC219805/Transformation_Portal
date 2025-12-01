@@ -1,0 +1,37 @@
+[
+  {
+    "metric_id": "test_pass_rate",
+    "metric_type": "test_health",
+    "value": 81.73679498657117,
+    "unit": "percent",
+    "source": "CI Run #386",
+    "timestamp": "2025-11-30T23:59:29.506143",
+    "context": {
+      "total": 1117,
+      "passed": 913
+    }
+  },
+  {
+    "metric_id": "test_execution_time",
+    "metric_type": "performance",
+    "value": 12.79,
+    "unit": "seconds",
+    "source": "CI Run #386",
+    "timestamp": "2025-11-30T23:59:29.506149",
+    "context": {
+      "test_count": 1117
+    }
+  },
+  {
+    "metric_id": "security_alerts",
+    "metric_type": "security",
+    "value": 0,
+    "unit": "count",
+    "source": "CodeQL Analysis",
+    "timestamp": "2025-11-30T23:59:29.506152",
+    "context": {
+      "queries_run": 43,
+      "modules_analyzed": 575
+    }
+  }
+]

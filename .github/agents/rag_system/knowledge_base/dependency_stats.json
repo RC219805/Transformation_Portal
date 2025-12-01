@@ -1,0 +1,15 @@
+{
+  "total_nodes": 640,
+  "total_edges": 1725,
+  "module_count": 575,
+  "test_count": 60,
+  "workflow_count": 5,
+  "avg_complexity": 2.5,
+  "critical_paths": [
+    "transformation_portal.foundation -> streaming -> pipelines",
+    "rag_system.cache_manager -> enhanced_retriever -> phase1_integration",
+    "transformation_portal.depth -> vlm -> perceptual"
+  ],
+  "circular_dependencies": [],
+  "build_time_ms": 2340
+}
