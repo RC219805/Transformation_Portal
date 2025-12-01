@@ -6,3 +6,4 @@
 - Git hooks operational (post-commit, post-merge, post-checkout, pre-push)
 - BM25 + semantic hybrid retrieval active
 - PYTHONPATH hook resolution implemented
+
