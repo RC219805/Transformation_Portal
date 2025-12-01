@@ -17,6 +17,7 @@ try:
     import scipy.ndimage  # noqa: F401
     HAS_SCIPY = True
 except ImportError:
+    # scipy is not available; tests requiring it will be skipped via HAS_SCIPY
     pass
 
 pytestmark = pytest.mark.skipif(

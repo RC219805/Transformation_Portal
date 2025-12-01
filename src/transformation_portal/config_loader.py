@@ -264,6 +264,7 @@ def validate_recipe(
         if 'format' in output_config:
             valid_formats = {'jpeg', 'png', 'tiff', 'exr'}
             fmt = output_config['format'].lower()
+            output_config['format'] = fmt  # Normalize to lowercase for downstream use
             if fmt not in valid_formats:
                 errors.append(f"Invalid output format: '{fmt}'. Valid formats: {sorted(valid_formats)}")
 
