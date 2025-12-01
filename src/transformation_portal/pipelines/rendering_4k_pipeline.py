@@ -398,8 +398,8 @@ class GPUMemoryManager:
                 torch.cuda.empty_cache()
             elif self.device == DeviceType.MPS:
                 torch.mps.empty_cache()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to clear GPU cache: {e}")
 
     def check_memory_threshold(self, threshold: float = 0.85) -> bool:
         """Check if memory usage is below threshold.
@@ -1914,7 +1914,7 @@ class Rendering4KPipeline:
                 self._controlnet_pipe.scheduler.config
             )
 
-            device_str = {"cuda": "cuda", "mps": "mps", "cpu": "cpu"}[self.device.value]
+            device_str = {"cuda": "cuda", "mps": "mps", "cpu": "cpu"}.get(self.device.value, "cpu")
             self._controlnet_pipe.to(device_str)
 
             if self.device == DeviceType.CUDA:
@@ -1960,7 +1960,8 @@ class Rendering4KPipeline:
             # Use depth map if depth guidance is enabled
             if self.config.ai_enhancement.use_depth_guidance and depth_map is not None:
                 # Convert depth map directly to RGB image for ControlNet
-                depth_uint8 = (depth_map * 255).astype(np.uint8)
+                # Use squeeze() to handle both (H, W) and (H, W, 1) shapes
+                depth_uint8 = (depth_map.squeeze() * 255).astype(np.uint8)
                 # Stack grayscale to RGB channels directly
                 depth_rgb = np.stack([depth_uint8, depth_uint8, depth_uint8], axis=-1)
                 depth_pil = Image.fromarray(depth_rgb, mode='RGB').resize(image.size)
@@ -1970,7 +1971,9 @@ class Rendering4KPipeline:
                 logger.warning("No control images available for ControlNet")
                 return image
 
-            generator = torch.Generator(device=pipe.device).manual_seed(
+            # Use CPU generator for MPS as PyTorch's Generator doesn't support MPS directly
+            device_for_gen = "cpu" if str(pipe.device).lower() == "mps" else pipe.device
+            generator = torch.Generator(device=device_for_gen).manual_seed(
                 self.config.ai_enhancement.seed
             )
 
@@ -2091,7 +2094,6 @@ class Rendering4KPipeline:
 
         for i, path in enumerate(iterator):
             try:
-                # Memory check before processing
                 # Check GPU memory before processing (75% threshold is conservative
                 # to allow headroom for spikes during inference)
                 if not self.memory_manager.check_memory_threshold(0.75):
