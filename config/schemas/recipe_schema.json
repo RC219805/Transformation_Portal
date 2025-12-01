@@ -1,0 +1,355 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Transformation Portal Recipe",
+  "description": "Schema for unified pipeline recipe configuration",
+  "type": "object",
+  "required": ["name", "stages"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Human-readable recipe name",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "description": "Recipe description"
+    },
+    "stages": {
+      "type": "array",
+      "description": "Processing stages to execute in order",
+      "items": {
+        "type": "string",
+        "enum": [
+          "depth_estimation",
+          "ai_enhancement",
+          "material_response",
+          "color_grading",
+          "photo_finishing",
+          "branding",
+          "output"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "depth_estimation": {
+      "type": "object",
+      "description": "Depth estimation stage configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable depth estimation"
+        },
+        "model": {
+          "type": "string",
+          "description": "Depth model name (e.g., depth-anything-v2-small)",
+          "default": "depth-anything-v2-small"
+        },
+        "device": {
+          "type": "string",
+          "enum": ["auto", "cpu", "cuda", "mps"],
+          "default": "auto",
+          "description": "Processing device"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ai_enhancement": {
+      "type": "object",
+      "description": "AI enhancement stage configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "model": {
+          "type": "string",
+          "description": "AI model identifier"
+        },
+        "strength": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.5,
+          "description": "Enhancement strength"
+        },
+        "steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 30,
+          "description": "Inference steps"
+        }
+      },
+      "additionalProperties": true
+    },
+    "material_response": {
+      "type": "object",
+      "description": "Material Response stage configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "profile": {
+          "type": "string",
+          "description": "Material profile name",
+          "default": "luxury_interior",
+          "enum": [
+            "luxury_interior",
+            "wood_floor_oak",
+            "marble_stone",
+            "textile_linen",
+            "metal_brushed",
+            "glass_window",
+            "exterior_courtyard",
+            "aerial_estate"
+          ]
+        },
+        "texture_boost": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.25,
+          "description": "High-frequency texture enhancement"
+        },
+        "ambient_occlusion": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.12,
+          "description": "Contact shadow intensity"
+        },
+        "highlight_warmth": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.08,
+          "description": "Warm highlight mix"
+        },
+        "haze_strength": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.06,
+          "description": "Volumetric haze blend"
+        },
+        "floor_plank_contrast": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.12
+        },
+        "floor_specular": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.18
+        },
+        "textile_contrast": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.18
+        },
+        "leather_sheen": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.16
+        },
+        "window_light_wrap": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.14
+        },
+        "window_reflection": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.12
+        },
+        "wall_texture": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.1
+        }
+      },
+      "additionalProperties": true
+    },
+    "color_grading": {
+      "type": "object",
+      "description": "Color grading stage configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "lut": {
+          "type": "string",
+          "description": "Path to LUT file (.cube format)"
+        },
+        "lut_strength": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.7,
+          "description": "LUT application strength"
+        },
+        "contrast": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 2.0,
+          "default": 1.0,
+          "description": "Contrast multiplier"
+        },
+        "saturation": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0,
+          "default": 1.0,
+          "description": "Saturation multiplier"
+        },
+        "warmth": {
+          "type": "number",
+          "minimum": -0.5,
+          "maximum": 0.5,
+          "default": 0.0,
+          "description": "Color temperature shift"
+        },
+        "exposure": {
+          "type": "number",
+          "minimum": -2.0,
+          "maximum": 2.0,
+          "default": 0.0,
+          "description": "Exposure adjustment in EV"
+        }
+      },
+      "additionalProperties": true
+    },
+    "photo_finishing": {
+      "type": "object",
+      "description": "Photo finishing stage configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "aces": {
+          "type": "boolean",
+          "description": "Apply ACES tone mapping",
+          "default": true
+        },
+        "bloom": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "threshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.8,
+              "description": "Bloom threshold"
+            },
+            "intensity": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.25,
+              "description": "Bloom intensity"
+            }
+          }
+        },
+        "vignette": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.18,
+              "description": "Vignette strength"
+            }
+          }
+        },
+        "grain": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "amount": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 0.1,
+              "default": 0.012,
+              "description": "Film grain amount"
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "branding": {
+      "type": "object",
+      "description": "Branding overlay configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "logo": {
+          "type": "string",
+          "description": "Path to logo file"
+        },
+        "text": {
+          "type": "string",
+          "description": "Brand text overlay"
+        },
+        "watermark": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "output": {
+      "type": "object",
+      "description": "Output configuration",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["jpeg", "png", "tiff", "exr"],
+          "default": "tiff",
+          "description": "Output file format"
+        },
+        "quality": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 95,
+          "description": "Output quality (for JPEG)"
+        },
+        "bit_depth": {
+          "type": "integer",
+          "enum": [8, 16, 32],
+          "default": 16,
+          "description": "Bit depth for TIFF/EXR"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,95 @@
+# End-to-End 4K Rendering Enhancement Pipeline Configuration
+# Optimized for luxury real estate and architectural visualization
+# Version: 1.0.0
+
+# Pipeline identification
+name: "luxury_4k_master"
+description: "Premium 4K rendering enhancement for luxury real estate"
+quality_level: "ultra"  # preview, standard, high, ultra
+
+# Depth Estimation (Depth Anything V2)
+depth:
+  enabled: true
+  model_variant: "small"  # small, base, large
+  backend: "auto"  # auto, pytorch_mps, pytorch_cpu, coreml
+  num_zones: 4  # Foreground, near-mid, far-mid, background
+  cache_enabled: true
+  cache_max_size: 100
+
+# HDR Tone Mapping
+tone_mapping:
+  enabled: true
+  method: "agx"  # agx, filmic, reinhard, aces
+  exposure: 0.0
+  contrast: 1.05
+  white_point: 11.2
+  preserve_highlights: true
+
+# Material Response Technology
+material_response:
+  enabled: true
+  strength: 0.75
+  texture_boost: 0.3
+  surface_types:
+    - "wood"
+    - "metal"
+    - "glass"
+    - "stone"
+    - "fabric"
+  preserve_highlights: true
+  micro_contrast: 0.2
+
+# Color Grading
+color_grading:
+  enabled: true
+  lut_paths:
+    - "assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube"
+    - "assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube"
+  lut_strengths:
+    - 0.65
+    - 0.55
+  saturation: 1.08
+  vibrance: 1.12
+  temperature_shift: [1.0, 0.98, 0.95]  # Warm interior lighting
+
+# AI Enhancement (requires optional ML dependencies)
+ai_enhancement:
+  enabled: false  # Set to true if ML deps are installed
+  use_controlnet: true
+  use_depth_guidance: true
+  prompt: "photorealistic luxury interior, professional architectural photography, perfect lighting, ultra detailed"
+  negative_prompt: "blurry, artifacts, cartoon, oversaturated, unrealistic"
+  strength: 0.30
+  guidance_scale: 7.5
+  num_steps: 25
+
+# Upscaling to 4K
+upscaling:
+  enabled: true
+  target_resolution: [3840, 2160]  # 4K UHD
+  method: "lanczos"  # lanczos, esrgan (requires optional deps)
+  scale_factor: 4
+  preserve_sharpness: true
+
+# RAG Quality Feedback Loop
+quality_feedback:
+  enabled: true
+  min_quality_threshold: 0.75
+  max_iterations: 3
+  metrics:
+    - "sharpness"
+    - "contrast"
+    - "colorfulness"
+    - "exposure"
+  auto_adjust: true
+
+# Output Configuration
+output:
+  master_tiff_16bit: true
+  delivery_jpeg: true
+  jpeg_quality: 95
+  jpeg_progressive: true
+  save_intermediate: false
+  save_depth_visualization: true
+  save_quality_report: true
+  preserve_metadata: true
