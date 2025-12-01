@@ -8,11 +8,11 @@ This module tests the four vectors of Phase 2:
 - Vector 4: Cross-Pipeline Dependency Analysis
 """
 
-import os
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
+import yaml
 
 # Get repository root (tests directory is in repo root)
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -88,8 +88,6 @@ class TestPhase2ConsolidatedCI:
 
     def test_consolidated_workflow_has_stages(self):
         """Test that consolidated workflow has expected stages."""
-        import yaml
-
         workflow_path = REPO_ROOT / ".github/workflows/ci-consolidated.yml"
         with open(workflow_path) as f:
             content = yaml.safe_load(f)
@@ -160,7 +158,6 @@ class TestPhase2KnowledgeEngine:
 
         # Verify patterns exist
         assert len(analyzer.patterns) > 0, "FailureAnalyzer should have built-in patterns"
-        
         # Verify patterns have required attributes
         for pattern in analyzer.patterns:
             assert hasattr(pattern, 'name'), "Pattern should have a name attribute"
