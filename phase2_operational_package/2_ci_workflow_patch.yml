@@ -1,0 +1,376 @@
+# =============================================================================
+# Phase 2 RAG System - CI Workflow Patch for JUnit XML Export
+# Action 2: Enable granular test intelligence through structured reporting
+# =============================================================================
+#
+# This patch adds JUnit XML export and Knowledge Engine ingestion to the
+# consolidated CI workflow. Apply these changes to ci-consolidated.yml.
+#
+# Expected Outcomes:
+#   - Per-test duration tracking for performance regression detection
+#   - Failure stack traces for pattern recognition
+#   - Skip reason categorization for ML-gating validation
+#   - Flaky test identification through result oscillation analysis
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# PATCH 1: Add Knowledge Engine configuration to env section
+# Location: After line 57 (after HF_HUB_OFFLINE: '1')
+# -----------------------------------------------------------------------------
+# Add these environment variables:
+
+env:
+  # ... existing variables ...
+  
+  # Knowledge Engine Configuration
+  JUNIT_XML_OUTPUT: 'test-results/junit.xml'
+  COVERAGE_XML_OUTPUT: 'test-results/coverage.xml'
+  KNOWLEDGE_ENGINE_ENABLED: '1'
+  RAG_CACHE_DIR: '.rag_cache'
+
+# -----------------------------------------------------------------------------
+# PATCH 2: Modify the core-tests job to export JUnit XML
+# Location: Replace the pytest step in the core-tests job
+# -----------------------------------------------------------------------------
+
+  core-tests:
+    name: Core Tests (Python ${{ matrix.python-version }})
+    needs: [setup, lint]
+    if: needs.setup.outputs.run-core-tests == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJson(needs.setup.outputs.python-matrix) }}
+        
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          
+      - name: Restore Dependencies Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ needs.setup.outputs.cache-key }}-${{ matrix.python-version }}
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-xdist
+          
+      - name: Create Test Results Directory
+        run: mkdir -p test-results
+        
+      # MODIFIED: Run tests with JUnit XML output
+      - name: Run Core Tests with JUnit XML Export
+        id: run-tests
+        run: |
+          python -m pytest tests/ \
+            --ignore=tests/foundation \
+            --ignore=tests/perceptual \
+            -v \
+            --tb=short \
+            --junitxml=test-results/junit-${{ matrix.python-version }}.xml \
+            --cov=src \
+            --cov-report=xml:test-results/coverage-${{ matrix.python-version }}.xml \
+            --cov-report=term-missing \
+            -x \
+            2>&1 | tee test-results/pytest-output-${{ matrix.python-version }}.log
+        continue-on-error: true
+        
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.python-version }}
+          path: test-results/
+          retention-days: 30
+          
+      - name: Check Test Status
+        if: steps.run-tests.outcome == 'failure'
+        run: exit 1
+
+# -----------------------------------------------------------------------------
+# PATCH 3: Add Knowledge Engine ingestion job
+# Location: Add as new job after summary job
+# -----------------------------------------------------------------------------
+
+  # ===========================================================================
+  # Stage 7: Knowledge Engine Ingestion
+  # ===========================================================================
+  knowledge-ingestion:
+    name: Knowledge Engine Ingestion
+    needs: [core-tests, ml-tests, summary]
+    if: always()
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
+          
+      - name: Download All Test Results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-test-results/
+          pattern: test-results-*
+          merge-multiple: true
+          
+      - name: Install Knowledge Engine Dependencies
+        run: |
+          pip install pyyaml
+          
+      - name: Restore RAG Cache
+        uses: actions/cache@v4
+        with:
+          path: .rag_cache
+          key: rag-cache-${{ github.sha }}
+          restore-keys: |
+            rag-cache-
+            
+      - name: Ingest Test Results into Knowledge Engine
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+          from datetime import datetime
+          from pathlib import Path
+          
+          # Paths
+          results_dir = Path("all-test-results")
+          knowledge_dir = Path(".rag_cache/knowledge")
+          knowledge_dir.mkdir(parents=True, exist_ok=True)
+          
+          # Collect all JUnit XML files
+          junit_files = list(results_dir.glob("**/junit-*.xml"))
+          print(f"Found {len(junit_files)} JUnit XML files")
+          
+          # Parse and aggregate results
+          all_results = []
+          total_tests = 0
+          total_passed = 0
+          total_failed = 0
+          total_skipped = 0
+          total_duration = 0.0
+          
+          for junit_file in junit_files:
+              try:
+                  tree = ET.parse(junit_file)
+                  root = tree.getroot()
+                  
+                  for testsuite in root.iter('testsuite'):
+                      suite_name = testsuite.get('name', 'unknown')
+                      
+                      for testcase in testsuite.iter('testcase'):
+                          test_name = testcase.get('name', 'unknown')
+                          classname = testcase.get('classname', '')
+                          duration = float(testcase.get('time', 0))
+                          
+                          # Determine status
+                          failure = testcase.find('failure')
+                          error = testcase.find('error')
+                          skipped = testcase.find('skipped')
+                          
+                          if failure is not None:
+                              status = 'failed'
+                              message = failure.get('message', '')
+                              total_failed += 1
+                          elif error is not None:
+                              status = 'error'
+                              message = error.get('message', '')
+                              total_failed += 1
+                          elif skipped is not None:
+                              status = 'skipped'
+                              message = skipped.get('message', '')
+                              total_skipped += 1
+                          else:
+                              status = 'passed'
+                              message = ''
+                              total_passed += 1
+                          
+                          total_tests += 1
+                          total_duration += duration
+                          
+                          all_results.append({
+                              'test_id': f"{classname}::{test_name}",
+                              'test_file': classname.replace('.', '/') + '.py',
+                              'test_name': test_name,
+                              'status': status,
+                              'duration_ms': duration * 1000,
+                              'error_message': message if message else None,
+                              'suite': suite_name,
+                              'timestamp': datetime.now().isoformat()
+                          })
+                          
+              except Exception as e:
+                  print(f"Warning: Failed to parse {junit_file}: {e}")
+          
+          # Save ingested results
+          results_file = knowledge_dir / "ci_test_results.json"
+          with open(results_file, "w") as f:
+              json.dump(all_results, f, indent=2)
+          
+          # Update quality metrics
+          metrics_file = knowledge_dir / "quality_metrics.json"
+          existing_metrics = []
+          if metrics_file.exists():
+              with open(metrics_file) as f:
+                  existing_metrics = json.load(f)
+          
+          # Add new metrics
+          run_id = os.environ.get('GITHUB_RUN_NUMBER', 'unknown')
+          new_metrics = [
+              {
+                  'metric_id': 'test_pass_rate',
+                  'metric_type': 'test_health',
+                  'value': (total_passed / total_tests * 100) if total_tests > 0 else 0,
+                  'unit': 'percent',
+                  'source': f'CI Run #{run_id}',
+                  'timestamp': datetime.now().isoformat(),
+                  'context': {
+                      'total': total_tests,
+                      'passed': total_passed,
+                      'failed': total_failed,
+                      'skipped': total_skipped
+                  }
+              },
+              {
+                  'metric_id': 'test_execution_time',
+                  'metric_type': 'performance',
+                  'value': total_duration,
+                  'unit': 'seconds',
+                  'source': f'CI Run #{run_id}',
+                  'timestamp': datetime.now().isoformat(),
+                  'context': {'test_count': total_tests}
+              }
+          ]
+          
+          existing_metrics.extend(new_metrics)
+          
+          # Keep last 100 metric entries
+          if len(existing_metrics) > 100:
+              existing_metrics = existing_metrics[-100:]
+          
+          with open(metrics_file, "w") as f:
+              json.dump(existing_metrics, f, indent=2)
+          
+          # Update knowledge state
+          state_file = knowledge_dir / "knowledge_state.json"
+          state = {
+              'test_results_count': len(all_results),
+              'metrics_count': len(existing_metrics),
+              'last_ingestion': datetime.now().isoformat(),
+              'last_run_id': run_id,
+              'storage_path': str(knowledge_dir)
+          }
+          with open(state_file, "w") as f:
+              json.dump(state, f, indent=2)
+          
+          # Summary
+          print(f"\n{'='*60}")
+          print("KNOWLEDGE ENGINE INGESTION COMPLETE")
+          print(f"{'='*60}")
+          print(f"  Tests Ingested: {total_tests}")
+          print(f"  Passed: {total_passed}")
+          print(f"  Failed: {total_failed}")
+          print(f"  Skipped: {total_skipped}")
+          print(f"  Total Duration: {total_duration:.2f}s")
+          print(f"  Pass Rate: {(total_passed/total_tests*100):.1f}%" if total_tests > 0 else "N/A")
+          print(f"{'='*60}")
+          
+          EOF
+          
+      - name: Save RAG Cache
+        uses: actions/cache/save@v4
+        with:
+          path: .rag_cache
+          key: rag-cache-${{ github.sha }}
+          
+      - name: Upload Knowledge Base State
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-base-state
+          path: .rag_cache/knowledge/
+          retention-days: 90
+
+# -----------------------------------------------------------------------------
+# PATCH 4: Add test result analysis to summary job
+# Location: Modify the summary job to include knowledge insights
+# -----------------------------------------------------------------------------
+
+  summary:
+    name: Pipeline Summary
+    needs: [setup, lint, core-tests, ml-tests, rag-validation, build, manifest]
+    if: always()
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Download Test Results
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: all-results/
+          pattern: test-results-*
+          
+      - name: Generate Summary with Test Intelligence
+        run: |
+          echo "## 📊 CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Job status
+          echo "### Job Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Setup | ${{ needs.setup.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Core Tests | ${{ needs.core-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ML Tests | ${{ needs.ml-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| RAG Validation | ${{ needs.rag-validation.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Manifest | ${{ needs.manifest.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Test results summary (if available)
+          if [ -d "all-results" ]; then
+            echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+            echo "JUnit XML results exported for Knowledge Engine ingestion." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "### Knowledge Engine" >> $GITHUB_STEP_SUMMARY
+          echo "Results will be ingested into the RAG system for:" >> $GITHUB_STEP_SUMMARY
+          echo "- Pattern detection and failure analysis" >> $GITHUB_STEP_SUMMARY
+          echo "- Quality trend tracking" >> $GITHUB_STEP_SUMMARY
+          echo "- Intelligent test selection" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+# =============================================================================
+# DEPLOYMENT INSTRUCTIONS
+# =============================================================================
+#
+# 1. Open .github/workflows/ci-consolidated.yml
+#
+# 2. Apply PATCH 1: Add environment variables after line 57
+#
+# 3. Apply PATCH 2: Replace the core-tests job pytest step
+#
+# 4. Apply PATCH 3: Add the knowledge-ingestion job after summary
+#
+# 5. Apply PATCH 4: Update the summary job for test intelligence
+#
+# 6. Commit and push to trigger the updated workflow
+#
+# =============================================================================
