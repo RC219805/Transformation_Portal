@@ -497,17 +497,22 @@ class QualityFeedbackBridge:
         kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=np.float32)
 
         # Simple convolution fallback
-        h, w = gray.shape
-        kh, kw = kernel.shape
-        pad_h, pad_w = kh // 2, kw // 2
-        padded = np.pad(gray, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
+        # Try scipy for convolution, fall back to manual implementation
+        try:
+            from scipy.ndimage import convolve
+            laplacian = convolve(gray, kernel, mode='reflect')
+        except ImportError:
+            # Manual convolution fallback
+            h, w = gray.shape
+            kh, kw = kernel.shape
+            pad_h, pad_w = kh // 2, kw // 2
+            padded = np.pad(gray, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
 
-        # Vectorized convolution using stride tricks
-        from numpy.lib.stride_tricks import as_strided
-        shape = (h, w, kh, kw)
-        strides = padded.strides + padded.strides
-        patches = as_strided(padded, shape=shape, strides=strides)
-        laplacian = np.sum(patches * kernel, axis=(2, 3))
+            # Simple loop-based convolution (readable fallback)
+            laplacian = np.zeros_like(gray)
+            for i in range(kh):
+                for j in range(kw):
+                    laplacian += kernel[i, j] * padded[i:i + h, j:j + w]
 
         variance = float(np.var(laplacian))
         return float(np.clip(variance * 50, 0, 1))
@@ -550,12 +555,17 @@ class QualityFeedbackBridge:
         """Estimate noise level using median absolute deviation."""
         gray = np.mean(image, axis=2)
 
-        # Simple smoothing
-        from PIL import ImageFilter
-        img_uint8 = (np.clip(gray, 0, 1) * 255).astype(np.uint8)
-        pil_img = Image.fromarray(img_uint8, mode='L')
-        smoothed_pil = pil_img.filter(ImageFilter.MedianFilter(3))
-        smoothed = np.array(smoothed_pil).astype(np.float32) / 255.0
+        # Try scipy median filter first, fall back to PIL
+        try:
+            from scipy.ndimage import median_filter
+            smoothed = median_filter(gray, size=3)
+        except ImportError:
+            # Fallback to PIL-based smoothing
+            from PIL import ImageFilter
+            img_uint8 = (np.clip(gray, 0, 1) * 255).astype(np.uint8)
+            pil_img = Image.fromarray(img_uint8, mode='L')
+            smoothed_pil = pil_img.filter(ImageFilter.MedianFilter(3))
+            smoothed = np.array(smoothed_pil).astype(np.float32) / 255.0
 
         noise = np.abs(gray - smoothed)
         mad = float(np.median(noise))
