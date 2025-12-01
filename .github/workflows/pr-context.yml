@@ -44,7 +44,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .rag_cache
-          key: rag-cache-${{ github.event.pull_request.base.sha }}
+          # Use consistent cache key pattern that matches CI workflow saves
+          key: rag-cache-${{ github.sha }}
           restore-keys: |
             rag-cache-
             
@@ -66,7 +67,8 @@ jobs:
           from datetime import datetime, timedelta
           from pathlib import Path
           
-          # Configuration
+          # Configuration constants
+          MAX_ERROR_MESSAGE_LENGTH = 100  # Max characters for error message display
           knowledge_dir = Path(".rag_cache/knowledge")
           changed_files = os.environ.get("CHANGED_FILES", "").split()
           
@@ -98,25 +100,33 @@ jobs:
           affected_tests = set()
           failure_history = {}
           
-          for changed_file in changed_files:
-              # Normalize path
-              file_stem = Path(changed_file).stem
+          # Precompute stems for all changed files for O(1) lookup
+          changed_file_stems = {Path(f).stem for f in changed_files}
+          
+          # Find related tests efficiently using set membership
+          for result in test_results:
+              test_file = result.get("test_file", "")
+              test_file_stem = Path(test_file).stem
               
-              # Find related tests
-              for result in test_results:
-                  test_file = result.get("test_file", "")
-                  if file_stem in test_file or f"test_{file_stem}" in test_file:
-                      affected_tests.add(result.get("test_id", ""))
-                      
-                      # Track failure history
-                      if result.get("status") == "failed":
-                          test_id = result.get("test_id", "unknown")
-                          if test_id not in failure_history:
-                              failure_history[test_id] = []
-                          failure_history[test_id].append({
-                              "timestamp": result.get("timestamp", ""),
-                              "message": result.get("error_message", "")
-                          })
+              # Check for direct stem match or with 'test_' prefix removed
+              # This prevents false positives like 'user' matching 'test_user_authentication'
+              stem_variants = {test_file_stem}
+              if test_file_stem.startswith("test_"):
+                  stem_variants.add(test_file_stem[5:])
+              
+              # Match if any changed file stem matches the test file variants
+              if changed_file_stems & stem_variants:
+                  affected_tests.add(result.get("test_id", ""))
+                  
+                  # Track failure history
+                  if result.get("status") == "failed":
+                      test_id = result.get("test_id", "unknown")
+                      if test_id not in failure_history:
+                          failure_history[test_id] = []
+                      failure_history[test_id].append({
+                          "timestamp": result.get("timestamp", ""),
+                          "message": result.get("error_message", "")
+                      })
           
           # 2. Generate test impact section
           if affected_tests:
@@ -140,7 +150,7 @@ jobs:
               for test_id, failures in list(failure_history.items())[:5]:
                   warnings.append(f"- **`{test_id}`**: {len(failures)} historical failure(s)")
                   if failures and failures[0].get("message"):
-                      msg = failures[0]["message"][:100]
+                      msg = failures[0]["message"][:MAX_ERROR_MESSAGE_LENGTH]
                       warnings.append(f"  - Last failure: `{msg}...`")
               
               warnings.append("")
@@ -191,13 +201,7 @@ jobs:
           # Output
           comment = "\n".join(comment_parts)
           
-          # Save for GitHub Actions
-          with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
-              # Escape for multiline output
-              escaped = comment.replace("%", "%25").replace("\n", "%0A").replace("\r", "%0D")
-              f.write(f"comment={escaped}\n")
-          
-          # Also save to file for artifact
+          # Save to file for artifact and PR comment
           with open("pr_context.md", "w") as f:
               f.write(comment)
           
