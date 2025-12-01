@@ -91,6 +91,7 @@ class GitHookConfig:
         "post-commit",   # Update index after commits
         "post-merge",    # Update index after merges/pulls
         "post-checkout",  # Validate cache on branch switch
+        "pre-push",      # Verify consistency before push
     ])
 
     # Enable incremental indexing (only changed files, not full reindex).
