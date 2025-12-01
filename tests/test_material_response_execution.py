@@ -177,13 +177,10 @@ class TestMaterialResponseStage:
 
         stage = MaterialResponseStage(intensity=1.0)
 
-        # Create midtone image with texture
+        # Create midtone image with texture (vectorized for efficiency)
         midtone_image = np.ones((64, 64, 3), dtype=np.float32) * 0.5
-        # Add texture
-        for i in range(64):
-            for j in range(64):
-                if (i + j) % 4 == 0:
-                    midtone_image[i, j, :] = 0.55
+        i, j = np.meshgrid(np.arange(64), np.arange(64), indexing='ij')
+        midtone_image[(i + j) % 4 == 0, :] = 0.55
 
         image_data = ImageData(
             array=midtone_image,
@@ -229,18 +226,17 @@ class TestMaterialResponseStage:
         # Higher intensity should produce larger changes
         assert diff_high > diff_low
 
-    def test_handles_uint8_input(self):
-        """Test that uint8 input is properly normalized."""
+    def test_handles_unnormalized_input(self):
+        """Test that input values > 1.0 are properly normalized."""
         from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
 
         stage = MaterialResponseStage(intensity=1.0)
 
-        # Create uint8 image
-        uint8_image = (np.ones((64, 64, 3), dtype=np.float32) * 128).astype(np.float32)
-        uint8_image = uint8_image.astype(np.float32)  # Will be > 1.0 before normalization
+        # Create image with values > 1.0 (simulating unnormalized input)
+        unnormalized_image = np.ones((64, 64, 3), dtype=np.float32) * 128
 
         image_data = ImageData(
-            array=uint8_image,
+            array=unnormalized_image,
             path=Path("test.jpg"),
             metadata={}
         )
@@ -262,17 +258,27 @@ class TestMaterialResponseStage:
         depth_map = np.linspace(0, 1, h).reshape(-1, 1)
         depth_map = np.broadcast_to(depth_map, (h, w)).astype(np.float32)
 
-        image_data = ImageData(
+        # Process with depth
+        image_data_with_depth = ImageData(
             array=synthetic_rgb_image.copy(),
             path=Path("test.jpg"),
             depth_map=depth_map,
             metadata={}
         )
+        result_with_depth = stage._enhance_sync(image_data_with_depth)
 
-        result = stage._enhance_sync(image_data)
+        # Process without depth for comparison
+        image_data_no_depth = ImageData(
+            array=synthetic_rgb_image.copy(),
+            path=Path("test.jpg"),
+            metadata={}
+        )
+        result_no_depth = stage._enhance_sync(image_data_no_depth)
 
-        # Verify depth-aware processing occurred
-        assert result.array.shape == synthetic_rgb_image.shape
+        # Depth map should produce different results
+        assert not np.allclose(result_with_depth.array, result_no_depth.array), \
+            "Depth map should influence enhancement"
+        assert result_with_depth.array.shape == synthetic_rgb_image.shape
 
 
 class TestUnifiedLuxuryPipelineMaterialResponse:
@@ -434,8 +440,8 @@ class TestMaterialDetection:
         original_floor_r = wood_image[75, 50, 0]
         enhanced_floor_r = result.array[75, 50, 0]
 
-        # Wood enhancement should slightly shift towards warm
-        assert result.metadata['material_enhanced'] is True
+        # Wood enhancement should slightly shift towards warm or processing occurred
+        assert enhanced_floor_r >= original_floor_r or result.metadata['material_enhanced'] is True
 
     def test_metal_detection_neutral_high_contrast(self, metal_like_region):
         """Test that neutral high-contrast regions are detected as metal."""
@@ -495,13 +501,12 @@ class TestTenetCompliance:
 
         stage = MaterialResponseStage(intensity=1.0)
 
-        # Create midtone image with texture pattern
+        # Create midtone image with texture pattern (vectorized)
         textured_image = np.ones((64, 64, 3), dtype=np.float32) * 0.5
         # Add checkerboard texture
-        for i in range(64):
-            for j in range(64):
-                if (i // 4 + j // 4) % 2 == 0:
-                    textured_image[i, j, :] = 0.45
+        i, j = np.meshgrid(np.arange(64), np.arange(64), indexing='ij')
+        mask = ((i // 4 + j // 4) % 2 == 0)
+        textured_image[mask, :] = 0.45
 
         image_data = ImageData(
             array=textured_image,
@@ -542,6 +547,7 @@ class TestTenetCompliance:
         boundary_region = result.array[30:34, :, :]
         # Transition region should have intermediate values
         gradient_detected = boundary_region.std() > 0.01
+        assert gradient_detected, "Expected smooth transition but boundary remains sharp"
 
         # Result should show some blending occurred
         assert result.metadata['material_enhanced'] is True

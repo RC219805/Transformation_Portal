@@ -809,6 +809,11 @@ class UnifiedLuxuryPipeline:
         log.info("  Applying Material Response...")
 
         strength = params.get('material_strength', 0.65)
+
+        # Ensure RGB mode
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
         arr = np.array(image).astype(np.float32) / 255.0
         h, w = arr.shape[:2]
 
@@ -822,9 +827,7 @@ class UnifiedLuxuryPipeline:
 
         # Vertical position for perspective-based detection
         y_norm = np.linspace(0, 1, h).reshape(-1, 1)
-        x_norm = np.linspace(0, 1, w).reshape(1, -1)
         y_norm = np.broadcast_to(y_norm, (h, w))
-        x_norm = np.broadcast_to(x_norm, (h, w))
 
         # Floor region (lower portion, perspective)
         floor_mask = np.clip((y_norm - 0.55) / 0.45, 0.0, 1.0).astype(np.float32)
@@ -844,10 +847,6 @@ class UnifiedLuxuryPipeline:
         # Midtone mask for texture preservation
         midtone_mask = np.clip(1.0 - np.abs(luminance - 0.5) / 0.35, 0.0, 1.0)
         midtone_mask = gaussian_filter(midtone_mask, sigma=1.5)
-
-        # Shadow mask
-        shadow_mask = np.clip((0.25 - luminance) / 0.25, 0.0, 1.0)
-        shadow_mask = gaussian_filter(shadow_mask, sigma=2.0)
 
         # ============================================================
         # SCENE-SPECIFIC MATERIAL MASKS
