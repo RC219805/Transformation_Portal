@@ -44,6 +44,7 @@ env:
 jobs:
   analyze-trends:
     name: Analyze Quality Trends
+    # Using ubuntu-24.04 for consistency with ci-consolidated.yml and Python 3.11+ support
     runs-on: ubuntu-24.04
     
     outputs:
@@ -78,7 +79,11 @@ jobs:
           from pathlib import Path
           from collections import defaultdict
           
-          # Configuration
+          # Configuration constants
+          FLAKINESS_MIN_THRESHOLD = 0.2  # Tests failing less than 20% are not flaky
+          FLAKINESS_MAX_THRESHOLD = 0.8  # Tests failing more than 80% are consistently failing
+          MAX_TEST_ID_LENGTH = 50  # Maximum characters for test_id display in tables
+          
           knowledge_dir = Path(".rag_cache/knowledge")
           analysis_days = int(os.environ.get("ANALYSIS_PERIOD_DAYS", "30"))
           cutoff_date = datetime.now() - timedelta(days=analysis_days)
@@ -162,17 +167,46 @@ jobs:
                   avg = statistics.mean(values)
                   first_val = values[0]
                   last_val = values[-1]
-                  change_pct = ((last_val - first_val) / first_val * 100) if first_val > 0 else 0
+                  
+                  # Handle division by zero: when first_val is 0 and last_val > 0,
+                  # this represents a regression from 0 to measurable duration
+                  if first_val == 0:
+                      if last_val > 0:
+                          # Infinite regression - went from 0 to measurable time
+                          change_pct = float('inf')
+                      else:
+                          # Both are 0, no change
+                          change_pct = 0
+                  else:
+                      change_pct = ((last_val - first_val) / first_val * 100)
+                  
+                  # Determine direction based on change percentage
+                  if change_pct == float('inf'):
+                      direction = "regression"
+                  elif change_pct > 5:
+                      direction = "slower"
+                  elif change_pct < -5:
+                      direction = "faster"
+                  else:
+                      direction = "stable"
                   
                   report["trends"]["execution_time"] = {
                       "current_seconds": round(last_val, 2),
                       "average_seconds": round(avg, 2),
-                      "change_percent": round(change_pct, 1),
-                      "direction": "slower" if change_pct > 5 else "faster" if change_pct < -5 else "stable"
+                      "change_percent": "inf" if change_pct == float('inf') else round(change_pct, 1),
+                      "direction": direction
                   }
                   
-                  # Performance regression
-                  if change_pct > 20:
+                  # Performance regression detection
+                  if change_pct == float('inf'):
+                      has_regressions = True
+                      report["regressions"].append({
+                          "type": "performance_regression",
+                          "severity": "critical",
+                          "change_percent": "inf",
+                          "message": "Test execution time increased from 0 to measurable duration"
+                      })
+                  elif change_pct > 20:
                       has_regressions = True
                       report["regressions"].append({
                           "type": "performance_regression",
@@ -198,7 +232,10 @@ jobs:
                       total = pass_count + fail_count
                       
                       # Flaky if neither consistently passes nor fails
-                      if 0.2 < (fail_count / total) < 0.8:
+                      # Tests failing less than MIN_THRESHOLD are stable passing
+                      # Tests failing more than MAX_THRESHOLD are stable failing
+                      fail_ratio = fail_count / total
+                      if FLAKINESS_MIN_THRESHOLD < fail_ratio < FLAKINESS_MAX_THRESHOLD:
                           report["flaky_tests"].append({
                               "test_id": test_id,
                               "pass_count": pass_count,
@@ -308,7 +345,7 @@ jobs:
               ])
               for ft in report["flaky_tests"][:5]:
                   md_lines.append(
-                      f"| `{ft['test_id'][:50]}` | {ft['pass_count']} | {ft['fail_count']} | {ft['flakiness_score']:.0%} |"
+                      f"| `{ft['test_id'][:MAX_TEST_ID_LENGTH]}` | {ft['pass_count']} | {ft['fail_count']} | {ft['flakiness_score']:.0%} |"
                   )
               md_lines.append("")
           
@@ -376,6 +413,7 @@ jobs:
     name: Create Regression Issue
     needs: analyze-trends
     if: needs.analyze-trends.outputs.has_regressions == 'true'
+    # Using ubuntu-24.04 for consistency with ci-consolidated.yml
     runs-on: ubuntu-24.04
     
     steps:
@@ -418,10 +456,11 @@ jobs:
             *This issue was automatically created by the Quality Trend Dashboard workflow.*
             `;
             
+            // Include full timestamp to prevent duplicate issues on same day (e.g., manual dispatch)
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `[Quality] Regression detected - ${new Date().toISOString().split('T')[0]}`,
+              title: `[Quality] Regression detected - ${new Date().toISOString().replace('T', ' ').replace(/\..+/, ' UTC')}`,
               body: body,
               labels: ['quality', 'automated', 'regression']
             });
