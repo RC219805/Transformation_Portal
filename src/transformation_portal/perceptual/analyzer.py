@@ -270,7 +270,7 @@ class PerceptualAnalyzer:
         # Apply to each channel and average
         sharpness_per_channel = []
         for c in range(image.shape[0]):
-            channel = image[c:c+1].unsqueeze(0)
+            channel = image[c:c + 1].unsqueeze(0)
             laplacian_response = torch.nn.functional.conv2d(channel, laplacian, padding=1)
             variance = laplacian_response.var().item()
             sharpness_per_channel.append(variance)

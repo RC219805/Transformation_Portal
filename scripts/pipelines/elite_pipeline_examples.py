@@ -19,6 +19,7 @@ from elite_architectural_pipeline import (
 # Example 1: Simple Single Image Processing
 # ============================================================================
 
+
 def example_1_simple_processing():
     """Process a single image with default settings."""
     print("=" * 80)
@@ -163,7 +164,10 @@ def example_4_custom_preset():
         # AI enhancement with pool-specific prompt
         ai_enhancement=AIEnhancementConfig(
             enabled=False,  # Disabled for this example
-            prompt="luxury infinity pool, crystal clear turquoise water, premium outdoor living, professional architectural photography",
+            prompt=(
+                "luxury infinity pool, crystal clear turquoise water, "
+                "premium outdoor living, professional architectural photography"
+            ),
         ),
     )
 
@@ -175,8 +179,8 @@ def example_4_custom_preset():
 
     input_path = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs/750Picacho_Pool_HDR_32-bit.tif")
     if input_path.exists():
-        outputs = pipeline.process_image(input_path)
-        print(f"\n✅ Custom processing complete")
+        _outputs = pipeline.process_image(input_path)  # noqa: F841
+        print("\n✅ Custom processing complete")
     else:
         print(f"⚠️ Input file not found: {input_path}")
 
@@ -193,7 +197,7 @@ def example_5_dry_run():
 
     preset = get_750_picacho_preset(room_type="interior")
 
-    pipeline = EliteArchitecturalPipeline(
+    _pipeline = EliteArchitecturalPipeline(  # noqa: F841
         preset=preset,
         output_dir=Path("output_example_5"),
         dry_run=True  # Preview only

@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import Path
 import sys
 
+
 def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = False):
     """
     Fix a float32 TIFF with values outside [0,1].
@@ -91,6 +92,7 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
 
         return True
 
+
 def main():
     """Fix all float TIFFs in TIFFs/_TIFFs directory."""
     tiff_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/TIFFs/_TIFFs")
@@ -122,6 +124,7 @@ def main():
     print("\n" + "=" * 70)
     print(f"SUMMARY: Fixed {fixed_count}/{len(tiff_files)} files")
     print("=" * 70)
+
 
 if __name__ == "__main__":
     main()

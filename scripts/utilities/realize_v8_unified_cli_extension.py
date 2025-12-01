@@ -189,7 +189,7 @@ def apply_depth_bloom(
     bright = np.maximum(img - threshold, 0.0)
 
     # Blur
-    bloom = gaussian_filter(bright, sigma=radius/BLOOM_RADIUS_TO_SIGMA, mode='reflect')
+    bloom = gaussian_filter(bright, sigma=radius / BLOOM_RADIUS_TO_SIGMA, mode='reflect')
 
     # Depth weighting (near objects bloom more)
     depth_weight = 1.0 - (depth ** DEPTH_BLOOM_FALLOFF)
@@ -277,7 +277,7 @@ def apply_lut_with_depth(
                     raise ValueError(f"Malformed LUT_3D_SIZE directive: '{line}'") from exc
                 break
         if size is None:
-            size = round(len(data_lines) ** (1/3))
+            size = round(len(data_lines) ** (1 / 3))
         expected_lines = size ** 3
 
         if len(data_lines) != expected_lines:

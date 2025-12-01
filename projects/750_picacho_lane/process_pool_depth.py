@@ -9,6 +9,7 @@ Optimized for luxury real estate exterior/pool photography using:
 - Depth-guided clarity enhancement
 """
 
+from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
 import logging
 import sys
 from pathlib import Path
@@ -17,7 +18,6 @@ from pathlib import Path
 repo_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(repo_root / "src"))
 
-from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
 
 # Configure logging
 logging.basicConfig(

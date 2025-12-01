@@ -9,7 +9,6 @@ Strategy: Extract PNG metadata chunks and parse selectively
 
 import json
 import logging
-import struct
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -64,7 +63,7 @@ class RoomSpec:
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
         data['materials'] = [m.to_dict() for m in self.materials]
-        data['lighting'] = [l.to_dict() for l in self.lighting]
+        data['lighting'] = [light.to_dict() for light in self.lighting]
         return data
 
 
@@ -365,7 +364,7 @@ class BIMMetadataExtractor:
             'extraction_method': 'lightweight_png_metadata',
             'png_metadata_keys': list(png_metadata.keys()),
             'global_materials': [m.to_dict() for m in arch_specs['typical_materials']],
-            'global_lighting': [l.to_dict() for l in arch_specs['lighting_characteristics']],
+            'global_lighting': [light.to_dict() for light in arch_specs['lighting_characteristics']],
             'color_palette': arch_specs['color_palette'],
             'room_specifications': {
                 filename: room.to_dict()
@@ -395,7 +394,7 @@ def main():
     parser = argparse.ArgumentParser(description='Extract BIM metadata from BIMx file')
     parser.add_argument('bim_file', type=Path, help='Path to BIMx file')
     parser.add_argument('--output', '-o', type=Path, default=Path('bim_metadata.json'),
-                       help='Output JSON file')
+                        help='Output JSON file')
     parser.add_argument('--canonical-views', nargs='+', help='Canonical view filenames')
 
     args = parser.parse_args()

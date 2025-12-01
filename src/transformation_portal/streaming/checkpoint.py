@@ -5,9 +5,8 @@ from __future__ import annotations
 import datetime
 import functools
 import json
-import pickle
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from threading import Lock

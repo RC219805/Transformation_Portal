@@ -4,9 +4,7 @@
 Processes all 7 views with scene-specific Material Response settings
 """
 
-import os
 import sys
-import json
 import time
 from pathlib import Path
 from datetime import datetime
@@ -107,7 +105,7 @@ def linear_to_srgb(linear):
     linear = np.clip(linear, 0, 1)
     srgb = np.where(linear <= 0.0031308,
                     12.92 * linear,
-                    1.055 * np.power(linear, 1/2.4) - 0.055)
+                    1.055 * np.power(linear, 1 / 2.4) - 0.055)
     return srgb
 
 
@@ -306,9 +304,9 @@ def process_scene(input_path, output_dir, scene_name, config):
 def main():
     """Batch process all renderings"""
 
-    print("="*70)
+    print("=" * 70)
     print("🏛️  750 PICACHO LANE - BATCH PROCESSING")
-    print("="*70)
+    print("=" * 70)
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
 
@@ -346,9 +344,9 @@ def main():
     # Summary
     total_time = time.time() - total_start
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✅ BATCH PROCESSING COMPLETE")
-    print("="*70)
+    print("=" * 70)
     print(f"Total time: {total_time:.1f}s ({total_time/60:.1f} minutes)")
     print(f"Processed: {len(results)} scenes")
     print(f"Average: {total_time/len(results):.1f}s per scene")

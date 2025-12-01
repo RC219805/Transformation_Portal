@@ -3,11 +3,11 @@
 Verify TIFF file quality - check bit depth and data integrity
 """
 
-import sys
 from pathlib import Path
 import tifffile
 import numpy as np
 from PIL import Image
+
 
 def verify_tiff(tiff_path: Path):
     """Verify a TIFF file is properly 16-bit RGB."""

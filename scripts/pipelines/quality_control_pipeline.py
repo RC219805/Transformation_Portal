@@ -12,6 +12,7 @@ from typing import Dict, List
 from PIL import Image
 import subprocess
 
+
 class QualityControlPipeline:
     """Manages end-to-end quality control for luxury rendering pipeline"""
 
@@ -119,7 +120,7 @@ class QualityControlPipeline:
         return results
 
     def run_pipeline(self, input_dir: Path, output_dir: Path,
-                    formats: List[str] = ["jpeg", "png", "tif"]):
+                     formats: List[str] = ["jpeg", "png", "tif"]):
         """Run the unified luxury pipeline with quality controls"""
 
         # Step 1: Verify sources

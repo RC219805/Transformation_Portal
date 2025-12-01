@@ -24,10 +24,8 @@ from datetime import datetime
 import json
 
 import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance
 from scipy.ndimage import gaussian_filter
-from scipy import ndimage
-from tqdm import tqdm
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -146,7 +144,7 @@ class WorldClassProPipeline:
                 return config
 
         # Default to interior large
-        logger.warning(f"  Unknown scene type, using Interior Large config")
+        logger.warning("  Unknown scene type, using Interior Large config")
         return SceneConfig.INTERIOR_LARGE
 
     def load_image(self, path: Path) -> Tuple[Image.Image, np.ndarray]:
@@ -165,8 +163,8 @@ class WorldClassProPipeline:
             # S-curve for landscapes: lift shadows, compress highlights
             def curve_func(x):
                 return np.where(x < 0.5,
-                    0.5 * np.power(2 * x, 0.9),
-                    1.0 - 0.5 * np.power(2 * (1 - x), 0.9))
+                                0.5 * np.power(2 * x, 0.9),
+                                1.0 - 0.5 * np.power(2 * (1 - x), 0.9))
         elif curve_type == 'interior':
             # Gentle curve for interiors: preserve midtones
             def curve_func(x):
@@ -404,8 +402,7 @@ class WorldClassProPipeline:
         # Convert to 16-bit properly
         enhanced_array = np.array(enhanced_pil)
         # Resize to 16-bit by creating proper mode
-        from PIL import ImageMode
-        enhanced_16bit = (enhanced_array.astype(np.float32) / 255.0 * 65535).astype(np.uint16)
+        _enhanced_16bit = (enhanced_array.astype(np.float32) / 255.0 * 65535).astype(np.uint16)  # noqa: F841
 
         # Save using Image.fromarray for I;16 mode per channel, then merge as RGB
         # Actually, let's use a simpler approach - save 8-bit as 16-bit TIFF
@@ -433,7 +430,7 @@ class WorldClassProPipeline:
 
         self.metadata['processed_images'].append(result)
 
-        logger.info(f"✓ Complete!\n")
+        logger.info("✓ Complete!\n")
         return result
 
     def process_all(self) -> List[Dict]:
@@ -446,7 +443,7 @@ class WorldClassProPipeline:
             return []
 
         logger.info(f"\n{'='*80}")
-        logger.info(f"750 PICACHO - WORLD-CLASS PROFESSIONAL PIPELINE")
+        logger.info("750 PICACHO - WORLD-CLASS PROFESSIONAL PIPELINE")
         logger.info(f"{'='*80}")
         logger.info(f"Input:  {self.input_dir}")
         logger.info(f"Output: {self.output_dir}")
@@ -471,11 +468,11 @@ class WorldClassProPipeline:
 
         # Print summary
         logger.info(f"\n{'='*80}")
-        logger.info(f"PROCESSING COMPLETE")
+        logger.info("PROCESSING COMPLETE")
         logger.info(f"{'='*80}")
         logger.info(f"Successfully processed: {len(results)}/{len(jpeg_files)} images")
         logger.info(f"Output directory: {self.output_dir}")
-        logger.info(f"\nFiles created:")
+        logger.info("\nFiles created:")
         for result in results:
             logger.info(f"  • {result['output']}")
             logger.info(f"    Preview: {result['preview']}")

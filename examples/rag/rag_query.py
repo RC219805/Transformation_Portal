@@ -4,15 +4,15 @@ Simple wrapper to query the RAG system with proper imports.
 Usage: ./rag_query.py "your question here"
 """
 
+from rag_system.indexer import RepositoryIndexer
+from rag_system.retriever import HybridRetriever
+from rag_system.citation import CitationGenerator
 import sys
 from pathlib import Path
 
 # Add RAG system to path (examples/rag/ -> repository root -> .github/agents)
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / ".github" / "agents"))
 
-from rag_system.citation import CitationGenerator
-from rag_system.retriever import HybridRetriever
-from rag_system.indexer import RepositoryIndexer
 
 def main():
     if len(sys.argv) < 2:
@@ -32,7 +32,7 @@ def main():
     results = retriever.retrieve(query, top_k=5)
 
     # Generate citations
-    citation_gen = CitationGenerator()
+    _citation_gen = CitationGenerator()  # noqa: F841
 
     print(f"\n{'='*80}")
     print(f"Query: {query}")
@@ -47,6 +47,7 @@ def main():
         print("-" * 80)
 
     print(f"\n✅ Found {len(results)} relevant results from {len(chunks)} indexed chunks\n")
+
 
 if __name__ == "__main__":
     main()

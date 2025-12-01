@@ -8,8 +8,8 @@ for 16-bit RGB TIFF saving.
 
 import numpy as np
 from pathlib import Path
-from PIL import Image
 import tifffile
+
 
 def test_tiff_quality():
     """Test that our TIFF saving preserves 16-bit quality."""
@@ -58,7 +58,7 @@ def test_tiff_quality():
     loaded_2 = tifffile.imread(test_path_2)
     expected = (np.clip(test_float, 0, 1) * 65535).astype(np.uint16)
 
-    print(f"\n4. Pipeline Verification:")
+    print("\n4. Pipeline Verification:")
     print(f"   Loaded dtype:   {loaded_2.dtype}")
     print(f"   Expected dtype: {expected.dtype}")
     print(f"   Loaded range:   [{loaded_2.min()}, {loaded_2.max()}]")
@@ -81,6 +81,7 @@ def test_tiff_quality():
     print("\n✅ All 750 Picacho TIFFs will maintain maximum quality")
 
     return True
+
 
 if __name__ == "__main__":
     success = test_tiff_quality()

@@ -12,6 +12,7 @@ from src.transformation_portal.pipelines.unified_luxury_pipeline import (
     OutputFormat
 )
 
+
 def main():
     # Input file from desktop cache - using Master TIFF (16-bit)
     input_file = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Master_TIFFs_16bit/750Picacho_Pool.tif")
@@ -101,6 +102,7 @@ def main():
         import traceback
         traceback.print_exc()
         return 1
+
 
 if __name__ == "__main__":
     exit(main())

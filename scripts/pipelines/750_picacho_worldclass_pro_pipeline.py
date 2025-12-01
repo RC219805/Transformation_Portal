@@ -16,9 +16,16 @@ Author: Transformation Portal
 Date: November 11, 2025
 """
 
+from src.transformation_portal.io.tiff_handler import TIFFHandler
+from src.transformation_portal.depth.processors.zone_tone_mapping import ZoneToneMapper
+from src.transformation_portal.depth.processors.atmospheric_effects import AtmosphericEffects
+from src.transformation_portal.depth.models.depth_anything_v2 import DepthAnythingV2Model
+from tqdm import tqdm
+from PIL import Image
+import numpy as np
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 import logging
 from datetime import datetime
 import json
@@ -26,16 +33,8 @@ import json
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import numpy as np
-from PIL import Image
-from tqdm import tqdm
 
 # Import core pipeline components
-from src.transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
-from src.transformation_portal.depth.models.depth_anything_v2 import DepthAnythingV2Model
-from src.transformation_portal.depth.processors.atmospheric_effects import AtmosphericEffects
-from src.transformation_portal.depth.processors.zone_tone_mapping import ZoneToneMapper
-from src.transformation_portal.io.tiff_handler import TIFFHandler
 
 # Configure logging
 logging.basicConfig(
@@ -461,7 +460,7 @@ class WorldClassProPipeline:
             return []
 
         logger.info(f"\n{'='*80}")
-        logger.info(f"750 Picacho - World-Class Professional Pipeline")
+        logger.info("750 Picacho - World-Class Professional Pipeline")
         logger.info(f"{'='*80}")
         logger.info(f"Input: {self.input_dir}")
         logger.info(f"Output: {self.output_dir}")
@@ -486,7 +485,7 @@ class WorldClassProPipeline:
 
         # Print summary
         logger.info(f"\n{'='*80}")
-        logger.info(f"PROCESSING COMPLETE")
+        logger.info("PROCESSING COMPLETE")
         logger.info(f"{'='*80}")
         logger.info(f"Processed: {len(results)}/{len(jpeg_files)} images")
         logger.info(f"Output directory: {self.output_dir}")

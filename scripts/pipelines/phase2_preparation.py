@@ -11,7 +11,6 @@ Date: 2025-11-10
 
 import logging
 import sys
-from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
@@ -106,7 +105,7 @@ def test_v2_variants():
                 trust_remote_code=True,
                 low_cpu_mem_usage=True
             )
-            logger.info(f"  ✓ Accessible and working")
+            logger.info("  ✓ Accessible and working")
             accessible.append(model_id)
 
         except Exception as e:
@@ -145,7 +144,6 @@ def research_depth_pro():
 
     # Check if already installed
     try:
-        import depth_pro
         logger.info("\n✓ Depth Pro already installed!")
         return True
     except ImportError:

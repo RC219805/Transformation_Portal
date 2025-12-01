@@ -4,6 +4,8 @@
 Context-aware processing with Material Response Technology
 """
 
+from PIL import Image
+import numpy as np
 import sys
 from pathlib import Path
 import json
@@ -12,10 +14,6 @@ import time
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from transformation_portal.utils.image_utils import load_image, save_image
-from transformation_portal.utils.error_handling import safe_execute
-import numpy as np
-from PIL import Image
 
 def load_exr_to_array(exr_path: Path) -> np.ndarray:
     """Load 16-bit EXR and convert to working format."""
@@ -184,9 +182,9 @@ def save_outputs(img: np.ndarray, output_dir: Path, base_name: str):
 
 
 def main():
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🏊 750 PICACHO POOL - LUXURY RENDERING PIPELINE")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     start_time = time.time()
 

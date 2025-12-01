@@ -61,28 +61,18 @@ except ImportError:
 
 try:
     from transformation_portal.depth.models import DepthAnythingV2Model, ModelBackend, ModelVariant
-    from transformation_portal.depth.processors import (
-        AtmosphericEffects,
-        DepthAwareDenoise,
-        DepthGuidedFilters,
-        ZoneToneMapping,
-    )
     DEPTH_PIPELINE_AVAILABLE = True
 except ImportError:
     DEPTH_PIPELINE_AVAILABLE = False
     logging.warning("Depth pipeline not available - will skip depth-aware processing")
 
 try:
-    from transformation_portal.processors.material_response.core import (
-        MaterialAestheticProfile,
-        LightingProfile,
-    )
     MATERIAL_RESPONSE_AVAILABLE = True
 except ImportError:
     MATERIAL_RESPONSE_AVAILABLE = False
     logging.warning("Material Response not available - will use simplified enhancement")
 
-from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable, linear_to_srgb
+from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable
 
 # Configure logging
 logging.basicConfig(
@@ -166,7 +156,10 @@ class AIEnhancementConfig:
     guidance_scale: float = 7.5
     strength: float = 0.30
     seed: int = 42
-    prompt_template: str = "luxury {room_type} architectural photography, {style}, ultra detailed, professional, photorealistic, 8k"
+    prompt_template: str = (
+        "luxury {room_type} architectural photography, {style}, "
+        "ultra detailed, professional, photorealistic, 8k"
+    )
     negative_prompt: str = "blurry, artifacts, cartoon, painting, oversaturated, unrealistic, low quality, distorted"
     ai_enhancement_padding: bool = True  # Auto-pad for tensor compatibility
     target_size_multiple: int = 64  # Pad to multiples of this value
@@ -283,7 +276,11 @@ def get_aerial_preset() -> PipelinePreset:
     preset.depth.haze_density = 0.03
     # Aerial scenes typically need more shadow boost
     preset.tone_mapping.shadow_boost_outdoor = 0.4
-    preset.ai_enhancement.prompt_template = "luxury coastal estate aerial photography, dramatic hillside architecture, infinity pool, mediterranean landscaping, golden hour lighting, ultra detailed, professional, photorealistic, 8k"
+    preset.ai_enhancement.prompt_template = (
+        "luxury coastal estate aerial photography, dramatic hillside architecture, "
+        "infinity pool, mediterranean landscaping, golden hour lighting, ultra detailed, "
+        "professional, photorealistic, 8k"
+    )
     return preset
 
 
@@ -386,7 +383,10 @@ class LuxuryEstateMasterPipeline:
         is_outdoor = (dynamic_range > 8.0) or (shadow_pixels > 0.15 and highlight_pixels > 0.1)
 
         scene_type = "outdoor" if is_outdoor else "indoor"
-        logger.info(f"  → Scene detection: {scene_type.upper()} (DR={dynamic_range:.1f}x, shadows={shadow_pixels*100:.1f}%, highlights={highlight_pixels*100:.1f}%)")
+        logger.info(
+            f"  → Scene detection: {scene_type.upper()} (DR={dynamic_range:.1f}x, "
+            f"shadows={shadow_pixels*100:.1f}%, highlights={highlight_pixels*100:.1f}%)"
+        )
 
         return scene_type
 
@@ -698,7 +698,7 @@ class LuxuryEstateMasterPipeline:
         g_new = balanced[:, :, 1].mean()
         b_new = balanced[:, :, 2].mean()
         logger.info(f"  After:  R={r_new:.3f}, G={g_new:.3f}, B={b_new:.3f} (ratio: {b_new/r_new:.2f}x)")
-        logger.info(f"  ✓ White balance corrected")
+        logger.info("  ✓ White balance corrected")
 
         return balanced
 
@@ -759,7 +759,7 @@ class LuxuryEstateMasterPipeline:
         return image_enhanced
 
     def _stage_4_tone_mapping(self, image_linear: np.ndarray, depth_map: Optional[np.ndarray] = None,
-                             scene_type: Optional[str] = None) -> np.ndarray:
+                              scene_type: Optional[str] = None) -> np.ndarray:
         """Stage 4: Intelligent HDR tone mapping with adaptive shadow handling."""
         logger.info("\n[Stage 4/7] HDR tone mapping...")
 
@@ -816,7 +816,7 @@ class LuxuryEstateMasterPipeline:
         return image_tonemapped
 
     def _apply_shadow_boost(self, image_linear: np.ndarray, boost_strength: float,
-                           depth_map: Optional[np.ndarray] = None) -> np.ndarray:
+                            depth_map: Optional[np.ndarray] = None) -> np.ndarray:
         """
         Apply adaptive shadow boost for outdoor scenes to reduce clipping.
 
@@ -864,7 +864,7 @@ class LuxuryEstateMasterPipeline:
         return final
 
     def _zone_based_tone_mapping(self, image_linear: np.ndarray, depth_map: np.ndarray,
-                                cfg: ToneMappingConfig) -> np.ndarray:
+                                 cfg: ToneMappingConfig) -> np.ndarray:
         """
         Apply zone-based tone mapping using depth information.
 
@@ -889,7 +889,7 @@ class LuxuryEstateMasterPipeline:
 
             # Smooth transitions between zones
             zone_mask = np.clip((depth_norm - zone_start) / 0.1, 0, 1) * \
-                       np.clip((zone_end - depth_norm) / 0.1, 0, 1)
+                np.clip((zone_end - depth_norm) / 0.1, 0, 1)
             zone_maps.append(zone_mask)
 
         # Apply tone mapping per zone with different parameters
@@ -1018,7 +1018,7 @@ class LuxuryEstateMasterPipeline:
             return image_ai
         except Exception as e:
             logger.warning(f"  ⚠ AI enhancement failed: {e}")
-            logger.info(f"     Continuing without AI enhancement (other stages compensate)")
+            logger.info("     Continuing without AI enhancement (other stages compensate)")
             return image
 
     def _stage_7_upscaling(self, image: np.ndarray, original_size: Tuple[int, int]) -> np.ndarray:
@@ -1068,7 +1068,7 @@ class LuxuryEstateMasterPipeline:
             return self._stage_7_upscaling(image, original_size)  # Retry with Lanczos
 
     def _save_outputs(self, source_path: Path, image_final: np.ndarray,
-                     image_tonemapped: np.ndarray, results: Dict):
+                      image_tonemapped: np.ndarray, results: Dict):
         """Save output files (TIFF master + JPEG delivery)."""
         logger.info("\n[Output] Saving files...")
 
@@ -1194,9 +1194,9 @@ Examples:
 
     parser.add_argument('images', nargs='*', help='Input image path(s)')
     parser.add_argument('--preset', choices=['750_picacho', 'aerial'], default='750_picacho',
-                       help='Pipeline preset (default: 750_picacho)')
+                        help='Pipeline preset (default: 750_picacho)')
     parser.add_argument('--room-type', default='interior',
-                       help='Room type for AI prompts (default: interior)')
+                        help='Room type for AI prompts (default: interior)')
     parser.add_argument('--output-dir', help='Output directory (overrides preset)')
     parser.add_argument('--dry-run', action='store_true', help='Show configuration and exit')
     parser.add_argument('--save-preset', help='Save preset to YAML file')
@@ -1216,9 +1216,9 @@ Examples:
 
     # Dry run
     if args.dry_run:
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print(f"PRESET: {preset.name}")
-        print("="*80)
+        print("=" * 80)
         print(json.dumps(asdict(preset), indent=2))
         return 0
 

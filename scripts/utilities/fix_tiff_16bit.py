@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
     # Verify
     loaded = tifffile.imread(test_path)
-    print(f"\nVerification:")
+    print("\nVerification:")
     print(f"  Saved dtype: {loaded.dtype}")
     print(f"  Saved shape: {loaded.shape}")
     print(f"  Saved range: [{loaded.min()}, {loaded.max()}]")

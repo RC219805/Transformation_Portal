@@ -54,6 +54,7 @@ class QualityMode(Enum):
     QUANTUM = (105, 120)      # Quantum-amplified reality
     THEORETICAL = (120, 150)  # Theoretical maximum
 
+
 @dataclass
 class EnhancementConfig:
     """Configuration for hyper-reality enhancement pipeline"""
@@ -169,7 +170,7 @@ class CausticGenerator(nn.Module):
 
                 # Apply quantum coherence
                 coherence = torch.exp(-torch.abs(wave_pattern) * self.config['coherence_length'])
-                interference[:, i:i+1] = wave_pattern * coherence
+                interference[:, i:i + 1] = wave_pattern * coherence
 
             # Combine with neural waves
             waves = waves * 0.7 + interference * 0.3
@@ -268,7 +269,7 @@ class AtmosphericSynthesizer(nn.Module):
         # Decoder path with skip connections
         for i, decoder in enumerate(self.decoder):
             if 0 < i < len(skips):
-                skip = skips[-(i+1)]
+                skip = skips[-(i + 1)]
                 # Resize if necessary
                 if feat.shape[-2:] != skip.shape[-2:]:
                     feat = F.interpolate(feat, size=skip.shape[-2:], mode='bilinear')
@@ -328,7 +329,7 @@ class MaterialTranscendence(nn.Module):
         result = torch.zeros_like(x)
 
         for i, (name, net) in enumerate(self.material_responses.items()):
-            mask = materials[:, i:i+1]
+            mask = materials[:, i:i + 1]
 
             # Generate material response
             response = net(x)
@@ -590,7 +591,7 @@ class HyperRealityProcessor:
         # Edge enhancement
         if self.config.synergistic['edge_enhancement'] > 1.0:
             kernel = torch.tensor([[-1, -1, -1],
-                                  [-1,  9, -1],
+                                  [-1, 9, -1],
                                   [-1, -1, -1]], dtype=torch.float32).view(1, 1, 3, 3).to(device)
             # pylint: disable=not-callable  # F.conv2d is callable in torch.nn.functional
             edges = F.conv2d(img, kernel.repeat(3, 1, 1, 1), padding=1, groups=3)

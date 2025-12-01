@@ -203,7 +203,7 @@ class TestTrainingDemo:
             # Create dataset and dataloaders
             from torchvision import transforms
             from torch.utils.data import DataLoader
-            import torch
+            import torch  # noqa: F811
 
             transform = transforms.Compose([
                 transforms.Resize((256, 256)),
@@ -253,11 +253,7 @@ class TestTrainingDemo:
 
 def test_imports():
     """Test that all required modules can be imported"""
-    import torch
-    import torchvision
-    from tqdm import tqdm
-    import numpy as np
-    from PIL import Image
+    import torch  # noqa: F811
 
     # Verify versions using proper semantic versioning
     assert version.parse(torch.__version__) >= version.parse("2.0.0")

@@ -30,9 +30,10 @@ Note: By default, this tool uses strict error handling. Any file processing erro
 exit code 1, regardless of how many files were successfully processed. Fatal errors that prevent batch processing
 from starting or completing result in exit code 2. All errors are logged with detailed context for troubleshooting.
 
-If the --allow-partial-success option is specified, the tool will exit with code 0 as long as at least one file was processed
-successfully, even if some files failed. In this mode, exit code 1 is only used if all files fail, and exit code 2 still indicates
-a fatal error that prevents batch processing from starting or completing.
+If the --allow-partial-success option is specified, the tool will exit with code 0 as
+long as at least one file was processed successfully, even if some files failed.
+In this mode, exit code 1 is only used if all files fail, and exit code 2 still
+indicates a fatal error that prevents batch processing from starting or completing.
 Designed to be robust for large photography / architectural pipelines.
 """
 from __future__ import annotations
@@ -277,7 +278,8 @@ def gaussian_blur_float(img: np.ndarray, sigma: float, backend: Optional[str] = 
     return np.asarray(blurred).astype(np.float32) / 255.0
 
 
-def bilateral_blur_float(img: np.ndarray, depth: np.ndarray, sigma_spatial: float, sigma_depth: float = 0.08, diameter: Optional[int] = None) -> np.ndarray:
+def bilateral_blur_float(img: np.ndarray, depth: np.ndarray, sigma_spatial: float,
+                         sigma_depth: float = 0.08, diameter: Optional[int] = None) -> np.ndarray:
     """
     Edge-preserving bilateral-style blur guided by depth.
     If OpenCV not present, falls back to gaussian blur.
@@ -305,7 +307,11 @@ def bilateral_blur_float(img: np.ndarray, depth: np.ndarray, sigma_spatial: floa
 # ----- file discovery -----
 
 
-def find_file_for_base(root: str, base: str, pattern_suffix: str = "*", priority_tags: Optional[Tuple[str, ...]] = None, extensions: Optional[Tuple[str, ...]] = None) -> Optional[str]:
+def find_file_for_base(
+    root: str, base: str, pattern_suffix: str = "*",
+    priority_tags: Optional[Tuple[str, ...]] = None,
+    extensions: Optional[Tuple[str, ...]] = None
+) -> Optional[str]:
     """
     Search recursively under root for files starting with 'base' and matching priority tags.
     Returns best matching path or None.
@@ -386,7 +392,8 @@ def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int 
 
 
 @retry_on_io_error()
-def load_depth_normalized(depth_path: str, target_size: Optional[Tuple[int, int]] = None, method: str = "percentile", use_cache: bool = True) -> np.ndarray:
+def load_depth_normalized(depth_path: str, target_size: Optional[Tuple[int, int]]
+                          = None, method: str = "percentile", use_cache: bool = True) -> np.ndarray:
     """
     Load a depth file and normalize to [0,1]. Supports percentile clipping, histogram equalization or linear scaling.
     target_size: (H, W)
@@ -509,7 +516,12 @@ def apply_depth_haze(
     return enhanced
 
 
-def apply_depth_clarity(img: np.ndarray, depth: np.ndarray, amount: float = 0.14, radius_px: int = 3, near_pct: float = 18.0, far_pct: float = 82.0, sky_mask: Optional[np.ndarray] = None, building_mask: Optional[np.ndarray] = None) -> np.ndarray:
+def apply_depth_clarity(
+    img: np.ndarray, depth: np.ndarray, amount: float = 0.14, radius_px: int = 3,
+    near_pct: float = 18.0, far_pct: float = 82.0,
+    sky_mask: Optional[np.ndarray] = None,
+    building_mask: Optional[np.ndarray] = None
+) -> np.ndarray:
     """
     Depth-aware microcontrast enhancement. Avoids sky and favors building.
     """
@@ -549,7 +561,15 @@ def _estimate_image_complexity(img: np.ndarray, depth: np.ndarray) -> float:
     return min(1.0, complexity * 10.0)  # Scale to 0-1 range
 
 
-def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0, aperture: float = 0.20, clarity: float = 0.15, falloff: float = 1.5, edge_preserving: bool = True, bilateral_sigma_depth: float = 0.08, bilateral_diameter: Optional[int] = None, sky_mask: Optional[np.ndarray] = None, building_mask: Optional[np.ndarray] = None, quality: str = "balanced", adaptive: bool = True) -> np.ndarray:
+def apply_depth_dof(
+    img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
+    aperture: float = 0.20, clarity: float = 0.15, falloff: float = 1.5,
+    edge_preserving: bool = True, bilateral_sigma_depth: float = 0.08,
+    bilateral_diameter: Optional[int] = None,
+    sky_mask: Optional[np.ndarray] = None,
+    building_mask: Optional[np.ndarray] = None,
+    quality: str = "balanced", adaptive: bool = True
+) -> np.ndarray:
     """
     DOF with optional bilateral edge preservation. Masks protect building from blur and can slightly reduce sky extremes.
 
@@ -561,8 +581,9 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
     adaptive: Auto-adjust bilateral sigma based on image complexity (20-30% faster)
     """
     if clarity > 1e-6:
-        usm = Image.fromarray((img * 255.0).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=2,
-                              percent=int(clarity * 100), threshold=0))
+        usm = Image.fromarray((img * 255.0).astype(np.uint8)).filter(
+            ImageFilter.UnsharpMask(radius=2, percent=int(clarity * 100), threshold=0)
+        )
         img = np.asarray(usm).astype(np.float32) / 255.0
 
     focus_depth = float(np.percentile(depth, focus_pct))
@@ -792,7 +813,11 @@ def build_cli() -> argparse.ArgumentParser:
         p.add_argument("--restrict-tag", type=str, default=None,
                        help="Restrict matches to a filename tag (not strictly required)")
         p.add_argument("--fmt", type=str, default="tiff", help="Output format (tiff/png/jpg, default: tiff for 6x faster I/O)")
-        p.add_argument("--workers", type=int, default=0, help="Parallel worker count (0=auto-detect, default), uses ProcessPoolExecutor")
+        p.add_argument(
+            "--workers",
+            type=int,
+            default=0,
+            help="Parallel worker count (0=auto-detect, default), uses ProcessPoolExecutor")
         p.add_argument("--quality", type=str, choices=['fast', 'balanced', 'high'], default='balanced',
                        help="Quality mode: fast (15x faster, Gaussian blur), balanced (default), high (bilateral filter)")
         p.add_argument("--allow-partial-success", action="store_true",

@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 # Try to import Numba
 try:
-    import numba
     from numba import jit, prange
     NUMBA_AVAILABLE = True
     logger.info("Numba JIT compilation available - hot loops will be accelerated")

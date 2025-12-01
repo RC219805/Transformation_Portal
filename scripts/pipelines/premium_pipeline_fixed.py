@@ -13,17 +13,13 @@ Key Fixes:
 4. Careful downsampling for web outputs
 """
 
-import json
-import sys
+import numpy as np
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = None  # Allow large images
-
-import numpy as np
-from tqdm import tqdm
 
 
 class PremiumPipelineFixed:
@@ -185,7 +181,7 @@ class PremiumPipelineFixed:
 
             # Subtle saturation boost
             hsv = self._rgb_to_hsv(arr)
-            hsv[:,:,1] = np.clip(hsv[:,:,1] * 1.06, 0, 1)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.06, 0, 1)
             arr = self._hsv_to_rgb(hsv)
 
         # Convert back to image
@@ -227,7 +223,6 @@ class PremiumPipelineFixed:
 
         try:
             # Try Real-ESRGAN
-            import torch
             from realesrgan import RealESRGANer
             from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 
@@ -253,7 +248,7 @@ class PremiumPipelineFixed:
             if self.verbose:
                 print("  ✓ Real-ESRGAN 4x upscale")
 
-        except Exception as e:
+        except Exception:
             if self.verbose:
                 print("  ! Real-ESRGAN unavailable, using Lanczos")
 
@@ -395,17 +390,17 @@ def main():
     parser = argparse.ArgumentParser(description="Premium Pipeline (Fixed Quality)")
     parser.add_argument("input", type=Path, help="Input image")
     parser.add_argument("--preset", default="kitchen-bright",
-                       help="Processing preset")
+                        help="Processing preset")
     parser.add_argument("--output", type=Path, default=None,
-                       help="Output directory")
+                        help="Output directory")
     parser.add_argument("--enable-4k", action="store_true", default=True,
-                       help="Enable 4K upscaling (default: True)")
+                        help="Enable 4K upscaling (default: True)")
     parser.add_argument("--no-4k", dest="enable_4k", action="store_false",
-                       help="Disable 4K upscaling")
+                        help="Disable 4K upscaling")
     parser.add_argument("--enable-ai", action="store_true", default=False,
-                       help="Enable AI enhancement (conservative)")
+                        help="Enable AI enhancement (conservative)")
     parser.add_argument("--quiet", action="store_true",
-                       help="Suppress verbose output")
+                        help="Suppress verbose output")
 
     args = parser.parse_args()
 

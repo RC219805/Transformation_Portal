@@ -325,7 +325,7 @@ def apply_materials_tiled(
                 arr = np.asarray(crop, dtype=np.float32) / 255.0
                 if gamma != 1.0:
                     arr = np.clip(arr**gamma, 0.0, 1.0)
-                patch[y:y+ph, x:x+pw, :] = arr[:ph, :pw, :]
+                patch[y:y + ph, x:x + pw, :] = arr[:ph, :pw, :]
                 x += pw
             y += ph
         return patch

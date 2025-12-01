@@ -17,6 +17,7 @@ def srgb_to_linear(img_array):
 
     return linear
 
+
 def save_linear_tiff(image: Image.Image, output_path, bit_depth=16):
     """Save image in linear colorspace as 16-bit TIFF."""
     # Convert PIL image to numpy array
@@ -51,6 +52,7 @@ def save_linear_tiff(image: Image.Image, output_path, bit_depth=16):
     )
 
     return output_path
+
 
 # Test with the current output
 if __name__ == "__main__":

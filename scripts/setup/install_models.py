@@ -23,12 +23,15 @@ REPO_ROOT = Path(__file__).parent.parent
 WEIGHTS_DIR = REPO_ROOT / "weights"
 WEIGHTS_DIR.mkdir(exist_ok=True)
 
+
 class DownloadProgressBar(tqdm):
     """Progress bar for downloads."""
+
     def update_to(self, b=1, bsize=1, tsize=None):
         if tsize is not None:
             self.total = tsize  # pylint: disable=attribute-defined-outside-init
         self.update(b * bsize - self.n)
+
 
 def download_file(url, output_path):
     """Download file with progress bar."""
@@ -39,6 +42,7 @@ def download_file(url, output_path):
         urllib.request.urlretrieve(url, output_path, reporthook=t.update_to)
 
     print(f"✓ Downloaded: {output_path}")
+
 
 # ============================================================================
 # 1. DEPTH ANYTHING V2 - HuggingFace Model
@@ -80,8 +84,14 @@ print("2. REAL-ESRGAN WEIGHTS")
 print("=" * 70)
 
 REALESRGAN_MODELS = {
-    "RealESRGAN_x4plus.pth": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
-    "RealESRGAN_x4plus_anime_6B.pth": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+    "RealESRGAN_x4plus.pth": (
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/"
+        "v0.1.0/RealESRGAN_x4plus.pth"
+    ),
+    "RealESRGAN_x4plus_anime_6B.pth": (
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/"
+        "v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
+    ),
 }
 
 print(f"\nChecking Real-ESRGAN weights in: {WEIGHTS_DIR}")

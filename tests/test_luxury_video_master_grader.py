@@ -14,7 +14,7 @@ from .documentation import documents
 
 def load_module() -> ModuleType:
     module_path = Path(__file__).resolve().parent.parent / "src" / "transformation_portal" / \
-                       "processors" / "luxury_video_master_grader.py"
+        "processors" / "luxury_video_master_grader.py"
     spec = importlib.util.spec_from_file_location("luxury_video_master_grader", module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader  # for mypy

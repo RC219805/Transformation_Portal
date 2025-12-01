@@ -119,7 +119,6 @@ class ValidationResult:
 
 class ImageValidationError(ProcessingError):
     """Exception raised when image validation fails."""
-    pass
 
 
 class ImageValidator:

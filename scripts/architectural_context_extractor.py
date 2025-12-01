@@ -14,7 +14,6 @@ Extracts architectural intelligence from PDFs:
 Enriches rendering pipeline with contextual understanding.
 """
 
-import io
 import json
 import re
 from dataclasses import asdict, dataclass
@@ -22,7 +21,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import fitz  # PyMuPDF
-from PIL import Image
 
 
 @dataclass
@@ -43,6 +41,7 @@ class RoomContext:
             self.features = []
         if self.adjacent_rooms is None:
             self.adjacent_rooms = []
+
 
 @dataclass
 class ProjectContext:
@@ -207,8 +206,11 @@ class ArchitecturalContextExtractor:
             # Look for address
             if not context.address:
                 # Match street addresses
-                addr_match = re.search(
-                    r'\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Street|St|Avenue|Ave|Lane|Ln|Road|Rd|Drive|Dr|Way|Court|Ct))', line)
+                addr_pattern = (
+                    r'\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*'
+                    r'(?:\s+(?:Street|St|Avenue|Ave|Lane|Ln|Road|Rd|Drive|Dr|Way|Court|Ct))'
+                )
+                addr_match = re.search(addr_pattern, line)
                 if addr_match:
                     context.address = addr_match.group(0)
 

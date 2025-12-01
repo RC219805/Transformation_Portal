@@ -23,7 +23,7 @@ import importlib.util
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 
 class Colors:
@@ -73,13 +73,13 @@ def check_disk_space() -> Dict[str, any]:
     """
     try:
         total, used, free = shutil.disk_usage("/")
-        
+
         # Convert to GB
         total_gb = total / (1024**3)
         used_gb = used / (1024**3)
         free_gb = free / (1024**3)
         used_percent = (used / total) * 100
-        
+
         return {
             'total_gb': total_gb,
             'used_gb': used_gb,
@@ -103,24 +103,24 @@ def check_sample_images() -> Dict[str, any]:
     repo_root = Path(__file__).parent.parent
     sample_dir = repo_root / 'data' / 'sample_images'
     input_dir = repo_root / 'input_images'
-    
+
     # Count image files
     image_extensions = {'.jpg', '.jpeg', '.png', '.tiff', '.tif'}
-    
+
     sample_images = []
     if sample_dir.exists():
         sample_images = [
             f for f in sample_dir.rglob('*')
             if f.is_file() and f.suffix.lower() in image_extensions
         ]
-    
+
     input_images = []
     if input_dir.exists():
         input_images = [
             f for f in input_dir.rglob('*')
             if f.is_file() and f.suffix.lower() in image_extensions
         ]
-    
+
     return {
         'sample_dir_exists': sample_dir.exists(),
         'input_dir_exists': input_dir.exists(),
@@ -172,7 +172,7 @@ def assess_capabilities() -> Dict[str, any]:
         'typer': check_package('typer', 'typer')[0],
         'tqdm': check_package('tqdm', 'tqdm')[0],
     }
-    
+
     # Check ML packages
     ml_packages = {
         'torch': check_package('torch', 'torch')[0],
@@ -181,7 +181,7 @@ def assess_capabilities() -> Dict[str, any]:
         'controlnet_aux': check_package('controlnet-aux', 'controlnet_aux')[0],
         'realesrgan': check_package('realesrgan', 'realesrgan')[0],
     }
-    
+
     # Check image processing packages
     image_packages = {
         'tifffile': check_package('tifffile', 'tifffile')[0],
@@ -189,12 +189,12 @@ def assess_capabilities() -> Dict[str, any]:
         'scikit-image': check_package('scikit-image', 'skimage')[0],
         'opencv': check_package('opencv-python', 'cv2')[0],
     }
-    
+
     # Determine capability tier
     minimal_ready = core_packages['numpy'] and core_packages['Pillow']
     standard_ready = minimal_ready and core_packages['scipy'] and image_packages['tifffile']
     full_ready = standard_ready and ml_packages['torch'] and ml_packages['diffusers']
-    
+
     return {
         'core_packages': core_packages,
         'ml_packages': ml_packages,
@@ -207,10 +207,10 @@ def assess_capabilities() -> Dict[str, any]:
 
 def print_tier_status(capabilities: Dict) -> None:
     """Print capability tier status."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(colored("CAPABILITY ASSESSMENT", Colors.BOLD))
-    print("="*70)
-    
+    print("=" * 70)
+
     # Minimal Tier
     print("\n" + colored("📦 MINIMAL TIER", Colors.OKBLUE))
     print("   Basic image operations (resize, format conversion, metadata)")
@@ -220,7 +220,7 @@ def print_tier_status(capabilities: Dict) -> None:
     else:
         print(colored("   ✗ NOT READY", Colors.FAIL))
         print("   → Install: pip install numpy Pillow")
-    
+
     # Standard Tier
     print("\n" + colored("📦 STANDARD TIER", Colors.OKBLUE))
     print("   Professional image processing (color grading, batch, 16-bit TIFF)")
@@ -235,7 +235,7 @@ def print_tier_status(capabilities: Dict) -> None:
         if not capabilities['image_packages']['tifffile']:
             missing.append('tifffile')
         print(f"   → Install: pip install {' '.join(missing)}")
-    
+
     # Full Tier
     print("\n" + colored("📦 FULL TIER", Colors.OKBLUE))
     print("   AI-powered processing (depth maps, upscaling, enhancement)")
@@ -252,19 +252,19 @@ def print_tier_status(capabilities: Dict) -> None:
 
 def print_available_operations(capabilities: Dict) -> None:
     """Print operations available with current setup."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(colored("AVAILABLE OPERATIONS", Colors.BOLD))
-    print("="*70)
-    
+    print("=" * 70)
+
     operations = []
-    
+
     if capabilities['minimal_ready']:
         operations.extend([
             ("✓", "Image format conversion (JPG, PNG, TIFF)", Colors.OKGREEN),
             ("✓", "Basic resize and crop operations", Colors.OKGREEN),
             ("✓", "EXIF/IPTC metadata reading", Colors.OKGREEN),
         ])
-    
+
     if capabilities['standard_ready']:
         operations.extend([
             ("✓", "LUT-based color grading", Colors.OKGREEN),
@@ -272,10 +272,10 @@ def print_available_operations(capabilities: Dict) -> None:
             ("✓", "Professional metadata preservation", Colors.OKGREEN),
             ("✓", "Exposure, contrast, saturation adjustments", Colors.OKGREEN),
         ])
-    
+
     if capabilities['image_packages']['opencv']:
         operations.append(("✓", "Advanced image filters and effects", Colors.OKGREEN))
-    
+
     if capabilities['full_ready']:
         operations.extend([
             ("✓", "AI-powered depth estimation", Colors.OKGREEN),
@@ -290,23 +290,23 @@ def print_available_operations(capabilities: Dict) -> None:
             ("○", "Stable Diffusion enhancement (requires ML packages)", Colors.WARNING),
             ("○", "Real-ESRGAN upscaling (requires ML packages)", Colors.WARNING),
         ])
-    
+
     for symbol, operation, color in operations:
         print(colored(f"{symbol} {operation}", color))
 
 
 def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
     """Print quick start guide based on current capabilities."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(colored("🚀 QUICK START GUIDE", Colors.BOLD))
-    print("="*70)
-    
+    print("=" * 70)
+
     if not capabilities['minimal_ready']:
         print("\n" + colored("⚠ Install core packages first:", Colors.WARNING))
         print("   pip install numpy Pillow PyYAML typer tqdm")
         print("\n   Then run this script again to see available operations.")
         return
-    
+
     # Check for images
     if not images['has_images']:
         print("\n" + colored("📥 Step 1: Get Sample Images", Colors.OKBLUE))
@@ -323,19 +323,21 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
             print(f"   {images['sample_count']} sample images in data/sample_images/")
         if images['input_count'] > 0:
             print(f"   {images['input_count']} images in input_images/")
-    
+
     # Show appropriate processing examples
     print("\n" + colored("🎨 Step 2: Process Images", Colors.OKBLUE))
-    
+
     if capabilities['minimal_ready'] and not capabilities['standard_ready']:
         print("   With current setup (Minimal), you can:")
         print("   ")
         print("   # Convert and resize images")
-        print("   python -c \"from PIL import Image; img = Image.open('input_images/my_image.jpg'); img.resize((1920, 1080)).save('output.jpg')\"")
+        print("   python -c \"from PIL import Image; "
+              "img = Image.open('input_images/my_image.jpg'); "
+              "img.resize((1920, 1080)).save('output.jpg')\"")
         print("   ")
         print("   Upgrade to Standard tier for professional workflows:")
         print("   pip install scipy tifffile imagecodecs scikit-image")
-    
+
     elif capabilities['standard_ready'] and not capabilities['full_ready']:
         print("   With current setup (Standard), try:")
         print("   ")
@@ -344,7 +346,7 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
         print("   ")
         print("   Upgrade to Full tier for AI-powered processing:")
         print("   pip install torch diffusers transformers realesrgan")
-    
+
     elif capabilities['full_ready']:
         print("   With current setup (Full), you can use all pipelines:")
         print("   ")
@@ -356,7 +358,7 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
         print("   ")
         print("   # Batch TIFF processing")
         print("   python scripts/utilities/luxury_tiff_batch_processor.py input_images/ output/")
-    
+
     print("\n" + colored("📖 Step 3: Explore Documentation", Colors.OKBLUE))
     print("   README.md - Feature overview and examples")
     print("   docs/depth_pipeline/DEPTH_PIPELINE_README.md - Depth pipeline documentation")
@@ -366,12 +368,12 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
 
 def print_recommendations(disk: Dict, capabilities: Dict) -> None:
     """Print actionable recommendations."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(colored("💡 RECOMMENDATIONS", Colors.BOLD))
-    print("="*70)
-    
+    print("=" * 70)
+
     recommendations = []
-    
+
     # Disk space
     if 'free_gb' in disk:
         if disk['free_gb'] < 5.0:
@@ -391,7 +393,7 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
                 f"Sufficient disk space: {disk['free_gb']:.1f}GB free",
                 Colors.OKGREEN
             ))
-    
+
     # Package recommendations
     if not capabilities['minimal_ready']:
         recommendations.append((
@@ -418,7 +420,7 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
                 "Full tier requires more disk space. Free up space first.",
                 Colors.WARNING
             ))
-    
+
     # Model downloads
     repo_root = Path(__file__).parent.parent
     if (repo_root / 'scripts' / 'download_depth_models.py').exists():
@@ -427,7 +429,7 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
             "Download ML models: python scripts/download_depth_models.py",
             Colors.OKCYAN
         ))
-    
+
     # Print all recommendations
     for symbol, message, color in recommendations:
         print(colored(f"{symbol} {message}", color))
@@ -455,49 +457,52 @@ Examples:
         action='store_true',
         help='Show only quick start guide'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Run checks
     disk = check_disk_space()
     capabilities = assess_capabilities()
     images = check_sample_images()
     ffmpeg_installed, ffmpeg_version = check_ffmpeg()
-    
+
     # Print results
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(colored("TRANSFORMATION PORTAL - IMAGE PROCESSING READINESS", Colors.BOLD))
-    print("="*70)
-    
+    print("=" * 70)
+
     if not args.quick_start:
         # System info
         print("\n" + colored("💻 SYSTEM INFORMATION", Colors.OKBLUE))
         print("-" * 70)
         print(f"Python: {sys.version.split()[0]}")
         if 'free_gb' in disk:
-            print(f"Disk Space: {disk['free_gb']:.1f}GB free / {disk['total_gb']:.1f}GB total ({disk['used_percent']:.1f}% used)")
+            print(
+                f"Disk Space: {disk['free_gb']:.1f}GB free / "
+                f"{disk['total_gb']:.1f}GB total ({disk['used_percent']:.1f}% used)"
+            )
         if ffmpeg_installed:
             print(f"FFmpeg: {ffmpeg_version.split()[2] if 'version' in ffmpeg_version else 'Installed'}")
         else:
             print("FFmpeg: Not installed (required for video processing)")
-        
+
         # Tier status
         print_tier_status(capabilities)
-        
+
         # Available operations
         print_available_operations(capabilities)
-        
+
         # Recommendations
         print_recommendations(disk, capabilities)
-    
+
     # Quick start guide
     print_quick_start_guide(capabilities, images)
-    
+
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(colored("SUMMARY", Colors.BOLD))
-    print("="*70)
-    
+    print("=" * 70)
+
     if capabilities['full_ready']:
         print(colored("✓ FULLY READY", Colors.OKGREEN))
         print("  You can use all image processing pipelines!")

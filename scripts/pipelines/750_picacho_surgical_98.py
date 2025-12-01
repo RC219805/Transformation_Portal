@@ -17,20 +17,19 @@ Date: November 11, 2025
 Version: Surgical 1.0
 """
 
-import sys
+from skimage import color
+from scipy.ndimage import gaussian_filter
+import cv2
+from PIL import Image
+import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 import logging
 from datetime import datetime
 import json
 import warnings
 warnings.filterwarnings('ignore')
 
-import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter
-import cv2
-from scipy.ndimage import gaussian_filter
-from skimage import color
 
 # Configure logging
 logging.basicConfig(
@@ -296,14 +295,17 @@ class SurgicalRefinement:
         enhanced_pil = Image.fromarray((np.clip(enhanced, 0, 1) * 255).astype(np.uint8))
 
         # Final analysis
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("RESULTS:")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         final_metrics = SurgicalQualityMetrics.evaluate(np.array(enhanced_pil).astype(np.float32) / 255.0)
         improvement = final_metrics['overall_quality'] - initial_metrics['overall_quality']
 
-        logger.info(f"\nOverall Quality: {initial_metrics['overall_quality']:.2f} → {final_metrics['overall_quality']:.2f} ({improvement:+.2f})")
+        logger.info(
+            f"\nOverall Quality: {initial_metrics['overall_quality']:.2f} → "
+            f"{final_metrics['overall_quality']:.2f} ({improvement:+.2f})"
+        )
         logger.info("\nDetailed Changes:")
 
         for key in initial_metrics.keys():
@@ -325,7 +327,7 @@ class SurgicalRefinement:
         logger.info(f"✓ Preview: {preview_path.name}")
 
         # Quality assessment
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         if final_metrics['overall_quality'] >= 98:
             logger.info("🏆 EXCELLENT: Achieved 98+ quality target!")
         elif final_metrics['overall_quality'] >= 95:
@@ -334,7 +336,7 @@ class SurgicalRefinement:
             logger.info("👍 GOOD: 90+ quality achieved")
         else:
             logger.info("📊 BASELINE: Further refinement may be needed")
-        logger.info("="*80 + "\n")
+        logger.info("=" * 80 + "\n")
 
         return {
             'input': input_path.name,
@@ -354,7 +356,7 @@ def main():
     parser = argparse.ArgumentParser(description='Surgical refinement for 98+ quality')
     parser.add_argument('image', type=str, help='Path to image file')
     parser.add_argument('--output-dir', type=str, default='outputs/750_picacho/Surgical98',
-                       help='Output directory')
+                        help='Output directory')
 
     args = parser.parse_args()
 

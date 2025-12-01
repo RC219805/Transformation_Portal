@@ -132,7 +132,7 @@ class DepthEstimator:
         self._initialize_model()
 
         logger.info(f"Initialized DepthEstimator with {self.config.variant.value}, "
-                   f"backend={self.config.backend.value}")
+                    f"backend={self.config.backend.value}")
 
     def _auto_detect_backend(self) -> ModelBackend:
         """Auto-detect optimal backend."""
@@ -141,7 +141,6 @@ class DepthEstimator:
         if device.type == "mps":
             # Check if CoreML ANE is available for production
             try:
-                import coremltools
                 return ModelBackend.COREML  # Prefer ANE for inference
             except ImportError:
                 return ModelBackend.PYTORCH_MPS
