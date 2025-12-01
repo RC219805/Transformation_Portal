@@ -7,9 +7,7 @@ These tests mock the architectural_context_extractor to avoid PyMuPDF dependency
 
 import json
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from unittest.mock import patch, MagicMock
 
 import numpy as np
@@ -21,51 +19,8 @@ scripts_dir = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(scripts_dir))
 
 
-# Mock classes for architectural_context_extractor
-@dataclass
-class MockRoomContext:
-    """Mock room context for testing."""
-    name: str
-    dimensions: Optional[Tuple[float, float]] = None
-    floor_level: Optional[str] = None
-    ceiling_height: Optional[float] = None
-    materials: List[str] = None
-    features: List[str] = None
-    adjacent_rooms: List[str] = None
-
-    def __post_init__(self):
-        if self.materials is None:
-            self.materials = []
-        if self.features is None:
-            self.features = []
-        if self.adjacent_rooms is None:
-            self.adjacent_rooms = []
-
-
-@dataclass
-class MockProjectContext:
-    """Mock project context for testing."""
-    project_name: str
-    project_number: Optional[str] = None
-    address: Optional[str] = None
-    architect: Optional[str] = None
-    total_sqft: Optional[float] = None
-    floors: List[str] = None
-    rooms: Dict[str, MockRoomContext] = None
-    materials_palette: List[str] = None
-    design_style: Optional[str] = None
-    extracted_images: List[str] = None
-    raw_text: Optional[str] = None
-
-    def __post_init__(self):
-        if self.floors is None:
-            self.floors = []
-        if self.rooms is None:
-            self.rooms = {}
-        if self.materials_palette is None:
-            self.materials_palette = []
-        if self.extracted_images is None:
-            self.extracted_images = []
+# Import shared mock context classes
+from tests.test_helpers import MockRoomContext, MockProjectContext  # noqa: E402
 
 
 @pytest.fixture
