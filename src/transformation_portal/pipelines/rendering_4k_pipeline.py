@@ -81,6 +81,40 @@ except ImportError:
     HAS_TQDM = False
     tqdm = None
 
+# Optional: LPIPS for perceptual quality scoring
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+    torch = None
+
+# Optional: PerceptualQualityAssessor for advanced quality metrics
+try:
+    from ...enhancements.perceptual_quality_assessment import (
+        PerceptualQualityAssessor,
+        QualityReport as PerceptualQualityReport,
+    )
+    HAS_PERCEPTUAL_ASSESSOR = True
+except ImportError:
+    HAS_PERCEPTUAL_ASSESSOR = False
+    PerceptualQualityAssessor = None
+    PerceptualQualityReport = None
+
+# Optional: QualityFeedbackBridge for unified quality assessment
+try:
+    from .quality_feedback_bridge import (
+        QualityFeedbackBridge,
+        UnifiedQualityMetrics,
+        create_rag_indexing_callback,
+    )
+    HAS_QUALITY_BRIDGE = True
+except ImportError:
+    HAS_QUALITY_BRIDGE = False
+    QualityFeedbackBridge = None
+    UnifiedQualityMetrics = None
+    create_rag_indexing_callback = None
+
 # Import internal utilities
 from ..utils.image_utils import load_image, np_to_pil, pil_to_np
 
@@ -207,6 +241,17 @@ class QualityFeedbackConfig:
     max_iterations: int = 3
     metrics: List[str] = field(default_factory=lambda: ["sharpness", "contrast", "colorfulness", "exposure"])
     auto_adjust: bool = True
+    # LPIPS integration settings
+    use_lpips: bool = False  # Enable LPIPS perceptual scoring (requires torch/lpips)
+    lpips_network: str = "alex"  # Network for LPIPS ('alex', 'vgg', 'squeeze')
+    perceptual_percentile_target: float = 95.0  # Target percentile for perceptual quality
+    material_fidelity_target: float = 0.98  # 98% material fidelity target
+    # Hybrid mode settings
+    hybrid_mode: bool = True  # Compute both LPIPS and heuristic metrics simultaneously
+    enable_material_fidelity: bool = True  # Compute per-material fidelity scores
+    # RAG indexing settings
+    rag_indexing_enabled: bool = False  # Enable RAG quality metric indexing
+    rag_index_path: Optional[str] = None  # Path to RAG index (if None, uses default)
 
 
 @dataclass
@@ -261,6 +306,11 @@ class QualityMetrics:
     exposure_balance: float = 0.0  # 0-1
     noise_level: float = 0.0  # 0-1 (lower is better)
     overall_score: float = 0.0  # 0-1
+    # LPIPS perceptual metrics (when available)
+    lpips_score: float = 0.0  # 0-1 (lower is better, 0 = identical)
+    lpips_percentile: float = 0.0  # Percentile rank against benchmark
+    material_fidelity: float = 0.0  # 0-1 (higher is better)
+    perceptual_quality: float = 0.0  # Composite perceptual score (0-100)
 
     def to_dict(self) -> Dict[str, float]:
         """Convert to dictionary."""
@@ -297,6 +347,13 @@ class QualityAssessor:
 
     Evaluates image quality using multiple metrics and provides
     feedback for iterative refinement in the quality feedback loop.
+
+    Supports two modes:
+    1. Heuristic-based: Fast, lightweight quality metrics (sharpness, contrast, etc.)
+    2. LPIPS-based: Perceptual quality scoring aligned with human perception
+
+    When use_lpips=True and reference image is provided, uses LPIPS perceptual
+    distance for quality scoring, targeting 95th percentile perceptual quality.
     """
 
     def __init__(self, config: QualityFeedbackConfig):
@@ -309,13 +366,44 @@ class QualityAssessor:
             "exposure": 0.20,
             "noise": 0.15,
         }
+        # Lazy-loaded perceptual assessor
+        self._perceptual_assessor = None
 
-    def assess(self, image: np.ndarray) -> QualityMetrics:
+    def _get_perceptual_assessor(self) -> Optional[PerceptualQualityAssessor]:
+        """Get or initialize the perceptual quality assessor (lazy loading)."""
+        if not self.config.use_lpips:
+            return None
+
+        if not HAS_PERCEPTUAL_ASSESSOR:
+            logger.warning(
+                "LPIPS requested but perceptual assessor not available. "
+                "Install torch and lpips for perceptual quality scoring."
+            )
+            return None
+
+        if self._perceptual_assessor is None:
+            try:
+                self._perceptual_assessor = PerceptualQualityAssessor(
+                    use_lpips_package=True
+                )
+                logger.info("Initialized LPIPS-based perceptual quality assessor")
+            except Exception as e:
+                logger.warning(f"Failed to initialize perceptual assessor: {e}")
+                return None
+
+        return self._perceptual_assessor
+
+    def assess(
+        self,
+        image: np.ndarray,
+        reference: Optional[np.ndarray] = None,
+    ) -> QualityMetrics:
         """
         Assess image quality using multiple metrics.
 
         Args:
             image: RGB image as float32 array [0, 1]
+            reference: Optional reference image for LPIPS comparison
 
         Returns:
             QualityMetrics object with all scores
@@ -337,10 +425,66 @@ class QualityAssessor:
 
         metrics.noise_level = self._estimate_noise(image)
 
+        # LPIPS perceptual scoring (when enabled and reference available)
+        if self.config.use_lpips and reference is not None:
+            perceptual_metrics = self._compute_lpips_metrics(image, reference)
+            metrics.lpips_score = perceptual_metrics.get('lpips_score', 0.0)
+            metrics.lpips_percentile = perceptual_metrics.get('lpips_percentile', 0.0)
+            metrics.material_fidelity = perceptual_metrics.get('material_fidelity', 0.0)
+            metrics.perceptual_quality = perceptual_metrics.get('composite_score', 0.0)
+
         # Compute weighted overall score
         metrics.overall_score = self._compute_overall_score(metrics)
 
         return metrics
+
+    def _compute_lpips_metrics(
+        self,
+        enhanced: np.ndarray,
+        reference: np.ndarray,
+    ) -> Dict[str, float]:
+        """
+        Compute LPIPS-based perceptual quality metrics.
+
+        Args:
+            enhanced: Enhanced image as float32 array [0, 1]
+            reference: Reference image as float32 array [0, 1]
+
+        Returns:
+            Dictionary with perceptual metrics
+        """
+        assessor = self._get_perceptual_assessor()
+        if assessor is None:
+            return {}
+
+        try:
+            # Convert numpy arrays to PIL Images for the assessor
+            enhanced_pil = Image.fromarray(
+                (np.clip(enhanced, 0, 1) * 255).astype(np.uint8), mode='RGB'
+            )
+            reference_pil = Image.fromarray(
+                (np.clip(reference, 0, 1) * 255).astype(np.uint8), mode='RGB'
+            )
+
+            # Run perceptual assessment
+            report = assessor.assess(
+                enhanced=enhanced_pil,
+                reference=reference_pil,
+                compute_material_fidelity=True,
+            )
+
+            return {
+                'lpips_score': report.lpips_score,
+                'lpips_percentile': report.lpips_percentile,
+                'material_fidelity': report.overall_material_fidelity,
+                'composite_score': report.composite_score,
+                'ssim_score': report.ssim_score,
+                'niqe_score': report.niqe_score,
+            }
+
+        except Exception as e:
+            logger.warning(f"LPIPS assessment failed: {e}")
+            return {}
 
     def _compute_sharpness(self, image: np.ndarray) -> float:
         """Compute sharpness using Laplacian variance."""
@@ -717,10 +861,12 @@ def apply_color_grading(
     config: ColorGradingConfig,
 ) -> np.ndarray:
     """
-    Apply color grading adjustments.
+    Apply color grading adjustments including LUT stacks.
 
-    Note: LUT application (lut_paths, lut_strengths) is not yet implemented.
-    Currently supports temperature shift, saturation, and vibrance adjustments.
+    Supports:
+    - Temperature shift (RGB multipliers)
+    - Saturation and vibrance adjustments
+    - LUT (Look-Up Table) application with configurable strengths
 
     Args:
         image: Input image as float32 array [0, 1]
@@ -733,6 +879,15 @@ def apply_color_grading(
         return image
 
     graded = image.copy()
+
+    # Apply LUTs first (before other adjustments)
+    if config.lut_paths and config.lut_strengths:
+        for lut_path, strength in zip(config.lut_paths, config.lut_strengths):
+            if strength > 0:
+                lut_result = _apply_lut(graded, lut_path, strength)
+                if lut_result is not None:
+                    graded = lut_result
+                    logger.debug(f"Applied LUT: {Path(lut_path).name} @ {strength:.0%}")
 
     # Apply temperature shift (RGB multipliers)
     r_mult, g_mult, b_mult = config.temperature_shift
@@ -751,6 +906,121 @@ def apply_color_grading(
         graded = _apply_vibrance(graded, config.vibrance)
 
     return np.clip(graded, 0, 1).astype(np.float32)
+
+
+def _load_cube_lut(lut_path: Union[str, Path]) -> Optional[np.ndarray]:
+    """
+    Load a .cube LUT file.
+
+    Args:
+        lut_path: Path to .cube LUT file
+
+    Returns:
+        3D LUT array (size, size, size, 3) or None if loading fails
+    """
+    lut_path = Path(lut_path)
+    if not lut_path.exists():
+        logger.warning(f"LUT file not found: {lut_path}")
+        return None
+
+    try:
+        lut_size = 0
+        lut_data = []
+
+        with open(lut_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('LUT_3D_SIZE'):
+                    lut_size = int(line.split()[-1])
+                elif line and not line.startswith('#') and not line.startswith('TITLE'):
+                    # Skip comments, titles, and domain specifications
+                    if line.startswith(('DOMAIN_', 'LUT_')):
+                        continue
+                    parts = line.split()
+                    if len(parts) == 3:
+                        try:
+                            r, g, b = map(float, parts)
+                            lut_data.append([r, g, b])
+                        except ValueError:
+                            continue
+
+        if lut_size > 0 and len(lut_data) == lut_size ** 3:
+            return np.array(lut_data, dtype=np.float32).reshape(
+                lut_size, lut_size, lut_size, 3
+            )
+        else:
+            logger.warning(
+                f"Invalid LUT data: expected {lut_size**3} entries, got {len(lut_data)}"
+            )
+            return None
+
+    except Exception as e:
+        logger.warning(f"Failed to load LUT {lut_path}: {e}")
+        return None
+
+
+def _apply_lut(
+    image: np.ndarray,
+    lut_path: Union[str, Path],
+    strength: float = 1.0,
+) -> Optional[np.ndarray]:
+    """
+    Apply a .cube LUT to an image using trilinear interpolation.
+
+    Args:
+        image: Input image as float32 array [0, 1] with shape (H, W, 3)
+        lut_path: Path to .cube LUT file
+        strength: LUT application strength (0.0-1.0)
+
+    Returns:
+        LUT-processed image, or None if LUT could not be applied
+    """
+    lut = _load_cube_lut(lut_path)
+    if lut is None:
+        return None
+
+    lut_size = lut.shape[0]
+
+    # Normalize image to LUT index space
+    array = np.clip(image, 0, 1).astype(np.float32)
+    indices = array * (lut_size - 1)
+    indices = np.clip(indices, 0, lut_size - 1.001)
+
+    # Get floor and ceiling indices for trilinear interpolation
+    idx0 = np.floor(indices).astype(np.int32)
+    idx1 = np.minimum(idx0 + 1, lut_size - 1)
+    frac = indices - idx0
+
+    # Extract RGB indices
+    r0, g0, b0 = idx0[..., 0], idx0[..., 1], idx0[..., 2]
+    r1, g1, b1 = idx1[..., 0], idx1[..., 1], idx1[..., 2]
+    fr, fg, fb = frac[..., 0:1], frac[..., 1:2], frac[..., 2:3]
+
+    # Trilinear interpolation (8 corner lookups)
+    c000 = lut[r0, g0, b0]
+    c001 = lut[r0, g0, b1]
+    c010 = lut[r0, g1, b0]
+    c011 = lut[r0, g1, b1]
+    c100 = lut[r1, g0, b0]
+    c101 = lut[r1, g0, b1]
+    c110 = lut[r1, g1, b0]
+    c111 = lut[r1, g1, b1]
+
+    # Interpolate along each axis
+    c00 = c000 * (1 - fr) + c100 * fr
+    c01 = c001 * (1 - fr) + c101 * fr
+    c10 = c010 * (1 - fr) + c110 * fr
+    c11 = c011 * (1 - fr) + c111 * fr
+
+    c0 = c00 * (1 - fg) + c10 * fg
+    c1 = c01 * (1 - fg) + c11 * fg
+
+    graded = c0 * (1 - fb) + c1 * fb
+
+    # Blend with original based on strength
+    result = array * (1 - strength) + graded * strength
+
+    return np.clip(result, 0, 1).astype(np.float32)
 
 
 def _apply_vibrance(image: np.ndarray, vibrance: float) -> np.ndarray:
@@ -903,6 +1173,11 @@ class Rendering4KPipeline:
                 vibrance=1.12,
                 temperature_shift=(1.0, 0.98, 0.95),  # Warm
             ),
+            quality_feedback=QualityFeedbackConfig(
+                use_lpips=True,  # Enable LPIPS for luxury workflows
+                hybrid_mode=True,
+                rag_indexing_enabled=True,
+            ),
         ),
         "aerial_exterior": PipelineConfig(
             name="aerial_exterior",
@@ -919,6 +1194,10 @@ class Rendering4KPipeline:
                 vibrance=1.15,
                 temperature_shift=(1.05, 1.0, 0.95),  # Golden hour warmth
             ),
+            quality_feedback=QualityFeedbackConfig(
+                use_lpips=True,  # Enable LPIPS for luxury workflows
+                hybrid_mode=True,
+            ),
         ),
         "editorial": PipelineConfig(
             name="editorial",
@@ -931,6 +1210,34 @@ class Rendering4KPipeline:
             material_response=MaterialResponseConfig(
                 strength=0.8,
                 texture_boost=0.35,
+            ),
+            quality_feedback=QualityFeedbackConfig(
+                use_lpips=True,  # Enable LPIPS for editorial workflows
+                hybrid_mode=True,
+                rag_indexing_enabled=True,
+            ),
+        ),
+        "750_picacho": PipelineConfig(
+            name="750_picacho",
+            description="Optimized preset for 750 Picacho Lane estate images",
+            quality_level=QualityLevel.ULTRA,
+            material_response=MaterialResponseConfig(
+                strength=0.80,
+                texture_boost=0.35,
+                micro_contrast=0.25,
+                surface_types=["quartzite", "oak", "metal", "glass", "stucco"],
+            ),
+            color_grading=ColorGradingConfig(
+                saturation=1.10,
+                vibrance=1.15,
+                temperature_shift=(1.02, 0.99, 0.96),  # Warm Montecito tones
+            ),
+            quality_feedback=QualityFeedbackConfig(
+                use_lpips=True,
+                hybrid_mode=True,
+                perceptual_percentile_target=95.0,
+                material_fidelity_target=0.98,
+                rag_indexing_enabled=True,
             ),
         ),
         "preview": PipelineConfig(
@@ -960,6 +1267,26 @@ class Rendering4KPipeline:
         self.quality_assessor = QualityAssessor(config.quality_feedback)
         # Use OrderedDict for true LRU cache behavior
         self._depth_cache: OrderedDict[str, np.ndarray] = OrderedDict()
+
+        # Initialize QualityFeedbackBridge if available and LPIPS requested
+        self._quality_bridge: Optional[QualityFeedbackBridge] = None
+        if HAS_QUALITY_BRIDGE and config.quality_feedback.use_lpips:
+            rag_callback = None
+            if config.quality_feedback.rag_indexing_enabled:
+                rag_callback = create_rag_indexing_callback(
+                    config.quality_feedback.rag_index_path
+                )
+            self._quality_bridge = QualityFeedbackBridge(
+                hybrid_mode=config.quality_feedback.hybrid_mode,
+                lpips_network=config.quality_feedback.lpips_network,
+                enable_material_fidelity=config.quality_feedback.enable_material_fidelity,
+                rag_callback=rag_callback,
+            )
+            logger.info("QualityFeedbackBridge initialized for LPIPS scoring")
+
+        # Track original input for quality comparison
+        self._current_original: Optional[np.ndarray] = None
+        self._current_image_id: str = ""
 
         # Detect compute device
         self.device = self._detect_device()
@@ -1103,6 +1430,10 @@ class Rendering4KPipeline:
         input_path = Path(input_path)
         stage_metrics: List[StageMetrics] = []
 
+        # Store image ID and original for RAG provenance and LPIPS comparison
+        self._current_image_id = input_path.stem
+        self._current_original = None
+
         logger.info("=" * 70)
         logger.info(f"Processing: {input_path.name}")
         logger.info(f"Preset: {self.config.name}")
@@ -1114,6 +1445,8 @@ class Rendering4KPipeline:
         try:
             image_pil = load_image(input_path)
             image_np = pil_to_np(image_pil, to_float=True)
+            # Store original for quality comparison
+            self._current_original = image_np.copy()
             logger.info(f"  Size: {image_pil.size}, Shape: {image_np.shape}")
             stage_metrics.append(StageMetrics(
                 "input_validation",
@@ -1220,13 +1553,46 @@ class Rendering4KPipeline:
         stage_start = time.time()
         logger.info("[8/9] Quality Assessment")
         quality_metrics = None
+        unified_metrics = None
         iterations = 1
         if self.config.quality_feedback.enabled:
-            quality_metrics = self.quality_assessor.assess(pil_to_np(result_pil, to_float=True))
-            logger.info(f"  Overall Score: {quality_metrics.overall_score:.2%}")
-            logger.info(f"  Sharpness: {quality_metrics.sharpness:.2%}")
-            logger.info(f"  Contrast: {quality_metrics.contrast:.2%}")
-            logger.info(f"  Colorfulness: {quality_metrics.colorfulness:.2%}")
+            enhanced_np = pil_to_np(result_pil, to_float=True)
+
+            # Use QualityFeedbackBridge if available (LPIPS-based scoring)
+            if self._quality_bridge is not None:
+                unified_metrics = self._quality_bridge.assess(
+                    enhanced=enhanced_np,
+                    original=self._current_original,
+                    image_id=self._current_image_id,
+                    pipeline_config_name=self.config.name,
+                )
+                # Translate unified metrics to QualityMetrics for backward compatibility
+                quality_metrics = QualityMetrics(
+                    sharpness=unified_metrics.heuristic.sharpness,
+                    contrast=unified_metrics.heuristic.contrast,
+                    colorfulness=unified_metrics.heuristic.colorfulness,
+                    exposure_balance=unified_metrics.heuristic.exposure_balance,
+                    noise_level=unified_metrics.heuristic.noise_level,
+                    overall_score=unified_metrics.hybrid_score / 100.0,  # Normalize to 0-1
+                    lpips_score=unified_metrics.perceptual.lpips_score,
+                    lpips_percentile=unified_metrics.perceptual.lpips_percentile,
+                    material_fidelity=unified_metrics.material_fidelity.overall_fidelity,
+                    perceptual_quality=unified_metrics.perceptual_composite,
+                )
+                logger.info(f"  Hybrid Score: {unified_metrics.hybrid_score:.1f}/100")
+                logger.info(f"  Perceptual: {unified_metrics.perceptual_composite:.1f}/100")
+                logger.info(f"  Heuristic: {unified_metrics.heuristic_composite:.1f}/100")
+                if unified_metrics.lpips_available:
+                    logger.info(f"  LPIPS: {unified_metrics.perceptual.lpips_score:.4f}")
+                    logger.info(f"  Material Fidelity: {unified_metrics.material_fidelity.overall_fidelity:.1%}")
+                logger.info(f"  {unified_metrics.targets_summary}")
+            else:
+                # Fallback to heuristic-only QualityAssessor
+                quality_metrics = self.quality_assessor.assess(enhanced_np)
+                logger.info(f"  Overall Score: {quality_metrics.overall_score:.2%}")
+                logger.info(f"  Sharpness: {quality_metrics.sharpness:.2%}")
+                logger.info(f"  Contrast: {quality_metrics.contrast:.2%}")
+                logger.info(f"  Colorfulness: {quality_metrics.colorfulness:.2%}")
 
             # Feedback loop for quality refinement
             auto_adjust = self.config.quality_feedback.auto_adjust
@@ -1254,6 +1620,7 @@ class Rendering4KPipeline:
                 quality_metrics,
                 input_path,
                 Path(output_dir),
+                unified_metrics=unified_metrics,
             )
             logger.info(f"  Saved {len(output_paths)} files")
         stage_metrics.append(StageMetrics(
@@ -1333,6 +1700,7 @@ class Rendering4KPipeline:
         quality_metrics: Optional[QualityMetrics],
         input_path: Path,
         output_dir: Path,
+        unified_metrics: Optional[UnifiedQualityMetrics] = None,
     ) -> Dict[str, Path]:
         """Save all output files."""
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1378,10 +1746,22 @@ class Rendering4KPipeline:
                 'quality_metrics': quality_metrics.to_dict(),
                 'config': asdict(self.config),
             }
+            # Include unified metrics if available (RAG-indexable)
+            if unified_metrics is not None:
+                report['unified_metrics'] = unified_metrics.to_dict()
             with open(report_path, 'w') as f:
                 json.dump(report, f, indent=2, default=str)
             outputs['quality_report'] = report_path
             logger.info(f"  Quality Report: {report_path.name}")
+
+        # Save unified metrics as separate RAG document if enabled
+        if (unified_metrics is not None and
+                self.config.quality_feedback.rag_indexing_enabled):
+            rag_path = output_dir / f"{stem}_unified_quality.json"
+            with open(rag_path, 'w') as f:
+                json.dump(unified_metrics.to_rag_document(), f, indent=2)
+            outputs['unified_quality_doc'] = rag_path
+            logger.info(f"  Unified Quality Doc: {rag_path.name}")
 
         return outputs
 
