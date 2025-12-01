@@ -190,20 +190,24 @@ jobs:
                   else:
                       direction = "stable"
                   
+                  # Use consistent numeric type for change_percent, with separate flag for infinite
+                  is_infinite = change_pct == float('inf')
                   report["trends"]["execution_time"] = {
                       "current_seconds": round(last_val, 2),
                       "average_seconds": round(avg, 2),
-                      "change_percent": "inf" if change_pct == float('inf') else round(change_pct, 1),
+                      "change_percent": 999999.0 if is_infinite else round(change_pct, 1),
+                      "is_infinite_regression": is_infinite,
                       "direction": direction
                   }
                   
                   # Performance regression detection
-                  if change_pct == float('inf'):
+                  if is_infinite:
                       has_regressions = True
                       report["regressions"].append({
                           "type": "performance_regression",
                           "severity": "critical",
-                          "change_percent": "inf",
+                          "change_percent": 999999.0,
+                          "is_infinite_regression": True,
                           "message": "Test execution time increased from 0 to measurable duration"
                       })
                   elif change_pct > 20:

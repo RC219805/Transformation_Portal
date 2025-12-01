@@ -44,7 +44,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .rag_cache
-          # Use consistent cache key pattern that matches CI workflow saves
+          # Cache key pattern: rag-cache-{sha} for each commit's knowledge base state
+          # Note: Knowledge Engine accumulates data over time; restore-keys ensures
+          # we get the most recent cache even if exact sha isn't found
           key: rag-cache-${{ github.sha }}
           restore-keys: |
             rag-cache-
