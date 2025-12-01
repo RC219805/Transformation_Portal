@@ -31,8 +31,8 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         "account": "",
         "local_database_path": null,
         "safety_version": "3.7.0",
-        "timestamp": "2025-11-24 09:35:40",
-        "packages_found": 173,
+        "timestamp": "2025-12-01 09:35:58",
+        "packages_found": 172,
         "vulnerabilities_found": 1,
         "vulnerabilities_ignored": 0,
         "remediations_recommended": 0,
@@ -56,7 +56,7 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         "git": {
             "branch": "main",
             "tag": "",
-            "commit": "bc9f5b1e033c5a628b7533d63ee8b9dfae57365c",
+            "commit": "0c74fe1fd217c27ff2bf7f7c6934b7d6df898415",
             "dirty": "True",
             "origin": "https://github.com/RC219805/Transformation_Portal"
         },
@@ -212,21 +212,6 @@ We highly encourage switching to the new `scan` command which is easier to use, 
                     "marker": null,
                     "name": "bandit",
                     "specifier": "==1.9.2",
-                    "url": null,
-                    "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
-                }
-            ]
-        },
-        "basicsr": {
-            "name": "basicsr",
-            "version": "1.4.2",
-            "requirements": [
-                {
-                    "raw": "basicsr==1.4.2",
-                    "extras": [],
-                    "marker": null,
-                    "name": "basicsr",
-                    "specifier": "==1.4.2",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
