@@ -1,0 +1,3302 @@
+[
+  {
+    "test_id": "test_rag_classifier.py::test_0",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_1",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_2",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_3",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_4",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_5",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_6",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_7",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_8",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_9",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_10",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_11",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_12",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_13",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_14",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_15",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_16",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_17",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_18",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_19",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_20",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_20",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_21",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_21",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_22",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_22",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_23",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_23",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_24",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_24",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_25",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_25",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_26",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_26",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_27",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_27",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_28",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_28",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_classifier.py::test_29",
+    "test_file": "test_rag_classifier.py",
+    "test_name": "test_29",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_0",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_1",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_2",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_3",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_4",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_5",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_6",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_7",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_8",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_9",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_10",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_11",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_12",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_13",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_14",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_15",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_16",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_17",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_18",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_19",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_20",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_20",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_21",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_21",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::test_22",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "test_22",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_enhanced.py::skipped_0",
+    "test_file": "test_rag_enhanced.py",
+    "test_name": "skipped_0",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_0",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_1",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_2",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_3",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_4",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_5",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_6",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_7",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_integration.py::test_8",
+    "test_file": "test_rag_integration.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_0",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_1",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_2",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_3",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_4",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_5",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_6",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_7",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_8",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_9",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_10",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_11",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_12",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_13",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_14",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_15",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_16",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_17",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_18",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_19",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_20",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_20",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_21",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_21",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_22",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_22",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_23",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_23",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_24",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_24",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_knowledge_engine.py::test_25",
+    "test_file": "test_rag_knowledge_engine.py",
+    "test_name": "test_25",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_0",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_1",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_2",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_3",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_4",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_5",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_6",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_7",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_8",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_9",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_10",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_11",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_12",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_13",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_14",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_15",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_16",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_17",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_18",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_19",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_20",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_20",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_21",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_21",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_phase2_integration.py::test_22",
+    "test_file": "test_rag_phase2_integration.py",
+    "test_name": "test_22",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_0",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_1",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_2",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_3",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_4",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_5",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_6",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_7",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_8",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_9",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_10",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_11",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_12",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_13",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_14",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_15",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_16",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_17",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_18",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_19",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_20",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_20",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_21",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_21",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_22",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_22",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_rag_system.py::test_23",
+    "test_file": "test_rag_system.py",
+    "test_name": "test_23",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "rag_system",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_0",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_1",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_2",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_3",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_4",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_5",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_6",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_7",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_8",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_9",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_10",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_11",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_12",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_13",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_14",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_15",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_16",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_17",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_18",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_checkpoint.py::test_19",
+    "test_file": "test_streaming_checkpoint.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_0",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_1",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_2",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_3",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_4",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_5",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_6",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_7",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_8",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_9",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_10",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_11",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_12",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_13",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_14",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_15",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_16",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_17",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_18",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_19",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_20",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_20",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_21",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_21",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_22",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_22",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_23",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_23",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_24",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_24",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_processor.py::test_25",
+    "test_file": "test_streaming_processor.py",
+    "test_name": "test_25",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_0",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_1",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_2",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_3",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_4",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_5",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_6",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_7",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_8",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_9",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_10",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_11",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_12",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_13",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_14",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_15",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_16",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_17",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_18",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_19",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_20",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_20",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_21",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_21",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_22",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_22",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_23",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_23",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_24",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_24",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_25",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_25",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_26",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_26",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_27",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_27",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_28",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_28",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_29",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_29",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_30",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_30",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_31",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_31",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_32",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_32",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_33",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_33",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_34",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_34",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_streaming_progress.py::test_35",
+    "test_file": "test_streaming_progress.py",
+    "test_name": "test_35",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "streaming",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_0",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_0",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_1",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_1",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_2",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_2",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_3",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_3",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_4",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_4",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_5",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_5",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_6",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_6",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_7",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_7",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_8",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_8",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_9",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_9",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_10",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_10",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_11",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_11",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_12",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_12",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_13",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_13",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_14",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_14",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_15",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_15",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_16",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_16",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_17",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_17",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_18",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_18",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_19",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_19",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_20",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_20",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_21",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_21",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_22",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_22",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_23",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_23",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_24",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_24",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_25",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_25",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_26",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_26",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_27",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_27",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_28",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_28",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_realize_v8_vfx_extension.py::skipped_29",
+    "test_file": "test_realize_v8_vfx_extension.py",
+    "test_name": "skipped_29",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_0",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_0",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_1",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_1",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_2",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_2",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_3",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_3",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_4",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_4",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_5",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_5",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_6",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_6",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_7",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_7",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_8",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_8",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_temporal_evolution.py::skipped_9",
+    "test_file": "test_temporal_evolution.py",
+    "test_name": "skipped_9",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_0",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_0",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_1",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_1",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_2",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_2",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_3",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_3",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_4",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_4",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_5",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_5",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_6",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_6",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_7",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_7",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_8",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_8",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_9",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_9",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_10",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_10",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_11",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_11",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_12",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_12",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_13",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_13",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_14",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_14",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_15",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_15",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_16",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_16",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_17",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_17",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_18",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_18",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_19",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_19",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_20",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_20",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_21",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_21",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_22",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_22",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_23",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_23",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_24",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_24",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_25",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_25",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_training_infrastructure.py::skipped_26",
+    "test_file": "test_training_infrastructure.py",
+    "test_name": "skipped_26",
+    "status": "skipped",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "ml_dependent",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_0",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_1",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_2",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_3",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_4",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_5",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_6",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_7",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_8",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_9",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_9",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_10",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_10",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_11",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_11",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_12",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_12",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_13",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_13",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_14",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_14",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_15",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_15",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_16",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_16",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_17",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_17",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_18",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_18",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_19",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_19",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_20",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_20",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_21",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_21",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_22",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_22",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_23",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_23",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_24",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_24",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_25",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_25",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_26",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_26",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_27",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_27",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_28",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_28",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_29",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_29",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_30",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_30",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_31",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_31",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_32",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_32",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_33",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_33",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_34",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_34",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_unified_luxury_pipeline.py::test_35",
+    "test_file": "test_unified_luxury_pipeline.py",
+    "test_name": "test_35",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_0",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_0",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_1",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_1",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_2",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_2",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_3",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_3",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_4",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_4",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_5",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_5",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_6",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_6",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_7",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_7",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  },
+  {
+    "test_id": "test_ultimate_quality_pipeline.py::test_8",
+    "test_file": "test_ultimate_quality_pipeline.py",
+    "test_name": "test_8",
+    "status": "passed",
+    "duration_ms": null,
+    "error_message": null,
+    "category": "unified_pipeline",
+    "timestamp": "2025-11-30T23:43:00Z"
+  }
+]

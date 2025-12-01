@@ -1,0 +1,8 @@
+{
+  "test_results_count": 330,
+  "metrics_count": 3,
+  "patterns_count": 3,
+  "last_ingestion": "2025-11-30T23:59:29.509687",
+  "dependency_graph_built": true,
+  "storage_path": "/home/runner/work/Transformation_Portal/Transformation_Portal/.github/agents/rag_system/knowledge_base"
+}
