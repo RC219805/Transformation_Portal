@@ -880,7 +880,9 @@ class TestBatchProcessingMemoryManagement:
     """Tests for batch processing with GPU memory management."""
 
     def test_batch_process_clears_memory_periodically(self, sample_image_pil, temp_output_dir):
-        """Test batch processing triggers memory cleanup."""
+        """Test batch processing triggers memory cleanup at expected intervals."""
+        from unittest.mock import MagicMock
+
         # Create multiple test images
         input_paths = []
         for i in range(6):  # More than 5 to trigger cleanup
@@ -893,12 +895,59 @@ class TestBatchProcessingMemoryManagement:
         output_dir.mkdir()
 
         pipeline = Rendering4KPipeline.from_preset("preview")
+
+        # Use MagicMock with wraps to track calls while preserving original behavior
+        original_clear_cache = pipeline.memory_manager.clear_cache
+        mock_clear_cache = MagicMock(side_effect=original_clear_cache)
+        pipeline.memory_manager.clear_cache = mock_clear_cache
+
         results = pipeline.batch_process(input_paths, output_dir, show_progress=False)
 
         # All images should be processed
         assert len(results) == 6
         for result in results:
             assert isinstance(result, ProcessingResult)
+
+        # Verify memory cleanup was called:
+        # - Once after image 5 (periodic cleanup every 5 images)
+        # - Once at final cleanup
+        # Total: at least 2 calls
+        assert mock_clear_cache.call_count >= 2, (
+            f"Expected at least 2 clear_cache calls (periodic + final), "
+            f"got {mock_clear_cache.call_count}"
+        )
+
+    def test_batch_process_clears_depth_cache_on_high_memory(self, sample_image_pil, temp_output_dir):
+        """Test that depth cache is cleared when memory threshold exceeded."""
+        from unittest.mock import MagicMock
+
+        # Create test images
+        input_paths = []
+        for i in range(3):
+            path = temp_output_dir / f"batch_input_{i}.png"
+            sample_image_pil.save(path)
+            input_paths.append(path)
+
+        output_dir = temp_output_dir / "batch_output"
+        output_dir.mkdir()
+
+        pipeline = Rendering4KPipeline.from_preset("preview")
+
+        # Pre-populate depth cache beyond half capacity to trigger clearing
+        for i in range(30):  # Half of default cache_max_size (50)
+            pipeline._depth_cache[f"test_key_{i}"] = np.zeros((10, 10))
+
+        # Use MagicMock to simulate high memory usage
+        pipeline.memory_manager.check_memory_threshold = MagicMock(return_value=False)
+
+        results = pipeline.batch_process(input_paths, output_dir, show_progress=False)
+
+        # All images should be processed despite high memory simulation
+        assert len(results) == 3
+
+        # Depth cache should have been cleared due to high memory
+        # (it may have new entries from processing, but should be less than pre-populated)
+        assert len(pipeline._depth_cache) < 30
 
 
 if __name__ == "__main__":
