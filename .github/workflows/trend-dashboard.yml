@@ -1,0 +1,427 @@
+# =============================================================================
+# Phase 2 RAG System - Trend Dashboard Workflow
+# Action 4: Scheduled quality trend analysis and predictive monitoring
+# =============================================================================
+#
+# This workflow runs on a schedule to analyze quality trends and generate
+# predictive insights for proactive quality management.
+#
+# Expected Outcomes:
+#   - Weekly quality trend reports
+#   - Regression detection before incidents
+#   - Flaky test identification
+#   - Performance trend analysis
+#   - Capacity planning insights
+#
+# =============================================================================
+
+name: Quality Trend Dashboard
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      analysis_period:
+        description: 'Analysis period in days'
+        required: false
+        default: '30'
+        type: string
+      generate_report:
+        description: 'Generate full report'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  ANALYSIS_PERIOD_DAYS: ${{ inputs.analysis_period || '30' }}
+
+jobs:
+  analyze-trends:
+    name: Analyze Quality Trends
+    runs-on: ubuntu-24.04
+    
+    outputs:
+      has_regressions: ${{ steps.analyze.outputs.has_regressions }}
+      report_url: ${{ steps.upload.outputs.artifact-url }}
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Restore RAG Cache
+        uses: actions/cache@v4
+        with:
+          path: .rag_cache
+          key: rag-cache-${{ github.sha }}
+          restore-keys: |
+            rag-cache-
+            
+      - name: Run Trend Analysis
+        id: analyze
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          import statistics
+          from datetime import datetime, timedelta
+          from pathlib import Path
+          from collections import defaultdict
+          
+          # Configuration
+          knowledge_dir = Path(".rag_cache/knowledge")
+          analysis_days = int(os.environ.get("ANALYSIS_PERIOD_DAYS", "30"))
+          cutoff_date = datetime.now() - timedelta(days=analysis_days)
+          
+          print(f"Analyzing trends for the last {analysis_days} days")
+          print(f"Cutoff date: {cutoff_date.isoformat()}")
+          print("=" * 60)
+          
+          # Load data
+          test_results = []
+          quality_metrics = []
+          
+          if (knowledge_dir / "ci_test_results.json").exists():
+              with open(knowledge_dir / "ci_test_results.json") as f:
+                  test_results = json.load(f)
+          
+          if (knowledge_dir / "quality_metrics.json").exists():
+              with open(knowledge_dir / "quality_metrics.json") as f:
+                  quality_metrics = json.load(f)
+          
+          # Analysis results
+          report = {
+              "generated_at": datetime.now().isoformat(),
+              "analysis_period_days": analysis_days,
+              "total_test_results": len(test_results),
+              "total_metrics": len(quality_metrics),
+              "trends": {},
+              "regressions": [],
+              "flaky_tests": [],
+              "insights": [],
+              "recommendations": []
+          }
+          
+          has_regressions = False
+          
+          # 1. Pass Rate Trend Analysis
+          pass_rate_metrics = [
+              m for m in quality_metrics 
+              if m.get("metric_id") == "test_pass_rate"
+          ]
+          
+          if len(pass_rate_metrics) >= 3:
+              values = [m.get("value", 0) for m in pass_rate_metrics[-10:]]
+              
+              if len(values) >= 2:
+                  first_half = values[:len(values)//2]
+                  second_half = values[len(values)//2:]
+                  
+                  avg_first = statistics.mean(first_half) if first_half else 0
+                  avg_second = statistics.mean(second_half) if second_half else 0
+                  trend = avg_second - avg_first
+                  
+                  report["trends"]["pass_rate"] = {
+                      "current": values[-1] if values else 0,
+                      "average": statistics.mean(values) if values else 0,
+                      "trend": round(trend, 2),
+                      "direction": "improving" if trend > 0 else "declining" if trend < 0 else "stable",
+                      "samples": len(values)
+                  }
+                  
+                  # Regression detection
+                  if trend < -5:
+                      has_regressions = True
+                      report["regressions"].append({
+                          "type": "pass_rate_decline",
+                          "severity": "high" if trend < -10 else "medium",
+                          "change": round(trend, 2),
+                          "message": f"Pass rate declined by {abs(trend):.1f}% over analysis period"
+                      })
+          
+          # 2. Execution Time Trend Analysis
+          duration_metrics = [
+              m for m in quality_metrics 
+              if m.get("metric_id") == "test_execution_time"
+          ]
+          
+          if len(duration_metrics) >= 3:
+              values = [m.get("value", 0) for m in duration_metrics[-10:]]
+              
+              if len(values) >= 2:
+                  avg = statistics.mean(values)
+                  first_val = values[0]
+                  last_val = values[-1]
+                  change_pct = ((last_val - first_val) / first_val * 100) if first_val > 0 else 0
+                  
+                  report["trends"]["execution_time"] = {
+                      "current_seconds": round(last_val, 2),
+                      "average_seconds": round(avg, 2),
+                      "change_percent": round(change_pct, 1),
+                      "direction": "slower" if change_pct > 5 else "faster" if change_pct < -5 else "stable"
+                  }
+                  
+                  # Performance regression
+                  if change_pct > 20:
+                      has_regressions = True
+                      report["regressions"].append({
+                          "type": "performance_regression",
+                          "severity": "high" if change_pct > 50 else "medium",
+                          "change_percent": round(change_pct, 1),
+                          "message": f"Test execution time increased by {change_pct:.1f}%"
+                      })
+          
+          # 3. Flaky Test Detection
+          test_outcomes = defaultdict(list)
+          for result in test_results:
+              test_id = result.get("test_id", "")
+              status = result.get("status", "")
+              if test_id and status:
+                  test_outcomes[test_id].append(status)
+          
+          for test_id, outcomes in test_outcomes.items():
+              if len(outcomes) >= 3:
+                  unique_outcomes = set(outcomes)
+                  if "passed" in unique_outcomes and "failed" in unique_outcomes:
+                      pass_count = outcomes.count("passed")
+                      fail_count = outcomes.count("failed")
+                      total = pass_count + fail_count
+                      
+                      # Flaky if neither consistently passes nor fails
+                      if 0.2 < (fail_count / total) < 0.8:
+                          report["flaky_tests"].append({
+                              "test_id": test_id,
+                              "pass_count": pass_count,
+                              "fail_count": fail_count,
+                              "flakiness_score": round(min(pass_count, fail_count) / total, 2)
+                          })
+          
+          # Sort flaky tests by flakiness score
+          report["flaky_tests"].sort(key=lambda x: x["flakiness_score"], reverse=True)
+          report["flaky_tests"] = report["flaky_tests"][:10]  # Top 10
+          
+          # 4. Generate Insights
+          if report["trends"].get("pass_rate", {}).get("direction") == "improving":
+              report["insights"].append({
+                  "type": "positive",
+                  "message": "Test pass rate is trending upward - quality improvements are working"
+              })
+          
+          if report["flaky_tests"]:
+              report["insights"].append({
+                  "type": "warning",
+                  "message": f"Identified {len(report['flaky_tests'])} flaky tests requiring attention"
+              })
+          
+          if len(test_results) < 100:
+              report["insights"].append({
+                  "type": "info",
+                  "message": "Limited historical data - trends will become more reliable over time"
+              })
+          
+          # 5. Generate Recommendations
+          if report["regressions"]:
+              report["recommendations"].append(
+                  "Investigate recent changes that may have caused quality regressions"
+              )
+          
+          if report["flaky_tests"]:
+              report["recommendations"].append(
+                  "Prioritize stabilizing flaky tests to improve CI reliability"
+              )
+          
+          if report["trends"].get("execution_time", {}).get("direction") == "slower":
+              report["recommendations"].append(
+                  "Review test parallelization and consider test splitting strategies"
+              )
+          
+          # Save report
+          report_path = Path("trend_report.json")
+          with open(report_path, "w") as f:
+              json.dump(report, f, indent=2)
+          
+          # Generate markdown report
+          md_lines = [
+              "# 📊 Quality Trend Dashboard",
+              "",
+              f"**Generated:** {report['generated_at']}",
+              f"**Analysis Period:** Last {analysis_days} days",
+              "",
+              "---",
+              "",
+              "## 📈 Quality Trends",
+              ""
+          ]
+          
+          # Pass rate trend
+          if "pass_rate" in report["trends"]:
+              pr = report["trends"]["pass_rate"]
+              emoji = "✅" if pr["direction"] == "improving" else "⚠️" if pr["direction"] == "declining" else "➡️"
+              md_lines.extend([
+                  f"### Test Pass Rate {emoji}",
+                  f"- **Current:** {pr['current']:.1f}%",
+                  f"- **Average:** {pr['average']:.1f}%",
+                  f"- **Trend:** {pr['direction']} ({pr['trend']:+.1f}%)",
+                  ""
+              ])
+          
+          # Execution time trend
+          if "execution_time" in report["trends"]:
+              et = report["trends"]["execution_time"]
+              emoji = "⚡" if et["direction"] == "faster" else "🐌" if et["direction"] == "slower" else "➡️"
+              md_lines.extend([
+                  f"### Execution Time {emoji}",
+                  f"- **Current:** {et['current_seconds']:.1f}s",
+                  f"- **Average:** {et['average_seconds']:.1f}s",
+                  f"- **Change:** {et['change_percent']:+.1f}%",
+                  ""
+              ])
+          
+          # Regressions
+          if report["regressions"]:
+              md_lines.extend([
+                  "## 🚨 Detected Regressions",
+                  ""
+              ])
+              for reg in report["regressions"]:
+                  severity_emoji = "🔴" if reg["severity"] == "high" else "🟡"
+                  md_lines.append(f"- {severity_emoji} **{reg['type']}**: {reg['message']}")
+              md_lines.append("")
+          
+          # Flaky tests
+          if report["flaky_tests"]:
+              md_lines.extend([
+                  "## 🎲 Flaky Tests",
+                  "",
+                  "| Test | Pass | Fail | Flakiness |",
+                  "|------|------|------|-----------|"
+              ])
+              for ft in report["flaky_tests"][:5]:
+                  md_lines.append(
+                      f"| `{ft['test_id'][:50]}` | {ft['pass_count']} | {ft['fail_count']} | {ft['flakiness_score']:.0%} |"
+                  )
+              md_lines.append("")
+          
+          # Insights
+          if report["insights"]:
+              md_lines.extend([
+                  "## 💡 Insights",
+                  ""
+              ])
+              for insight in report["insights"]:
+                  emoji = "✅" if insight["type"] == "positive" else "⚠️" if insight["type"] == "warning" else "ℹ️"
+                  md_lines.append(f"- {emoji} {insight['message']}")
+              md_lines.append("")
+          
+          # Recommendations
+          if report["recommendations"]:
+              md_lines.extend([
+                  "## 📋 Recommendations",
+                  ""
+              ])
+              for i, rec in enumerate(report["recommendations"], 1):
+                  md_lines.append(f"{i}. {rec}")
+              md_lines.append("")
+          
+          md_lines.extend([
+              "---",
+              "*Generated by Phase 2 RAG System Knowledge Engine*"
+          ])
+          
+          md_report = "\n".join(md_lines)
+          
+          with open("TREND_DASHBOARD.md", "w") as f:
+              f.write(md_report)
+          
+          # Output for GitHub Actions
+          with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+              f.write(f"has_regressions={'true' if has_regressions else 'false'}\n")
+          
+          # Print summary
+          print("\n" + md_report)
+          
+          EOF
+          
+      - name: Upload Trend Report
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: trend-dashboard-${{ github.run_number }}
+          path: |
+            trend_report.json
+            TREND_DASHBOARD.md
+          retention-days: 90
+          
+      - name: Update Dashboard in Wiki (Optional)
+        if: github.event_name == 'schedule' || inputs.generate_report == 'true'
+        continue-on-error: true
+        run: |
+          # This would update a wiki page with the dashboard
+          # Requires wiki to be enabled and configured
+          echo "Dashboard report generated - manual wiki update may be required"
+          cat TREND_DASHBOARD.md
+          
+  # Create issue for regressions
+  create-regression-issue:
+    name: Create Regression Issue
+    needs: analyze-trends
+    if: needs.analyze-trends.outputs.has_regressions == 'true'
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Download Report
+        uses: actions/download-artifact@v4
+        with:
+          name: trend-dashboard-${{ github.run_number }}
+          
+      - name: Create Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let report = {};
+            try {
+              report = JSON.parse(fs.readFileSync('trend_report.json', 'utf8'));
+            } catch (e) {
+              console.log('Could not read report:', e);
+              return;
+            }
+            
+            const regressions = report.regressions || [];
+            if (regressions.length === 0) return;
+            
+            const body = `## 🚨 Quality Regression Detected
+            
+            The weekly trend analysis has detected quality regressions that require attention.
+            
+            ### Regressions
+            
+            ${regressions.map(r => `- **${r.type}** (${r.severity}): ${r.message}`).join('\n')}
+            
+            ### Recommendations
+            
+            ${(report.recommendations || []).map((r, i) => `${i+1}. ${r}`).join('\n')}
+            
+            ---
+            
+            *This issue was automatically created by the Quality Trend Dashboard workflow.*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Quality] Regression detected - ${new Date().toISOString().split('T')[0]}`,
+              body: body,
+              labels: ['quality', 'automated', 'regression']
+            });
