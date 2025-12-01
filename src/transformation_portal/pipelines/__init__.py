@@ -12,7 +12,18 @@ from .unified_luxury_pipeline import (
     process_luxury_render,
 )
 
+from .rendering_4k_pipeline import (
+    PipelineConfig,
+    ProcessingResult,
+    QualityAssessor,
+    QualityLevel,
+    QualityMetrics,
+    Rendering4KPipeline,
+    ToneMappingMethod,
+)
+
 __all__ = [
+    # Unified Luxury Pipeline
     'UnifiedLuxuryPipeline',
     'UnifiedPipelineConfig',
     'ProcessingProfile',
@@ -22,4 +33,12 @@ __all__ = [
     'PipelineStatistics',
     'process_luxury_render',
     'batch_process_luxury_renders',
+    # 4K Rendering Pipeline
+    'Rendering4KPipeline',
+    'PipelineConfig',
+    'ProcessingResult',
+    'QualityAssessor',
+    'QualityLevel',
+    'QualityMetrics',
+    'ToneMappingMethod',
 ]
