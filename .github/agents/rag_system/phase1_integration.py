@@ -593,7 +593,7 @@ class RAGSystem:
         to ensure cache validation only considers files that were actually indexed.
         Previously scanned entire repo causing 452 extra files → full re-index every commit.
         
-        Fix applied: 2024-12-01 - Align with index_directories configuration.
+        Fix applied: 2025-12-01 - Align with index_directories configuration.
         """
         import fnmatch
         
