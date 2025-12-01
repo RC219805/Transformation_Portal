@@ -260,6 +260,26 @@ class ContextAwareRenderingPipeline:
                 return room
         return None
 
+    def _create_default_strategy(self, image_path: Path) -> RenderingStrategy:
+        """Create a default rendering strategy for unknown room types.
+
+        Args:
+            image_path: Path to rendering (used for logging)
+
+        Returns:
+            Default RenderingStrategy with balanced settings
+        """
+        print(f"⚠ Could not identify room type from: {image_path.name}")
+        print("  Using balanced default strategy")
+        return RenderingStrategy(
+            room_type='unknown',
+            primary_materials=self.context.materials_palette[:4] if self.context.materials_palette else ['wood', 'stone'],
+            lighting_style='ambient',
+            depth_emphasis='balanced',
+            color_temperature='neutral',
+            enhancement_strength=0.7,
+        )
+
     def derive_strategy(self, image_path: Path) -> RenderingStrategy:
         """
         Derive optimal rendering strategy from context.
@@ -274,22 +294,14 @@ class ContextAwareRenderingPipeline:
         room_type = self.identify_room_from_filename(image_path)
 
         if not room_type:
-            # Default strategy
-            print(f"⚠ Could not identify room type from: {image_path.name}")
-            print("  Using balanced default strategy")
-            return RenderingStrategy(
-                room_type='unknown',
-                primary_materials=self.context.materials_palette[:4] if self.context.materials_palette else ['wood', 'stone'],
-                lighting_style='ambient',
-                depth_emphasis='balanced',
-                color_temperature='neutral',
-                enhancement_strength=0.7,
-            )
+            # Default strategy for unknown rooms
+            return self._create_default_strategy(image_path)
 
         # Get base strategy for room type
         base_strategy_ref = self.ROOM_STRATEGIES.get(room_type)
         if not base_strategy_ref:
-            return self.derive_strategy(image_path)  # Fallback to default
+            # Room type identified but not in strategies - use default
+            return self._create_default_strategy(image_path)
 
         # Create a copy of the strategy to avoid mutating class-level defaults
         # Use replace() to copy the dataclass and list() to copy the materials list
