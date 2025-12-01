@@ -166,6 +166,26 @@ class TestPipelineConfig:
         assert config.delivery_jpeg is True
         assert config.jpeg_quality == 95
 
+    def test_quality_feedback_config_lpips_fields(self):
+        """Test QualityFeedbackConfig LPIPS-related fields."""
+        from transformation_portal.pipelines.rendering_4k_pipeline import QualityFeedbackConfig
+
+        config = QualityFeedbackConfig(
+            use_lpips=True,
+            hybrid_mode=True,
+            lpips_network="vgg",
+            perceptual_percentile_target=95.0,
+            material_fidelity_target=0.98,
+            rag_indexing_enabled=True,
+        )
+
+        assert config.use_lpips is True
+        assert config.hybrid_mode is True
+        assert config.lpips_network == "vgg"
+        assert config.perceptual_percentile_target == 95.0
+        assert config.material_fidelity_target == 0.98
+        assert config.rag_indexing_enabled is True
+
 
 # =============================================================================
 # Quality Assessment Tests
@@ -472,6 +492,17 @@ class TestRendering4KPipeline:
         assert pipeline.config.depth.enabled is False
         assert pipeline.config.upscaling.enabled is False
 
+    def test_pipeline_from_preset_750_picacho(self):
+        """Test 750 Picacho preset for estate-specific optimization."""
+        pipeline = Rendering4KPipeline.from_preset("750_picacho")
+
+        assert pipeline.config.name == "750_picacho"
+        assert pipeline.config.quality_level == QualityLevel.ULTRA
+        assert pipeline.config.material_response.strength == 0.80
+        assert pipeline.config.quality_feedback.use_lpips is True
+        assert pipeline.config.quality_feedback.perceptual_percentile_target == 95.0
+        assert pipeline.config.quality_feedback.material_fidelity_target == 0.98
+
     def test_pipeline_from_preset_invalid(self):
         """Test invalid preset raises error."""
         with pytest.raises(ValueError, match="Unknown preset"):
@@ -485,6 +516,7 @@ class TestRendering4KPipeline:
         assert "luxury_estate" in presets
         assert "aerial_exterior" in presets
         assert "editorial" in presets
+        assert "750_picacho" in presets
         assert "preview" in presets
 
     def test_pipeline_process_single_image(self, temp_image_file, temp_output_dir):
