@@ -364,7 +364,7 @@ pipeline_app = typer.Typer(
 
 
 @pipeline_app.command("process")
-def pipeline_process(
+def process_command(
     input_glob: str = typer.Option(..., "--input", "-i", help="Input glob pattern (e.g., 'inputs/*.jpg')"),
     output_dir: Path = typer.Option(..., "--output", "-o", help="Output directory"),
     recipe: Path = typer.Option(..., "--recipe", "-r", help="Recipe YAML file path"),
