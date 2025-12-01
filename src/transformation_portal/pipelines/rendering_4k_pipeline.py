@@ -53,6 +53,33 @@ try:
 except ImportError:
     HAS_TIFFFILE = False
 
+# Optional: scipy for advanced image processing
+try:
+    from scipy.ndimage import convolve, gaussian_filter, median_filter, uniform_filter
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+    convolve = None
+    gaussian_filter = None
+    median_filter = None
+    uniform_filter = None
+
+# Optional: PyYAML for configuration loading
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+    yaml = None
+
+# Optional: tqdm for progress bars
+try:
+    from tqdm import tqdm
+    HAS_TQDM = True
+except ImportError:
+    HAS_TQDM = False
+    tqdm = None
+
 # Import internal utilities
 from ..utils.image_utils import load_image, np_to_pil, pil_to_np
 
@@ -322,15 +349,35 @@ class QualityAssessor:
         # Laplacian kernel
         kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=np.float32)
 
-        # Convolve (simple implementation)
-        from scipy.ndimage import convolve
-        laplacian = convolve(gray, kernel)
+        # Convolve (use scipy if available, else simple fallback)
+        if HAS_SCIPY and convolve is not None:
+            laplacian = convolve(gray, kernel)
+        else:
+            # Simple numpy-based convolution fallback
+            laplacian = self._simple_convolve(gray, kernel)
 
         # Variance of Laplacian as sharpness measure
         variance = np.var(laplacian)
 
         # Normalize to 0-1 (empirical scaling)
         return float(np.clip(variance * 50, 0, 1))
+
+    def _simple_convolve(self, image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+        """Simple 2D convolution without scipy."""
+        h, w = image.shape
+        kh, kw = kernel.shape
+        pad_h, pad_w = kh // 2, kw // 2
+
+        # Pad image
+        padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
+
+        # Convolve
+        result = np.zeros_like(image)
+        for i in range(h):
+            for j in range(w):
+                result[i, j] = np.sum(padded[i:i+kh, j:j+kw] * kernel)
+
+        return result
 
     def _compute_contrast(self, image: np.ndarray) -> float:
         """Compute contrast using standard deviation of luminance."""
@@ -394,8 +441,11 @@ class QualityAssessor:
         gray = np.mean(image, axis=2)
 
         # High-pass filter to isolate noise
-        from scipy.ndimage import median_filter
-        smoothed = median_filter(gray, size=3)
+        if HAS_SCIPY and median_filter is not None:
+            smoothed = median_filter(gray, size=3)
+        else:
+            # Simple fallback: use local mean
+            smoothed = self._simple_smooth(gray, size=3)
         noise = np.abs(gray - smoothed)
 
         # Median absolute deviation
@@ -403,6 +453,19 @@ class QualityAssessor:
 
         # Normalize (empirical scaling)
         return float(np.clip(mad * 20, 0, 1))
+
+    def _simple_smooth(self, image: np.ndarray, size: int = 3) -> np.ndarray:
+        """Simple smoothing filter without scipy."""
+        h, w = image.shape
+        pad = size // 2
+        padded = np.pad(image, pad, mode='reflect')
+        result = np.zeros_like(image)
+
+        for i in range(h):
+            for j in range(w):
+                result[i, j] = np.mean(padded[i:i+size, j:j+size])
+
+        return result
 
     def _compute_overall_score(self, metrics: QualityMetrics) -> float:
         """Compute weighted overall quality score."""
@@ -576,8 +639,11 @@ def apply_material_response(
 
     # Texture enhancement via high-frequency boost
     if config.texture_boost > 0:
-        from scipy.ndimage import gaussian_filter
-        blurred = gaussian_filter(enhanced, sigma=(1.2, 1.2, 0))
+        if HAS_SCIPY and gaussian_filter is not None:
+            blurred = gaussian_filter(enhanced, sigma=(1.2, 1.2, 0))
+        else:
+            # Fallback: use PIL-based blur
+            blurred = _simple_gaussian_blur(enhanced, sigma=1.2)
         detail = enhanced - blurred
         enhanced = np.clip(enhanced + config.texture_boost * detail, 0, 1)
 
@@ -591,17 +657,43 @@ def apply_material_response(
     return np.clip(enhanced, 0, 1).astype(np.float32)
 
 
+def _simple_gaussian_blur(image: np.ndarray, sigma: float) -> np.ndarray:
+    """Simple Gaussian blur using PIL as fallback."""
+    from PIL import ImageFilter
+    # Convert to PIL, blur, convert back
+    img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+    pil_img = Image.fromarray(img_uint8)
+    blurred = pil_img.filter(ImageFilter.GaussianBlur(radius=sigma))
+    return np.array(blurred).astype(np.float32) / 255.0
+
+
 def _apply_local_contrast(image: np.ndarray, strength: float) -> np.ndarray:
     """Apply local contrast enhancement (CLAHE-like)."""
-    from scipy.ndimage import uniform_filter
-
-    # Local mean
-    local_mean = uniform_filter(image, size=(32, 32, 1))
+    if HAS_SCIPY and uniform_filter is not None:
+        # Local mean using scipy
+        local_mean = uniform_filter(image, size=(32, 32, 1))
+    else:
+        # Fallback: use simple box blur
+        local_mean = _simple_box_blur(image, size=32)
 
     # Local contrast enhancement
     enhanced = image + strength * (image - local_mean)
 
     return np.clip(enhanced, 0, 1)
+
+
+def _simple_box_blur(image: np.ndarray, size: int) -> np.ndarray:
+    """Simple box blur as fallback for uniform_filter."""
+    from PIL import ImageFilter
+    # Handle each channel
+    h, w, c = image.shape
+    result = np.zeros_like(image)
+    for ch in range(c):
+        img_uint8 = (np.clip(image[..., ch], 0, 1) * 255).astype(np.uint8)
+        pil_img = Image.fromarray(img_uint8, mode='L')
+        blurred = pil_img.filter(ImageFilter.BoxBlur(size // 2))
+        result[..., ch] = np.array(blurred).astype(np.float32) / 255.0
+    return result
 
 
 def apply_color_grading(
@@ -727,10 +819,12 @@ def estimate_depth_simple(image: np.ndarray) -> np.ndarray:
     lum = 0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
 
     # Simple depth proxy using luminance + spatial gradient
-    from scipy.ndimage import gaussian_filter
-
-    # Blur for depth approximation (distant objects blur more)
-    blurred = gaussian_filter(lum, sigma=15)
+    if HAS_SCIPY and gaussian_filter is not None:
+        # Blur for depth approximation (distant objects blur more)
+        blurred = gaussian_filter(lum, sigma=15)
+    else:
+        # Fallback: use PIL-based blur
+        blurred = _simple_gaussian_blur_2d(lum, sigma=15)
 
     # Vertical gradient (sky typically brighter at top)
     h, w = lum.shape
@@ -744,6 +838,14 @@ def estimate_depth_simple(image: np.ndarray) -> np.ndarray:
     depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
 
     return depth.astype(np.float32)
+
+
+def _simple_gaussian_blur_2d(image: np.ndarray, sigma: float) -> np.ndarray:
+    """Simple 2D Gaussian blur using PIL as fallback."""
+    img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+    pil_img = Image.fromarray(img_uint8, mode='L')
+    blurred = pil_img.filter(ImageFilter.GaussianBlur(radius=sigma))
+    return np.array(blurred).astype(np.float32) / 255.0
 
 
 # =============================================================================
@@ -877,8 +979,16 @@ class Rendering4KPipeline:
 
         Returns:
             Initialized pipeline
+
+        Raises:
+            ImportError: If PyYAML is not installed
+            FileNotFoundError: If config file does not exist
         """
-        import yaml
+        if not HAS_YAML or yaml is None:
+            raise ImportError(
+                "PyYAML is required for loading YAML configs. "
+                "Install with: pip install pyyaml"
+            )
 
         config_path = Path(config_path)
         if not config_path.exists():
@@ -1248,13 +1358,20 @@ class Rendering4KPipeline:
         Returns:
             List of ProcessingResults
         """
-        from tqdm import tqdm
-
         results = []
-        iterator = tqdm(input_paths, desc="Processing") if show_progress else input_paths
 
-        for path in iterator:
+        # Use tqdm if available, otherwise simple iteration
+        if show_progress and HAS_TQDM and tqdm is not None:
+            iterator = tqdm(input_paths, desc="Processing")
+        else:
+            iterator = input_paths
+            if show_progress and not HAS_TQDM:
+                logger.info(f"Processing {len(input_paths)} images...")
+
+        for i, path in enumerate(iterator):
             try:
+                if show_progress and not HAS_TQDM:
+                    logger.info(f"Processing {i+1}/{len(input_paths)}: {Path(path).name}")
                 result = self.process(path, output_dir)
                 results.append(result)
             except Exception as e:
