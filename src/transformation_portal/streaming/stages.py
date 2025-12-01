@@ -525,37 +525,200 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
         self._worker_pool = worker_pool
 
     def _enhance_sync(self, image_data: ImageData) -> ImageData:
-        """Synchronous material enhancement."""
+        """Synchronous material enhancement with physics-based rendering.
+
+        Implements Material Response technology following three core tenets:
+        1. Respect energy conservation in highlights (preserve specular)
+        2. Preserve midtone texture (keep organic materials tactile)
+        3. Blend transitions between materials (smooth, authored feel)
+        """
         import numpy as np
+        from scipy.ndimage import gaussian_filter, sobel
 
         array = image_data.array.astype(np.float32)
         if array.max() > 1.0:
             array = array / 255.0
 
-        # Apply subtle enhancement based on local contrast
-        # This is a simplified version - real implementation would use
-        # material detection and physics-based rendering
+        h, w = array.shape[:2]
+        intensity = self._intensity
 
-        # Increase local contrast
-        if len(array.shape) == 3:
-            gray = np.mean(array, axis=2, keepdims=True)
+        # Compute luminance and saturation for material detection
+        if len(array.shape) == 3 and array.shape[2] >= 3:
+            luminance = 0.2126 * array[..., 0] + 0.7152 * array[..., 1] + 0.0722 * array[..., 2]
+            saturation = np.maximum(array.max(axis=2) - array.min(axis=2), 1e-6)
         else:
-            gray = array[..., np.newaxis]
+            luminance = array[..., 0] if len(array.shape) == 3 else array
+            saturation = np.zeros_like(luminance)
 
-        # Local mean (simplified)
-        from scipy.ndimage import uniform_filter
-        local_mean = uniform_filter(gray, size=50)
+        # ============================================================
+        # MATERIAL DETECTION via color/intensity heuristics
+        # ============================================================
 
-        # Enhance based on deviation from local mean
-        enhancement = (gray - local_mean) * self._intensity * 0.2
-        array = array + enhancement
+        # Material detection thresholds (physics-based, tuned for luxury real estate rendering)
+        WOOD_WARM_BIAS_THRESHOLD = 0.1
+        WOOD_WARM_BIAS_RANGE = 0.2
+        WOOD_SATURATION_MIN = 0.08
+        WOOD_SATURATION_RANGE = 0.25
+        WOOD_LUMINANCE_MIN = 0.2
+        WOOD_LUMINANCE_RANGE = 0.5
+        WOOD_GAUSSIAN_SIGMA = 3.0
 
-        # Clip to valid range
-        array = np.clip(array, 0, 1)
+        METAL_SATURATION_NEUTRAL = 0.15
+        METAL_SATURATION_RANGE = 0.15
+        METAL_LUMINANCE_MIN = 0.3
+        METAL_LUMINANCE_MAX = 0.9
+        METAL_GAUSSIAN_SIGMA = 2.0
+        METAL_EDGE_SIGMA = 1.0
 
-        image_data.array = array
+        GLASS_LUMINANCE_MIN = 0.6
+        GLASS_LUMINANCE_RANGE = 0.4
+        GLASS_SATURATION_MAX = 0.12
+        GLASS_SATURATION_RANGE = 0.12
+        GLASS_GAUSSIAN_SIGMA = 3.0
+
+        TEXTILE_LUMINANCE_MIN = 0.35
+        TEXTILE_LUMINANCE_RANGE = 0.4
+        TEXTILE_SATURATION_MAX = 0.3
+        TEXTILE_SATURATION_RANGE = 0.3
+        TEXTILE_GAUSSIAN_SIGMA = 2.0
+
+        # Floor region mask (lower portion of image, typical perspective)
+        y_norm = np.linspace(0, 1, h).reshape(-1, 1)
+        floor_mask = np.clip((y_norm - 0.5) / 0.5, 0.0, 1.0)
+        floor_mask = np.broadcast_to(floor_mask, (h, w))
+
+        # Specular/highlight mask (bright regions - energy conservation)
+        highlight_mask = np.clip((luminance - 0.7) / 0.3, 0.0, 1.0)
+        highlight_mask = gaussian_filter(highlight_mask, sigma=2.0)
+
+        # Midtone mask (preserve texture)
+        midtone_mask = np.clip(1.0 - np.abs(luminance - 0.5) / 0.4, 0.0, 1.0)
+        midtone_mask = gaussian_filter(midtone_mask, sigma=1.5)
+
+        # Check if image has 3 color channels for RGB-specific operations
+        is_rgb = len(array.shape) == 3 and array.shape[2] >= 3
+
+        # Wood detection (warm mid-tones, moderate saturation)
+        wood_mask = np.zeros((h, w), dtype=np.float32)
+        if "wood" in self._materials:
+            warm_bias = array[..., 0] - 0.5 * (array[..., 1] + array[..., 2]) if is_rgb else np.zeros((h, w))
+            wood_mask = (
+                np.clip((warm_bias + WOOD_WARM_BIAS_THRESHOLD) / WOOD_WARM_BIAS_RANGE, 0.0, 1.0) *
+                np.clip((saturation - WOOD_SATURATION_MIN) / WOOD_SATURATION_RANGE, 0.0, 1.0) *
+                np.clip((luminance - WOOD_LUMINANCE_MIN) / WOOD_LUMINANCE_RANGE, 0.0, 1.0)
+            )
+            wood_mask *= floor_mask  # Wood typically on floors
+            wood_mask = gaussian_filter(wood_mask, sigma=WOOD_GAUSSIAN_SIGMA)
+
+        # Metal detection (neutral hue, high local contrast)
+        metal_mask = np.zeros((h, w), dtype=np.float32)
+        if "metal" in self._materials:
+            neutral = np.clip((METAL_SATURATION_NEUTRAL - saturation) / METAL_SATURATION_RANGE, 0.0, 1.0)
+            edge_mag = np.abs(sobel(luminance, axis=0)) + np.abs(sobel(luminance, axis=1))
+            edge_mag = gaussian_filter(edge_mag, sigma=METAL_EDGE_SIGMA)
+            if edge_mag.max() > 0:
+                edge_mag = edge_mag / edge_mag.max()
+            metal_mask = neutral * edge_mag * np.clip(luminance, METAL_LUMINANCE_MIN, METAL_LUMINANCE_MAX)
+            metal_mask = gaussian_filter(metal_mask, sigma=METAL_GAUSSIAN_SIGMA)
+
+        # Glass detection (high brightness, low saturation, transparency regions)
+        glass_mask = np.zeros((h, w), dtype=np.float32)
+        if "glass" in self._materials:
+            glass_mask = (
+                np.clip((luminance - GLASS_LUMINANCE_MIN) / GLASS_LUMINANCE_RANGE, 0.0, 1.0) *
+                np.clip((GLASS_SATURATION_MAX - saturation) / GLASS_SATURATION_RANGE, 0.0, 1.0)
+            )
+            glass_mask = gaussian_filter(glass_mask, sigma=GLASS_GAUSSIAN_SIGMA)
+
+        # Textile detection (soft edges, mid brightness, low-moderate saturation)
+        textile_mask = np.zeros((h, w), dtype=np.float32)
+        if "textile" in self._materials:
+            textile_mask = (
+                np.clip((luminance - TEXTILE_LUMINANCE_MIN) / TEXTILE_LUMINANCE_RANGE, 0.0, 1.0) *
+                np.clip((TEXTILE_SATURATION_MAX - saturation) / TEXTILE_SATURATION_RANGE, 0.0, 1.0) *
+                np.clip(1.0 - floor_mask, 0.0, 1.0)  # Typically not on floor
+            )
+            textile_mask = gaussian_filter(textile_mask, sigma=TEXTILE_GAUSSIAN_SIGMA)
+
+        # ============================================================
+        # PHYSICS-BASED ENHANCEMENTS
+        # ============================================================
+        enhanced = array.copy()
+
+        # 1. High-frequency texture boost (reveals grain and fabric weave)
+        blurred = gaussian_filter(array, sigma=(1.2, 1.2, 0) if len(array.shape) == 3 else 1.2)
+        texture_detail = array - blurred
+        texture_boost = 0.25 * intensity * midtone_mask[..., np.newaxis]
+        enhanced = np.clip(enhanced + texture_boost * texture_detail, 0.0, 1.0)
+
+        # 2. Wood grain enhancement (warm tone, directional grain)
+        if "wood" in self._materials and wood_mask.max() > 0.01 and is_rgb:
+            # Horizontal grain detection
+            grain = np.abs(sobel(luminance * wood_mask, axis=1))
+            grain = gaussian_filter(grain, sigma=(0.8, 2.0))
+            if grain.max() > 0:
+                grain = grain / grain.max()
+            warm_wood = np.array([0.88, 0.76, 0.60], dtype=np.float32)
+            wood_enhance = 0.15 * intensity * wood_mask[..., np.newaxis] * grain[..., np.newaxis]
+            enhanced = np.clip(enhanced + wood_enhance * (warm_wood - enhanced), 0.0, 1.0)
+
+        # 3. Metal specular enhancement (preserve reflections, add sheen)
+        if "metal" in self._materials and metal_mask.max() > 0.01 and is_rgb:
+            # Specular highlight recovery
+            specular = gaussian_filter(luminance * metal_mask, sigma=2.0)
+            specular = np.clip((specular - 0.4) / 0.5, 0.0, 1.0)
+            cool_metal = np.array([0.92, 0.94, 0.98], dtype=np.float32)
+            metal_enhance = 0.12 * intensity * metal_mask[..., np.newaxis] * specular[..., np.newaxis]
+            enhanced = np.clip(enhanced + metal_enhance * (cool_metal - enhanced), 0.0, 1.0)
+
+        # 4. Glass clarity enhancement (subtle edge sharpening, reflection)
+        if "glass" in self._materials and glass_mask.max() > 0.01:
+            glass_edges = np.abs(sobel(luminance, axis=0)) + np.abs(sobel(luminance, axis=1))
+            glass_edges = gaussian_filter(glass_edges, sigma=0.8)
+            if glass_edges.max() > 0:
+                glass_edges = glass_edges / glass_edges.max()
+            glass_enhance = 0.08 * intensity * glass_mask[..., np.newaxis]
+            enhanced = np.clip(enhanced + glass_enhance * glass_edges[..., np.newaxis], 0.0, 1.0)
+
+        # 5. Textile softness (micro-contrast for fabric texture)
+        if "textile" in self._materials and textile_mask.max() > 0.01:
+            textile_detail = array - gaussian_filter(array, sigma=(1.5, 1.5, 0) if len(array.shape) == 3 else 1.5)
+            textile_enhance = 0.18 * intensity * textile_mask[..., np.newaxis]
+            enhanced = np.clip(enhanced + textile_enhance * textile_detail, 0.0, 1.0)
+
+        # 6. Highlight energy conservation (prevent clipping, preserve sheen)
+        # Roll off aggressive enhancements in highlight regions
+        highlight_rolloff = 1.0 - 0.5 * highlight_mask[..., np.newaxis]
+        enhanced = array + highlight_rolloff * (enhanced - array)
+
+        # 7. Ambient occlusion (ground objects with subtle contact shadows)
+        edge_mag = np.abs(sobel(luminance, axis=0)) + np.abs(sobel(luminance, axis=1))
+        if edge_mag.max() > 0:
+            edge_mag = edge_mag / edge_mag.max()
+        occlusion = gaussian_filter(edge_mag, sigma=1.5)
+        ao_strength = 0.1 * intensity
+        enhanced = np.clip(enhanced * (1.0 - ao_strength * occlusion[..., np.newaxis]), 0.0, 1.0)
+
+        # 8. Transition blending (smooth material boundaries)
+        # Apply final gaussian smoothing to mask edges
+        final_blend = gaussian_filter(enhanced, sigma=0.3)
+        blend_factor = 0.15  # Subtle blending
+        enhanced = enhanced * (1 - blend_factor) + final_blend * blend_factor
+
+        # Use depth map for depth-aware processing if available
+        if self._use_depth and image_data.depth_map is not None:
+            depth = image_data.depth_map.astype(np.float32)
+            if depth.max() > 1.0:
+                depth = depth / depth.max()
+            # Reduce enhancement intensity in distant regions
+            depth_factor = np.clip(1.0 - depth * 0.3, 0.7, 1.0)
+            enhanced = array + depth_factor[..., np.newaxis] * (enhanced - array)
+
+        image_data.array = np.clip(enhanced, 0.0, 1.0)
         image_data.metadata['material_enhanced'] = True
         image_data.metadata['materials'] = self._materials
+        image_data.metadata['material_response_version'] = '2.0'
+        image_data.metadata['enhancement_intensity'] = intensity
 
         return image_data
 

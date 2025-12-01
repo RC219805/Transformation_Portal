@@ -260,6 +260,26 @@ class ContextAwareRenderingPipeline:
                 return room
         return None
 
+    def _create_default_strategy(self, image_path: Path) -> RenderingStrategy:
+        """Create a default rendering strategy for unknown room types.
+
+        Args:
+            image_path: Path to rendering (used for logging)
+
+        Returns:
+            Default RenderingStrategy with balanced settings
+        """
+        print(f"⚠ Could not identify room type from: {image_path.name}")
+        print("  Using balanced default strategy")
+        return RenderingStrategy(
+            room_type='unknown',
+            primary_materials=self.context.materials_palette[:4] if self.context.materials_palette else ['wood', 'stone'],
+            lighting_style='ambient',
+            depth_emphasis='balanced',
+            color_temperature='neutral',
+            enhancement_strength=0.7,
+        )
+
     def derive_strategy(self, image_path: Path) -> RenderingStrategy:
         """
         Derive optimal rendering strategy from context.
@@ -274,22 +294,21 @@ class ContextAwareRenderingPipeline:
         room_type = self.identify_room_from_filename(image_path)
 
         if not room_type:
-            # Default strategy
-            print(f"⚠ Could not identify room type from: {image_path.name}")
-            print("  Using balanced default strategy")
-            return RenderingStrategy(
-                room_type='unknown',
-                primary_materials=self.context.materials_palette[:4] if self.context.materials_palette else ['wood', 'stone'],
-                lighting_style='ambient',
-                depth_emphasis='balanced',
-                color_temperature='neutral',
-                enhancement_strength=0.7,
-            )
+            # Default strategy for unknown rooms
+            return self._create_default_strategy(image_path)
 
         # Get base strategy for room type
-        base_strategy = self.ROOM_STRATEGIES.get(room_type)
-        if not base_strategy:
-            return self.derive_strategy(image_path)  # Fallback to default
+        base_strategy_ref = self.ROOM_STRATEGIES.get(room_type)
+        if not base_strategy_ref:
+            # Room type identified but not in strategies - use default
+            return self._create_default_strategy(image_path)
+
+        # Create a copy of the strategy to avoid mutating class-level defaults
+        # Use replace() to copy the dataclass and list() to copy the materials list
+        strategy = replace(
+            base_strategy_ref,
+            primary_materials=list(base_strategy_ref.primary_materials)
+        )
 
         # Create a copy to avoid mutating the class-level strategy
         strategy = replace(base_strategy)
@@ -305,23 +324,17 @@ class ContextAwareRenderingPipeline:
                 if mat in self.context.materials_palette
             ]
             if matched_materials:
-                strategy = replace(strategy, primary_materials=matched_materials)
+                strategy.primary_materials = matched_materials
 
         # Adjust based on design style
         if self.context.design_style:
             style_lower = self.context.design_style.lower()
             if 'modern' in style_lower or 'contemporary' in style_lower:
-                strategy = replace(
-                    strategy,
-                    color_temperature='neutral',
-                    enhancement_strength=min(strategy.enhancement_strength + 0.1, 1.0)
-                )
+                strategy.color_temperature = 'neutral'
+                strategy.enhancement_strength = min(strategy.enhancement_strength + 0.1, 1.0)
             elif 'traditional' in style_lower:
-                strategy = replace(
-                    strategy,
-                    color_temperature='warm',
-                    enhancement_strength=max(strategy.enhancement_strength - 0.1, 0.5)
-                )
+                strategy.color_temperature = 'warm'
+                strategy.enhancement_strength = max(strategy.enhancement_strength - 0.1, 0.5)
 
         print(f"\n✓ Derived strategy for {room_type}:")
         print(f"  Materials: {', '.join(strategy.primary_materials)}")

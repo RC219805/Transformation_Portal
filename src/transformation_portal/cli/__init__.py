@@ -353,6 +353,171 @@ def analyze_cli():
 
 
 # ============================================================================
+# UNIFIED PIPELINE COMMANDS
+# ============================================================================
+
+pipeline_app = typer.Typer(
+    name="pipeline",
+    help="Unified pipeline operations with YAML recipes",
+    no_args_is_help=True,
+)
+
+
+@pipeline_app.command("process")
+def process_command(
+    input_glob: str = typer.Option(..., "--input", "-i", help="Input glob pattern (e.g., 'inputs/*.jpg')"),
+    output_dir: Path = typer.Option(..., "--output", "-o", help="Output directory"),
+    recipe: Path = typer.Option(..., "--recipe", "-r", help="Recipe YAML file path"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview processing plan without executing"),
+):
+    """Run unified enhancement pipeline with recipe.
+
+    Process images using the unified pipeline with a YAML recipe configuration.
+    Supports batch processing with dry-run preview.
+
+    Example:
+        transform-process pipeline process -i "renders/*.exr" -o outputs/ -r config/recipes/signature_estate.yaml
+    """
+    typer.echo("🚀 Running Unified Pipeline...")
+    typer.echo(f"   Recipe: {recipe}")
+    typer.echo(f"   Input: {input_glob}")
+    typer.echo(f"   Output: {output_dir}")
+    typer.echo(f"   Dry run: {dry_run}")
+
+    if not recipe.exists():
+        typer.echo(f"❌ Error: Recipe file not found: {recipe}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        from transformation_portal.pipeline_unified import UnifiedPipeline
+
+        pipeline = UnifiedPipeline.from_recipe(recipe)
+        result = pipeline.process_batch(input_glob, output_dir, dry_run=dry_run)
+
+        if not dry_run:
+            typer.echo(f"\n✅ Processed {result.successful_count} images successfully")
+            if result.failed_count > 0:
+                typer.echo(f"⚠️  {result.failed_count} images failed", err=True)
+
+    except ImportError as e:
+        typer.echo(f"❌ Error loading pipeline: {e}", err=True)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.echo(f"❌ Pipeline error: {e}", err=True)
+        raise typer.Exit(code=1)
+
+
+@pipeline_app.command("list-recipes")
+def pipeline_list_recipes(
+    recipes_dir: Path = typer.Option(
+        Path("config/recipes"),
+        "--dir", "-d",
+        help="Recipes directory path"
+    ),
+):
+    """List all available recipe presets.
+
+    Scans the recipes directory and displays available pipeline recipes
+    with their descriptions.
+
+    Example:
+        transform-process pipeline list-recipes
+        transform-process pipeline list-recipes -d custom/recipes/
+    """
+    typer.echo("📋 Available Pipeline Recipes\n")
+
+    if not recipes_dir.exists():
+        typer.echo(f"⚠️  Recipes directory not found: {recipes_dir}", err=True)
+        typer.echo("   Create recipes in config/recipes/ directory")
+        raise typer.Exit(code=1)
+
+    try:
+        from transformation_portal.config_loader import list_recipes
+
+        recipes = list_recipes(recipes_dir)
+
+        if not recipes:
+            typer.echo("No recipes found in directory")
+            raise typer.Exit(code=0)
+
+        for recipe in recipes:
+            if 'error' in recipe:
+                typer.echo(f"  ❌ {recipe['path']}: {recipe['error']}")
+            else:
+                name = recipe.get('name', 'Unknown')
+                description = recipe.get('description', 'No description')
+                stages = recipe.get('stages', [])
+                output_format = recipe.get('output_format', 'tiff')
+
+                typer.echo(f"  📄 {name}")
+                typer.echo(f"     {description}")
+                typer.echo(f"     Stages: {', '.join(stages)}")
+                typer.echo(f"     Output: {output_format}")
+                typer.echo(f"     Path: {recipe['path']}")
+                typer.echo()
+
+    except ImportError as e:
+        typer.echo(f"❌ Error: {e}", err=True)
+        raise typer.Exit(code=1)
+
+
+@pipeline_app.command("validate-recipe")
+def pipeline_validate_recipe(
+    recipe_path: Path = typer.Argument(..., help="Recipe YAML file to validate"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed validation results"),
+):
+    """Validate a recipe configuration.
+
+    Validates a recipe YAML file against the schema and reports any errors.
+
+    Example:
+        transform-process pipeline validate-recipe config/recipes/signature_estate.yaml
+        transform-process pipeline validate-recipe custom_recipe.yaml -v
+    """
+    typer.echo(f"🔍 Validating recipe: {recipe_path}\n")
+
+    if not recipe_path.exists():
+        typer.echo(f"❌ Error: Recipe file not found: {recipe_path}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        from transformation_portal.config_loader import load_recipe, validate_recipe, get_recipe_info
+
+        # Load the recipe
+        recipe = load_recipe(recipe_path, expand_env=False, resolve_paths=False)
+
+        # Validate
+        is_valid, errors = validate_recipe(recipe)
+
+        if verbose:
+            info = get_recipe_info(recipe)
+            typer.echo("Recipe Information:")
+            typer.echo(f"  Name: {info.get('name', 'Unknown')}")
+            typer.echo(f"  Description: {info.get('description', 'None')}")
+            typer.echo(f"  Stages: {', '.join(info.get('stages', []))}")
+            typer.echo(f"  Has Depth: {info.get('has_depth', False)}")
+            typer.echo(f"  Has Material Response: {info.get('has_material_response', False)}")
+            typer.echo(f"  Has Color Grading: {info.get('has_color_grading', False)}")
+            typer.echo(f"  Output Format: {info.get('output_format', 'unknown')}")
+            typer.echo()
+
+        if is_valid:
+            typer.echo("✅ Recipe is valid!")
+        else:
+            typer.echo("❌ Recipe validation failed:")
+            for error in errors:
+                typer.echo(f"   - {error}")
+            raise typer.Exit(code=1)
+
+    except ImportError as e:
+        typer.echo(f"❌ Error: {e}", err=True)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.echo(f"❌ Error validating recipe: {e}", err=True)
+        raise typer.Exit(code=1)
+
+
+# ============================================================================
 # MAIN UNIFIED CLI (For development/testing)
 # ============================================================================
 
@@ -360,6 +525,7 @@ def analyze_cli():
 app.add_typer(render_app, name="render")
 app.add_typer(process_app, name="process")
 app.add_typer(analyze_app, name="analyze")
+app.add_typer(pipeline_app, name="pipeline")
 
 
 @app.command()
@@ -425,6 +591,7 @@ __all__ = [
     "render_app",
     "process_app",
     "analyze_app",
+    "pipeline_app",
     "render_cli",
     "process_cli",
     "analyze_cli",
