@@ -1,0 +1,62 @@
+# Golden Hour Courtyard Recipe
+# ============================
+# Montecito golden light aesthetic with warm saturation
+# Optimized for outdoor spaces at magic hour
+
+name: "Golden Hour Courtyard"
+description: "Montecito golden light aesthetic with warm saturation"
+
+# Processing stages in execution order
+stages:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+
+# Depth estimation configuration
+depth_estimation:
+  enabled: true
+  model: "depth-anything-v2-small"
+  device: "auto"
+
+# Material Response configuration
+material_response:
+  enabled: true
+  profile: "exterior_courtyard"
+  texture_boost: 0.28
+  ambient_occlusion: 0.16
+  highlight_warmth: 0.12
+  haze_strength: 0.10
+  window_light_wrap: 0.18
+  floor_plank_contrast: 0.14
+  floor_specular: 0.12
+
+# Color grading configuration
+color_grading:
+  enabled: true
+  lut: "assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube"
+  lut_strength: 0.9
+  contrast: 1.04
+  saturation: 1.14
+  warmth: 0.025
+  exposure: 0.0
+
+# Photo finishing configuration
+photo_finishing:
+  enabled: true
+  aces: true
+  bloom:
+    enabled: true
+    threshold: 0.78
+    intensity: 0.25
+  vignette:
+    enabled: false
+    strength: 0.0
+  grain:
+    enabled: true
+    amount: 0.008
+
+# Output configuration
+output:
+  format: "jpeg"
+  quality: 92
