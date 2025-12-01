@@ -1,0 +1,257 @@
+# =============================================================================
+# Phase 2 RAG System - PR Context Workflow
+# Action 3: Automated review enrichment with historical intelligence
+# =============================================================================
+#
+# This workflow generates contextual information for pull request reviews
+# based on Knowledge Engine insights accumulated from CI history.
+#
+# Expected Outcomes:
+#   - Automated comments with relevant test history for changed files
+#   - Failure pattern warnings based on historical data
+#   - Coverage implications highlighted
+#   - Similar past PRs referenced for context
+#
+# =============================================================================
+
+name: PR Context Generation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  generate-context:
+    name: Generate PR Context
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Restore RAG Cache
+        uses: actions/cache@v4
+        with:
+          path: .rag_cache
+          key: rag-cache-${{ github.event.pull_request.base.sha }}
+          restore-keys: |
+            rag-cache-
+            
+      - name: Get Changed Files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          files: |
+            **/*.py
+            
+      - name: Generate PR Context
+        id: context
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          python3 << 'EOF'
+          import json
+          import os
+          from datetime import datetime, timedelta
+          from pathlib import Path
+          
+          # Configuration
+          knowledge_dir = Path(".rag_cache/knowledge")
+          changed_files = os.environ.get("CHANGED_FILES", "").split()
+          
+          print(f"Analyzing {len(changed_files)} changed files...")
+          
+          # Load knowledge base
+          test_results = []
+          quality_metrics = []
+          patterns = {}
+          
+          if (knowledge_dir / "ci_test_results.json").exists():
+              with open(knowledge_dir / "ci_test_results.json") as f:
+                  test_results = json.load(f)
+          
+          if (knowledge_dir / "quality_metrics.json").exists():
+              with open(knowledge_dir / "quality_metrics.json") as f:
+                  quality_metrics = json.load(f)
+          
+          if (knowledge_dir / "detected_patterns.json").exists():
+              with open(knowledge_dir / "detected_patterns.json") as f:
+                  patterns = json.load(f)
+          
+          # Analyze changed files
+          context_sections = []
+          warnings = []
+          insights = []
+          
+          # 1. Map changed files to historical test results
+          affected_tests = set()
+          failure_history = {}
+          
+          for changed_file in changed_files:
+              # Normalize path
+              file_stem = Path(changed_file).stem
+              
+              # Find related tests
+              for result in test_results:
+                  test_file = result.get("test_file", "")
+                  if file_stem in test_file or f"test_{file_stem}" in test_file:
+                      affected_tests.add(result.get("test_id", ""))
+                      
+                      # Track failure history
+                      if result.get("status") == "failed":
+                          test_id = result.get("test_id", "unknown")
+                          if test_id not in failure_history:
+                              failure_history[test_id] = []
+                          failure_history[test_id].append({
+                              "timestamp": result.get("timestamp", ""),
+                              "message": result.get("error_message", "")
+                          })
+          
+          # 2. Generate test impact section
+          if affected_tests:
+              context_sections.append(f"### 🧪 Test Impact Analysis\n")
+              context_sections.append(f"**{len(affected_tests)} tests** are historically associated with the changed files:\n")
+              
+              # Show top 10 affected tests
+              for test_id in list(affected_tests)[:10]:
+                  context_sections.append(f"- `{test_id}`")
+              
+              if len(affected_tests) > 10:
+                  context_sections.append(f"- ... and {len(affected_tests) - 10} more")
+              
+              context_sections.append("")
+          
+          # 3. Generate failure warnings
+          if failure_history:
+              warnings.append("### ⚠️ Historical Failure Patterns\n")
+              warnings.append("The following tests have failed previously when similar files were changed:\n")
+              
+              for test_id, failures in list(failure_history.items())[:5]:
+                  warnings.append(f"- **`{test_id}`**: {len(failures)} historical failure(s)")
+                  if failures and failures[0].get("message"):
+                      msg = failures[0]["message"][:100]
+                      warnings.append(f"  - Last failure: `{msg}...`")
+              
+              warnings.append("")
+          
+          # 4. Quality trend insights
+          if quality_metrics:
+              recent_metrics = [m for m in quality_metrics 
+                               if m.get("metric_id") == "test_pass_rate"][-5:]
+              
+              if len(recent_metrics) >= 2:
+                  first_rate = recent_metrics[0].get("value", 0)
+                  last_rate = recent_metrics[-1].get("value", 0)
+                  trend = last_rate - first_rate
+                  
+                  if abs(trend) > 1:
+                      direction = "📈 improving" if trend > 0 else "📉 declining"
+                      insights.append(f"### 📊 Quality Trends\n")
+                      insights.append(f"Test pass rate is {direction}: {first_rate:.1f}% → {last_rate:.1f}%")
+                      insights.append("")
+          
+          # 5. Pattern-based recommendations
+          if patterns:
+              if patterns.get("ml_test_gating", 0) > 0:
+                  insights.append("### 💡 Recommendations\n")
+                  insights.append("- ML tests are gated in CI. Ensure ML-dependent changes are tested locally.")
+                  insights.append("")
+          
+          # Build final comment
+          comment_parts = ["## 🔍 PR Context (Knowledge Engine)\n"]
+          comment_parts.append("*Automated analysis based on historical CI data*\n")
+          
+          if context_sections:
+              comment_parts.extend(context_sections)
+          
+          if warnings:
+              comment_parts.extend(warnings)
+          
+          if insights:
+              comment_parts.extend(insights)
+          
+          if not (context_sections or warnings or insights):
+              comment_parts.append("No specific historical patterns found for the changed files.")
+              comment_parts.append("This may be new code or code with limited test history.")
+          
+          comment_parts.append("\n---")
+          comment_parts.append("*Generated by Phase 2 RAG System Knowledge Engine*")
+          
+          # Output
+          comment = "\n".join(comment_parts)
+          
+          # Save for GitHub Actions
+          with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+              # Escape for multiline output
+              escaped = comment.replace("%", "%25").replace("\n", "%0A").replace("\r", "%0D")
+              f.write(f"comment={escaped}\n")
+          
+          # Also save to file for artifact
+          with open("pr_context.md", "w") as f:
+              f.write(comment)
+          
+          print(comment)
+          
+          EOF
+          
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read generated context
+            let comment = '';
+            try {
+              comment = fs.readFileSync('pr_context.md', 'utf8');
+            } catch (e) {
+              comment = '## 🔍 PR Context\n\nKnowledge Engine analysis unavailable.';
+            }
+            
+            // Check for existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(c => 
+              c.user.type === 'Bot' && 
+              c.body.includes('PR Context (Knowledge Engine)')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+            
+      - name: Upload PR Context Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-context
+          path: pr_context.md
+          retention-days: 7
