@@ -13,6 +13,7 @@ without requiring actual ML models or heavy dependencies.
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -28,6 +29,10 @@ sys.path.insert(0, str(scripts_dir))
 
 # Import shared mock context classes
 from tests.test_helpers import MockRoomContext, MockProjectContext  # noqa: E402
+
+
+# Seed for reproducible random number generation in tests
+TEST_RNG_SEED = 42
 
 
 # ---------------------------------------------------------------------------
@@ -57,19 +62,22 @@ def mock_apply_adjustments(image_arr: np.ndarray, settings: MockAdjustmentSettin
     # Apply simulated adjustments
     result = image_arr.copy()
 
-    # Exposure
+    # Exposure (clip intermediate result to prevent overflow/underflow)
     result = result * (1.0 + settings.exposure * 0.5)
+    result = np.clip(result, 0, 1)
 
-    # Saturation (simplified)
+    # Saturation (simplified, clip intermediate result)
     if settings.saturation != 0:
         gray = np.mean(result, axis=2, keepdims=True)
         result = gray + (result - gray) * (1.0 + settings.saturation)
+        result = np.clip(result, 0, 1)
 
-    # Contrast
+    # Contrast (clip intermediate result)
     if settings.midtone_contrast != 0:
         result = (result - 0.5) * (1.0 + settings.midtone_contrast) + 0.5
+        result = np.clip(result, 0, 1)
 
-    return np.clip(result, 0, 1)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +151,7 @@ def luxury_estate_context():
 def test_images(tmp_path):
     """Create test images for various room types."""
     images = {}
-    rng = np.random.default_rng(seed=42)
+    rng = np.random.default_rng(seed=TEST_RNG_SEED)
 
     room_types = ['kitchen', 'living_room', 'bedroom_master', 'bathroom_spa', 'outdoor_pool', 'unknown_space']
 
@@ -225,7 +233,8 @@ class TestFullPipelineIntegration:
 
         def track_depth(*args, **kwargs):
             processing_order.append('depth')
-            return np.random.rand(256, 256, 3).astype(np.float32)
+            # Use seeded random generator for reproducible tests
+            return np.random.default_rng(seed=TEST_RNG_SEED).random((256, 256, 3)).astype(np.float32)
 
         def track_color(*args, **kwargs):
             processing_order.append('color')
@@ -291,6 +300,11 @@ class TestFullPipelineIntegration:
         assert result['output_path'].exists()
         # Processing log should not include depth (unavailable)
         assert 'depth_processing' not in result['processing_applied']
+        # Strategy should still be derived correctly
+        assert result['strategy'] is not None
+        assert result['strategy'].room_type == 'bedroom'
+        # Configs should still be generated (even if depth processing skipped)
+        assert result['depth_config'] is not None
         # Color grading may or may not be applied depending on TIFF processor availability
         # The key test is that pipeline completes successfully
 
@@ -358,10 +372,11 @@ class TestStrategyToConfigIntegration:
     ):
         """Verify material config uses room-appropriate materials from project palette."""
         # Create context with materials that match bathroom defaults
+        project_materials = {'stone', 'glass', 'metal', 'tile', 'marble'}
         context = MockProjectContext(
             project_name='Spa Retreat',
             rooms={'bathroom_main': MockRoomContext(name='Main Bathroom')},
-            materials_palette=['stone', 'glass', 'metal', 'tile', 'marble'],
+            materials_palette=list(project_materials),
         )
 
         with patch.dict(sys.modules, {'architectural_context_extractor': mock_context_module}):
@@ -381,6 +396,8 @@ class TestStrategyToConfigIntegration:
         # Bathroom materials should include stone, glass from matching project palette
         assert 'stone' in material_config['enabled_surfaces']
         assert 'glass' in material_config['enabled_surfaces']
+        # Verify all enabled surfaces are from the project palette
+        assert set(material_config['enabled_surfaces']) <= project_materials
 
 
 class TestMultiRoomProcessing:
@@ -711,33 +728,36 @@ class TestErrorHandling:
         assert result['output_path'].exists()
 
     def test_handles_processor_exceptions_gracefully(
-        self, pipeline_with_mocks, test_images, mock_context_module
+        self, pipeline_with_mocks, test_images, mock_context_module, caplog
     ):
         """Verify pipeline continues after processor exceptions via internal handling."""
-        with patch.dict(sys.modules, {'architectural_context_extractor': mock_context_module}):
-            # Mock depth as available but have the internal processor raise
-            with patch('context_aware_rendering._check_depth_pipeline', return_value=True):
-                # Mock the depth pipeline import to raise when instantiated
-                mock_depth_module = MagicMock()
-                mock_depth_module.ArchitecturalDepthPipeline.side_effect = RuntimeError(
-                    "Simulated processor failure"
-                )
-
-                with patch.dict(sys.modules, {
-                    'transformation_portal.depth.pipeline': mock_depth_module
-                }):
-                    # The internal try/except in _apply_depth_processing should catch this
-                    result = pipeline_with_mocks.process_render(
-                        test_images['kitchen'],
-                        apply_depth=True,
-                        apply_material=False,
-                        apply_color=False,
+        with caplog.at_level(logging.WARNING):
+            with patch.dict(sys.modules, {'architectural_context_extractor': mock_context_module}):
+                # Mock depth as available but have the internal processor raise
+                with patch('context_aware_rendering._check_depth_pipeline', return_value=True):
+                    # Mock the depth pipeline import to raise when instantiated
+                    mock_depth_module = MagicMock()
+                    mock_depth_module.ArchitecturalDepthPipeline.side_effect = RuntimeError(
+                        "Simulated processor failure"
                     )
+
+                    with patch.dict(sys.modules, {
+                        'transformation_portal.depth.pipeline': mock_depth_module
+                    }):
+                        # The internal try/except in _apply_depth_processing should catch this
+                        result = pipeline_with_mocks.process_render(
+                            test_images['kitchen'],
+                            apply_depth=True,
+                            apply_material=False,
+                            apply_color=False,
+                        )
 
         # Pipeline should still produce output despite depth failure
         assert result['output_path'].exists()
         # Depth processing should have been skipped due to error
         assert 'depth_processing' not in result['processing_applied']
+        # Verify warning was logged about the depth processing failure
+        assert 'Depth processing failed' in caplog.text
 
 
 if __name__ == '__main__':
