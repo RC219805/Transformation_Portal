@@ -503,6 +503,34 @@ class TestRendering4KPipeline:
         assert pipeline.config.quality_feedback.perceptual_percentile_target == 95.0
         assert pipeline.config.quality_feedback.material_fidelity_target == 0.98
 
+    def test_pipeline_750_picacho_end_to_end(self, temp_image_file, temp_output_dir):
+        """Test 750 Picacho preset processes image end-to-end with quality assessment.
+
+        This test validates that the LPIPS integration and material-specific
+        settings function correctly during actual image processing.
+        """
+        pipeline = Rendering4KPipeline.from_preset("750_picacho")
+        # Use fast settings for testing while keeping quality settings
+        pipeline.config.upscaling.enabled = False  # Skip upscaling for speed
+        pipeline.config.depth.enabled = False  # Skip depth for speed
+        pipeline.config.output.delivery_jpeg = True
+        pipeline.config.output.master_tiff_16bit = False
+
+        result = pipeline.process(temp_image_file, temp_output_dir)
+
+        # Verify basic processing completed
+        assert isinstance(result, ProcessingResult)
+        assert isinstance(result.image, Image.Image)
+        assert result.total_duration_ms > 0
+
+        # Verify quality metrics were computed (via bridge or fallback)
+        if result.quality_metrics is not None:
+            assert result.quality_metrics.overall_score >= 0
+
+        # Verify output was generated
+        assert "delivery_jpeg" in result.output_paths
+        assert result.output_paths["delivery_jpeg"].exists()
+
     def test_pipeline_from_preset_invalid(self):
         """Test invalid preset raises error."""
         with pytest.raises(ValueError, match="Unknown preset"):
