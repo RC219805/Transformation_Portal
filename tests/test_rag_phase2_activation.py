@@ -273,8 +273,15 @@ class TestObservedCIResults:
         """Test ingesting the actual observed CI results."""
         report = activator.ingest_ci_results(OBSERVED_CI_RESULTS)
 
-        # Should create entries for all test results
-        assert report["entries_created"] == 330  # Based on actual data
+        # Calculate expected count dynamically from test categories
+        expected_entries = sum(
+            results.get("passed", 0) + results.get("skipped", 0)
+            for category_tests in OBSERVED_CI_RESULTS.get(
+                "test_categories", {}
+            ).values()
+            for results in category_tests.values()
+        )
+        assert report["entries_created"] == expected_entries
         assert report["metrics_recorded"] == 3
         assert report["patterns_detected"] == 3
 

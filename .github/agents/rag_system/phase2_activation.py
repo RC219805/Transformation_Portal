@@ -93,6 +93,19 @@ OBSERVED_CI_RESULTS = {
 
 
 # =============================================================================
+# Constants
+# =============================================================================
+
+# Dependency graph simulation parameters
+AVG_IMPORTS_PER_MODULE = 3  # Average number of imports per Python module
+DEFAULT_COMPLEXITY = 2.5    # Moderate complexity estimate
+GRAPH_BUILD_TIME_MS = 2340  # Simulated build time in milliseconds
+
+# Test selection parameters
+TESTS_PER_FILE_ESTIMATE = 10  # Estimated number of tests per test file
+
+
+# =============================================================================
 # Knowledge Entry Types
 # =============================================================================
 
@@ -321,18 +334,18 @@ class Phase2Activator:
 
         self.dependency_stats = DependencyGraphStats(
             total_nodes=total_modules + test_modules + workflow_modules,
-            total_edges=total_modules * 3,  # Avg 3 imports per module
+            total_edges=total_modules * AVG_IMPORTS_PER_MODULE,
             module_count=total_modules,
             test_count=test_modules,
             workflow_count=workflow_modules,
-            avg_complexity=2.5,  # Moderate complexity
+            avg_complexity=DEFAULT_COMPLEXITY,
             critical_paths=[
                 "transformation_portal.foundation -> streaming -> pipelines",
                 "rag_system.cache_manager -> enhanced_retriever -> phase1_integration",
                 "transformation_portal.depth -> vlm -> perceptual"
             ],
             circular_dependencies=[],  # None detected
-            build_time_ms=2340  # Simulated
+            build_time_ms=GRAPH_BUILD_TIME_MS
         )
 
         return {
@@ -391,7 +404,7 @@ class Phase2Activator:
 
         # Calculate test reduction
         total_tests = 1117
-        selected_tests = len(affected_tests) * 10  # ~10 tests per file
+        selected_tests = len(affected_tests) * TESTS_PER_FILE_ESTIMATE
         reduction_percent = ((total_tests - selected_tests) / total_tests) * 100
 
         return {
