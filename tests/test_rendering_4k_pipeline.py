@@ -93,7 +93,13 @@ def temp_image_file(sample_image_pil):
     """Create a temporary image file."""
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
         sample_image_pil.save(f.name)
-        yield Path(f.name)
+        temp_path = Path(f.name)
+
+    yield temp_path
+
+    # Cleanup
+    if temp_path.exists():
+        temp_path.unlink()
 
 
 # =============================================================================
@@ -604,9 +610,8 @@ class TestPipelineIntegration:
 
         result = pipeline.process(temp_image_file, temp_output_dir)
 
-        # Get original aspect ratio
-        from PIL import Image as PILImage
-        original = PILImage.open(temp_image_file)
+        # Get original aspect ratio (using already imported Image)
+        original = Image.open(temp_image_file)
         original_ratio = original.width / original.height
 
         # Check result maintains aspect ratio (approximately)
@@ -629,10 +634,13 @@ class TestEdgeCases:
             tiny_image.save(f.name)
             tiny_path = Path(f.name)
 
-        pipeline = Rendering4KPipeline.from_preset("preview")
-        result = pipeline.process(tiny_path, temp_output_dir)
-
-        assert result.image is not None
+        try:
+            pipeline = Rendering4KPipeline.from_preset("preview")
+            result = pipeline.process(tiny_path, temp_output_dir)
+            assert result.image is not None
+        finally:
+            if tiny_path.exists():
+                tiny_path.unlink()
 
     def test_grayscale_handling(self, temp_output_dir):
         """Test handling of grayscale input (converted to RGB)."""
@@ -644,11 +652,14 @@ class TestEdgeCases:
             rgb_image.save(f.name)
             gray_path = Path(f.name)
 
-        pipeline = Rendering4KPipeline.from_preset("preview")
-        result = pipeline.process(gray_path, temp_output_dir)
-
-        assert result.image is not None
-        assert result.image.mode == 'RGB'
+        try:
+            pipeline = Rendering4KPipeline.from_preset("preview")
+            result = pipeline.process(gray_path, temp_output_dir)
+            assert result.image is not None
+            assert result.image.mode == 'RGB'
+        finally:
+            if gray_path.exists():
+                gray_path.unlink()
 
     def test_invalid_input_path(self, temp_output_dir):
         """Test handling of invalid input path."""
