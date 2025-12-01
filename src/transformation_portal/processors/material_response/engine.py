@@ -29,13 +29,20 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 from PIL import Image
-from scipy.ndimage import gaussian_filter, sobel
+
+# Optional scipy import for advanced image processing
+try:
+    from scipy.ndimage import gaussian_filter, sobel
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+    gaussian_filter = None  # type: ignore
+    sobel = None  # type: ignore
 
 
 @dataclass
@@ -194,6 +201,15 @@ class MaterialResponseEngine:
         Returns:
             Enhanced PIL Image.
         """
+        # Check for scipy availability
+        if not HAS_SCIPY:
+            import logging
+            logging.getLogger(__name__).warning(
+                "scipy not available, returning original image. "
+                "Install scipy for Material Response processing."
+            )
+            return image
+
         # Convert to float32 RGB array
         if image.mode != 'RGB':
             image = image.convert('RGB')

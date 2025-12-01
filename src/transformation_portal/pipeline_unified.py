@@ -32,6 +32,7 @@ Example:
 from __future__ import annotations
 
 import glob
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -273,7 +274,6 @@ class UnifiedPipeline:
 
         def rag_callback(document: Dict) -> None:
             """Callback to index quality metrics into RAG system."""
-            import json
             output_path = Path(rag_index_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 

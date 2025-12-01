@@ -6,21 +6,18 @@ Unit Tests for Material Response Engine.
 Tests for the MaterialResponseEngine class and related functionality.
 """
 
-import tempfile
-from pathlib import Path
-
 import numpy as np
 import pytest
 from PIL import Image
 
 
 # Check if scipy is available
+HAS_SCIPY = False
 try:
-    from scipy.ndimage import gaussian_filter
+    import scipy.ndimage  # noqa: F401
     HAS_SCIPY = True
-    del gaussian_filter  # Clean up - not needed in this module
 except ImportError:
-    HAS_SCIPY = False
+    pass
 
 pytestmark = pytest.mark.skipif(
     not HAS_SCIPY,
