@@ -286,14 +286,20 @@ def get_recipe_info(recipe_dict: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionary with recipe summary information.
     """
+    stages = recipe_dict.get('stages', [])
+    quality_feedback = recipe_dict.get('quality_feedback', {})
+
     return {
         'name': recipe_dict.get('name', 'Unnamed'),
         'description': recipe_dict.get('description', ''),
-        'stages': recipe_dict.get('stages', []),
-        'has_depth': 'depth_estimation' in recipe_dict.get('stages', []),
-        'has_ai': 'ai_enhancement' in recipe_dict.get('stages', []),
-        'has_material_response': 'material_response' in recipe_dict.get('stages', []),
-        'has_color_grading': 'color_grading' in recipe_dict.get('stages', []),
+        'stages': stages,
+        'has_depth': 'depth_estimation' in stages,
+        'has_ai': 'ai_enhancement' in stages,
+        'has_material_response': 'material_response' in stages,
+        'has_color_grading': 'color_grading' in stages,
+        'has_4k_upscaling': 'upscaling_4k' in stages,
+        'has_quality_feedback': quality_feedback.get('enabled', False) or 'quality_assessment' in stages,
+        'has_rag_indexing': quality_feedback.get('rag_indexing_enabled', False),
         'output_format': recipe_dict.get('output', {}).get('format', 'tiff'),
     }
 
