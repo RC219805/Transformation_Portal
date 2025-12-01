@@ -809,6 +809,11 @@ class UnifiedLuxuryPipeline:
         log.info("  Applying Material Response...")
 
         strength = params.get('material_strength', 0.65)
+
+        # Ensure RGB mode
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
         arr = np.array(image).astype(np.float32) / 255.0
         h, w = arr.shape[:2]
 
@@ -822,32 +827,60 @@ class UnifiedLuxuryPipeline:
 
         # Vertical position for perspective-based detection
         y_norm = np.linspace(0, 1, h).reshape(-1, 1)
-        x_norm = np.linspace(0, 1, w).reshape(1, -1)
         y_norm = np.broadcast_to(y_norm, (h, w))
-        x_norm = np.broadcast_to(x_norm, (h, w))
+
+        # ============================================================
+        # MATERIAL DETECTION THRESHOLDS (physics-based, tuned for luxury real estate)
+        # ============================================================
+        FLOOR_Y_OFFSET = 0.55
+        FLOOR_Y_RANGE = 0.45
+
+        WALL_LUMINANCE_MIN = 0.32
+        WALL_LUMINANCE_RANGE = 0.45
+        WALL_SATURATION_MAX = 0.26
+
+        HIGHLIGHT_LUMINANCE_MIN = 0.68
+        HIGHLIGHT_LUMINANCE_RANGE = 0.32
+
+        MIDTONE_CENTER = 0.5
+        MIDTONE_RANGE = 0.35
+
+        WOOD_WARM_BIAS_OFFSET = 0.08
+        WOOD_WARM_BIAS_RANGE = 0.18
+        WOOD_SATURATION_MIN = 0.06
+        WOOD_SATURATION_RANGE = 0.22
+        WOOD_LUMINANCE_MIN = 0.18
+        WOOD_LUMINANCE_RANGE = 0.5
+        WOOD_GAUSSIAN_SIGMA = 2.5
+
+        TEXTILE_LUMINANCE_MIN = 0.35
+        TEXTILE_LUMINANCE_RANGE = 0.4
+        TEXTILE_SATURATION_MAX = 0.28
+        TEXTILE_GAUSSIAN_SIGMA = 1.8
+
+        METAL_SATURATION_MAX = 0.12
+        METAL_LUMINANCE_MIN = 0.25
+        METAL_LUMINANCE_MAX = 0.85
+        METAL_GAUSSIAN_SIGMA = 2.0
 
         # Floor region (lower portion, perspective)
-        floor_mask = np.clip((y_norm - 0.55) / 0.45, 0.0, 1.0).astype(np.float32)
+        floor_mask = np.clip((y_norm - FLOOR_Y_OFFSET) / FLOOR_Y_RANGE, 0.0, 1.0).astype(np.float32)
 
         # Wall region (upper-mid, low saturation)
         wall_mask = (
-            np.clip((luminance - 0.32) / 0.45, 0.0, 1.0) *
-            np.clip((0.26 - saturation) / 0.26, 0.0, 1.0) *
+            np.clip((luminance - WALL_LUMINANCE_MIN) / WALL_LUMINANCE_RANGE, 0.0, 1.0) *
+            np.clip((WALL_SATURATION_MAX - saturation) / WALL_SATURATION_MAX, 0.0, 1.0) *
             np.clip(1.0 - floor_mask, 0.0, 1.0)
         )
         wall_mask = gaussian_filter(wall_mask, sigma=1.5)
 
         # Highlight mask for energy conservation
-        highlight_mask = np.clip((luminance - 0.68) / 0.32, 0.0, 1.0)
+        highlight_mask = np.clip((luminance - HIGHLIGHT_LUMINANCE_MIN) / HIGHLIGHT_LUMINANCE_RANGE, 0.0, 1.0)
         highlight_mask = gaussian_filter(highlight_mask, sigma=2.0)
 
         # Midtone mask for texture preservation
-        midtone_mask = np.clip(1.0 - np.abs(luminance - 0.5) / 0.35, 0.0, 1.0)
+        midtone_mask = np.clip(1.0 - np.abs(luminance - MIDTONE_CENTER) / MIDTONE_RANGE, 0.0, 1.0)
         midtone_mask = gaussian_filter(midtone_mask, sigma=1.5)
-
-        # Shadow mask
-        shadow_mask = np.clip((0.25 - luminance) / 0.25, 0.0, 1.0)
-        shadow_mask = gaussian_filter(shadow_mask, sigma=2.0)
 
         # ============================================================
         # SCENE-SPECIFIC MATERIAL MASKS
@@ -856,29 +889,29 @@ class UnifiedLuxuryPipeline:
         # Wood detection (warm mid-tones on floor regions)
         warm_bias = arr[..., 0] - 0.5 * (arr[..., 1] + arr[..., 2])
         wood_mask = (
-            np.clip((warm_bias + 0.08) / 0.18, 0.0, 1.0) *
-            np.clip((saturation - 0.06) / 0.22, 0.0, 1.0) *
-            np.clip((luminance - 0.18) / 0.5, 0.0, 1.0) *
+            np.clip((warm_bias + WOOD_WARM_BIAS_OFFSET) / WOOD_WARM_BIAS_RANGE, 0.0, 1.0) *
+            np.clip((saturation - WOOD_SATURATION_MIN) / WOOD_SATURATION_RANGE, 0.0, 1.0) *
+            np.clip((luminance - WOOD_LUMINANCE_MIN) / WOOD_LUMINANCE_RANGE, 0.0, 1.0) *
             floor_mask
         )
-        wood_mask = gaussian_filter(wood_mask, sigma=2.5)
+        wood_mask = gaussian_filter(wood_mask, sigma=WOOD_GAUSSIAN_SIGMA)
 
         # Textile detection (soft, mid-brightness, neutral)
         textile_mask = (
-            np.clip((luminance - 0.35) / 0.4, 0.0, 1.0) *
-            np.clip((0.28 - saturation) / 0.28, 0.0, 1.0) *
+            np.clip((luminance - TEXTILE_LUMINANCE_MIN) / TEXTILE_LUMINANCE_RANGE, 0.0, 1.0) *
+            np.clip((TEXTILE_SATURATION_MAX - saturation) / TEXTILE_SATURATION_MAX, 0.0, 1.0) *
             np.clip(1.0 - floor_mask, 0.0, 1.0)
         )
-        textile_mask = gaussian_filter(textile_mask, sigma=1.8)
+        textile_mask = gaussian_filter(textile_mask, sigma=TEXTILE_GAUSSIAN_SIGMA)
 
         # Metal/glass detection (neutral, high contrast)
-        neutral_mask = np.clip((0.12 - saturation) / 0.12, 0.0, 1.0)
+        neutral_mask = np.clip((METAL_SATURATION_MAX - saturation) / METAL_SATURATION_MAX, 0.0, 1.0)
         edge_mag = np.abs(sobel(luminance, axis=0)) + np.abs(sobel(luminance, axis=1))
         edge_mag = gaussian_filter(edge_mag, sigma=1.0)
         if edge_mag.max() > 0:
             edge_mag = edge_mag / edge_mag.max()
-        metal_mask = neutral_mask * edge_mag * np.clip(luminance, 0.25, 0.85)
-        metal_mask = gaussian_filter(metal_mask, sigma=2.0)
+        metal_mask = neutral_mask * edge_mag * np.clip(luminance, METAL_LUMINANCE_MIN, METAL_LUMINANCE_MAX)
+        metal_mask = gaussian_filter(metal_mask, sigma=METAL_GAUSSIAN_SIGMA)
 
         # ============================================================
         # PHYSICS-BASED ENHANCEMENTS
