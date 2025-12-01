@@ -1,0 +1,67 @@
+# Interior Neutral Luxe Recipe
+# ============================
+# Clean FilmConvert Nitrate base for neutral interiors
+# Subtle, refined look for modern luxury spaces
+
+name: "Interior Neutral Luxe"
+description: "Clean FilmConvert Nitrate base for neutral interiors with refined tones"
+
+# Processing stages in execution order
+stages:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+
+# Depth estimation configuration
+depth_estimation:
+  enabled: true
+  model: "depth-anything-v2-small"
+  device: "auto"
+
+# Material Response configuration
+material_response:
+  enabled: true
+  profile: "luxury_interior"
+  texture_boost: 0.22
+  ambient_occlusion: 0.10
+  highlight_warmth: 0.05
+  haze_strength: 0.04
+  floor_plank_contrast: 0.10
+  floor_specular: 0.15
+  textile_contrast: 0.20
+  leather_sheen: 0.14
+  window_light_wrap: 0.12
+  window_reflection: 0.10
+  wall_texture: 0.08
+
+# Color grading configuration
+color_grading:
+  enabled: true
+  lut: "assets/luts/film_emulation/FilmConvert/FilmConvert_Nitrate_LuxuryRE.cube"
+  lut_strength: 0.75
+  contrast: 1.02
+  saturation: 1.04
+  warmth: 0.0
+  exposure: 0.0
+
+# Photo finishing configuration
+photo_finishing:
+  enabled: true
+  aces: true
+  bloom:
+    enabled: true
+    threshold: 0.85
+    intensity: 0.18
+  vignette:
+    enabled: true
+    strength: 0.12
+  grain:
+    enabled: true
+    amount: 0.008
+
+# Output configuration
+output:
+  format: "tiff"
+  quality: 95
+  bit_depth: 16
