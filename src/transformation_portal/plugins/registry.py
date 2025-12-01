@@ -3,17 +3,15 @@
 import importlib
 import importlib.util
 import inspect
-import sys
 import warnings
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
 from .interface import (
     PluginInterface,
     PluginMetadata,
     PluginType,
-    PluginValidationError,
 )
 
 
@@ -201,7 +199,7 @@ class PluginRegistry:
                         for name, obj in inspect.getmembers(module, inspect.isclass):
                             if (issubclass(obj, PluginInterface) and
                                 obj is not PluginInterface and
-                                not inspect.isabstract(obj)):
+                                    not inspect.isabstract(obj)):
 
                                 # Instantiate and register plugin
                                 plugin_instance = obj()

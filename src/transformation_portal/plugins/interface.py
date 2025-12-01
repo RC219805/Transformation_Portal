@@ -1,11 +1,9 @@
 """Plugin interface definitions for extensible architecture."""
 
-import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class PluginType(Enum):
@@ -89,7 +87,6 @@ class PluginInterface(ABC):
     @abstractmethod
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata. Must be implemented by subclasses."""
-        pass
 
     @abstractmethod
     def initialize(self, config: Optional[Dict[str, Any]] = None) -> None:
@@ -101,7 +98,6 @@ class PluginInterface(ABC):
         Raises:
             PluginInitializationError: If initialization fails
         """
-        pass
 
     @abstractmethod
     def execute(self, *args, **kwargs) -> Any:
@@ -117,7 +113,6 @@ class PluginInterface(ABC):
         Raises:
             PluginExecutionError: If execution fails
         """
-        pass
 
     def validate(self) -> bool:
         """Validate plugin configuration and state.
@@ -170,7 +165,6 @@ class DepthModelPlugin(PluginInterface):
         Returns:
             Depth map (format depends on implementation)
         """
-        pass
 
     def execute(self, image: Any, **kwargs) -> Any:
         """Execute depth estimation (delegates to estimate_depth)."""
@@ -191,7 +185,6 @@ class ProcessorPlugin(PluginInterface):
         Returns:
             Processed output
         """
-        pass
 
     def execute(self, input_data: Any, **kwargs) -> Any:
         """Execute processing (delegates to process)."""
@@ -213,7 +206,6 @@ class EnhancerPlugin(PluginInterface):
         Returns:
             Enhanced image
         """
-        pass
 
     def execute(self, image: Any, **kwargs) -> Any:
         """Execute enhancement (delegates to enhance)."""
@@ -222,14 +214,11 @@ class EnhancerPlugin(PluginInterface):
 
 class PluginInitializationError(Exception):
     """Raised when plugin initialization fails."""
-    pass
 
 
 class PluginExecutionError(Exception):
     """Raised when plugin execution fails."""
-    pass
 
 
 class PluginValidationError(Exception):
     """Raised when plugin validation fails."""
-    pass

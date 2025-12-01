@@ -11,7 +11,6 @@ Tests cover:
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -416,7 +415,7 @@ class TestPluginLoader:
         """Test discovering from empty directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             loader = PluginLoader(search_paths=[Path(tmpdir)])
-            plugins = loader.discover_all()
+            _plugins = loader.discover_all()  # noqa: F841
             # May find builtin plugins
             # Just verify it doesn't crash
 
@@ -675,7 +674,7 @@ class TestPluginValidator:
     def test_strict_mode(self, simple_plugin):
         """Test strict validation mode."""
         validator = PluginValidator(strict_mode=True)
-        result = validator.validate(simple_plugin)
+        _result = validator.validate(simple_plugin)  # noqa: F841
         # In strict mode, warnings become errors
 
 

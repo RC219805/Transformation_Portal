@@ -33,17 +33,13 @@ from PIL import Image, ImageEnhance
 
 # Import Material Response (via backward-compatible wrapper)
 try:
-    from transformation_portal.processors.material_response.core import (
-        MaterialAestheticProfile,
-        LightingProfile,
-    )
     MATERIAL_RESPONSE_AVAILABLE = True
 except ImportError:
     MATERIAL_RESPONSE_AVAILABLE = False
     logging.warning("Material Response not available - will use simplified enhancement")
 
 # Import tone mapping
-from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable, linear_to_srgb
+from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable
 
 # Configure logging
 logging.basicConfig(
@@ -174,7 +170,11 @@ def get_750_picacho_preset(room_type: str = "interior") -> PipelinePreset:
                 temperature_shift=(1.0, 0.98, 0.95),  # Slightly warm
             ),
             ai_enhancement=AIEnhancementConfig(
-                prompt="luxury interior, montecito estate, perfect architectural lighting, high-end finishes, photorealistic, ultra detailed, professional real estate photography",
+                prompt=(
+                    "luxury interior, montecito estate, perfect architectural lighting, "
+                    "high-end finishes, photorealistic, ultra detailed, professional "
+                    "real estate photography"
+                ),
                 strength=0.30,
             ),
         )
@@ -197,7 +197,12 @@ def get_750_picacho_preset(room_type: str = "interior") -> PipelinePreset:
                 temperature_shift=(1.05, 1.0, 1.0),  # Golden hour warmth
             ),
             ai_enhancement=AIEnhancementConfig(
-                prompt="luxury montecito coastal estate aerial photography, dramatic hillside architecture, infinity pool, mediterranean landscaping, golden hour lighting, ultra detailed, professional architectural photography, photorealistic",
+                prompt=(
+                    "luxury montecito coastal estate aerial photography, dramatic "
+                    "hillside architecture, infinity pool, mediterranean landscaping, "
+                    "golden hour lighting, ultra detailed, professional architectural "
+                    "photography, photorealistic"
+                ),
                 strength=0.35,
             ),
         )
@@ -514,7 +519,7 @@ class EliteArchitecturalPipeline:
 
         # Blend based on strength
         enhanced = image * (1 - self.preset.material_response.strength) + \
-                   enhanced * self.preset.material_response.strength
+            enhanced * self.preset.material_response.strength
 
         return np.clip(enhanced, 0, 1)
 
@@ -600,7 +605,7 @@ class EliteArchitecturalPipeline:
         Image.fromarray(depth_colormap).save(path)
 
     def _save_processing_report(self, input_path: Path, outputs: Dict[str, Path],
-                               total_time: float, report_path: Path):
+                                total_time: float, report_path: Path):
         """Save detailed processing report."""
         report = {
             'input': str(input_path),
@@ -697,12 +702,12 @@ Examples:
     parser.add_argument('-i', '--input', type=Path, help='Input image path')
     parser.add_argument('-d', '--directory', type=Path, help='Batch process directory')
     parser.add_argument('-o', '--output', type=Path, default=Path('output_elite'),
-                       help='Output directory (default: output_elite)')
+                        help='Output directory (default: output_elite)')
     parser.add_argument('--pattern', default='*.tif', help='Glob pattern for batch (default: *.tif)')
 
     # Preset selection
     parser.add_argument('--preset', choices=['interior', 'aerial', 'pool', 'auto'],
-                       default='auto', help='Processing preset (default: auto)')
+                        default='auto', help='Processing preset (default: auto)')
     parser.add_argument('--config', type=Path, help='Custom preset JSON config')
 
     # Processing options
@@ -713,7 +718,7 @@ Examples:
 
     # Utility
     parser.add_argument('--dry-run', action='store_true',
-                       help='Show configuration without processing')
+                        help='Show configuration without processing')
     parser.add_argument('--verbose', action='store_true', help='Verbose logging')
 
     args = parser.parse_args()

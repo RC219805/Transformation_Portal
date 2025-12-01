@@ -23,15 +23,13 @@ Outputs:
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import cv2
 import numpy as np
-from PIL import Image
 
 try:
     import torch
-    import torch.nn as nn
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -168,7 +166,7 @@ class SkyGANGenerator:
             np.random.seed(random_seed)
 
         logger.info(f"Generating sky: azimuth={params.sun_azimuth}°, "
-                   f"elevation={params.sun_elevation}°")
+                    f"elevation={params.sun_elevation}°")
 
         # Generate clear sky base (physics-based)
         clear_sky = self._generate_clear_sky(params, resolution)
@@ -229,7 +227,7 @@ class SkyGANGenerator:
 
         # Calculate zenith luminance (simplified Preetham model)
         turbidity = params.turbidity
-        zenith_angle = np.pi/2 - sun_elevation_rad
+        _zenith_angle = np.pi / 2 - sun_elevation_rad  # noqa: F841
 
         # Rayleigh scattering (blue sky)
         rayleigh = self._rayleigh_phase(chi)
@@ -294,7 +292,7 @@ class SkyGANGenerator:
 
         # Henyey-Greenstein phase function
         numerator = 1 - g**2
-        denominator = (1 + g**2 - 2*g*cos_angle) ** 1.5
+        denominator = (1 + g**2 - 2 * g * cos_angle) ** 1.5
 
         phase = numerator / (4 * np.pi * denominator)
 
@@ -329,13 +327,13 @@ class SkyGANGenerator:
             # Blend clouds with sky
             cloud_color = np.array([1.0, 1.0, 1.0]) * 15.0  # Bright white clouds
             clear_sky = clear_sky * (1 - clouds[:, :, np.newaxis]) + \
-                       cloud_color * clouds[:, :, np.newaxis]
+                cloud_color * clouds[:, :, np.newaxis]
 
         # Add haze (reduces contrast, adds whiteness)
         if params.haze_density > 0.05:
             haze_color = np.array([1.0, 0.98, 0.95]) * 8.0  # Slightly warm haze
             clear_sky = clear_sky * (1 - params.haze_density * 0.5) + \
-                       haze_color * params.haze_density * 0.3
+                haze_color * params.haze_density * 0.3
 
         return clear_sky
 
@@ -435,7 +433,7 @@ class SkyGANGenerator:
         alpha = features if features.ndim == 2 else features[:, :, 0]
 
         blended = clear_sky * (1 - alpha[:, :, np.newaxis]) + \
-                 np.ones_like(clear_sky) * alpha[:, :, np.newaxis] * 12.0
+            np.ones_like(clear_sky) * alpha[:, :, np.newaxis] * 12.0
 
         return blended
 

@@ -492,10 +492,10 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
     """Entry point for luxury TIFF batch processor CLI.
-    
+
     Args:
         argv: Command-line arguments (defaults to sys.argv if None).
-    
+
     Returns:
         None (exits with appropriate status code).
     """

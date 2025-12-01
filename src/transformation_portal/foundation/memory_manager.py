@@ -375,7 +375,7 @@ class MemoryManager:
         max_bytes = self.config.max_memory_gb * 1024**3
 
         if projected_usage > max_bytes * self.config.high_watermark:
-            logger.warning(f"Memory pressure detected, running optimization before allocation")
+            logger.warning("Memory pressure detected, running optimization before allocation")
             self.optimize_memory()
 
     def _get_memory_usage(self) -> int:

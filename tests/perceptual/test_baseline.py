@@ -356,7 +356,7 @@ class TestPerceptualBaseline:
         """Create test images."""
         paths = []
         for i, name in enumerate(["pool", "bedroom", "kitchen"]):
-            img = Image.new('RGB', (256, 256), color=(i*80, i*80, i*80))
+            img = Image.new('RGB', (256, 256), color=(i * 80, i * 80, i * 80))
             path = tmp_path / f"{name}.jpg"
             img.save(path)
             paths.append(path)

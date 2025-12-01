@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
+
 class QualityEnforcer:
     """Enforce code quality standards proactively."""
 
@@ -72,7 +73,6 @@ class QualityEnforcer:
             (r'def.*\(.*=\{\}', 'Empty dict {} as default'),
         ]
 
-        found_issues = False
         for pattern, desc in dangerous_patterns:
             result = subprocess.run(
                 ["grep", "-r", "-n", "-E", pattern, "--include=*.py", "."],
@@ -87,7 +87,7 @@ class QualityEnforcer:
                     f"⚠️  Found {len(lines)} instances of: {desc}\n"
                     f"   → Use None as default and initialize in function body"
                 )
-                found_issues = True
+                pass  # Issues already tracked in self.warnings
 
         print("✓ Dangerous defaults checked")
         return True

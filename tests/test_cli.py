@@ -8,6 +8,15 @@ from __future__ import annotations
 
 import pytest
 
+# Check if typer is available
+try:
+    import typer  # noqa: F401
+    HAS_TYPER = True
+except ImportError:
+    HAS_TYPER = False
+
+pytestmark = pytest.mark.skipif(not HAS_TYPER, reason="typer not installed")
+
 
 class TestCLIImport:
     """Tests for CLI module import."""

@@ -177,9 +177,9 @@ class SyntheticDataGenerator:
             for window_y in range(building_y + 30, h - 30, 80):
                 window_w, window_h = 60, 50
                 # Glass reflection (blue tint)
-                img[window_y:window_y+window_h, window_x:window_x+window_w, 2] = 140
-                img[window_y:window_y+window_h, window_x:window_x+window_w, 1] = 120
-                img[window_y:window_y+window_h, window_x:window_x+window_w, 0] = 100
+                img[window_y:window_y + window_h, window_x:window_x + window_w, 2] = 140
+                img[window_y:window_y + window_h, window_x:window_x + window_w, 1] = 120
+                img[window_y:window_y + window_h, window_x:window_x + window_w, 0] = 100
 
         # Add subtle lighting variations
         x_gradient = np.linspace(0.9, 1.1, w)

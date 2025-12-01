@@ -17,7 +17,6 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import torch
 from PIL import Image
 
@@ -39,17 +38,17 @@ def test_model_download():
         from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
         model_id = "depth-anything/Depth-Anything-V2-Small-hf"
-        logger.info(f"\n✓ Step 1: Testing model download from HuggingFace")
+        logger.info("\n✓ Step 1: Testing model download from HuggingFace")
         logger.info(f"  Model ID: {model_id}")
 
         start_time = time.time()
 
         # This will auto-download if not cached
         processor = AutoImageProcessor.from_pretrained(model_id)
-        logger.info(f"  ✓ Image processor loaded")
+        logger.info("  ✓ Image processor loaded")
 
         model = AutoModelForDepthEstimation.from_pretrained(model_id)
-        logger.info(f"  ✓ Model loaded")
+        logger.info("  ✓ Model loaded")
 
         download_time = time.time() - start_time
         logger.info(f"  ✓ Total time: {download_time:.2f}s")
@@ -67,7 +66,7 @@ def test_depth_estimation(processor, model, test_image_path=None):
         logger.error("\n✗ Step 2: Skipped (model not loaded)")
         return None
 
-    logger.info(f"\n✓ Step 2: Testing depth map generation")
+    logger.info("\n✓ Step 2: Testing depth map generation")
 
     try:
         # Find a test image
@@ -110,13 +109,13 @@ def test_depth_estimation(processor, model, test_image_path=None):
         if torch.backends.mps.is_available():
             device = "mps"
             model = model.to(device)
-            logger.info(f"  Using MPS acceleration (Apple Silicon)")
+            logger.info("  Using MPS acceleration (Apple Silicon)")
         elif torch.cuda.is_available():
             device = "cuda"
             model = model.to(device)
-            logger.info(f"  Using CUDA acceleration")
+            logger.info("  Using CUDA acceleration")
         else:
-            logger.info(f"  Using CPU (no GPU available)")
+            logger.info("  Using CPU (no GPU available)")
 
         # Prepare inputs
         inputs = processor(images=test_image, return_tensors="pt")
@@ -133,7 +132,7 @@ def test_depth_estimation(processor, model, test_image_path=None):
         # Convert to numpy
         depth_map = predicted_depth.squeeze().cpu().numpy()
 
-        logger.info(f"  ✓ Depth map generated successfully")
+        logger.info("  ✓ Depth map generated successfully")
         logger.info(f"  Output shape: {depth_map.shape}")
         logger.info(f"  Depth range: [{depth_map.min():.3f}, {depth_map.max():.3f}]")
         logger.info(f"  Inference time: {inference_time*1000:.1f}ms")
@@ -149,10 +148,9 @@ def test_depth_estimation(processor, model, test_image_path=None):
 
 def test_pipeline_integration():
     """Test integration with luxury estate pipeline."""
-    logger.info(f"\n✓ Step 3: Testing pipeline integration")
+    logger.info("\n✓ Step 3: Testing pipeline integration")
 
     try:
-        from luxury_estate_master_pipeline import LuxuryEstatePipeline
         logger.info("  ✓ Pipeline imports successfully")
 
         # Check that depth is available

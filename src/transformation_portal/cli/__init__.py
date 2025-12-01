@@ -36,15 +36,13 @@ from typing import Optional
 
 try:
     import typer
-except ImportError:
-    print(
-        "Error: typer is required for the CLI. Install it with:\n"
+except ImportError as e:
+    raise ImportError(
+        "typer is required for the CLI. Install it with:\n"
         "  pip install typer\n"
         "or install the full package with:\n"
-        "  pip install -e '.[dev]'",
-        file=sys.stderr
-    )
-    sys.exit(1)
+        "  pip install -e '.[dev]'"
+    ) from e
 
 
 def check_module_availability(module_path: str, module_name: str) -> bool:

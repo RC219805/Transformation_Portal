@@ -4,7 +4,6 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="temporal_evolution module in scripts, not yet migrated")
 
-import pytest
 
 try:
     from scripts.temporal_evolution import TemporalEvolutionRoadmap

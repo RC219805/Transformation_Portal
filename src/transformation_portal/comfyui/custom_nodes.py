@@ -13,10 +13,8 @@ Node Categories:
 
 import logging
 from typing import Any, Dict, List, Optional, Tuple
-from pathlib import Path
 
 import numpy as np
-from PIL import Image
 
 
 logger = logging.getLogger(__name__)

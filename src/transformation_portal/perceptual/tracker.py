@@ -66,7 +66,7 @@ class EnhancementTrajectory:
 
         recent_points = self.points[-5:]  # Look at last 5 points
         return all(
-            recent_points[i].overall_quality <= recent_points[i+1].overall_quality
+            recent_points[i].overall_quality <= recent_points[i + 1].overall_quality
             for i in range(len(recent_points) - 1)
         )
 

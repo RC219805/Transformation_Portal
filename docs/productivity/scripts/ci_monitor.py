@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
 
+
 class CIMonitor:
     """Monitor CI/CD pipeline health and performance"""
 
@@ -95,6 +96,7 @@ class CIMonitor:
         print(f"✅ Metrics saved to {output_file}")
         return output_file
 
+
 def main():
     """Main entry point"""
     monitor = CIMonitor()
@@ -105,6 +107,7 @@ def main():
     # Save metrics
     if "--save" in sys.argv:
         monitor.save_metrics()
+
 
 if __name__ == "__main__":
     main()

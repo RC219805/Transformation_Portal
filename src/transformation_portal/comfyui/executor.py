@@ -569,7 +569,6 @@ class WorkflowExecutor:
         Returns:
             Dictionary with processed image
         """
-        from transformation_portal.atmosphere import AtmosphericModel
 
         image = inputs.get("image")
         if image is None:

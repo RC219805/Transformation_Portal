@@ -176,7 +176,7 @@ class LocationPresets:
         Returns:
             AtmosphericParameters
         """
-        profile = self.LOCATIONS.get(location, self.LOCATIONS["montecito"])
+        _profile = self.LOCATIONS.get(location, self.LOCATIONS["montecito"])  # noqa: F841
 
         # Base parameters for coastal location
         base_params = AtmosphericParameters(
@@ -307,7 +307,7 @@ class LocationPresets:
             day_of_year = 266  # Fall equinox
 
         # Solar declination (simplified)
-        declination = 23.45 * np.sin(np.deg2rad((360/365) * (day_of_year - 81)))
+        declination = 23.45 * np.sin(np.deg2rad((360 / 365) * (day_of_year - 81)))
 
         # Hour angle
         hour_angle = (time_of_day - 12) * 15  # 15 degrees per hour

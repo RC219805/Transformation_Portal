@@ -6,18 +6,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from threading import Lock
-from typing import Any, Callable, Dict, Iterator, List, Optional, Type, Union
+from typing import Any, Dict, Iterator, List, Optional
 
 from .interface import (
-    DepthModelPlugin,
-    EnhancerPlugin,
-    PluginExecutionError,
     PluginInitializationError,
     PluginInterface,
-    PluginMetadata,
     PluginType,
-    PluginValidationError,
-    ProcessorPlugin,
 )
 from .loader import LoadedPlugin, PluginLoader, get_global_loader
 from .registry import PluginRegistry, get_global_registry

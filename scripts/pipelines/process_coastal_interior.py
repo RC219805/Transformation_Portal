@@ -71,7 +71,7 @@ def conservative_enhance(img, params):
             img = img.convert('RGB')
 
     # Store original mode for restoration
-    original_mode = img.mode
+    _original_mode = img.mode  # noqa: F841
 
     # Work in RGB for processing (Pillow requirement)
     if img.mode == 'I;16':
@@ -162,10 +162,10 @@ def create_comparison(img1, img2, labels, output_path):
     draw = ImageDraw.Draw(comparison)
     try:
         font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32)
-        font_small = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 18)
+        font_small = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 18)  # noqa: F841
     except (OSError, IOError):
         font = ImageFont.load_default()
-        font_small = font
+        _font_small = font  # noqa: F841
 
     # Draw labels
     draw.text((10, 15), labels[0], fill=(255, 255, 255), font=font)
@@ -285,7 +285,7 @@ def main():
 
     # Calculate brightness change percentage
     brightness_change = ((enhanced_metrics['normalized_mean'] - original_metrics['normalized_mean'])
-                        / original_metrics['normalized_mean'] * 100)
+                         / original_metrics['normalized_mean'] * 100)
     print(f"   Brightness Change: {brightness_change:+.2f}%")
 
     # Quality verification

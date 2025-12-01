@@ -121,10 +121,10 @@ def main():
     _info("VFX Extension Examples for Transformation Portal\n")
 
     example_list_presets()
-    _info("\n" + "="*60 + "\n")
+    _info("\n" + "=" * 60 + "\n")
 
     example_cli_usage()
-    _info("\n" + "="*60 + "\n")
+    _info("\n" + "=" * 60 + "\n")
 
     # Uncomment to run single image example (requires actual image file)
     # example_single_image()

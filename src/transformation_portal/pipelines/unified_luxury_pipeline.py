@@ -618,7 +618,7 @@ class UnifiedLuxuryPipeline:
         arr = np.array(image).astype(np.float32) / 255.0
 
         # Calculate sky ratio (top 1/3 of image)
-        top_third = arr[:arr.shape[0]//3, :, :]
+        top_third = arr[:arr.shape[0] // 3, :, :]
         sky_brightness = top_third.mean()
 
         # Calculate overall brightness variance

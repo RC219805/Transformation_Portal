@@ -57,13 +57,13 @@ class ContextAwareProPipeline:
         logger.info(f"  Context cache: {context_dir}")
 
     def process_image(self,
-                     image_path: Path,
-                     pdf_documents: Optional[List[Path]] = None,
-                     base_prompt: str = "photorealistic luxury architectural rendering",
-                     enable_depth: bool = True,
-                     enable_material_response: bool = True,
-                     enable_ai_enhancement: bool = True,
-                     upscale_4x: bool = False) -> Dict[str, Path]:
+                      image_path: Path,
+                      pdf_documents: Optional[List[Path]] = None,
+                      base_prompt: str = "photorealistic luxury architectural rendering",
+                      enable_depth: bool = True,
+                      enable_material_response: bool = True,
+                      enable_ai_enhancement: bool = True,
+                      upscale_4x: bool = False) -> Dict[str, Path]:
         """
         Process image with architectural context awareness.
 
@@ -145,9 +145,9 @@ class ContextAwareProPipeline:
         return outputs
 
     def _process_depth_stage(self,
-                            image_path: Path,
-                            context: ArchitecturalContext,
-                            prompt: str) -> Path:
+                             image_path: Path,
+                             context: ArchitecturalContext,
+                             prompt: str) -> Path:
         """Process with depth-aware pipeline."""
         try:
             from depth_pipeline.pipeline import ArchitecturalDepthPipeline
@@ -250,10 +250,10 @@ class ContextAwareProPipeline:
             return image_path
 
     def _process_ai_stage(self,
-                         image_path: Path,
-                         context: ArchitecturalContext,
-                         prompt: str,
-                         upscale_4x: bool = False) -> Path:
+                          image_path: Path,
+                          context: ArchitecturalContext,
+                          prompt: str,
+                          upscale_4x: bool = False) -> Path:
         """Process with AI enhancement."""
         try:
             # Import AI pipeline components
@@ -267,7 +267,7 @@ class ContextAwareProPipeline:
             output_path = self.output_dir / f"{image_path.stem}_ai_enhanced.png"
 
             # Process with enhanced prompt
-            result = process_image(
+            _result = process_image(  # noqa: F841
                 image_path,
                 prompt=prompt,
                 output_path=output_path,
@@ -283,9 +283,9 @@ class ContextAwareProPipeline:
             return image_path
 
     def _save_processing_summary(self,
-                                context: ArchitecturalContext,
-                                outputs: Dict[str, Path],
-                                summary_path: Path):
+                                 context: ArchitecturalContext,
+                                 outputs: Dict[str, Path],
+                                 summary_path: Path):
         """Save processing summary with context details."""
 
         with open(summary_path, 'w') as f:

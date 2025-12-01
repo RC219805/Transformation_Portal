@@ -21,22 +21,19 @@ Date: November 11, 2025
 Version: Ultra-Premium 1.0
 """
 
-import sys
+from skimage import color
+from scipy.ndimage import gaussian_filter
+import cv2
+from PIL import Image, ImageEnhance
+import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 import logging
 from datetime import datetime
 import json
 import warnings
 warnings.filterwarnings('ignore')
 
-import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter
-import cv2
-from scipy import ndimage
-from scipy.ndimage import gaussian_filter
-from skimage import exposure, color, filters
-from tqdm import tqdm
 
 # Configure logging
 logging.basicConfig(
@@ -401,16 +398,16 @@ class UltraPremiumPipeline:
         """Apply advanced tone curve."""
         curves = {
             'landscape': lambda x: np.where(x < 0.5,
-                0.5 * np.power(2 * x, 0.85),
-                1.0 - 0.5 * np.power(2 * (1 - x), 0.85)),
+                                            0.5 * np.power(2 * x, 0.85),
+                                            1.0 - 0.5 * np.power(2 * (1 - x), 0.85)),
 
             'interior': lambda x: np.power(x, 0.92),
 
             'detail': lambda x: np.power(x, 0.88),
 
             'vibrant': lambda x: np.where(x < 0.5,
-                0.5 * np.power(2 * x, 0.9),
-                1.0 - 0.5 * np.power(2 * (1 - x), 0.95))
+                                          0.5 * np.power(2 * x, 0.9),
+                                          1.0 - 0.5 * np.power(2 * (1 - x), 0.95))
         }
 
         curve_func = curves.get(curve_type, curves['interior'])
@@ -664,12 +661,12 @@ class UltraPremiumPipeline:
             return []
 
         logger.info(f"\n{'='*80}")
-        logger.info(f"ULTRA-PREMIUM 100/100 QUALITY PIPELINE")
+        logger.info("ULTRA-PREMIUM 100/100 QUALITY PIPELINE")
         logger.info(f"{'='*80}")
         logger.info(f"Input:  {self.input_dir}")
         logger.info(f"Output: {self.output_dir}")
         logger.info(f"Images: {len(jpeg_files)}")
-        logger.info(f"Target: 100/100 quality across all metrics")
+        logger.info("Target: 100/100 quality across all metrics")
         logger.info(f"{'='*80}\n")
 
         results = []
@@ -696,7 +693,7 @@ class UltraPremiumPipeline:
     def print_summary(self, results: List[Dict]):
         """Print comprehensive summary."""
         logger.info(f"\n{'='*80}")
-        logger.info(f"PROCESSING COMPLETE - QUALITY REPORT")
+        logger.info("PROCESSING COMPLETE - QUALITY REPORT")
         logger.info(f"{'='*80}\n")
 
         if not results:
@@ -709,7 +706,11 @@ class UltraPremiumPipeline:
         for i, result in enumerate(results, 1):
             logger.info(f"{i}. {result['input']}")
             logger.info(f"   Scene: {result['scene']}")
-            logger.info(f"   Quality: {result['initial_metrics']['overall_quality']:.2f} → {result['final_metrics']['overall_quality']:.2f} (+{result['improvement']:.2f})")
+            logger.info(
+                f"   Quality: {result['initial_metrics']['overall_quality']:.2f} → "
+                f"{result['final_metrics']['overall_quality']:.2f} "
+                f"(+{result['improvement']:.2f})"
+            )
             logger.info(f"   Output: {result['output']}")
             logger.info("")
 
@@ -719,7 +720,7 @@ class UltraPremiumPipeline:
         avg_improvement = avg_final - avg_initial
 
         logger.info(f"{'='*80}")
-        logger.info(f"OVERALL STATISTICS")
+        logger.info("OVERALL STATISTICS")
         logger.info(f"{'='*80}")
         logger.info(f"Average Initial Quality:  {avg_initial:.2f}/100")
         logger.info(f"Average Final Quality:    {avg_final:.2f}/100")

@@ -22,7 +22,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict
 
 import numpy as np
 from PIL import Image
@@ -106,7 +106,7 @@ def test_model_variant(variant: str) -> Dict:
             'depth_range': [float(depth_map.min()), float(depth_map.max())],
         }
 
-        logger.info(f"\n✓ Results:")
+        logger.info("\n✓ Results:")
         logger.info(f"  Model ID: {model_id}")
         logger.info(f"  Init time: {init_time:.2f}s")
         logger.info(f"  Avg inference: {avg_time:.1f}ms ± {std_time:.1f}ms")
@@ -125,9 +125,9 @@ def test_model_variant(variant: str) -> Dict:
 def compare_variants() -> Dict:
     """Compare all V2 variants."""
 
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("PHASE 2: DEPTH ANYTHING V2 VARIANT COMPARISON")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     variants = ['small', 'large']  # Skip 'base' to save time
     results = {}
@@ -136,9 +136,9 @@ def compare_variants() -> Dict:
         results[variant] = test_model_variant(variant)
 
     # Generate comparison summary
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("COMPARISON SUMMARY")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     if 'small' in results and 'large' in results:
         small = results['small']
@@ -149,11 +149,11 @@ def compare_variants() -> Dict:
             large_time = large['avg_inference_ms']
             slowdown = (large_time / small_time - 1) * 100
 
-            logger.info(f"\nV2-Small:")
+            logger.info("\nV2-Small:")
             logger.info(f"  Inference: {small_time:.1f}ms")
             logger.info(f"  Model: {small['model_id']}")
 
-            logger.info(f"\nV2-Large:")
+            logger.info("\nV2-Large:")
             logger.info(f"  Inference: {large_time:.1f}ms")
             logger.info(f"  Model: {large['model_id']}")
             logger.info(f"  Slowdown: {slowdown:+.1f}% vs Small")
@@ -162,14 +162,14 @@ def compare_variants() -> Dict:
             small_throughput = 3600 * 1000 / small_time
             large_throughput = 3600 * 1000 / large_time
 
-            logger.info(f"\nThroughput (images/hour, depth only):")
+            logger.info("\nThroughput (images/hour, depth only):")
             logger.info(f"  V2-Small: {small_throughput:.0f} images/hour")
             logger.info(f"  V2-Large: {large_throughput:.0f} images/hour")
 
             # Recommendation
             logger.info(f"\n{'='*70}")
             logger.info("RECOMMENDATION")
-            logger.info("="*70)
+            logger.info("=" * 70)
 
             if slowdown < 100:  # Less than 2x slower
                 logger.info("✓ V2-Large is acceptable for production use")
@@ -190,9 +190,9 @@ def compare_variants() -> Dict:
 def update_pipeline_config():
     """Update pipeline configuration to support model variant selection."""
 
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("UPDATING PIPELINE CONFIGURATION")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Check if config file exists
     config_path = Path("config/750_picacho_master_preset.yaml")
@@ -209,12 +209,12 @@ def update_pipeline_config():
 def main():
     """Execute Phase 2: V2-Large upgrade."""
 
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info("PHASE 2 EXECUTION: DEPTH ANYTHING V2-LARGE UPGRADE")
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info("Date: November 10, 2025")
     logger.info("Objective: Upgrade from V2-Small to V2-Large for improved quality")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Step 1: Compare model variants
     results = compare_variants()
@@ -229,15 +229,15 @@ def main():
     update_pipeline_config()
 
     # Summary
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("PHASE 2 EXECUTION COMPLETE")
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info("\nNext Steps:")
     logger.info("1. Review benchmark results in phase2_benchmark_results.json")
     logger.info("2. Process test images with V2-Large")
     logger.info("3. Generate visual comparisons (Small vs Large)")
     logger.info("4. Update documentation with findings")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     return 0
 

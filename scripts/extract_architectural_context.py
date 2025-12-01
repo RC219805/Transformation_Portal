@@ -18,7 +18,7 @@ import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 try:
     import fitz  # PyMuPDF
@@ -26,6 +26,7 @@ try:
 except ImportError:
     HAS_PYMUPDF = False
     print("⚠ PyMuPDF not installed. Install: pip install PyMuPDF")
+
 
 @dataclass
 class ArchitecturalContext:
@@ -270,7 +271,7 @@ def main():
     output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else pdf_path.with_suffix('.json')
 
     extractor = ArchitecturalContextExtractor()
-    context = extractor.extract_from_pdf(pdf_path)
+    _context = extractor.extract_from_pdf(pdf_path)  # noqa: F841
     extractor.save_json(output_path)
 
     print("\n✅ Extraction complete!")

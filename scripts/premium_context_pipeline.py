@@ -15,16 +15,12 @@ This is the flagship pipeline for luxury real estate visualization.
 """
 
 import json
-import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, Optional
 
-import numpy as np
 from architectural_context_extractor import ArchitecturalContextExtractor, ProjectContext
-from context_aware_rendering import ContextAwareRenderingPipeline, RenderingStrategy
-from PIL import Image
+from context_aware_rendering import ContextAwareRenderingPipeline
 
 
 class PremiumContextAwarePipeline:
@@ -264,7 +260,7 @@ class PremiumContextAwarePipeline:
             if self.verbose:
                 print(f"Running: {' '.join(cmd)}")
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            _result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: F841
 
             # Find output (script generates its own naming)
             expected_output = self.output_dir / f"{image_path.stem}_{preset}.tif"

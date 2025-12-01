@@ -1,6 +1,5 @@
 """Version checking and compatibility utilities."""
 
-import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple
 

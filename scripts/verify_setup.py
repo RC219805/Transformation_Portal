@@ -147,9 +147,9 @@ def main():
 
     args = parser.parse_args()
 
-    print("="*70)
+    print("=" * 70)
     print("TRANSFORMATION PORTAL - INSTALLATION VERIFICATION")
-    print("="*70)
+    print("=" * 70)
 
     # Check required packages
     print("\nRequired Packages:")
@@ -225,9 +225,9 @@ def main():
     verify_dimension_validation()
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("SUMMARY")
-    print("="*70)
+    print("=" * 70)
 
     if required_ok:
         print("✓ All required packages are installed")

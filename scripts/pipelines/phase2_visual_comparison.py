@@ -13,7 +13,6 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -41,7 +40,7 @@ def create_depth_comparison(
 
     # Load input image
     img = Image.open(image_path).convert('RGB')
-    img_array = np.array(img)
+    _img_array = np.array(img)  # noqa: F841
     logger.info(f"✓ Loaded image: {img.size[0]}x{img.size[1]}")
 
     # Create output directory
@@ -134,13 +133,13 @@ def create_comparison_grid(
     try:
         font_title = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
         font_info = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
-    except:
+    except BaseException:
         font_title = ImageFont.load_default()
         font_info = ImageFont.load_default()
 
     # Paste original image
     grid.paste(original_img, (0, 80))
-    draw.text((w//2 - 50, 20), "Original", fill='black', font=font_title)
+    draw.text((w // 2 - 50, 20), "Original", fill='black', font=font_title)
 
     # Paste depth maps
     x_offset = w
@@ -154,7 +153,7 @@ def create_comparison_grid(
 
             # Add title
             title = f"V2-{variant_name.title()}"
-            draw.text((x_offset + w//2 - 50, 20), title, fill='black', font=font_title)
+            draw.text((x_offset + w // 2 - 50, 20), title, fill='black', font=font_title)
 
             # Add performance info
             if variant_name in results:
@@ -172,9 +171,9 @@ def create_comparison_grid(
 def main():
     """Run Phase 2 visual comparison."""
 
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info("PHASE 2 VISUAL COMPARISON: V2-SMALL vs V2-LARGE")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Find test image
     input_dir = Path("input_images/Temporary_Holding_Files")
@@ -194,13 +193,13 @@ def main():
         all_results[img_path.name] = results
 
     # Summary
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("PHASE 2 VISUAL COMPARISON COMPLETE")
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info(f"\nProcessed {len(test_images)} image(s)")
     logger.info(f"Output saved to: {output_dir}")
     logger.info("\nNext: Review visual comparisons to assess quality improvement")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     return 0
 

@@ -3,7 +3,7 @@
 import functools
 import time
 import uuid
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from .store import Event, get_global_store
 

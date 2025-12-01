@@ -22,9 +22,9 @@ from transformation_portal.pipelines.unified_luxury_pipeline import (
 
 def example_basic_usage():
     """Example 1: Basic single image processing with defaults."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 1: Basic Single Image Processing")
-    print("="*70)
+    print("=" * 70)
 
     # Process with balanced profile (default)
     outputs = process_luxury_render(
@@ -40,9 +40,9 @@ def example_basic_usage():
 
 def example_premium_quality():
     """Example 2: Premium quality processing for hero shots."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 2: Premium Quality for Hero Shot")
-    print("="*70)
+    print("=" * 70)
 
     config = UnifiedPipelineConfig(
         scene_type=SceneType.INTERIOR,
@@ -85,9 +85,9 @@ def example_premium_quality():
 
 def example_performance_mode():
     """Example 3: Fast processing for quick reviews."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 3: Performance Mode for Quick Review")
-    print("="*70)
+    print("=" * 70)
 
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.PERFORMANCE,
@@ -108,16 +108,16 @@ def example_performance_mode():
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
-    outputs = pipeline.process(Path("input/preview.jpg"))
+    _outputs = pipeline.process(Path("input/preview.jpg"))  # noqa: F841
 
     print(f"Fast preview generated in {pipeline.stats.total_time:.2f}s")
 
 
 def example_batch_processing():
     """Example 4: Batch process entire folder."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 4: Batch Processing")
-    print("="*70)
+    print("=" * 70)
 
     # Process all images in directory
     results = batch_process_luxury_renders(
@@ -136,12 +136,12 @@ def example_batch_processing():
 
 def example_custom_scene_optimization():
     """Example 5: Scene-specific optimization."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 5: Scene-Specific Optimization")
-    print("="*70)
+    print("=" * 70)
 
     # Interior scene
-    interior_config = UnifiedPipelineConfig(
+    _interior_config = UnifiedPipelineConfig(  # noqa: F841
         scene_type=SceneType.INTERIOR,
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/interior"),
@@ -150,7 +150,7 @@ def example_custom_scene_optimization():
     )
 
     # Exterior scene
-    exterior_config = UnifiedPipelineConfig(
+    _exterior_config = UnifiedPipelineConfig(  # noqa: F841
         scene_type=SceneType.EXTERIOR,
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/exterior"),
@@ -159,7 +159,7 @@ def example_custom_scene_optimization():
     )
 
     # Aerial scene
-    aerial_config = UnifiedPipelineConfig(
+    _aerial_config = UnifiedPipelineConfig(  # noqa: F841
         scene_type=SceneType.AERIAL,
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/aerial"),
@@ -172,9 +172,9 @@ def example_custom_scene_optimization():
 
 def example_with_lut():
     """Example 6: Processing with custom LUT."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 6: Processing with Custom LUT")
-    print("="*70)
+    print("=" * 70)
 
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.BALANCED,
@@ -191,16 +191,16 @@ def example_with_lut():
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
-    outputs = pipeline.process(Path("input/exterior.jpg"))
+    _outputs = pipeline.process(Path("input/exterior.jpg"))  # noqa: F841
 
     print("LUT-graded output generated")
 
 
 def example_runtime_overrides():
     """Example 7: Runtime parameter overrides."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 7: Runtime Parameter Overrides")
-    print("="*70)
+    print("=" * 70)
 
     # Create base configuration
     config = UnifiedPipelineConfig(
@@ -211,10 +211,10 @@ def example_runtime_overrides():
     pipeline = UnifiedLuxuryPipeline(config)
 
     # Process first image with base config
-    outputs1 = pipeline.process(Path("input/image1.jpg"))
+    _outputs1 = pipeline.process(Path("input/image1.jpg"))  # noqa: F841
 
     # Process second image with overrides
-    outputs2 = pipeline.process(
+    _outputs2 = pipeline.process(  # noqa: F841
         Path("input/image2.jpg"),
         exposure=0.3,      # Override exposure
         saturation=1.15,   # Override saturation
@@ -226,9 +226,9 @@ def example_runtime_overrides():
 
 def example_parallel_output_generation():
     """Example 8: Parallel output format generation."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 8: Parallel Output Generation")
-    print("="*70)
+    print("=" * 70)
 
     config = UnifiedPipelineConfig(
         output_dir=Path("output/parallel"),
@@ -246,9 +246,9 @@ def example_parallel_output_generation():
 
 def example_statistics_tracking():
     """Example 9: Detailed statistics tracking."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 9: Statistics Tracking")
-    print("="*70)
+    print("=" * 70)
 
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.BALANCED,
@@ -271,9 +271,9 @@ def example_statistics_tracking():
 
 def example_social_media_workflow():
     """Example 10: Social media optimized workflow."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 10: Social Media Workflow")
-    print("="*70)
+    print("=" * 70)
 
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.BALANCED,
@@ -306,9 +306,9 @@ def example_social_media_workflow():
 
 def example_auto_scene_detection():
     """Example 11: Automatic scene type detection."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 11: Automatic Scene Detection")
-    print("="*70)
+    print("=" * 70)
 
     config = UnifiedPipelineConfig(
         scene_type=SceneType.AUTO,  # Auto-detect scene type
@@ -327,15 +327,15 @@ def example_auto_scene_detection():
     ]
 
     for image_path in images:
-        outputs = pipeline.process(image_path)
+        _outputs = pipeline.process(image_path)  # noqa: F841
         print(f"Processed {image_path.name} (auto-detected scene type)")
 
 
 def example_print_production():
     """Example 12: High-end print production workflow."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Example 12: Print Production Workflow")
-    print("="*70)
+    print("=" * 70)
 
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.PREMIUM,
@@ -367,9 +367,9 @@ def example_print_production():
 
 
 if __name__ == "__main__":
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("UNIFIED LUXURY PIPELINE - USAGE EXAMPLES")
-    print("="*70)
+    print("=" * 70)
     print("\nThese examples demonstrate various ways to use the pipeline.")
     print("Uncomment the examples you want to run.\n")
 

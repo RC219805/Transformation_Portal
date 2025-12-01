@@ -76,50 +76,50 @@ class WorkflowTemplates:
         builder = WorkflowBuilder(name="Full Luxury Estate Enhancement")
 
         workflow = (builder
-            # Input
-            .add_input(input_path)
+                    # Input
+                    .add_input(input_path)
 
-            # Analysis phase
-            .add_scene_analysis(detailed=True)
-            .add_material_segmentation()
+                    # Analysis phase
+                    .add_scene_analysis(detailed=True)
+                    .add_material_segmentation()
 
-            # Enhancement phase
-            .add_flux_enhancement(
-                strength=flux_strength,
-                num_steps=4,
-                variant=flux_variant,
-                use_controlnet=True,
-                controlnet_types=["depth", "canny"]
-            )
+                    # Enhancement phase
+                    .add_flux_enhancement(
+                        strength=flux_strength,
+                        num_steps=4,
+                        variant=flux_variant,
+                        use_controlnet=True,
+                        controlnet_types=["depth", "canny"]
+                    )
 
-            # Atmospheric rendering
-            .add_skygan_sky(
-                location=location,
-                season=season,
-                time_of_day=time_of_day,
-                cloud_coverage=0.3,
-                update_reflections=True
-            )
+                    # Atmospheric rendering
+                    .add_skygan_sky(
+                        location=location,
+                        season=season,
+                        time_of_day=time_of_day,
+                        cloud_coverage=0.3,
+                        update_reflections=True
+                    )
 
-            # Aesthetic optimization
-            .add_neuroaesthetics_optimization(
-                emotional_target=emotional_target,
-                optimize_composition=True,
-                optimize_color_harmony=True,
-                optimize_spatial_frequency=True
-            )
+                    # Aesthetic optimization
+                    .add_neuroaesthetics_optimization(
+                        emotional_target=emotional_target,
+                        optimize_composition=True,
+                        optimize_color_harmony=True,
+                        optimize_spatial_frequency=True
+                    )
 
-            # Quality validation
-            .add_quality_validation(
-                pass_threshold=quality_threshold,
-                warning_threshold=5.0
-            )
+                    # Quality validation
+                    .add_quality_validation(
+                        pass_threshold=quality_threshold,
+                        warning_threshold=5.0
+                    )
 
-            # Output
-            .add_output(output_path, quality=95)
+                    # Output
+                    .add_output(output_path, quality=95)
 
-            .build()
-        )
+                    .build()
+                    )
 
         return workflow
 
@@ -151,26 +151,26 @@ class WorkflowTemplates:
         builder = WorkflowBuilder(name="Quick Iterative Enhancement")
 
         workflow = (builder
-            .add_input(input_path)
+                    .add_input(input_path)
 
-            # Fast enhancement only
-            .add_flux_enhancement(
-                strength=flux_strength,
-                num_steps=4,
-                variant="schnell",  # Fastest variant
-                use_controlnet=False  # Skip for speed
-            )
+                    # Fast enhancement only
+                    .add_flux_enhancement(
+                        strength=flux_strength,
+                        num_steps=4,
+                        variant="schnell",  # Fastest variant
+                        use_controlnet=False  # Skip for speed
+                    )
 
-            # Quick validation
-            .add_quality_validation(
-                pass_threshold=quality_threshold,
-                warning_threshold=4.0
-            )
+                    # Quick validation
+                    .add_quality_validation(
+                        pass_threshold=quality_threshold,
+                        warning_threshold=4.0
+                    )
 
-            .add_output(output_path, quality=90)
+                    .add_output(output_path, quality=90)
 
-            .build()
-        )
+                    .build()
+                    )
 
         return workflow
 
@@ -203,30 +203,30 @@ class WorkflowTemplates:
         builder = WorkflowBuilder(name="Material-Specific Enhancement")
 
         workflow = (builder
-            .add_input(input_path)
+                    .add_input(input_path)
 
-            # Detailed material analysis
-            .add_material_segmentation(materials=target_materials)
+                    # Detailed material analysis
+                    .add_material_segmentation(materials=target_materials)
 
-            # Material-aware enhancement
-            .add_flux_enhancement(
-                strength=flux_strength,
-                num_steps=4,
-                variant="dev",
-                use_controlnet=True,
-                controlnet_types=["depth", "canny"]
-            )
+                    # Material-aware enhancement
+                    .add_flux_enhancement(
+                        strength=flux_strength,
+                        num_steps=4,
+                        variant="dev",
+                        use_controlnet=True,
+                        controlnet_types=["depth", "canny"]
+                    )
 
-            # Validate material consistency
-            .add_quality_validation(
-                pass_threshold=7.0,
-                check_material_consistency=True
-            )
+                    # Validate material consistency
+                    .add_quality_validation(
+                        pass_threshold=7.0,
+                        check_material_consistency=True
+                    )
 
-            .add_output(output_path, quality=95)
+                    .add_output(output_path, quality=95)
 
-            .build()
-        )
+                    .build()
+                    )
 
         return workflow
 
@@ -262,39 +262,39 @@ class WorkflowTemplates:
         builder = WorkflowBuilder(name=f"Atmospheric Rendering - {location.title()}")
 
         workflow = (builder
-            .add_input(input_path)
+                    .add_input(input_path)
 
-            # Scene understanding
-            .add_scene_analysis(detailed=True)
+                    # Scene understanding
+                    .add_scene_analysis(detailed=True)
 
-            # Sky replacement
-            .add_skygan_sky(
-                location=location,
-                season=season,
-                time_of_day=time_of_day,
-                cloud_coverage=cloud_coverage,
-                update_reflections=True
-            )
+                    # Sky replacement
+                    .add_skygan_sky(
+                        location=location,
+                        season=season,
+                        time_of_day=time_of_day,
+                        cloud_coverage=cloud_coverage,
+                        update_reflections=True
+                    )
 
-            # Atmospheric effects
-            .add_atmospheric_model(
-                apply_aerial_perspective=True,
-                marine_layer=marine_layer,
-                max_distance=1000.0
-            )
+                    # Atmospheric effects
+                    .add_atmospheric_model(
+                        apply_aerial_perspective=True,
+                        marine_layer=marine_layer,
+                        max_distance=1000.0
+                    )
 
-            # Color harmony adjustment
-            .add_neuroaesthetics_optimization(
-                emotional_target="serenity",
-                optimize_composition=False,  # Don't change composition
-                optimize_color_harmony=True,
-                optimize_spatial_frequency=False
-            )
+                    # Color harmony adjustment
+                    .add_neuroaesthetics_optimization(
+                        emotional_target="serenity",
+                        optimize_composition=False,  # Don't change composition
+                        optimize_color_harmony=True,
+                        optimize_spatial_frequency=False
+                    )
 
-            .add_output(output_path, quality=95)
+                    .add_output(output_path, quality=95)
 
-            .build()
-        )
+                    .build()
+                    )
 
         return workflow
 
@@ -349,27 +349,27 @@ class WorkflowTemplates:
             builder = WorkflowBuilder(name=f"Variant {i+1} - {emotional_target.title()}")
 
             workflow = (builder
-                .add_input(input_path)
+                        .add_input(input_path)
 
-                .add_scene_analysis(detailed=True)
+                        .add_scene_analysis(detailed=True)
 
-                .add_flux_enhancement(
-                    strength=strength,
-                    num_steps=4,
-                    variant="dev",
-                    use_controlnet=True
-                )
+                        .add_flux_enhancement(
+                            strength=strength,
+                            num_steps=4,
+                            variant="dev",
+                            use_controlnet=True
+                        )
 
-                .add_neuroaesthetics_optimization(
-                    emotional_target=emotional_target
-                )
+                        .add_neuroaesthetics_optimization(
+                            emotional_target=emotional_target
+                        )
 
-                .add_quality_validation(pass_threshold=6.5)
+                        .add_quality_validation(pass_threshold=6.5)
 
-                .add_output(output_path, quality=92)
+                        .add_output(output_path, quality=92)
 
-                .build()
-            )
+                        .build()
+                        )
 
             workflows.append(workflow)
 
@@ -406,55 +406,55 @@ class WorkflowTemplates:
         builder = WorkflowBuilder(name="Coastal Golden Hour Enhancement")
 
         workflow = (builder
-            .add_input(input_path)
+                    .add_input(input_path)
 
-            # Understand scene
-            .add_scene_analysis(detailed=True)
-            .add_material_segmentation()
+                    # Understand scene
+                    .add_scene_analysis(detailed=True)
+                    .add_material_segmentation()
 
-            # Enhancement with architectural precision
-            .add_flux_enhancement(
-                strength=0.42,
-                num_steps=4,
-                variant="dev",
-                use_controlnet=True,
-                controlnet_types=["depth", "canny"]
-            )
+                    # Enhancement with architectural precision
+                    .add_flux_enhancement(
+                        strength=0.42,
+                        num_steps=4,
+                        variant="dev",
+                        use_controlnet=True,
+                        controlnet_types=["depth", "canny"]
+                    )
 
-            # Golden hour sky
-            .add_skygan_sky(
-                location=location,
-                season=season,
-                time_of_day="golden_hour",
-                cloud_coverage=0.2,  # Light clouds
-                update_reflections=True
-            )
+                    # Golden hour sky
+                    .add_skygan_sky(
+                        location=location,
+                        season=season,
+                        time_of_day="golden_hour",
+                        cloud_coverage=0.2,  # Light clouds
+                        update_reflections=True
+                    )
 
-            # Atmospheric effects
-            .add_atmospheric_model(
-                apply_aerial_perspective=True,
-                marine_layer=include_marine_layer,
-                max_distance=1500.0  # Longer distance for ocean views
-            )
+                    # Atmospheric effects
+                    .add_atmospheric_model(
+                        apply_aerial_perspective=True,
+                        marine_layer=include_marine_layer,
+                        max_distance=1500.0  # Longer distance for ocean views
+                    )
 
-            # Emotional optimization for aspiration
-            .add_neuroaesthetics_optimization(
-                emotional_target="aspiration",
-                optimize_composition=True,
-                optimize_color_harmony=True,
-                optimize_spatial_frequency=True
-            )
+                    # Emotional optimization for aspiration
+                    .add_neuroaesthetics_optimization(
+                        emotional_target="aspiration",
+                        optimize_composition=True,
+                        optimize_color_harmony=True,
+                        optimize_spatial_frequency=True
+                    )
 
-            # High quality validation
-            .add_quality_validation(
-                pass_threshold=7.5,
-                warning_threshold=6.0
-            )
+                    # High quality validation
+                    .add_quality_validation(
+                        pass_threshold=7.5,
+                        warning_threshold=6.0
+                    )
 
-            .add_output(output_path, quality=98)
+                    .add_output(output_path, quality=98)
 
-            .build()
-        )
+                    .build()
+                    )
 
         return workflow
 

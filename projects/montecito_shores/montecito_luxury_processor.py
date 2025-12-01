@@ -12,6 +12,7 @@ from datetime import datetime
 from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
 
+
 def auto_white_balance(img):
     """
     Apply automatic white balance using gray world assumption.
@@ -43,6 +44,7 @@ def auto_white_balance(img):
     img_array[:, :, 2] = np.clip(img_array[:, :, 2] * scale_b, 0, 255)
 
     return Image.fromarray(img_array.astype(np.uint8))
+
 
 def enhance_luxury_interior(image_path, output_dir, preset='signature', auto_wb=False):
     """

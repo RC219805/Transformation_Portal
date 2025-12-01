@@ -14,6 +14,7 @@ from PIL import Image
 # Add current directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+
 def load_exr_with_tone_mapping(exr_path: Path, target_size: Optional[Tuple[int, int]] = None) -> np.ndarray:
     """
     Load EXR file and apply proper tone mapping for luxury real estate.
@@ -88,7 +89,7 @@ def load_exr_with_tone_mapping(exr_path: Path, target_size: Optional[Tuple[int, 
         def tonemap_curve(x):
             return ((x * (shoulder_strength * x + linear_angle * linear_strength) +
                     toe_strength * toe_numerator) /
-                   (x * (shoulder_strength * x + linear_strength) +
+                    (x * (shoulder_strength * x + linear_strength) +
                     toe_strength * toe_denominator)) - toe_numerator / toe_denominator
 
         curr = tonemap_curve(x)

@@ -438,7 +438,7 @@ def main():
     parser = argparse.ArgumentParser(description='Parse architectural specifications from PDF')
     parser.add_argument('pdf_file', type=Path, help='Path to PDF file')
     parser.add_argument('--output', '-o', type=Path, default=Path('pdf_specs.json'),
-                       help='Output JSON file')
+                        help='Output JSON file')
 
     args = parser.parse_args()
 

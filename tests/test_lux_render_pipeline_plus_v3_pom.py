@@ -14,7 +14,7 @@ import pytest
 # Add scripts/pipelines to path for direct import
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "pipelines"))
 
-from lux_render_pipeline_plus_v3 import (
+from lux_render_pipeline_plus_v3 import (  # noqa: E402
     apply_pbr_overlays,
     _parallax_uv,
     _bilinear,

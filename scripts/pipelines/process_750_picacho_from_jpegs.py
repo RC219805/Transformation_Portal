@@ -32,9 +32,9 @@ def apply_luxury_enhancements(img: np.ndarray, scene_name: str) -> np.ndarray:
 
     # 3. Saturation refinement (+3%)
     if img_float.shape[2] == 3:
-        luminance = 0.299 * img_float[:,:,0] + 0.587 * img_float[:,:,1] + 0.114 * img_float[:,:,2]
+        luminance = 0.299 * img_float[:, :, 0] + 0.587 * img_float[:, :, 1] + 0.114 * img_float[:, :, 2]
         for c in range(3):
-            img_float[:,:,c] = luminance + 1.03 * (img_float[:,:,c] - luminance)
+            img_float[:, :, c] = luminance + 1.03 * (img_float[:, :, c] - luminance)
 
     return np.clip(img_float, 0, 1).astype(np.float32)
 

@@ -342,12 +342,12 @@ class AdaptiveSegmentationStage:
         h, w = image.shape[:2]
 
         # Check top region brightness (sky in ground photos)
-        top_region = image[:h//5, :]
+        top_region = image[:h // 5, :]
         top_brightness = top_region.mean()
 
         # Check for perspective (ground photos have convergence)
         # Simple proxy: variance in horizontal lines
-        mid_section = image[h//3:2*h//3, :]
+        mid_section = image[h // 3:2 * h // 3, :]
         row_means = mid_section.mean(axis=1)
         perspective_indicator = row_means.std()
 
