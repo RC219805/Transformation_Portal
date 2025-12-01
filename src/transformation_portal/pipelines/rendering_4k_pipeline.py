@@ -1033,11 +1033,14 @@ class Rendering4KPipeline:
         """Detect best available compute device."""
         try:
             import torch
-            if torch.backends.mps.is_available():
-                return DeviceType.MPS
-            elif torch.cuda.is_available():
+            # Check for MPS (Apple Silicon) support
+            if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps'):
+                if torch.backends.mps.is_available():
+                    return DeviceType.MPS
+            # Check for CUDA support
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 return DeviceType.CUDA
-        except ImportError:
+        except (ImportError, AttributeError):
             pass
         return DeviceType.CPU
 
