@@ -83,11 +83,11 @@ except ImportError:
 
 # Optional: LPIPS for perceptual quality scoring
 try:
-    import torch
+    import torch  # noqa: F401 - used for availability check
     HAS_TORCH = True
 except ImportError:
     HAS_TORCH = False
-    torch = None
+    torch = None  # noqa: F841 - placeholder for optional import
 
 # Optional: PerceptualQualityAssessor for advanced quality metrics
 try:
@@ -888,6 +888,8 @@ def apply_color_grading(
                 if lut_result is not None:
                     graded = lut_result
                     logger.debug(f"Applied LUT: {Path(lut_path).name} @ {strength:.0%}")
+                else:
+                    logger.warning(f"Failed to apply LUT: {Path(lut_path).name} (strength={strength:.0%})")
 
     # Apply temperature shift (RGB multipliers)
     r_mult, g_mult, b_mult = config.temperature_shift
@@ -950,7 +952,7 @@ def _load_cube_lut(lut_path: Union[str, Path]) -> Optional[np.ndarray]:
             )
         else:
             logger.warning(
-                f"Invalid LUT data: expected {lut_size**3} entries, got {len(lut_data)}"
+                f"Invalid LUT data: size={lut_size}, expected {lut_size**3} entries, got {len(lut_data)}"
             )
             return None
 
@@ -1272,7 +1274,7 @@ class Rendering4KPipeline:
         self._quality_bridge: Optional[QualityFeedbackBridge] = None
         if HAS_QUALITY_BRIDGE and config.quality_feedback.use_lpips:
             rag_callback = None
-            if config.quality_feedback.rag_indexing_enabled:
+            if config.quality_feedback.rag_indexing_enabled and config.quality_feedback.rag_index_path:
                 rag_callback = create_rag_indexing_callback(
                     config.quality_feedback.rag_index_path
                 )

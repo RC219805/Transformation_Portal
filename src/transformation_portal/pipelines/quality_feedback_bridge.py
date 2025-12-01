@@ -38,7 +38,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
@@ -84,9 +84,7 @@ def _check_perceptual_assessor_available() -> bool:
     global _PERCEPTUAL_ASSESSOR_AVAILABLE
     if _PERCEPTUAL_ASSESSOR_AVAILABLE is None:
         try:
-            from ..enhancements.perceptual_quality_assessment import (
-                PerceptualQualityAssessor,
-            )
+            from ..enhancements.perceptual_quality_assessment import PerceptualQualityAssessor  # noqa: F401
             _PERCEPTUAL_ASSESSOR_AVAILABLE = True
         except ImportError:
             _PERCEPTUAL_ASSESSOR_AVAILABLE = False
@@ -438,7 +436,7 @@ class QualityFeedbackBridge:
 
         if isinstance(image, np.ndarray):
             arr = image.astype(np.float32)
-            if arr.max() > 1.0:
+            if arr.size > 0 and arr.max() > 1.0:
                 arr = arr / 255.0
             return arr
 
@@ -502,17 +500,21 @@ class QualityFeedbackBridge:
             from scipy.ndimage import convolve
             laplacian = convolve(gray, kernel, mode='reflect')
         except ImportError:
-            # Manual convolution fallback
+            # Vectorized convolution fallback (faster than loops, but slower than scipy)
+            # For 3x3 Laplacian kernel, use slicing and weighted sums
+            # WARNING: For large 4K+ images, consider installing scipy for 10-100x speedup
             h, w = gray.shape
-            kh, kw = kernel.shape
-            pad_h, pad_w = kh // 2, kw // 2
+            pad_h, pad_w = 1, 1
             padded = np.pad(gray, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
 
-            # Simple loop-based convolution (readable fallback)
-            laplacian = np.zeros_like(gray)
-            for i in range(kh):
-                for j in range(kw):
-                    laplacian += kernel[i, j] * padded[i:i + h, j:j + w]
+            # Vectorized 3x3 Laplacian convolution using slicing
+            laplacian = (
+                kernel[0, 1] * padded[0:h, 1:w+1] +
+                kernel[1, 0] * padded[1:h+1, 0:w] +
+                kernel[1, 1] * padded[1:h+1, 1:w+1] +
+                kernel[1, 2] * padded[1:h+1, 2:w+2] +
+                kernel[2, 1] * padded[2:h+2, 1:w+1]
+            )
 
         variance = float(np.var(laplacian))
         return float(np.clip(variance * 50, 0, 1))

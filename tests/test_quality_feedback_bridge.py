@@ -11,7 +11,6 @@ Tests cover:
 - UnifiedQualityMetrics document structure
 """
 
-import json
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -22,7 +21,6 @@ from PIL import Image
 
 from transformation_portal.pipelines.quality_feedback_bridge import (
     HeuristicMetrics,
-    MaterialFidelityMetrics,
     PerceptualMetrics,
     QualityFeedbackBridge,
     QualityTargets,
@@ -437,16 +435,17 @@ class TestRAGCallback:
         assert received_doc["image_id"] == "test_doc"
 
     def test_callback_error_handling(self, sample_image_np):
-        """Test that callback errors don't crash assessment."""
-        def failing_callback(doc):
-            raise RuntimeError("Callback failed")
+        """Test that callback errors don't crash assessment and callback was invoked."""
+        callback = MagicMock(side_effect=RuntimeError("Callback failed"))
 
-        bridge = QualityFeedbackBridge(rag_callback=failing_callback)
+        bridge = QualityFeedbackBridge(rag_callback=callback)
 
         # Should not raise, just warn
         metrics = bridge.assess(enhanced=sample_image_np)
 
         assert metrics is not None
+        # Verify the callback was actually invoked (even though it failed)
+        assert callback.call_count == 1
         assert any("RAG callback failed" in w for w in metrics.warnings)
 
 
@@ -489,10 +488,13 @@ class TestRAGIndexing:
         """Test RAG indexing with invalid path."""
         metrics = UnifiedQualityMetrics(image_id="test_fail")
 
-        # This should handle the error gracefully
-        result = index_quality_metrics_to_rag(
-            metrics, "/nonexistent/path/that/cannot/be/created"
-        )
+        # Mock Path.mkdir to simulate a permission error (more robust than relying on OS)
+        with patch('transformation_portal.pipelines.quality_feedback_bridge.Path.mkdir') as mock_mkdir:
+            mock_mkdir.side_effect = PermissionError("Permission denied")
+
+            result = index_quality_metrics_to_rag(
+                metrics, "/mock/path/that/fails"
+            )
 
         # Should return False on failure
         assert result is False
