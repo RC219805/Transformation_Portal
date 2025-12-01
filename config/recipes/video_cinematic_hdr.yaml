@@ -1,0 +1,65 @@
+# Video Cinematic HDR Recipe
+# ==========================
+# HDR tone-mapped video grading recipe
+# Optimized for 4K video content with cinematic color
+
+name: "Video Cinematic HDR"
+description: "HDR tone-mapped video grading recipe for cinematic production"
+
+# Processing stages in execution order
+# Note: For video, AI enhancement and depth are typically disabled for performance
+stages:
+  - material_response
+  - color_grading
+  - photo_finishing
+
+# Depth estimation (disabled for video performance)
+depth_estimation:
+  enabled: false
+  model: "depth-anything-v2-small"
+  device: "auto"
+
+# Material Response configuration (lighter settings for video)
+material_response:
+  enabled: true
+  profile: "luxury_interior"
+  texture_boost: 0.18
+  ambient_occlusion: 0.08
+  highlight_warmth: 0.06
+  haze_strength: 0.04
+  floor_plank_contrast: 0.08
+  floor_specular: 0.12
+  textile_contrast: 0.14
+  window_light_wrap: 0.10
+  window_reflection: 0.08
+
+# Color grading configuration (HDR-optimized)
+color_grading:
+  enabled: true
+  lut: "assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube"
+  lut_strength: 0.80
+  contrast: 1.08
+  saturation: 1.06
+  warmth: 0.0
+  exposure: 0.0
+
+# Photo finishing configuration (cinematic)
+photo_finishing:
+  enabled: true
+  aces: true
+  bloom:
+    enabled: true
+    threshold: 0.80
+    intensity: 0.20
+  vignette:
+    enabled: true
+    strength: 0.15
+  grain:
+    enabled: true
+    amount: 0.010
+
+# Output configuration (video frame)
+output:
+  format: "tiff"
+  quality: 95
+  bit_depth: 16

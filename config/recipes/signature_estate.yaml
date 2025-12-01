@@ -1,0 +1,87 @@
+# Signature Estate Recipe
+# =======================
+# Flagship Kodak 2393 emulation with gentle highlight roll-off
+# Designed for luxury real estate interiors and exteriors
+
+name: "Signature Estate"
+description: "Flagship Kodak 2393 emulation with gentle highlight roll-off"
+
+# Processing stages in execution order
+stages:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - upscaling_4k
+  - quality_assessment
+
+# Depth estimation configuration
+depth_estimation:
+  enabled: true
+  model: "depth-anything-v2-small"
+  device: "auto"
+
+# Material Response configuration
+material_response:
+  enabled: true
+  profile: "luxury_interior"
+  texture_boost: 0.25
+  ambient_occlusion: 0.12
+  highlight_warmth: 0.08
+  haze_strength: 0.06
+  floor_plank_contrast: 0.12
+  floor_specular: 0.18
+  textile_contrast: 0.18
+  window_light_wrap: 0.14
+  window_reflection: 0.12
+
+# Color grading configuration
+color_grading:
+  enabled: true
+  lut: "assets/luts/film_emulation/Kodak/Kodak_2393_D55.cube"
+  lut_strength: 0.85
+  contrast: 1.06
+  saturation: 1.10
+  warmth: 0.0
+  exposure: 0.0
+
+# Photo finishing configuration
+photo_finishing:
+  enabled: true
+  aces: true
+  bloom:
+    enabled: true
+    threshold: 0.82
+    intensity: 0.22
+  vignette:
+    enabled: true
+    strength: 0.18
+  grain:
+    enabled: true
+    amount: 0.012
+
+# 4K Upscaling configuration (Rendering 4K Pipeline integration)
+upscaling_4k:
+  enabled: true
+  target_width: 3840
+  target_height: 2160
+  method: "lanczos"
+  preserve_sharpness: true
+
+# Quality feedback configuration (RAG integration)
+quality_feedback:
+  enabled: true
+  hybrid_mode: true
+  use_lpips: true
+  lpips_network: "alex"
+  enable_material_fidelity: true
+  perceptual_percentile_target: 95.0
+  material_fidelity_target: 0.98
+  rag_indexing_enabled: false
+  # rag_index_path: "output/rag_quality_index.jsonl"
+
+# Output configuration
+output:
+  format: "tiff"
+  quality: 95
+  bit_depth: 16
