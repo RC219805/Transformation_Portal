@@ -587,33 +587,52 @@ class RAGSystem:
         return len(self.chunks)
 
     def _get_current_files(self) -> Dict[str, Path]:
-        """Get current repository files for cache validation."""
-        files = {}
-        repo_root = Path(self.config.repo_root)
+        """Get current repository files for cache validation.
+        
+        CRITICAL: Must scan identical directories as SimpleIndexer.index_repository()
+        to ensure cache validation only considers files that were actually indexed.
+        Previously scanned entire repo causing 452 extra files → full re-index every commit.
+        
+        Fix applied: 2024-12-01 - Align with index_directories configuration.
+        """
         import fnmatch
-
-        for pattern in self.config.include_patterns:
-            # Handle glob patterns properly - rglob expects patterns without '*'
-            # but we need to match filenames with fnmatch
-            ext = pattern.lstrip("*.")
-            for file_path in repo_root.rglob(f"*.{ext}"):
-                if file_path.is_file():
-                    rel_path = str(file_path.relative_to(repo_root))
-
-                    # Check if file matches include pattern
-                    if not fnmatch.fnmatch(file_path.name, pattern):
+        
+        files = {}
+        repo_root = Path(self.config.repo_root).resolve()
+        
+        # Use same directory list as index_repository (THE KEY FIX)
+        # Previously: scanned entire repo_root with rglob
+        # Now: scan only configured index_directories
+        if self.config.index_directories:
+            scan_dirs = []
+            for d in self.config.index_directories:
+                dir_path = repo_root / d.rstrip('/')
+                if dir_path.exists():
+                    scan_dirs.append(dir_path)
+        else:
+            scan_dirs = [repo_root]
+        
+        for scan_dir in scan_dirs:
+            for pattern in self.config.include_patterns:
+                for file_path in scan_dir.rglob(pattern):
+                    if not file_path.is_file():
                         continue
-
+                    
+                    try:
+                        rel_path = str(file_path.relative_to(repo_root))
+                    except ValueError:
+                        continue
+                    
                     # Check exclude patterns
                     excluded = False
                     for excl in self.config.exclude_patterns:
                         if fnmatch.fnmatch(rel_path, excl):
                             excluded = True
                             break
-
+                    
                     if not excluded:
                         files[rel_path] = file_path
-
+        
         return files
 
     def _load_cached_embeddings(self) -> bool:
