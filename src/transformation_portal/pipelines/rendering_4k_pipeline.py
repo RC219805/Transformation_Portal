@@ -39,6 +39,7 @@ import hashlib
 import json
 import logging
 import time
+from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -363,10 +364,17 @@ class QualityAssessor:
         return float(np.clip(variance * 50, 0, 1))
 
     def _simple_convolve(self, image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
-        """Simple 2D convolution without scipy."""
+        """Simple 2D convolution without scipy. WARNING: Slow for large images."""
         h, w = image.shape
         kh, kw = kernel.shape
         pad_h, pad_w = kh // 2, kw // 2
+
+        # Warn about performance for large images
+        if h * w > 1_000_000:  # ~1MP
+            logger.warning(
+                "Large image without scipy: convolution will be slow. "
+                "Install scipy for better performance."
+            )
 
         # Pad image
         padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
@@ -455,9 +463,17 @@ class QualityAssessor:
         return float(np.clip(mad * 20, 0, 1))
 
     def _simple_smooth(self, image: np.ndarray, size: int = 3) -> np.ndarray:
-        """Simple smoothing filter without scipy."""
+        """Simple smoothing filter without scipy. WARNING: Slow for large images."""
         h, w = image.shape
         pad = size // 2
+
+        # Warn about performance for large images
+        if h * w > 1_000_000:  # ~1MP
+            logger.warning(
+                "Large image without scipy: smoothing will be slow. "
+                "Install scipy for better performance."
+            )
+
         padded = np.pad(image, pad, mode='reflect')
         result = np.zeros_like(image)
 
@@ -703,6 +719,9 @@ def apply_color_grading(
     """
     Apply color grading adjustments.
 
+    Note: LUT application (lut_paths, lut_strengths) is not yet implemented.
+    Currently supports temperature shift, saturation, and vibrance adjustments.
+
     Args:
         image: Input image as float32 array [0, 1]
         config: Color grading configuration
@@ -939,7 +958,8 @@ class Rendering4KPipeline:
         """
         self.config = config
         self.quality_assessor = QualityAssessor(config.quality_feedback)
-        self._depth_cache: Dict[str, np.ndarray] = {}
+        # Use OrderedDict for true LRU cache behavior
+        self._depth_cache: OrderedDict[str, np.ndarray] = OrderedDict()
 
         # Detect compute device
         self.device = self._detect_device()
@@ -1004,10 +1024,21 @@ class Rendering4KPipeline:
 
     @staticmethod
     def _build_config_from_dict(data: Dict) -> PipelineConfig:
-        """Build PipelineConfig from dictionary."""
-        # Parse nested configs
+        """Build PipelineConfig from dictionary with proper enum conversion."""
+        # Parse nested configs (most use strings, no enum conversion needed)
         depth = DepthConfig(**data.get("depth", {}))
-        tone_mapping = ToneMappingConfig(**data.get("tone_mapping", {}))
+
+        # Parse tone mapping config with ToneMappingMethod enum conversion
+        tone_mapping_data = data.get("tone_mapping", {})
+        if "method" in tone_mapping_data and isinstance(tone_mapping_data["method"], str):
+            try:
+                tone_mapping_data["method"] = ToneMappingMethod(tone_mapping_data["method"])
+            except ValueError:
+                logger.warning(f"Invalid tone_mapping method '{tone_mapping_data['method']}', using 'agx'")
+                tone_mapping_data["method"] = ToneMappingMethod.AGX
+        tone_mapping = ToneMappingConfig(**tone_mapping_data)
+
+        # Parse remaining configs (all use strings, no enum conversion needed)
         material_response = MaterialResponseConfig(**data.get("material_response", {}))
         color_grading = ColorGradingConfig(**data.get("color_grading", {}))
         ai_enhancement = AIEnhancementConfig(**data.get("ai_enhancement", {}))
@@ -1015,10 +1046,18 @@ class Rendering4KPipeline:
         quality_feedback = QualityFeedbackConfig(**data.get("quality_feedback", {}))
         output = OutputConfig(**data.get("output", {}))
 
+        # Parse quality level with validation
+        quality_level_value = data.get("quality_level", "high")
+        try:
+            quality_level = QualityLevel(quality_level_value)
+        except ValueError:
+            logger.warning(f"Invalid quality_level '{quality_level_value}', using 'high'")
+            quality_level = QualityLevel.HIGH
+
         return PipelineConfig(
             name=data.get("name", "custom"),
             description=data.get("description", ""),
-            quality_level=QualityLevel(data.get("quality_level", "high")),
+            quality_level=quality_level,
             depth=depth,
             tone_mapping=tone_mapping,
             material_response=material_response,
@@ -1041,6 +1080,7 @@ class Rendering4KPipeline:
             if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 return DeviceType.CUDA
         except (ImportError, AttributeError):
+            # torch is not installed or has unexpected structure; fall back to CPU processing
             pass
         return DeviceType.CPU
 
@@ -1263,6 +1303,8 @@ class Rendering4KPipeline:
             cache_key = self._compute_cache_key(image)
             if cache_key in self._depth_cache:
                 logger.debug("  Using cached depth map")
+                # Move to end to mark as recently used (LRU behavior)
+                self._depth_cache.move_to_end(cache_key)
                 return self._depth_cache[cache_key]
 
         # Use simple depth estimation (fallback)
@@ -1272,18 +1314,17 @@ class Rendering4KPipeline:
         # Cache result
         if self.config.depth.cache_enabled:
             if len(self._depth_cache) >= self.config.depth.cache_max_size:
-                # Remove oldest entry (simple LRU)
-                oldest = next(iter(self._depth_cache))
-                del self._depth_cache[oldest]
+                # Remove oldest (least recently used) entry
+                self._depth_cache.popitem(last=False)
             self._depth_cache[cache_key] = depth
 
         return depth
 
     def _compute_cache_key(self, image: np.ndarray) -> str:
-        """Compute cache key from image content."""
-        # Use image hash for cache key
+        """Compute cache key from image content (non-security, non-cryptographic)."""
+        # Use SHA-256 for cache key (non-cryptographic; safe for content hashing)
         data = image.tobytes()[:4096]  # First 4KB for speed
-        return hashlib.md5(data).hexdigest()
+        return hashlib.sha256(data).hexdigest()
 
     def _save_outputs(
         self,
