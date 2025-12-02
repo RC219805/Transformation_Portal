@@ -45,34 +45,47 @@ fi
 # 2. Backup and update performance-monitor.yml (avoid self-referential copy)
 PM_TARGET="${REPO_ROOT}/.github/workflows/performance-monitor.yml"
 SRC_PM="${SCRIPT_DIR}/.github/workflows/performance-monitor.yml"
-mkdir -p "$(dirname "${PM_TARGET}")"
 
-# Resolve to absolute paths and compare
+# Security: Resolve REPO_ROOT to canonical path (following symlinks) before any operations
+ROOT_REAL="$(realpath "${REPO_ROOT}")"
+
+# Create target directory within the resolved repo root
+TARGET_DIR="${ROOT_REAL}/.github/workflows"
+mkdir -p "${TARGET_DIR}"
+
+# Construct the final target path using the resolved root
+PM_TARGET_RESOLVED="${TARGET_DIR}/performance-monitor.yml"
+
+# Resolve source path for self-reference check
 SRC_PM_REAL="$(realpath "${SRC_PM}" 2>/dev/null || echo "${SRC_PM}")"
-DST_PM_REAL="$(realpath "${PM_TARGET}" 2>/dev/null || echo "${PM_TARGET}")"
 
-# Security: Resolve REPO_ROOT to absolute path and verify PM_TARGET is within it
-ROOT_REAL="$(realpath -m "${REPO_ROOT}")"
-PM_REAL="$(realpath -m "${PM_TARGET}" 2>/dev/null || echo)"
+# Verify the resolved target is within the resolved repo root (protects against symlink traversal)
+PM_REAL="$(realpath -m "${PM_TARGET_RESOLVED}" 2>/dev/null || echo)"
 
-# Refuse to operate on symlinks or paths outside the repo root (symlink traversal protection)
-if [ -L "${PM_TARGET}" ] || [ -z "${PM_REAL}" ] || [[ "${PM_REAL}" != "${ROOT_REAL}"/* ]]; then
-    echo "ERROR: Refusing to operate on symlink or path outside repo: ${PM_TARGET}" >&2
+# Refuse to operate if target path escapes repo root or if final target is a symlink
+if [ -z "${PM_REAL}" ] || [[ "${PM_REAL}" != "${ROOT_REAL}"/* ]]; then
+    echo "ERROR: Refusing to operate on path outside repo: ${PM_TARGET_RESOLVED}" >&2
     exit 1
 fi
 
-if [ "${SRC_PM_REAL}" = "${DST_PM_REAL}" ]; then
+# Additional check: refuse if the target itself is a symlink
+if [ -L "${PM_TARGET_RESOLVED}" ]; then
+    echo "ERROR: Refusing to operate on symlink target: ${PM_TARGET_RESOLVED}" >&2
+    exit 1
+fi
+
+if [ "${SRC_PM_REAL}" = "${PM_REAL}" ]; then
     echo "⚠️  Source and destination for performance-monitor.yml are the same; skipping copy."
 else
-    if [ -f "${PM_TARGET}" ]; then
-        BACKUP="${PM_TARGET}.bak.$(date +%s)"
-        echo "🔁 Backing up existing ${PM_TARGET} -> ${BACKUP}"
-        cp -- "${PM_TARGET}" "${BACKUP}"
+    if [ -f "${PM_TARGET_RESOLVED}" ]; then
+        BACKUP="${PM_TARGET_RESOLVED}.bak.$(date +%s)"
+        echo "🔁 Backing up existing ${PM_TARGET_RESOLVED} -> ${BACKUP}"
+        cp -- "${PM_TARGET_RESOLVED}" "${BACKUP}"
     fi
-    echo "✅ Updating ${PM_TARGET}..."
+    echo "✅ Updating ${PM_TARGET_RESOLVED}..."
     # Remove any existing file before copy to prevent symlink following
-    rm -f -- "${PM_TARGET}"
-    cp -- "${SRC_PM}" "${PM_TARGET}"
+    rm -f -- "${PM_TARGET_RESOLVED}"
+    cp -- "${SRC_PM}" "${PM_TARGET_RESOLVED}"
 fi
 
 echo "Done. Next steps: pip install pip-tools; pip-compile requirements/ml.in -o requirements/ml.txt; commit changes."
