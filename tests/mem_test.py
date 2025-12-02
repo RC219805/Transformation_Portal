@@ -15,7 +15,8 @@ def test_import_core():
     """Test that core imports don't leak memory."""
     import numpy as np  # noqa: F401
     from PIL import Image  # noqa: F401
-    return True
+    # Use assertion for pytest compatibility instead of return value
+    assert True
 
 
 @profile
@@ -27,7 +28,8 @@ def test_basic_array_operations():
     # Perform some operations
     result = arr.mean()
     del arr
-    return result
+    # Use assertion for pytest compatibility instead of return value
+    assert result is not None
 
 
 if __name__ == "__main__":
