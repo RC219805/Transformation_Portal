@@ -52,17 +52,25 @@ We have implemented **Option A: Vendored Security-Hardened Fork**
 - `scripts/pipelines/luxury_estate_master_pipeline.py` - Import updated
 - `scripts/pipelines/test_luxury_estate_pipeline.py` - Import updated
 - `requirements/ml.in` - Removed vulnerable `basicsr>=1.4.2,<2` dependency
+- `requirements/constraints.txt` - Blocks basicsr installation with impossible version constraint
 
 **Verification:**
 ```bash
-# Verify no imports from original basicsr using the dedicated verification script
-python scripts/utilities/verify_no_basicsr_imports.py
+# Full security verification (imports + package installation check)
+python scripts/utilities/verify_no_basicsr_imports.py --check-pkg
 
-# Or use the Makefile target
+# Or use the Makefile target (recommended)
 make verify-security
 
-# Should return success if mitigation is complete
+# Import-only check (faster)
+python scripts/utilities/verify_no_basicsr_imports.py
 ```
+
+**Defense-in-Depth Strategy:**
+1. **constraints.txt** - Blocks basicsr installation with `basicsr>=999.0.0`
+2. **CI verification** - Every PR runs import and package installation checks
+3. **Makefile integration** - All pip installs use `-c requirements/constraints.txt`
+4. **AST-based detection** - Verification script uses Python AST for accurate import detection
 
 #### Benefits
 ✅ **Real mitigation** - Vulnerable SLURM code completely removed  

@@ -46,6 +46,14 @@ jobs:
           pip install -c requirements/constraints.txt -e ".[ml]"
           pip install pytest pytest-benchmark memory-profiler
 
+      - name: Verify basicsr Not Installed (CVE-2024-27763)
+        run: |
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ SECURITY: basicsr package installed despite constraints!"
+            exit 1
+          fi
+          echo "✅ Security check passed: basicsr not installed"
+
       - name: Download baseline results
         continue-on-error: true
         uses: actions/download-artifact@v6

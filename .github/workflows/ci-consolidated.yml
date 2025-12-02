@@ -245,6 +245,19 @@ jobs:
         run: |
           python scripts/utilities/verify_no_basicsr_imports.py
 
+      - name: Verify basicsr Package Not Installed (CVE-2024-27763)
+        run: |
+          # This check ensures basicsr was not installed as a transitive dependency
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ SECURITY VIOLATION: basicsr package is installed!"
+            echo "This package has CVE-2024-27763 (command injection vulnerability)."
+            echo "The constraints.txt file should have prevented this."
+            pip show basicsr
+            exit 1
+          else
+            echo "✅ basicsr package is NOT installed (as expected)"
+          fi
+
   # ===========================================================================
   # Stage 3: Core Tests (No ML Dependencies)
   # ===========================================================================
@@ -293,7 +306,15 @@ jobs:
           pip install pytest pytest-cov pytest-asyncio
           pip install -c requirements/constraints.txt -r requirements-ci.txt
           pip install -c requirements/constraints.txt -e .
-          
+
+      - name: Verify basicsr Not Installed (CVE-2024-27763)
+        run: |
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ SECURITY: basicsr package installed despite constraints!"
+            exit 1
+          fi
+          echo "✅ Security check passed: basicsr not installed"
+
       - name: Run Core Tests
         run: |
           pytest tests/ \
@@ -363,7 +384,17 @@ jobs:
           # ML extras (with constraints to exclude vulnerable basicsr)
           pip install -c requirements/constraints.txt -e ".[ml]" || pip install -c requirements/constraints.txt -r requirements/ml.txt
           pip install -c requirements/constraints.txt -e .
-          
+
+      - name: Verify basicsr Not Installed (CVE-2024-27763)
+        run: |
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ SECURITY: basicsr package installed despite constraints!"
+            echo "This is a critical security issue - CVE-2024-27763"
+            pip show basicsr
+            exit 1
+          fi
+          echo "✅ Security check passed: basicsr not installed"
+
       - name: Run ML Tests
         env:
           PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:128"
