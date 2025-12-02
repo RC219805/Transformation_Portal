@@ -159,14 +159,13 @@ def _find_imports_via_string_matching(py_file: Path, lines: list[str]) -> list[t
 
     # Pattern matches 'from basicsr' or 'import basicsr' as whole words
     # but NOT 'from basicsr_tp' or 'import basicsr_new'
+    # The negative lookahead (?!_) ensures we don't match basicsr_ prefixed packages
     pattern = re.compile(r'\b(from|import)\s+basicsr\b(?!_)')
 
     for line_no, line in enumerate(lines, start=1):
         line_stripped = line.strip()
         if not line_stripped.startswith("#") and pattern.search(line):
-            # Double-check it's not basicsr_tp
-            if "basicsr_tp" not in line:
-                violations.append((py_file, line_no, line))
+            violations.append((py_file, line_no, line))
 
     return violations
 
