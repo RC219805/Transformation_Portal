@@ -166,8 +166,8 @@ check-docs:
 
 # Verify no vulnerable basicsr imports (CVE-2024-27763)
 verify-security:
-	@echo "Verifying no vulnerable basicsr imports..."
-	@"$(PY)" scripts/utilities/verify_no_basicsr_imports.py
+	@echo "Verifying security: basicsr CVE-2024-27763 mitigation..."
+	@"$(PY)" scripts/utilities/verify_no_basicsr_imports.py --check-pkg
 
 # --- Dependency locking (pip-tools) ---
 
