@@ -36,7 +36,8 @@ def check_undefined_names():
     result = subprocess.run(
         ['flake8', '.', '--select=F821', '--exclude=.venv,deprecated,src/transformation_portal,scripts'],
         capture_output=True,
-        text=True
+        text=True,
+        check=False
     )
 
     if result.returncode != 0:
@@ -70,9 +71,10 @@ def check_trailing_whitespace():
     print("🔍 Checking for trailing whitespace...")
 
     result = subprocess.run(
-        ['git', 'dif', '--cached', '--name-only', '--diff-filter=ACM'],
+        ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACM'],
         capture_output=True,
-        text=True
+        text=True,
+        check=False
     )
 
     if result.returncode != 0:
@@ -112,7 +114,8 @@ def check_import_order():
     result = subprocess.run(
         ['flake8', '.', '--select=E402,F401', '--exclude=.venv,deprecated,src/transformation_portal,scripts'],
         capture_output=True,
-        text=True
+        text=True,
+        check=False
     )
 
     if result.returncode != 0:
@@ -133,7 +136,8 @@ def run_quick_tests():
          'tests/test_format_utils.py::TestNormalizeExtension',
          'tests/test_error_handling.py::TestFileValidation'],
         capture_output=True,
-        text=True
+        text=True,
+        check=False
     )
 
     if result.returncode != 0:
