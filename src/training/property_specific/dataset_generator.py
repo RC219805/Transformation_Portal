@@ -488,8 +488,12 @@ class DatasetGenerator:
             img_pil = Image.fromarray(image)
             image = np.array(img_pil.rotate(angle, resample=Image.Resampling.BILINEAR, expand=False))
             if depth is not None:
-                depth_pil = Image.fromarray(depth)
-                depth = np.array(depth_pil.rotate(angle, resample=Image.Resampling.BILINEAR, expand=False))
+                # Convert depth to uint16 for PIL rotation, then back to float32
+                depth_normalized = ((depth - depth.min()) / (depth.max() - depth.min() + 1e-8) * 65535).astype(np.uint16)
+                depth_pil = Image.fromarray(depth_normalized, mode='I;16')
+                depth_rotated = np.array(depth_pil.rotate(angle, resample=Image.Resampling.BILINEAR, expand=False))
+                # Restore original depth range
+                depth = (depth_rotated.astype(np.float32) / 65535) * (depth.max() - depth.min()) + depth.min()
             params["rotation"] = angle
         else:
             params["rotation"] = 0

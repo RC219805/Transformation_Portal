@@ -40,12 +40,14 @@ except ImportError:
 # Optional ML imports
 try:
     import torch
+    import torch.nn.functional as F
     from torch import nn, Tensor
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
     Tensor = Any
     nn = None  # Type stub for when PyTorch is not available
+    F = None  # Type stub for when PyTorch is not available
 
 # Optional TIFF support
 try:
@@ -738,8 +740,6 @@ class PicachoInference:
 
     def _compute_normals(self, depth: Tensor) -> Tensor:
         """Compute surface normals from depth."""
-        import torch.nn.functional as F
-
         sobel_x = torch.tensor(
             [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
             dtype=depth.dtype,
