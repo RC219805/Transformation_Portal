@@ -338,10 +338,11 @@ class ArchitecturalDepthDataset(Dataset):
                 pil_img = Image.fromarray(array)
             else:
                 # Depth map
+                UINT16_MAX = 65535  # Maximum value for uint16 depth precision
                 if array.dtype == np.float32:
                     # Scale for uint16 precision
                     scaled = ((array - array.min()) /
-                              (array.max() - array.min() + 1e-8) * 65535)
+                              (array.max() - array.min() + 1e-8) * UINT16_MAX)
                     pil_img = Image.fromarray(scaled.astype(np.uint16))
                 else:
                     pil_img = Image.fromarray(array)
@@ -351,8 +352,8 @@ class ArchitecturalDepthDataset(Dataset):
             result = np.array(resized)
 
             if is_depth and array.dtype == np.float32:
-                # Rescale back
-                result = result.astype(np.float32) / 65535.0
+                # Rescale back using the same constant
+                result = result.astype(np.float32) / UINT16_MAX
                 result = result * (array.max() - array.min()) + array.min()
 
             return result

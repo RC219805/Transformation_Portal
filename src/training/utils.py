@@ -507,6 +507,7 @@ def cleanup_checkpoints(
         try:
             return int(path.stem.split("_")[-1])
         except ValueError:
+            logger.warning(f"Could not parse epoch from checkpoint: {path.name}")
             return 0
 
     checkpoints.sort(key=get_epoch, reverse=True)

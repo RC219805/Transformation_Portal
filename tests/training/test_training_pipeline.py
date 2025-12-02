@@ -386,16 +386,14 @@ class TestConfigLoading:
         """Test YAML config loading."""
         from src.training.utils import load_config
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write("model:\n  name: test\ntraining:\n  epochs: 10\n")
-            f.flush()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "test_config.yaml"
+            config_path.write_text("model:\n  name: test\ntraining:\n  epochs: 10\n")
 
-            config = load_config(f.name)
+            config = load_config(str(config_path))
 
             assert config["model"]["name"] == "test"
             assert config["training"]["epochs"] == 10
-
-        Path(f.name).unlink()
 
     def test_load_config_not_found(self):
         """Test config loading with missing file."""
