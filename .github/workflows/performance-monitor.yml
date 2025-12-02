@@ -42,8 +42,8 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-ci.txt
-          pip install -e ".[ml]"
+          pip install -c requirements/constraints.txt -r requirements-ci.txt
+          pip install -c requirements/constraints.txt -e ".[ml]"
           pip install pytest pytest-benchmark memory-profiler
 
       - name: Download baseline results
