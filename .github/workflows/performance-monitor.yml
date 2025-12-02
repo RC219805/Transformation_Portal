@@ -15,6 +15,10 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   performance:
     runs-on: ubuntu-latest
