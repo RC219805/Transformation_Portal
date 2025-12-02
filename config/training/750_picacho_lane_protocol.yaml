@@ -1,0 +1,332 @@
+# 750 Picacho Lane Training Protocol Configuration
+# ==================================================
+# Comprehensive property-specific training configuration for luxury real estate
+# image enhancement optimized for the 750 Picacho Lane Montecito estate.
+#
+# This protocol implements a 3-stage progressive training pipeline:
+#   Stage 1: Material Learning (512px, 20 epochs)
+#   Stage 2: Architectural Refinement (1024px, 20 epochs)
+#   Stage 3: Full-Resolution Fine-tuning (2048px, 10 epochs)
+
+name: "750_picacho_lane_training_protocol"
+description: "Property-specific training protocol for 750 Picacho Lane luxury estate"
+version: "1.0.0"
+
+# ============================================================================
+# Property Information
+# ============================================================================
+property:
+  name: "750 Picacho Lane"
+  address: "750 Picacho Lane, Montecito, CA"
+  project_number: "24098.00"
+  architectural_style: "Contemporary Mediterranean"
+  
+  # Expected source images
+  rooms:
+    - name: "Exterior"
+      type: "exterior"
+      materials: ["stucco", "stone", "glass", "vegetation"]
+      
+    - name: "LivingRoom"
+      type: "interior"
+      materials: ["wood", "fabric", "glass", "stone"]
+      
+    - name: "Kitchen"
+      type: "interior"
+      materials: ["stone", "metal", "wood", "glass"]
+      
+    - name: "Pool"
+      type: "exterior"
+      materials: ["water", "stone", "glass"]
+      
+    - name: "PrimaryBathroom"
+      type: "interior"
+      materials: ["stone", "glass", "metal"]
+      
+    - name: "PrimaryBedroom"
+      type: "interior"
+      materials: ["fabric", "wood", "glass"]
+
+# ============================================================================
+# Data Configuration
+# ============================================================================
+data:
+  # Source directories
+  source_images: "projects/750_picacho_lane/Final_Production_UltraQuality"
+  bim_context: "extracted_context/24098.00_750 PICACHO LANE_context.json"
+  mbar_context: "extracted_context/mbar_submittal.json"
+  
+  # Output directories
+  directory: "data/training_750picacho"
+  depth_maps: "data/training_750picacho/depth"
+  
+  # Dataset generation
+  total_samples: 600
+  samples_per_image: 100
+  random_seed: 42
+  
+  # Multi-scale crops
+  crop_sizes: [512, 1024, 2048]
+  crop_size_weights: [0.4, 0.4, 0.2]
+  
+  # Splits
+  train_split: 0.85
+  val_split: 0.10
+  test_split: 0.05
+
+# ============================================================================
+# Depth Synthesis Configuration
+# ============================================================================
+depth_synthesis:
+  # Model configuration
+  model: "depth-anything-v2-large"
+  ensemble_enabled: true
+  ensemble_models:
+    - variant: "large"
+      weight: 0.7
+    - variant: "base"
+      weight: 0.3
+  
+  # Backend
+  backend: "auto"  # auto, pytorch_mps, pytorch_cuda, coreml
+  precision: "fp16"
+  
+  # Processing
+  apply_architectural_priors: true
+  edge_enhancement: 0.15
+  
+  # Output formats
+  output_16bit_png: true
+  output_float32_tiff: true
+  colorize_depth: true
+
+# ============================================================================
+# Augmentation Configuration
+# ============================================================================
+augmentation:
+  enabled: true
+  
+  # Geometric augmentations
+  geometric:
+    horizontal_flip_prob: 0.5
+    rotation_range: [-15.0, 15.0]
+    scale_range: [0.8, 1.2]
+  
+  # Color augmentations
+  color:
+    brightness_range: [0.85, 1.15]
+    contrast_range: [0.85, 1.15]
+    saturation_range: [0.85, 1.15]
+    hue_shift_range: [-0.05, 0.05]
+  
+  # Material-aware augmentations
+  material:
+    enabled: true
+    water_blue_boost_range: [1.0, 1.08]
+    wood_warmth_range: [1.0, 1.05]
+    metal_contrast_range: [1.0, 1.1]
+    stone_texture_range: [0.0, 0.05]
+  
+  # Quality augmentations
+  quality:
+    noise_sigma_range: [0.0, 0.02]
+    blur_sigma_range: [0.0, 1.0]
+    jpeg_quality_range: [75, 100]
+  
+  # Depth noise
+  depth_noise_sigma: 0.01
+
+# ============================================================================
+# Training Configuration
+# ============================================================================
+training:
+  # Model
+  model_name: "750_picacho_enhancer"
+  base_model: "hyper_reality_v3"
+  
+  # Stage 1: Material Learning
+  stage1:
+    name: "Material Learning"
+    epochs: 20
+    resolution: 512
+    batch_size: 8
+    learning_rate: 0.0001
+    description: "Learn material-specific enhancement patterns at low resolution"
+    focus:
+      - "stone texture enhancement"
+      - "glass clarity optimization"
+      - "water reflection handling"
+      - "wood grain preservation"
+      - "metal highlight control"
+      - "fabric softness rendering"
+  
+  # Stage 2: Architectural Refinement
+  stage2:
+    name: "Architectural Refinement"
+    epochs: 20
+    resolution: 1024
+    batch_size: 4
+    learning_rate: 0.00005
+    description: "Refine architectural details and spatial relationships"
+    focus:
+      - "edge sharpness optimization"
+      - "perspective correction"
+      - "lighting consistency"
+      - "depth-aware processing"
+      - "structural detail preservation"
+  
+  # Stage 3: Full-Resolution Fine-tuning
+  stage3:
+    name: "Full-Resolution Fine-tuning"
+    epochs: 10
+    resolution: 2048
+    batch_size: 2
+    learning_rate: 0.00001
+    description: "Final quality refinement at production resolution"
+    focus:
+      - "4K texture detail"
+      - "fine grain preservation"
+      - "micro-contrast optimization"
+      - "color fidelity verification"
+  
+  # Optimization
+  optimizer: "adamw"
+  weight_decay: 0.00001
+  gradient_clip: 1.0
+  use_mixed_precision: true
+  
+  # Scheduling
+  scheduler: "cosine"
+  warmup_epochs: 3
+  
+  # Validation
+  val_frequency: 1
+  early_stopping_patience: 10
+  
+  # Hardware
+  device: "auto"  # auto, cuda, mps, cpu
+  num_workers: 4
+  pin_memory: true
+
+# ============================================================================
+# Loss Function Configuration
+# ============================================================================
+loss:
+  # Component weights
+  mse_weight: 1.0
+  perceptual_weight: 1.0
+  style_weight: 0.5
+  depth_weight: 0.3
+  material_weight: 0.5
+  
+  # Perceptual loss
+  perceptual:
+    backbone: "vgg19"
+    layers: [2, 7, 12, 21, 30]  # relu1_2, relu2_2, relu3_2, relu4_2, relu5_2
+  
+  # Style loss
+  style:
+    layers: [0, 5, 10, 19, 28]  # conv1_1, conv2_1, conv3_1, conv4_1, conv5_1
+  
+  # Material-specific weights
+  material_weights:
+    stone:
+      texture: 1.2
+      color: 1.0
+    glass:
+      reflection: 1.3
+      clarity: 1.2
+    water:
+      color: 1.2
+      texture: 0.8
+    wood:
+      grain: 1.2
+      warmth: 1.1
+    metal:
+      highlight: 1.3
+      contrast: 1.2
+    fabric:
+      texture: 1.1
+      softness: 1.0
+
+# ============================================================================
+# Output Configuration
+# ============================================================================
+output:
+  # Directories
+  checkpoint_dir: "weights/750_picacho"
+  results_dir: "output/750_picacho"
+  logs_dir: "logs/750_picacho"
+  
+  # Checkpointing
+  save_every: 5
+  keep_last_n: 3
+  
+  # Final output format
+  format: "16bit_tiff"
+  jpeg_quality: 98
+  png_compression: 6
+  
+  # Metadata
+  include_metadata: true
+  save_processing_report: true
+
+# ============================================================================
+# Inference Configuration
+# ============================================================================
+inference:
+  # Processing
+  tile_size: 1024
+  tile_overlap: 128
+  use_tiling: true
+  max_resolution: [4096, 4096]
+  
+  # Enhancement
+  enhancement_level: "balanced"  # subtle, balanced, strong, maximum
+  apply_depth_enhancement: true
+  apply_material_enhancement: true
+  apply_color_grading: true
+  
+  # Material-specific strengths
+  material_strengths:
+    stone: 0.8
+    glass: 0.9
+    water: 0.85
+    wood: 0.75
+    metal: 0.85
+    fabric: 0.7
+
+# ============================================================================
+# Quality Assessment
+# ============================================================================
+quality:
+  # Metrics to track
+  metrics:
+    - "psnr"
+    - "ssim"
+    - "lpips"
+    - "fid"
+  
+  # Quality thresholds
+  minimum_psnr: 30.0
+  minimum_ssim: 0.85
+  maximum_lpips: 0.2
+  
+  # Visual inspection
+  save_comparison_grids: true
+  save_difference_maps: true
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # TensorBoard
+  tensorboard_enabled: true
+  tensorboard_dir: "logs/750_picacho/tensorboard"
+  
+  # Weights & Biases (optional)
+  wandb_enabled: false
+  wandb_project: "750_picacho_training"
