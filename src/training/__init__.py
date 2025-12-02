@@ -1,102 +1,63 @@
 """
-Training Pipeline for Depth Anything V2 Fine-tuning
+Property-Specific Training Module for Transformation Portal.
 
-This module provides a complete training infrastructure for fine-tuning
-Depth Anything V2 models on architectural imagery.
+This module provides comprehensive training infrastructure for property-specific
+image enhancement models, integrating architectural data analysis, material-aware
+optimization, and depth intelligence.
 
-Components:
-- augmentations: Depth-aware data augmentation pipeline
-- depth_dataset: Flexible dataset class for paired RGB-Depth data
-- losses: Depth-specific loss functions (Scale-Invariant, Gradient, SSIM)
-- metrics: Depth estimation evaluation metrics
-- trainer: Training orchestration with checkpointing and logging
-- train_depth_anything_v2: Main training script
+Key Components:
+- PropertyAnalyzer: Architectural feature and material detection
+- DepthSynthesis: High-quality depth map generation
+- DatasetGenerator: Multi-scale augmented dataset creation
+- PropertyTrainer: Multi-stage training pipeline
+- PropertyInference: Production 4K TIFF processing
 
-Example:
-    >>> from src.training import DepthTrainer, ArchitecturalDepthDataset
-    >>> import yaml
-    >>>
-    >>> with open('config/training/depth_anything_v2_large_finetune.yaml') as f:
-    ...     config = yaml.safe_load(f)
-    >>>
-    >>> trainer = DepthTrainer(config)
-    >>> trainer.train()
+Usage:
+    from training.property_specific import (
+        PicachoAnalyzer,
+        DepthSynthesis,
+        DatasetGenerator,
+        PicachoTrainer,
+        PicachoInference
+    )
 
-Author: Transformation Portal Team
-Version: 1.0.0
+    # Initialize analyzer
+    analyzer = PicachoAnalyzer(property_dir="projects/750_picacho_lane")
+
+    # Analyze property
+    report = analyzer.analyze_property()
+
+    # Generate depth maps
+    depth_synth = DepthSynthesis()
+    depth_maps = depth_synth.synthesize_all(analyzer.images)
+
+    # Create training dataset
+    generator = DatasetGenerator(analyzer, depth_synth)
+    dataset = generator.generate_dataset(num_samples=600)
+
+    # Train model
+    trainer = PicachoTrainer(config_path="config/training/750_picacho_lane_protocol.yaml")
+    trainer.train()
+
+    # Production inference
+    inference = PicachoInference(model_path="weights/750_picacho/best_model.pth")
+    enhanced = inference.process("input.tiff", output_format="16bit_tiff")
 """
 
-from .augmentations import (
-    DepthAwareAugmentation,
-    GeometricAugmentation,
-    ColorAugmentation,
-    ArchitecturalAugmentation,
-    get_train_augmentations,
-    get_val_augmentations,
-)
-
-from .depth_dataset import (
-    ArchitecturalDepthDataset,
-    create_data_loaders,
-    DepthDataConfig,
-)
-
-from .losses import (
-    ScaleInvariantLoss,
-    GradientLoss,
-    SSIMLoss,
-    CombinedDepthLoss,
-)
-
-from .metrics import (
-    DepthMetrics,
-    compute_depth_metrics,
-    visualize_depth_comparison,
-)
-
-from .trainer import (
-    DepthTrainer,
-    TrainingConfig,
-    EarlyStopping,
-)
-
-from .utils import (
-    load_config,
-    setup_device,
-    set_seed,
-    create_logger,
+from .property_specific import (
+    PicachoAnalyzer,
+    DepthSynthesis,
+    DatasetGenerator,
+    PicachoTrainer,
+    PicachoInference
 )
 
 __all__ = [
-    # Augmentations
-    "DepthAwareAugmentation",
-    "GeometricAugmentation",
-    "ColorAugmentation",
-    "ArchitecturalAugmentation",
-    "get_train_augmentations",
-    "get_val_augmentations",
-    # Dataset
-    "ArchitecturalDepthDataset",
-    "create_data_loaders",
-    "DepthDataConfig",
-    # Losses
-    "ScaleInvariantLoss",
-    "GradientLoss",
-    "SSIMLoss",
-    "CombinedDepthLoss",
-    # Metrics
-    "DepthMetrics",
-    "compute_depth_metrics",
-    "visualize_depth_comparison",
-    # Trainer
-    "DepthTrainer",
-    "TrainingConfig",
-    "EarlyStopping",
-    # Utils
-    "load_config",
-    "setup_device",
-    "set_seed",
-    "create_logger",
+    "PicachoAnalyzer",
+    "DepthSynthesis",
+    "DatasetGenerator",
+    "PicachoTrainer",
+    "PicachoInference"
 ]
 
 __version__ = "1.0.0"
