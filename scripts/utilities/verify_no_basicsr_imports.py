@@ -128,7 +128,10 @@ def _find_imports_via_string_matching(py_file: Path, lines: list[str]) -> list[t
 
 def main():
     """Main verification function."""
-    repo_root = Path(__file__).parent
+    # Get the repository root (3 directories up from this script)
+    # scripts/utilities/verify_no_basicsr_imports.py -> repository root
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parent.parent.parent
     print("=" * 70)
     print("VERIFYING: No vulnerable basicsr imports")
     print("=" * 70)

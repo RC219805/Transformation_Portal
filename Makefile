@@ -18,7 +18,7 @@ FAST_TESTS := \
 
 .PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
-        lock lock-prod lock-ci lock-dev
+        lock lock-prod lock-ci lock-dev verify-security
 
 help:
 	@echo "Targets:"
@@ -30,6 +30,9 @@ help:
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
+	@echo ""
+	@echo "Security:"
+	@echo "  verify-security    Verify no vulnerable basicsr imports (CVE-2024-27763)"
 	@echo ""
 	@echo "Quality & CI:"
 	@echo "  lint               Run linting (flake8 + pylint)"
@@ -57,7 +60,7 @@ venv:
 
 setup: venv
 	@echo "Installing package in editable mode..."
-	@"$(PY)" -m pip install -e .
+	@"$(PY)" -m pip install -c requirements/constraints.txt -e .
 
 test-fast:
 	@"$(PY)" -m pytest -q $(FAST_TESTS)
@@ -93,7 +96,7 @@ clean:
 
 lint:
 	@echo "Installing package for linting..."
-	@$(PY) -m pip install -q -e . || echo "Warning: Package installation failed"
+	@$(PY) -m pip install -q -c requirements/constraints.txt -e . || echo "Warning: Package installation failed"
 	@echo "Running flake8 critical checks..."
 	@$(PY) -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated,scripts,examples || true
 	@echo "Running pylint (non-blocking)..."
@@ -161,6 +164,11 @@ check-docs:
 	@echo "Checking documentation organization..."
 	@./scripts/organize_docs.sh --dry-run
 
+# Verify no vulnerable basicsr imports (CVE-2024-27763)
+verify-security:
+	@echo "Verifying no vulnerable basicsr imports..."
+	@"$(PY)" scripts/utilities/verify_no_basicsr_imports.py
+
 # --- Dependency locking (pip-tools) ---
 
 lock: lock-prod lock-ci lock-dev
@@ -169,17 +177,20 @@ lock: lock-prod lock-ci lock-dev
 lock-prod:
 	@echo "Locking production requirements -> requirements.lock.txt"
 	@pip-compile --generate-hashes \
+		-c requirements/constraints.txt \
 		-o requirements.lock.txt \
 		requirements.txt
 
 lock-ci:
 	@echo "Locking CI requirements -> requirements-ci.lock.txt"
 	@pip-compile --generate-hashes \
+		-c requirements/constraints.txt \
 		-o requirements-ci.lock.txt \
 		requirements-ci.txt
 
 lock-dev:
 	@echo "Locking dev requirements -> requirements-dev.lock.txt"
 	@pip-compile --generate-hashes \
+		-c requirements/constraints.txt \
 		-o requirements-dev.lock.txt \
 		requirements-dev.txt

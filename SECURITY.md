@@ -56,7 +56,10 @@ We have implemented **Option A: Vendored Security-Hardened Fork**
 **Verification:**
 ```bash
 # Verify no imports from original basicsr using the dedicated verification script
-python verify_no_basicsr_imports.py
+python scripts/utilities/verify_no_basicsr_imports.py
+
+# Or use the Makefile target
+make verify-security
 
 # Should return success if mitigation is complete
 ```
