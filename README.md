@@ -1,7 +1,7 @@
-[![CI](https://github.com/RC219805/Transformation_Portal/actions/workflows/python-app.yml/badge.svg)](https://github.com/RC219805/Transformation_Portal/actions)
+[![CI/CD](https://github.com/RC219805/Transformation_Portal/actions/workflows/ci-consolidated.yml/badge.svg)](https://github.com/RC219805/Transformation_Portal/actions/workflows/ci-consolidated.yml)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/build-passing-success.svg)](https://github.com/RC219805/Transformation_Portal)
+[![Tests](https://img.shields.io/badge/tests-1199%20passed-brightgreen.svg)](https://github.com/RC219805/Transformation_Portal/actions)
 
 # Transformation Portal
 

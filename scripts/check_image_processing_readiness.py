@@ -143,7 +143,8 @@ def check_ffmpeg() -> Tuple[bool, str]:
             ['ffmpeg', '-version'],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            check=False
         )
         if result.returncode == 0:
             # Extract version from first line
