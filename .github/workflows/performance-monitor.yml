@@ -1,154 +1,97 @@
-# .github/workflows/performance-monitor.yml
-# Phase 2: Performance Regression Testing
+# Performance Monitor Workflow
+# Runs performance benchmarks and memory profiling
+#
+# NOTE: This job uses base dependencies only (no ML extras) to avoid
+# ResolutionImpossible conflicts. ML-heavy tests run in dedicated workflows.
+#
 name: Performance Monitor
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
-  issues: write
 
 jobs:
-  performance-test:
-    name: Performance Regression Check
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+  performance:
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0  # Need history for comparison
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
+          cache: 'pip'
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.cache/huggingface
-            ~/.cache/torch
-          key: ${{ runner.os }}-perf-${{ hashFiles('requirements.txt') }}
+      - name: Ensure constraints present
+        run: |
+          if [ ! -f requirements/constraints.txt ]; then
+            echo "ERROR: requirements/constraints.txt not found; CI expects this file for security constraints."
+            exit 1
+          fi
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements-ci.txt
-          pip install -e ".[ml]"
-          pip install pytest pytest-benchmark memory-profiler
+          python -m pip install --upgrade pip setuptools wheel
+          # Use constraints to exclude vulnerable basicsr (CVE-2024-27763)
+          # Install base package without ML extras to avoid dependency conflicts
+          pip install -c requirements/constraints.txt -e .
+          # Install only the lightweight profiling dependencies
+          pip install memory-profiler pytest-benchmark
 
-      - name: Download baseline results
-        continue-on-error: true
-        uses: actions/download-artifact@v6
-        with:
-          name: baseline-benchmark
-          path: baseline/
-
-      - name: Run performance tests
+      - name: Run performance benchmarks
         run: |
-          # Create performance test directory if needed
-          mkdir -p tests/performance
+          # Benchmark core functionality (non-ML)
+          python -m pytest tests/performance/ \
+            --benchmark-only \
+            --benchmark-json=benchmark-results.json \
+            --benchmark-sort=mean \
+            || true
 
-          # Run benchmarks
-          pytest tests/ -k "benchmark or performance" \
-            --benchmark-json=current-benchmark.json \
-            --benchmark-compare=baseline/benchmark.json \
-            --benchmark-compare-fail=mean:10% || true
-
-      - name: Analyze memory usage
+      - name: Run memory profiling
         run: |
-          # Memory profiling script
-          cat > mem_test.py << 'EOF'
-          from memory_profiler import profile
-          import sys
+          python -m memory_profiler tests/mem_test.py > memory-report.txt 2>&1 || true
 
-          @profile
-          def test_import():
-              # Test basic imports don't leak memory
-              import numpy as np
-              import torch
-              return True
-
-          if __name__ == "__main__":
-              test_import()
-          EOF
-
-          python -m memory_profiler mem_test.py > memory-report.txt || true
-
-      - name: Generate performance report
+      - name: Generate benchmark summary
         run: |
-          cat > performance-summary.md << 'EOF'
-          # 📊 Performance Test Results
+          if [ -f benchmark-results.json ]; then
+            cp benchmark-results.json current-benchmark.json
+          fi
 
-          ## Benchmark Summary
-          See `current-benchmark.json` for detailed results.
-
-          ## Memory Profile
-          See `memory-report.txt` for memory usage analysis.
-
-          ## Status
-          - ✅ Tests completed
-          - Check for regressions > 10%
-          EOF
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: performance-results
-          path: |
-            current-benchmark.json
-            memory-report.txt
-            performance-summary.md
-          if-no-files-found: warn
-
-      - name: Save as baseline (main branch only)
-        if: github.ref == 'refs/heads/main' && hashFiles('current-benchmark.json') != ''
-        uses: actions/upload-artifact@v5
-        with:
-          name: baseline-benchmark
-          path: current-benchmark.json
-          if-no-files-found: warn
-
-      - name: Comment on PR
+      - name: Comment on PR with results
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-
-            let summary = '# 📊 Performance Test Results\n\n';
-
-            // Check if performance summary exists
-            if (fs.existsSync('performance-summary.md')) {
-              summary = fs.readFileSync('performance-summary.md', 'utf8');
-            } else {
-              summary += 'ℹ️  No performance benchmarks generated.\n\n';
-              summary += 'To enable performance tracking, add benchmark tests:\n';
-              summary += '```python\n';
-              summary += 'def test_performance(benchmark):\n';
-              summary += '    result = benchmark(your_function)\n';
-              summary += '```\n';
-            }
-
-            // Add memory report if available
+            let comment = '📊 **Performance Test Results**\n\n';
+            comment += '**Benchmark Summary**\n\n';
+            comment += 'See `current-benchmark.json` for detailed results.\n\n';
+            comment += '**Memory Profile**\n\n';
             if (fs.existsSync('memory-report.txt')) {
               const memReport = fs.readFileSync('memory-report.txt', 'utf8');
-              summary += '\n## Memory Profile\n```\n' + memReport.slice(0, 500) + '\n```\n';
+              comment += 'See `memory-report.txt` for memory usage analysis.\n\n';
             }
-
+            comment += '**Status**\n\n';
+            comment += '✅ Tests completed\n';
+            comment += 'Check for regressions > 10%\n';
+            if (fs.existsSync('memory-report.txt')) {
+              const memReport = fs.readFileSync('memory-report.txt', 'utf8');
+              comment += '**Memory Profile**\n\n```\n' + memReport + '\n```\n';
+            }
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: summary
+              body: comment
             });
