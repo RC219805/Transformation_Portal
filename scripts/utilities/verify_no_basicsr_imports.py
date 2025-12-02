@@ -93,6 +93,36 @@ def _find_imports_in_ast(tree: ast.AST, py_file: Path, lines: list[str]) -> list
     return violations
 
 
+# Maximum directory levels to traverse when searching for repository root
+_MAX_TRAVERSAL_DEPTH = 10
+
+
+def _is_vulnerable_basicsr_import(module_name: str) -> bool:
+    """Check if a module name refers to the vulnerable basicsr package.
+
+    This uses exact matching to avoid false positives with similarly-named packages
+    like 'basicsr_new', 'basicsrv2', etc.
+
+    Args:
+        module_name: The module name from an import statement (e.g., 'basicsr.archs')
+
+    Returns:
+        True if this is a vulnerable basicsr import, False otherwise.
+    """
+    if not module_name:
+        return False
+
+    # Split module path and check if first component is exactly 'basicsr'
+    # This matches: 'basicsr', 'basicsr.archs', 'basicsr.utils.dist_util'
+    # But NOT: 'basicsr_tp', 'basicsr_new', 'basicsrv2'
+    parts = module_name.split('.')
+    first_part = parts[0]
+
+    # Must be exactly 'basicsr' (the vulnerable package)
+    # and NOT 'basicsr_tp' (our secure vendored replacement)
+    return first_part == 'basicsr'
+
+
 def _check_ast_node_for_import(node: ast.AST, py_file: Path, lines: list[str]) -> list[tuple[Path, int, str]]:
     """Check a single AST node for basicsr imports.
 
@@ -103,7 +133,7 @@ def _check_ast_node_for_import(node: ast.AST, py_file: Path, lines: list[str]) -
 
     # Check for "from basicsr import ..." statements
     if isinstance(node, ast.ImportFrom):
-        if node.module and node.module.startswith('basicsr') and 'basicsr_tp' not in node.module:
+        if _is_vulnerable_basicsr_import(node.module):
             line_no = node.lineno
             line_content = lines[line_no - 1] if line_no <= len(lines) else ""
             violations.append((py_file, line_no, line_content))
@@ -111,7 +141,7 @@ def _check_ast_node_for_import(node: ast.AST, py_file: Path, lines: list[str]) -
     # Check for "import basicsr" statements - check ALL aliases
     elif isinstance(node, ast.Import):
         for alias in node.names:
-            if alias.name.startswith('basicsr') and 'basicsr_tp' not in alias.name:
+            if _is_vulnerable_basicsr_import(alias.name):
                 line_no = node.lineno
                 line_content = lines[line_no - 1] if line_no <= len(lines) else ""
                 violations.append((py_file, line_no, line_content))
@@ -120,13 +150,22 @@ def _check_ast_node_for_import(node: ast.AST, py_file: Path, lines: list[str]) -
 
 
 def _find_imports_via_string_matching(py_file: Path, lines: list[str]) -> list[tuple[Path, int, str]]:
-    """Fall back to string matching for files with syntax errors."""
+    """Fall back to string matching for files with syntax errors.
+
+    Uses word boundary matching to avoid false positives with similarly-named packages.
+    """
+    import re
     violations = []
+
+    # Pattern matches 'from basicsr' or 'import basicsr' as whole words
+    # but NOT 'from basicsr_tp' or 'import basicsr_new'
+    pattern = re.compile(r'\b(from|import)\s+basicsr\b(?!_)')
 
     for line_no, line in enumerate(lines, start=1):
         line_stripped = line.strip()
-        if ("from basicsr" in line or "import basicsr" in line) and "basicsr_tp" not in line:
-            if not line_stripped.startswith("#"):
+        if not line_stripped.startswith("#") and pattern.search(line):
+            # Double-check it's not basicsr_tp
+            if "basicsr_tp" not in line:
                 violations.append((py_file, line_no, line))
 
     return violations
@@ -138,7 +177,7 @@ def _find_repo_root() -> Path:
     current = script_path.parent
 
     # Walk up directory tree looking for .git directory
-    for _ in range(10):  # Safety limit to prevent infinite loop
+    for _ in range(_MAX_TRAVERSAL_DEPTH):
         if (current / '.git').exists():
             return current
         if current.parent == current:  # Reached filesystem root

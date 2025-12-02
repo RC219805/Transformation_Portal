@@ -18,7 +18,7 @@ FAST_TESTS := \
 
 .PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
-        lock lock-prod lock-ci lock-dev verify-security
+        lock lock-prod lock-ci lock-dev verify-security security-quick security-full security-audit
 
 help:
 	@echo "Targets:"
@@ -31,12 +31,15 @@ help:
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
 	@echo ""
-	@echo "Security:"
+	@echo "Security (Continuous Verification):"
 	@echo "  verify-security    Verify no vulnerable basicsr imports (CVE-2024-27763)"
+	@echo "  security-quick     Quick security check (for pre-commit hooks)"
+	@echo "  security-full      Full security audit with all checks"
+	@echo "  security-audit     Comprehensive security audit with report"
 	@echo ""
 	@echo "Quality & CI:"
 	@echo "  lint               Run linting (flake8 + pylint)"
-	@echo "  ci                 Run local CI checks (lint + test-fast)"
+	@echo "  ci                 Run local CI checks (lint + test-fast + security)"
 	@echo "  ci-full            Run comprehensive CI simulation (all checks)"
 	@echo "  pre-commit         Run pre-commit checks manually"
 	@echo "  install-hooks      Install git pre-commit hook"
@@ -102,11 +105,11 @@ lint:
 	@echo "Running pylint (non-blocking)..."
 	@$(PY) -m pylint $(shell git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e 'examples/' || echo '') || true
 
-ci: lint test-fast
+ci: lint security-quick test-fast
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation
-ci-full:
+ci-full: security-full
 	@echo "Running comprehensive CI simulation..."
 	@./scripts/local_ci_check.sh
 
@@ -168,6 +171,21 @@ check-docs:
 verify-security:
 	@echo "Verifying security: basicsr CVE-2024-27763 mitigation..."
 	@"$(PY)" scripts/utilities/verify_no_basicsr_imports.py --check-pkg
+
+# Quick security check (for pre-commit hooks)
+security-quick:
+	@echo "Running quick security checks..."
+	@"$(PY)" scripts/security/continuous_security.py quick
+
+# Full security audit with all checks
+security-full:
+	@echo "Running full security audit..."
+	@"$(PY)" scripts/security/continuous_security.py full
+
+# Comprehensive security audit with detailed report
+security-audit:
+	@echo "Running comprehensive security audit..."
+	@"$(PY)" scripts/security/continuous_security.py health
 
 # --- Dependency locking (pip-tools) ---
 
