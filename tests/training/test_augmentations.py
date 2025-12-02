@@ -15,10 +15,11 @@ Version: 1.0.0
 import pytest
 import numpy as np
 
-# Check if dependencies are available
+# Check if dependencies are available (including actual torch functionality, not just mock)
 try:
     import torch
-    TORCH_AVAILABLE = True
+    # Verify torch has actual functionality (not just a mock/stub)
+    TORCH_AVAILABLE = hasattr(torch, 'from_numpy') and hasattr(torch, 'Tensor')
 except ImportError:
     TORCH_AVAILABLE = False
 
