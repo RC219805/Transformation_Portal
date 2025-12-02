@@ -32,8 +32,7 @@ huggingface-hub>=0.16,<1
 Pillow>=10,<12
 opencv-python>=4.8,<5
 
-# Real-ESRGAN / GFPGAN (note: basicsr excluded via constraints.txt)
-realesrgan>=0.3.0,<1
-# gfpgan: Face restoration support for Real-ESRGAN workflows
-# Not in pyproject.toml ml extras - included here for full ML pipeline support
-gfpgan>=1.3.8,<2
+# Real-ESRGAN / GFPGAN - EXCLUDED due to basicsr dependency (CVE-2024-27763)
+# The repository uses basicsr_tp vendored package instead.
+# realesrgan>=0.3.0,<1  # Requires basicsr - EXCLUDED
+# gfpgan>=1.3.8,<2      # Requires basicsr - EXCLUDED
