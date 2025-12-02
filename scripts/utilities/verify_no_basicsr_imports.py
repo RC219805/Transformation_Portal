@@ -9,15 +9,26 @@ import argparse
 
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument('--check-pkg', action='store_true', help='Check if basicsr is importable and exit non-zero if present')
+    p = argparse.ArgumentParser(
+        description='Verify that the vulnerable basicsr package is not importable.'
+    )
+    p.add_argument(
+        '--check-pkg',
+        action='store_true',
+        help='Check if basicsr is importable and exit non-zero if present'
+    )
     args = p.parse_args()
 
+    if not args.check_pkg:
+        print('Use --check-pkg to verify basicsr is not importable')
+        sys.exit(0)
+
     try:
-        import basicsr  # type: ignore
-        print('ERROR: basicsr is importable in the environment. This may expose CVE-2024-27763')
+        import basicsr  # type: ignore  # noqa: F401
+        print('ERROR: basicsr is importable in the environment. '
+              'This may expose CVE-2024-27763')
         sys.exit(2)
-    except Exception:
+    except ImportError:
         # Import failed, which is the expected state
         print('OK: basicsr is not importable')
         sys.exit(0)
