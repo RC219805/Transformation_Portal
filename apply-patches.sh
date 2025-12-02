@@ -67,11 +67,6 @@ else
     if [ -f "${PM_TARGET}" ]; then
         BACKUP="${PM_TARGET}.bak.$(date +%s)"
         echo "🔁 Backing up existing ${PM_TARGET} -> ${BACKUP}"
-        # Additional check: refuse to read from symlink during backup
-        if [ -L "${PM_TARGET}" ]; then
-            echo "ERROR: Refusing to backup from symlinked target: ${PM_TARGET}" >&2
-            exit 1
-        fi
         cp -- "${PM_TARGET}" "${BACKUP}"
     fi
     echo "✅ Updating ${PM_TARGET}..."
