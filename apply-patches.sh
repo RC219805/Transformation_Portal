@@ -51,16 +51,33 @@ mkdir -p "$(dirname "${PM_TARGET}")"
 SRC_PM_REAL="$(realpath "${SRC_PM}" 2>/dev/null || echo "${SRC_PM}")"
 DST_PM_REAL="$(realpath "${PM_TARGET}" 2>/dev/null || echo "${PM_TARGET}")"
 
+# Security: Resolve REPO_ROOT to absolute path and verify PM_TARGET is within it
+ROOT_REAL="$(realpath -m "${REPO_ROOT}")"
+PM_REAL="$(realpath -m "${PM_TARGET}" 2>/dev/null || echo)"
+
+# Refuse to operate on symlinks or paths outside the repo root (symlink traversal protection)
+if [ -L "${PM_TARGET}" ] || [ -z "${PM_REAL}" ] || [[ "${PM_REAL}" != "${ROOT_REAL}"/* ]]; then
+    echo "ERROR: Refusing to operate on symlink or path outside repo: ${PM_TARGET}" >&2
+    exit 1
+fi
+
 if [ "${SRC_PM_REAL}" = "${DST_PM_REAL}" ]; then
     echo "⚠️  Source and destination for performance-monitor.yml are the same; skipping copy."
 else
     if [ -f "${PM_TARGET}" ]; then
         BACKUP="${PM_TARGET}.bak.$(date +%s)"
         echo "🔁 Backing up existing ${PM_TARGET} -> ${BACKUP}"
-        cp "${PM_TARGET}" "${BACKUP}"
+        # Additional check: refuse to read from symlink during backup
+        if [ -L "${PM_TARGET}" ]; then
+            echo "ERROR: Refusing to backup from symlinked target: ${PM_TARGET}" >&2
+            exit 1
+        fi
+        cp -- "${PM_TARGET}" "${BACKUP}"
     fi
     echo "✅ Updating ${PM_TARGET}..."
-    cp "${SRC_PM}" "${PM_TARGET}"
+    # Remove any existing file before copy to prevent symlink following
+    rm -f -- "${PM_TARGET}"
+    cp -- "${SRC_PM}" "${PM_TARGET}"
 fi
 
 echo "Done. Next steps: pip install pip-tools; pip-compile requirements/ml.in -o requirements/ml.txt; commit changes."
