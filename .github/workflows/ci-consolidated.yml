@@ -382,7 +382,12 @@ jobs:
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
           # ML extras (with constraints to exclude vulnerable basicsr)
-          pip install -c requirements/constraints.txt -e ".[ml]" || pip install -c requirements/constraints.txt -r requirements/ml.txt
+          # Try editable install first, fall back to requirements file
+          # Both use constraints to ensure basicsr is blocked
+          if ! pip install -c requirements/constraints.txt -e ".[ml]"; then
+            echo "Warning: Editable install failed, trying requirements file"
+            pip install -c requirements/constraints.txt -r requirements/ml.txt
+          fi
           pip install -c requirements/constraints.txt -e .
 
       - name: Verify basicsr Not Installed (CVE-2024-27763)
