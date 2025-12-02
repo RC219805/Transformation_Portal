@@ -260,8 +260,11 @@ class PremiumContextAwarePipeline:
             if self.verbose:
                 print(f"Running: {' '.join(cmd)}")
 
-            _result = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: F841
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
+            if result.returncode != 0:
+                print(f"⚠ Color grading failed: {result.stderr.strip()}")
+                return None
             # Find output (script generates its own naming)
             expected_output = self.output_dir / f"{image_path.stem}_{preset}.tif"
             if expected_output.exists():
