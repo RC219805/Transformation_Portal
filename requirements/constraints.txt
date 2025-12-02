@@ -18,8 +18,6 @@
 
 # ML dependency constraints to prevent resolver conflicts
 controlnet-aux<0.0.9
-huggingface-hub<0.20
-accelerate<0.25
 
 # Security Advisory: CVE-2024-27763
 # BasicSR <= 1.4.2 has a command injection vulnerability via SLURM_NODELIST.

@@ -241,6 +241,23 @@ jobs:
             echo "::warning::Too many markdown files in root ($MD_COUNT/10)"
           fi
 
+      - name: Verify No Vulnerable basicsr Imports (CVE-2024-27763)
+        run: |
+          python scripts/utilities/verify_no_basicsr_imports.py
+
+      - name: Verify basicsr Package Not Installed (CVE-2024-27763)
+        run: |
+          # This check ensures basicsr was not installed as a transitive dependency
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ SECURITY VIOLATION: basicsr package is installed!"
+            echo "This package has CVE-2024-27763 (command injection vulnerability)."
+            echo "The constraints.txt file should have prevented this."
+            pip show basicsr
+            exit 1
+          else
+            echo "✅ basicsr package is NOT installed (as expected)"
+          fi
+
   # ===========================================================================
   # Stage 3: Core Tests (No ML Dependencies)
   # ===========================================================================
@@ -287,9 +304,17 @@ jobs:
         run: |
           pip install --upgrade pip wheel
           pip install pytest pytest-cov pytest-asyncio
-          pip install -r requirements-ci.txt
-          pip install -e .
-          
+          pip install -c requirements/constraints.txt -r requirements-ci.txt
+          pip install -c requirements/constraints.txt -e .
+
+      - name: Verify basicsr Not Installed (CVE-2024-27763)
+        run: |
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ SECURITY: basicsr package installed despite constraints!"
+            exit 1
+          fi
+          echo "✅ Security check passed: basicsr not installed"
+
       - name: Run Core Tests
         run: |
           pytest tests/ \
@@ -352,14 +377,29 @@ jobs:
         run: |
           pip install --upgrade pip wheel
           pip install pytest pytest-cov hypothesis
-          
+
           # CPU-only PyTorch
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          
-          # ML extras
-          pip install -e ".[ml]" || pip install -r requirements/ml.txt
-          pip install -e .
-          
+
+          # ML extras (with constraints to exclude vulnerable basicsr)
+          # Try editable install first, fall back to requirements file
+          # Both use constraints to ensure basicsr is blocked
+          if ! pip install -c requirements/constraints.txt -e ".[ml]"; then
+            echo "Warning: Editable install failed, trying requirements file"
+            pip install -c requirements/constraints.txt -r requirements/ml.txt
+          fi
+          pip install -c requirements/constraints.txt -e .
+
+      - name: Verify basicsr Not Installed (CVE-2024-27763)
+        run: |
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ SECURITY: basicsr package installed despite constraints!"
+            echo "This is a critical security issue - CVE-2024-27763"
+            pip show basicsr
+            exit 1
+          fi
+          echo "✅ Security check passed: basicsr not installed"
+
       - name: Run ML Tests
         env:
           PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:128"
