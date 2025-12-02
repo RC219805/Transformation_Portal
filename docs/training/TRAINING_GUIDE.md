@@ -45,8 +45,9 @@ pip install torch torchvision transformers
 # Install training extras
 pip install tqdm tensorboard pyyaml
 
-# Optional: Distributed training
-pip install torch-distributed
+# Distributed training is included in PyTorch. No separate package needed.
+# If you need CUDA support, install the appropriate PyTorch build, e.g.:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # Optional: Weights & Biases
 pip install wandb
