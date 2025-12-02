@@ -137,6 +137,14 @@ input_images/**/*.tiff
 # RAG system generated files
 .rag_cache/
 
+# Security state files (runtime-generated, avoid merge conflicts)
+.github/security/state.json
+.github/security/last_check.json
+.github/security/feedback.jsonl
+.github/security/resolution_attempts.json
+.github/security/resolver_stats.json
+.github/security/learned_patterns.json
+
 # JSON metadata (keep quality analysis JSON)
 !*quality*.json
 !*metadata*.json
