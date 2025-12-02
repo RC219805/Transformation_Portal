@@ -42,16 +42,16 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import re
+import shlex
 import shutil
 import subprocess
-import sys
+from collections import Counter
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # Configure module logger
 logging.basicConfig(
@@ -195,7 +195,11 @@ class SecurityFeedback:
 class PatternLearner:
     """Learns resolution patterns from historical fixes."""
 
-    # Pre-defined patterns based on common vulnerabilities
+    # Pre-defined patterns based on common vulnerabilities.
+    # NOTE: success_count and failure_count are initial seed values to bootstrap
+    # the confidence scoring system. These are estimated based on industry
+    # experience with similar patterns, not actual historical data. Real metrics
+    # will be accumulated as the system learns from actual resolution attempts.
     BUILT_IN_PATTERNS: List[Dict[str, Any]] = [
         {
             "pattern_id": "basicsr_cve_2024_27763",
@@ -213,6 +217,7 @@ class PatternLearner:
                 "python scripts/utilities/verify_no_basicsr_imports.py --check-pkg",
                 "pip install -c requirements/constraints.txt basicsr 2>&1 | grep -q 'ResolutionImpossible'",
             ],
+            # Seed values for confidence scoring (not actual historical data)
             "success_count": 10,
             "failure_count": 0,
         },
@@ -227,6 +232,7 @@ class PatternLearner:
             ],
             "commands": [],  # Generated dynamically
             "verification_steps": [],  # Generated dynamically
+            # Seed values for confidence scoring (not actual historical data)
             "success_count": 5,
             "failure_count": 1,
         },
@@ -239,6 +245,7 @@ class PatternLearner:
             "files_to_modify": [],  # Determined by package location
             "commands": [],  # Generated dynamically
             "verification_steps": [],
+            # Seed values for confidence scoring (not actual historical data)
             "success_count": 8,
             "failure_count": 2,
         },
@@ -553,39 +560,70 @@ class AutoFixer:
         self._save_attempts()
         return attempt
 
+    @staticmethod
+    def _validate_package_name(package_name: str) -> bool:
+        """Validate package name to prevent command injection.
+
+        Package names must match PEP 508 naming conventions:
+        - Only alphanumeric, hyphens, underscores, and dots allowed
+        - Must start with alphanumeric character
+        """
+        # PEP 508 compliant package name pattern
+        pattern = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$')
+        return bool(pattern.match(package_name)) and len(package_name) <= 100
+
     def _generate_commands(self, pattern: ResolutionPattern, package_name: str) -> List[str]:
-        """Generate commands for a pattern, substituting package name."""
+        """Generate commands for a pattern, substituting package name.
+
+        Uses shlex.quote() to sanitize inputs and prevent command injection.
+        """
+        # Validate package name to prevent command injection
+        if not self._validate_package_name(package_name):
+            logger.error(f"Invalid package name rejected: {package_name}")
+            return []
+
+        safe_package = shlex.quote(package_name)
+
         if pattern.commands:
-            return [cmd.replace("{package}", package_name) for cmd in pattern.commands]
+            return [cmd.replace("{package}", safe_package) for cmd in pattern.commands]
 
         # Generate default commands based on strategy
         if pattern.strategy == ResolutionStrategy.CONSTRAINT_BLOCK:
             return [
-                f"echo '{package_name}>=999.0.0  # Security blocked' >> requirements/constraints.txt",
+                f"echo {shlex.quote(f'{package_name}>=999.0.0  # Security blocked')} >> requirements/constraints.txt",
             ]
         elif pattern.strategy == ResolutionStrategy.UPGRADE:
             return [
-                f"pip install --upgrade {package_name}",
+                f"pip install --upgrade {safe_package}",
             ]
         return []
 
     def _verify_fix(self, pattern: ResolutionPattern, package_name: str) -> bool:
-        """Verify a fix was applied successfully."""
+        """Verify a fix was applied successfully.
+
+        Uses shlex.quote() to sanitize package names in verification commands.
+        """
+        # Validate package name to prevent command injection
+        if not self._validate_package_name(package_name):
+            logger.error(f"Invalid package name rejected during verification: {package_name}")
+            return False
+
+        safe_package = shlex.quote(package_name)
         verification_steps = pattern.verification_steps or []
 
         # Add default verifications
         if not verification_steps:
             if pattern.strategy == ResolutionStrategy.CONSTRAINT_BLOCK:
                 verification_steps = [
-                    f"grep -q '{package_name}' requirements/constraints.txt",
+                    f"grep -q {safe_package} requirements/constraints.txt",
                 ]
             elif pattern.strategy == ResolutionStrategy.VENDOR_REPLACE:
                 verification_steps = [
-                    f"pip show {package_name} 2>&1 | grep -q 'not found' || exit 1",
+                    f"pip show {safe_package} 2>&1 | grep -q 'not found' || exit 1",
                 ]
 
         for step in verification_steps:
-            step = step.replace("{package}", package_name)
+            step = step.replace("{package}", safe_package)
             try:
                 result = subprocess.run(
                     step,
@@ -640,8 +678,8 @@ class FeedbackCollector:
                                 feedback.success
                             )
                             break
-            except (IOError, json.JSONDecodeError):
-                pass
+            except (IOError, json.JSONDecodeError) as e:
+                logger.warning(f"Failed to update pattern outcome in resolution_attempts.json: {e}")
 
     def analyze_feedback(self) -> Dict[str, Any]:
         """Analyze feedback to identify improvement opportunities."""
@@ -682,8 +720,7 @@ class FeedbackCollector:
 
             # Find common failure reasons
             if failure_notes:
-                # Simple frequency analysis
-                from collections import Counter
+                # Simple frequency analysis using Counter (imported at module level)
                 word_freq = Counter()
                 for note in failure_notes:
                     words = note.lower().split()
@@ -838,8 +875,8 @@ class AutoSecurityResolver:
             try:
                 with open(self.stats_file, 'r') as f:
                     stats = json.load(f)
-            except (IOError, json.JSONDecodeError):
-                pass
+            except (IOError, json.JSONDecodeError) as e:
+                logger.warning(f"Could not read stats file '{self.stats_file}': {e}. Using default stats.")
 
         stats["total_attempts"] += 1
         if attempt.status == ResolutionStatus.VERIFIED:

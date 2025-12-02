@@ -42,16 +42,14 @@ from __future__ import annotations
 import ast
 import json
 import logging
-import os
 import re
 import subprocess
 import sys
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 # Configure logging
 logging.basicConfig(
@@ -265,7 +263,8 @@ class ImportScanner:
                 if isinstance(node, ast.ImportFrom):
                     if node.module:
                         module_parts = node.module.split('.')
-                        if module_parts[0] in BLOCKED_PACKAGES and module_parts[0] != 'basicsr_tp':
+                        # Check if the first part of the module is a blocked package
+                        if module_parts[0] in BLOCKED_PACKAGES:
                             rel_path = py_file.relative_to(self.repo_root)
                             violations.append(
                                 f"{rel_path}:{node.lineno} - imports from blocked package '{module_parts[0]}'"
@@ -273,14 +272,16 @@ class ImportScanner:
                 elif isinstance(node, ast.Import):
                     for alias in node.names:
                         module_parts = alias.name.split('.')
-                        if module_parts[0] in BLOCKED_PACKAGES and module_parts[0] != 'basicsr_tp':
+                        # Check if the first part of the module is a blocked package
+                        if module_parts[0] in BLOCKED_PACKAGES:
                             rel_path = py_file.relative_to(self.repo_root)
                             violations.append(
                                 f"{rel_path}:{node.lineno} - imports blocked package '{module_parts[0]}'"
                             )
 
-        except (SyntaxError, UnicodeDecodeError):
-            pass
+        except (SyntaxError, UnicodeDecodeError) as e:
+            # Skip files that cannot be parsed (syntax errors, encoding issues)
+            logger.warning(f"Skipped file due to parse error ({type(e).__name__}): {py_file}")
 
         return violations
 
@@ -361,10 +362,12 @@ class ConstraintVerifier:
         # Verify all blocked packages have constraints
         for pkg_name, pkg_info in BLOCKED_PACKAGES.items():
             expected_constraint = pkg_info.get("constraint", f"{pkg_name}>=999.0.0")
-            if pkg_name not in content.lower():
-                issues.append(f"Missing constraint for blocked package: {pkg_name}")
-            elif ">=999" not in content:
-                issues.append(f"Constraint for {pkg_name} may not be blocking properly")
+            # Check for expected constraint string (case-insensitive)
+            if expected_constraint.lower() not in content.lower():
+                issues.append(
+                    f"Missing or incorrect constraint for blocked package: {pkg_name} "
+                    f"(expected: '{expected_constraint}')"
+                )
 
         if issues:
             return SecurityCheckResult(
@@ -434,7 +437,8 @@ class CodePatternScanner:
                         )
 
         except (UnicodeDecodeError, IOError):
-            pass
+            # Skip files that cannot be read due to encoding or I/O errors
+            logger.warning(f"Skipped file {py_file} due to read error (UnicodeDecodeError or IOError)")
 
         return findings
 
