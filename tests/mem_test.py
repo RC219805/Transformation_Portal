@@ -44,19 +44,31 @@ def get_memory_delta(func, *args, **kwargs) -> Dict[str, Any]:
         Dictionary with memory metrics
     """
     start_time = time.time()
-    mem_before = memory_usage(-1, interval=0.1, max_usage=True)
 
-    # Run function and capture memory usage over time
-    mem_during = memory_usage((func, args, kwargs), interval=0.1, max_usage=True)
+    # Get baseline memory (returns list with single value when max_usage=False)
+    mem_before_list = memory_usage(-1, interval=0.01, timeout=0.1)
+    mem_before = mem_before_list[0] if mem_before_list else 0.0
+
+    # Run function and capture maximum memory usage during execution
+    # max_usage=True returns (max_mem, num_measurements) tuple
+    mem_result = memory_usage((func, args, kwargs), interval=0.05, max_usage=True)
+    # mem_result is (max_mem, count) when max_usage=True
+    mem_peak = mem_result[0] if isinstance(mem_result, tuple) else mem_result
 
     end_time = time.time()
-    mem_after = memory_usage(-1, interval=0.1, max_usage=True)
+
+    # Get final memory after function completes
+    mem_after_list = memory_usage(-1, interval=0.01, timeout=0.1)
+    mem_after = mem_after_list[0] if mem_after_list else 0.0
+
+    # Calculate memory delta (peak - baseline)
+    mem_delta = max(0.0, mem_peak - mem_before)
 
     return {
         'mem_before': mem_before,
-        'mem_peak': mem_during,
+        'mem_peak': mem_peak,
         'mem_after': mem_after,
-        'mem_delta': mem_during - mem_before,
+        'mem_delta': mem_delta,
         'processing_time': end_time - start_time,
         'success': True,
     }
