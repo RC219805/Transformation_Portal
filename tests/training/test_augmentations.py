@@ -23,7 +23,7 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 try:
-    from PIL import Image  # noqa: F401
+    import PIL  # noqa: F401
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
