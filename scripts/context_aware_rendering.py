@@ -310,6 +310,9 @@ class ContextAwareRenderingPipeline:
             primary_materials=list(base_strategy_ref.primary_materials)
         )
 
+        # Create a copy to avoid mutating the class-level strategy
+        strategy = replace(base_strategy)
+
         # Get room-specific context (reserved for future material/feature customization)
         room_context = self.get_room_context(room_type)  # noqa: F841
 
