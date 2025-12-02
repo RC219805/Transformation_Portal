@@ -1,5 +1,22 @@
-# constraints to steer dependency resolver away from known incompatible or vulnerable transitive upgrades
-# These constraints are intentionally conservative. Maintainers should update pins via a locked requirements file.
+# This constraints file is used to steer the dependency resolver away from known
+# incompatible or vulnerable transitive upgrades.
+#
+# Usage:
+#   - Pass this file to pip-compile with the --constraint option to restrict
+#     transitive dependencies:
+#       pip-compile --constraint requirements/constraints.txt requirements.in
+#   - Alternatively, use pip install --constraint requirements/constraints.txt <package>
+#
+# Scope:
+#   - These constraints apply to transitive dependencies only (not direct requirements).
+#   - They are intentionally conservative to avoid problematic upgrades.
+#
+# Maintenance:
+#   - Review and update these pins when upgrading direct dependencies, after security
+#     advisories, or before major releases.
+#   - Update pins via a locked requirements file and after testing for compatibility.
+
+# ML dependency constraints to prevent resolver conflicts
 controlnet-aux<0.0.9
 huggingface-hub<0.20
 accelerate<0.25
