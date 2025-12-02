@@ -1,0 +1,104 @@
+# Depth Anything V2 Large Fine-tuning Configuration
+# Optimized for architectural depth estimation
+#
+# Usage:
+#   python -m src.training.train_depth_anything_v2 \
+#       --config config/training/depth_anything_v2_large_finetune.yaml
+#
+# Author: Transformation Portal Team
+# Version: 1.0.0
+
+# Model Configuration
+model:
+  name: "depth-anything/Depth-Anything-V2-Large-hf"
+  variant: "LARGE"
+  pretrained: true
+  freeze_encoder: false  # Set to true for faster training with less GPU memory
+
+# Training Hyperparameters
+training:
+  num_epochs: 50
+  batch_size: 8
+  gradient_accumulation_steps: 4  # Effective batch size = 8 * 4 = 32
+  learning_rate: 1.0e-5
+  weight_decay: 0.01
+  warmup_epochs: 2
+  mixed_precision: "fp16"  # Options: "fp16", "bf16", null
+  num_workers: 8
+  pin_memory: true
+
+# Optimizer Configuration
+optimizer:
+  type: "adamw"
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+# Learning Rate Scheduler
+scheduler:
+  type: "cosine"
+  min_lr: 1.0e-7
+  warmup_steps: 1000
+
+# Loss Function Configuration
+loss:
+  type: "combined"
+  weights:
+    scale_invariant: 1.0  # Primary depth loss
+    gradient: 0.5         # Edge preservation
+    ssim: 0.3             # Structural similarity
+
+# Data Configuration
+data:
+  train_dir: "data/architectural/train"
+  val_dir: "data/architectural/val"
+  image_size: [518, 518]  # Depth Anything V2 default input size
+  augmentation: true
+  normalize: true
+
+# Augmentation Configuration
+augmentation:
+  horizontal_flip: 0.5
+  rotation_degrees: 10
+  brightness: 0.2
+  contrast: 0.2
+  saturation: 0.2
+  hue: 0.1
+  scale_range: [0.8, 1.2]
+  grid_distortion_prob: 0.0
+  perspective_prob: 0.0
+  gaussian_blur_prob: 0.1
+
+# Checkpointing Configuration
+checkpointing:
+  save_dir: "checkpoints/depth_anything_v2_large"
+  save_every_n_epochs: 5
+  keep_last_n: 3
+  save_best: true
+  monitor_metric: "val_rmse"
+  mode: "min"  # "min" for loss/error metrics, "max" for accuracy
+
+# Logging Configuration
+logging:
+  log_dir: "logs/depth_anything_v2_large"
+  tensorboard: true
+  wandb: false  # Set to true to enable Weights & Biases logging
+  log_every_n_steps: 50
+  save_images_every_n_epochs: 1
+
+# Early Stopping Configuration
+early_stopping:
+  enabled: true
+  patience: 10
+  min_delta: 0.001
+  monitor: "val_rmse"
+  mode: "min"
+
+# Random Seed
+seed: 42
+
+# Hardware Configuration (optional overrides)
+# Uncomment to force specific hardware settings
+# hardware:
+#   device: "cuda"  # Options: "cuda", "mps", "cpu"
+#   cuda_visible_devices: "0,1"  # For multi-GPU training
+#   distributed: false
