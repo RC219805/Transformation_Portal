@@ -11,45 +11,24 @@
 # NOTE: Package versions are pinned to avoid dependency conflicts between
 # controlnet-aux, diffusers, and transformers HuggingFace ecosystem.
 #
-absl-py==2.3.1
 accelerate==0.24.1
-addict==2.4.0
-attrs==25.4.0
-# basicsr - EXCLUDED: CVE-2024-27763 (command injection vulnerability)
-cattrs==25.3.0
 certifi==2025.11.12
 charset-normalizer==3.4.4
-colour-science==0.4.6
-contourpy==1.3.3
 controlnet-aux==0.0.8
-coremltools==9.0
-cycler==0.12.1
 diffusers==0.24.0
 einops==0.8.1
-facexlib==0.3.0
 filelock==3.20.0
-filterpy==1.4.5
-fonttools==4.61.0
 fsspec==2023.12.2
-future==1.0.0
-# gfpgan - EXCLUDED: depends on basicsr (CVE-2024-27763)
-grpcio==1.76.0
+hf-xet==1.2.0
+huggingface-hub==0.36.0
 idna==3.11
 imageio==2.37.2
 importlib-metadata==8.7.0
 jinja2==3.1.6
-joblib==1.5.2
-kiwisolver==1.4.9
 lazy-loader==0.4
-llvmlite==0.45.1
-lmdb==1.7.5
-markdown==3.10
 markupsafe==3.0.3
-matplotlib==3.10.7
-memory-profiler==0.61.0
 mpmath==1.3.0
 networkx==3.6
-numba==0.62.1
 numpy==2.2.6
 nvidia-cublas-cu12==12.8.4.1
 nvidia-cuda-cupti-cu12==12.8.90
@@ -70,38 +49,24 @@ opencv-python==4.12.0.88
 opencv-python-headless==4.12.0.88
 packaging==25.0
 pillow==11.3.0
-platformdirs==4.5.0
-protobuf==6.33.1
 psutil==7.1.3
-pyaml==25.7.0
-pyparsing==3.2.5
-python-dateutil==2.9.0.post0
 pyyaml==6.0.3
-# realesrgan - EXCLUDED: depends on basicsr (CVE-2024-27763)
 regex==2025.11.3
 requests==2.32.5
 safetensors==0.7.0
 scikit-image==0.25.2
-scikit-learn==1.7.2
 scipy==1.15.3
-sentence-transformers==2.2.2
-six==1.17.0
 sympy==1.14.0
-tb-nightly==2.21.0a20251023
-tensorboard-data-server==0.7.2
-threadpoolctl==3.6.0
 tifffile==2024.12.12
 timm==0.6.7
-tokenizers==0.19.1
+tokenizers==0.21.4
 torch==2.9.1
 torchvision==0.24.1
 tqdm==4.67.1
-transformers==4.40.0
+transformers==4.53.0
 triton==3.5.1
 typing-extensions==4.15.0
 urllib3==2.5.0
-werkzeug==3.1.4
-yapf==0.43.0
 zipp==3.23.0
 
 # The following packages are considered to be unsafe in a requirements file:
