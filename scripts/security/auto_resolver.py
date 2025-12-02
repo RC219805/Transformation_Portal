@@ -196,10 +196,12 @@ class PatternLearner:
     """Learns resolution patterns from historical fixes."""
 
     # Pre-defined patterns based on common vulnerabilities.
-    # NOTE: success_count and failure_count are initial seed values to bootstrap
-    # the confidence scoring system. These are estimated based on industry
-    # experience with similar patterns, not actual historical data. Real metrics
-    # will be accumulated as the system learns from actual resolution attempts.
+    #
+    # NOTE ON SEED VALUES: All patterns include `success_count` and `failure_count`
+    # fields to bootstrap the confidence scoring system. These are estimated values
+    # based on industry experience with similar vulnerability resolution patterns,
+    # not actual historical data from this repository. Real metrics will accumulate
+    # as the system learns from actual resolution attempts in production.
     BUILT_IN_PATTERNS: List[Dict[str, Any]] = [
         {
             "pattern_id": "basicsr_cve_2024_27763",
@@ -217,7 +219,6 @@ class PatternLearner:
                 "python scripts/utilities/verify_no_basicsr_imports.py --check-pkg",
                 "pip install -c requirements/constraints.txt basicsr 2>&1 | grep -q 'ResolutionImpossible'",
             ],
-            # Seed values for confidence scoring (not actual historical data)
             "success_count": 10,
             "failure_count": 0,
         },
@@ -232,7 +233,6 @@ class PatternLearner:
             ],
             "commands": [],  # Generated dynamically
             "verification_steps": [],  # Generated dynamically
-            # Seed values for confidence scoring (not actual historical data)
             "success_count": 5,
             "failure_count": 1,
         },
@@ -245,7 +245,6 @@ class PatternLearner:
             "files_to_modify": [],  # Determined by package location
             "commands": [],  # Generated dynamically
             "verification_steps": [],
-            # Seed values for confidence scoring (not actual historical data)
             "success_count": 8,
             "failure_count": 2,
         },
