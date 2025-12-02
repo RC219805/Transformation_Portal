@@ -1,0 +1,25 @@
+{
+  "id": "30c96c761dbac715",
+  "type": "vulnerability",
+  "cve_id": "CVE-BLOCKED",
+  "package": "basicsr",
+  "severity": "high",
+  "description": "Package listed in ml.txt but blocked by constraints",
+  "content": "Security Vulnerability: CVE-BLOCKED\nPackage: basicsr\nSeverity: high\nCVSS Score: N/A\nAffected Versions: basicsr==1.4.2\nFixed Version: No patch available\n\nDescription:\nPackage listed in ml.txt but blocked by constraints\n\nReferences:\nNone",
+  "metadata": {
+    "cve_id": "CVE-BLOCKED",
+    "package_name": "basicsr",
+    "affected_versions": "basicsr==1.4.2",
+    "severity": "high",
+    "description": "Package listed in ml.txt but blocked by constraints",
+    "cvss_score": null,
+    "attack_vector": null,
+    "fixed_version": null,
+    "patch_available": false,
+    "discovered_date": "2025-12-02T07:27:39.591987+00:00",
+    "references": [],
+    "installed_version": null,
+    "is_direct_dependency": false,
+    "dependent_packages": []
+  }
+}

@@ -1,0 +1,336 @@
+# .github/workflows/security-scan.yml
+# Proactive Dependabot Security Warning Management
+# Integrates with RAG feedback system for end-to-end security monitoring
+
+name: Security Scan
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'requirements/**'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'constraints.txt'
+      - 'scripts/security/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'requirements/**'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+  workflow_dispatch:
+    inputs:
+      full_scan:
+        description: 'Run full security scan including all dependencies'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =========================================================================
+  # Stage 1: Quick Security Verification
+  # =========================================================================
+  quick-check:
+    name: Quick Security Check
+    runs-on: ubuntu-24.04
+    outputs:
+      has_vulnerabilities: ${{ steps.check.outputs.has_vulnerabilities }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Verify basicsr Not Installed (CVE-2024-27763)
+        id: basicsr-check
+        run: |
+          # This is a quick check before any dependencies are installed
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ CRITICAL: basicsr is pre-installed!"
+            echo "has_basicsr=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "✅ basicsr not present (expected)"
+          echo "has_basicsr=false" >> $GITHUB_OUTPUT
+
+      - name: Verify No Vulnerable Imports
+        run: |
+          python scripts/utilities/verify_no_basicsr_imports.py
+
+      - name: Check Constraints File
+        id: check
+        run: |
+          # Verify constraints.txt exists and blocks basicsr
+          if [ ! -f "requirements/constraints.txt" ]; then
+            echo "❌ Missing requirements/constraints.txt"
+            echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          if grep -q "basicsr>=999.0.0" requirements/constraints.txt; then
+            echo "✅ basicsr is blocked in constraints.txt"
+            echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ basicsr may not be properly blocked"
+            echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
+          fi
+
+  # =========================================================================
+  # Stage 2: Full Dependency Security Scan
+  # =========================================================================
+  dependency-scan:
+    name: Dependency Security Scan
+    needs: quick-check
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies with Constraints
+        run: |
+          pip install --upgrade pip
+          pip install -c requirements/constraints.txt -r requirements-ci.txt
+          pip install -c requirements/constraints.txt -e .
+
+      - name: Verify basicsr Not Installed After pip install
+        run: |
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ CRITICAL: basicsr was installed despite constraints!"
+            pip show basicsr
+            exit 1
+          fi
+          echo "✅ Constraints working: basicsr not installed"
+
+      - name: Run Security Manager Scan
+        run: |
+          python scripts/security/security_manager.py scan
+
+      - name: Auto-Resolve Known Vulnerabilities
+        id: auto-resolve
+        continue-on-error: true
+        run: |
+          # Run auto-resolver to fix known vulnerabilities
+          echo "🔧 Running auto-resolver..."
+          python scripts/security/auto_resolver.py status || true
+
+          # Check resolver status
+          python -c "
+          from scripts.security import AutoSecurityResolver
+          resolver = AutoSecurityResolver()
+          status = resolver.get_resolution_status()
+          print(f'Patterns available: {status[\"patterns_count\"]}')
+          print(f'Historical success rate: {status[\"feedback_analysis\"][\"success_rate\"]:.1%}')
+          " || echo "Auto-resolver status check failed"
+
+      - name: Full Verification with Package Check
+        run: |
+          python scripts/utilities/verify_no_basicsr_imports.py --check-pkg
+
+      - name: Install Safety for Additional Scanning
+        run: pip install safety
+
+      - name: Run Safety Check
+        continue-on-error: true
+        run: |
+          # Check all requirements for known vulnerabilities
+          safety check -r requirements/all.txt --json > safety-report.json || true
+          
+          # Display summary
+          if [ -f safety-report.json ]; then
+            echo "## Safety Scan Results" >> $GITHUB_STEP_SUMMARY
+            python -c "
+import json
+try:
+    with open('safety-report.json') as f:
+        data = json.load(f)
+    vulns = data.get('vulnerabilities', [])
+    if vulns:
+        print(f'Found {len(vulns)} potential vulnerabilities')
+        for v in vulns[:5]:
+            print(f'  - {v.get(\"package_name\", \"unknown\")}: {v.get(\"vulnerability_id\", \"unknown\")}')
+    else:
+        print('No vulnerabilities found by Safety')
+except Exception as e:
+    print(f'Could not parse safety report: {e}')
+"
+          fi
+
+      - name: Upload Safety Report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: safety-report
+          path: safety-report.json
+          if-no-files-found: ignore
+
+  # =========================================================================
+  # Stage 3: RAG Knowledge Base Update
+  # =========================================================================
+  update-knowledge-base:
+    name: Update Security Knowledge Base
+    needs: [quick-check, dependency-scan]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -c requirements/constraints.txt -e .
+
+      - name: Update RAG Security Knowledge
+        run: |
+          # Create security knowledge directory if needed
+          mkdir -p .github/security/knowledge
+
+          # Run security scan to update knowledge base
+          python scripts/security/security_manager.py scan
+
+          # Log feedback for RAG system
+          echo "Security scan completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .github/security/scan_history.log
+
+      - name: Generate Security Summary
+        run: |
+          python scripts/security/security_manager.py report > security_summary.md
+          cat security_summary.md >> $GITHUB_STEP_SUMMARY
+
+  # =========================================================================
+  # Stage 4: PR Security Comment
+  # =========================================================================
+  pr-comment:
+    name: PR Security Status
+    needs: [quick-check, dependency-scan]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -c requirements/constraints.txt -e .
+
+      - name: Generate Security Report
+        id: report
+        run: |
+          python scripts/security/security_manager.py report > security_report.md
+          echo "report_content<<EOF" >> $GITHUB_OUTPUT
+          cat security_report.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let body = '## 🔒 Security Scan Results\n\n';
+
+            if (fs.existsSync('security_report.md')) {
+              body += fs.readFileSync('security_report.md', 'utf8');
+            } else {
+              body += '✅ Security scan completed. No critical issues found.\n\n';
+              body += '### Checks Performed\n';
+              body += '- [x] Vulnerable basicsr import detection\n';
+              body += '- [x] Package installation verification\n';
+              body += '- [x] Constraints.txt enforcement\n';
+            }
+
+            body += '\n---\n*Powered by Transformation Portal Security Manager*';
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c => 
+              c.user.type === 'Bot' && c.body.includes('Security Scan Results')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+  # =========================================================================
+  # Stage 5: Summary
+  # =========================================================================
+  summary:
+    name: Security Summary
+    needs: [quick-check, dependency-scan]
+    if: always()
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Generate Summary
+        run: |
+          echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Quick Check | ${{ needs.quick-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Scan | ${{ needs.dependency-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.quick-check.outputs.has_vulnerabilities }}" == "true" ]; then
+            echo "⚠️ **Vulnerabilities detected - review required**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **All security checks passed**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail on Critical Issues
+        if: needs.quick-check.result == 'failure' || needs.dependency-scan.result == 'failure'
+        run: |
+          echo "❌ Security checks failed"
+          exit 1
