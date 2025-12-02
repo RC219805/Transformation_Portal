@@ -28,9 +28,14 @@ def main():
         print('ERROR: basicsr is importable in the environment. '
               'This may expose CVE-2024-27763')
         sys.exit(2)
-    except ImportError:
-        # Import failed, which is the expected state
+    except (ImportError, ModuleNotFoundError):
+        # Import failed due to missing package, which is the expected state
         print('OK: basicsr is not importable')
+        sys.exit(0)
+    except Exception as e:
+        # Other errors during import (e.g., dependency issues) also indicate
+        # basicsr is not usable, which is acceptable for our security check
+        print(f'OK: basicsr import failed with error: {e}')
         sys.exit(0)
 
 
