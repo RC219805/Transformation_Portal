@@ -4,8 +4,13 @@
 Usage: python scripts/utilities/verify_no_basicsr_imports.py --check-pkg
 Exits non-zero if basicsr can be imported from the active environment.
 """
+import subprocess
 import sys
 import argparse
+from pathlib import Path
+
+# Maximum directory traversal depth to prevent infinite loops
+_MAX_TRAVERSAL_DEPTH = 10
 
 
 def _find_repo_root() -> Path:
