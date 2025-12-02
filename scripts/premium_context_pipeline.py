@@ -175,7 +175,7 @@ class PremiumContextAwarePipeline:
             if self.verbose:
                 print(f"Running: {' '.join(cmd)}")
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
             if result.returncode == 0 and output_path.exists():
                 print(f"✓ Depth processing complete: {output_path}")
@@ -219,7 +219,7 @@ class PremiumContextAwarePipeline:
             if self.verbose:
                 print(f"Running: {' '.join(cmd)}")
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
             if result.returncode == 0 and output_path.exists():
                 print(f"✓ Material Response complete: {output_path}")
@@ -260,7 +260,7 @@ class PremiumContextAwarePipeline:
             if self.verbose:
                 print(f"Running: {' '.join(cmd)}")
 
-            _result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: F841
+            _result = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: F841
 
             # Find output (script generates its own naming)
             expected_output = self.output_dir / f"{image_path.stem}_{preset}.tif"
@@ -302,7 +302,7 @@ class PremiumContextAwarePipeline:
             if self.verbose:
                 print(f"Running: {' '.join(cmd)}")
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
 
             if result.returncode == 0 and output_path.exists():
                 print(f"✓ Ultimate enhancement complete: {output_path}")
