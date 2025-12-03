@@ -10,6 +10,11 @@ This test suite validates:
 - Configuration presets are valid
 - Error handling is robust
 
+Note: This test file adds the projects directory to sys.path because the
+picacho_pool_remediation_pipeline module is a standalone script in the
+projects directory, not an installed package. This is consistent with
+how the pipeline is used in production (directly executed from that directory).
+
 Author: Transformation Portal
 Date: 2025-12-03
 """
@@ -20,9 +25,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 from PIL import Image
 
-# Add projects directory to path for imports
+# Add projects directory to path for imports - required because the pipeline
+# is a standalone script in projects/750_picacho_lane, not an installed package
 PROJECT_DIR = Path(__file__).parent.parent / "projects" / "750_picacho_lane"
 sys.path.insert(0, str(PROJECT_DIR))
 
@@ -521,8 +528,6 @@ class TestConfigurationPresets:
 
     def test_elite_preset_valid_yaml(self, elite_preset_path):
         """Test that elite preset is valid YAML."""
-        import yaml
-
         with open(elite_preset_path, "r") as f:
             config = yaml.safe_load(f)
 
@@ -574,17 +579,30 @@ class TestDocumentation:
 class TestErrorHandling:
     """Tests for robust error handling."""
 
-    def test_invalid_image_dimensions(self, tmp_path):
-        """Test handling of invalid image dimensions."""
-        # Create an invalid 1D image
-        invalid_img = np.zeros((100,), dtype=np.float32)
-        image_path = tmp_path / "invalid.npy"
-        np.save(image_path, invalid_img)
+    def test_invalid_image_file(self, tmp_path):
+        """Test handling of an invalid/corrupted image file."""
+        # Create a file that's not a valid image
+        invalid_path = tmp_path / "invalid.tif"
+        invalid_path.write_text("This is not a valid image file")
 
         pipeline = PicachoPoolRemediationPipeline()
         output_path = tmp_path / "output.tif"
 
         # Should handle gracefully (return False, not crash)
+        success = pipeline.process(invalid_path, output_path)
+        assert success is False
+
+    def test_grayscale_image_handling(self, tmp_path):
+        """Test handling of grayscale (non-RGB) images."""
+        # Create a grayscale image (2D instead of 3D)
+        grayscale_img = np.random.randint(0, 255, (256, 256), dtype=np.uint8)
+        image_path = tmp_path / "grayscale.tif"
+        Image.fromarray(grayscale_img, mode="L").save(image_path)
+
+        pipeline = PicachoPoolRemediationPipeline()
+        output_path = tmp_path / "output.tif"
+
+        # Should handle gracefully (return False since it's not RGB)
         success = pipeline.process(image_path, output_path)
         assert success is False
 
