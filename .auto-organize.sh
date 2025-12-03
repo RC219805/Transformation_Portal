@@ -68,7 +68,7 @@ move_file() {
     fi
     
     # Skip if already in the right place
-    if [[ "$(dirname "$src")" == "$dest_dir" ]]; then
+    if [[ "$(cd "$(dirname "$src")" && pwd)" == "$(cd "$dest_dir" && pwd)" ]]; then
         log_skip "$filename (already in correct location)"
         return
     fi
