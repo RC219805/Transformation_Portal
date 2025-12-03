@@ -84,7 +84,7 @@ def compute_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
     return float(ssim)
 
 
-def init_lpips_model(device: str = "auto") -> tuple:
+def init_lpips_model(device: str = "auto") -> tuple[Optional[Any], Optional[str]]:
     """Initialize LPIPS model for perceptual similarity.
 
     Args:
