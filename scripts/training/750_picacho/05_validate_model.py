@@ -84,17 +84,17 @@ def compute_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
     return float(ssim)
 
 
-def init_lpips_model(device: str = "auto") -> Optional[Any]:
+def init_lpips_model(device: str = "auto") -> tuple:
     """Initialize LPIPS model for perceptual similarity.
 
     Args:
         device: Compute device ('auto', 'cuda', 'mps', 'cpu')
 
     Returns:
-        LPIPS model or None if not available.
+        Tuple of (LPIPS model, device string) or (None, None) if not available.
     """
     if not LPIPS_AVAILABLE:
-        return None
+        return None, None
 
     # Determine device
     if device == "auto":
@@ -108,13 +108,14 @@ def init_lpips_model(device: str = "auto") -> Optional[Any]:
     logger.info(f"Initializing LPIPS model with net='alex' on device '{device}'")
     lpips_model = lpips.LPIPS(net='alex').to(device)
     lpips_model.eval()
-    return lpips_model
+    return lpips_model, device
 
 
 def compute_lpips(
     img1: np.ndarray,
     img2: np.ndarray,
-    lpips_model: Any
+    lpips_model: Any,
+    device: Optional[str] = None
 ) -> Optional[float]:
     """Compute LPIPS (Learned Perceptual Image Patch Similarity) distance.
 
@@ -122,6 +123,7 @@ def compute_lpips(
         img1: First image as numpy array (RGB, 0-255, HWC format).
         img2: Second image as numpy array (RGB, 0-255, HWC format).
         lpips_model: Initialized LPIPS model.
+        device: Compute device (cached from init_lpips_model for efficiency).
 
     Returns:
         LPIPS distance (lower is better) or None if LPIPS is not available.
@@ -142,10 +144,10 @@ def compute_lpips(
     img1_tensor = torch.from_numpy(img1_normalized).permute(2, 0, 1).unsqueeze(0)
     img2_tensor = torch.from_numpy(img2_normalized).permute(2, 0, 1).unsqueeze(0)
 
-    # Move to same device as model
-    device = next(lpips_model.parameters()).device
-    img1_tensor = img1_tensor.to(device)
-    img2_tensor = img2_tensor.to(device)
+    # Move to same device as model (use cached device for efficiency)
+    if device is not None:
+        img1_tensor = img1_tensor.to(device)
+        img2_tensor = img2_tensor.to(device)
 
     # Compute LPIPS distance
     with torch.no_grad():
@@ -181,7 +183,7 @@ def validate_model(
     print(f"Found {len(test_images)} test images")
 
     # Initialize LPIPS model outside the loop for efficiency
-    lpips_model = init_lpips_model(device)
+    lpips_model, lpips_device = init_lpips_model(device)
 
     # Process and compute metrics
     metrics: Dict[str, List[float]] = {
@@ -214,7 +216,7 @@ def validate_model(
             # Compute metrics
             psnr = compute_psnr(original, enhanced)
             ssim = compute_ssim(original, enhanced)
-            lpips_value = compute_lpips(original, enhanced, lpips_model)
+            lpips_value = compute_lpips(original, enhanced, lpips_model, lpips_device)
 
             metrics["psnr"].append(psnr)
             metrics["ssim"].append(ssim)
