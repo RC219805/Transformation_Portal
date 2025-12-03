@@ -17,15 +17,13 @@
 
 ```
 .
-├── agents/                     # Autonomous agent swarm
-│   ├── architect/             # Architecture and design agents
-│   ├── engineer/              # Code generation and implementation agents
-│   ├── qa/                    # Quality assurance and testing agents
-│   └── feedback_loop/         # Self-correction and optimization agents
-├── knowledge_base/             # Vector stores and RAG indices
-│   ├── embeddings/            # Semantic embeddings for code search
-│   ├── indices/               # Vector database indices
-│   └── context/               # Architectural context documents
+├── .github/agents/             # Agent documentation and RAG implementation
+│   ├── rag_system/             # RAG system implementation
+│   │   ├── knowledge_engine.py # RAG-based knowledge retrieval engine
+│   │   ├── knowledge_base/     # Knowledge state, quality metrics, dependency stats (JSON)
+│   │   └── ...                 # Indexer, retriever, semantic search, etc.
+│   ├── transformation-portal-specialist.md  # Custom agent definition
+│   └── [RAG and agent guides]  # Documentation and integration guides
 ├── depth_pipeline/             # Depth Anything V2 integration with CoreML
 │   ├── pipeline.py            # Main depth-aware processing pipeline
 │   ├── processors/            # Depth-based image processors
@@ -45,7 +43,6 @@
 ├── material_response.py        # Material Response core implementation
 ├── depth_tools.py              # Depth estimation utilities
 ├── hdr_production_pipeline.sh  # HDR finishing workflow
-├── knowledge_engine.py         # RAG-based knowledge retrieval engine
 ├── codebase_philosophy_auditor.py  # Code quality auditing tool
 └── decision_decay_dashboard.py     # Temporal contract monitoring
 ```
@@ -177,24 +174,24 @@ make lint
 ### Knowledge Engine & RAG
 The Knowledge Engine provides intelligent, context-aware processing through Retrieval-Augmented Generation:
 
-- **Context-Aware Generation**: RAG system accesses the `knowledge_base/` directory to retrieve relevant architectural patterns, material specifications, and processing guidelines. The `knowledge_engine.py` module orchestrates semantic retrieval for informed decision-making.
-- **Vector Search**: Integration with vector databases enables semantic code search across the entire codebase. Embeddings are stored in `knowledge_base/embeddings/` for fast similarity queries.
+- **Context-Aware Generation**: RAG system accesses the `.github/agents/rag_system/knowledge_base/` directory to retrieve relevant architectural patterns, material specifications, and processing guidelines. The `knowledge_engine.py` module orchestrates semantic retrieval for informed decision-making.
+- **Vector Search**: Integration with vector databases enables semantic code search across the entire codebase. Embeddings and knowledge documents are stored in `.github/agents/rag_system/knowledge_base/` for fast similarity queries.
 - **Architectural Intelligence**: The system understands luxury real estate contexts, automatically selecting appropriate processing presets based on scene analysis and historical project data.
 
 ### Advanced Feedback Loop
 The autonomous feedback system ensures continuous quality improvement:
 
-- **Self-Correction**: Automated refinement tickets are generated based on quality metrics. The `agents/feedback_loop/` directory contains agents that monitor output quality and trigger corrective actions.
+- **Self-Correction**: Automated refinement tickets are generated based on quality metrics. Specialized agents monitor output quality and trigger corrective actions; see `.github/agents/` for documentation and implementation details.
 - **Performance Optimization**: Real-time monitoring tracks processing throughput, memory usage, and output quality. Agents automatically adjust parameters to optimize the efficiency-quality tradeoff.
 - **Quality Metrics**: Automated scoring for sharpness, color accuracy, material fidelity, and architectural preservation guides iterative improvements.
 
 ### Agents Directory Access
-The `agents/` directory contains specialized autonomous agents organized by function:
+The `.github/agents/` directory contains agent-related documentation and implementation files:
 
-- **`agents/architect/`**: Architecture and design agents that analyze scene composition, spatial relationships, and aesthetic balance. These agents inform high-level processing decisions.
-- **`agents/engineer/`**: Code generation and implementation agents that handle pipeline construction, filter chain optimization, and FFmpeg command assembly.
-- **`agents/qa/`**: Quality assurance agents that validate outputs, run regression tests, and ensure deliverables meet client specifications.
-- **Agent Protocol**: All agents implement the `AgentProtocol` defined in `src/transformation_portal/protocols.py`, ensuring consistent communication patterns and interoperability.
+- **Documentation & Guides**: Multiple markdown files provide technical guides, usage instructions, and architectural notes for agent development and integration.
+- **`rag_system/` Subdirectory**: Contains the Retrieval-Augmented Generation (RAG) implementation for context-aware architectural intelligence and semantic code search.
+- **`transformation-portal-specialist.md`**: Defines a custom agent for Transformation Portal-specific tasks and workflows.
+- **Agent Interface**: All agents follow a consistent interface for communication and interoperability, ensuring standardized patterns across the agent swarm.
 
 ## Testing Guidelines
 
@@ -307,17 +304,12 @@ The `agents/` directory contains specialized autonomous agents organized by func
 
 ## Stable Merge State
 
-All pull requests must pass `scripts/verify_merge_state.py` to ensure codebase consistency:
+All pull requests should maintain codebase consistency through the following quality gates:
 
 - **Semantic Consistency Checks**: Validates that new code aligns with established architectural patterns and coding conventions
-- **Knowledge Base Synchronization**: Ensures `knowledge_base/` indices are updated when relevant code changes are introduced
-- **Agent Compatibility**: Verifies that changes don't break `AgentProtocol` contracts or agent communication patterns
+- **Knowledge Base Synchronization**: Ensures `.github/agents/rag_system/knowledge_base/` indices are updated when relevant code changes are introduced
+- **Agent Compatibility**: Verifies that changes don't break agent communication patterns or interoperability
 - **Quality Gate**: Automated quality metrics must meet minimum thresholds before merge approval
-
-Run the verification manually:
-```bash
-python scripts/verify_merge_state.py --check-all
-```
 
 ## When Making Changes
 
