@@ -2,19 +2,30 @@
 
 ## Project Overview
 
-**Transformation Portal** is a professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production. The repository combines:
+**Transformation Portal** is an advanced, production-grade image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production. The repository combines cutting-edge AI capabilities with enterprise-level automation:
 
 - **AI-Powered Enhancement**: Stable Diffusion XL, ControlNet, and Real-ESRGAN for intelligent upscaling
 - **Depth-Aware Processing**: Depth Anything V2 with Apple Neural Engine optimization for architectural rendering
 - **Material Response Technology**: Physics-based surface enhancement for wood, metal, glass, and textiles
 - **Professional Color Grading**: 16+ LUTs with Film Emulation and Location Aesthetics
 - **Batch Processing**: High-throughput TIFF and video processing pipelines
-- **Production-Ready**: Comprehensive test suite with CI/CD, performance profiling
+- **Knowledge Engine**: RAG-based architectural intelligence with vector database integration for context-aware processing
+- **Autonomous Agents**: Specialized agent swarm for code generation, design optimization, and quality assurance
+- **Production-Ready**: Comprehensive test suite with CI/CD, performance profiling, and semantic consistency checks
 
 ## Repository Structure
 
 ```
 .
+├── agents/                     # Autonomous agent swarm
+│   ├── architect/             # Architecture and design agents
+│   ├── engineer/              # Code generation and implementation agents
+│   ├── qa/                    # Quality assurance and testing agents
+│   └── feedback_loop/         # Self-correction and optimization agents
+├── knowledge_base/             # Vector stores and RAG indices
+│   ├── embeddings/            # Semantic embeddings for code search
+│   ├── indices/               # Vector database indices
+│   └── context/               # Architectural context documents
 ├── depth_pipeline/             # Depth Anything V2 integration with CoreML
 │   ├── pipeline.py            # Main depth-aware processing pipeline
 │   ├── processors/            # Depth-based image processors
@@ -34,6 +45,7 @@
 ├── material_response.py        # Material Response core implementation
 ├── depth_tools.py              # Depth estimation utilities
 ├── hdr_production_pipeline.sh  # HDR finishing workflow
+├── knowledge_engine.py         # RAG-based knowledge retrieval engine
 ├── codebase_philosophy_auditor.py  # Code quality auditing tool
 └── decision_decay_dashboard.py     # Temporal contract monitoring
 ```
@@ -160,6 +172,30 @@ make lint
 - Preset-based adjustments for exposure, contrast, saturation, clarity, glow
 - Progress tracking and batch statistics for large-scale operations
 
+## Advanced Capabilities
+
+### Knowledge Engine & RAG
+The Knowledge Engine provides intelligent, context-aware processing through Retrieval-Augmented Generation:
+
+- **Context-Aware Generation**: RAG system accesses the `knowledge_base/` directory to retrieve relevant architectural patterns, material specifications, and processing guidelines. The `knowledge_engine.py` module orchestrates semantic retrieval for informed decision-making.
+- **Vector Search**: Integration with vector databases enables semantic code search across the entire codebase. Embeddings are stored in `knowledge_base/embeddings/` for fast similarity queries.
+- **Architectural Intelligence**: The system understands luxury real estate contexts, automatically selecting appropriate processing presets based on scene analysis and historical project data.
+
+### Advanced Feedback Loop
+The autonomous feedback system ensures continuous quality improvement:
+
+- **Self-Correction**: Automated refinement tickets are generated based on quality metrics. The `agents/feedback_loop/` directory contains agents that monitor output quality and trigger corrective actions.
+- **Performance Optimization**: Real-time monitoring tracks processing throughput, memory usage, and output quality. Agents automatically adjust parameters to optimize the efficiency-quality tradeoff.
+- **Quality Metrics**: Automated scoring for sharpness, color accuracy, material fidelity, and architectural preservation guides iterative improvements.
+
+### Agents Directory Access
+The `agents/` directory contains specialized autonomous agents organized by function:
+
+- **`agents/architect/`**: Architecture and design agents that analyze scene composition, spatial relationships, and aesthetic balance. These agents inform high-level processing decisions.
+- **`agents/engineer/`**: Code generation and implementation agents that handle pipeline construction, filter chain optimization, and FFmpeg command assembly.
+- **`agents/qa/`**: Quality assurance agents that validate outputs, run regression tests, and ensure deliverables meet client specifications.
+- **Agent Protocol**: All agents implement the `AgentProtocol` defined in `src/transformation_portal/protocols.py`, ensuring consistent communication patterns and interoperability.
+
 ## Testing Guidelines
 
 - Write unit tests for new functions in the `tests/` directory
@@ -268,6 +304,20 @@ make lint
 - CI uses `requirements-ci.txt` for minimal dependency installation
 - Free disk space cleanup runs before tests due to large ML models
 - Exclude deprecated code from linting: `deprecated/`, `src/transformation_portal/`, `scripts/`
+
+## Stable Merge State
+
+All pull requests must pass `scripts/verify_merge_state.py` to ensure codebase consistency:
+
+- **Semantic Consistency Checks**: Validates that new code aligns with established architectural patterns and coding conventions
+- **Knowledge Base Synchronization**: Ensures `knowledge_base/` indices are updated when relevant code changes are introduced
+- **Agent Compatibility**: Verifies that changes don't break `AgentProtocol` contracts or agent communication patterns
+- **Quality Gate**: Automated quality metrics must meet minimum thresholds before merge approval
+
+Run the verification manually:
+```bash
+python scripts/verify_merge_state.py --check-all
+```
 
 ## When Making Changes
 
