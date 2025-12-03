@@ -207,7 +207,7 @@ organize_repository() {
     do
         if [[ -f "$file" ]]; then
             # Remove leading dot for organized version
-            local new_name="${file#.}"
+            local             local new_name="${file#.}"
             if [[ "$DRY_RUN" == "false" ]]; then
                 mkdir -p "scripts/utilities"
                 mv "$file" "scripts/utilities/$new_name"
