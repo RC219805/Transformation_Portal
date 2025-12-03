@@ -94,12 +94,13 @@ class TestPyPIWorkflows:
         """Test that python-app.yml has cleanup job (skipped if deprecated)."""
         workflow_file = workflows_dir / "python-app.yml"
 
-        # Skip if workflow has been deprecated (renamed to .deprecated)
+        # Skip if workflow has been deprecated (renamed to .deprecated or archived)
         if not workflow_file.exists():
             deprecated_file = workflows_dir / "python-app.yml.deprecated"
-            if deprecated_file.exists():
+            archived_file = workflows_dir / "archived" / "python-app.yml.archived"
+            if deprecated_file.exists() or archived_file.exists():
                 pytest.skip("python-app.yml has been deprecated in favor of ci-consolidated.yml")
-            raise FileNotFoundError("Neither python-app.yml nor python-app.yml.deprecated exists")
+            raise FileNotFoundError("python-app.yml not found (neither active nor archived)")
 
         with open(workflow_file, 'r', encoding='utf-8') as f:
             workflow = yaml.safe_load(f)
@@ -118,12 +119,13 @@ class TestPyPIWorkflows:
         """Test that python-app.yml has Test PyPI deployment (skipped if deprecated)."""
         workflow_file = workflows_dir / "python-app.yml"
 
-        # Skip if workflow has been deprecated (renamed to .deprecated)
+        # Skip if workflow has been deprecated (renamed to .deprecated or archived)
         if not workflow_file.exists():
             deprecated_file = workflows_dir / "python-app.yml.deprecated"
-            if deprecated_file.exists():
+            archived_file = workflows_dir / "archived" / "python-app.yml.archived"
+            if deprecated_file.exists() or archived_file.exists():
                 pytest.skip("python-app.yml has been deprecated in favor of ci-consolidated.yml")
-            raise FileNotFoundError("Neither python-app.yml nor python-app.yml.deprecated exists")
+            raise FileNotFoundError("python-app.yml not found (neither active nor archived)")
 
         with open(workflow_file, 'r', encoding='utf-8') as f:
             workflow = yaml.safe_load(f)
