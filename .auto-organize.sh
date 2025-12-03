@@ -16,6 +16,7 @@
 set -euo pipefail
 
 # Configuration
+# shellcheck disable=SC2034  # SCRIPT_DIR may be used by sourcing scripts
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRY_RUN=false
 VERBOSE=false
@@ -34,6 +35,9 @@ for arg in "$@"; do
 done
 
 # --- Logging & Utility Functions ---
+
+# Enable nullglob for safer wildcard handling
+shopt -s nullglob
 
 log_info() {
     if [[ "$VERBOSE" == "true" || "$DRY_RUN" == "true" ]]; then
@@ -60,7 +64,8 @@ move_file() {
         return
     fi
     
-    local filename=$(basename "$src")
+    local filename
+    filename=$(basename "$src")
     local dest="$dest_dir/$filename"
     
     # Skip if already in the right place
@@ -183,19 +188,16 @@ organize_utilities() {
         .codebase_health_monitor.py \
         .pre-commit-quality-check.py
     do
-        # If these are meant to be hidden scripts in root, keep them, 
-        # otherwise move them to scripts/hooks/
+        # Move hidden health monitors to scripts/utilities (without dot prefix)
         if [[ -f "$file" ]]; then
-             # Optional: decided to keep hidden files in root for git hooks usually,
-             # but moving health monitors to scripts
-             local new_name="${file#.}"
-             if [[ "$DRY_RUN" == "false" ]]; then
+            local new_name="${file#.}"
+            if [[ "$DRY_RUN" == "false" ]]; then
                 mkdir -p "scripts/utilities"
                 mv "$file" "scripts/utilities/$new_name"
                 log_move "$file" "scripts/utilities/$new_name"
-             else
+            else
                 log_move "$file" "scripts/utilities/$new_name"
-             fi
+            fi
         fi
     done
 }
