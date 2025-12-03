@@ -58,6 +58,12 @@ log_skip() {
     fi
 }
 
+# Check if file is in the root directory
+is_in_root_dir() {
+    local file="$1"
+    [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]
+}
+
 move_file() {
     local src="$1"
     local dest_dir="$2"
@@ -106,7 +112,7 @@ organize_rag_and_memory() {
         *_embeddings.pkl
     do
         # Only move files from root directory
-        if [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]; then
+        if is_in_root_dir "$file"; then
             move_file "$file" "$kb_dir/memory_snapshots"
         else
             log_skip "$file (not in root directory, skipping)"
@@ -124,7 +130,7 @@ organize_rag_and_memory() {
         *auditor_report.json
     do
         # Only move files from root directory
-        if [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]; then
+        if is_in_root_dir "$file"; then
             move_file "$file" "$feedback_dir/audits"
         else
             log_skip "$file (not in root directory, skipping)"
@@ -136,12 +142,10 @@ organize_lut_files() {
     log_info "Organizing loose LUT files from root directory..."
     
     # Move only loose LUT files from the root directory (not subdirectories)
-    for ext in cube 3dl; do
-        for file in *."$ext"; do
-            if [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]; then
-                move_file "$file" "assets/luts/imported"
-            fi
-        done
+    for file in *.cube *.3dl; do
+        if is_in_root_dir "$file"; then
+            move_file "$file" "assets/luts/imported"
+        fi
     done
 }
 
@@ -166,7 +170,7 @@ organize_standard_docs() {
         BUILD_report.txt \
         CI_report.txt
     do
-        if [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]; then
+        if is_in_root_dir "$file"; then
             move_file "$file" "docs/guides"
         fi
     done
@@ -232,8 +236,8 @@ main() {
     organize_utilities
     
     # Archive cleanup - only from root directory
-    for file in ./debug_*.jpg ./temp_*.png; do
-        if [[ -f "$file" ]]; then
+    for file in debug_*.jpg temp_*.png; do
+        if is_in_root_dir "$file"; then
             move_file "$file" "archive/debug_artifacts"
         fi
     done
