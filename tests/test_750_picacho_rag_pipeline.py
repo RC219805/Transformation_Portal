@@ -533,10 +533,10 @@ class TestKnowledgeIntegrationBridge:
         assert isinstance(result, dict)
 
     def test_query_knowledge_without_engine(self):
-        """Test knowledge query without engine."""
+        """Test knowledge query works even when RAG engine is not available."""
         bridge = KnowledgeIntegrationBridge()
         bridge.initialize()
-        # Don't set _engine to None to test fallback behavior
+        # The bridge should work in fallback mode (without RAG engine)
 
         result = bridge.query_knowledge("Test query")
 

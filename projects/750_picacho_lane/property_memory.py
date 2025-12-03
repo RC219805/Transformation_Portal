@@ -453,6 +453,46 @@ class PropertyMemory:
 
         self._save_to_file()
 
+    def _get_cached_trend(self, scene_type: SceneType) -> Optional[str]:
+        """
+        Get quality trend for a scene type using lightweight calculation.
+
+        This method avoids the expensive computations in learn_from_results
+        by only calculating the basic trend from recent history.
+
+        Args:
+            scene_type: The scene type to analyze
+
+        Returns:
+            Trend string ('improving', 'stable', 'degrading') or None if not enough data
+        """
+        config = self.get_room_config(scene_type)
+        history = config.processing_history
+
+        if len(history) < 2:
+            return None
+
+        # Get recent successful runs
+        successful = [r for r in history if r.success]
+        if len(successful) < 2:
+            return None
+
+        # Calculate trend from last 5 vs earlier
+        recent = successful[-min(5, len(successful)):]
+        recent_avg = sum(r.quality_score for r in recent) / len(recent)
+
+        older = successful[:-len(recent)] if len(successful) > len(recent) else []
+        if older:
+            older_avg = sum(r.quality_score for r in older) / len(older)
+        else:
+            return 'stable'  # Not enough data for comparison
+
+        if recent_avg > older_avg * 1.05:
+            return 'improving'
+        elif recent_avg < older_avg * 0.95:
+            return 'degrading'
+        return 'stable'
+
     def learn_from_results(
         self,
         scene_type: SceneType,
@@ -583,12 +623,12 @@ class PropertyMemory:
         # Find best performing scene
         best_scene = max(scene_qualities.items(), key=lambda x: x[1])[0] if scene_qualities else 'N/A'
 
-        # Calculate trends
+        # Calculate trends using lightweight method (avoid expensive learn_from_results)
         trends = {}
         for scene_type, config in self.room_configs.items():
-            learning = self.learn_from_results(scene_type, min_samples=2)
-            if learning.get('status') == 'success':
-                trends[scene_type.value] = learning.get('quality_trend', 'stable')
+            trend = self._get_cached_trend(scene_type)
+            if trend:
+                trends[scene_type.value] = trend
 
         return PropertyKnowledge(
             property_name=self.global_learnings.get('property_name', '750 Picacho Lane'),

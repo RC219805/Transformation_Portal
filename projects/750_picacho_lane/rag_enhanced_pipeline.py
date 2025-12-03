@@ -20,7 +20,6 @@ Performance: 400-600 images/hour batch throughput on M4 Max
 """
 
 import logging
-import sys
 import time
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -182,6 +181,7 @@ class KnowledgeIntegrationBridge:
             # This is optional - pipeline works without it
             # Try environment variable first, then default relative path
             import os
+            import importlib.util
             rag_path_env = os.environ.get('RAG_SYSTEM_PATH')
             if rag_path_env:
                 rag_path = Path(rag_path_env)
@@ -189,14 +189,20 @@ class KnowledgeIntegrationBridge:
                 # Default: relative to this file's location
                 rag_path = Path(__file__).parent.parent.parent / '.github' / 'agents' / 'rag_system'
 
-            if rag_path.exists():
-                sys.path.insert(0, str(rag_path))
-                from knowledge_engine import KnowledgeIntegrationEngine
-                self._engine = KnowledgeIntegrationEngine()
-                self._initialized = True
-                logger.info("Connected to Knowledge Integration Engine")
-                return True
-        except ImportError as e:
+            knowledge_engine_path = rag_path / 'knowledge_engine.py'
+            if knowledge_engine_path.exists():
+                # Use importlib for safer dynamic import
+                spec = importlib.util.spec_from_file_location(
+                    "knowledge_engine", knowledge_engine_path
+                )
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    self._engine = module.KnowledgeIntegrationEngine()
+                    self._initialized = True
+                    logger.info("Connected to Knowledge Integration Engine")
+                    return True
+        except (ImportError, AttributeError, Exception) as e:
             logger.debug(f"RAG system not available: {e}")
 
         # Fall back to local implementation
@@ -597,9 +603,10 @@ class RAGEnhancedPipeline:
 
             if self.config.preserve_16bit and HAS_TIFFFILE:
                 # Use tifffile for 16-bit TIFF
-                # PIL Image arrays are already in 0-255 range, so we scale directly to 0-65535
+                # PIL Image arrays are already in 0-255 range, scale to 0-65535
+                # Use integer math: multiply by 257 exactly (255 * 257 = 65535)
                 img_array = np.array(img, dtype=np.uint8)
-                img_uint16 = (img_array.astype(np.float32) * 257).astype(np.uint16)  # 255 * 257 ≈ 65535
+                img_uint16 = (img_array.astype(np.uint16) * 257)
                 tifffile.imwrite(tiff_path, img_uint16, compression='lzw')
             else:
                 # Fall back to PIL (8-bit only)
