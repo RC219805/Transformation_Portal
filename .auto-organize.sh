@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
 #
 # .auto-organize.sh
-# Automated Repository Organization System
+# Automated Repository Organization & RAG Knowledge Management System
 #
-# Automatically organizes files in the Transformation Portal repository
-# to maintain a clean, structured directory hierarchy.
+# Organizes loose/temporary files and artifacts in the repository root:
+# 1. Moves orphaned RAG memory dumps and embeddings to data/knowledge_base/
+# 2. Relocates stray feedback loop artifacts to data/feedback_loops/
+# 3. Archives debug images and temporary files
+# 4. Organizes loose documentation files
+#
+# NOTE: This script does NOT move production CLI tools (lux_render_pipeline.py, etc.)
+# which are intentionally placed in root as user-facing entry points.
 #
 # Usage:
 #   ./.auto-organize.sh [--dry-run] [--verbose]
-#
-# Options:
-#   --dry-run   Show what would be done without making changes
-#   --verbose   Show detailed output
 #
 
 set -euo pipefail
 
 # Configuration
+# shellcheck disable=SC2034  # SCRIPT_DIR may be used by sourcing scripts
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRY_RUN=false
 VERBOSE=false
@@ -24,12 +27,8 @@ VERBOSE=false
 # Parse arguments
 for arg in "$@"; do
     case $arg in
-        --dry-run)
-            DRY_RUN=true
-            ;;
-        --verbose)
-            VERBOSE=true
-            ;;
+        --dry-run) DRY_RUN=true ;;
+        --verbose) VERBOSE=true ;;
         *)
             echo "Unknown option: $arg"
             echo "Usage: $0 [--dry-run] [--verbose]"
@@ -38,7 +37,11 @@ for arg in "$@"; do
     esac
 done
 
-# Logging functions
+# --- Logging & Utility Functions ---
+
+# Enable nullglob for safer wildcard handling
+shopt -s nullglob
+
 log_info() {
     if [[ "$VERBOSE" == "true" || "$DRY_RUN" == "true" ]]; then
         echo "[INFO] $*"
@@ -55,20 +58,27 @@ log_skip() {
     fi
 }
 
-# Move file function
+# Check if file is in the root directory (portable, no realpath dependency)
+is_in_root_dir() {
+    local file="$1"
+    [[ -f "$file" ]] && [[ "$(cd "$(dirname "$file")" && pwd)" == "$SCRIPT_DIR" ]]
+}
+
 move_file() {
     local src="$1"
     local dest_dir="$2"
-    local filename=$(basename "$src")
-    local dest="$dest_dir/$filename"
     
-    # Skip if source doesn't exist
-    if [[ ! -f "$src" ]]; then
+    # Handle wildcards passed as strings or non-existent files
+    if [[ ! -e "$src" ]]; then
         return
     fi
     
-    # Skip if already in the right place
-    if [[ "$(dirname "$src")" == "$dest_dir" ]]; then
+    local filename
+    filename=$(basename "$src") || return
+    local dest="$dest_dir/$filename"
+    
+    # Skip if already in the right place (use realpath -m for both src and dest_dir for consistency)
+    if [[ "$(dirname "$(realpath -m "$src")")" == "$(realpath -m "$dest_dir")" ]]; then
         log_skip "$filename (already in correct location)"
         return
     fi
@@ -85,130 +95,119 @@ move_file() {
     fi
 }
 
-# Main organization logic
-organize_repository() {
-    log_info "Starting repository organization..."
+# --- Organization Logic ---
+
+organize_rag_and_memory() {
+    log_info "Organizing RAG & Knowledge Memory artifacts from root directory..."
     
-    cd "$SCRIPT_DIR"
+    # 1. Knowledge Base & Memory Dumps
+    # Moves context files and memory logs from ROOT ONLY to the data/knowledge layer
+    # Matches files like: agent_memory_dump.json, rag_memory_dump.json, session_rag_context.md, etc.
+    local kb_dir="data/knowledge_base"
     
-    # ========================================
-    # Documentation Files
-    # ========================================
-    log_info "Organizing documentation files..."
+    for file in \
+        *memory_dump.json \
+        *rag_context.md \
+        *knowledge_graph.json \
+        *semantic_index.faiss \
+        *_embeddings.pkl
+    do
+        # Only move files from root directory
+        if is_in_root_dir "$file"; then
+            move_file "$file" "$kb_dir/memory_snapshots"
+        else
+            log_skip "$file (not in root directory, skipping)"
+        fi
+    done
+
+    # 2. Decision Decay & Feedback Loops
+    # Organizes system learning feedback for the auditing tools (ROOT ONLY)
+    local feedback_dir="data/feedback_loops"
     
-    # Strategy and planning documents → docs/guides/
+    for file in \
+        *decision_decay.json \
+        *learning_feedback.log \
+        *performance_metrics.csv \
+        *auditor_report.json
+    do
+        # Only move files from root directory
+        if is_in_root_dir "$file"; then
+            move_file "$file" "$feedback_dir/audits"
+        else
+            log_skip "$file (not in root directory, skipping)"
+        fi
+    done
+}
+
+organize_lut_files() {
+    log_info "Organizing loose LUT files from root directory..."
+    
+    # Move only loose LUT files from the root directory (not subdirectories)
+    # With nullglob enabled and cd to SCRIPT_DIR, glob only matches root files
+    for file in *.cube *.3dl; do
+        move_file "$file" "assets/luts/imported"
+    done
+}
+
+organize_standard_docs() {
+    log_info "Organizing standard documentation from root..."
+    
+    # Specific documentation files to move (not broad wildcards)
     for file in \
         CI_WORKFLOW_OPTIMIZATION.md \
         DIRECTORY_OPTIMIZATION_PLAN.md \
-        DIRECTORY_STRUCTURE_OPTIMIZATION.md \
         FINAL_STRUCTURE.md \
-        OPTIMIZATION_COMPLETE.md \
-        OPTIONAL_FEATURES_INSTALLED.md \
-        PHASE1_COMPLETION_SUMMARY.md \
-        SYSTEM_STATUS.md \
-        START_HERE.md
+        SYSTEM_STATUS.md
     do
         move_file "$file" "docs/guides"
     done
     
-    # ========================================
-    # Scripts
-    # ========================================
-    log_info "Organizing scripts..."
+    # Summary and report files - only from root directory with explicit patterns
+    for file in \
+        PROJECT_*_SUMMARY.txt \
+        PHASE*_SUMMARY.txt \
+        OPTIMIZATION_*_SUMMARY.txt \
+        BUILD_report.txt \
+        CI_report.txt
+    do
+        if is_in_root_dir "$file"; then
+            move_file "$file" "docs/guides"
+        fi
+    done
+}
+
+organize_utilities() {
+    log_info "Organizing utility scripts..."
     
-    # Utility scripts → scripts/utilities/
+    # Maintenance scripts - only move if they exist in root and not already in scripts/utilities
     for file in \
         navigate.sh \
-        verify_organization.sh
+        verify_organization.sh \
+        codebase_philosophy_auditor.py \
+        decision_decay_dashboard.py
     do
-        move_file "$file" "scripts/utilities"
-    done
-    
-    # Python CLI wrappers → scripts/utilities/
-    for file in \
-        luxury_tiff_batch_processor_cli.py
-    do
-        move_file "$file" "scripts/utilities"
-    done
-    
-    # ========================================
-    # Text Files and Summaries
-    # ========================================
-    log_info "Organizing text files..."
-    
-    # Project summaries → docs/guides/
-    for file in \
-        750_PICACHO_QUICK_SUMMARY.txt \
-        FILES_CHANGED_SUMMARY.txt \
-        PUSH_STATUS.txt \
-        QUALITY_BOOST_SUMMARY.txt \
-        step5_lut_examples.txt
-    do
-        move_file "$file" "docs/guides"
-    done
-    
-    # ========================================
-    # Data Files
-    # ========================================
-    log_info "Organizing data files..."
-    
-    # JSON files → data/
-    for file in \
-        depth_model_comparison.json \
-        index_stats.json
-    do
-        move_file "$file" "data"
-    done
-    
-    # Images → archive/ (unless actively used)
-    for file in \
-        debug_after_white_balance.jpg
-    do
-        move_file "$file" "archive"
-    done
-    
-    # ========================================
-    # Configuration and Build Files
-    # ========================================
-    log_info "Checking configuration files..."
-    
-    # These stay in root:
-    # - README.md
-    # - Makefile
-    # - pyproject.toml
-    # - requirements*.txt
-    # - pytest.ini
-    # - mypy.ini
-    # - .pylintrc
-    # - Dockerfile
-    # - docker-compose.yml
-    # - .gitignore
-    # - .gitattributes (to be created)
-    
-    # ========================================
-    # Hidden/System Files
-    # ========================================
-    log_info "Organizing hidden files..."
-    
-    # Move old organization scripts to archive
-    for file in \
-        .organize_docs.sh
-    do
-        if [[ -f "$file" ]]; then
-            move_file "$file" "archive"
+        local filename
+        filename=$(basename "$file")
+        local dest_path="scripts/utilities/$filename"
+        if [[ -f "$dest_path" ]]; then
+            log_skip "$filename already exists in scripts/utilities"
+        elif [[ -f "$file" ]]; then
+            move_file "$file" "scripts/utilities"
         fi
     done
     
-    # Quality check scripts → scripts/utilities/
+    # Hidden maintenance hooks (cleaning up root)
     for file in \
         .codebase_health_monitor.py \
-        .pre-commit-quality-check.py \
-        .quality_fix.py
+        .pre-commit-quality-check.py
     do
+        # Move hidden health monitors to scripts/utilities (without dot prefix)
         if [[ -f "$file" ]]; then
-            # Remove leading dot for organized version
             local new_name="${file#.}"
-            if [[ "$DRY_RUN" == "false" ]]; then
+            local dest_path="scripts/utilities/$new_name"
+            if [[ -f "$dest_path" ]]; then
+                log_skip "$new_name already exists in scripts/utilities"
+            elif [[ "$DRY_RUN" == "false" ]]; then
                 mkdir -p "scripts/utilities"
                 mv "$file" "scripts/utilities/$new_name"
                 log_move "$file" "scripts/utilities/$new_name"
@@ -217,36 +216,46 @@ organize_repository() {
             fi
         fi
     done
-    
-    # TypeScript code files → archive/ (unless actively used)
-    for file in \
-        code.ts
-    do
-        if [[ -f "$file" ]]; then
-            move_file "$file" "archive"
-        fi
-    done
-    
-    log_info "Organization complete!"
 }
 
-# Main execution
+organize_archive_artifacts() {
+    log_info "Archiving debug artifacts from root..."
+    
+    # Archive cleanup - glob patterns only match root files after cd to SCRIPT_DIR
+    for file in debug_*.jpg temp_*.png; do
+        if is_in_root_dir "$file"; then
+            move_file "$file" "archive/debug_artifacts"
+        fi
+    done
+}
+
+# --- Main Execution ---
+
 main() {
     if [[ "$DRY_RUN" == "true" ]]; then
         echo "=== DRY RUN MODE - No changes will be made ==="
         echo ""
     fi
     
-    organize_repository
+    log_info "Starting Intelligent Repository Organization..."
+    
+    # Ensure we are in the script directory for consistent relative paths
+    cd "$SCRIPT_DIR"
+    
+    # Execute Modules
+    organize_rag_and_memory
+    organize_lut_files
+    organize_standard_docs
+    organize_utilities
+    organize_archive_artifacts
     
     if [[ "$DRY_RUN" == "true" ]]; then
         echo ""
         echo "=== DRY RUN COMPLETE ==="
-        echo "Run without --dry-run to apply changes"
     else
         echo ""
-        echo "✓ Repository organization complete!"
-        echo "  Review the changes with: git status"
+        echo "✓ Repository organization complete."
+        echo "  RAG Memory & Feedback loops updated."
     fi
 }
 
