@@ -16,6 +16,10 @@
 
 set -euo pipefail
 
+# Enable nullglob to handle glob patterns that don't match any files
+# Without this, unmatched globs would expand to the literal pattern string
+shopt -s nullglob
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRY_RUN=false
@@ -207,7 +211,7 @@ organize_repository() {
     do
         if [[ -f "$file" ]]; then
             # Remove leading dot for organized version
-            local             local new_name="${file#.}"
+            local new_name="${file#.}"
             if [[ "$DRY_RUN" == "false" ]]; then
                 mkdir -p "scripts/utilities"
                 mv "$file" "scripts/utilities/$new_name"
