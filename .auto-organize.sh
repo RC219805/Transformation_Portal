@@ -3,11 +3,14 @@
 # .auto-organize.sh
 # Automated Repository Organization & RAG Knowledge Management System
 #
-# Integrates with the Transformation Portal's enhanced capabilities to:
-# 1. Structure AI/ML pipelines and model assets
-# 2. Manage RAG system knowledge memory and embeddings
-# 3. Process feedback loop data for continuous learning
-# 4. Maintain architectural cleanliness
+# Organizes loose/temporary files and artifacts in the repository root:
+# 1. Moves orphaned RAG memory dumps and embeddings to data/knowledge_base/
+# 2. Relocates stray feedback loop artifacts to data/feedback_loops/
+# 3. Archives debug images and temporary files
+# 4. Organizes loose documentation files
+#
+# NOTE: This script does NOT move production CLI tools (lux_render_pipeline.py, etc.)
+# which are intentionally placed in root as user-facing entry points.
 #
 # Usage:
 #   ./.auto-organize.sh [--dry-run] [--verbose]
@@ -68,8 +71,8 @@ move_file() {
     filename=$(basename "$src")
     local dest="$dest_dir/$filename"
     
-    # Skip if already in the right place
-    if [[ "$(dirname "$(realpath "$src")")" == "$(realpath "$dest_dir")" ]]; then
+    # Skip if already in the right place (use realpath -m for dest_dir that may not exist)
+    if [[ "$(dirname "$(realpath "$src")")" == "$(realpath -m "$dest_dir")" ]]; then
         log_skip "$filename (already in correct location)"
         return
     fi
@@ -89,10 +92,10 @@ move_file() {
 # --- Organization Logic ---
 
 organize_rag_and_memory() {
-    log_info "Organizing RAG & Knowledge Memory artifacts..."
+    log_info "Organizing RAG & Knowledge Memory artifacts from root directory..."
     
     # 1. Knowledge Base & Memory Dumps
-    # Moves context files and memory logs to the data/knowledge layer
+    # Moves context files and memory logs from ROOT ONLY to the data/knowledge layer
     local kb_dir="data/knowledge_base"
     
     for file in \
@@ -102,11 +105,16 @@ organize_rag_and_memory() {
         *semantic_index.faiss \
         *_embeddings.pkl
     do
-        move_file "$file" "$kb_dir/memory_snapshots"
+        # Only move files from root directory
+        if [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]; then
+            move_file "$file" "$kb_dir/memory_snapshots"
+        else
+            log_skip "$file (not in root directory, skipping)"
+        fi
     done
 
     # 2. Decision Decay & Feedback Loops
-    # Organizes system learning feedback for the auditing tools
+    # Organizes system learning feedback for the auditing tools (ROOT ONLY)
     local feedback_dir="data/feedback_loops"
     
     for file in \
@@ -115,72 +123,71 @@ organize_rag_and_memory() {
         *performance_metrics.csv \
         *auditor_report.json
     do
-        move_file "$file" "$feedback_dir/audits"
+        # Only move files from root directory
+        if [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]; then
+            move_file "$file" "$feedback_dir/audits"
+        else
+            log_skip "$file (not in root directory, skipping)"
+        fi
     done
 }
 
-organize_ai_pipelines() {
-    log_info "Structuring AI Pipeline components..."
+organize_lut_files() {
+    log_info "Organizing loose LUT files from root directory..."
     
-    # 1. Core Processing Scripts
-    # Moves loose python pipeline scripts to src/transformation_portal/pipelines
-    # or scripts/production based on type
-    local pipeline_dir="src/transformation_portal/pipelines"
-    local scripts_dir="scripts/production"
-    
-    # Production CLI tools
-    for file in \
-        luxury_tiff_batch_processor.py \
-        luxury_video_master_grader.py \
-        hdr_production_pipeline.sh
-    do
-        move_file "$file" "$scripts_dir"
-    done
-    
-    # Core Logic Pipelines
-    for file in \
-        lux_render_pipeline.py \
-        depth_pipeline.py \
-        material_response.py \
-        depth_tools.py
-    do
-        move_file "$file" "$pipeline_dir"
-    done
-
-    # 2. Model Weights & LUTS
-    # Ensures assets are correctly placed in the assets structure
-    for file in *.cube *.3dl; do
-        move_file "$file" "assets/luts/imported"
+    # Move only loose LUT files from the root directory (not subdirectories)
+    for ext in cube 3dl; do
+        for file in *."$ext"; do
+            if [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]; then
+                move_file "$file" "assets/luts/imported"
+            fi
+        done
     done
 }
 
 organize_standard_docs() {
-    log_info "Organizing standard documentation..."
+    log_info "Organizing standard documentation from root..."
     
-    # Documentation Files
+    # Specific documentation files to move (not broad wildcards)
     for file in \
         CI_WORKFLOW_OPTIMIZATION.md \
         DIRECTORY_OPTIMIZATION_PLAN.md \
         FINAL_STRUCTURE.md \
-        SYSTEM_STATUS.md \
-        *_SUMMARY.txt \
-        *_report.txt
+        SYSTEM_STATUS.md
     do
         move_file "$file" "docs/guides"
+    done
+    
+    # Summary and report files - only from root directory with explicit patterns
+    for file in \
+        PROJECT_*_SUMMARY.txt \
+        PHASE*_SUMMARY.txt \
+        OPTIMIZATION_*_SUMMARY.txt \
+        BUILD_report.txt \
+        CI_report.txt
+    do
+        if [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]; then
+            move_file "$file" "docs/guides"
+        fi
     done
 }
 
 organize_utilities() {
     log_info "Organizing utility scripts..."
     
-    # Maintenance scripts
+    # Maintenance scripts - only move if they exist in root and not already in scripts/utilities
     for file in \
         navigate.sh \
         verify_organization.sh \
         codebase_philosophy_auditor.py \
         decision_decay_dashboard.py
     do
-        move_file "$file" "scripts/utilities"
+        local dest_path="scripts/utilities/$file"
+        if [[ -f "$dest_path" ]]; then
+            log_skip "$file already exists in scripts/utilities"
+        elif [[ -f "$file" ]]; then
+            move_file "$file" "scripts/utilities"
+        fi
     done
     
     # Hidden maintenance hooks (cleaning up root)
@@ -191,7 +198,10 @@ organize_utilities() {
         # Move hidden health monitors to scripts/utilities (without dot prefix)
         if [[ -f "$file" ]]; then
             local new_name="${file#.}"
-            if [[ "$DRY_RUN" == "false" ]]; then
+            local dest_path="scripts/utilities/$new_name"
+            if [[ -f "$dest_path" ]]; then
+                log_skip "$file already exists as $new_name in scripts/utilities"
+            elif [[ "$DRY_RUN" == "false" ]]; then
                 mkdir -p "scripts/utilities"
                 mv "$file" "scripts/utilities/$new_name"
                 log_move "$file" "scripts/utilities/$new_name"
@@ -212,15 +222,20 @@ main() {
     
     log_info "Starting Intelligent Repository Organization..."
     
+    # Ensure we are in the script directory for consistent relative paths
+    cd "$SCRIPT_DIR"
+    
     # Execute Modules
     organize_rag_and_memory
-    organize_ai_pipelines
+    organize_lut_files
     organize_standard_docs
     organize_utilities
     
-    # Archive cleanup
-    for file in debug_*.jpg temp_*.png; do
-        move_file "$file" "archive/debug_artifacts"
+    # Archive cleanup - only from root directory
+    for file in ./debug_*.jpg ./temp_*.png; do
+        if [[ -f "$file" ]]; then
+            move_file "$file" "archive/debug_artifacts"
+        fi
     done
     
     if [[ "$DRY_RUN" == "true" ]]; then
