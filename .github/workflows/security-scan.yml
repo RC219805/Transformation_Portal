@@ -45,16 +45,16 @@ jobs:
   # =========================================================================
   quick-check:
     name: Quick Security Check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     outputs:
       has_vulnerabilities: ${{ steps.check.outputs.has_vulnerabilities }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -98,14 +98,14 @@ jobs:
   dependency-scan:
     name: Dependency Security Scan
     needs: quick-check
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -162,20 +162,22 @@ jobs:
           if [ -f safety-report.json ]; then
             echo "## Safety Scan Results" >> $GITHUB_STEP_SUMMARY
             python -c "
-import json
-try:
-    with open('safety-report.json') as f:
-        data = json.load(f)
-    vulns = data.get('vulnerabilities', [])
-    if vulns:
-        print(f'Found {len(vulns)} potential vulnerabilities')
-        for v in vulns[:5]:
-            print(f'  - {v.get(\"package_name\", \"unknown\")}: {v.get(\"vulnerability_id\", \"unknown\")}')
-    else:
-        print('No vulnerabilities found by Safety')
-except Exception as e:
-    print(f'Could not parse safety report: {e}')
-"
+          import json
+          try:
+              with open('safety-report.json') as f:
+                  data = json.load(f)
+              vulns = data.get('vulnerabilities', [])
+              if vulns:
+                  print(f'Found {len(vulns)} potential vulnerabilities')
+                  for v in vulns[:5]:
+                      pkg = v.get('package_name', 'unknown')
+                      vid = v.get('vulnerability_id', 'unknown')
+                      print(f'  - {pkg}: {vid}')
+              else:
+                  print('No vulnerabilities found by Safety')
+          except Exception as e:
+              print(f'Could not parse safety report: {e}')
+          "
           fi
 
       - name: Upload Safety Report
@@ -193,14 +195,14 @@ except Exception as e:
     name: Update Security Knowledge Base
     needs: [quick-check, dependency-scan]
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -232,14 +234,14 @@ except Exception as e:
     name: PR Security Status
     needs: [quick-check, dependency-scan]
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -310,7 +312,7 @@ except Exception as e:
     name: Security Summary
     needs: [quick-check, dependency-scan]
     if: always()
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Generate Summary
