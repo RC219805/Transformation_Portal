@@ -1,0 +1,322 @@
+# RAG-Enhanced Pipeline Configuration - 750 Picacho Lane
+# ======================================================
+# Unified configuration for the RAG-enhanced property-specific pipeline
+# with knowledge, memory, and learning feedback loop integration.
+
+name: "750 Picacho RAG Pipeline"
+version: "1.0.0"
+description: "Production-grade RAG-enhanced pipeline for 750 Picacho Lane luxury estate"
+
+# ============================================================================
+# Property Information
+# ============================================================================
+property:
+  name: "750 Picacho Lane"
+  location: "Santa Barbara, CA 93103"
+  style: "Mediterranean Coastal Estate"
+  views:
+    - pool
+    - great_room
+    - kitchen
+    - primary_bedroom
+    - primary_bathroom
+    - aerial
+    - aerial_2
+
+# ============================================================================
+# Input Configuration
+# ============================================================================
+input:
+  directory: "projects/750_picacho_lane/input_images"
+  formats:
+    - exr
+    - tiff
+    - jpg
+    - png
+  color_space: "linear"  # linear, srgb, aces
+
+# ============================================================================
+# Output Configuration
+# ============================================================================
+output:
+  directory: "projects/750_picacho_lane/output_rag_enhanced"
+  formats:
+    - tiff
+    - jpg
+  preserve_16bit: true
+  jpeg_quality: 95
+  naming_pattern: "750Picacho_{scene}_{stage}.{ext}"
+
+# ============================================================================
+# Processing Configuration
+# ============================================================================
+processing:
+  quality_mode: "premium"  # fast, balanced, premium
+  enable_depth: true
+  enable_material_response: true
+  enable_color_grading: true
+  enable_ai_enhancement: false  # Optional SDXL/ControlNet
+  enable_rag_context: true
+  enable_learning: true
+
+# ============================================================================
+# Depth Processing (Depth Anything V2)
+# ============================================================================
+depth:
+  enabled: true
+  model: "depth_anything_v2"
+  model_variant: "large"  # small, base, large
+  backend: "pytorch_mps"  # pytorch_mps, coreml, pytorch_cpu
+  zones: 4  # Number of depth zones
+  atmospheric_haze: true
+  haze_density: 0.02
+  clarity_strength: 0.55
+
+# ============================================================================
+# Material Response Technology
+# ============================================================================
+material_response:
+  enabled: true
+  strength: 0.75
+  preserve_highlights: true
+
+  # Per-material settings
+  materials:
+    water:
+      enhance: true
+      saturation_boost: 1.25
+      clarity: 0.85
+      reflection_boost: 0.7
+    wood:
+      enhance: true
+      warmth: 1.15
+      grain_detail: 0.8
+    metal:
+      enhance: true
+      reflection_control: 0.75
+      specular_preservation: true
+    glass:
+      enhance: true
+      transparency: 0.85
+      highlight_management: true
+    stone:
+      enhance: true
+      texture_detail: 0.75
+      micro_contrast: 0.6
+    fabric:
+      enhance: true
+      texture_detail: 0.7
+      softness: 0.9
+
+# ============================================================================
+# Color Grading
+# ============================================================================
+color_grading:
+  enabled: true
+  lut_path: "assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube"
+  lut_strength: 0.70
+  saturation: 1.05
+  contrast: 1.08
+  temperature: 5.0
+  vibrance: 0.15
+
+  # Secondary LUT for film emulation
+  secondary_lut:
+    path: "assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube"
+    strength: 0.50
+
+# ============================================================================
+# Tone Mapping
+# ============================================================================
+tone_mapping:
+  method: "filmic"  # agx, filmic, reinhard
+  exposure: 0.0
+  white_point: 11.2
+  shadow_boost: 0.3
+  highlight_compression: 0.85
+
+# ============================================================================
+# Detail Enhancement
+# ============================================================================
+detail_enhancement:
+  enabled: true
+  sharpening:
+    amount: 0.65
+    radius: 1.5
+    threshold: 3
+    edge_aware: true
+  clarity: 0.18
+  micro_contrast: 0.12
+
+# ============================================================================
+# Final Polish
+# ============================================================================
+final_polish:
+  enabled: true
+  vignette:
+    enabled: true
+    strength: 0.08
+    falloff: 2.0
+  grain:
+    enabled: true
+    amount: 0.012
+    size: "fine"
+  glow:
+    enabled: false
+    strength: 0.05
+    radius: 30
+
+# ============================================================================
+# RAG (Retrieval Augmented Generation) Configuration
+# ============================================================================
+rag:
+  enabled: true
+  top_k: 5  # Number of patterns to retrieve
+  confidence_threshold: 0.7  # Minimum confidence for applying recommendations
+
+  # Knowledge sources
+  knowledge_sources:
+    - property_memory  # Local property-specific memory
+    - knowledge_engine  # RAG Knowledge Integration Engine
+    - pattern_analysis  # Historical pattern analysis
+
+  # Query configuration
+  query_strategy: "hybrid"  # keyword, semantic, hybrid
+  context_window: 5  # Number of similar patterns to consider
+
+# ============================================================================
+# Learning Configuration
+# ============================================================================
+learning:
+  enabled: true
+  threshold: 0.85  # Minimum quality for parameter adoption
+  min_samples: 3  # Minimum samples before learning
+  auto_update_parameters: true  # Automatically update optimal parameters
+
+  # Feedback integration
+  feedback:
+    user_feedback_weight: 0.3
+    quality_score_weight: 0.5
+    processing_time_weight: 0.2
+
+  # Trend analysis
+  trend_window_days: 30
+  trend_change_threshold: 0.05  # 5% change for trend detection
+
+# ============================================================================
+# Memory Configuration
+# ============================================================================
+memory:
+  path: "projects/750_picacho_lane/memory/property_memory.json"
+  auto_save: true
+  backup_on_update: true
+  export_on_batch_complete: true
+
+# ============================================================================
+# Performance Configuration
+# ============================================================================
+performance:
+  enable_caching: true
+  cache_depth_maps: true
+  batch_size: 1  # Images per batch (1 = sequential)
+  use_fp16: true  # Half precision for ML models
+  tile_processing: true
+  tile_size: 512
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "projects/750_picacho_lane/logs/pipeline.log"
+  console: true
+  include_timestamps: true
+
+# ============================================================================
+# Scene-Specific Overrides
+# ============================================================================
+scene_overrides:
+  pool:
+    material_response:
+      water:
+        saturation_boost: 1.30
+        clarity: 0.90
+    color_grading:
+      saturation: 1.08
+      vibrance: 0.20
+    depth:
+      atmospheric_haze: true
+      haze_density: 0.02
+
+  great_room:
+    material_response:
+      wood:
+        warmth: 1.20
+    color_grading:
+      temperature: 8.0
+      saturation: 1.03
+
+  kitchen:
+    material_response:
+      metal:
+        reflection_control: 0.80
+    color_grading:
+      contrast: 1.12
+      clarity: 0.20
+
+  primary_bedroom:
+    material_response:
+      fabric:
+        softness: 0.95
+    color_grading:
+      warmth: 12.0
+      saturation: 1.02
+    detail_enhancement:
+      sharpening:
+        amount: 0.50  # Softer for bedroom
+
+  primary_bathroom:
+    material_response:
+      stone:
+        texture_detail: 0.80
+      glass:
+        transparency: 0.90
+    color_grading:
+      temperature: 4.0
+
+  aerial:
+    depth:
+      atmospheric_haze: true
+      haze_density: 0.03
+    color_grading:
+      saturation: 1.10
+      contrast: 1.15
+      vibrance: 0.22
+    detail_enhancement:
+      clarity: 0.25
+
+  aerial_2:
+    depth:
+      atmospheric_haze: true
+      haze_density: 0.03
+    color_grading:
+      saturation: 1.10
+      contrast: 1.15
+      vibrance: 0.22
+
+# ============================================================================
+# Metadata Configuration
+# ============================================================================
+metadata:
+  preserve_iptc: true
+  preserve_xmp: true
+  preserve_gps: true
+  preserve_color_profile: true
+  embed_processing_history: true
+
+  # Custom metadata to embed
+  custom:
+    project: "750 Picacho Lane"
+    pipeline: "RAG-Enhanced"
+    artist: "Transformation Portal"
+    copyright: "© 2025 750 Picacho Lane"
