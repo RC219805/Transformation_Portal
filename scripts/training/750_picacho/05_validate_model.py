@@ -19,7 +19,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 import numpy as np
 from PIL import Image
@@ -34,6 +34,18 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Optional: Import torch and lpips for LPIPS metric
+LPIPS_AVAILABLE = False
+try:
+    import torch
+    import lpips
+    LPIPS_AVAILABLE = True
+except ImportError:
+    logger.warning(
+        "torch or lpips not installed. LPIPS metric will be skipped. "
+        "Install with: pip install torch lpips"
+    )
 
 
 def compute_psnr(img1: np.ndarray, img2: np.ndarray) -> float:
@@ -72,6 +84,78 @@ def compute_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
     return float(ssim)
 
 
+def init_lpips_model(device: str = "auto") -> tuple[Optional[Any], Optional[str]]:
+    """Initialize LPIPS model for perceptual similarity.
+
+    Args:
+        device: Compute device ('auto', 'cuda', 'mps', 'cpu')
+
+    Returns:
+        Tuple of (LPIPS model, device string) or (None, None) if not available.
+    """
+    if not LPIPS_AVAILABLE:
+        return None, None
+
+    # Determine device
+    if device == "auto":
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+
+    logger.info(f"Initializing LPIPS model with net='alex' on device '{device}'")
+    lpips_model = lpips.LPIPS(net='alex').to(device)
+    lpips_model.eval()
+    return lpips_model, device
+
+
+def compute_lpips(
+    img1: np.ndarray,
+    img2: np.ndarray,
+    lpips_model: Any,
+    device: Optional[str] = None
+) -> Optional[float]:
+    """Compute LPIPS (Learned Perceptual Image Patch Similarity) distance.
+
+    Args:
+        img1: First image as numpy array (RGB, 0-255, HWC format).
+        img2: Second image as numpy array (RGB, 0-255, HWC format).
+        lpips_model: Initialized LPIPS model.
+        device: Compute device (cached from init_lpips_model for efficiency).
+
+    Returns:
+        LPIPS distance (lower is better) or None if LPIPS is not available.
+    """
+    if lpips_model is None or not LPIPS_AVAILABLE:
+        return None
+
+    # Convert numpy images (RGB, 0-255) to PyTorch tensors (NCHW, normalized to [-1, 1])
+    # Step 1: Normalize from [0, 255] to [0, 1]
+    img1_float = img1.astype(np.float32) / 255.0
+    img2_float = img2.astype(np.float32) / 255.0
+
+    # Step 2: Normalize from [0, 1] to [-1, 1]
+    img1_normalized = img1_float * 2.0 - 1.0
+    img2_normalized = img2_float * 2.0 - 1.0
+
+    # Step 3: Convert HWC to NCHW format
+    img1_tensor = torch.from_numpy(img1_normalized).permute(2, 0, 1).unsqueeze(0)
+    img2_tensor = torch.from_numpy(img2_normalized).permute(2, 0, 1).unsqueeze(0)
+
+    # Move to same device as model (use cached device for efficiency)
+    if device is not None:
+        img1_tensor = img1_tensor.to(device)
+        img2_tensor = img2_tensor.to(device)
+
+    # Compute LPIPS distance
+    with torch.no_grad():
+        lpips_distance = lpips_model(img1_tensor, img2_tensor)
+
+    return float(lpips_distance.item())
+
+
 def validate_model(
     model_path: Path,
     test_dir: Path,
@@ -98,10 +182,14 @@ def validate_model(
 
     print(f"Found {len(test_images)} test images")
 
+    # Initialize LPIPS model outside the loop for efficiency
+    lpips_model, lpips_device = init_lpips_model(device)
+
     # Process and compute metrics
     metrics: Dict[str, List[float]] = {
         "psnr": [],
         "ssim": [],
+        "lpips": [],
         "processing_time": [],
     }
 
@@ -128,9 +216,12 @@ def validate_model(
             # Compute metrics
             psnr = compute_psnr(original, enhanced)
             ssim = compute_ssim(original, enhanced)
+            lpips_value = compute_lpips(original, enhanced, lpips_model, lpips_device)
 
             metrics["psnr"].append(psnr)
             metrics["ssim"].append(ssim)
+            if lpips_value is not None:
+                metrics["lpips"].append(lpips_value)
             metrics["processing_time"].append(result.processing_time)
 
             # Save comparison
@@ -141,7 +232,7 @@ def validate_model(
             logger.error(f"Failed to process {test_image_path.name}: {e}")
 
     # Compute summary statistics
-    summary = {
+    summary: Dict[str, Any] = {
         "num_samples": len(metrics["psnr"]),
         "psnr": {
             "mean": float(np.mean(metrics["psnr"])),
@@ -161,6 +252,15 @@ def validate_model(
         },
         "individual_metrics": metrics,
     }
+
+    # Add LPIPS statistics if available
+    if metrics["lpips"]:
+        summary["lpips"] = {
+            "mean": float(np.mean(metrics["lpips"])),
+            "std": float(np.std(metrics["lpips"])),
+            "min": float(np.min(metrics["lpips"])),
+            "max": float(np.max(metrics["lpips"])),
+        }
 
     return summary
 
@@ -273,6 +373,10 @@ def main():
         print("\nQuality Metrics:")
         print(f"  PSNR: {results['psnr']['mean']:.2f} dB (±{results['psnr']['std']:.2f})")
         print(f"  SSIM: {results['ssim']['mean']:.4f} (±{results['ssim']['std']:.4f})")
+        if "lpips" in results:
+            print(f"  LPIPS: {results['lpips']['mean']:.4f} (±{results['lpips']['std']:.4f})")
+        else:
+            print("  LPIPS: N/A (torch/lpips not installed)")
         print("\nProcessing Performance:")
         print(f"  Avg time: {results['processing_time']['mean']:.2f}s per image")
         print(f"  Total time: {results['processing_time']['total']:.2f}s")
@@ -280,14 +384,51 @@ def main():
         # Quality assessment
         psnr_mean = results["psnr"]["mean"]
         ssim_mean = results["ssim"]["mean"]
+        lpips_mean = results.get("lpips", {}).get("mean")
 
         print("\nQuality Assessment:")
-        if psnr_mean >= 35 and ssim_mean >= 0.9:
+
+        # Determine quality level based on all available metrics
+        # Target thresholds from TRAINING_PROTOCOL.md:
+        # PSNR: Excellent ≥35 dB, Good ≥30 dB
+        # SSIM: Excellent ≥0.92, Good ≥0.85
+        # LPIPS: Excellent ≤0.15, Good ≤0.20
+        psnr_excellent = psnr_mean >= 35
+        psnr_good = psnr_mean >= 30
+        ssim_excellent = ssim_mean >= 0.92
+        ssim_good = ssim_mean >= 0.85
+
+        # LPIPS assessment (lower is better)
+        if lpips_mean is not None:
+            lpips_excellent = lpips_mean <= 0.15
+            lpips_good = lpips_mean <= 0.20
+        else:
+            # If LPIPS not available, don't penalize
+            lpips_excellent = True
+            lpips_good = True
+
+        if psnr_excellent and ssim_excellent and lpips_excellent:
             print("  ✓ EXCELLENT: Model meets all quality thresholds")
-        elif psnr_mean >= 30 and ssim_mean >= 0.85:
+            if lpips_mean is not None:
+                print("    PSNR ≥35 dB ✓, SSIM ≥0.92 ✓, LPIPS ≤0.15 ✓")
+            else:
+                print("    PSNR ≥35 dB ✓, SSIM ≥0.92 ✓")
+        elif psnr_good and ssim_good and lpips_good:
             print("  ✓ GOOD: Model meets baseline quality thresholds")
+            if lpips_mean is not None:
+                print("    PSNR ≥30 dB ✓, SSIM ≥0.85 ✓, LPIPS ≤0.20 ✓")
+            else:
+                print("    PSNR ≥30 dB ✓, SSIM ≥0.85 ✓")
         else:
             print("  ⚠ NEEDS IMPROVEMENT: Consider additional training")
+            issues = []
+            if not psnr_good:
+                issues.append(f"PSNR ({psnr_mean:.2f} dB) < 30 dB")
+            if not ssim_good:
+                issues.append(f"SSIM ({ssim_mean:.4f}) < 0.85")
+            if lpips_mean is not None and not lpips_good:
+                issues.append(f"LPIPS ({lpips_mean:.4f}) > 0.20")
+            print(f"    Issues: {', '.join(issues)}")
 
         print(f"\n✓ Results saved to: {results_path}")
         print(f"✓ Comparisons saved to: {args.output_dir / 'comparisons'}")
