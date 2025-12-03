@@ -162,20 +162,22 @@ jobs:
           if [ -f safety-report.json ]; then
             echo "## Safety Scan Results" >> $GITHUB_STEP_SUMMARY
             python -c "
-import json
-try:
-    with open('safety-report.json') as f:
-        data = json.load(f)
-    vulns = data.get('vulnerabilities', [])
-    if vulns:
-        print(f'Found {len(vulns)} potential vulnerabilities')
-        for v in vulns[:5]:
-            print(f'  - {v.get(\"package_name\", \"unknown\")}: {v.get(\"vulnerability_id\", \"unknown\")}')
-    else:
-        print('No vulnerabilities found by Safety')
-except Exception as e:
-    print(f'Could not parse safety report: {e}')
-"
+          import json
+          try:
+              with open('safety-report.json') as f:
+                  data = json.load(f)
+              vulns = data.get('vulnerabilities', [])
+              if vulns:
+                  print(f'Found {len(vulns)} potential vulnerabilities')
+                  for v in vulns[:5]:
+                      pkg = v.get('package_name', 'unknown')
+                      vid = v.get('vulnerability_id', 'unknown')
+                      print(f'  - {pkg}: {vid}')
+              else:
+                  print('No vulnerabilities found by Safety')
+          except Exception as e:
+              print(f'Could not parse safety report: {e}')
+          "
           fi
 
       - name: Upload Safety Report
