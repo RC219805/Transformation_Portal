@@ -59,7 +59,7 @@ log_skip() {
 move_file() {
     local src="$1"
     local dest_dir="$2"
-    local filename=$(basename "$src")
+    local filename="$(basename "$src")"
     local dest="$dest_dir/$filename"
     
     # Skip if source doesn't exist
