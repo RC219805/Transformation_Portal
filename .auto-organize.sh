@@ -58,10 +58,10 @@ log_skip() {
     fi
 }
 
-# Check if file is in the root directory
+# Check if file is in the root directory (portable, no realpath dependency)
 is_in_root_dir() {
     local file="$1"
-    [[ -f "$file" ]] && [[ "$(dirname "$(realpath "$file")")" == "$SCRIPT_DIR" ]]
+    [[ -f "$file" ]] && [[ "$(cd "$(dirname "$file")" && pwd)" == "$SCRIPT_DIR" ]]
 }
 
 move_file() {
@@ -74,11 +74,11 @@ move_file() {
     fi
     
     local filename
-    filename=$(basename "$src")
+    filename=$(basename "$src") || return
     local dest="$dest_dir/$filename"
     
-    # Skip if already in the right place (use realpath -m for dest_dir that may not exist)
-    if [[ "$(dirname "$(realpath "$src")")" == "$(realpath -m "$dest_dir")" ]]; then
+    # Skip if already in the right place (use realpath -m for both src and dest_dir for consistency)
+    if [[ "$(dirname "$(realpath -m "$src")")" == "$(realpath -m "$dest_dir")" ]]; then
         log_skip "$filename (already in correct location)"
         return
     fi
@@ -102,6 +102,7 @@ organize_rag_and_memory() {
     
     # 1. Knowledge Base & Memory Dumps
     # Moves context files and memory logs from ROOT ONLY to the data/knowledge layer
+    # Matches files like: agent_memory_dump.json, rag_memory_dump.json, session_rag_context.md, etc.
     local kb_dir="data/knowledge_base"
     
     for file in \
@@ -142,10 +143,9 @@ organize_lut_files() {
     log_info "Organizing loose LUT files from root directory..."
     
     # Move only loose LUT files from the root directory (not subdirectories)
+    # With nullglob enabled and cd to SCRIPT_DIR, glob only matches root files
     for file in *.cube *.3dl; do
-        if is_in_root_dir "$file"; then
-            move_file "$file" "assets/luts/imported"
-        fi
+        move_file "$file" "assets/luts/imported"
     done
 }
 
@@ -186,9 +186,11 @@ organize_utilities() {
         codebase_philosophy_auditor.py \
         decision_decay_dashboard.py
     do
-        local dest_path="scripts/utilities/$file"
+        local filename
+        filename=$(basename "$file")
+        local dest_path="scripts/utilities/$filename"
         if [[ -f "$dest_path" ]]; then
-            log_skip "$file already exists in scripts/utilities"
+            log_skip "$filename already exists in scripts/utilities"
         elif [[ -f "$file" ]]; then
             move_file "$file" "scripts/utilities"
         fi
@@ -204,7 +206,7 @@ organize_utilities() {
             local new_name="${file#.}"
             local dest_path="scripts/utilities/$new_name"
             if [[ -f "$dest_path" ]]; then
-                log_skip "$file already exists as $new_name in scripts/utilities"
+                log_skip "$new_name already exists in scripts/utilities"
             elif [[ "$DRY_RUN" == "false" ]]; then
                 mkdir -p "scripts/utilities"
                 mv "$file" "scripts/utilities/$new_name"
@@ -212,6 +214,17 @@ organize_utilities() {
             else
                 log_move "$file" "scripts/utilities/$new_name"
             fi
+        fi
+    done
+}
+
+organize_archive_artifacts() {
+    log_info "Archiving debug artifacts from root..."
+    
+    # Archive cleanup - glob patterns only match root files after cd to SCRIPT_DIR
+    for file in debug_*.jpg temp_*.png; do
+        if is_in_root_dir "$file"; then
+            move_file "$file" "archive/debug_artifacts"
         fi
     done
 }
@@ -234,13 +247,7 @@ main() {
     organize_lut_files
     organize_standard_docs
     organize_utilities
-    
-    # Archive cleanup - only from root directory
-    for file in debug_*.jpg temp_*.png; do
-        if is_in_root_dir "$file"; then
-            move_file "$file" "archive/debug_artifacts"
-        fi
-    done
+    organize_archive_artifacts
     
     if [[ "$DRY_RUN" == "true" ]]; then
         echo ""
