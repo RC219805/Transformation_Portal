@@ -1,0 +1,209 @@
+========================================================================
+750 PICACHO LUXURY ESTATE - 32-BIT TIFF ANALYSIS SUMMARY
+========================================================================
+
+Date: December 4, 2025
+Full Report: 750_Picacho_32bit_Analysis_Report.md (429 lines, 15KB)
+
+========================================================================
+FILES DISCOVERED: 5 (not 6 as mentioned in prompt)
+========================================================================
+
+1. V2_750Picacho_Aerial_Signature.tif          976.78 MB    85.3 MP
+2. V2_750Picacho_Kitchen_Signature.tif         920.90 MB    80.5 MP
+3. V2_750Picacho_Pool_Signature.tif            926.20 MB    80.9 MP
+4. V2_750Picacho_PrimaryBathroom_Signature.tif 2176.79 MB  190.2 MP ⭐ LARGEST
+5. V2_750Picacho_PrimaryBedroom_Signature.tif  1098.67 MB   96.0 MP
+
+TOTAL: 6,099 MB (5.96 GB)
+
+========================================================================
+CRITICAL FINDINGS
+========================================================================
+
+🔴 HDR DATA BEYOND sRGB RANGE
+   All files contain values outside 0-1 range (negative: 1-4%, >1: 0.01-0.3%)
+   → REQUIRES 32-bit → 16-bit tone mapping BEFORE any processing
+
+✅ TECHNICAL SPECS CONFIRMED
+   - Bit Depth: 32-bit float (float32)
+   - Channels: 3 (RGB) - NO alpha channel despite directory name
+   - ICC Profile: sRGB IEC61966-2.1 embedded
+   - Software: Adobe Lightroom 9.0
+   - Compression: Uncompressed
+   - Resolution: 240 DPI
+
+🎨 COLOR GRADING ANALYSIS
+   - 4 images: Warm cast (intentional luxury aesthetic)
+   - 1 image (Pool): Cool cast (appropriate for water)
+   - Lightroom "Signature" grade already applied
+   - DO NOT auto-correct - preserve artistic intent
+
+💎 MATERIAL PRIORITIES
+   - Kitchen: Metal (appliances) + Stone (countertops) - HIGH
+   - Bathroom: Stone (marble) - MAXIMUM (hero space, 190 MP)
+   - Bedroom: Fabric + Wood
+   - Pool: Water surface (depth-critical)
+
+========================================================================
+PROCESSING STRATEGY
+========================================================================
+
+STEP 1: 32-bit → 16-bit Conversion (MANDATORY)
+   Method: Reinhard Local Tone Mapping
+   White Point: 1.5 (test 1.3-1.8)
+   Preserve: Lightroom color grading
+
+STEP 2: Depth Pipeline
+   Intensity: 60-85% (scene-dependent)
+   Aerial: 60% | Kitchen: 75% | Pool: 80% | Bathroom: 85% | Bedroom: 65%
+
+STEP 3: Material Response
+   Kitchen: Metal+Stone (75% strength)
+   Bathroom: Stone MAX (85% strength)
+   Bedroom: Fabric+Wood (60% strength)
+
+STEP 4: Final LUT Grading (Optional)
+   Film Emulation: Kodak 2393 @ 60-65%
+   Material Response LUTs: Stacked 70-80%
+
+========================================================================
+QUALITY ASSESSMENT
+========================================================================
+
+EXPOSURE: Shadow-heavy (intentional moody/dramatic style)
+   - Aerial: Mean 0.246 (dark), 57.8% shadows
+   - Kitchen: Mean 0.489 (bright), 29.2% shadows ← Brightest
+   - Pool: Mean 0.267 (dark), 50.2% shadows
+   - Bathroom: Mean 0.286 (dark), 51.6% shadows
+   - Bedroom: Mean 0.368 (moderate), 46.5% shadows
+
+DYNAMIC RANGE: 12-14 stops (estimated, HDR data present)
+
+COLOR BALANCE:
+   - Aerial: Warm (desert/golden hour)
+   - Kitchen: Very Warm (R=0.631, inviting aesthetic)
+   - Pool: Cool (blue from water/sky)
+   - Bathroom: Warm (mixed lighting)
+   - Bedroom: Warm (sunrise/sunset)
+
+========================================================================
+RESOURCE REQUIREMENTS
+========================================================================
+
+PROCESSING TIME (M4 Max, 64GB RAM):
+   - Aerial: 12 min
+   - Kitchen: 12 min
+   - Pool: 13 min
+   - Bathroom: 28 min (largest file)
+   - Bedroom: 14 min
+   TOTAL: ~79 minutes (Ultimate quality)
+
+MEMORY: 8-16 GB per image (32 GB+ RAM recommended)
+
+STORAGE:
+   - Original 32-bit: 5.96 GB
+   - 16-bit converted: ~2 GB
+   - Depth maps: ~2 GB
+   - Processed output: ~3 GB
+   - Final exports: ~4 GB
+   TOTAL PROJECT: ~17 GB
+
+========================================================================
+RECOMMENDATIONS
+========================================================================
+
+MUST DO (Critical):
+   ✅ Implement 32-bit → 16-bit tone mapping (Reinhard)
+   ✅ Material Response on Kitchen (metal+stone) and Bathroom (stone MAX)
+   ✅ Test on Bedroom (smallest) before batch processing
+   ✅ Preserve Lightroom color grading (no white balance changes)
+
+SHOULD DO (High Priority):
+   ✅ Depth-aware processing with zone-based enhancement
+   ✅ Pool: 80% depth for water/decking separation
+   ✅ Quality control at each stage
+   ✅ Export 16-bit TIFF + 8-bit JPEG
+
+OPTIONAL (Enhancement):
+   - Multi-LUT stacking (test against Lightroom grade)
+   - Print-ready Adobe RGB variants
+   - Atmospheric haze on Aerial
+
+========================================================================
+COMPARISON WITH PREVIOUS BATCH
+========================================================================
+
+PREVIOUS (16-bit):         CURRENT (32-bit):
+- 16-bit uint              - 32-bit float
+- [0, 65535] range         - [-0.45, +1.80] HDR range
+- ~10-11 stops DR          - ~12-14 stops DR
+- 200-400 MB files         - 921-2,177 MB files
+- Raw/initial edit         - Lightroom "Signature" grade
+- Direct compatible        - Requires tone mapping
+
+WORKFLOW POSITION:
+   Previous: Camera → 16-bit → Processing
+   Current: Camera → Lightroom Signature → 32-bit → Tone Map → Processing
+
+IMPLICATION: These are FINAL COLOR GRADES. Processing should enhance
+technical quality (sharpness, detail, materials) while preserving
+artistic intent.
+
+========================================================================
+DELIVERABLES
+========================================================================
+
+MASTER ARCHIVE (16-bit TIFF):
+   - V2_750Picacho_[Scene]_Ultimate_16bit.tif
+   - sRGB ICC, LZW compression, 240 DPI, full metadata
+
+WEB PREVIEW (8-bit JPEG):
+   - V2_750Picacho_[Scene]_Ultimate_4K.jpg
+   - Quality 95, 72 DPI, 4K or original aspect scaled
+
+OPTIONAL PRINT (16-bit TIFF):
+   - Adobe RGB (1998), uncompressed, 300 DPI
+
+========================================================================
+TIMELINE
+========================================================================
+
+Day 1 - Setup & Testing: 2-3 hours
+   - Implement conversion script
+   - Test on Bedroom (smallest)
+   - Validate tone mapping
+
+Day 1-2 - Batch Processing: 8-12 hours
+   - Convert all to 16-bit
+   - Depth pipeline
+   - Material Response
+   - LUT grading
+
+Day 2 - Quality Control: 2-3 hours
+   - Side-by-side comparisons
+   - Export deliverables
+   - Client package
+
+TOTAL: 12-18 hours (1.5-2 business days)
+
+========================================================================
+CONCLUSION
+========================================================================
+
+5 high-resolution 32-bit Lightroom "Signature" edits with HDR data
+beyond sRGB range. Requires specialized tone mapping before processing.
+Material Response priority: Kitchen (metal+stone) and Bathroom (stone
+MAX - 190 MP hero space).
+
+Expected Quality: ⭐⭐⭐⭐⭐ Portfolio-grade luxury real estate imagery
+
+NEXT STEPS:
+1. Test 32-bit conversion on Bedroom
+2. Client approval of approach
+3. Batch processing to Ultimate quality
+4. Export deliverables (TIFF + JPEG)
+
+========================================================================
+Full analysis available in: 750_Picacho_32bit_Analysis_Report.md
+========================================================================
