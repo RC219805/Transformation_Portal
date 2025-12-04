@@ -14,21 +14,33 @@ import json
 import sys
 from pathlib import Path
 
-# Add current directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# Add RAG system directory to path for imports
+rag_dir = Path(__file__).parent
+sys.path.insert(0, str(rag_dir.parent))
 
 try:
-    from citation import CitationGenerator
-    from classifier import ArtifactClassifier
-    from indexer import RepositoryIndexer
-    from knowledge_engine import KnowledgeIntegrationEngine
-    from reranker import ResultReranker
-    from retriever import HybridRetriever
-    from templates import PromptTemplates
+    from rag_system.citation import CitationGenerator
+    from rag_system.classifier import ArtifactClassifier
+    from rag_system.indexer import RepositoryIndexer
+    from rag_system.knowledge_engine import KnowledgeIntegrationEngine
+    from rag_system.reranker import ResultReranker
+    from rag_system.retriever import HybridRetriever
+    from rag_system.templates import PromptTemplates
 except ImportError as e:
-    print(f"Error importing RAG components: {e}", file=sys.stderr)
-    print("Make sure you're running from the correct directory", file=sys.stderr)
-    sys.exit(1)
+    # Fallback to direct imports if package-style doesn't work
+    sys.path.insert(0, str(rag_dir))
+    try:
+        from citation import CitationGenerator
+        from classifier import ArtifactClassifier
+        from indexer import RepositoryIndexer
+        from knowledge_engine import KnowledgeIntegrationEngine
+        from reranker import ResultReranker
+        from retriever import HybridRetriever
+        from templates import PromptTemplates
+    except ImportError as e2:
+        print(f"Error importing RAG components: {e2}", file=sys.stderr)
+        print("Make sure you're running from the correct directory", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_index(args):
