@@ -106,12 +106,17 @@ class TestPhase2ConsolidatedCI:
         assert "lint" in jobs
 
     def test_deprecated_workflows_marked(self):
-        """Test that old workflows are deprecated."""
+        """Test that old workflows are deprecated or archived."""
         workflows_dir = REPO_ROOT / ".github/workflows"
 
+        # Check for deprecated files (old naming convention)
         deprecated_files = list(workflows_dir.glob("*.deprecated"))
-        # Should have at least one deprecated file
-        assert len(deprecated_files) >= 1
+        # Check for archived files (new naming convention in archived subdirectory)
+        archived_dir = workflows_dir / "archived"
+        archived_files = list(archived_dir.glob("*.archived")) if archived_dir.exists() else []
+
+        # Should have at least one deprecated or archived file
+        assert len(deprecated_files) + len(archived_files) >= 1
 
 
 class TestPhase2KnowledgeEngine:

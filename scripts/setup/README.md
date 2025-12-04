@@ -2,7 +2,47 @@
 
 This directory contains installation and setup scripts for the Transformation Portal repository.
 
+## Quick Start
+
+For new developers, run the unified setup script:
+
+```bash
+# Full development setup with RAG hooks
+python scripts/setup/dev_setup.py --all
+
+# Minimal setup (core deps only)
+python scripts/setup/dev_setup.py --minimal
+
+# Setup with ML extras
+python scripts/setup/dev_setup.py --with-ml --with-rag
+```
+
 ## Available Scripts
+
+### `dev_setup.py` ⭐ (Recommended)
+
+Unified developer setup script with RAG hooks integration.
+
+**Usage:**
+```bash
+python scripts/setup/dev_setup.py              # Standard setup
+python scripts/setup/dev_setup.py --minimal    # Core deps only
+python scripts/setup/dev_setup.py --with-ml    # Include ML extras
+python scripts/setup/dev_setup.py --with-rag   # Include RAG git hooks
+python scripts/setup/dev_setup.py --all        # Everything
+```
+
+**What it does:**
+- Creates/uses virtual environment
+- Installs dependencies (core + optional extras)
+- Installs RAG system git hooks for incremental indexing
+- Sets up pre-commit hooks
+- Configures development environment
+
+**RAG Hooks installed:**
+- `post-commit`: Automatic RAG index updates on commits
+- `post-merge`: Index sync after pulls/merges
+- `pre-push`: Cache consistency validation
 
 ### `auto-organize-install.sh`
 
@@ -228,6 +268,10 @@ For issues with setup scripts:
 
 ## Version History
 
+- **v1.1.0** (December 2025): Added unified developer setup
+  - Added `dev_setup.py` with RAG hooks integration
+  - Streamlined developer onboarding process
+  - Integrated RAG incremental indexing hooks
 - **v1.0.0** (November 2025): Initial setup script collection
   - Added `auto-organize-install.sh`
   - Added `pre-commit-check.sh`
