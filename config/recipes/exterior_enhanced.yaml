@@ -1,0 +1,43 @@
+# Exterior Enhanced - For aerial and exterior shots that benefit from enhancement
+# Based on successful aerial processing results
+
+name: "Exterior Enhanced"
+description: "Full enhancement for exteriors - adds punch and character"
+
+output_format: "tiff"
+
+stages:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - upscaling_4k
+  - quality_assessment
+
+color_grading:
+  enabled: true
+  lut: "assets/luts/film_emulation/Kodak/Kodak_2393_D55.cube"
+  lut_strength: 0.80          # Strong film character for exteriors
+  contrast: 1.08              # Boost contrast for depth
+  saturation: 1.12            # Richer colors for outdoor scenes
+  warmth: 0.08                # Warm golden hour feel
+  exposure: 0.03              # Slight lift for brightness
+
+photo_finishing:
+  enabled: true
+  aces: true
+  bloom:
+    enabled: true
+    threshold: 0.78           # More generous bloom
+    intensity: 0.025          # Noticeable glow
+    radius: 5
+  vignette:
+    enabled: true
+    amount: -0.12             # Subtle vignette for focus
+
+quality_assessment:
+  lpips_weight: 0.6
+  heuristic_weight: 0.4
+  expected_brightness_range: [0.35, 0.65]
+  expected_contrast_range: [0.20, 0.50]
+  expected_color_balance: "warm"
