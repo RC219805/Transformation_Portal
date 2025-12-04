@@ -1,0 +1,42 @@
+# Interior Warm Minimal - For high-quality interior shots
+# Minimal processing to preserve existing quality while adding subtle warmth
+
+name: "Interior Warm Minimal"
+description: "Minimal film look for high-quality interior renderings"
+
+output_format: "tiff"
+
+stages:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - upscaling_4k
+  - quality_assessment
+
+color_grading:
+  enabled: true
+  lut: "assets/luts/film_emulation/Kodak/Kodak_2393_D55.cube"
+  lut_strength: 0.45          # Very light film look
+  contrast: 1.01              # Barely perceptible contrast boost
+  saturation: 1.03            # Subtle saturation lift
+  warmth: 0.05                # Slight warmth for interiors
+  exposure: 0.0
+
+photo_finishing:
+  enabled: true
+  aces: true
+  bloom:
+    enabled: true
+    threshold: 0.90           # Only extreme highlights
+    intensity: 0.01           # Very subtle
+    radius: 3
+  vignette:
+    enabled: false            # No vignette for interiors
+
+quality_assessment:
+  lpips_weight: 0.6
+  heuristic_weight: 0.4
+  expected_brightness_range: [0.40, 0.70]
+  expected_contrast_range: [0.25, 0.55]
+  expected_color_balance: "warm"

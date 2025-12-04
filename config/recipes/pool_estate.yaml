@@ -1,0 +1,45 @@
+# Pool Estate – Optimized Pool / Exterior Water Recipe
+# Based on Golden Hour Courtyard + luxury adjustments
+
+name: "Pool Estate"
+description: "Warm, soft, high-end luxury rendering for pool exteriors"
+
+output_format: "tiff"
+
+stages:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - quality_assessment
+
+color_grading:
+  enabled: true
+  # Target: eliminate harsh teal/cyan drift common in pool photos
+  # Using Kodak 2393 LUT at lower intensity for softer outdoor look
+  lut: "assets/luts/film_emulation/Kodak/Kodak_2393_D55.cube"
+  lut_strength: 0.35          # Lower than Signature Estate for outdoor softness
+  
+  # Adjustments optimized for pool exteriors
+  contrast: 0.92              # Softer contrast for calm water look (1.0 - 0.08)
+  saturation: 0.88            # Slight desaturation for luxury look (0.95 - 0.07 avg pool/blue reduction)
+  warmth: 0.12                # Warm shift to eliminate harsh teal/cyan
+  exposure: 0.05              # Subtle lift to open stone + landscaping shadows
+
+photo_finishing:
+  enabled: true
+  aces: true
+  # Optimized for pool exteriors
+  bloom:
+    enabled: true
+    threshold: 0.75           # Lower threshold for gentle bloom on water reflections
+    intensity: 0.03           # Gentle bloom to soften specular reflections
+  vignette:
+    enabled: false            # No vignette for pool exteriors
+
+quality_assessment:
+  lpips_weight: 0.6
+  heuristic_weight: 0.4
+  expected_brightness_range: [0.38, 0.62]
+  expected_contrast_range: [0.20, 0.45]
+  expected_color_balance: "warm-neutral"

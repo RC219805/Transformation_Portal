@@ -1,0 +1,43 @@
+# Signature Estate (Gentle) - Optimized based on baseline analysis
+# Reduced intensity to preserve source image quality while adding film character
+
+name: "Signature Estate (Gentle)"
+description: "Lighter Kodak 2393 emulation - preserves high baseline quality"
+
+output_format: "tiff"
+
+stages:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - upscaling_4k
+  - quality_assessment
+
+color_grading:
+  enabled: true
+  lut: "assets/luts/film_emulation/Kodak/Kodak_2393_D55.cube"
+  lut_strength: 0.60          # Reduced from 0.85 - lighter touch
+  contrast: 1.02              # Reduced from 1.06 - subtle enhancement only
+  saturation: 1.05            # Reduced from 1.10 - preserve natural color
+  warmth: 0.0                 # Neutral
+  exposure: 0.0               # Preserve original exposure
+
+photo_finishing:
+  enabled: true
+  aces: true
+  bloom:
+    enabled: true
+    threshold: 0.85           # Higher threshold - only brightest highlights
+    intensity: 0.015          # Subtle bloom
+    radius: 4
+  vignette:
+    enabled: true
+    amount: -0.08             # Very subtle
+
+quality_assessment:
+  lpips_weight: 0.6
+  heuristic_weight: 0.4
+  expected_brightness_range: [0.35, 0.65]
+  expected_contrast_range: [0.20, 0.50]
+  expected_color_balance: "neutral-warm"

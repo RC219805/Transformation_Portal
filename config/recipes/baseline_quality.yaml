@@ -1,0 +1,15 @@
+# config/recipes/baseline_quality.yaml
+name: "Baseline Quality"
+description: "Reference quality metrics on unedited source JPEGs"
+
+output_format: "jpeg"   # or tiff, doesn't really matter for metrics
+
+stages:
+  - quality_assessment
+
+quality_assessment:
+  lpips_weight: 0.6
+  heuristic_weight: 0.4
+  expected_brightness_range: [0.35, 0.65]
+  expected_contrast_range: [0.20, 0.50]
+  expected_color_balance: "neutral"
