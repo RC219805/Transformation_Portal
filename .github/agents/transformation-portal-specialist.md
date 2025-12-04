@@ -238,7 +238,7 @@ Respect intentional deviations from coding standards:
 - `requirements/base.in`: Core dependencies (abstract)
 - `requirements/base.txt`: Pinned versions
 - `pyproject.toml`: Package configuration
-- `.github/workflows/build.yml`: CI configuration
+- `.github/workflows/ci-consolidated.yml`: Primary CI/CD pipeline
 - `tests/`: pytest test suite
 
 ### Performance Benchmarks

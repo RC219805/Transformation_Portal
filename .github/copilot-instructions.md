@@ -2,19 +2,28 @@
 
 ## Project Overview
 
-**Transformation Portal** is a professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production. The repository combines:
+**Transformation Portal** is an advanced, production-grade image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production. The repository combines cutting-edge AI capabilities with enterprise-level automation:
 
 - **AI-Powered Enhancement**: Stable Diffusion XL, ControlNet, and Real-ESRGAN for intelligent upscaling
 - **Depth-Aware Processing**: Depth Anything V2 with Apple Neural Engine optimization for architectural rendering
 - **Material Response Technology**: Physics-based surface enhancement for wood, metal, glass, and textiles
 - **Professional Color Grading**: 16+ LUTs with Film Emulation and Location Aesthetics
 - **Batch Processing**: High-throughput TIFF and video processing pipelines
-- **Production-Ready**: Comprehensive test suite with CI/CD, performance profiling
+- **Knowledge Engine**: RAG-based architectural intelligence with vector database integration for context-aware processing
+- **Autonomous Agents**: Specialized agent swarm for code generation, design optimization, and quality assurance
+- **Production-Ready**: Comprehensive test suite with CI/CD, performance profiling, and semantic consistency checks
 
 ## Repository Structure
 
 ```
 .
+├── .github/agents/             # Agent documentation and RAG implementation
+│   ├── rag_system/             # RAG system implementation
+│   │   ├── knowledge_engine.py # RAG-based knowledge retrieval engine
+│   │   ├── knowledge_base/     # Knowledge state, quality metrics, dependency stats (JSON)
+│   │   └── ...                 # Indexer, retriever, semantic search, etc.
+│   ├── transformation-portal-specialist.md  # Custom agent definition
+│   └── [RAG and agent guides]  # Documentation and integration guides
 ├── depth_pipeline/             # Depth Anything V2 integration with CoreML
 │   ├── pipeline.py            # Main depth-aware processing pipeline
 │   ├── processors/            # Depth-based image processors
@@ -160,6 +169,30 @@ make lint
 - Preset-based adjustments for exposure, contrast, saturation, clarity, glow
 - Progress tracking and batch statistics for large-scale operations
 
+## Advanced Capabilities
+
+### Knowledge Engine & RAG
+The Knowledge Engine provides intelligent, context-aware processing through Retrieval-Augmented Generation:
+
+- **Context-Aware Generation**: RAG system accesses the `.github/agents/rag_system/knowledge_base/` directory to retrieve relevant architectural patterns, material specifications, and processing guidelines. The `knowledge_engine.py` module orchestrates semantic retrieval for informed decision-making.
+- **Vector Search**: Integration with vector databases enables semantic code search across the entire codebase. Embeddings and knowledge documents are stored in `.github/agents/rag_system/knowledge_base/` for fast similarity queries.
+- **Architectural Intelligence**: The system understands luxury real estate contexts, automatically selecting appropriate processing presets based on scene analysis and historical project data.
+
+### Advanced Feedback Loop
+The autonomous feedback system ensures continuous quality improvement:
+
+- **Self-Correction**: Automated refinement tickets are generated based on quality metrics. Specialized agents monitor output quality and trigger corrective actions; see `.github/agents/` for documentation and implementation details.
+- **Performance Optimization**: Real-time monitoring tracks processing throughput, memory usage, and output quality. Agents automatically adjust parameters to optimize the efficiency-quality tradeoff.
+- **Quality Metrics**: Automated scoring for sharpness, color accuracy, material fidelity, and architectural preservation guides iterative improvements.
+
+### Agents Directory Access
+The `.github/agents/` directory contains agent-related documentation and implementation files:
+
+- **Documentation & Guides**: Multiple markdown files provide technical guides, usage instructions, and architectural notes for agent development and integration.
+- **`rag_system/` Subdirectory**: Contains the Retrieval-Augmented Generation (RAG) implementation for context-aware architectural intelligence and semantic code search.
+- **`transformation-portal-specialist.md`**: Defines a custom agent for Transformation Portal-specific tasks and workflows.
+- **Agent Interface**: All agents follow a consistent interface for communication and interoperability, ensuring standardized patterns across the agent swarm.
+
 ## Testing Guidelines
 
 - Write unit tests for new functions in the `tests/` directory
@@ -268,6 +301,15 @@ make lint
 - CI uses `requirements-ci.txt` for minimal dependency installation
 - Free disk space cleanup runs before tests due to large ML models
 - Exclude deprecated code from linting: `deprecated/`, `src/transformation_portal/`, `scripts/`
+
+## Stable Merge State
+
+All pull requests should maintain codebase consistency through the following quality gates:
+
+- **Semantic Consistency Checks**: Validates that new code aligns with established architectural patterns and coding conventions
+- **Knowledge Base Synchronization**: Ensures `.github/agents/rag_system/knowledge_base/` indices are updated when relevant code changes are introduced
+- **Agent Compatibility**: Verifies that changes don't break agent communication patterns or interoperability
+- **Quality Gate**: Automated quality metrics must meet minimum thresholds before merge approval
 
 ## When Making Changes
 
