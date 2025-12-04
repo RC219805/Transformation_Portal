@@ -84,9 +84,16 @@ def _check_perceptual_assessor_available() -> bool:
     global _PERCEPTUAL_ASSESSOR_AVAILABLE
     if _PERCEPTUAL_ASSESSOR_AVAILABLE is None:
         try:
-            from ..enhancements.perceptual_quality_assessment import PerceptualQualityAssessor  # noqa: F401
+            import sys
+            from pathlib import Path
+            # Add src directory to path if not already there
+            src_dir = Path(__file__).parent.parent.parent.parent / "src"
+            if str(src_dir) not in sys.path:
+                sys.path.insert(0, str(src_dir))
+            from enhancements.perceptual_quality_assessment import PerceptualQualityAssessor  # noqa: F401
             _PERCEPTUAL_ASSESSOR_AVAILABLE = True
-        except ImportError:
+        except ImportError as e:
+            logger.debug(f"PerceptualQualityAssessor not available: {e}")
             _PERCEPTUAL_ASSESSOR_AVAILABLE = False
     return _PERCEPTUAL_ASSESSOR_AVAILABLE
 
@@ -336,7 +343,13 @@ class QualityFeedbackBridge:
 
         # Try to initialize assessor
         try:
-            from ..enhancements.perceptual_quality_assessment import (
+            import sys
+            from pathlib import Path
+            # Add src directory to path if not already there
+            src_dir = Path(__file__).parent.parent.parent.parent / "src"
+            if str(src_dir) not in sys.path:
+                sys.path.insert(0, str(src_dir))
+            from enhancements.perceptual_quality_assessment import (
                 PerceptualQualityAssessor,
             )
             self._perceptual_assessor = PerceptualQualityAssessor(

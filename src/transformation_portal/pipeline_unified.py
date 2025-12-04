@@ -775,9 +775,30 @@ class UnifiedPipeline:
         config: Dict[str, Any]
     ) -> Image.Image:
         """Apply depth-aware processing."""
-        # Depth estimation stage (placeholder for integration)
-        log.info("    Depth estimation stage (integration pending)")
-        return image
+        try:
+            # Try to use depth estimation if available
+            from .depth.depth_processor import DepthProcessor
+            
+            if not hasattr(self, '_depth_processor'):
+                self._depth_processor = DepthProcessor(device=self.device)
+            
+            # Generate depth map and apply depth-aware enhancements
+            depth_map = self._depth_processor.estimate_depth(image)
+            
+            # Store depth map for potential use in later stages
+            if not hasattr(self, '_depth_maps'):
+                self._depth_maps = {}
+            self._depth_maps[id(image)] = depth_map
+            
+            log.info("    ✓ Depth Estimation (depth-aware processing enabled)")
+            return image
+            
+        except ImportError:
+            log.debug("    Depth estimation module not available, skipping")
+            return image
+        except Exception as e:
+            log.warning(f"    Depth estimation failed: {e}, continuing without depth")
+            return image
 
     def _apply_ai_enhancement(
         self,
