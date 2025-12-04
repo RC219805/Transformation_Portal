@@ -271,7 +271,7 @@ transformation_portal/
 
 ### Test Suite Status
 
-**Current Status:** ✅ 1348 tests passed, 257 skipped (ML dependencies)
+**Current Status:** ✅ 1,348 tests passed, 257 skipped (ML dependencies)
 
 **Test Categories:**
 - Unit tests: `tests/unit/`
