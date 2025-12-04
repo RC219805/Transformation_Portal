@@ -1,0 +1,99 @@
+# Run Card: 750 Picacho Pool - Pool Estate Recipe
+# Date: 2025-12-04
+# Experiment: Testing pool-specific recipe variant
+
+image_id: 750Picacho_Pool
+project: 750_picacho_lane
+scene_type: pool_exterior
+scene_features:
+  - swimming_pool
+  - water_reflections
+  - daylight
+  - hardscape
+  - blue_water_present
+
+# Quality Metrics
+source_baseline_score: 50.06
+processed_score: 40.53
+delta_score: -9.53
+targets_met: 1/4
+
+# Recipe Details
+recipe: pool_estate
+recipe_path: config/recipes/pool_estate.yaml
+recipe_settings:
+  lut: Kodak_2393_D55
+  lut_strength: 0.35
+  contrast: 0.92
+  saturation: 0.88
+  warmth: 0.12
+  exposure: 0.05
+
+# Processing Performance
+processing_time_seconds: 6.61
+stages_executed:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - quality_assessment
+
+# Human Assessment
+human_rating: significantly_worse
+visual_quality: over_processed
+brand_alignment: poor
+
+notes:
+  - "Worst performer of all recipes tested"
+  - "Water looks less natural than baseline"
+  - "Color corrections too aggressive despite gentle settings"
+
+issues:
+  - "Nearly 10% quality loss unacceptable"
+  - "Pool-specific adjustments backfired"
+  - "Saturation reduction and warmth shift didn't help"
+  - "Recipe needs complete revision"
+
+# Decision
+decision: recipe_avoid_completely_needs_revision
+recommendation_confidence: very_high
+alternative_recipes:
+  - baseline (much better: 50.06%)
+  - signature_estate_original (better: 44.88%, -5.18%)
+  - signature_estate_gentle (untested but likely better)
+
+# Comparison Context
+compared_against:
+  - baseline: 50.06%
+  - signature_estate_original: 44.88% (-5.18%)
+  - pool_estate: 40.53% (-9.53%)
+
+winner: baseline
+key_finding: "Pool-specific recipe over-processes - simpler approaches better"
+
+# Learning Points
+lessons:
+  - "Pool scenes are high-risk for processing"
+  - "Scene-specific recipes can backfire if too aggressive"
+  - "Water reflections and color need extremely light touch"
+  - "Current pool_estate.yaml should be shelved"
+  - "For pools: default to baseline or lightest general recipe"
+  - "Future pool recipe needs LUT 0.25-0.30 max"
+
+# Revision Plan
+needs_revision: true
+revision_targets:
+  - reduce_lut_strength_to: 0.25-0.30
+  - increase_contrast_to: 0.98-1.00
+  - increase_saturation_to: 0.95-0.98
+  - reduce_warmth_to: 0.03-0.05
+  - test_against_baseline_first: true
+
+tags:
+  - pool
+  - exterior
+  - water_features
+  - over_processed
+  - recipe_failed
+  - needs_revision
+  - high_risk_scene

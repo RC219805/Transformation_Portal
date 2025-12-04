@@ -1,0 +1,87 @@
+# Run Card: 750 Picacho Primary Bedroom - Signature Estate Gentle
+# Date: 2025-12-04
+# Experiment: Testing lighter recipe variant on hero interior shot
+
+image_id: 750Picacho_PrimaryBedroom
+project: 750_picacho_lane
+scene_type: interior_bedroom
+scene_features:
+  - high_end_staging
+  - neutral_palette
+  - daylight
+  - wood_floors
+  - premium_finishes
+
+# Quality Metrics
+source_baseline_score: 60.40
+processed_score: 55.78
+delta_score: -4.62
+targets_met: 3/4
+
+# Recipe Details
+recipe: signature_estate_gentle
+recipe_path: config/recipes/signature_estate_gentle.yaml
+recipe_settings:
+  lut: Kodak_2393_D55
+  lut_strength: 0.60  # Reduced from 0.85
+  contrast: 1.02      # Reduced from 1.06
+  saturation: 1.05    # Reduced from 1.10
+  warmth: 0.0
+  exposure: 0.0
+
+# Processing Performance
+processing_time_seconds: 8.26
+stages_executed:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - upscaling_4k
+  - quality_assessment
+
+# Human Assessment
+human_rating: acceptable_but_unnecessary
+visual_quality: different_not_better
+brand_alignment: moderate
+
+notes:
+  - "Baseline already pristine at 60.40%"
+  - "Gentle recipe still loses 4.62%"
+  - "Film look adds character but costs quality"
+  - "Source didn't need enhancement"
+
+issues:
+  - "Quality loss on already-excellent source"
+  - "Gentle variant performed WORSE than original (-4.62% vs -3.60%)"
+
+# Decision
+decision: recipe_not_recommended_for_hero_shots
+recommendation_confidence: high
+alternative_recipes:
+  - baseline (keep as-is: 60.40%)
+  - signature_estate_original (actually better: 56.80%, -3.60%)
+
+# Comparison Context
+compared_against:
+  - baseline: 60.40%
+  - signature_estate_original: 56.80% (-3.60%)
+  - signature_estate_gentle: 55.78% (-4.62%)
+
+winner: baseline
+key_finding: "Gentle recipe paradoxically worse than original on hero shots"
+
+# Learning Points
+lessons:
+  - "Hero shots (≥55% baseline) resist ALL processing variants"
+  - "Lighter LUT doesn't always mean better preservation"
+  - "Original recipe (0.85 strength) actually better than gentle (0.60) on high-quality sources"
+  - "When baseline >60%, consider shipping without processing"
+  - "Film emulation has inherent quality cost even at reduced strength"
+
+tags:
+  - interior
+  - bedroom
+  - hero_shot
+  - high_baseline
+  - preservation_recommended
+  - counterintuitive_result
