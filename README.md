@@ -1,11 +1,26 @@
 [![CI/CD](https://github.com/RC219805/Transformation_Portal/actions/workflows/ci-consolidated.yml/badge.svg)](https://github.com/RC219805/Transformation_Portal/actions/workflows/ci-consolidated.yml)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-1199%20passed-brightgreen.svg)](https://github.com/RC219805/Transformation_Portal/actions)
+[![Tests](https://img.shields.io/badge/tests-1348%20passed-brightgreen.svg)](https://github.com/RC219805/Transformation_Portal/actions)
 
 # Transformation Portal
 
 Professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production.
+
+## 📋 Comprehensive Status Report (December 2025)
+
+A detailed review of the codebase structure, infrastructure, capabilities, and performance is now available:
+
+**[📊 View Comprehensive Codebase Update](docs/COMPREHENSIVE_CODEBASE_UPDATE_2025.md)**
+
+**Key Highlights:**
+- ✅ **1,348 tests passing** (0 critical linting errors)
+- ⚡ **3-5x throughput improvement** via async pipeline architecture  
+- 📉 **92% smaller repository** (180MB → 15MB)
+- 🔒 **Security hardened** (CVE-2024-27763 mitigation)
+- 🧠 **RAG Knowledge Engine** activated (Phase 2)
+
+---
 
 ## 🚀 Latest Update: Async/Streaming Pipeline Architecture (November 2025)
 
