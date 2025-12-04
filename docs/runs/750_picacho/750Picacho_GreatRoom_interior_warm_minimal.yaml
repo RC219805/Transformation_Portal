@@ -1,0 +1,88 @@
+# Run Card: 750 Picacho Great Room - Interior Warm Minimal
+# Date: 2025-12-04
+# Experiment: Testing ultra-minimal processing on excellent interior
+
+image_id: 750Picacho_GreatRoom
+project: 750_picacho_lane
+scene_type: interior_greatroom
+scene_features:
+  - open_plan
+  - high_ceilings
+  - natural_light
+  - premium_finishes
+  - neutral_warm_palette
+
+# Quality Metrics
+source_baseline_score: 57.77
+processed_score: 51.92
+delta_score: -5.85
+targets_met: 1/4
+
+# Recipe Details
+recipe: interior_warm_minimal
+recipe_path: config/recipes/interior_warm_minimal.yaml
+recipe_settings:
+  lut: Kodak_2393_D55
+  lut_strength: 0.45  # Very light film look
+  contrast: 1.01      # Barely perceptible
+  saturation: 1.03    # Subtle lift
+  warmth: 0.05        # Slight warmth
+  exposure: 0.0
+
+# Processing Performance
+processing_time_seconds: 8.29
+stages_executed:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - upscaling_4k
+  - quality_assessment
+
+# Human Assessment
+human_rating: worse_than_source
+visual_quality: degraded
+brand_alignment: poor
+
+notes:
+  - "Baseline already excellent at 57.77%"
+  - "Even 'minimal' recipe loses nearly 6%"
+  - "LUT strength 0.45 still too aggressive for hero shots"
+
+issues:
+  - "Worst result of all variants tested (-5.85%)"
+  - "Minimal processing paradoxically caused most damage"
+  - "Quality drop not justified by subtle film character"
+
+# Decision
+decision: recipe_avoid_for_high_baseline_interiors
+recommendation_confidence: very_high
+alternative_recipes:
+  - baseline (keep as-is: 57.77%)
+  - signature_estate_original (less bad: 52.54%, -5.23%)
+
+# Comparison Context
+compared_against:
+  - baseline: 57.77%
+  - signature_estate_original: 52.54% (-5.23%)
+  - interior_warm_minimal: 51.92% (-5.85%)
+
+winner: baseline
+key_finding: "Ultra-light recipe performed worst - counterintuitive but measured"
+
+# Learning Points
+lessons:
+  - "Minimal processing ≠ minimal damage on excellent sources"
+  - "Hero shots (≥55%) should be shipped as baseline"
+  - "ANY film emulation (even 0.45 strength) costs 5-6% on pristine sources"
+  - "Recipe 'lightness' doesn't correlate with quality preservation above 55% baseline"
+  - "The metric is telling us: leave excellence alone"
+
+tags:
+  - interior
+  - great_room
+  - hero_shot
+  - high_baseline
+  - minimal_failed
+  - ship_as_baseline
+  - critical_learning

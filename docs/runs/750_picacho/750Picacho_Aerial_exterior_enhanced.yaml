@@ -1,0 +1,82 @@
+# Run Card: 750 Picacho Aerial - Exterior Enhanced Recipe
+# Date: 2025-12-04
+# Experiment: Recipe optimization for aerial/exterior shots
+
+image_id: 750Picacho_Aerial
+project: 750_picacho_lane
+scene_type: aerial_exterior
+scene_features:
+  - architecture_exterior
+  - daylight
+  - foliage_visible
+  - wide_angle
+  
+# Quality Metrics
+source_baseline_score: 42.20
+processed_score: 48.04
+delta_score: +5.84
+targets_met: 2/4
+
+# Recipe Details
+recipe: exterior_enhanced
+recipe_path: config/recipes/exterior_enhanced.yaml
+recipe_settings:
+  lut: Kodak_2393_D55
+  lut_strength: 0.80
+  contrast: 1.08
+  saturation: 1.12
+  warmth: 0.08
+  exposure: 0.03
+
+# Processing Performance
+processing_time_seconds: 7.05
+stages_executed:
+  - depth_estimation
+  - material_response
+  - color_grading
+  - photo_finishing
+  - upscaling_4k
+  - quality_assessment
+
+# Human Assessment
+human_rating: clearly_better
+visual_quality: improved
+brand_alignment: excellent
+
+notes:
+  - "Sky depth improved significantly"
+  - "Architecture reads cleaner and more premium"
+  - "Warmth adds appropriate golden hour feel"
+  - "Contrast boost helps structure definition"
+  - "Low baseline (42.20%) clearly benefited from enhancement"
+
+issues: []
+
+# Decision
+decision: recipe_strongly_recommended_for_aerial
+recommendation_confidence: high
+alternative_recipes:
+  - signature_estate (acceptable but weaker: +3.29%)
+
+# Comparison Context
+compared_against:
+  - baseline: 42.20%
+  - signature_estate_original: 45.49% (+3.29%)
+  - exterior_enhanced: 48.04% (+5.84%)
+
+winner: exterior_enhanced
+improvement_over_best_alternative: +2.55%
+
+# Learning Points
+lessons:
+  - "Low baseline exteriors (<45%) respond very well to aggressive enhancement"
+  - "Exterior Enhanced recipe is proven for aerial shots"
+  - "Warmth and saturation boost work well for outdoor architecture"
+  - "This is a clear use case for full processing vs minimal"
+
+tags:
+  - aerial
+  - exterior
+  - low_baseline
+  - enhancement_success
+  - proven_recipe
