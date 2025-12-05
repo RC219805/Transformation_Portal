@@ -20,6 +20,7 @@ try:
 except ImportError as e:
     print(f"Import error: {e}")
     MODULES_AVAILABLE = False
+    print("Please ensure transformation_portal is properly installed.")
 
 
 def example_1_export_model():
@@ -297,7 +298,7 @@ def main():
     
     if not MODULES_AVAILABLE:
         print("\n✗ CoreML modules not available")
-        print("Please ensure depth_pipeline is properly installed.")
+        print("Please ensure transformation_portal is properly installed.")
         return
     
     examples = [

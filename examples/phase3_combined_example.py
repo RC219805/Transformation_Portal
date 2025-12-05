@@ -74,7 +74,11 @@ def example_1_sequential_baseline():
         """Simple depth estimation (grayscale conversion)"""
         time.sleep(0.5)  # Simulate slow depth estimation
         gray = np.mean(image, axis=2)
-        return (gray - gray.min()) / (gray.max() - gray.min())
+        denominator = gray.max() - gray.min()
+        if denominator > 0:
+            return (gray - gray.min()) / denominator
+        else:
+            return np.zeros_like(gray)
     
     start_time = time.time()
     
@@ -131,7 +135,13 @@ def example_2_parallel_only():
         # Simulate depth estimation
         time.sleep(0.5)
         gray = np.mean(image, axis=2)
-        depth = (gray - gray.min()) / (gray.max() - gray.min())
+        gray_min = gray.min()
+        gray_max = gray.max()
+        if gray_max == gray_min:
+            # Uniform image: set depth to zeros (or ones, depending on desired effect)
+            depth = np.zeros_like(gray)
+        else:
+            depth = (gray - gray_min) / (gray_max - gray_min)
         
         # Use depth to modulate enhancement: deeper pixels get more boost
         # Expand depth to shape (H, W, 1) for broadcasting
@@ -209,7 +219,12 @@ def example_3_with_caching():
         """Slow depth computation"""
         time.sleep(0.5)
         gray = np.mean(image, axis=2)
-        return (gray - gray.min()) / (gray.max() - gray.min())
+        min_val = gray.min()
+        max_val = gray.max()
+        if max_val == min_val:
+            # Uniform image: return zeros (or any constant)
+            return np.zeros_like(gray)
+        return (gray - min_val) / (max_val - min_val)
     
     # First run
     processor = ParallelProcessor(WorkerConfig(num_workers=4))
@@ -291,7 +306,12 @@ def example_4_full_optimization():
             # Mock fast depth
             time.sleep(0.05)  # Much faster than 0.5s
             gray = np.mean(image, axis=2)
-            return (gray - gray.min()) / (gray.max() - gray.min())
+            min_val = gray.min()
+            max_val = gray.max()
+            if max_val == min_val:
+                # Uniform image, return zeros (or any constant)
+                return np.zeros_like(gray)
+            return (gray - min_val) / (max_val - min_val)
     
     def apply_depth_enhancement(image, depth):
         """Apply depth-aware effects"""

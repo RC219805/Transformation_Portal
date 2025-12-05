@@ -402,7 +402,7 @@ class IncrementalCache:
         print(f"Total entries: {stats['total_entries']}")
         print(f"Total size: {stats['total_size_gb']:.2f} GB ({stats['total_size_mb']:.1f} MB)")
         print(f"Limit: {stats['max_size_gb']:.1f} GB")
-        print(f"Usage: {stats['total_size_gb']/stats['max_size_gb']*100:.1f}%")
+        print(f"Usage: {stats['total_size_gb']/stats['max_size_gb']*100:.1f}%" if stats['max_size_gb'] > 0 else "Usage: 0.0%")
         print(f"\nNamespaces:")
         for ns, data in stats['namespaces'].items():
             size_mb = data['size_bytes'] / (1024**2)

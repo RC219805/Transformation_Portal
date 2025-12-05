@@ -2,7 +2,7 @@
 
 import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -170,18 +170,22 @@ class TestParallelProcessor:
         assert stats.total_time_seconds > 0
         assert stats.throughput_per_hour > 0
         
-    @patch('utils.parallel_processor.TORCH_AVAILABLE', True)
-    @patch('utils.parallel_processor.torch')
-    def test_gpu_detection(self, mock_torch):
+    def test_gpu_detection(self):
         """Test GPU detection"""
+        import utils.parallel_processor as pp
+        mock_torch = MagicMock()
         mock_torch.cuda.is_available.return_value = True
         mock_torch.cuda.device_count.return_value = 2
+        # Mock hasattr checks
+        mock_torch.backends = MagicMock()
         
-        config = WorkerConfig(mode=ProcessingMode.AUTO)
-        processor = ParallelProcessor(config)
-        
-        assert processor.gpu_available
-        assert processor.num_gpus == 2
+        with patch.object(pp, 'TORCH_AVAILABLE', True):
+            with patch.object(pp, 'torch', mock_torch, create=True):
+                config = WorkerConfig(mode=ProcessingMode.AUTO)
+                processor = ParallelProcessor(config)
+                
+                assert processor.gpu_available
+                assert processor.num_gpus == 2
 
 
 class TestConvenienceFunction:
@@ -235,11 +239,15 @@ class TestGPULoadBalancing:
         
     def test_auto_gpu_ids(self):
         """Test automatic GPU ID assignment"""
-        with patch('utils.parallel_processor.TORCH_AVAILABLE', True):
-            with patch('utils.parallel_processor.torch') as mock_torch:
-                mock_torch.cuda.is_available.return_value = True
-                mock_torch.cuda.device_count.return_value = 4
-                
+        import utils.parallel_processor as pp
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = True
+        mock_torch.cuda.device_count.return_value = 4
+        # Mock hasattr checks
+        mock_torch.backends = MagicMock()
+        
+        with patch.object(pp, 'TORCH_AVAILABLE', True):
+            with patch.object(pp, 'torch', mock_torch, create=True):
                 config = WorkerConfig(mode=ProcessingMode.AUTO)
                 processor = ParallelProcessor(config)
                 

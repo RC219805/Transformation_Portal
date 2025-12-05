@@ -14,7 +14,7 @@ import multiprocessing as mp
 import queue
 import threading
 import time
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -26,7 +26,6 @@ try:
     import torch
     TORCH_AVAILABLE = True
 except ImportError:
-    torch = None  # type: ignore[assignment]  # noqa: N816
     TORCH_AVAILABLE = False
 
 
@@ -92,10 +91,13 @@ class ParallelProcessor:
         self.mps_available = False
         
         if TORCH_AVAILABLE:
+            # Check CUDA availability (with fallback for mock/stub torch)
             if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 self.num_gpus = torch.cuda.device_count()
                 self.gpu_available = True
-            elif (hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and
+            # Check MPS availability (Apple Silicon) - need to verify backends exists first
+            elif (hasattr(torch, 'backends') and
+                  hasattr(torch.backends, 'mps') and
                   torch.backends.mps.is_available()):
                 self.num_gpus = 1
                 self.mps_available = True
@@ -296,7 +298,7 @@ class ParallelProcessor:
     ):
         """Worker thread for GPU processing"""
         if gpu_id is not None and TORCH_AVAILABLE:
-            if torch.cuda.is_available():
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 torch.cuda.set_device(gpu_id)
             
         while True:
