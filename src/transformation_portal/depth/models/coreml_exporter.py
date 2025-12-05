@@ -372,16 +372,18 @@ class CoreMLDepthEstimator:
             elapsed = time.time() - start
             times.append(elapsed * 1000)
             
+        mean_time_ms = np.mean(times)
+        throughput = 3600 / (mean_time_ms / 1000) if mean_time_ms > 0 else 0
         return {
             'backend': 'CoreML' if self.use_coreml else 'PyTorch',
             'model': self.model_name,
             'iterations': num_iterations,
-            'mean_ms': np.mean(times),
+            'mean_ms': mean_time_ms,
             'std_ms': np.std(times),
             'min_ms': np.min(times),
             'max_ms': np.max(times),
             'median_ms': np.median(times),
-            'throughput_per_hour': 3600 / (np.mean(times) / 1000)
+            'throughput_per_hour': throughput
         }
 
 
