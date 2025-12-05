@@ -15,7 +15,7 @@ import queue
 import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -57,12 +57,8 @@ class ProcessingStats:
     failed_tasks: int = 0
     total_time_seconds: float = 0.0
     throughput_per_hour: float = 0.0
-    worker_utilization: Dict[int, float] = None
+    worker_utilization: Dict[int, float] = field(default_factory=dict)
     memory_peak_gb: float = 0.0
-    
-    def __post_init__(self):
-        if self.worker_utilization is None:
-            self.worker_utilization = {}
 
 
 class ParallelProcessor:
@@ -239,6 +235,7 @@ class ParallelProcessor:
         results = [None] * len(items)
         task_queue = queue.Queue()
         result_queue = queue.Queue()
+        stats_lock = threading.Lock()
         
         for idx, item in enumerate(items):
             task_queue.put((idx, item))
@@ -259,10 +256,11 @@ class ParallelProcessor:
             try:
                 idx, result, error = result_queue.get(timeout=1.0)
                 results[idx] = (result, error)
-                if error is None:
-                    self.stats.completed_tasks += 1
-                else:
-                    self.stats.failed_tasks += 1
+                with stats_lock:
+                    if error is None:
+                        self.stats.completed_tasks += 1
+                    else:
+                        self.stats.failed_tasks += 1
                 completed += 1
                 
                 if progress_callback:
@@ -273,6 +271,16 @@ class ParallelProcessor:
                     
         for worker in workers:
             worker.join(timeout=1.0)
+        
+        # Check for incomplete results (workers terminated unexpectedly)
+        unprocessed = sum(1 for r in results if r is None)
+        if unprocessed > 0:
+            with stats_lock:
+                self.stats.failed_tasks += unprocessed
+            # Fill None entries with error indication
+            for i, r in enumerate(results):
+                if r is None:
+                    results[i] = (None, RuntimeError("Worker terminated unexpectedly"))
             
         return results
         

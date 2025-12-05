@@ -76,6 +76,10 @@ def example_2_custom_config():
         return x ** 2
     
     results = processor.process_batch(items, compute_intensive)
+    
+    print(f"\nProcessed {len(results)} items")
+    print(f"Success: {sum(1 for _, err in results if err is None)}")
+    print(f"Failed: {sum(1 for _, err in results if err is not None)}")
     processor.print_summary()
 
 
@@ -210,16 +214,19 @@ def example_6_progress_tracking():
     processor = ParallelProcessor()
     items = list(range(50))
     
-    progress_data = {'completed': 0, 'total': len(items), 'last_update': time.time()}
+    progress_data = {'completed': 0, 'total': len(items), 'start_time': time.time(), 'last_update': time.time()}
     
     def progress_callback(completed, total):
         """Custom progress callback"""
         now = time.time()
-        elapsed = now - progress_data['last_update']
+        elapsed_since_update = now - progress_data['last_update']
+        elapsed_since_start = now - progress_data['start_time']
         
-        if elapsed > 0.5 or completed == total:
+        # Minimum threshold to avoid division by zero or misleading rates
+        min_elapsed = 0.1
+        if elapsed_since_update > 0.5 or completed == total:
             percent = completed / total * 100
-            rate = completed / (now - progress_data['last_update']) if elapsed > 0 else 0
+            rate = completed / max(elapsed_since_start, min_elapsed)
             
             print(f"\rProgress: {completed}/{total} ({percent:.1f}%) - {rate:.1f} items/s", end="")
             progress_data['last_update'] = now
@@ -231,6 +238,7 @@ def example_6_progress_tracking():
     results = processor.process_batch(items, slow_task, progress_callback)
     print()  # New line after progress
     
+    print(f"\nProcessed {len(results)} items")
     processor.print_summary()
 
 

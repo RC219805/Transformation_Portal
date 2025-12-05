@@ -14,10 +14,12 @@ import hashlib
 import json
 import pickle
 import shutil
+import threading
 import time
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import numpy as np
 
@@ -73,6 +75,7 @@ class IncrementalCache:
         self.config = config or CacheConfig()
         self.config.cache_dir.mkdir(parents=True, exist_ok=True)
         self.entries: Dict[str, CacheEntry] = {}
+        self._lock = threading.RLock()  # Reentrant lock for thread safety
         self._load_index()
         
     def _load_index(self):
@@ -122,7 +125,11 @@ class IncrementalCache:
                 print(f"Failed to save cache index: {e}")
                 
     def _compute_key(self, namespace: str, inputs: Dict[str, Any]) -> str:
-        """Compute content-based cache key"""
+        """Compute content-based cache key.
+        
+        Supported types: str, int, float, bool, bytes, np.ndarray, Path.
+        Other types fall back to str() representation which may not be deterministic.
+        """
         hasher = hashlib.sha256()
         hasher.update(namespace.encode())
         
@@ -141,6 +148,13 @@ class IncrementalCache:
                 if value.exists():
                     hasher.update(str(value.stat().st_mtime).encode())
             else:
+                # Unsupported type - warn user about potential non-deterministic keys
+                warnings.warn(
+                    f"Cache key input '{key}' has unsupported type '{type(value).__name__}'. "
+                    f"Using str() representation which may not be deterministic. "
+                    f"Supported types: str, int, float, bool, bytes, np.ndarray, Path.",
+                    UserWarning
+                )
                 hasher.update(str(value).encode())
                 
         return hasher.hexdigest()
@@ -158,34 +172,35 @@ class IncrementalCache:
         """
         key = self._compute_key(namespace, inputs)
         
-        if key not in self.entries:
-            return None
-            
-        entry = self.entries[key]
-        
-        if entry.is_expired(self.config.max_age_days):
-            self.invalidate(key)
-            return None
-            
-        if not entry.path.exists():
-            del self.entries[key]
-            return None
-            
-        try:
-            with open(entry.path, 'rb') as f:
-                result = pickle.load(f)
-            entry.last_accessed = time.time()
-            self._save_index()
-            
-            if self.config.verbose:
-                print(f"Cache hit: {namespace} ({key[:8]}...)")
+        with self._lock:
+            if key not in self.entries:
+                return None
                 
-            return result
-        except Exception as e:
-            if self.config.verbose:
-                print(f"Failed to load cached result: {e}")
-            self.invalidate(key)
-            return None
+            entry = self.entries[key]
+            
+            if entry.is_expired(self.config.max_age_days):
+                self.invalidate(key)
+                return None
+                
+            if not entry.path.exists():
+                del self.entries[key]
+                return None
+                
+            try:
+                with open(entry.path, 'rb') as f:
+                    result = pickle.load(f)
+                entry.last_accessed = time.time()
+                self._save_index()
+                
+                if self.config.verbose:
+                    print(f"Cache hit: {namespace} ({key[:8]}...)")
+                    
+                return result
+            except Exception as e:
+                if self.config.verbose:
+                    print(f"Failed to load cached result: {e}")
+                self.invalidate(key)
+                return None
             
     def put(
         self,
@@ -212,33 +227,34 @@ class IncrementalCache:
         
         result_path = cache_path / f"{key}.pkl"
         
-        try:
-            with open(result_path, 'wb') as f:
-                pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+        with self._lock:
+            try:
+                with open(result_path, 'wb') as f:
+                    pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    
+                size_bytes = result_path.stat().st_size
                 
-            size_bytes = result_path.stat().st_size
-            
-            entry = CacheEntry(
-                key=key,
-                path=result_path,
-                size_bytes=size_bytes,
-                created_at=time.time(),
-                last_accessed=time.time(),
-                dependencies=dependencies or set(),
-                metadata=metadata or {}
-            )
-            
-            self.entries[key] = entry
-            self._save_index()
-            
-            if self.config.verbose:
-                print(f"Cache stored: {namespace} ({key[:8]}...) - {size_bytes/1024:.1f} KB")
+                entry = CacheEntry(
+                    key=key,
+                    path=result_path,
+                    size_bytes=size_bytes,
+                    created_at=time.time(),
+                    last_accessed=time.time(),
+                    dependencies=dependencies or set(),
+                    metadata=metadata or {}
+                )
                 
-            self._enforce_limits()
-            
-        except Exception as e:
-            if self.config.verbose:
-                print(f"Failed to cache result: {e}")
+                self.entries[key] = entry
+                self._save_index()
+                
+                if self.config.verbose:
+                    print(f"Cache stored: {namespace} ({key[:8]}...) - {size_bytes/1024:.1f} KB")
+                    
+                self._enforce_limits()
+                
+            except Exception as e:
+                if self.config.verbose:
+                    print(f"Failed to cache result: {e}")
                 
     def get_or_compute(
         self,
