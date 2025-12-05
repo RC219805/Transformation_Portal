@@ -163,8 +163,9 @@ input_images/**/*.tiff
 *.mlmodel
 *.mlpackage
 
-# Model directories
+# Model directories (ML weights, not source code)
 models/
+!src/**/models/
 weights/
 checkpoints/
 pretrained/
