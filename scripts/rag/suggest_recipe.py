@@ -144,8 +144,6 @@ def rule_based_suggestion(scene_type: str, baseline_score: float) -> Dict[str, A
                 "alternatives": ["signature_estate_gentle"],
                 "warning": "Interior processing still risky - review results"
             }
-    
-    return suggestion
 
 
 def format_suggestion(suggestion: Dict[str, Any], sources: List[str] = None) -> str:
