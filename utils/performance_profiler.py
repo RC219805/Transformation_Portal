@@ -78,6 +78,7 @@ class GPUMonitor:
             elif torch.backends.mps.is_available():
                 return 'mps'
         except ImportError:
+            # torch is not installed; GPU monitoring will be disabled.
             pass
         return None
     
@@ -94,6 +95,7 @@ class GPUMonitor:
             elif self.backend == 'mps':
                 return torch.mps.current_allocated_memory() / 1024**2
         except Exception:
+            # Intentionally ignore all exceptions: GPU memory monitoring is optional.
             pass
         
         return None
@@ -111,6 +113,7 @@ class GPUMonitor:
                 util = pynvml.nvmlDeviceGetUtilizationRates(handle)
                 return float(util.gpu)
         except Exception:
+            # Intentionally ignore all exceptions: GPU utilization monitoring is optional.
             pass
         
         return None
@@ -129,6 +132,7 @@ class GPUMonitor:
                 # MPS doesn't have peak stats reset
                 pass
         except Exception:
+            # Intentionally ignore all exceptions: GPU peak memory reset is optional.
             pass
     
     def get_peak_memory_mb(self) -> Optional[float]:
@@ -144,6 +148,7 @@ class GPUMonitor:
             elif self.backend == 'mps':
                 return torch.mps.driver_allocated_memory() / 1024**2
         except Exception:
+            # Intentionally ignore all exceptions: GPU peak memory monitoring is optional.
             pass
         
         return None
