@@ -104,11 +104,10 @@ class CoreMLExporter:
 
             pytorch_model.eval()
 
-            example_input = torch.randn(1, 3, input_size[0], input_size[1])
-            # Move example input to the same device as the model
+            # Create example input on the same device as the model for efficiency
             params = list(pytorch_model.parameters())
-            if params:
-                example_input = example_input.to(params[0].device)
+            device = params[0].device if params else 'cpu'
+            example_input = torch.randn(1, 3, input_size[0], input_size[1], device=device)
 
             traced_model = torch.jit.trace(pytorch_model, example_input)
 
