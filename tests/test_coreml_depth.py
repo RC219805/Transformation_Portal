@@ -7,8 +7,8 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 
-import depth_pipeline.coreml_exporter as coreml_module
-from depth_pipeline.coreml_exporter import (
+from transformation_portal.depth.models import coreml_exporter as coreml_module
+from transformation_portal.depth.models.coreml_exporter import (
     CoreMLExporter,
     CoreMLDepthEstimator
 )
@@ -34,8 +34,8 @@ class TestCoreMLExporter:
         exporter = CoreMLExporter()
         assert exporter.cache_dir == Path("weights/coreml")
         
-    @patch('depth_pipeline.coreml_exporter.TORCH_AVAILABLE', False)
-    @patch('depth_pipeline.coreml_exporter.COREML_AVAILABLE', False)
+    @patch('transformation_portal.depth.models.coreml_exporter.TORCH_AVAILABLE', False)
+    @patch('transformation_portal.depth.models.coreml_exporter.COREML_AVAILABLE', False)
     def test_export_without_dependencies(self, temp_cache_dir):
         """Test export fails gracefully without dependencies"""
         exporter = CoreMLExporter(temp_cache_dir)
@@ -59,7 +59,7 @@ class TestCoreMLExporter:
         size_mb = exporter._get_model_size(test_file)
         assert size_mb >= 1.0
         
-    @patch('depth_pipeline.coreml_exporter.COREML_AVAILABLE', False)
+    @patch('transformation_portal.depth.models.coreml_exporter.COREML_AVAILABLE', False)
     def test_benchmark_without_coreml(self, temp_cache_dir):
         """Test benchmark fails gracefully without CoreML"""
         exporter = CoreMLExporter(temp_cache_dir)
@@ -76,8 +76,8 @@ class TestCoreMLDepthEstimator:
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
             
-    @patch('depth_pipeline.coreml_exporter.TORCH_AVAILABLE', False)
-    @patch('depth_pipeline.coreml_exporter.COREML_AVAILABLE', False)
+    @patch('transformation_portal.depth.models.coreml_exporter.TORCH_AVAILABLE', False)
+    @patch('transformation_portal.depth.models.coreml_exporter.COREML_AVAILABLE', False)
     def test_estimator_fails_without_dependencies(self, temp_cache_dir):
         """Test estimator fails gracefully without dependencies"""
         with pytest.raises(RuntimeError):
