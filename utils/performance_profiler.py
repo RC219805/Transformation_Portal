@@ -73,12 +73,17 @@ class GPUMonitor:
         """Detect available GPU backend."""
         try:
             import torch
-            if torch.cuda.is_available():
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 return 'cuda'
-            elif torch.backends.mps.is_available():
+            elif (hasattr(torch, 'backends')
+                  and hasattr(torch.backends, 'mps')
+                  and torch.backends.mps.is_available()):
                 return 'mps'
         except ImportError:
             # torch is not installed; GPU monitoring will be disabled.
+            pass
+        except (AttributeError, RuntimeError):
+            # Handle attribute errors or runtime errors during GPU detection.
             pass
         return None
     
