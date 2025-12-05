@@ -12,7 +12,7 @@ Performance targets:
 
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import numpy as np
 from PIL import Image
@@ -23,6 +23,7 @@ try:
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
+    nn = None  # Define nn as None when torch not available
 
 try:
     import coremltools as ct
@@ -49,13 +50,20 @@ class CoreMLExporter:
         ... )
     """
     
+    # Model ID mapping for Hugging Face
+    MODEL_ID_MAP = {
+        "depth_anything_v2_small": "depth-anything/Depth-Anything-V2-Small",
+        "depth_anything_v2_base": "depth-anything/Depth-Anything-V2-Base",
+        "depth_anything_v2_large": "depth-anything/Depth-Anything-V2-Large"
+    }
+    
     def __init__(self, cache_dir: Optional[Path] = None):
         self.cache_dir = cache_dir or Path("weights/coreml")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
     def export_depth_model(
         self,
-        pytorch_model: Optional[nn.Module] = None,
+        pytorch_model: Optional[Any] = None,
         model_name: str = "depth_anything_v2_small",
         input_size: Tuple[int, int] = (518, 518),
         output_path: Optional[Path] = None,
@@ -75,7 +83,12 @@ class CoreMLExporter:
             Path to exported CoreML model or None if export failed
         """
         if not TORCH_AVAILABLE or not COREML_AVAILABLE:
-            print("CoreML export requires torch and coremltools")
+            missing = []
+            if not TORCH_AVAILABLE:
+                missing.append("torch")
+            if not COREML_AVAILABLE:
+                missing.append("coremltools")
+            print(f"CoreML export requires the following missing dependencies: {', '.join(missing)}")
             return None
             
         if output_path is None:
@@ -94,6 +107,11 @@ class CoreMLExporter:
             pytorch_model.eval()
             
             example_input = torch.randn(1, 3, input_size[0], input_size[1])
+            # Move example input to the same device as the model
+            try:
+                example_input = example_input.to(next(pytorch_model.parameters()).device)
+            except StopIteration:
+                pass  # Model has no parameters, keep input on default device
             
             traced_model = torch.jit.trace(pytorch_model, example_input)
             
@@ -120,17 +138,11 @@ class CoreMLExporter:
             print(f"Failed to export CoreML model: {e}")
             return None
             
-    def _load_pytorch_model(self, model_name: str) -> nn.Module:
+    def _load_pytorch_model(self, model_name: str) -> Any:
         """Load PyTorch model from transformers or local cache"""
         from transformers import AutoModel
         
-        model_id_map = {
-            "depth_anything_v2_small": "depth-anything/Depth-Anything-V2-Small",
-            "depth_anything_v2_base": "depth-anything/Depth-Anything-V2-Base",
-            "depth_anything_v2_large": "depth-anything/Depth-Anything-V2-Large"
-        }
-        
-        model_id = model_id_map.get(model_name, model_name)
+        model_id = self.MODEL_ID_MAP.get(model_name, model_name)
         model = AutoModel.from_pretrained(model_id)
         return model
         
@@ -260,13 +272,7 @@ class CoreMLDepthEstimator:
         print(f"Using PyTorch model: {self.model_name}")
         from transformers import AutoModel
         
-        model_id_map = {
-            "depth_anything_v2_small": "depth-anything/Depth-Anything-V2-Small",
-            "depth_anything_v2_base": "depth-anything/Depth-Anything-V2-Base",
-            "depth_anything_v2_large": "depth-anything/Depth-Anything-V2-Large"
-        }
-        
-        model_id = model_id_map.get(self.model_name, self.model_name)
+        model_id = CoreMLExporter.MODEL_ID_MAP.get(self.model_name, self.model_name)
         self.model = AutoModel.from_pretrained(model_id)
         self.model.eval()
         self.use_coreml = False
