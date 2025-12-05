@@ -298,7 +298,7 @@ class ParallelProcessor:
     ):
         """Worker thread for GPU processing"""
         if gpu_id is not None and TORCH_AVAILABLE:
-            if torch.cuda.is_available():
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 torch.cuda.set_device(gpu_id)
             
         while True:
