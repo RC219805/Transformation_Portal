@@ -13,14 +13,14 @@ Features:
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict
 from dataclasses import dataclass
 from enum import Enum
 import json
 from datetime import datetime
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 
 
 class MaterialType(Enum):
@@ -353,7 +353,7 @@ class MaterialDetector:
         # Draw label background
         try:
             font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
-        except:
+        except Exception:
             font = ImageFont.load_default()
         
         bbox = draw.textbbox((0, 0), label, font=font)
