@@ -165,6 +165,7 @@ input_images/**/*.tiff
 
 # Model directories
 models/
+!src/transformation_portal/depth/models/
 weights/
 checkpoints/
 pretrained/
