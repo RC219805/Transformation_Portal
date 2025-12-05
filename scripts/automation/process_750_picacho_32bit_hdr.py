@@ -32,7 +32,7 @@ except ImportError:
 
 # Optional: scipy for advanced filtering
 try:
-    from scipy.ndimage import gaussian_filter  # noqa: F401
+    import scipy.ndimage  # noqa: F401 - check availability only
     HAS_SCIPY = True
 except ImportError:
     print("⚠ WARNING: scipy not available, using fallback filters")
