@@ -76,6 +76,7 @@ class IncrementalCache:
         self.config.cache_dir.mkdir(parents=True, exist_ok=True)
         self.entries: Dict[str, CacheEntry] = {}
         self._lock = threading.RLock()  # Reentrant lock for thread safety
+        self._warned_types: Set[str] = set()  # Track warned unsupported types
         self._load_index()
         
     def _load_index(self):
@@ -149,12 +150,16 @@ class IncrementalCache:
                     hasher.update(str(value.stat().st_mtime).encode())
             else:
                 # Unsupported type - warn user about potential non-deterministic keys
-                warnings.warn(
-                    f"Cache key input '{key}' has unsupported type '{type(value).__name__}'. "
-                    f"Using str() representation which may not be deterministic. "
-                    f"Supported types: str, int, float, bool, bytes, np.ndarray, Path.",
-                    UserWarning
-                )
+                # Only warn once per type to avoid log spam
+                type_name = type(value).__name__
+                if type_name not in self._warned_types:
+                    self._warned_types.add(type_name)
+                    warnings.warn(
+                        f"Cache key input '{key}' has unsupported type '{type_name}'. "
+                        f"Using str() representation which may not be deterministic. "
+                        f"Supported types: str, int, float, bool, bytes, np.ndarray, Path.",
+                        UserWarning
+                    )
                 hasher.update(str(value).encode())
                 
         return hasher.hexdigest()
