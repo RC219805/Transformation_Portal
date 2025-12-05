@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 # Phase 2 imports
-from tools.material_detector import MaterialDetector, MaterialType
+from tools.material_detector import MaterialDetector
 from tools.depth_aware_lut import (
     DepthAwareLUT, DepthAwareLUTConfig, ZoneLUTConfig, DepthZone
 )

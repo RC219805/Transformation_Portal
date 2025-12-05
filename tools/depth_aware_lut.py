@@ -406,22 +406,34 @@ class DepthAwareLUT:
         rgb = np.zeros_like(hsv)
 
         mask = (0 <= h_prime) & (h_prime < 1)
-        rgb[mask] = np.stack([c[mask], x[mask], np.zeros_like(c[mask])], axis=-1)
+        rgb[..., 0][mask] = c[mask]
+        rgb[..., 1][mask] = x[mask]
+        rgb[..., 2][mask] = 0
 
         mask = (1 <= h_prime) & (h_prime < 2)
-        rgb[mask] = np.stack([x[mask], c[mask], np.zeros_like(c[mask])], axis=-1)
+        rgb[..., 0][mask] = x[mask]
+        rgb[..., 1][mask] = c[mask]
+        rgb[..., 2][mask] = 0
 
         mask = (2 <= h_prime) & (h_prime < 3)
-        rgb[mask] = np.stack([np.zeros_like(c[mask]), c[mask], x[mask]], axis=-1)
+        rgb[..., 0][mask] = 0
+        rgb[..., 1][mask] = c[mask]
+        rgb[..., 2][mask] = x[mask]
 
         mask = (3 <= h_prime) & (h_prime < 4)
-        rgb[mask] = np.stack([np.zeros_like(c[mask]), x[mask], c[mask]], axis=-1)
+        rgb[..., 0][mask] = 0
+        rgb[..., 1][mask] = x[mask]
+        rgb[..., 2][mask] = c[mask]
 
         mask = (4 <= h_prime) & (h_prime < 5)
-        rgb[mask] = np.stack([x[mask], np.zeros_like(c[mask]), c[mask]], axis=-1)
+        rgb[..., 0][mask] = x[mask]
+        rgb[..., 1][mask] = 0
+        rgb[..., 2][mask] = c[mask]
 
         mask = (5 <= h_prime) & (h_prime < 6)
-        rgb[mask] = np.stack([c[mask], np.zeros_like(c[mask]), x[mask]], axis=-1)
+        rgb[..., 0][mask] = c[mask]
+        rgb[..., 1][mask] = 0
+        rgb[..., 2][mask] = x[mask]
 
         m = v - c
         rgb += m[..., np.newaxis]

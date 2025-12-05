@@ -51,7 +51,7 @@ class ExposureFusion:
         self,
         hdr_image: np.ndarray,
         num_brackets: int = 3,
-        ev_range: float = 2.0  # noqa: E226
+        ev_range: float = 2.0
     ) -> List[Tuple[float, np.ndarray]]:
         """
         Extract exposure brackets from HDR image.
@@ -245,14 +245,9 @@ class ExposureFusion:
         h, w = image.shape[:2]
         new_h, new_w = h // 2, w // 2
         
-        if image.ndim == 3:
-            img_pil = PILImage.fromarray((image * 255).astype(np.uint8))
-            downsampled = img_pil.resize((new_w, new_h), PILImage.BILINEAR)
-            return np.array(downsampled).astype(np.float32) / 255.0
-        else:
-            img_pil = PILImage.fromarray((image * 255).astype(np.uint8))
-            downsampled = img_pil.resize((new_w, new_h), PILImage.BILINEAR)
-            return np.array(downsampled).astype(np.float32) / 255.0
+        img_pil = PILImage.fromarray((image * 255).astype(np.uint8))
+        downsampled = img_pil.resize((new_w, new_h), PILImage.BILINEAR)
+        return np.array(downsampled).astype(np.float32) / 255.0
     
     def _upsample(self, image: np.ndarray, target_shape: Tuple[int, int]) -> np.ndarray:
         """Upsample to target shape."""
@@ -260,14 +255,9 @@ class ExposureFusion:
         
         target_h, target_w = target_shape
         
-        if image.ndim == 3:
-            img_pil = PILImage.fromarray((image * 255).astype(np.uint8))
-            upsampled = img_pil.resize((target_w, target_h), PILImage.BILINEAR)
-            return np.array(upsampled).astype(np.float32) / 255.0
-        else:
-            img_pil = PILImage.fromarray((image * 255).astype(np.uint8))
-            upsampled = img_pil.resize((target_w, target_h), PILImage.BILINEAR)
-            return np.array(upsampled).astype(np.float32) / 255.0
+        img_pil = PILImage.fromarray((image * 255).astype(np.uint8))
+        upsampled = img_pil.resize((target_w, target_h), PILImage.BILINEAR)
+        return np.array(upsampled).astype(np.float32) / 255.0
     
     def _compute_quality_weight(self, image: np.ndarray) -> np.ndarray:
         """Compute quality weight based on contrast, saturation, and well-exposedness."""
@@ -382,23 +372,24 @@ class ExposureFusion:
         return adjusted.clip(0, 1)
     
     def _adjust_saturation(self, image: np.ndarray, factor: float) -> np.ndarray:
-        """Adjust saturation by factor."""
+        """Adjust saturation by factor using vectorized operations."""
         if image.ndim != 3:
             return image
         
-        # Convert to HSV
-        from colorsys import rgb_to_hsv, hsv_to_rgb
+        r, g, b = image[..., 0], image[..., 1], image[..., 2]
         
+        # Use luminance as the grayscale anchor for saturation adjustment
+        # Standard Rec. 709 luminance coefficients
+        gray = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        
+        # Saturation adjustment: scale the distance from grayscale
+        # result = gray + (original - gray) * factor
         result = np.zeros_like(image)
+        result[..., 0] = gray + (r - gray) * factor
+        result[..., 1] = gray + (g - gray) * factor
+        result[..., 2] = gray + (b - gray) * factor
         
-        for i in range(image.shape[0]):
-            for j in range(image.shape[1]):
-                r, g, b = image[i, j]
-                h, s, v = rgb_to_hsv(r, g, b)
-                s = min(s * factor, 1.0)
-                result[i, j] = hsv_to_rgb(h, s, v)
-        
-        return result
+        return np.clip(result, 0, 1)
 
 
 def main():

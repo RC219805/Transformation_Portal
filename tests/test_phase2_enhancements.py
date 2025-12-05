@@ -8,21 +8,17 @@ and exposure fusion.
 
 import pytest
 import numpy as np
-from pathlib import Path
-import tempfile
 import time
 import json
 
 # Import Phase 2 modules
 from tools.material_detector import (
-    MaterialDetector, MaterialType, MaterialConfidence, MaterialDetectionResult
+    MaterialDetector, MaterialType, MaterialDetectionResult
 )
 from tools.depth_aware_lut import (
     DepthAwareLUT, DepthAwareLUTConfig, ZoneLUTConfig, DepthZone, LUTReader
 )
-from utils.performance_profiler import (
-    PerformanceProfiler, StageMetrics, SystemSnapshot
-)
+from utils.performance_profiler import PerformanceProfiler
 from utils.exposure_fusion import ExposureFusion, ExposureTarget
 
 
@@ -315,7 +311,9 @@ class TestPerformanceProfiler:
         with profiler.stage('test_stage', items=10):
             # Simulate work
             time.sleep(0.1)
-            data = np.random.rand(1000, 1000)  # Allocate memory
+            # Allocate memory and explicitly delete to avoid unused variable warning
+            data = np.random.rand(1000, 1000)
+            del data
         
         assert len(profiler.stages) == 1
         stage = profiler.stages[0]
@@ -354,6 +352,9 @@ class TestPerformanceProfiler:
             
             data2 = np.random.rand(1000, 1000)
             profiler.update_peak_memory()
+            
+            # Keep references alive to prevent garbage collection during test
+            _ = [data1, data2]
         
         stage = profiler.stages[0]
         assert stage.memory_peak >= stage.memory_start
@@ -594,6 +595,9 @@ class TestPhase2Integration:
         with profiler.stage('fusion', items=1):
             bracket_images = [b[1] for b in brackets]
             fused = fusion.fuse_exposures(bracket_images)
+            # Validate fused output
+            assert isinstance(fused, np.ndarray)
+            assert fused.shape == hdr_image.shape
         
         report = profiler.generate_report()
         
