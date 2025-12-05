@@ -19,11 +19,9 @@ from PIL import Image
 
 try:
     import torch
-    import torch.nn as nn
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
-    nn = None  # Define nn as None when torch not available
 
 try:
     import coremltools as ct
@@ -108,10 +106,9 @@ class CoreMLExporter:
             
             example_input = torch.randn(1, 3, input_size[0], input_size[1])
             # Move example input to the same device as the model
-            try:
-                example_input = example_input.to(next(pytorch_model.parameters()).device)
-            except StopIteration:
-                pass  # Model has no parameters, keep input on default device
+            params = list(pytorch_model.parameters())
+            if params:
+                example_input = example_input.to(params[0].device)
             
             traced_model = torch.jit.trace(pytorch_model, example_input)
             
