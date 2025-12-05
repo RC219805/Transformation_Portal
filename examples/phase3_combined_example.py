@@ -17,7 +17,7 @@ from PIL import Image
 try:
     from utils.parallel_processor import ParallelProcessor, WorkerConfig
     from utils.incremental_cache import IncrementalCache, CacheConfig
-    from depth_pipeline.coreml_exporter import CoreMLDepthEstimator
+    from transformation_portal.depth.models.coreml_exporter import CoreMLDepthEstimator
     MODULES_AVAILABLE = True
 except ImportError as e:
     print(f"Import error: {e}")

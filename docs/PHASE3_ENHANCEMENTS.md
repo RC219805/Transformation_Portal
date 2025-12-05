@@ -107,7 +107,7 @@ Convert PyTorch depth models to CoreML format for Apple Neural Engine optimizati
 ### Export Models
 
 ```python
-from depth_pipeline.coreml_exporter import CoreMLExporter
+from transformation_portal.depth.models.coreml_exporter import CoreMLExporter
 
 exporter = CoreMLExporter()
 
@@ -118,14 +118,14 @@ coreml_path = exporter.export_depth_model(
 )
 
 # Export all models
-from depth_pipeline.coreml_exporter import export_all_models
+from transformation_portal.depth.models.coreml_exporter import export_all_models
 export_all_models()
 ```
 
 ### Use CoreML Estimator
 
 ```python
-from depth_pipeline.coreml_exporter import CoreMLDepthEstimator
+from transformation_portal.depth.models.coreml_exporter import CoreMLDepthEstimator
 
 # Automatically uses CoreML if available
 estimator = CoreMLDepthEstimator(
@@ -277,7 +277,7 @@ cache.clear()
 from pathlib import Path
 from utils.parallel_processor import ParallelProcessor, WorkerConfig
 from utils.incremental_cache import IncrementalCache
-from depth_pipeline.coreml_exporter import CoreMLDepthEstimator
+from transformation_portal.depth.models.coreml_exporter import CoreMLDepthEstimator
 
 # Initialize components
 cache = IncrementalCache()
@@ -348,7 +348,7 @@ for config in configs:
 
 ```python
 # CoreML benchmark
-from depth_pipeline.coreml_exporter import CoreMLDepthEstimator
+from transformation_portal.depth.models.coreml_exporter import CoreMLDepthEstimator
 
 estimator = CoreMLDepthEstimator()
 results = estimator.benchmark(num_iterations=100)
@@ -389,7 +389,7 @@ Phase 3 is **fully backward compatible** with Phase 1 and Phase 2. Existing code
 
 2. **Add CoreML depth** (if on Apple Silicon)
    ```python
-   from depth_pipeline.coreml_exporter import CoreMLDepthEstimator
+   from transformation_portal.depth.models.coreml_exporter import CoreMLDepthEstimator
    estimator = CoreMLDepthEstimator()
    ```
 
