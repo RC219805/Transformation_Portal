@@ -8,3 +8,7 @@ pytest>=8,<10
 pytest-cov>=4.0,<8
 pytest-asyncio>=0.23,<1
 hypothesis>=6,<7
+
+# Phase 2 dependencies
+psutil>=5.9.0
+scikit-image>=0.21
