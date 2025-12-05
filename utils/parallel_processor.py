@@ -95,7 +95,7 @@ class ParallelProcessor:
             if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 self.num_gpus = torch.cuda.device_count()
                 self.gpu_available = True
-            elif (hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and 
+            elif (hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and
                   torch.backends.mps.is_available()):
                 self.num_gpus = 1
                 self.mps_available = True
