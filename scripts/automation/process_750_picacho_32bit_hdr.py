@@ -14,7 +14,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, Tuple
 import json
 
 import numpy as np
@@ -32,7 +32,7 @@ except ImportError:
 
 # Optional: scipy for advanced filtering
 try:
-    from scipy.ndimage import gaussian_filter
+    from scipy.ndimage import gaussian_filter  # noqa: F401
     HAS_SCIPY = True
 except ImportError:
     print("⚠ WARNING: scipy not available, using fallback filters")
@@ -458,7 +458,6 @@ def process_scene_hdr(
     has_alpha = False
     if hdr_array.shape[2] == 4:
         print("  ⚠ Alpha channel detected (RGBA format)")
-        alpha = hdr_array[:, :, 3]
         hdr_array = hdr_array[:, :, :3]  # Extract RGB
         has_alpha = True
         print("  ✓ Alpha channel separated (will process RGB only)")

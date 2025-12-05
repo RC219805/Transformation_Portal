@@ -6,7 +6,7 @@ Intelligent prediction of processing time based on image metadata and historical
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 import json
 from datetime import datetime, timedelta
 

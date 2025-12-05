@@ -7,7 +7,7 @@ Validates tone mapping, measures quality metrics, generates visual reports.
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Any
 import json
 from datetime import datetime
 
@@ -241,7 +241,7 @@ class ImageComparison:
         try:
             font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 36)
             font_small = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
-        except:
+        except OSError:
             font = ImageFont.load_default()
             font_small = font
         

@@ -7,7 +7,6 @@ Advanced alpha channel handling with multiple compositing modes.
 
 from pathlib import Path
 from typing import Tuple, Optional, Literal
-from enum import Enum
 
 import numpy as np
 from PIL import Image

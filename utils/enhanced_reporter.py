@@ -10,7 +10,6 @@ from typing import Dict, List, Optional, Any
 import json
 from datetime import datetime
 
-import numpy as np
 
 
 class ProcessingReport:

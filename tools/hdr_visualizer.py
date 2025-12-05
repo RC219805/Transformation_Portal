@@ -6,9 +6,6 @@ Generate histograms and statistical visualizations for HDR processing analysis.
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
-import json
-from datetime import datetime
 
 import numpy as np
 from PIL import Image
@@ -17,7 +14,6 @@ try:
     import matplotlib
     matplotlib.use('Agg')  # Non-interactive backend
     import matplotlib.pyplot as plt
-    from matplotlib.figure import Figure
     HAS_MATPLOTLIB = True
 except ImportError:
     HAS_MATPLOTLIB = False

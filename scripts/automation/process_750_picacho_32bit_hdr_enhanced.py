@@ -15,7 +15,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any
 
 import numpy as np
 from PIL import Image
@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from utils.adaptive_tone_mapping import AdaptiveToneMapper
 from utils.alpha_compositor import AlphaCompositor
 from utils.enhanced_reporter import ProcessingReport, create_client_deliverable_summary
-from tools.time_predictor import ProcessingTimePredictor, ImageMetadata
+from tools.time_predictor import ProcessingTimePredictor
 from tools.hdr_visualizer import HDRVisualizer
 from tools.qa_validator import QAValidator
 
@@ -311,7 +311,7 @@ def process_scene_hdr_enhanced(
         
         # Generate alpha variants
         alpha_dir = output_dir / "alpha_variants" / scene_name
-        alpha_paths = compositor.save_variants(
+        compositor.save_variants(
             enhanced_rgba,
             alpha_dir,
             f"750Picacho_{scene_name}",
@@ -518,7 +518,7 @@ def main():
     print("📄 PHASE 1: GENERATING ENHANCED REPORTS")
     print("=" * 80)
     
-    report_paths = reporter.finalize(include_thumbnails=True)
+    reporter.finalize(include_thumbnails=True)
     
     # Generate client summary
     client_summary = create_client_deliverable_summary(output_dir, "750 Picacho Lane", results)
