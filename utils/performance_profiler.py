@@ -14,7 +14,7 @@ Features:
 
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from contextlib import contextmanager
 import time
@@ -217,14 +217,13 @@ class PerformanceProfiler:
         self.stage_memory_peak = self.stage_memory_start
         self.gpu_monitor.reset_peak_memory()
         
-        snapshot_start = self._take_snapshot()
         
         try:
             yield self
         finally:
             # End stage
             duration = time.time() - self.stage_start
-            snapshot_end = self._take_snapshot()
+            self._take_snapshot()
             
             memory_end = self.process.memory_info().rss / 1024**2
             memory_peak = max(self.stage_memory_peak, memory_end)
@@ -515,7 +514,6 @@ def profile_function(func: Callable, *args, **kwargs) -> tuple:
 # Example usage
 if __name__ == '__main__':
     import numpy as np
-    from PIL import Image
     
     # Example: Profile image processing pipeline
     profiler = PerformanceProfiler(session_id="example_pipeline")

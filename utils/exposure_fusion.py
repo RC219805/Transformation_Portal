@@ -13,7 +13,7 @@ Features:
 """
 
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
@@ -51,7 +51,7 @@ class ExposureFusion:
         self,
         hdr_image: np.ndarray,
         num_brackets: int = 3,
-        ev_range: float = 2.0
+        ev_range: float = 2.0  # noqa: E226
     ) -> List[Tuple[float, np.ndarray]]:
         """
         Extract exposure brackets from HDR image.
