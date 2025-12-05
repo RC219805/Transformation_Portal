@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image
 
 try:
-    from depth_pipeline.coreml_exporter import (
+    from transformation_portal.depth.models.coreml_exporter import (
         CoreMLExporter,
         CoreMLDepthEstimator
     )
