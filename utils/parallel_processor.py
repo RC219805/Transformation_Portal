@@ -26,6 +26,7 @@ try:
     import torch
     TORCH_AVAILABLE = True
 except ImportError:
+    torch = None  # type: ignore[assignment]  # noqa: N816
     TORCH_AVAILABLE = False
 
 
@@ -91,10 +92,11 @@ class ParallelProcessor:
         self.mps_available = False
         
         if TORCH_AVAILABLE:
-            if torch.cuda.is_available():
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
                 self.num_gpus = torch.cuda.device_count()
                 self.gpu_available = True
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            elif (hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and
+                  torch.backends.mps.is_available()):
                 self.num_gpus = 1
                 self.mps_available = True
                 
