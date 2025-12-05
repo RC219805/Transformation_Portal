@@ -376,34 +376,18 @@ class ExposureFusion:
         if image.ndim != 3:
             return image
         
-        # Vectorized RGB to HSV conversion
         r, g, b = image[..., 0], image[..., 1], image[..., 2]
         
-        max_c = np.maximum(np.maximum(r, g), b)
-        min_c = np.minimum(np.minimum(r, g), b)
-        diff = max_c - min_c
+        # Use luminance as the grayscale anchor for saturation adjustment
+        # Standard Rec. 709 luminance coefficients
+        gray = 0.2126 * r + 0.7152 * g + 0.0722 * b
         
-        # Saturation
-        s = np.zeros_like(max_c)
-        s[max_c != 0] = diff[max_c != 0] / max_c[max_c != 0]
-        
-        # Apply factor to saturation
-        s_new = np.clip(s * factor, 0, 1)
-        
-        # Compute scale factor for RGB channels to achieve new saturation
-        # When saturation changes, we scale the distance from the grayscale value
-        gray = max_c  # Use max as reference (value in HSV)
-        
-        # Avoid division by zero
-        scale = np.ones_like(s)
-        nonzero_s = s > 1e-8
-        scale[nonzero_s] = s_new[nonzero_s] / s[nonzero_s]
-        
-        # Apply saturation adjustment
+        # Saturation adjustment: scale the distance from grayscale
+        # result = gray + (original - gray) * factor
         result = np.zeros_like(image)
-        result[..., 0] = gray + (r - gray) * scale
-        result[..., 1] = gray + (g - gray) * scale
-        result[..., 2] = gray + (b - gray) * scale
+        result[..., 0] = gray + (r - gray) * factor
+        result[..., 1] = gray + (g - gray) * factor
+        result[..., 2] = gray + (b - gray) * factor
         
         return np.clip(result, 0, 1)
 
