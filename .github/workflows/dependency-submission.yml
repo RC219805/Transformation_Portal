@@ -132,9 +132,9 @@ jobs:
           PIP_NO_BUILD_ISOLATION: '1'
         with:
           # Process from repository root
-          path: '.'
+          filePath: '.'
           # Scan for Python dependencies
-          detectorCategories: 'Pip'
+          detectorsCategories: 'Pip'
           # Exclude directories that don't contain dependencies
           directoryExclusionList: '.git,node_modules,deprecated,archive,tests,docs,examples,.pytest_cache,__pycache__,.tox,.mypy_cache'
         continue-on-error: false
