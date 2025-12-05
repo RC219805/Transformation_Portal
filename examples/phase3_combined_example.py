@@ -87,8 +87,10 @@ def example_1_sequential_baseline():
         # Estimate depth (slow)
         depth = estimate_depth_simple(image)
         
-        # Apply simple effect
-        enhanced = image * 1.2
+        # Apply simple depth-aware effect
+        # Modulate enhancement by depth: brighten foreground (shallower depth)
+        depth_factor = 1.0 + 0.2 * (1.0 - depth)  # 1.2 for shallow, 1.0 for deep
+        enhanced = image * depth_factor[:, :, np.newaxis]
         enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
         
         # Save
@@ -131,8 +133,10 @@ def example_2_parallel_only():
         gray = np.mean(image, axis=2)
         depth = (gray - gray.min()) / (gray.max() - gray.min())
         
-        # Apply effect
-        enhanced = image * 1.2
+        # Use depth to modulate enhancement: deeper pixels get more boost
+        # Expand depth to shape (H, W, 1) for broadcasting
+        depth_expanded = np.expand_dims(depth, axis=2)
+        enhanced = image * (1.0 + 0.2 * depth_expanded)
         enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
         
         # Save
@@ -149,7 +153,8 @@ def example_2_parallel_only():
     results = processor.process_batch(image_paths, process_image)
     elapsed = time.time() - start_time
     
-    print(f"\n✓ Parallel processing complete")
+    success_count = sum(1 for _, err in results if err is None)
+    print(f"\n✓ Parallel processing complete ({success_count}/{len(results)} successful)")
     processor.print_summary()
     
     return elapsed
@@ -190,8 +195,9 @@ def example_3_with_caching():
             inputs={"image": image_path}
         )
         
-        # Apply effect (not cached)
-        enhanced = image * 1.2
+        # Apply depth-aware effect (not cached)
+        depth_expanded = np.expand_dims(depth, axis=2)
+        enhanced = image * (1.0 + 0.2 * depth_expanded)
         enhanced = np.clip(enhanced, 0, 255).astype(np.uint8)
         
         output_path = output_dir / f"result_{image_path.stem}.jpg"
@@ -251,7 +257,7 @@ def example_4_full_optimization():
     try:
         depth_estimator = CoreMLDepthEstimator(prefer_coreml=True)
         print(f"Depth backend: {'CoreML' if depth_estimator.use_coreml else 'PyTorch'}")
-    except:
+    except Exception:
         print("CoreML/PyTorch not available, using mock depth estimator")
         depth_estimator = None
     

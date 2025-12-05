@@ -14,8 +14,7 @@ from PIL import Image
 try:
     from depth_pipeline.coreml_exporter import (
         CoreMLExporter,
-        CoreMLDepthEstimator,
-        export_all_models
+        CoreMLDepthEstimator
     )
     MODULES_AVAILABLE = True
 except ImportError as e:
@@ -99,7 +98,8 @@ def example_3_depth_estimation():
     
     image_path = input_dir / "test_depth.jpg"
     if not image_path.exists():
-        image_path = list(input_dir.glob("*.jpg"))[0] if list(input_dir.glob("*.jpg")) else None
+        jpg_files = list(input_dir.glob("*.jpg"))
+        image_path = jpg_files[0] if jpg_files else None
         
     if not image_path or not image_path.exists():
         print(f"No test image found in {input_dir}")
