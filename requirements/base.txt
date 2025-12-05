@@ -81,3 +81,6 @@ typing-extensions==4.15.0
     # via
     #   -c all.txt
     #   typer
+
+# Phase 2: Performance profiling
+psutil>=5.9.0
