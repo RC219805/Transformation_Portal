@@ -278,8 +278,10 @@ pluggy==1.6.0
     #   pytest
     #   pytest-cov
     #   tox
-psutil==7.1.3
-    # via accelerate
+psutil==5.9.8
+    # via
+    #   -r base.in
+    #   accelerate
 pycodestyle==2.14.0
     # via
     #   autopep8
@@ -369,8 +371,10 @@ safety==3.7.0
     # via -r ci.in
 safety-schemas==0.0.16
     # via safety
-scikit-image==0.25.2
-    # via controlnet-aux
+scikit-image==0.24.0
+    # via
+    #   -r base.in
+    #   controlnet-aux
 scikit-learn==1.7.2
     # via -r base.in
 scipy==1.15.3
@@ -452,7 +456,7 @@ typing-extensions==4.15.0
     #   typing-inspection
 typing-inspection==0.4.2
     # via pydantic
-urllib3==2.5.0
+urllib3==2.6.0
     # via
     #   requests
     #   twine
