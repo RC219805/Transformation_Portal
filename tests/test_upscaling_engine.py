@@ -341,6 +341,9 @@ class TestEdgeCases:
     
     def test_invalid_model_type(self):
         """Test error on invalid model."""
+        if not TORCH_AVAILABLE:
+            pytest.skip("PyTorch required for model loading test")
+        
         config = UpscalingConfig(device="cpu")
         engine = UpscalingEngine(config)
         

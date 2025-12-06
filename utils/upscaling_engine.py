@@ -2,6 +2,8 @@
 """
 Advanced Image Upscaling Engine - Production Grade
 ===================================================
+# NOTE: Using 'from __future__ import annotations' to allow torch type hints
+# even when PyTorch is not installed. This defers annotation evaluation.
 
 High-quality, 16-bit preserving upscaling with multiple model support:
 - Real-ESRGAN (4x, robust for noisy inputs)
@@ -18,6 +20,7 @@ Key Features:
 - Scalable tiling for gigapixel images
 - Model caching for batch efficiency
 """
+from __future__ import annotations
 
 import hashlib
 import logging
@@ -36,6 +39,22 @@ try:
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
+    # Create a dummy torch module for type annotations and decorators
+    # when PyTorch is not installed
+    class _DummyTorch:
+        """Stub for torch when not available."""
+        class nn:
+            Module = object
+        @staticmethod
+        def no_grad():
+            """No-op decorator when torch is not available."""
+            def decorator(func):
+                return func
+            return decorator
+        @staticmethod
+        def device(x):
+            return x
+    torch = _DummyTorch()
 
 try:
     from tifffile import TiffFile, imwrite as tiff_write
