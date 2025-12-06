@@ -2,7 +2,46 @@
 
 ## Overview
 
-The **Transformation Portal Specialist** is a custom GitHub Copilot agent specifically designed for this repository. It has deep expertise in luxury real estate rendering, architectural visualization, and professional image/video processing workflows.
+The Transformation Portal repository provides **two specialized custom GitHub Copilot agents** designed to work together:
+
+1. **Transformation Portal Specialist** - Implementation-focused expert for pipelines, AI/ML integration, and processing workflows
+2. **Transformation Portal Architect** - System design authority for architecture, security, and infrastructure
+
+### Agent Roles & Differentiation
+
+| Aspect | Specialist | Architect |
+|--------|-----------|-----------|
+| **Focus** | Implementation details, algorithms, optimizations | System design, integration, security |
+| **Scope** | Individual pipelines and components | Cross-module interactions and contracts |
+| **Expertise** | Depth processing, Material Response, color grading | Architecture patterns, CI/CD, dependency management |
+| **When to Use** | "Implement depth-based bokeh", "Optimize batch processing" | "Design API for batch processor", "Review security of input handler" |
+| **Tone** | Technical and precise | Authoritative and collaborative |
+| **Deliverables** | Working code with tests | Architecture diagrams, ADRs, security audits |
+
+### Choosing the Right Agent
+
+**Use @transformation-portal-specialist when:**
+- Implementing new image/video processing features
+- Optimizing pipeline performance
+- Working with AI/ML models (SDXL, ControlNet, Real-ESRGAN)
+- Debugging FFmpeg filter graphs
+- Adding tests for existing functionality
+
+**Use @transformation-portal-architect when:**
+- Designing new modules or system components
+- Reviewing security implications of changes
+- Refactoring legacy code for better maintainability
+- Managing dependencies and version conflicts
+- Setting up CI/CD workflows
+- Creating API contracts between components
+
+**Use both agents in sequence when:**
+1. Architect designs the system structure
+2. Specialist implements the detailed functionality
+
+## Transformation Portal Specialist
+
+The **Transformation Portal Specialist** has deep expertise in luxury real estate rendering, architectural visualization, and professional image/video processing workflows.
 
 **NEW in v2.0**: The agent has been significantly enhanced with 8 advanced capabilities that transform it into an intelligent development platform. See [Agent Enhancements v2.0](../.github/agents/AGENT_ENHANCEMENTS_v2.md) for complete details.
 
@@ -390,41 +429,183 @@ The agent learns from the repository's evolving patterns. Update it when:
 
 To update: Edit `.github/agents/transformation-portal-specialist.md`
 
+## Transformation Portal Architect
+
+The **Transformation Portal Architect** is a senior technical authority responsible for holistic system design, security, and long-term health of the repository.
+
+### What Makes the Architect Special?
+
+Unlike the Specialist which focuses on implementation details, the Architect ensures components fit together into a secure, maintainable, and scalable system.
+
+### Core Responsibilities
+
+1. **System Architecture & Integration**
+   - Design interactions between Depth, Lux Render, and Video pipelines
+   - Prevent tight coupling and ensure modularity
+   - Define clear component boundaries
+
+2. **Security & Compliance**
+   - Audit code for vulnerabilities
+   - Manage dependency supply chains
+   - Ensure safe handling of assets and metadata
+
+3. **Technical Debt Management**
+   - Identify aging patterns
+   - Propose refactoring strategies
+   - Enforce codebase philosophy
+
+4. **Infrastructure & DevOps**
+   - Manage CI/CD workflows
+   - Docker containerization
+   - Deployment configurations
+
+5. **API Governance**
+   - Define contracts between backend and interfaces
+   - Ensure consistent API design patterns
+   - Validate integration points
+
+### Example Usage
+
+#### Designing New Modules
+```
+@transformation-portal-architect I want to add a web API to the batch 
+processor. Design the architecture including async processing and queue management.
+```
+
+**What you'll get:**
+- FastAPI wrapper design
+- Async processing strategy (Celery/Redis recommendations)
+- Directory structure proposal
+- Pydantic models for request/response
+- Security considerations
+- Integration points with existing pipelines
+
+#### Security Reviews
+```
+@transformation-portal-architect Review the security of this file upload 
+handler. Are there any path traversal vulnerabilities?
+```
+
+**What you'll get:**
+- Security audit of the code
+- Identification of vulnerabilities
+- Secure validation layer implementation
+- Best practices for file handling
+- OWASP compliance recommendations
+
+#### Refactoring Strategy
+```
+@transformation-portal-architect The legacy batch processor has grown to 
+2000 lines. How should we refactor it for better maintainability?
+```
+
+**What you'll get:**
+- Refactoring strategy with phases
+- Component separation plan
+- Backward compatibility approach
+- Testing strategy for refactored code
+- Architectural Decision Record (ADR) draft
+
+#### CI/CD Pipeline Design
+```
+@transformation-portal-architect Create a CI/CD pipeline for automated 
+testing and deployment of the image processing service.
+```
+
+**What you'll get:**
+- GitHub Actions workflow design
+- Test matrix configuration (Python versions, GPU/CPU)
+- Docker container build strategy
+- Deployment automation
+- Rollback procedures
+
+### Architect Communication Style
+
+- **Authoritative but Collaborative**: Uses "we should" and "I recommend"
+- **Big Picture Focused**: Considers system-wide impacts
+- **Safety-First**: Prioritizes stability and security
+
+### Architect Constraints
+
+The Architect **will not**:
+- Write low-level image processing algorithms (delegates to Specialist)
+- Suggest experimental ML models without stability assessment
+- Make changes without referencing codebase philosophy
+
+The Architect **always**:
+- References `docs/codebase_philosophy.md` when critiquing style
+- Considers cross-module impacts
+- Provides security assessments
+- Documents architectural decisions
+
+### When to Use Both Agents Together
+
+For complex features, use a two-phase approach:
+
+**Phase 1: Architecture Design**
+```
+@transformation-portal-architect Design a real-time preview system for 
+depth effects with browser interface
+```
+- Get architecture design, component separation, API contracts
+
+**Phase 2: Implementation**
+```
+@transformation-portal-specialist Implement the depth effect preview 
+renderer based on the architecture design
+```
+- Get working code, tests, optimizations
+
+This ensures both good design **and** quality implementation.
+
 ## Integration with Development Workflow
 
-### Development Cycle with Agent
+### Development Cycle with Both Agents
 
 ```
 1. Design Phase
-   └─ @agent: "Design architecture for [feature]"
-
+   └─ @transformation-portal-architect: "Design architecture for [feature]"
+   
 2. Implementation Phase  
-   └─ @agent: "Implement [component] with tests"
+   └─ @transformation-portal-specialist: "Implement [component] with tests"
 
 3. Optimization Phase
-   └─ @agent: "Profile and optimize [code]"
+   └─ @transformation-portal-specialist: "Profile and optimize [code]"
 
 4. Review Phase
-   └─ @agent: "Review this implementation"
+   ├─ @transformation-portal-architect: "Review system integration"
+   └─ @transformation-portal-specialist: "Review implementation details"
 
 5. Documentation Phase
-   └─ @agent: "Document [feature] with examples"
+   └─ @transformation-portal-specialist: "Document [feature] with examples"
 ```
 
 ### CI/CD Integration
 
-The agent understands CI/CD constraints:
+Both agents understand CI/CD constraints:
 - Tests must run in < 5 minutes
 - Mock heavy dependencies (ML models, FFmpeg for unit tests)
 - Python 3.10/3.11/3.12 compatibility
 - Linting with flake8 and pylint
 - Code coverage expectations
 
+The **Architect** additionally manages:
+- Workflow design and optimization
+- Docker container configurations
+- Deployment automation
+- Security scanning integration
+
 ## Resources
 
-- **Agent File**: `.github/agents/transformation-portal-specialist.md`
+### Agent Files
+- **Specialist**: `.github/agents/transformation-portal-specialist.md`
+- **Architect**: `.github/agents/transformation-portal-architect.md`
 - **Agent README**: `.github/agents/README.md`
+
+### Documentation
 - **Repository Docs**: `docs/`
+- **Agent Enhancements**: `.github/agents/AGENT_ENHANCEMENTS_v2.md`
+- **RAG System**: `.github/agents/rag_system/`
 - **Copilot Instructions**: `.github/copilot-instructions.md`
 
 ## Support
