@@ -1,0 +1,45 @@
+# Lux Depth V2 - Repository Integration Dependencies
+# ====================================================
+# Use this file when integrating lux_depth_v2 within Transformation Portal.
+# This ensures dependency alignment with the repository's vetted ML stack.
+#
+# For standalone usage (outside Transformation Portal), use requirements.txt
+
+# Lux Depth V2 specific dependencies
+# -----------------------------------
+
+# Core image processing
+numpy>=1.23
+opencv-python>=4.8
+tifffile>=2023.7.10
+tqdm>=4.66
+
+# PyTorch (use repository's version or install separately)
+# torch>=2.1
+# torchvision>=0.15
+
+# FastAPI service mode
+fastapi>=0.104.0,<1
+uvicorn[standard]>=0.24.0,<1
+
+# Rate limiting for service mode security
+slowapi>=0.1.9,<1
+
+# ONNX runtime for material segmentation
+onnxruntime>=1.16.0,<2
+
+# Optional: Transformers for SegFormer backend
+transformers>=4.40
+
+# SECURITY NOTE: The following packages are EXCLUDED due to vulnerabilities:
+# - basicsr (CVE-2024-27763 - command injection)
+# - realesrgan (depends on vulnerable basicsr)
+# - gfpgan (depends on vulnerable basicsr)
+#
+# Use the repository's vendored basicsr_tp package instead.
+# See: /Users/rc/Transformation_Portal/basicsr_tp/
+#
+# For Real-ESRGAN functionality, use alternative upscaling backends:
+# - torchvision (built-in, use --upscaler-backend torch)
+# - ONNX models (use --upscaler-backend onnx)
+# - Custom torch-based upscaling (see lux_depth_v2/upscaling.py)

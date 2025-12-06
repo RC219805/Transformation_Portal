@@ -87,6 +87,10 @@ transform-analyze = "transformation_portal.cli:analyze_cli"
 # Luxury TIFF Batch Processor CLI
 luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
 
+# Lux Depth V2 Pipeline CLI (production-oriented, GPU-accelerated)
+lux-depth-v2 = "lux_depth_v2.cli:main"
+lux-depth-v2-service = "lux_depth_v2.service:main"
+
 # Legacy compatibility (can be removed in future versions)
 luxury_video_grader = "transformation_portal.processors.luxury_video_master_grader:main"
 lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"

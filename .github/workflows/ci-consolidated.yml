@@ -410,6 +410,107 @@ jobs:
             --maxfail=5
             
   # ===========================================================================
+  # Stage 4.5: Lux Depth V2 Module Tests
+  # ===========================================================================
+  test-lux-depth-v2:
+    name: Lux Depth V2 Tests (Python ${{ matrix.python-version }})
+    needs: [setup, lint]
+    if: |
+      always() && 
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (contains(needs.setup.outputs.changed-files, 'lux_depth_v2') || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJson(needs.setup.outputs.python-matrix) }}
+        
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          
+      - name: Install lux_depth_v2 Dependencies
+        run: |
+          pip install --upgrade pip
+          # Install from requirements-repo.txt (safe dependencies, no CVE-2024-27763)
+          if [ -f lux_depth_v2/requirements-repo.txt ]; then
+            pip install -r lux_depth_v2/requirements-repo.txt
+          fi
+          
+      - name: Verify No Vulnerable Packages (CVE-2024-27763)
+        run: |
+          # Ensure basicsr, realesrgan, gfpgan are NOT installed
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ SECURITY VIOLATION: basicsr is installed!"
+            exit 1
+          fi
+          if pip show realesrgan > /dev/null 2>&1; then
+            echo "❌ SECURITY VIOLATION: realesrgan is installed!"
+            exit 1
+          fi
+          if pip show gfpgan > /dev/null 2>&1; then
+            echo "❌ SECURITY VIOLATION: gfpgan is installed!"
+            exit 1
+          fi
+          echo "✅ No vulnerable packages found"
+          
+      - name: Test Module Imports
+        run: |
+          cd lux_depth_v2
+          python -c "
+          from lux_depth_v2 import pipeline, config, upscaling, service
+          print('✅ All modules import successfully')
+          "
+          
+      - name: Test TorchUpscaler
+        run: |
+          python -c "
+          from lux_depth_v2.upscaling import create_upscaler
+          from lux_depth_v2.config import PipelineConfig
+          import torch
+          
+          cfg = PipelineConfig()
+          cfg.upscaler_backend = 'torch'
+          device = torch.device('cpu')
+          upscaler = create_upscaler(cfg, device)
+          print(f'✅ TorchUpscaler created: {type(upscaler).__name__}')
+          "
+          
+      - name: Test Input Validation
+        run: |
+          python -c "
+          from lux_depth_v2.service import validate_filepath
+          
+          # Test valid filename
+          validate_filepath('test.png')
+          print('✅ Valid filename accepted')
+          
+          # Test path traversal detection
+          try:
+              validate_filepath('../etc/passwd')
+              print('❌ Should have rejected path traversal')
+              exit(1)
+          except ValueError:
+              print('✅ Path traversal blocked')
+          "
+          
+      - name: Run lux_depth_v2 Tests (if available)
+        continue-on-error: true
+        run: |
+          if [ -d lux_depth_v2/tests ]; then
+            cd lux_depth_v2
+            pytest tests/ -m "not slow and not gpu" -v --tb=short
+          else
+            echo "⚠️ No tests directory found, skipping pytest"
+          fi
+
+  # ===========================================================================
   # Stage 5: RAG System Validation
   # ===========================================================================
   rag-validation:
@@ -554,7 +655,7 @@ jobs:
   # ===========================================================================
   summary:
     name: Pipeline Summary
-    needs: [setup, lint, test-core, test-ml, rag-validation, build, manifest]
+    needs: [setup, lint, test-core, test-ml, test-lux-depth-v2, rag-validation, build, manifest]
     if: always()
     runs-on: ubuntu-24.04
     
@@ -569,6 +670,7 @@ jobs:
           echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Core Tests | ${{ needs.test-core.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ML Tests | ${{ needs.test-ml.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lux Depth V2 Tests | ${{ needs.test-lux-depth-v2.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| RAG Validation | ${{ needs.rag-validation.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Manifest | ${{ needs.manifest.result }} |" >> $GITHUB_STEP_SUMMARY

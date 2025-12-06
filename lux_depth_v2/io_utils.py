@@ -161,52 +161,22 @@ def atomic_write_rgb16_tiff(path: Path, rgb01: np.ndarray, compression: str = "d
 
 
 def atomic_write_png8(path: Path, rgb01: np.ndarray) -> None:
-    """Write 8-bit PNG with atomic operation. Falls back to Pillow if OpenCV fails."""
+    ensure_deps()
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    
-    # Convert to 8-bit
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
-    
-    try:
-        # Try OpenCV first (faster)
-        if cv2 is not None:
-            bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_PNG_COMPRESSION, 7])
-            os.replace(str(tmp), str(p))
-            return
-    except Exception:
-        pass
-    
-    # Fallback to Pillow
-    from PIL import Image
-    img = Image.fromarray(rgb8, mode='RGB')
-    img.save(tmp, 'PNG', compress_level=7)
+    bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_PNG_COMPRESSION, 7])
     os.replace(str(tmp), str(p))
 
 
 def atomic_write_jpg8(path: Path, rgb01: np.ndarray, quality: int = 92) -> None:
-    """Write 8-bit JPEG with atomic operation. Falls back to Pillow if OpenCV fails."""
+    ensure_deps()
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    
-    # Convert to 8-bit
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
-    
-    try:
-        # Try OpenCV first (faster)
-        if cv2 is not None:
-            bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_JPEG_QUALITY, int(quality)])
-            os.replace(str(tmp), str(p))
-            return
-    except Exception:
-        pass
-    
-    # Fallback to Pillow
-    from PIL import Image
-    img = Image.fromarray(rgb8, mode='RGB')
-    img.save(tmp, 'JPEG', quality=int(quality), optimize=True)
+    bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_JPEG_QUALITY, int(quality)])
     os.replace(str(tmp), str(p))

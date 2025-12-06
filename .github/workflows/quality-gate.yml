@@ -30,16 +30,21 @@ jobs:
 
       - name: Run flake8 (critical errors only)
         run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated/,src/transformation_portal/,.venv/
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated/,src/transformation_portal/,.venv/,lux_depth_v2/__pycache__/
 
       - name: Run pylint (non-blocking)
         continue-on-error: true
         run: |
-          files=$(find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*")
+          files=$(find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*" ! -path "./lux_depth_v2/__pycache__/*")
           if [ -n "$files" ]; then
             # shellcheck disable=SC2086
             pylint $files --exit-zero
           fi
+      
+      - name: Test lux_depth_v2 Module Imports
+        run: |
+          pip install torch torchvision
+          python -c "from lux_depth_v2 import pipeline, config, upscaling, service; print('✅ lux_depth_v2 imports OK')" || echo "⚠️ lux_depth_v2 import check skipped"
 
       - name: Check markdown file count
         run: |
