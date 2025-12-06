@@ -202,7 +202,8 @@ def example_5_custom_configuration():
     from unified_luxury_pipeline import (
         UnifiedLuxuryPipeline,
         UnifiedPipelineConfig,
-        UpscalingModel
+        UpscalingModel,
+        PipelinePreset
     )
     
     print("\n" + "="*70)
