@@ -42,19 +42,48 @@ except ImportError:
     # Create a dummy torch module for type annotations and decorators
     # when PyTorch is not installed
     class _DummyTorch:
-        """Stub for torch when not available."""
+        """Stub for torch when not available.
+        
+        Provides minimal interface to allow module to import without PyTorch.
+        All torch-dependent code paths should check TORCH_AVAILABLE first.
+        """
         class nn:
             Module = object
+        
+        class backends:
+            class mps:
+                @staticmethod
+                def is_available():
+                    return False
+            
+            class cuda:
+                @staticmethod
+                def is_available():
+                    return False
+        
+        class cuda:
+            @staticmethod
+            def is_available():
+                return False
+        
         @staticmethod
         def no_grad():
             """No-op decorator when torch is not available."""
             def decorator(func):
                 return func
             return decorator
+        
         @staticmethod
-        def device(x):
-            return x
+        def device(*args, **kwargs):
+            """Return a dummy device representation."""
+            return args[0] if args else "cpu"
+        
+        def __getattr__(self, name):
+            """Return a safe default for any unhandled attribute access."""
+            return None
+    
     torch = _DummyTorch()
+    F = None  # torch.nn.functional stub
 
 try:
     from tifffile import TiffFile, imwrite as tiff_write
