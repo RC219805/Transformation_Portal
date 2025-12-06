@@ -31,7 +31,7 @@ While the Specialist agent focuses on implementation details and specific pipeli
 
 ### 2. Security Auditing
 *Gap*: The Specialist optimizes for speed. The Architect optimizes for safety.
-*Action*: actively scan for:
+*Action*: Actively scan for:
 - Insecure deserialization (pickle usage)
 - Hardcoded credentials
 - Path traversal vulnerabilities in file processors
