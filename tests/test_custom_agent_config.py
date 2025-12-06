@@ -8,6 +8,31 @@ import re
 from pathlib import Path
 
 
+def extract_frontmatter(content: str) -> str:
+    """Extract YAML frontmatter from markdown content.
+
+    Args:
+        content: The markdown file content
+
+    Returns:
+        The extracted frontmatter as a string
+    """
+    lines = content.split("\n")
+    frontmatter_lines = []
+    in_frontmatter = False
+
+    for line in lines:
+        if line == "---":
+            if not in_frontmatter:
+                in_frontmatter = True
+                continue
+            break
+        if in_frontmatter:
+            frontmatter_lines.append(line)
+
+    return "\n".join(frontmatter_lines)
+
+
 def test_agent_file_exists():
     """Verify the custom agent file exists."""
     agent_file = Path(__file__).parents[1] / ".github" / "agents" / "transformation-portal-specialist.md"
@@ -38,21 +63,7 @@ def test_agent_frontmatter_has_name():
     agent_file = Path(__file__).parents[1] / ".github" / "agents" / "transformation-portal-specialist.md"
     content = agent_file.read_text()
 
-    # Extract frontmatter
-    lines = content.split("\n")
-    frontmatter_lines = []
-    in_frontmatter = False
-
-    for line in lines:
-        if line == "---":
-            if not in_frontmatter:
-                in_frontmatter = True
-                continue
-            break
-        if in_frontmatter:
-            frontmatter_lines.append(line)
-
-    frontmatter = "\n".join(frontmatter_lines)
+    frontmatter = extract_frontmatter(content)
     assert re.search(r"^name:\s*.+", frontmatter, re.MULTILINE), "Frontmatter must include 'name:' field"
 
 
@@ -61,21 +72,7 @@ def test_agent_frontmatter_has_description():
     agent_file = Path(__file__).parents[1] / ".github" / "agents" / "transformation-portal-specialist.md"
     content = agent_file.read_text()
 
-    # Extract frontmatter
-    lines = content.split("\n")
-    frontmatter_lines = []
-    in_frontmatter = False
-
-    for line in lines:
-        if line == "---":
-            if not in_frontmatter:
-                in_frontmatter = True
-                continue
-            break
-        if in_frontmatter:
-            frontmatter_lines.append(line)
-
-    frontmatter = "\n".join(frontmatter_lines)
+    frontmatter = extract_frontmatter(content)
     assert re.search(r"^description:\s*.+", frontmatter, re.MULTILINE), "Frontmatter must include 'description:' field"
 
 
@@ -226,21 +223,7 @@ def test_architect_agent_frontmatter_has_name():
     architect_file = Path(__file__).parents[1] / ".github" / "agents" / "transformation-portal-architect.md"
     content = architect_file.read_text()
 
-    # Extract frontmatter
-    lines = content.split("\n")
-    frontmatter_lines = []
-    in_frontmatter = False
-
-    for line in lines:
-        if line == "---":
-            if not in_frontmatter:
-                in_frontmatter = True
-                continue
-            break
-        if in_frontmatter:
-            frontmatter_lines.append(line)
-
-    frontmatter = "\n".join(frontmatter_lines)
+    frontmatter = extract_frontmatter(content)
     assert re.search(r"^name:\s*.+", frontmatter, re.MULTILINE), "Architect frontmatter must include 'name:' field"
 
 
@@ -249,21 +232,7 @@ def test_architect_agent_frontmatter_has_description():
     architect_file = Path(__file__).parents[1] / ".github" / "agents" / "transformation-portal-architect.md"
     content = architect_file.read_text()
 
-    # Extract frontmatter
-    lines = content.split("\n")
-    frontmatter_lines = []
-    in_frontmatter = False
-
-    for line in lines:
-        if line == "---":
-            if not in_frontmatter:
-                in_frontmatter = True
-                continue
-            break
-        if in_frontmatter:
-            frontmatter_lines.append(line)
-
-    frontmatter = "\n".join(frontmatter_lines)
+    frontmatter = extract_frontmatter(content)
     assert re.search(r"^description:\s*.+", frontmatter, re.MULTILINE), \
         "Architect frontmatter must include 'description:' field"
 
