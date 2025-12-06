@@ -190,8 +190,34 @@ The `.github/agents/` directory contains agent-related documentation and impleme
 
 - **Documentation & Guides**: Multiple markdown files provide technical guides, usage instructions, and architectural notes for agent development and integration.
 - **`rag_system/` Subdirectory**: Contains the Retrieval-Augmented Generation (RAG) implementation for context-aware architectural intelligence and semantic code search.
-- **`transformation-portal-specialist.md`**: Defines a custom agent for Transformation Portal-specific tasks and workflows.
+- **Custom Agents**:
+  - **`transformation-portal-specialist.md`**: Implementation-focused expert for pipelines, AI/ML integration, and processing workflows. Handles detailed coding tasks, optimizations, and testing.
+  - **`transformation-portal-architect.md`**: System design authority for architecture, security, and infrastructure. Handles cross-module design, security audits, and CI/CD workflows.
 - **Agent Interface**: All agents follow a consistent interface for communication and interoperability, ensuring standardized patterns across the agent swarm.
+
+### Custom Agent Usage Guidelines
+
+When working with custom agents:
+
+1. **@transformation-portal-specialist** - Use for:
+   - Implementing new image/video processing features
+   - Optimizing pipeline performance
+   - Working with AI/ML models (SDXL, ControlNet, Real-ESRGAN)
+   - Writing tests and debugging implementation details
+   - FFmpeg filter graphs and color grading
+
+2. **@transformation-portal-architect** - Use for:
+   - Designing new system components and modules
+   - Security audits and vulnerability reviews
+   - Refactoring legacy code for maintainability
+   - CI/CD workflow design and optimization
+   - API contracts and cross-module integration
+
+3. **Both agents in sequence** - For complex features:
+   - Phase 1: Architect designs the system structure
+   - Phase 2: Specialist implements the detailed functionality
+
+See `docs/CUSTOM_AGENT_GUIDE.md` for comprehensive usage examples and best practices.
 
 ## Testing Guidelines
 
