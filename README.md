@@ -267,7 +267,53 @@ python utils/upscaling_engine.py noisy.jpg clean_4x.tif --model realesrgan_gener
 🔬 **Examples**: [examples/upscaling_workflow.py](examples/upscaling_workflow.py)  
 📊 **Summary**: [docs/UPSCALING_SUMMARY.md](docs/UPSCALING_SUMMARY.md)
 
-### 🎯 Unified Luxury Pipeline (NEW - December 2025)
+### 🚀 Lux Depth V2 Pipeline (NEW - December 2025)
+
+**Production-oriented, GPU-accelerated depth processing** with advanced material segmentation and security hardening:
+
+```bash
+# Quick Start (Batch Processing)
+lux-depth-v2 \
+  --input-dir renders/ \
+  --depth-dir depth_maps/ \
+  --output-dir output/ \
+  --preset interior_luxury \
+  --device cuda \
+  --upscaler-backend torch
+
+# Service Mode (FastAPI - persistent models, low latency)
+lux-depth-v2-service \
+  --output-dir /data/output \
+  --service \
+  --host 0.0.0.0 \
+  --port 8088
+```
+
+**Key Features:**
+- ✅ **Secure by default** - CVE-2024-27763 mitigated, input validation, rate limiting
+- ✅ **GPU-accelerated** - Torch-based post-processing (clarity, sharpen, detail transfer)
+- ✅ **Advanced material segmentation** - ONNX/SegFormer/Heuristic backends
+- ✅ **Safe AI detail transfer** - Color/luma drift guardrails
+- ✅ **Service mode** - FastAPI with persistent models for real-time processing
+- ✅ **16-bit precision** - Full archival-grade workflow maintained
+
+**Security Hardening:**
+- ✅ Path traversal prevention
+- ✅ Rate limiting (10 req/min per IP)
+- ✅ File size validation (configurable)
+- ✅ Safe upscaling (torch backend, no vulnerable dependencies)
+
+**Outputs:**
+- `*_master16.tif` - 16-bit graded pre-upscale
+- `*_upscaled16.tif` - 16-bit final output
+- `*_marketing.png` - 8-bit preview
+- `*_report.json` - Processing metadata
+
+📚 **Documentation**: [lux_depth_v2/README.md](lux_depth_v2/README.md)  
+🔒 **Security Guide**: [lux_depth_v2/SECURITY.md](lux_depth_v2/SECURITY.md)  
+⚡ **Quick Start**: [docs/LUX_DEPTH_V2_QUICK_START.md](docs/LUX_DEPTH_V2_QUICK_START.md)
+
+### 🎯 Unified Luxury Pipeline (December 2025)
 
 **Production-grade pipeline** integrating upscaling, depth processing, and luxury enhancements:
 

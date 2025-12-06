@@ -6,14 +6,26 @@ This is a modular, GPU-accelerated rewrite of the V1 “Gold Standard Depth-Awar
 - **Advanced automatic material segmentation** (pluggable backends: ONNX / SegFormer / Heuristic fallback)
 - **Safe AI detail transfer** (color/luma drift guardrails)
 
+## ⚠️ Security Notice
+
+**When integrating within Transformation Portal, use `requirements-repo.txt` instead of `requirements.txt`**
+
+This avoids CVE-2024-27763 (basicsr command injection vulnerability). See [SECURITY.md](SECURITY.md) for details.
+
 ## Quickstart (Batch)
 
 ```bash
-# Install core deps
-pip install -r requirements.txt
+# Install core deps (within Transformation Portal repository)
+pip install -r requirements-repo.txt
 
-# Run on a folder
-python -m lux_depth_v2.cli   --input-dir /data/images   --depth-dir /data/depth   --output-dir /data/out   --preset interior_luxury   --device cuda   --upscaler-backend realesrgan   --model-path /models/RealESRGAN_x4plus.pth
+# Run on a folder (torch backend is default and secure)
+python -m lux_depth_v2.cli \
+  --input-dir /data/images \
+  --depth-dir /data/depth \
+  --output-dir /data/out \
+  --preset interior_luxury \
+  --device cuda \
+  --upscaler-backend torch
 ```
 
 Outputs:

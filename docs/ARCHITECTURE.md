@@ -43,11 +43,19 @@ Each module has a single, well-defined responsibility:
 ```
 transformation_portal/
 ├── src/transformation_portal/    # Main package
+├── lux_depth_v2/                 # ✨ NEW: Production depth pipeline (Dec 2025)
+│   ├── pipeline.py              # GPU-accelerated processing
+│   ├── config.py                # Configuration with presets
+│   ├── cli.py                   # Command-line interface
+│   ├── service.py               # FastAPI service (security-hardened)
+│   ├── upscaling.py             # Safe upscaling backends
+│   ├── material_segmentation.py # Advanced material detection
+│   ├── SECURITY.md              # Security guidelines
+│   └── requirements-repo.txt    # Safe dependencies
 ├── scripts/                      # Standalone utilities  
 ├── data/                         # Data files (gitignored)
 ├── docs/                         # Documentation
 ├── tests/                        # Test suite
-├── depth_pipeline/               # Existing depth processing
 ├── luxury_tiff_batch_processor/  # Existing TIFF processor
 ├── tools/                        # Editorial tools
 └── [LUT directories]/           # Film emulation & location LUTs
@@ -435,6 +443,104 @@ def old_function():
     return new_function()
 ```
 
+## Lux Depth V2 - Peer Module Architecture ✨ NEW
+
+### Design Philosophy
+
+Lux Depth V2 follows a **peer-level module pattern** (same as `luxury_tiff_batch_processor/`):
+- Lives at repository root: `/lux_depth_v2/`
+- Independent CLI entry points via `pyproject.toml`
+- Uses repository's vetted dependencies via `requirements-repo.txt`
+- Coexists peacefully with existing lux rendering workflows
+
+### Module Structure
+
+```
+lux_depth_v2/
+├── __init__.py              # Package initialization
+├── pipeline.py              # Core LuxPipelineV2 class (GPU-accelerated)
+├── config.py                # PipelineConfig with presets
+├── cli.py                   # Command-line interface (Typer)
+├── service.py               # FastAPI service (security-hardened)
+├── upscaling.py             # Safe upscaling backends (Torch, ONNX)
+├── material_segmentation.py # Material detection (ONNX/SegFormer/Heuristic)
+├── material_profiles.py     # Material enhancement profiles
+├── torch_ops.py             # GPU operations (grading, clarity, sharpen)
+├── weights.py               # Zone weight calculations
+├── io_utils.py              # File I/O with 16-bit TIFF support
+├── logging_utils.py         # Logging configuration
+├── SECURITY.md              # Security guidelines
+├── requirements-repo.txt    # Safe dependencies (CVE-2024-27763 mitigated)
+└── tools/
+    └── export_material_model_to_onnx.py
+```
+
+### Security Architecture
+
+**Critical**: CVE-2024-27763 Mitigation
+- ❌ No `basicsr`, `realesrgan`, or `gfpgan` dependencies
+- ✅ Safe upscaling via `TorchUpscaler` (torchvision-based)
+- ✅ Service mode security: input validation, rate limiting, file size limits
+- ✅ Legacy `realesrgan` backend deprecated with automatic fallback to safe backend
+
+**Service Security Features**:
+- `validate_filepath()`: Prevents path traversal attacks
+- Rate limiting: 10 requests/minute per IP (slowapi)
+- File size limits: 100MB default (configurable via `MAX_UPLOAD_SIZE`)
+- HTTPException error handling
+
+### Data Flow
+
+```
+Input Image (TIFF/PNG/JPG)
+  ↓
+LuxPipelineV2.process_one()
+  ├─→ Load RGB + Depth (optional)
+  ├─→ Material Segmentation (optional)
+  │     └─→ ONNX/SegFormer/Heuristic backends
+  ├─→ Grade at Original Resolution
+  │     └─→ torch_ops.grade_core() with material mods
+  ├─→ Upscale (TorchUpscaler or ONNX)
+  │     └─→ Base bicubic + optional AI detail transfer
+  ├─→ Post-Processing (tiled for large images)
+  │     ├─→ Detail transfer (color/luma drift validation)
+  │     ├─→ Clarity enhancement
+  │     └─→ Sharpening
+  └─→ Save Outputs
+        ├─→ *_master16.tif (pre-upscale)
+        ├─→ *_upscaled16.tif (final)
+        ├─→ *_marketing.png (8-bit preview)
+        └─→ *_report.json (metadata)
+```
+
+### Integration with Repository
+
+**CLI Entry Points** (`pyproject.toml`):
+```toml
+[project.scripts]
+lux-depth-v2 = "lux_depth_v2.cli:main"
+lux-depth-v2-service = "lux_depth_v2.service:main"
+```
+
+**Testing** (`Makefile`):
+```makefile
+test-lux-depth-v2        # Run module tests
+test-lux-depth-v2-fast   # Fast tests (no GPU, no slow)
+test-all-modules         # Main + lux-depth-v2 tests
+```
+
+**No Conflicts**:
+- Independent of `src/transformation_portal/` package structure
+- Complements existing lux rendering tools (not replacing)
+- Uses distinct CLI names to avoid collisions
+
+### Performance Characteristics
+
+- **Throughput**: 127-400 images/hour (model-dependent)
+- **Latency**: Service mode: 500ms-2s per image (GPU)
+- **Memory**: Tile-based processing for gigapixel images (4GB GPU minimum)
+- **Caching**: LRU caching for 10-20x speedup in iterative workflows
+
 ## Future Architecture Goals
 
 ### Short Term (v0.2.0)
@@ -442,12 +548,13 @@ def old_function():
 - [ ] Remove root-level duplicates
 - [ ] Unified CLI interface
 - [ ] Comprehensive type hints
+- [x] **Lux Depth V2 integration** ✅ Complete (Dec 2025)
 
 ### Medium Term (v0.3.0)
 - [ ] Plugin architecture
 - [ ] Async processing support
 - [ ] Distributed processing
-- [ ] Web API
+- [ ] Web API (Lux Depth V2 service mode provides foundation)
 
 ### Long Term (v1.0.0)
 - [ ] Stable public API

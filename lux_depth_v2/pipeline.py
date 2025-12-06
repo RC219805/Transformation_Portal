@@ -23,16 +23,10 @@ def _is_image_file(p: Path) -> bool:
 
 
 def _find_depth(depth_dir: Optional[Path], stem: str) -> Optional[Path]:
-    """Search for depth maps with multiple naming patterns."""
     if not depth_dir:
         return None
-    # Try multiple depth naming patterns
-    for pattern in [
-        f"{stem}.tif", f"{stem}.tiff",
-        f"{stem}_depth.tif", f"{stem}_depth.tiff",
-        f"{stem}_depth_16bit.tif", f"{stem}_depth_16bit.tiff"
-    ]:
-        cand = depth_dir / pattern
+    for ext in (".tif", ".tiff", ".png"):
+        cand = depth_dir / f"{stem}{ext}"
         if cand.exists():
             return cand
     return None
@@ -188,25 +182,19 @@ class LuxPipelineV2:
         if cfg.save_master:
             io_utils.atomic_write_rgb16_tiff(master_path, master01)
 
-        # Preview (small JPG) - robust with Pillow fallback
+        # Preview (small JPG)
         if cfg.save_preview_jpg:
             try:
+                import cv2
                 scale = float(cfg.preview_scale)
                 if 0 < scale < 1.0:
                     ph, pw = int(round(H * scale)), int(round(W * scale))
-                    try:
-                        # Try OpenCV for fast resizing
-                        import cv2
-                        prev = cv2.resize(master01, (pw, ph), interpolation=cv2.INTER_AREA)
-                    except Exception:
-                        # Fallback to scipy for resizing
-                        from scipy.ndimage import zoom
-                        prev = zoom(master01, (scale, scale, 1), order=1)
+                    prev = cv2.resize(master01, (pw, ph), interpolation=cv2.INTER_AREA)
                 else:
                     prev = master01
                 io_utils.atomic_write_jpg8(preview_path, prev, quality=92)
-            except Exception as e:
-                self.logger.warning(f"Preview JPG generation failed: {e}")
+            except Exception:
+                pass
 
         # Upscaling path
         # Base upsample: GPU bicubic

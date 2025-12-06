@@ -16,12 +16,14 @@ on:
       - 'pyproject.toml'
       - 'constraints.txt'
       - 'scripts/security/**'
+      - 'lux_depth_v2/requirements-repo.txt'
   pull_request:
     branches: [main]
     paths:
       - 'requirements/**'
       - 'requirements*.txt'
       - 'pyproject.toml'
+      - 'lux_depth_v2/requirements-repo.txt'
   workflow_dispatch:
     inputs:
       full_scan:
@@ -158,6 +160,12 @@ jobs:
           # Check all requirements for known vulnerabilities
           safety check -r requirements/all.txt --json > safety-report.json || true
           
+          # Also check lux_depth_v2 dependencies
+          if [ -f lux_depth_v2/requirements-repo.txt ]; then
+            echo "Scanning lux_depth_v2/requirements-repo.txt..."
+            safety check --file lux_depth_v2/requirements-repo.txt --json > safety-lux-depth-v2.json || true
+          fi
+          
           # Display summary
           if [ -f safety-report.json ]; then
             echo "## Safety Scan Results" >> $GITHUB_STEP_SUMMARY
@@ -179,13 +187,34 @@ jobs:
               print(f'Could not parse safety report: {e}')
           "
           fi
+          
+          # Display lux_depth_v2 scan results
+          if [ -f safety-lux-depth-v2.json ]; then
+            echo "## Lux Depth V2 Safety Scan" >> $GITHUB_STEP_SUMMARY
+            python -c "
+          import json
+          try:
+              with open('safety-lux-depth-v2.json') as f:
+                  data = json.load(f)
+              vulns = data.get('vulnerabilities', [])
+              if vulns:
+                  print(f'❌ Found {len(vulns)} vulnerabilities in lux_depth_v2')
+                  exit(1)
+              else:
+                  print('✅ No vulnerabilities in lux_depth_v2 dependencies')
+          except Exception as e:
+              print(f'Could not parse lux_depth_v2 safety report: {e}')
+          "
+          fi
 
-      - name: Upload Safety Report
+      - name: Upload Safety Reports
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: safety-report
-          path: safety-report.json
+          name: safety-reports
+          path: |
+            safety-report.json
+            safety-lux-depth-v2.json
           if-no-files-found: ignore
 
   # =========================================================================

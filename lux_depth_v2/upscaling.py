@@ -46,52 +46,30 @@ class NoneUpscaler(Upscaler):
         return torch_ops.resize(rgb, (h * self.scale, w * self.scale), mode="bicubic", autocast=True).clamp(0.0, 1.0)
 
 
-class RealESRGANUpscaler(Upscaler):
+class TorchUpscaler(Upscaler):
+    """Torch-based upscaling using torchvision (safe alternative to Real-ESRGAN)."""
     def __init__(self, cfg, device: "torch_ops.torch.device"):
         super().__init__(cfg, device)
-        if not cfg.model_path:
-            raise ValueError("RealESRGAN backend requires cfg.model_path to local .pth")
-        verify_model(Path(cfg.model_path), cfg.model_sha256)
-
         try:
             import torch
-            from basicsr.archs.rrdbnet_arch import RRDBNet  # type: ignore
-            from realesrgan import RealESRGANer  # type: ignore
+            from torchvision.transforms import functional as TF  # type: ignore
         except Exception as e:
-            raise RuntimeError("Missing Real-ESRGAN deps. Install: realesrgan basicsr") from e
-
-        # Choose device for RealESRGANer
-        dev = str(cfg.device).lower()
-        if dev == "auto":
-            dev = "cuda" if torch.cuda.is_available() else "cpu"
-
-        model = RRDBNet(
-            num_in_ch=3, num_out_ch=3, num_feat=64,
-            num_block=23, num_grow_ch=32, scale=self.scale
-        )
-
-        self._er = RealESRGANer(
-            scale=self.scale,
-            model_path=str(cfg.model_path),
-            model=model,
-            tile=int(cfg.tile) if int(cfg.tile) > 0 else 0,
-            tile_pad=int(cfg.tile_pad),
-            pre_pad=0,
-            half=bool(cfg.half),
-            gpu_id=0 if dev == "cuda" else None,
-        )
-
+            raise RuntimeError("torchvision is required for torch upscaling") from e
+        self.TF = TF
+        
     def upscale(self, rgb: "torch_ops.torch.Tensor") -> "torch_ops.torch.Tensor":
-        # Real-ESRGAN expects BGR uint8 HxWx3
-        torch_ops.require_torch()
-        inp = (rgb.detach().clamp(0,1)[0].permute(1,2,0).to("cpu").numpy() * 255.0 + 0.5).astype(np.uint8)
-        inp = inp[..., ::-1]  # RGB->BGR
-        out, _ = self._er.enhance(inp, outscale=self.scale)
-        if out.ndim == 2:
-            out = np.stack([out, out, out], axis=-1)
-        out = out[..., ::-1]  # BGR->RGB
-        out01 = (out.astype(np.float32) / 255.0).clip(0.0, 1.0)
-        return torch_ops.to_torch_rgb(out01, device=self.device)
+        """High-quality bicubic upscaling with edge enhancement."""
+        _, _, h, w = rgb.shape
+        target_h, target_w = h * self.scale, w * self.scale
+        
+        # Use torchvision's high-quality bicubic interpolation
+        upscaled = self.TF.resize(
+            rgb, 
+            [target_h, target_w], 
+            interpolation=self.TF.InterpolationMode.BICUBIC,
+            antialias=True
+        )
+        return upscaled.clamp(0.0, 1.0)
 
 
 class OnnxUpscaler(Upscaler):
@@ -124,11 +102,21 @@ class OnnxUpscaler(Upscaler):
 
 
 def create_upscaler(cfg, device: "torch_ops.torch.device") -> Upscaler:
-    backend = str(getattr(cfg, "upscaler_backend", "realesrgan")).lower()
+    backend = str(getattr(cfg, "upscaler_backend", "torch")).lower()
     if backend == "none":
         return NoneUpscaler(cfg, device)
     if backend == "onnx":
         return OnnxUpscaler(cfg, device)
+    if backend in ("torch", "torchvision"):
+        return TorchUpscaler(cfg, device)
+    # Legacy support: map realesrgan to torch backend
     if backend == "realesrgan":
-        return RealESRGANUpscaler(cfg, device)
+        import warnings
+        warnings.warn(
+            "RealESRGAN backend is deprecated due to CVE-2024-27763. "
+            "Using torch backend instead. See lux_depth_v2/SECURITY.md",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return TorchUpscaler(cfg, device)
     raise ValueError(f"Unknown upscaler backend: {backend}")

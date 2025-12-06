@@ -24,10 +24,15 @@
 │   │   └── ...                 # Indexer, retriever, semantic search, etc.
 │   ├── transformation-portal-specialist.md  # Custom agent definition
 │   └── [RAG and agent guides]  # Documentation and integration guides
-├── depth_pipeline/             # Depth Anything V2 integration with CoreML
-│   ├── pipeline.py            # Main depth-aware processing pipeline
-│   ├── processors/            # Depth-based image processors
-│   └── models/                # ML model configurations
+├── lux_depth_v2/               # ✨ NEW: Production-oriented depth processing pipeline
+│   ├── pipeline.py            # GPU-accelerated post-processing
+│   ├── config.py              # Pipeline configuration with presets
+│   ├── cli.py                 # Command-line interface
+│   ├── service.py             # FastAPI service mode (with security hardening)
+│   ├── upscaling.py           # Safe upscaling backends (torch, onnx)
+│   ├── material_segmentation.py # Advanced material detection
+│   ├── SECURITY.md            # Security guidelines (CVE-2024-27763 mitigation)
+│   └── requirements-repo.txt  # Safe dependencies (no vulnerable packages)
 ├── src/transformation_portal/ # Installable package (WIP)
 ├── tests/                      # pytest test suite (70+ tests)
 ├── config/                     # YAML configuration presets
@@ -235,7 +240,48 @@ See `docs/CUSTOM_AGENT_GUIDE.md` for comprehensive usage examples and best pract
 
 ## Common Tasks
 
-### Adding a New Depth Pipeline Preset
+### Working with Lux Depth V2 Pipeline ✨ NEW
+
+**Module Location**: `lux_depth_v2/` (peer-level module, production-oriented)
+
+**Key Files**:
+- `pipeline.py` - Core processing pipeline with GPU acceleration
+- `config.py` - Configuration with presets (interior_luxury, exterior_showcase, etc.)
+- `upscaling.py` - Safe upscaling backends (TorchUpscaler, OnnxUpscaler)
+- `service.py` - FastAPI service with security hardening
+- `material_segmentation.py` - Advanced material detection
+
+**Security Considerations** 🔒:
+- ⚠️ Always use `lux_depth_v2/requirements-repo.txt` (not `requirements.txt`)
+- ✅ CVE-2024-27763 mitigated - no vulnerable basicsr/realesrgan
+- ✅ Use `--upscaler-backend torch` (default, safe) instead of `realesrgan`
+- ✅ Service mode has input validation, rate limiting, file size limits
+- 📚 See `lux_depth_v2/SECURITY.md` for full security guidelines
+
+**Usage Examples**:
+```bash
+# Batch processing
+lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
+
+# Service mode (with security features)
+lux-depth-v2-service --output-dir /data/out --service --port 8088
+
+# Module testing
+make test-lux-depth-v2
+```
+
+**Adding a Preset**:
+1. Edit `lux_depth_v2/config.py` → `PipelineConfig.apply_preset()`
+2. Add preset name and parameters (exposure, contrast, clarity, etc.)
+3. Document intended use case
+4. Test with `make test-lux-depth-v2`
+
+**Modifying Upscaling Backends**:
+- `TorchUpscaler` (default): torchvision-based, safe, high-quality
+- `OnnxUpscaler`: custom ONNX models
+- ❌ Do NOT re-add RealESRGANUpscaler (vulnerable to CVE-2024-27763)
+
+### Adding a New Depth Pipeline Preset (Legacy)
 1. Create YAML configuration file in `config/` directory (e.g., `config/new_preset.yaml`)
 2. Define parameters: depth model, tone mapping, denoising, atmospheric effects
 3. Use existing presets like `config/interior_preset.yaml` as templates
@@ -273,11 +319,21 @@ See `docs/CUSTOM_AGENT_GUIDE.md` for comprehensive usage examples and best pract
 ## Repository-Specific Notes
 
 ### Depth Processing
-- Depth Anything V2 is the primary depth estimation model
+
+**Lux Depth V2 (Production - December 2025)** ✨:
+- GPU-accelerated post-processing with torch operations
+- Advanced material segmentation (ONNX/SegFormer/Heuristic backends)
+- Service mode with FastAPI for real-time processing
+- Security-hardened (CVE-2024-27763 mitigated)
+- 16-bit precision end-to-end workflow
+- CLI: `lux-depth-v2` (batch) and `lux-depth-v2-service` (API)
+- See `lux_depth_v2/README.md` and `lux_depth_v2/SECURITY.md`
+
+**Legacy Tools**:
+- Depth Anything V2 is available via `depth_tools.py`
 - CoreML variants provide 3-5x speedup on Apple Silicon (M1/M2/M3/M4)
 - Depth maps are normalized and cached for iterative workflows
 - Zone-based processing applies different enhancements to foreground/midground/background
-- See `docs/depth_pipeline/DEPTH_PIPELINE_README.md` for detailed documentation
 
 ### HDR Handling
 - Automatically detect HDR transfer functions (PQ, HLG) from video metadata
@@ -309,7 +365,12 @@ See `docs/CUSTOM_AGENT_GUIDE.md` for comprehensive usage examples and best pract
 - Architecture documentation in `docs/ARCHITECTURE.md`
 - Refactoring notes in `docs/REFACTORING_SUMMARY.md` and `docs/REFACTORING_2025.md`
 - Performance optimization guidance in `docs/PERFORMANCE_OPTIMIZATION.md`
-- Depth pipeline specifics in `docs/depth_pipeline/DEPTH_PIPELINE_README.md`
+- **Lux Depth V2 documentation** ✨:
+  - `lux_depth_v2/README.md` - Module overview and usage
+  - `lux_depth_v2/SECURITY.md` - Security guidelines (CVE mitigation)
+  - `lux_depth_v2/PHASE1_COMPLETE.md` - Phase 1 completion report
+  - `docs/LUX_DEPTH_V2_INTEGRATION_PLAN.md` - Comprehensive integration plan
+  - `docs/LUX_DEPTH_V2_QUICK_START.md` - Quick start guide
 - Include usage examples with common parameter combinations in README
 - Document all presets with their intended use cases and parameter rationale
 - Add inline comments for complex algorithms (depth processing, tone mapping, material detection)

@@ -19,7 +19,8 @@ FAST_TESTS := \
 .PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
         lock lock-prod lock-ci lock-dev verify-security security-quick security-full security-audit \
-        setup-upscaling setup-swinir download-weights test-upscaling test-unified-pipeline
+        setup-upscaling setup-swinir download-weights test-upscaling test-unified-pipeline \
+        test-lux-depth-v2 test-lux-depth-v2-fast test-all-modules
 
 help:
 	@echo "Targets:"
@@ -29,6 +30,8 @@ help:
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
+	@echo "  test-lux-depth-v2  Run lux_depth_v2 module tests (fast, no GPU)"
+	@echo "  test-all-modules   Run all module tests (main + lux-depth-v2)"
 	@echo "  venv               Create local .venv if missing"
 	@echo "  clean              Remove Python cache files and build artifacts"
 	@echo ""
@@ -287,3 +290,28 @@ test-unified-pipeline:
 	@"$(PY)" -c "from unified_luxury_pipeline import UnifiedLuxuryPipeline, PipelinePreset; print('✓ Unified pipeline imports OK')"
 	@echo "✓ Available presets:"
 	@"$(PY)" -c "from unified_luxury_pipeline import PipelinePreset; [print(f'  - {p.value}') for p in PipelinePreset]"
+
+# --- Lux Depth V2 Module Tests ---
+
+test-lux-depth-v2-fast:
+	@echo "Running lux_depth_v2 fast tests (no GPU, no slow tests)..."
+	@if [ -d lux_depth_v2/tests ]; then \
+		cd lux_depth_v2 && "$(PY)" -m pytest tests/ -m "not slow and not gpu" -v --tb=short; \
+	else \
+		echo "⚠️  lux_depth_v2/tests directory not found"; \
+		"$(PY)" -c "from lux_depth_v2 import pipeline, config, upscaling, service; print('✓ Module imports OK')"; \
+	fi
+
+test-lux-depth-v2:
+	@echo "Running lux_depth_v2 module tests..."
+	@if [ -d lux_depth_v2/tests ]; then \
+		cd lux_depth_v2 && "$(PY)" -m pytest tests/ -v --tb=short; \
+	else \
+		echo "⚠️  lux_depth_v2/tests directory not found, running import test..."; \
+		"$(PY)" -c "from lux_depth_v2 import pipeline, config, upscaling, service; print('✓ Module imports OK')"; \
+		"$(PY)" -c "from lux_depth_v2.upscaling import create_upscaler; from lux_depth_v2.config import PipelineConfig; import torch; cfg = PipelineConfig(); cfg.upscaler_backend = 'torch'; u = create_upscaler(cfg, torch.device('cpu')); print('✓ TorchUpscaler creation OK')"; \
+		"$(PY)" -c "from lux_depth_v2.service import validate_filepath; validate_filepath('test.png'); print('✓ Input validation OK')"; \
+	fi
+
+test-all-modules: test-fast test-lux-depth-v2-fast
+	@echo "✅ All module tests completed"
