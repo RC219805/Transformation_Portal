@@ -1,0 +1,17 @@
+numpy>=1.23
+opencv-python>=4.8
+tifffile>=2023.7.10
+tqdm>=4.66
+
+# Core GPU pipeline (install the correct torch build for your CUDA setup)
+torch>=2.1
+
+# Optional: ONNX backends
+onnxruntime>=1.16
+
+# Optional: Real-ESRGAN backend
+realesrgan>=0.3
+basicsr>=1.4
+
+# Optional: segformer backend
+transformers>=4.40
