@@ -146,7 +146,7 @@ twine==4.0.2
 typer==0.20.0
 types-PyYAML==6.0.12.20250915
 typing_extensions==4.15.0
-urllib3==2.5.0
+urllib3==2.6.0
 virtualenv==20.35.4
 Werkzeug==3.1.4
 yapf==0.43.0
