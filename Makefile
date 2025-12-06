@@ -18,7 +18,8 @@ FAST_TESTS := \
 
 .PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
-        lock lock-prod lock-ci lock-dev verify-security security-quick security-full security-audit
+        lock lock-prod lock-ci lock-dev verify-security security-quick security-full security-audit \
+        setup-upscaling setup-swinir download-weights test-upscaling test-unified-pipeline
 
 help:
 	@echo "Targets:"
@@ -212,3 +213,77 @@ lock-dev:
 		-c requirements/constraints.txt \
 		-o requirements-dev.lock.txt \
 		requirements-dev.txt
+
+# --- Advanced Upscaling Setup ---
+
+setup-upscaling: setup-swinir download-weights
+	@echo "✓ Upscaling engine configured"
+	@echo "  Models: Real-ESRGAN (built-in), SwinIR (downloaded)"
+	@echo "  Usage: python utils/upscaling_engine.py --help"
+
+setup-swinir:
+	@echo "Setting up SwinIR architecture..."
+	@if [ ! -f utils/swinir_arch_network.py ]; then \
+		echo "Downloading SwinIR from official repository..."; \
+		mkdir -p /tmp/swinir; \
+		git clone --depth=1 https://github.com/JingyunLiang/SwinIR.git /tmp/swinir 2>/dev/null || true; \
+		if [ -f /tmp/swinir/models/network_swinir.py ]; then \
+			cp /tmp/swinir/models/network_swinir.py utils/swinir_arch_network.py; \
+			echo "✓ SwinIR architecture installed"; \
+		else \
+			echo "⚠️  Auto-download failed. Manual setup required:"; \
+			echo "   1. Clone: git clone https://github.com/JingyunLiang/SwinIR.git"; \
+			echo "   2. Copy: cp SwinIR/models/network_swinir.py utils/swinir_arch_network.py"; \
+		fi; \
+	else \
+		echo "✓ SwinIR architecture already installed"; \
+	fi
+
+download-weights:
+	@echo "Downloading upscaling model weights..."
+	@mkdir -p weights/upscaling
+	@if [ ! -f weights/upscaling/swinir_real_4x.pth ]; then \
+		echo "Downloading SwinIR Real-World 4x (150MB)..."; \
+		wget -q --show-progress \
+			https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth \
+			-O weights/upscaling/swinir_real_4x.pth 2>/dev/null || \
+		curl -L -o weights/upscaling/swinir_real_4x.pth \
+			https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth; \
+	fi
+	@if [ ! -f weights/upscaling/realesrgan_4x.pth ]; then \
+		echo "Downloading Real-ESRGAN 4x (65MB)..."; \
+		wget -q --show-progress \
+			https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth \
+			-O weights/upscaling/realesrgan_4x.pth 2>/dev/null || \
+		curl -L -o weights/upscaling/realesrgan_4x.pth \
+			https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth; \
+	fi
+	@if [ ! -f weights/upscaling/realesrgan_general_4x.pth ]; then \
+		echo "Downloading Real-ESRGAN General x4v3 (65MB)..."; \
+		wget -q --show-progress \
+			https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth \
+			-O weights/upscaling/realesrgan_general_4x.pth 2>/dev/null || \
+		curl -L -o weights/upscaling/realesrgan_general_4x.pth \
+			https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth; \
+	fi
+	@echo "✓ Model weights downloaded (verify with: sha256sum weights/upscaling/*.pth)"
+
+test-upscaling:
+	@echo "Testing upscaling engine..."
+	@"$(PY)" -c "from utils.upscaling_engine import UpscalingEngine, UpscalingConfig; print('✓ Engine imports OK')"
+	@if [ -f weights/upscaling/realesrgan_4x.pth ]; then \
+		echo "✓ Real-ESRGAN weights found"; \
+	else \
+		echo "⚠️  Real-ESRGAN weights missing (run: make download-weights)"; \
+	fi
+	@if [ -f utils/swinir_arch_network.py ]; then \
+		echo "✓ SwinIR architecture installed"; \
+	else \
+		echo "⚠️  SwinIR architecture missing (run: make setup-swinir)"; \
+	fi
+
+test-unified-pipeline:
+	@echo "Testing unified luxury pipeline..."
+	@"$(PY)" -c "from unified_luxury_pipeline import UnifiedLuxuryPipeline, PipelinePreset; print('✓ Unified pipeline imports OK')"
+	@echo "✓ Available presets:"
+	@"$(PY)" -c "from unified_luxury_pipeline import PipelinePreset; [print(f'  - {p.value}') for p in PipelinePreset]"
