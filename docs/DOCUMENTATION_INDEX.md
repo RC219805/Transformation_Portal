@@ -4,6 +4,16 @@ This directory contains organized documentation for the Transformation Portal.
 
 ## Directory Structure
 
+### `/architecture`
+System architecture, ADRs (Architectural Decision Records), and design documentation.
+
+**Key Documents:**
+- [ARCHITECTURE_REVIEW_2025.md](architecture/ARCHITECTURE_REVIEW_2025.md) - Comprehensive architecture review
+- [INTERFACE_MIGRATION_GUIDE.md](architecture/INTERFACE_MIGRATION_GUIDE.md) - Guide for adopting interface contracts
+- [SECURITY_MIGRATION_GUIDE.md](architecture/SECURITY_MIGRATION_GUIDE.md) - Guide for security hardening
+- [adr/ADR-001-module-interface-contracts.md](architecture/adr/ADR-001-module-interface-contracts.md) - Interface contracts ADR
+- [adr/ADR-002-security-input-validation.md](architecture/adr/ADR-002-security-input-validation.md) - Security validation ADR
+
 ### `/migration`
 Migration guides and version upgrade documentation.
 
