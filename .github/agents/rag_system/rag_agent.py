@@ -48,14 +48,13 @@ Version: 1.0.0
 from __future__ import annotations
 
 import json
-import logging
 import time
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import asdict, dataclass, field, replace
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -64,14 +63,11 @@ from .cache_manager import CacheManager
 from .citation import CitationGenerator
 from .config import get_config
 from .enhanced_retriever import EnhancedHybridRetriever, RetrieverConfig
-from .exceptions import RetrievalError
 from .indexer import DocumentChunk, RepositoryIndexer
 from .knowledge_engine import KnowledgeIntegrationEngine
 from .logger import get_logger
 from .reranker import ResultReranker
 from .retriever import HybridRetriever, RetrievalResult
-from .semantic_search import SemanticCodeSearch
-from .templates import PromptTemplates
 
 logger = get_logger(__name__)
 
@@ -140,7 +136,7 @@ class RetrievalMetrics:
     retrieval_strategy: str
     cache_hit: bool
     confidence_score: float
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now())
 
 
 @dataclass
@@ -525,9 +521,13 @@ class RAGAgent:
             for source in file_sources[1:]:
                 # Merge if adjacent (within threshold lines)
                 if source.start_line - current_merge.end_line <= ADJACENT_CHUNK_THRESHOLD:
-                    current_merge.content += "\n" + source.content
-                    current_merge.end_line = source.end_line
-                    current_merge.score = max(current_merge.score, source.score)
+                    # Create new instance to avoid mutating original
+                    current_merge = replace(
+                        current_merge,
+                        content=current_merge.content + "\n" + source.content,
+                        end_line=source.end_line,
+                        score=max(current_merge.score, source.score)
+                    )
                 else:
                     merged_sources.append(current_merge)
                     current_merge = source
