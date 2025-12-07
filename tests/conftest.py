@@ -18,3 +18,14 @@ PROPER SETUP:
 Tests will automatically find the package if installed via pip install -e .
 or if PYTHONPATH is set correctly.
 """
+
+import sys
+from pathlib import Path
+
+# Add lux_depth_v2 peer module to Python path for test discovery
+# This ensures lux_depth_v2 can be imported during tests without requiring
+# it to be installed as a package
+repo_root = Path(__file__).parent.parent
+lux_depth_v2_path = repo_root / "lux_depth_v2"
+if lux_depth_v2_path.exists() and str(lux_depth_v2_path) not in sys.path:
+    sys.path.insert(0, str(lux_depth_v2_path.parent))
