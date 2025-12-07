@@ -1,3 +1,12 @@
+# =============================================================================
+# Lux Depth V2 - Standalone Dependencies
+# =============================================================================
+# For standalone usage (outside Transformation Portal repository).
+# For repository integration, use requirements-repo.txt instead.
+#
+# SECURITY WARNING: This file includes DEPRECATED and UNSAFE dependencies.
+# =============================================================================
+
 numpy>=1.23
 opencv-python>=4.8
 tifffile>=2023.7.10
@@ -9,9 +18,22 @@ torch>=2.1
 # Optional: ONNX backends
 onnxruntime>=1.16
 
-# Optional: Real-ESRGAN backend
-realesrgan>=0.3
-basicsr>=1.4
+# =============================================================================
+# ⚠️  SECURITY WARNING - DEPRECATED DEPENDENCIES ⚠️
+# =============================================================================
+# The following dependencies are UNSAFE and should NOT be installed:
+#
+# realesrgan>=0.3   - Depends on vulnerable basicsr (CVE-2024-27763)
+# basicsr>=1.4      - CVE-2024-27763: Command injection vulnerability
+#
+# MITIGATION:
+# 1. For Transformation Portal integration: Use requirements-repo.txt
+# 2. For upscaling: Use --upscaler-backend torch (safe, default)
+# 3. See SECURITY.md for details and alternative backends
+#
+# The module will automatically use the safe torch backend if you
+# specify --upscaler-backend realesrgan (with deprecation warning).
+# =============================================================================
 
 # Optional: segformer backend
 transformers>=4.40
