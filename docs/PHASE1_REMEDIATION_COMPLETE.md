@@ -352,15 +352,16 @@ grep "segformer_revision" lux_depth_v2/material_segmentation.py
 
 ## Files Changed Summary
 
-### Modified Files (3)
+### Modified Files (4)
 1. `lux_depth_v2/requirements.txt` - Added comprehensive security warnings
 2. `SECURITY.md` - Added lux_depth_v2 security section
 3. `lux_depth_v2/config.py` - Added `segformer_revision` field
 4. `lux_depth_v2/material_segmentation.py` - Implemented revision pinning
 
-### New Files (2)
+### New Files (3)
 1. `lux_depth_v2/tests/test_security_hardening.py` - Security test suite
 2. `docs/PHASE1_REMEDIATION_COMPLETE.md` - This document
+3. `docs/PHASE1_VERIFICATION_REPORT.md` - Phase 1 verification/audit report
 
 ### No Changes Required (Pre-existing Security)
 1. `lux_depth_v2/requirements-repo.txt` - Already excludes vulnerable packages

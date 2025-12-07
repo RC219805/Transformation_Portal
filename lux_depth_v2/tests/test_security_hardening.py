@@ -64,11 +64,23 @@ class TestServiceModeSecurity:
     
     def test_validate_filepath_has_null_byte_checks(self):
         """Verify validate_filepath checks for null bytes."""
+        import re
         service_src = (Path(__file__).parent.parent / "service.py").read_text()
         
-        # Verify null byte protection
-        assert "\\x00" in service_src or "\\n" in service_src, \
-            "validate_filepath missing null/newline byte checks"
+        # Extract the validate_filepath function body
+        match = re.search(
+            r"def validate_filepath\(.*?\):.*?\n((?:[ \t]+.+\n)*)", 
+            service_src, 
+            re.MULTILINE | re.DOTALL
+        )
+        assert match, "validate_filepath function not found in service.py"
+        func_body = match.group(0)
+        
+        # Verify null byte protection is present in the function body
+        assert (
+            "'\\x00'" in func_body or '"\\x00"' in func_body or
+            "'\\0'" in func_body or '"\\0"' in func_body
+        ), "validate_filepath missing null byte checks"
     
     def test_validate_filepath_has_extension_validation(self):
         """Verify validate_filepath validates file extensions."""
@@ -108,7 +120,6 @@ class TestUpscalerSecurity:
     def test_realesrgan_backend_is_deprecated(self):
         """Verify realesrgan backend triggers deprecation warning."""
         from lux_depth_v2 import config
-        from dataclasses import replace
         
         # Create config with realesrgan backend
         cfg = config.PipelineConfig(upscaler_backend="realesrgan")
