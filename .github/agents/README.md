@@ -4,6 +4,49 @@ This directory contains specialized GitHub Copilot agents tailored for the Trans
 
 ## Available Agents
 
+### 🤖 RAG Integration Agent (NEW)
+
+**File**: `rag-integration-agent.md`
+
+**Purpose**: Advanced autonomous RAG orchestration agent for optimizing knowledge retrieval, fusion, and context-aware code assistance. Coordinates with other agents to provide accurate, well-cited responses.
+
+**Core Capabilities**:
+- **Intelligent Query Orchestration**: Multi-strategy retrieval (single, multi-source, chain reasoning, adaptive)
+- **Knowledge Fusion**: Combines code, docs, and tests into coherent responses
+- **Confidence Assessment**: High/medium/low confidence with gap analysis
+- **Cross-Agent Coordination**: Prepares context for Specialist/Architect agents
+- **Adaptive Learning**: Improves from feedback over time
+- **Quality Assurance**: Validates retrieval results, detects conflicts
+
+**Best Used For**:
+- Preparing context for implementation tasks
+- Investigating bugs with multi-source knowledge
+- Understanding complex pipelines and workflows
+- Identifying documentation/test gaps
+- Coordinating between Specialist and Architect agents
+- Validating information accuracy with citations
+
+**Key Features**:
+- Four retrieval strategies: SINGLE_QUERY, MULTI_SOURCE, CHAIN_REASONING, ADAPTIVE
+- Intent classification: IMPLEMENTATION, BUG_FIX, EXPLORATION, OPTIMIZATION, etc.
+- Confidence scoring with recency and quality metrics
+- Gap and conflict detection
+- Query caching for performance
+- Feedback-driven learning
+
+**Usage**:
+```
+@rag-integration-agent How do I add atmospheric effects to the depth pipeline?
+
+@rag-integration-agent [IMPLEMENTATION] Add sunset LUT preset to video grader
+
+@rag-integration-agent [MULTI_SOURCE] Find all depth processing patterns
+```
+
+**Documentation**: See `RAG_AGENT_GUIDE.md` for complete usage guide
+
+---
+
 ### 🎨 Transformation Portal Specialist (RAG-Enhanced)
 
 **File**: `transformation-portal-specialist.md`
@@ -39,6 +82,46 @@ This directory contains specialized GitHub Copilot agents tailored for the Trans
 - Performance profiling and optimization strategies
 - Professional color grading and HDR workflows
 - Comprehensive testing strategies (pytest, hypothesis, mocking)
+
+---
+
+### 🏗️ Transformation Portal Architect
+
+**File**: `transformation-portal-architect.md`
+
+**Purpose**: Senior technical authority for system design, security, and long-term health of the Transformation Portal. Focuses on architecture, cross-module integration, and technical debt management.
+
+**Core Responsibilities**:
+- **System Architecture & Integration**: Design interactions between pipelines
+- **Security & Compliance**: Audit vulnerabilities, manage dependencies
+- **Technical Debt Management**: Identify patterns, propose refactoring
+- **Infrastructure & DevOps**: Manage CI/CD, containerization, deployment
+- **API Governance**: Define contracts between components
+
+**Best Used For**:
+- Designing new modules or major refactoring
+- Security audits and vulnerability reviews
+- Cross-module integration design
+- CI/CD workflow creation and optimization
+- Architectural decision records (ADRs)
+- Dependency governance and conflict resolution
+
+**Key Capabilities**:
+- Cross-module dependency analysis
+- Security vulnerability scanning
+- Architectural pattern enforcement
+- Infrastructure as code (Docker, CI/CD)
+- API contract design
+- Technical debt assessment
+
+**Usage**:
+```
+@transformation-portal-architect Design a new module for batch video processing
+
+@transformation-portal-architect Review the security of this input handler
+
+@transformation-portal-architect How should we refactor the legacy batch processor?
+```
 
 ## How to Use Custom Agents
 
