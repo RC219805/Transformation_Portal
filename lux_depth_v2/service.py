@@ -123,3 +123,38 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
     logger.info(f"Starting service on {host}:{port} | output_dir={cfg.output_dir}")
     logger.info(f"Security: Rate limiting enabled (10/min), max upload size: {MAX_UPLOAD_SIZE} bytes")
     uvicorn.run(app, host=host, port=int(port))
+
+
+def main() -> None:
+    """Entry point for lux-depth-v2-service command.
+    
+    This is a convenience wrapper that starts the service with default settings.
+    For more control over configuration, use: lux-depth-v2 --service [options]
+    """
+    import argparse
+    from pathlib import Path
+    
+    parser = argparse.ArgumentParser(
+        description="Lux Depth V2 Service Mode (FastAPI server)",
+        epilog="For full configuration options, use: lux-depth-v2 --service --help"
+    )
+    parser.add_argument("--output-dir", type=str, required=True, help="Output directory for processed images")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8088, help="Port to bind to (default: 8088)")
+    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"],
+                       help="Device to use (default: auto)")
+    
+    args = parser.parse_args()
+    
+    # Create minimal config for service mode
+    cfg = PipelineConfig(
+        output_dir=Path(args.output_dir),
+        device=args.device
+    )
+    
+    logger = setup_logging("INFO")
+    run_service(cfg, host=args.host, port=args.port, logger=logger)
+
+
+if __name__ == "__main__":
+    main()

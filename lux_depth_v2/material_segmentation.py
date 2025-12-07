@@ -256,47 +256,49 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
                 if any(tok in name for tok in toks):
                     self.bucket_ids[bucket].append(idx)
 
-    @torch_ops.torch.no_grad()
     def predict(self, rgb: "torch_ops.torch.Tensor") -> Dict[str, "torch_ops.torch.Tensor"]:
         torch_ops.require_torch()
         device = rgb.device
-        rgb_in, scale = _resize_long_side(rgb, int(self.cfg.input_long_side))
+        
+        # Use context manager instead of decorator to avoid import-time issues
+        with torch_ops.torch.no_grad():
+            rgb_in, scale = _resize_long_side(rgb, int(self.cfg.input_long_side))
 
-        # processor expects PIL or numpy; use cpu numpy for preprocessing
-        np_img = (rgb_in[0].permute(1,2,0).clamp(0,1).to("cpu").numpy() * 255.0).astype(np.uint8)
+            # processor expects PIL or numpy; use cpu numpy for preprocessing
+            np_img = (rgb_in[0].permute(1,2,0).clamp(0,1).to("cpu").numpy() * 255.0).astype(np.uint8)
 
-        inputs = self.processor(images=np_img, return_tensors="pt")
-        inputs = {k: v.to(device) for k, v in inputs.items()}
+            inputs = self.processor(images=np_img, return_tensors="pt")
+            inputs = {k: v.to(device) for k, v in inputs.items()}
 
-        outputs = self.model(**inputs)
-        logits = outputs.logits  # 1xCxH'xW'
-        probs = torch_ops.torch.softmax(logits.to(dtype=torch_ops.torch.float32), dim=1)
+            outputs = self.model(**inputs)
+            logits = outputs.logits  # 1xCxH'xW'
+            probs = torch_ops.torch.softmax(logits.to(dtype=torch_ops.torch.float32), dim=1)
 
-        # upsample to rgb_in resolution
-        probs = torch_ops.resize(probs, (rgb_in.shape[2], rgb_in.shape[3]), mode="bilinear", autocast=True)
+            # upsample to rgb_in resolution
+            probs = torch_ops.resize(probs, (rgb_in.shape[2], rgb_in.shape[3]), mode="bilinear", autocast=True)
 
-        masks: Dict[str, torch_ops.torch.Tensor] = {}
-        for bucket, ids in self.bucket_ids.items():
-            if not ids:
-                continue
-            # sum probabilities of relevant classes
-            idx = torch_ops.torch.tensor(ids, device=device, dtype=torch_ops.torch.long)
-            m = probs.index_select(1, idx).sum(dim=1, keepdim=True)
-            masks[bucket] = m.clamp(0.0, 1.0)
+            masks: Dict[str, torch_ops.torch.Tensor] = {}
+            for bucket, ids in self.bucket_ids.items():
+                if not ids:
+                    continue
+                # sum probabilities of relevant classes
+                idx = torch_ops.torch.tensor(ids, device=device, dtype=torch_ops.torch.long)
+                m = probs.index_select(1, idx).sum(dim=1, keepdim=True)
+                masks[bucket] = m.clamp(0.0, 1.0)
 
-        # resize masks back to original if needed
-        if scale != 1.0:
-            _, _, h0, w0 = rgb.shape
+            # resize masks back to original if needed
+            if scale != 1.0:
+                _, _, h0, w0 = rgb.shape
+                for k in list(masks.keys()):
+                    masks[k] = torch_ops.resize(masks[k], (h0, w0), mode="bilinear", autocast=True)
+
+            sigma = float(getattr(self.cfg, "soften_sigma_px", 2.0))
+            min_c = float(getattr(self.cfg, "min_confidence", 0.25))
             for k in list(masks.keys()):
-                masks[k] = torch_ops.resize(masks[k], (h0, w0), mode="bilinear", autocast=True)
+                masks[k] = _soften_mask(masks[k].clamp(0.0, 1.0), sigma)
+                masks[k] = torch_ops.torch.where(masks[k] >= min_c, masks[k], torch_ops.torch.zeros_like(masks[k]))
 
-        sigma = float(getattr(self.cfg, "soften_sigma_px", 2.0))
-        min_c = float(getattr(self.cfg, "min_confidence", 0.25))
-        for k in list(masks.keys()):
-            masks[k] = _soften_mask(masks[k].clamp(0.0, 1.0), sigma)
-            masks[k] = torch_ops.torch.where(masks[k] >= min_c, masks[k], torch_ops.torch.zeros_like(masks[k]))
-
-        return masks
+            return masks
 
 
 def create_material_segmenter(seg_cfg, device: "torch_ops.torch.device") -> Optional[MaterialSegmenter]:
