@@ -118,7 +118,7 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
                 return JSONResponse(rep)
             except Exception as e:
                 logger.exception(f"request failed: {req_id}: {e}")
-                return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
+                return JSONResponse({"status": "error", "error": "An internal error has occurred."}, status_code=500)
 
     logger.info(f"Starting service on {host}:{port} | output_dir={cfg.output_dir}")
     logger.info(f"Security: Rate limiting enabled (10/min), max upload size: {MAX_UPLOAD_SIZE} bytes")
