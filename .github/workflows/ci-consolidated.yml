@@ -258,6 +258,12 @@ jobs:
             echo "✅ basicsr package is NOT installed (as expected)"
           fi
 
+      - name: Check Module Boundaries (ADR-001)
+        run: |
+          echo "🔍 Checking module boundary violations..."
+          python scripts/validation/check_module_boundaries.py --fail-on-violations
+          echo "✅ Module boundary check passed"
+
   # ===========================================================================
   # Stage 3: Core Tests (No ML Dependencies)
   # ===========================================================================
