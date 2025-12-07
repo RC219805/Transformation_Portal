@@ -22,6 +22,8 @@ See Also:
 from pathlib import Path
 from typing import List, Optional
 import os
+import signal
+from contextlib import contextmanager
 
 
 class SecurityError(Exception):
@@ -242,6 +244,11 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     return filename
 
 
+# Shell metacharacters that could enable command injection
+# Includes: semicolon, ampersand, pipe, backtick, dollar, parentheses, angle brackets
+DANGEROUS_SHELL_CHARS = set(";&|`$()<>")
+
+
 def build_safe_command(
     executable: str,
     args: List[str],
@@ -256,7 +263,7 @@ def build_safe_command(
     Args:
         executable: Command executable (e.g., 'ffmpeg')
         args: List of command arguments
-        dangerous_chars: Set of characters to reject (default: shell metacharacters)
+        dangerous_chars: Set of characters to reject (default: DANGEROUS_SHELL_CHARS)
         
     Returns:
         List of command arguments (safe for subprocess.run without shell=True)
@@ -273,8 +280,7 @@ def build_safe_command(
         SecurityError: Argument contains dangerous characters
     """
     if dangerous_chars is None:
-        # Common shell metacharacters
-        dangerous_chars = set(";&|`$()<>")
+        dangerous_chars = DANGEROUS_SHELL_CHARS
     
     # Validate executable
     if any(char in executable for char in dangerous_chars):
@@ -291,6 +297,168 @@ def build_safe_command(
     
     # Build command list
     return [executable] + [str(arg) for arg in args]
+
+
+def build_ffmpeg_command(
+    input_file: Path,
+    output_file: Path,
+    filters: Optional[List[str]] = None,
+    codec: str = "libx264",
+    additional_args: Optional[List[str]] = None,
+    validate_paths: bool = True,
+    allowed_dirs: Optional[List[Path]] = None
+) -> List[str]:
+    """
+    Build safe FFmpeg command with injection protection.
+    
+    Constructs FFmpeg command as argument list (no shell required),
+    validates filter strings for shell metacharacters, and optionally
+    validates file paths.
+    
+    Args:
+        input_file: Input file path
+        output_file: Output file path
+        filters: Optional list of video filter strings
+        codec: Video codec (default 'libx264')
+        additional_args: Optional additional FFmpeg arguments
+        validate_paths: Whether to validate paths are safe (default True)
+        allowed_dirs: Required if validate_paths=True
+        
+    Returns:
+        List of command arguments safe for subprocess.run without shell=True
+        
+    Raises:
+        SecurityError: If filters contain dangerous characters or paths invalid
+        
+    Example:
+        >>> cmd = build_ffmpeg_command(
+        ...     Path('input.mp4'),
+        ...     Path('output.mp4'),
+        ...     filters=['scale=1920:1080', 'fps=30']
+        ... )
+        >>> subprocess.run(cmd, check=True)  # Safe: no shell=True
+        
+    See Also:
+        - docs/architecture/adr/ADR-002-security-input-validation.md
+    """
+    # Validate paths if requested
+    if validate_paths:
+        if allowed_dirs is None:
+            allowed_dirs = [Path.cwd()]
+        validate_filepath(input_file, allowed_dirs, must_exist=True)
+        validate_filepath(output_file, allowed_dirs, must_exist=False)
+    
+    # Validate filter strings don't contain shell metacharacters
+    if filters:
+        for filter_str in filters:
+            if any(char in filter_str for char in DANGEROUS_SHELL_CHARS):
+                raise SecurityError(
+                    f"Filter contains dangerous characters: {filter_str}\n"
+                    f"Dangerous characters: {DANGEROUS_SHELL_CHARS}"
+                )
+    
+    # Build command list
+    cmd = ["ffmpeg", "-i", str(input_file)]
+    
+    # Add filters if provided
+    if filters:
+        cmd.extend(["-vf", ",".join(filters)])
+    
+    # Add codec
+    cmd.extend(["-c:v", codec])
+    
+    # Add additional arguments
+    if additional_args:
+        cmd.extend([str(arg) for arg in additional_args])
+    
+    # Add output file
+    cmd.append(str(output_file))
+    
+    return cmd
+
+
+def validate_filter_graph(filter_graph: str) -> str:
+    """
+    Validate FFmpeg filter graph string for safety.
+    
+    Checks that filter graph doesn't contain shell metacharacters
+    or other dangerous patterns that could enable command injection.
+    
+    Args:
+        filter_graph: FFmpeg filter graph string
+        
+    Returns:
+        Validated filter graph string
+        
+    Raises:
+        SecurityError: If filter graph contains dangerous patterns
+        
+    Example:
+        >>> safe_graph = validate_filter_graph("scale=1920:1080,fps=30")
+        >>> dangerous = validate_filter_graph("scale=1920; rm -rf /")
+        Traceback (most recent call last):
+        SecurityError: Filter graph contains dangerous characters
+    """
+    if any(char in filter_graph for char in DANGEROUS_SHELL_CHARS):
+        raise SecurityError(
+            f"Filter graph contains dangerous characters: {filter_graph}\n"
+            f"Dangerous characters found: {[c for c in DANGEROUS_SHELL_CHARS if c in filter_graph]}"
+        )
+    
+    return filter_graph
+
+
+class TimeoutError(Exception):
+    """Raised when operation exceeds timeout."""
+    pass
+
+
+@contextmanager
+def timeout(seconds: int):
+    """
+    Context manager for operation timeout (Unix-only).
+    
+    Uses SIGALRM which only works on Unix-like systems (Linux, macOS).
+    Windows users should use alternative timeout mechanisms.
+    
+    Args:
+        seconds: Timeout in seconds
+        
+    Yields:
+        None
+        
+    Raises:
+        TimeoutError: If operation exceeds timeout
+        NotImplementedError: If used on Windows
+        
+    Example:
+        >>> with timeout(30):
+        ...     slow_operation()  # Raises TimeoutError after 30s
+        
+    Warning:
+        This implementation uses signal.SIGALRM which is not available
+        on Windows. Use multiprocessing.Process with timeout parameter
+        or threading-based solutions on Windows.
+    """
+    if not hasattr(signal, 'SIGALRM'):
+        raise NotImplementedError(
+            "timeout() requires signal.SIGALRM (Unix-only). "
+            "Use multiprocessing or threading-based timeout on Windows."
+        )
+    
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Operation exceeded {seconds}s timeout")
+    
+    # Set signal handler
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+    
+    try:
+        yield
+    finally:
+        # Restore old handler and cancel alarm
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 
 # Deprecated alias for backwards compatibility
