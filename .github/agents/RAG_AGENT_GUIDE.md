@@ -683,7 +683,6 @@ class RetrievalStrategy(Enum):
     MULTI_SOURCE = "multi_source"
     CHAIN_REASONING = "chain"
     ADAPTIVE = "adaptive"
-    CACHED_ONLY = "cached"
 
 class UserIntent(Enum):
     IMPLEMENTATION = "implementation"
@@ -701,11 +700,9 @@ class ConfidenceLevel(Enum):
 
 ## Examples
 
-See `examples/rag/` directory for complete examples:
-- `feature_implementation_example.py` - Implementing a new feature
-- `bug_investigation_example.py` - Debugging with RAG
-- `code_exploration_example.py` - Understanding a pipeline
-- `cross_agent_coordination_example.py` - Coordinating with other agents
+See `.github/agents/rag_system/examples/` directory for complete examples:
+- `demo_rag_agent.py` - Demonstrates RAG agent usage and integration
+- `README.md` - Example usage instructions and integration notes
 
 ## Next Steps
 

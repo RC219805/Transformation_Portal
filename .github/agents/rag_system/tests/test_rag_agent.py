@@ -13,7 +13,6 @@ Comprehensive tests for the RAGAgent orchestration system including:
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 # Add parent directory to path
 rag_system_path = Path(__file__).parent.parent
@@ -349,7 +348,7 @@ class TestRAGAgent:
         
         # Execute query
         query = "depth processing"
-        response = agent.query(query)
+        agent.query(query)
         
         # Add feedback
         agent.add_feedback(query, helpful=True, comment="Very helpful!")
@@ -456,7 +455,7 @@ class TestRAGAgent:
         
         # Execute query with multi-source strategy
         context = QueryContext(user_intent=UserIntent.IMPLEMENTATION)
-        response = agent.query(
+        agent.query(
             "add new feature",
             context=context,
             strategy=RetrievalStrategy.MULTI_SOURCE
