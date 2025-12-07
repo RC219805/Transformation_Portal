@@ -482,6 +482,7 @@ class TestRAGAgent:
         
         assert 'citations' in response.__dict__
         # Citations may be empty if no sources found, but structure exists
+        assert hasattr(response, 'citations')
         assert isinstance(response.citations, list)
 
 

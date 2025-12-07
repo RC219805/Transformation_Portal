@@ -80,6 +80,11 @@ logger = get_logger(__name__)
 # Enums and Constants
 # =============================================================================
 
+# Configuration constants
+DEFAULT_RECENCY_SCORE = 0.5  # Default when file mtime unavailable
+DEFAULT_QUALITY_SCORE = 0.5  # Default when code quality signals unavailable
+ADJACENT_CHUNK_THRESHOLD = 5  # Lines between chunks to consider for merging
+
 
 class RetrievalStrategy(Enum):
     """Strategy for RAG retrieval."""
@@ -88,7 +93,6 @@ class RetrievalStrategy(Enum):
     MULTI_SOURCE = "multi_source"     # Query code, docs, tests separately
     CHAIN_REASONING = "chain"         # Chain multiple queries for complex tasks
     ADAPTIVE = "adaptive"             # Agent decides optimal strategy
-    CACHED_ONLY = "cached"            # Use only cached results
 
 
 class UserIntent(Enum):
@@ -370,6 +374,8 @@ class RAGAgent:
         confidence = self._assess_confidence(fused_sources, query_text)
         
         # Generate citations
+        # Note: Citation generator expects RetrievalResult objects
+        # This conversion maintains compatibility with existing citation system
         citations = []
         if include_citations and fused_sources:
             retrieval_results = [self._source_to_result(s) for s in fused_sources]
@@ -517,8 +523,8 @@ class RAGAgent:
             
             current_merge = file_sources[0]
             for source in file_sources[1:]:
-                # Merge if adjacent (within 5 lines)
-                if source.start_line - current_merge.end_line <= 5:
+                # Merge if adjacent (within threshold lines)
+                if source.start_line - current_merge.end_line <= ADJACENT_CHUNK_THRESHOLD:
                     current_merge.content += "\n" + source.content
                     current_merge.end_line = source.end_line
                     current_merge.score = max(current_merge.score, source.score)
@@ -824,10 +830,21 @@ class RAGAgent:
         return RetrievalStrategy.SINGLE_QUERY
     
     def _decompose_query(self, query: str, context: QueryContext) -> List[str]:
-        """Decompose complex query into sub-queries."""
-        # Simplified decomposition
-        # In production, this would use NLP techniques
+        """
+        Decompose complex query into sub-queries.
         
+        Note: This is a simplified heuristic-based decomposition.
+        Production systems would use:
+        - NLP techniques (spaCy, NLTK)
+        - Dependency parsing
+        - Intent recognition
+        - Query reformulation
+        
+        Current limitations:
+        - Only handles simple ' and ' splits
+        - May miss complex query patterns
+        - Does not handle nested conditions
+        """
         sub_queries = []
         
         # Split on "and", "then", etc.
@@ -850,8 +867,8 @@ class RAGAgent:
             end_line=result.end_line,
             score=result.score,
             retrieval_method=result.retrieval_method,
-            recency_score=0.5,  # Default, should compute from file mtime
-            quality_score=0.5,  # Default, should compute from code quality signals
+            recency_score=DEFAULT_RECENCY_SCORE,  # TODO: Compute from file mtime
+            quality_score=DEFAULT_QUALITY_SCORE,  # TODO: Extract code quality signals
             metadata=result.metadata,
         )
     

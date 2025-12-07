@@ -23,7 +23,6 @@ def test_enum_definitions():
         MULTI_SOURCE = "multi_source"
         CHAIN_REASONING = "chain"
         ADAPTIVE = "adaptive"
-        CACHED_ONLY = "cached"
     
     assert RetrievalStrategy.SINGLE_QUERY.value == "single"
     assert RetrievalStrategy.MULTI_SOURCE.value == "multi_source"
