@@ -111,10 +111,67 @@ class LuxPipelineV2:
             f"upscaler={type(self.upscaler).__name__} seg={type(self.segmenter).__name__ if self.segmenter else 'None'}"
         )
 
+    def _sync_for_timing(self) -> None:
+        """Optional sync to make per-stage timings accurate on async devices."""
+        if not getattr(self.cfg, "timing_sync_device", False):
+            return
+        try:
+            import torch
+            d = str(getattr(self, "device", "")).lower()
+            if "cuda" in d and torch.cuda.is_available():
+                torch.cuda.synchronize()
+            elif d.startswith("mps") and hasattr(torch, "mps") and torch.backends.mps.is_available():
+                torch.mps.synchronize()
+        except Exception:
+            # never let timing sync crash the pipeline
+            return
+
+    def _stage(self, report: dict, name: str):
+        """
+        Context manager recording wall time per stage into report['stage_times_sec'].
+        Accumulates if the same stage is entered multiple times (e.g. tiled loops).
+        """
+        from contextlib import contextmanager
+        from time import perf_counter
+
+        @contextmanager
+        def _stage_context():
+            self._sync_for_timing()
+            t0 = perf_counter()
+            try:
+                yield
+            finally:
+                self._sync_for_timing()
+                dt = perf_counter() - t0
+                st = report.setdefault("stage_times_sec", {})
+                st[name] = float(st.get(name, 0.0)) + float(dt)
+
+        return _stage_context()
+
+    def _ensure_output_dir(self, out_dir: Path) -> None:
+        """Create output dir only if writes are enabled."""
+        if not getattr(self.cfg, "write_outputs", True):
+            return
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    def _write_json(self, path: Path, obj: dict) -> None:
+        """Write JSON only if writes are enabled."""
+        if not getattr(self.cfg, "write_outputs", True):
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(obj, indent=2))
+
     def process_one(self, img_path: Path, depth_path: Optional[Path] = None) -> Dict[str, object]:
         """Process a single image file and write outputs to output_dir."""
         t0 = time.time()
         cfg = self.cfg
+
+        # Initialize report early so stage_times_sec is always present
+        report = {
+            "status": "processing",
+            "image": str(img_path),
+            "stage_times_sec": {},
+        }
 
         if not cfg.output_dir:
             raise ValueError("cfg.output_dir is required for file-based processing")
@@ -122,7 +179,7 @@ class LuxPipelineV2:
         img_path = Path(img_path)
         stem = img_path.stem
         out_dir = Path(cfg.output_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
+        self._ensure_output_dir(out_dir)
 
         # Output paths
         master_path = out_dir / f"{stem}_master16.tif"
@@ -136,8 +193,9 @@ class LuxPipelineV2:
             return {"status": "skipped", "image": str(img_path)}
 
         # Load image
-        rgb01, info = io_utils.read_rgb_any(img_path)
-        H, W = rgb01.shape[:2]
+        with self._stage(report, "io/read_input"):
+            rgb01, info = io_utils.read_rgb_any(img_path)
+            H, W = rgb01.shape[:2]
         float_gb = (H * W * 3 * 4) / 1e9
         if float_gb > float(cfg.warn_float_gb):
             self.logger.warning(
@@ -145,72 +203,82 @@ class LuxPipelineV2:
             )
 
         # Depth and weights
-        if depth_path is None:
-            depth_path = _find_depth(cfg.depth_dir, stem)
-        depth01 = None
-        if depth_path and Path(depth_path).exists():
-            depth01 = io_utils.read_depth_u16(Path(depth_path))
-        else:
-            if cfg.strict_depth:
-                raise FileNotFoundError(f"Depth missing for {img_path.name} (strict_depth=True)")
-            self.logger.warning(f"Depth missing for {img_path.name}; using uniform weights")
+        with self._stage(report, "io/read_depth"):
+            if depth_path is None:
+                depth_path = _find_depth(cfg.depth_dir, stem)
+            depth01 = None
+            if depth_path and Path(depth_path).exists():
+                depth01 = io_utils.read_depth_u16(Path(depth_path))
+            else:
+                if cfg.strict_depth:
+                    raise FileNotFoundError(f"Depth missing for {img_path.name} (strict_depth=True)")
+                self.logger.warning(f"Depth missing for {img_path.name}; using uniform weights")
 
-        zone_masks = _find_zone_masks(cfg.depth_dir, stem)
-        w = weights_mod.weights_from_assets(H, W, self.device, depth01, zone_masks, cfg)
+            zone_masks = _find_zone_masks(cfg.depth_dir, stem)
+            w = weights_mod.weights_from_assets(H, W, self.device, depth01, zone_masks, cfg)
 
         # Convert to torch
         rgb_t = torch_ops.to_torch_rgb(rgb01, self.device)
 
         # Material segmentation (optional)
-        mods0: Optional[material_profiles.MaterialMods] = None
-        if cfg.enable_material and self.segmenter is not None:
-            try:
-                masks = self.segmenter.predict(rgb_t)
-                mods0 = material_profiles.build_material_mods(masks, cfg)
-            except Exception as e:
-                self.logger.exception(f"Material segmentation failed for {img_path.name}: {e}")
-                mods0 = None
+        with self._stage(report, "material/segmentation"):
+            mods0: Optional[material_profiles.MaterialMods] = None
+            if cfg.enable_material and self.segmenter is not None:
+                try:
+                    masks = self.segmenter.predict(rgb_t)
+                    mods0 = material_profiles.build_material_mods(masks, cfg)
+                except Exception as e:
+                    self.logger.exception(f"Material segmentation failed for {img_path.name}: {e}")
+                    mods0 = None
 
         # Grade at original resolution
-        with torch_ops.maybe_autocast(self.autocast, self.device):
-            master_t = torch_ops.grade_core(rgb_t, w.wfg, w.wmid, w.wbg, cfg, mods=mods0)
-            master_t = torch_ops.soft_clip01(master_t, cfg.soft_clip_knee)
-            if mods0 is not None and cfg.enable_material:
-                master_t = torch_ops.material_highlight_compress(master_t, mods0.highlight_compress, knee=0.85)
+        with self._stage(report, "grade/master"):
+            with torch_ops.maybe_autocast(self.autocast, self.device):
+                master_t = torch_ops.grade_core(rgb_t, w.wfg, w.wmid, w.wbg, cfg, mods=mods0)
+                master_t = torch_ops.soft_clip01(master_t, cfg.soft_clip_knee)
+                if mods0 is not None and cfg.enable_material:
+                    master_t = torch_ops.material_highlight_compress(master_t, mods0.highlight_compress, knee=0.85)
 
-        master01 = torch_ops.from_torch_rgb(master_t)
-        if cfg.save_master:
-            io_utils.atomic_write_rgb16_tiff(master_path, master01)
+            master01 = torch_ops.from_torch_rgb(master_t)
+        
+        # Write master and preview only if enabled
+        if cfg.write_outputs:
+            with self._stage(report, "io/write_master"):
+                if cfg.save_master:
+                    io_utils.atomic_write_rgb16_tiff(master_path, master01)
 
-        # Preview (small JPG)
-        if cfg.save_preview_jpg:
-            try:
-                import cv2
-                scale = float(cfg.preview_scale)
-                if 0 < scale < 1.0:
-                    ph, pw = int(round(H * scale)), int(round(W * scale))
-                    prev = cv2.resize(master01, (pw, ph), interpolation=cv2.INTER_AREA)
-                else:
-                    prev = master01
-                io_utils.atomic_write_jpg8(preview_path, prev, quality=92)
-            except Exception:
-                pass
+            # Preview (small JPG)
+            with self._stage(report, "io/write_preview"):
+                if cfg.save_preview_jpg:
+                    try:
+                        import cv2
+                        scale = float(cfg.preview_scale)
+                        if 0 < scale < 1.0:
+                            ph, pw = int(round(H * scale)), int(round(W * scale))
+                            prev = cv2.resize(master01, (pw, ph), interpolation=cv2.INTER_AREA)
+                        else:
+                            prev = master01
+                        io_utils.atomic_write_jpg8(preview_path, prev, quality=92)
+                    except Exception:
+                        pass
 
         # Upscaling path
-        # Base upsample: GPU bicubic
-        with torch_ops.maybe_autocast(self.autocast, self.device):
-            base_up = torch_ops.resize(master_t, (H * cfg.upscale, W * cfg.upscale), mode="bicubic", autocast=True).clamp(0.0, 1.0)
+        with self._stage(report, "upscale/base"):
+            # Base upsample: GPU bicubic
+            with torch_ops.maybe_autocast(self.autocast, self.device):
+                base_up = torch_ops.resize(master_t, (H * cfg.upscale, W * cfg.upscale), mode="bicubic", autocast=True).clamp(0.0, 1.0)
 
         ai_up = base_up
         ai_status = "none"
         if cfg.upscaler_backend != "none":
-            try:
-                ai_up = self.upscaler.upscale(master_t)
-                ai_status = str(cfg.upscaler_backend)
-            except Exception as e:
-                self.logger.exception(f"Upscaler failed for {img_path.name}; falling back to bicubic: {e}")
-                ai_up = base_up
-                ai_status = "fallback_bicubic"
+            with self._stage(report, f"upscale/{cfg.upscaler_backend}"):
+                try:
+                    ai_up = self.upscaler.upscale(master_t)
+                    ai_status = str(cfg.upscaler_backend)
+                except Exception as e:
+                    self.logger.exception(f"Upscaler failed for {img_path.name}; falling back to bicubic: {e}")
+                    ai_up = base_up
+                    ai_status = "fallback_bicubic"
 
         # Validate AI upscaler drift (optional)
         use_ai_details = (cfg.upscaler_backend != "none")
@@ -266,15 +334,17 @@ class LuxPipelineV2:
 
         out01 = torch_ops.from_torch_rgb(out_up)
 
-        if cfg.save_upscaled:
-            io_utils.atomic_write_rgb16_tiff(up_path, out01)
-        if cfg.save_marketing_png:
-            io_utils.atomic_write_png8(marketing_path, out01)
+        # Write upscaled outputs only if enabled
+        if cfg.write_outputs:
+            with self._stage(report, "io/write_upscaled"):
+                if cfg.save_upscaled:
+                    io_utils.atomic_write_rgb16_tiff(up_path, out01)
+                if cfg.save_marketing_png:
+                    io_utils.atomic_write_png8(marketing_path, out01)
 
-        # Report
-        report = {
+        # Update report with final status
+        report.update({
             "status": "ok",
-            "image": str(img_path),
             "depth": str(depth_path) if depth_path else None,
             "zone_weights": w.source,
             "material_mods": mods0.source if mods0 is not None else None,
@@ -283,12 +353,16 @@ class LuxPipelineV2:
             "ai_luma_diff": luma_diff,
             "timing_s": round(time.time() - t0, 3),
             "config": _config_to_json(cfg),
-        }
+            "write_outputs": bool(cfg.write_outputs),
+        })
 
-        try:
-            report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        except Exception:
-            pass
+        # Write report JSON only if enabled
+        if cfg.write_outputs:
+            with self._stage(report, "io/write_report"):
+                self._write_json(report_path, report)
+
+        # Backward compatibility alias
+        report["stage_times"] = report.get("stage_times_sec", {})
 
         return report
 
