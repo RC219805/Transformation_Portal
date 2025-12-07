@@ -26,6 +26,8 @@ class SegmentationConfig:
     onnx_labels_path: Optional[Path] = None  # optional JSON mapping class index->surface name
     # For backend=segformer: local HF directory or model id (if allow_downloads=True)
     segformer_model: Optional[str] = None
+    # Segformer model revision (commit hash) for security and reproducibility
+    segformer_revision: Optional[str] = None
     # For backend=sam_clip: local SAM checkpoint path
     sam_checkpoint: Optional[Path] = None
 

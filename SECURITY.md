@@ -115,6 +115,59 @@ If XPixelGroup releases a patched version (> 1.4.2), we will evaluate whether to
 
 ---
 
+## Module-Specific Security
+
+### Lux Depth V2 Module
+
+The `lux_depth_v2/` module has additional security considerations for its FastAPI service mode and dependency management.
+
+#### Security Documentation
+For comprehensive security guidelines specific to lux_depth_v2, see:
+- **📄 [lux_depth_v2/SECURITY.md](lux_depth_v2/SECURITY.md)** - Complete security guide
+
+#### Key Security Features
+
+**✅ Dependency Security:**
+- Uses `requirements-repo.txt` with repository-vetted dependencies
+- Excludes vulnerable basicsr/realesrgan packages (CVE-2024-27763)
+- Safe upscaling backends (torch, ONNX) as alternatives
+
+**✅ Service Mode Security:**
+- Input validation with path traversal protection
+- Rate limiting (10 requests/minute per IP via slowapi)
+- File upload size limits (100MB default)
+- Filename sanitization and validation
+- Configurable max concurrency limits
+
+**⚠️ Production Requirements:**
+For production deployments, the following are **strongly recommended**:
+1. **HTTPS/TLS** - Enable via reverse proxy (nginx, caddy) or uvicorn SSL
+2. **Authentication** - Implement API key or OAuth2 authentication
+3. **Firewall Rules** - Restrict access to trusted IPs only
+4. **Monitoring** - Enable security event logging and alerting
+
+#### Quick Security Checklist
+
+**Development:**
+- [x] Use `requirements-repo.txt` (not `requirements.txt`)
+- [x] No basicsr/realesrgan installed
+- [x] Service mode has input validation
+- [x] Rate limiting configured
+
+**Production (User Responsibility):**
+- [ ] HTTPS/TLS enabled (reverse proxy or uvicorn --ssl-*)
+- [ ] API authentication enabled (environment variables)
+- [ ] File upload limits configured (MAX_UPLOAD_SIZE env var)
+- [ ] Firewall rules restrict access
+- [ ] Security logging enabled
+- [ ] Regular dependency audits (safety, bandit)
+
+#### Vulnerability Reporting
+
+For security issues specific to lux_depth_v2, follow the repository-wide reporting process below, noting "lux_depth_v2 module" in your report.
+
+---
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in Transformation Portal, please report it to:
