@@ -148,9 +148,16 @@ def configure_pipeline(
     cfg.output_dir = output_root / f"bench_{device.replace(':','_')}_{upscale}x"
 
     if io_mode == "compute":
-        maybe_disable_outputs(cfg)
+        # Use the new write_outputs kill-switch for true compute-only mode
+        if hasattr(cfg, "write_outputs"):
+            cfg.write_outputs = False
+        else:
+            # Fallback for older pipeline versions
+            maybe_disable_outputs(cfg)
     elif io_mode == "end_to_end":
         # allow saving master/upscaled if your pipeline requires it; otherwise stay minimal
+        if hasattr(cfg, "write_outputs"):
+            cfg.write_outputs = True
         if hasattr(cfg, "save_upscaled"):
             cfg.save_upscaled = True
 
