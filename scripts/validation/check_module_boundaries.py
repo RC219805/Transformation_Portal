@@ -36,7 +36,7 @@ See Also:
 import ast
 import sys
 from pathlib import Path
-from typing import List, Dict, Set, Tuple
+from typing import List, Optional
 from dataclasses import dataclass
 from collections import defaultdict
 
@@ -151,7 +151,7 @@ class ModuleBoundaryChecker:
         lineno: int,
         importing_layer: str,
         imported_module: str
-    ) -> ImportViolation:
+    ) -> Optional[ImportViolation]:
         """
         Check if an import violates boundary rules.
         

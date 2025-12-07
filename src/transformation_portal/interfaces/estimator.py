@@ -5,7 +5,7 @@ Base contract for depth estimation and surface property estimation.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 import numpy as np
 
 
