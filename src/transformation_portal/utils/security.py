@@ -22,6 +22,8 @@ See Also:
 from pathlib import Path
 from typing import List, Optional
 import os
+import signal
+from contextlib import contextmanager
 
 
 class SecurityError(Exception):
@@ -242,6 +244,11 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     return filename
 
 
+# Shell metacharacters that could enable command injection
+# Includes: semicolon, ampersand, pipe, backtick, dollar, parentheses, angle brackets
+DANGEROUS_SHELL_CHARS = set(";&|`$()<>")
+
+
 def build_safe_command(
     executable: str,
     args: List[str],
@@ -256,7 +263,7 @@ def build_safe_command(
     Args:
         executable: Command executable (e.g., 'ffmpeg')
         args: List of command arguments
-        dangerous_chars: Set of characters to reject (default: shell metacharacters)
+        dangerous_chars: Set of characters to reject (default: DANGEROUS_SHELL_CHARS)
         
     Returns:
         List of command arguments (safe for subprocess.run without shell=True)
@@ -273,8 +280,7 @@ def build_safe_command(
         SecurityError: Argument contains dangerous characters
     """
     if dangerous_chars is None:
-        # Common shell metacharacters
-        dangerous_chars = set(";&|`$()<>")
+        dangerous_chars = DANGEROUS_SHELL_CHARS
     
     # Validate executable
     if any(char in executable for char in dangerous_chars):
@@ -291,10 +297,6 @@ def build_safe_command(
     
     # Build command list
     return [executable] + [str(arg) for arg in args]
-
-
-# Shell metacharacters that could enable command injection
-DANGEROUS_SHELL_CHARS = set(";&|`$<>")
 
 
 def build_ffmpeg_command(
@@ -404,11 +406,6 @@ def validate_filter_graph(filter_graph: str) -> str:
         )
     
     return filter_graph
-
-
-# Timeout context manager (Unix-only)
-import signal
-from contextlib import contextmanager
 
 
 class TimeoutError(Exception):

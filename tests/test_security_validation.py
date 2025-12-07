@@ -6,17 +6,13 @@ and FFmpeg security features.
 """
 
 import pytest
-import tempfile
-import subprocess
 from pathlib import Path
-from unittest.mock import patch
 
 from transformation_portal.utils.security import (
     SecurityError,
     validate_filepath,
     validate_image_path,
     validate_video_path,
-    validate_config_path,
     sanitize_filename,
     build_safe_command,
     build_ffmpeg_command,
