@@ -31,15 +31,43 @@ See Also:
 - docs/ARCHITECTURE.md
 """
 
-from transformation_portal.interfaces.processor import ImageProcessor, VideoProcessor
-from transformation_portal.interfaces.pipeline import Pipeline, PipelineStage, BatchPipeline
+from transformation_portal.interfaces.processor import ImageProcessor, VideoProcessor, ProcessingError
+from transformation_portal.interfaces.pipeline import Pipeline, PipelineStage, BatchPipeline, PipelineError
+from transformation_portal.interfaces.enhancer import Enhancer, AdaptiveEnhancer, EnhancementError
+from transformation_portal.interfaces.segmenter import (
+    Segmenter, MaterialSegmenter, SemanticSegmenter,
+    MaterialType, SegmentationError
+)
+from transformation_portal.interfaces.estimator import (
+    DepthEstimator, NormalEstimator, UnifiedEstimator,
+    EstimationError
+)
 
 __all__ = [
+    # Processor interfaces
     'ImageProcessor',
     'VideoProcessor',
+    'ProcessingError',
+    # Pipeline interfaces
     'Pipeline',
     'PipelineStage',
     'BatchPipeline',
+    'PipelineError',
+    # Enhancer interfaces
+    'Enhancer',
+    'AdaptiveEnhancer',
+    'EnhancementError',
+    # Segmenter interfaces
+    'Segmenter',
+    'MaterialSegmenter',
+    'SemanticSegmenter',
+    'MaterialType',
+    'SegmentationError',
+    # Estimator interfaces
+    'DepthEstimator',
+    'NormalEstimator',
+    'UnifiedEstimator',
+    'EstimationError',
 ]
 
-__version__ = '0.1.0'
+__version__ = '1.0.0'
