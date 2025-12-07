@@ -166,7 +166,8 @@ def atomic_write_png8(path: Path, rgb01: np.ndarray) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
     bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
-    tmp = p.with_suffix(p.suffix + ".tmp")
+    # Keep .png extension for OpenCV to recognize the format
+    tmp = p.parent / (p.stem + ".tmp" + p.suffix)
     cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_PNG_COMPRESSION, 7])
     os.replace(str(tmp), str(p))
 
@@ -177,6 +178,7 @@ def atomic_write_jpg8(path: Path, rgb01: np.ndarray, quality: int = 92) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
     bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
-    tmp = p.with_suffix(p.suffix + ".tmp")
+    # Keep .jpg extension for OpenCV to recognize the format
+    tmp = p.parent / (p.stem + ".tmp" + p.suffix)
     cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_JPEG_QUALITY, int(quality)])
     os.replace(str(tmp), str(p))
