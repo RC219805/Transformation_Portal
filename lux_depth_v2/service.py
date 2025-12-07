@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
 import uuid
@@ -131,9 +132,6 @@ def main() -> None:
     This is a convenience wrapper that starts the service with default settings.
     For more control over configuration, use: lux-depth-v2 --service [options]
     """
-    import argparse
-    from pathlib import Path
-    
     parser = argparse.ArgumentParser(
         description="Lux Depth V2 Service Mode (FastAPI server)",
         epilog="For full configuration options, use: lux-depth-v2 --service --help"

@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Upscaling
     p.add_argument("--upscale", type=int, default=4, choices=[2,4])
-    p.add_argument("--upscaler-backend", type=str, default="realesrgan", choices=["realesrgan", "onnx", "none"])
+    p.add_argument("--upscaler-backend", type=str, default="torch", choices=["torch", "realesrgan", "onnx", "none"])
     p.add_argument("--model-path", type=str, default=None, help="Upscaler model path (.pth or .onnx).")
     p.add_argument("--model-sha256", type=str, default=None, help="Optional SHA256 for verifying model file.")
     p.add_argument("--tile", type=int, default=512, help="Real-ESRGAN tile size (0 disables).")
