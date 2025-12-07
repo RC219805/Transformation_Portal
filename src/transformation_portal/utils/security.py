@@ -222,7 +222,7 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
     filename = os.path.basename(filename)
     
     # Replace dangerous characters
-    dangerous_chars = '<>:"|?*\\/;'
+    dangerous_chars = '<>:"|?*/\\;'
     for char in dangerous_chars:
         filename = filename.replace(char, '_')
     

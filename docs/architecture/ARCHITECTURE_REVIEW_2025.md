@@ -812,19 +812,19 @@ Create `docs/architecture/adr/` directory for decision tracking:
    - Decision: All modules must implement abstract interfaces
    - Rationale: Enables testing, prevents coupling
 
-2. **ADR-002: Dependency Management Strategy**
-   - Decision: `pyproject.toml` as single source of truth
-   - Rationale: Reduces configuration drift
-
-3. **ADR-003: Security Input Validation**
+2. **ADR-002: Security Input Validation**
    - Decision: All file paths validated before use
    - Rationale: Prevents path traversal attacks
 
-4. **ADR-004: Monolithic File Refactoring**
+3. **ADR-003: Dependency Management Strategy** _(Planned)_
+   - Decision: `pyproject.toml` as single source of truth
+   - Rationale: Reduces configuration drift
+
+4. **ADR-004: Monolithic File Refactoring** _(Planned)_
    - Decision: No file shall exceed 800 LOC
    - Rationale: Maintainability, testing
 
-5. **ADR-005: Event-Driven Analytics**
+5. **ADR-005: Event-Driven Analytics** _(Planned)_
    - Decision: Use pub/sub for cross-cutting concerns
    - Rationale: Decouples analyzers from core logic
 
