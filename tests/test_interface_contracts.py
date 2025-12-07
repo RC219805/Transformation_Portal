@@ -65,7 +65,12 @@ class MockDepthEstimator(DepthEstimator):
         h, w = image.shape[:2]
         depth = np.random.rand(h, w).astype(np.float32)
         if normalize:
-            depth = (depth - depth.min()) / (depth.max() - depth.min())
+            # Avoid division by zero for uniform arrays
+            depth_min = depth.min()
+            depth_max = depth.max()
+            if depth_max != depth_min:
+                depth = (depth - depth_min) / (depth_max - depth_min)
+            # If uniform, depth is already in [0, 1] range
         return depth
     
     def get_model_info(self) -> Dict[str, Any]:
