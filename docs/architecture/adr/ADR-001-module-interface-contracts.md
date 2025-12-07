@@ -190,9 +190,10 @@ def test_material_response_implements_interface():
 
 ## Related ADRs
 
-- ADR-002: Dependency Management Strategy (uses interfaces for plugin loading)
-- ADR-004: Monolithic File Refactoring (enabled by interface decomposition)
-- ADR-005: Event-Driven Analytics (interfaces for event producers/consumers)
+- ADR-002: Security Input Validation (uses interfaces for secure processing)
+- ADR-003: Dependency Management Strategy _(Planned)_ (uses interfaces for plugin loading)
+- ADR-004: Monolithic File Refactoring _(Planned)_ (enabled by interface decomposition)
+- ADR-005: Event-Driven Analytics _(Planned)_ (interfaces for event producers/consumers)
 
 ## References
 

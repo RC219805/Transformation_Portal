@@ -27,12 +27,29 @@ class ImageProcessor(ABC):
     
     @abstractmethod
     def process(self, image: np.ndarray, **kwargs) -> np.ndarray:
-        """Process input image."""
+        """
+        Process input image according to processor-specific algorithm.
+
+        Args:
+            image: Input image (H, W, C) numpy array in [0, 1] float32 or [0, 255] uint8
+            **kwargs: Processor-specific parameters
+
+        Returns:
+            Processed image, same shape and dtype as input
+
+        Raises:
+            ProcessingError: If processing fails
+        """
         pass
     
     @abstractmethod
     def get_config(self) -> Dict[str, Any]:
-        """Return current processor configuration."""
+        """
+        Return current processor configuration.
+
+        Returns:
+            Dictionary of configuration parameters (must be JSON-serializable for reproducibility)
+        """
         pass
 
 

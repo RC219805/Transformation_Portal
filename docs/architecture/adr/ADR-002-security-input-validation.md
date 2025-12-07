@@ -105,17 +105,18 @@ def validate_filepath(
         raise SecurityError(f"File does not exist: {filepath}")
     
     # Validate within allowed directories
-    if not any(resolved.is_relative_to(d) for d in allowed_dirs):
+    if not any(resolved.is_relative_to(d.resolve()) for d in allowed_dirs):
         raise SecurityError(
             f"Path {filepath} outside allowed directories: {allowed_dirs}"
         )
     
     # Check file size
-    if max_file_size and resolved.stat().st_size > max_file_size:
-        raise SecurityError(
-            f"File {filepath} exceeds size limit: "
-            f"{resolved.stat().st_size} > {max_file_size}"
-        )
+    if max_file_size and resolved.is_file():
+        file_size = resolved.stat().st_size
+        if file_size > max_file_size:
+            raise SecurityError(
+                f"File {filepath} exceeds size limit: {file_size} > {max_file_size}"
+            )
     
     # Check extension
     if allowed_extensions and resolved.suffix.lower() not in allowed_extensions:
@@ -130,7 +131,6 @@ def validate_filepath(
 
 ```python
 from typing import List
-import shlex
 
 def build_ffmpeg_command(
     input_file: Path,
@@ -197,6 +197,10 @@ class TimeoutError(Exception):
 def timeout(seconds: int):
     """
     Context manager for operation timeout.
+    
+    Note: This implementation uses signal.SIGALRM which only works on Unix-like
+    systems (Linux, macOS). Windows support requires a different approach
+    (e.g., threading-based timeout or multiprocessing).
     
     Usage:
         with timeout(30):
