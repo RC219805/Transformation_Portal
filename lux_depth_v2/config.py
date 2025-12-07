@@ -83,6 +83,13 @@ class PipelineConfig:
     skip_existing: bool = True
     overwrite: bool = False
 
+    # Master switch for *any* filesystem output (images, reports, debug dumps)
+    write_outputs: bool = True
+
+    # Optional: per-stage timing accuracy on async backends (cuda/mps).
+    # OFF by default because it introduces synchronization overhead.
+    timing_sync_device: bool = False
+
     # Safety
     warn_float_gb: float = 6.0
     strict_depth: bool = False
