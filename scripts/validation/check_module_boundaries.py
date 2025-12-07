@@ -52,15 +52,16 @@ class ImportViolation:
 
 
 # Define layer hierarchy (lower index = lower in hierarchy)
+# Note: Layer names match actual directory names in src/transformation_portal/
 LAYER_HIERARCHY = {
-    'utils': 0,
-    'interfaces': 1,
-    'processors': 2,
-    'enhancers': 2,  # Same level as processors
-    'segmentation': 2,  # Same level as processors
-    'depth': 2,  # Same level as processors
-    'pipelines': 3,
-    'cli': 4,  # Highest layer
+    'utils': 0,          # Shared utility functions
+    'interfaces': 1,     # Abstract base classes
+    'processors': 2,     # Core transformation engines
+    'enhancers': 2,      # Same level as processors
+    'depth': 2,          # Depth processing (same level as processors)
+    'segmentation': 2,   # Segmentation utilities (same level as processors)
+    'pipelines': 3,      # Multi-stage orchestration
+    'cli': 4,            # Highest layer - user-facing interfaces
 }
 
 

@@ -293,6 +293,10 @@ def build_safe_command(
     return [executable] + [str(arg) for arg in args]
 
 
+# Shell metacharacters that could enable command injection
+DANGEROUS_SHELL_CHARS = set(";&|`$<>")
+
+
 def build_ffmpeg_command(
     input_file: Path,
     output_file: Path,
@@ -343,13 +347,12 @@ def build_ffmpeg_command(
         validate_filepath(output_file, allowed_dirs, must_exist=False)
     
     # Validate filter strings don't contain shell metacharacters
-    dangerous_chars = set(";&|`$<>")
     if filters:
         for filter_str in filters:
-            if any(char in filter_str for char in dangerous_chars):
+            if any(char in filter_str for char in DANGEROUS_SHELL_CHARS):
                 raise SecurityError(
                     f"Filter contains dangerous characters: {filter_str}\n"
-                    f"Dangerous characters: {dangerous_chars}"
+                    f"Dangerous characters: {DANGEROUS_SHELL_CHARS}"
                 )
     
     # Build command list
@@ -394,11 +397,10 @@ def validate_filter_graph(filter_graph: str) -> str:
         Traceback (most recent call last):
         SecurityError: Filter graph contains dangerous characters
     """
-    dangerous_chars = set(";&|`$<>")
-    if any(char in filter_graph for char in dangerous_chars):
+    if any(char in filter_graph for char in DANGEROUS_SHELL_CHARS):
         raise SecurityError(
             f"Filter graph contains dangerous characters: {filter_graph}\n"
-            f"Dangerous characters found: {[c for c in dangerous_chars if c in filter_graph]}"
+            f"Dangerous characters found: {[c for c in DANGEROUS_SHELL_CHARS if c in filter_graph]}"
         )
     
     return filter_graph
