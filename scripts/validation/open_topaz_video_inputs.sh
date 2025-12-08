@@ -34,7 +34,11 @@ cat <<EOF
 Manual step required:
 
   1) In Topaz Video AI, select all imported images.
-  2) Apply preset: "Lux_Validation_Video" (upscaling + enhancement).
+  2) Apply preset: "Lux_Validation_Video" (upscaling + enhancement):
+       - Enhancement mode: Standard enhancement
+       - Temporal processing: ON (frame-aware smoothing)
+       - Output resolution: Match input (no upscaling)
+       - Noise reduction: Minimal/Auto
   3) Export as 16-bit TIFF (ProPhoto/original), no lossy compression.
   4) Export directory:
 

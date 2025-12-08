@@ -21,17 +21,19 @@ def test_validation_v1_dirs_exist():
         assert p.exists()
 
 
-def test_list_input_images_empty():
-    """Test list_input_images returns empty list when no images exist."""
+def test_list_input_images_returns_list():
+    """Test list_input_images returns a list (empty or populated)."""
     images = list_input_images("validation_v1")
-    # Initially, input directory exists but may be empty
+    # Directory exists, may be empty or contain images
     assert isinstance(images, list)
 
 
 def test_list_input_images_filters_by_extension():
     """Test that list_input_images only returns TIFF files."""
     images = list_input_images("validation_v1")
-    # All returned images should have .tif or .tiff extension
+    # If images exist, all should have .tif or .tiff extension
+    if len(images) == 0:
+        pytest.skip("No test images available to verify filtering behavior")
     for img in images:
         assert img.suffix.lower() in [".tif", ".tiff"]
 
