@@ -1,6 +1,7 @@
 import pytest
 
 from lux_depth_v2.validation.benchmark.dataset_registry import (
+    BASELINE_IDS,
     baseline_dir,
     get_dataset_spec,
     list_input_images,
@@ -37,9 +38,7 @@ def test_list_input_images_filters_by_extension():
 
 def test_baseline_dir_valid_ids():
     """Test baseline_dir returns correct path for all valid baseline_ids."""
-    valid_ids = ["topaz_photo", "topaz_gigapixel", "topaz_video", "adobe_sr", "adobe_neutral"]
-
-    for baseline_id in valid_ids:
+    for baseline_id in BASELINE_IDS:
         path = baseline_dir("validation_v1", baseline_id)
         assert path.exists()
         assert path.name == baseline_id
@@ -67,7 +66,5 @@ def test_get_dataset_spec_structure():
     assert spec.input_dir.name == "input"
     assert spec.metadata_file.name == "metadata.json"
     assert spec.baselines_dir.name == "baselines"
-    assert len(spec.baselines) == 5
-    assert set(spec.baselines.keys()) == {
-        "topaz_photo", "topaz_gigapixel", "topaz_video", "adobe_sr", "adobe_neutral"
-    }
+    assert len(spec.baselines) == len(BASELINE_IDS)
+    assert set(spec.baselines.keys()) == set(BASELINE_IDS)

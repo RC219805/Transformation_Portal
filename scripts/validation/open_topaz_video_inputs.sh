@@ -44,7 +44,7 @@ After export, run:
 
   python scripts/validation/generate_manifest.py
 
-Note: Topaz Video AI is primarily for video processing but can handle
-      still images. This baseline tests frame-by-frame enhancement quality.
+Note: Topaz Video AI can process still images using its video enhancement
+      algorithms. This baseline tests its temporal-aware processing on stills.
 
 EOF
