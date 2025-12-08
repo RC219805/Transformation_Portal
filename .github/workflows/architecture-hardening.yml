@@ -1,0 +1,56 @@
+name: Architecture Hardening (Security + Guardrails)
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  hardening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install runtime deps (safe baseline)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r lux_depth_v2/requirements-repo.txt
+          python -m pip install pytest ruff bandit pip-audit
+
+      - name: Install local lux_depth_v2 for CI checks
+        run: |
+          python -m pip install --upgrade pip
+          # Install the package in editable mode so local code is importable
+          python -m pip install -e .
+
+      - name: Dependency ban guard (basicsr/realesrgan/gfpgan)
+        run: |
+          python scripts/hardening/check_banned_deps.py
+
+      - name: Unit tests
+        run: |
+          python -m pytest lux_depth_v2/tests -q
+
+      - name: Ruff (new hardening layer only)
+        run: |
+          ruff check lux_depth_v2/hardening scripts/hardening
+
+      - name: Bandit (new hardening layer only)
+        run: |
+          bandit -q -r lux_depth_v2/hardening scripts/hardening -ll
+
+      - name: pip-audit (HIGH+ severity)
+        run: |
+          pip-audit -r lux_depth_v2/requirements-repo.txt --severity high
