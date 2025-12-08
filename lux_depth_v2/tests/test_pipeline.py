@@ -161,7 +161,7 @@ class TestPipelineProcessDirectory:
         mock_config.input_dir = None
         
         pipeline = LuxPipelineV2(mock_config)
-        with pytest.raises(ValueError, match="input_dir and output_dir"):
+        with pytest.raises(ValueError, match="cfg.input_dir and cfg.output_dir"):
             pipeline.process_directory()
 
     def test_process_directory_empty(self, temp_dir, mock_config):

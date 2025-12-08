@@ -27,7 +27,7 @@ class TestDeviceSelection:
         """Test automatic device selection."""
         device = torch_ops.pick_device("auto")
         assert isinstance(device, torch.device)
-        assert device.type in ("cuda", "cpu")
+        assert device.type in ("cuda", "cpu", "mps")
 
     def test_pick_device_cpu(self):
         """Test CPU device selection."""

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import platform
+import subprocess
+import sys
 import time
+import warnings
 from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -93,6 +98,16 @@ class LuxPipelineV2:
 
         self.logger = logger or setup_logging("INFO", json_logs=False)
 
+        # PRODUCTION SAFETY: Validate dependencies before starting
+        self._validate_dependencies()
+        
+        # PRODUCTION SAFETY: Warn if validate_ai is disabled
+        if not cfg.validate_ai:
+            self.logger.warning(
+                "⚠️  validate_ai=False detected! This disables AI safety checks. "
+                "Production presets should always have validate_ai=True."
+            )
+
         torch_ops.require_torch()
         self.device = torch_ops.pick_device(cfg.device)
         torch_ops.configure_torch(cfg.cudnn_benchmark)
@@ -106,10 +121,100 @@ class LuxPipelineV2:
         # Post tiler
         self.tiler = torch_ops.Tiler(tile=int(cfg.post_tile), overlap=int(cfg.post_overlap)) if int(cfg.post_tile) > 0 else None
 
+        # Capture reproducibility metadata on init
+        self._repro_metadata = self._collect_reproducibility_metadata()
+
         self.logger.info(
             f"PipelineV2 init | device={self.device} autocast={self.autocast} "
-            f"upscaler={type(self.upscaler).__name__} seg={type(self.segmenter).__name__ if self.segmenter else 'None'}"
+            f"upscaler={type(self.upscaler).__name__} seg={type(self.segmenter).__name__ if self.segmenter else 'None'} "
+            f"post_tile={cfg.post_tile} validate_ai={cfg.validate_ai}"
         )
+
+    def _validate_dependencies(self) -> None:
+        """PRODUCTION SAFETY: Validate dependencies against vulnerable packages."""
+        try:
+            import importlib.metadata
+            # Check for vulnerable packages
+            vulnerable_packages = ["basicsr", "realesrgan", "gfpgan"]
+            found_vulnerable = []
+            
+            for pkg in vulnerable_packages:
+                try:
+                    version = importlib.metadata.version(pkg)
+                    found_vulnerable.append(f"{pkg}=={version}")
+                except importlib.metadata.PackageNotFoundError:
+                    pass
+            
+            if found_vulnerable:
+                msg = (
+                    f"⚠️  SECURITY WARNING: Vulnerable packages detected: {', '.join(found_vulnerable)}\n"
+                    f"These packages have known CVE-2024-27763 vulnerabilities.\n"
+                    f"Please use requirements-repo.txt for safe dependencies.\n"
+                    f"Use --upscaler-backend torch instead of realesrgan."
+                )
+                warnings.warn(msg, UserWarning, stacklevel=2)
+                self.logger.error(msg)
+        except Exception as e:
+            self.logger.debug(f"Dependency validation check skipped: {e}")
+
+    def _collect_reproducibility_metadata(self) -> Dict[str, object]:
+        """Collect reproducibility metadata for production stamping."""
+        metadata: Dict[str, object] = {}
+        
+        # Git commit hash
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=2, check=False
+            )
+            if result.returncode == 0:
+                metadata["git_commit"] = result.stdout.strip()
+        except Exception:
+            pass
+        
+        # Config hash (deterministic)
+        try:
+            cfg_dict = asdict(self.cfg)
+            cfg_json = json.dumps(cfg_dict, sort_keys=True)
+            metadata["config_hash"] = hashlib.sha256(cfg_json.encode()).hexdigest()[:16]
+        except Exception:
+            pass
+        
+        # Device info
+        try:
+            import torch
+            metadata["device"] = str(self.device)
+            if torch.cuda.is_available() and self.device.type == "cuda":
+                metadata["gpu_name"] = torch.cuda.get_device_name(self.device)
+                metadata["cuda_version"] = torch.version.cuda
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                metadata["gpu_name"] = "Apple Silicon (MPS)"
+        except Exception:
+            metadata["device"] = str(getattr(self, "device", "unknown"))
+        
+        # Python version
+        metadata["python_version"] = platform.python_version()
+        
+        # PyTorch version
+        try:
+            import torch
+            metadata["torch_version"] = torch.__version__
+        except Exception:
+            pass
+        
+        # Model versions
+        metadata["upscaler_backend"] = self.cfg.upscaler_backend
+        if self.cfg.model_path:
+            metadata["model_path"] = str(self.cfg.model_path)
+            metadata["model_sha256"] = self.cfg.model_sha256 or "not_specified"
+        
+        # Tiling settings
+        metadata["post_tile"] = self.cfg.post_tile
+        metadata["post_overlap"] = self.cfg.post_overlap
+        metadata["upscale_tile"] = self.cfg.tile
+        metadata["upscale_tile_pad"] = self.cfg.tile_pad
+        
+        return metadata
 
     def _sync_for_timing(self) -> None:
         """Optional sync to make per-stage timings accurate on async devices."""
@@ -363,6 +468,11 @@ class LuxPipelineV2:
 
         # Backward compatibility alias
         report["stage_times"] = report.get("stage_times_sec", {})
+        
+        # PRODUCTION: Add reproducibility stamping
+        report["reproducibility"] = self._repro_metadata.copy()
+        report["reproducibility"]["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+        report["reproducibility"]["preset"] = str(cfg.preset.value)
 
         return report
 
