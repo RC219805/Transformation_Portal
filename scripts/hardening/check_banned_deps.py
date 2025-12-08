@@ -14,7 +14,19 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from lux_depth_v2.hardening.policy import HardeningPolicy, find_requirement_files
+# Banned packages (CVE-2024-27763 mitigation)
+BANNED_PACKAGES = ("basicsr", "realesrgan", "gfpgan")
+
+
+def find_requirement_files(paths: list[Path]) -> list[Path]:
+    """Find all requirements files in given paths."""
+    out: list[Path] = []
+    for p in paths:
+        if p.is_dir():
+            out.extend(sorted(p.glob("**/*requirements*.txt")))
+        elif p.is_file() and p.name.endswith(".txt"):
+            out.append(p)
+    return out
 
 
 def parse_req_lines(path: Path) -> list[str]:
@@ -32,8 +44,7 @@ def parse_req_lines(path: Path) -> list[str]:
 
 
 def main() -> int:
-    policy = HardeningPolicy()
-    banned = {b.lower() for b in policy.banned_packages}
+    banned = {b.lower() for b in BANNED_PACKAGES}
 
     roots = [Path(p) for p in (sys.argv[1:] or ["lux_depth_v2", "requirements"])]
     files = find_requirement_files(roots)
