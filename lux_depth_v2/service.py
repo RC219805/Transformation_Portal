@@ -56,6 +56,10 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+    # Install observability (Prometheus /metrics + JSON logging + request correlation)
+    from lux_depth_v2.observability import install_observability
+    install_observability(app, service_name="lux_depth_v2")
+
     # Max upload size (100MB default)
     MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 100 * 1024 * 1024))
 
