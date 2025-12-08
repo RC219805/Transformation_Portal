@@ -40,7 +40,7 @@ opencv-python>=4.8,<5
 # Semantic search for RAG system
 # NOTE: CVE-2024-73169 affects sentence-transformers <3.1.0 (arbitrary code execution via torch.load)
 # Use >=3.1.0 to mitigate the vulnerability
-sentence-transformers>=3.1.0,<4
+sentence-transformers>=3.1.0,<6
 
 # Apple Neural Engine optimization (M-series chips)
 # Provides 3-5x speedup on Apple Silicon for depth processing
