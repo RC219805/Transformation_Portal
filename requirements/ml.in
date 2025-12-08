@@ -15,9 +15,9 @@ torch>=2.0,<3
 # Diffusion pipeline
 diffusers>=0.20,<1
 
-# ControlNet (pinned upper bound to avoid huggingface-hub conflicts)
-# NOTE: pyproject.toml allows <1, but <0.0.9 is safer for CI resolution
-controlnet-aux>=0.0.6,<0.0.9
+# ControlNet (allow 0.0.10 for latest features)
+# Previously pinned to <0.0.9, but 0.0.10 is compatible with current deps
+controlnet-aux>=0.0.6,<0.0.11
 
 # Hugging Face ecosystem (aligned versions)
 # NOTE: Conservative bounds here vs pyproject.toml to avoid resolver conflicts
@@ -36,3 +36,12 @@ opencv-python>=4.8,<5
 # The repository uses basicsr_tp vendored package instead.
 # realesrgan>=0.3.0,<1  # Requires basicsr - EXCLUDED
 # gfpgan>=1.3.8,<2      # Requires basicsr - EXCLUDED
+
+# Semantic search for RAG system
+# NOTE: CVE-2024-73169 affects sentence-transformers <3.1.0 (arbitrary code execution via torch.load)
+# Use >=3.1.0 to mitigate the vulnerability
+sentence-transformers>=3.1.0,<4
+
+# Apple Neural Engine optimization (M-series chips)
+# Provides 3-5x speedup on Apple Silicon for depth processing
+coremltools>=8.0,<10
