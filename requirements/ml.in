@@ -21,7 +21,7 @@ controlnet-aux>=0.0.6,<0.0.11
 
 # Hugging Face ecosystem (aligned versions)
 # NOTE: Conservative bounds here vs pyproject.toml to avoid resolver conflicts
-accelerate>=0.20.0,<1
+accelerate>=0.20.0,<2
 transformers>=4.35.0,<5
 # safetensors: Explicitly listed to avoid version conflicts with transformers/diffusers
 # and ensure compatibility across the HuggingFace ecosystem
