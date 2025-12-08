@@ -1,0 +1,38 @@
+{
+  "baseline_pack": "validation_v1",
+  "host": {
+    "machine_label": "Richards-Mac-Studio",
+    "note": "Edit machine_label if you rename the host; script will also stamp hostname/user/os.",
+    "hostname": "RC-MacBook-Pro.local",
+    "user": "rc",
+    "os": "macOS-26.0.1-arm64-arm-64bit",
+    "python": "3.11.14",
+    "generated_utc": "2025-12-08T04:05:45Z"
+  },
+  "tools": {
+    "topaz_photo": {
+      "version": "4.0.4",
+      "preset": "Lux_Validation_Photo"
+    },
+    "topaz_gigapixel": {
+      "version": "8.4.4",
+      "preset": "Lux_Validation_Giga4x"
+    },
+    "topaz_video": {
+      "version": "7.1.5",
+      "preset": "Lux_Validation_Video_SR"
+    },
+    "adobe_sr": {
+      "lr_version": "15.0.1",
+      "acr_version": "18.0",
+      "preset": "Adobe Super Resolution"
+    },
+    "adobe_neutral": {
+      "photoshop_version": "27.1.0",
+      "acr_version": "18.0",
+      "preset": "Lux_Validation_Neutral"
+    }
+  },
+  "inputs": [],
+  "files": []
+}
