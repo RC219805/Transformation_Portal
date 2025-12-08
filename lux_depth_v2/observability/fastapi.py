@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from typing import Optional
 
 from .json_logging import configure_structured_logging
@@ -25,12 +26,18 @@ def install_observability(
     Additive installer for FastAPI apps:
     - Structured logging (JSON by default here)
     - Correlation + metrics middleware
-    - /metrics endpoint (Prometheus text exposition)
+    - /metrics endpoint (Prometheus text exposition with optional authentication)
 
     No changes to existing routes required.
+
+    Args:
+        app: FastAPI application instance
+        service_name: Service name for logging and metrics
+        enable_metrics: Enable Prometheus metrics (unused - controlled by LUX_METRICS_ENABLED env var)
+        enable_json_logging: Enable JSON logging format (default: True for service mode)
     """
     # Defer heavy imports; keeps non-service contexts clean.
-    from fastapi import HTTPException, Request, Response
+    from fastapi import HTTPException, Response
 
     from .middleware import ObservabilityMiddleware
 
@@ -43,7 +50,7 @@ def install_observability(
 
     # /metrics endpoint with optional bearer token authentication
     @app.get("/metrics", include_in_schema=False, response_class=Response)
-    async def metrics_endpoint(request: Request):
+    async def metrics_endpoint(request):
         m = get_metrics()
         # Check if authentication is required
         if m.auth.token:
@@ -51,7 +58,8 @@ def install_observability(
             if not auth_header.startswith("Bearer "):
                 raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
             token = auth_header[7:]  # Remove "Bearer " prefix
-            if token != m.auth.token:
+            # Use constant-time comparison to prevent timing attacks
+            if not secrets.compare_digest(token, m.auth.token):
                 raise HTTPException(status_code=403, detail="Invalid metrics token")
         body, content_type, status = m.render()
         return Response(content=body, media_type=content_type, status_code=status)
