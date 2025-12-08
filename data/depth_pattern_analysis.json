@@ -1,0 +1,6151 @@
+{
+  "summary": {
+    "total_files": 72,
+    "categories": {
+      "Core/Utilities": 20,
+      "Configuration": 12,
+      "Documentation": 3,
+      "Lux Depth V2 Implementation": 29,
+      "Test Files": 8
+    },
+    "pattern_categories": 5,
+    "total_matches": 1143
+  },
+  "file_categories": {
+    "Core/Utilities": [
+      ".venv/lib/python3.11/site-packages/controlnet_aux/zoe/zoedepth/models/depth_model.py",
+      ".venv/lib/python3.11/site-packages/huggingface_hub/inference/_generated/types/depth_estimation.py",
+      ".venv/lib/python3.11/site-packages/networkx/algorithms/traversal/depth_first_search.py",
+      ".venv/lib/python3.11/site-packages/transformers/pipelines/depth_estimation.py",
+      "scripts/automation/depth_integrated_luxury_pipeline.py",
+      "scripts/automation/depth_integrated_luxury_pipeline_ultimate.py",
+      "scripts/utilities/depth_anything_v2.py",
+      "scripts/utilities/depth_predict_coreml.py",
+      "scripts/utilities/depth_tools.py",
+      "src/training/depth_dataset.py",
+      "src/training/property_specific/depth_synthesis.py",
+      "src/transformation_portal/depth/models/depth_anything_v2.py",
+      "src/transformation_portal/depth/processors/depth_aware_denoise.py",
+      "src/transformation_portal/depth/processors/depth_guided_filters.py",
+      "src/transformation_portal/depth/utils/depth_utils.py",
+      "src/transformation_portal/depth_intelligence/depth_estimator.py",
+      "src/transformation_portal/pipelines/depth_tools.py",
+      "src/transformation_portal/plugins/builtin/depth_models.py",
+      "tools/depth_aware_lut.py",
+      "utils/depth_processor.py"
+    ],
+    "Configuration": [
+      "config/750_picacho_elite_preset.yaml",
+      "config/750_picacho_master_preset.yaml",
+      "config/750_picacho_rag_pipeline.yaml",
+      "config/aerial_preset.yaml",
+      "config/default_config.yaml",
+      "config/exterior_preset.yaml",
+      "config/interior_preset.yaml",
+      "config/montecito_santa_barbara_presets.yaml",
+      "config/phase1_foundation.yaml",
+      "config/phase2_perceptual.yaml",
+      "config/pro_pipeline_config.yaml",
+      "config/rendering_4k_pipeline.yaml"
+    ],
+    "Documentation": [
+      "docs/LUX_DEPTH_V2_INTEGRATION_PLAN.md",
+      "docs/LUX_DEPTH_V2_INTEGRATION_SUMMARY.md",
+      "docs/LUX_DEPTH_V2_QUICK_START.md"
+    ],
+    "Lux Depth V2 Implementation": [
+      "lux_depth_v2/__init__.py",
+      "lux_depth_v2/__main__.py",
+      "lux_depth_v2/cli.py",
+      "lux_depth_v2/config.py",
+      "lux_depth_v2/docs/conf.py",
+      "lux_depth_v2/examples/01_basic_processing.py",
+      "lux_depth_v2/examples/02_batch_processing.py",
+      "lux_depth_v2/examples/07_production_pipeline.py",
+      "lux_depth_v2/examples/09_monitoring.py",
+      "lux_depth_v2/io_utils.py",
+      "lux_depth_v2/logging_utils.py",
+      "lux_depth_v2/material_profiles.py",
+      "lux_depth_v2/material_segmentation.py",
+      "lux_depth_v2/pipeline.py",
+      "lux_depth_v2/service.py",
+      "lux_depth_v2/telemetry.py",
+      "lux_depth_v2/tests/__init__.py",
+      "lux_depth_v2/tests/conftest.py",
+      "lux_depth_v2/tests/test_config.py",
+      "lux_depth_v2/tests/test_io_utils.py",
+      "lux_depth_v2/tests/test_material_profiles.py",
+      "lux_depth_v2/tests/test_pipeline.py",
+      "lux_depth_v2/tests/test_security_hardening.py",
+      "lux_depth_v2/tests/test_torch_ops.py",
+      "lux_depth_v2/tests/test_weights.py",
+      "lux_depth_v2/tools/export_material_model_to_onnx.py",
+      "lux_depth_v2/torch_ops.py",
+      "lux_depth_v2/upscaling.py",
+      "lux_depth_v2/weights.py"
+    ],
+    "Test Files": [
+      "test_lux_depth_pool.py",
+      "test_lux_depth_pool_mps.py",
+      "test_lux_depth_pool_upscale.py",
+      "test_lux_depth_pool_with_depth.py",
+      "tests/test_coreml_depth.py",
+      "tests/test_depth_anything_v2_onnx.py",
+      "tests/test_depth_processor.py",
+      "tests/test_depth_tools.py"
+    ]
+  },
+  "pattern_matches": {
+    "Depth Processing Core": {
+      "src/transformation_portal/depth/processors/depth_aware_denoise.py": [
+        {
+          "line": 74,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 90,
+          "pattern": "depth.*map",
+          "match": "depth_guided_bilateral(image, depth, edge_map"
+        },
+        {
+          "line": 108,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 148,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 21,
+          "pattern": "depth.*processing",
+          "match": "depth processing"
+        }
+      ],
+      "src/transformation_portal/pipelines/depth_tools.py": [
+        {
+          "line": 20,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 380,
+          "pattern": "depth.*map",
+          "match": "depth_path, \"Depth map"
+        },
+        {
+          "line": 643,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 701,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 706,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 707,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 708,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 710,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 714,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 719,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 731,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 767,
+          "pattern": "depth.*map",
+          "match": "depths_root\", help=\"Root folder containing *_depth16.* depth map"
+        },
+        {
+          "line": 859,
+          "pattern": "depth.*map",
+          "match": "depth maps found, so we have at least 1 depth map"
+        },
+        {
+          "line": 861,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 862,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 5,
+          "pattern": "depth.*processing",
+          "match": "depth_tools.py - Production-grade depth-based post-processing"
+        }
+      ],
+      "lux_depth_v2/examples/02_batch_processing.py": [
+        {
+          "line": 23,
+          "pattern": "depth.*map",
+          "match": "depth_dir=Path(\"depth_map"
+        },
+        {
+          "line": 12,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 13,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "lux_depth_v2/cli.py": [
+        {
+          "line": 12,
+          "pattern": "depth.*pipeline",
+          "match": "Depth Pipeline"
+        }
+      ],
+      "test_lux_depth_pool_mps.py": [
+        {
+          "line": 14,
+          "pattern": "depth.*map",
+          "match": "depth_dir = Path(\"output_750_Picacho_Depth_Map"
+        },
+        {
+          "line": 38,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 52,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 15,
+          "pattern": "LuxDepth",
+          "match": "LuxDepth"
+        },
+        {
+          "line": 8,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 9,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "src/transformation_portal/depth/processors/depth_guided_filters.py": [
+        {
+          "line": 72,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 88,
+          "pattern": "depth.*map",
+          "match": "depth, edge_map"
+        },
+        {
+          "line": 101,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 150,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 191,
+          "pattern": "depth.*map",
+          "match": "depth, edge_map"
+        },
+        {
+          "line": 234,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        }
+      ],
+      "src/transformation_portal/depth/utils/depth_utils.py": [
+        {
+          "line": 2,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 43,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 46,
+          "pattern": "depth.*map",
+          "match": "depth: Input depth map"
+        },
+        {
+          "line": 51,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 59,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 73,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 91,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 103,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 106,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 173,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 235,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 238,
+          "pattern": "depth.*map",
+          "match": "depth: Input depth map"
+        },
+        {
+          "line": 244,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 292,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 295,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 304,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 343,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 346,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 381,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 384,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 389,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 424,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 427,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 432,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 476,
+          "pattern": "depth.*map",
+          "match": "depth_of_field_map"
+        },
+        {
+          "line": 487,
+          "pattern": "depth.*map",
+          "match": "depth: Depth map"
+        },
+        {
+          "line": 4,
+          "pattern": "depth.*processing",
+          "match": "depth processing"
+        },
+        {
+          "line": 32,
+          "pattern": "depth.*processing",
+          "match": "depth processing"
+        }
+      ],
+      "lux_depth_v2/tests/test_io_utils.py": [
+        {
+          "line": 71,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        }
+      ],
+      "config/default_config.yaml": [
+        {
+          "line": 1,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 4,
+          "pattern": "depth.*model",
+          "match": "Depth Model"
+        },
+        {
+          "line": 5,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 80,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 82,
+          "pattern": "depth.*map",
+          "match": "depth_colormap: \"turbo\"  # matplotlib colormap"
+        },
+        {
+          "line": 1,
+          "pattern": "depth.*pipeline",
+          "match": "Depth Anything V2 Pipeline"
+        }
+      ],
+      "tools/depth_aware_lut.py": [
+        {
+          "line": 446,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth map using Depth Anything V2"
+        },
+        {
+          "line": 455,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth.models.depth_anything_v2 import DepthAnythingV2"
+        },
+        {
+          "line": 457,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 466,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 455,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 457,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 455,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 193,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 200,
+          "pattern": "depth.*map",
+          "match": "depth_map: Normalized depth map"
+        },
+        {
+          "line": 205,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 206,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 207,
+          "pattern": "depth.*map",
+          "match": "depth_map = depth_map"
+        },
+        {
+          "line": 210,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 253,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 257,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 259,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 262,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 274,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 279,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 286,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 346,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 353,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 362,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 444,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 446,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 452,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 487,
+          "pattern": "depth.*map",
+          "match": "depth-map', type=Path, help='Pre-computed depth map"
+        },
+        {
+          "line": 519,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 520,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 521,
+          "pattern": "depth.*map",
+          "match": "depth map: {args.depth_map"
+        },
+        {
+          "line": 522,
+          "pattern": "depth.*map",
+          "match": "depth = np.array(Image.open(args.depth_map"
+        },
+        {
+          "line": 524,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 525,
+          "pattern": "depth.*map",
+          "match": "depth = create_depth_map"
+        }
+      ],
+      "docs/LUX_DEPTH_V2_INTEGRATION_SUMMARY.md": [
+        {
+          "line": 37,
+          "pattern": "depth.*processing",
+          "match": "depth processing"
+        },
+        {
+          "line": 32,
+          "pattern": "depth.*pipeline",
+          "match": "depth_pipeline"
+        },
+        {
+          "line": 34,
+          "pattern": "depth.*pipeline",
+          "match": "depth_pipeline"
+        },
+        {
+          "line": 36,
+          "pattern": "depth.*pipeline",
+          "match": "depth_pipeline"
+        },
+        {
+          "line": 41,
+          "pattern": "depth.*pipeline",
+          "match": "depth_pipeline"
+        }
+      ],
+      "docs/LUX_DEPTH_V2_INTEGRATION_PLAN.md": [
+        {
+          "line": 481,
+          "pattern": "depth.*map",
+          "match": "Depth Map"
+        },
+        {
+          "line": 483,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 490,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 493,
+          "pattern": "depth.*map",
+          "match": "Depth Map"
+        },
+        {
+          "line": 535,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 12,
+          "pattern": "depth.*processing",
+          "match": "depth_v2` module into the Transformation Portal repository. The integration balances **security**, **maintainability**, and **backward compatibility** while positioning the new module as a production-grade depth processing"
+        },
+        {
+          "line": 20,
+          "pattern": "depth.*processing",
+          "match": "Depth Processing"
+        },
+        {
+          "line": 24,
+          "pattern": "depth.*processing",
+          "match": "depth processing"
+        },
+        {
+          "line": 319,
+          "pattern": "depth.*processing",
+          "match": "depth processing"
+        },
+        {
+          "line": 455,
+          "pattern": "depth.*processing",
+          "match": "depth_v2 interact with existing material processing"
+        },
+        {
+          "line": 12,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2` module into the Transformation Portal repository. The integration balances **security**, **maintainability**, and **backward compatibility** while positioning the new module as a production-grade depth processing pipeline"
+        },
+        {
+          "line": 14,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2 as a standalone, peer-level module** rather than merging into existing pipeline"
+        },
+        {
+          "line": 22,
+          "pattern": "depth.*pipeline",
+          "match": "depth_pipeline"
+        },
+        {
+          "line": 288,
+          "pattern": "depth.*pipeline",
+          "match": "Depth V2 Pipeline"
+        },
+        {
+          "line": 290,
+          "pattern": "depth.*pipeline",
+          "match": "depth-aware 16-bit luxury rendering pipeline"
+        },
+        {
+          "line": 316,
+          "pattern": "depth.*pipeline",
+          "match": "depth-aware rendering pipeline"
+        },
+        {
+          "line": 467,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2 material segmentation as plugin for other pipeline"
+        },
+        {
+          "line": 483,
+          "pattern": "depth.*pipeline",
+          "match": "depth maps from lux_depth_v2 compatible with other pipeline"
+        },
+        {
+          "line": 748,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2 autonomy, enable composable pipeline"
+        }
+      ],
+      "lux_depth_v2/examples/01_basic_processing.py": [
+        {
+          "line": 10,
+          "pattern": "depth.*map",
+          "match": "Depth map at depth_map"
+        },
+        {
+          "line": 25,
+          "pattern": "depth.*map",
+          "match": "depth_dir=Path(\"depth_map"
+        },
+        {
+          "line": 13,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 14,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "tests/test_coreml_depth.py": [
+        {
+          "line": 248,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 249,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 250,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 10,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 11,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 37,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 38,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 42,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 62,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 79,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 80,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 110,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        }
+      ],
+      "config/750_picacho_elite_preset.yaml": [
+        {
+          "line": 9,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Processing (Depth Anything V2"
+        },
+        {
+          "line": 15,
+          "pattern": "depth.*map",
+          "match": "Depth-based zones for intelligent tone map"
+        },
+        {
+          "line": 156,
+          "pattern": "depth.*map",
+          "match": "depth_maps: true  # Cache depth map"
+        },
+        {
+          "line": 9,
+          "pattern": "depth.*processing",
+          "match": "Depth Processing"
+        }
+      ],
+      "config/750_picacho_master_preset.yaml": [
+        {
+          "line": 10,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Processing (Depth Anything V2"
+        },
+        {
+          "line": 25,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 20,
+          "pattern": "depth.*map",
+          "match": "Depth-based zones for intelligent tone map"
+        },
+        {
+          "line": 54,
+          "pattern": "depth.*map",
+          "match": "depth zones for tone map"
+        },
+        {
+          "line": 171,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 10,
+          "pattern": "depth.*processing",
+          "match": "Depth Processing"
+        },
+        {
+          "line": 171,
+          "pattern": "depth.*processing",
+          "match": "depth maps for iterative processing"
+        }
+      ],
+      "scripts/automation/depth_integrated_luxury_pipeline.py": [
+        {
+          "line": 7,
+          "pattern": "depth.*map",
+          "match": "Depth Map"
+        },
+        {
+          "line": 47,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 82,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 86,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 87,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 90,
+          "pattern": "depth.*map",
+          "match": "depth_dir = self.config.depth_map"
+        },
+        {
+          "line": 92,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 95,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 98,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 99,
+          "pattern": "depth.*map",
+          "match": "depth map: {self.depth_map"
+        },
+        {
+          "line": 351,
+          "pattern": "depth.*map",
+          "match": "depth_dir = Path(\"output_750_Picacho_Depth_Map"
+        },
+        {
+          "line": 362,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 377,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 3,
+          "pattern": "depth.*pipeline",
+          "match": "Depth-Integrated Luxury Real Estate Enhancement Pipeline"
+        },
+        {
+          "line": 77,
+          "pattern": "depth.*pipeline",
+          "match": "DepthIntegratedPipeline"
+        },
+        {
+          "line": 281,
+          "pattern": "depth.*pipeline",
+          "match": "DEPTH-INTEGRATED LUXURY ENHANCEMENT PIPELINE"
+        },
+        {
+          "line": 346,
+          "pattern": "depth.*pipeline",
+          "match": "Depth-Integrated Luxury Real Estate Pipeline"
+        },
+        {
+          "line": 385,
+          "pattern": "depth.*pipeline",
+          "match": "DepthIntegratedPipeline"
+        }
+      ],
+      "config/exterior_preset.yaml": [
+        {
+          "line": 4,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        }
+      ],
+      "lux_depth_v2/tests/conftest.py": [
+        {
+          "line": 118,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "src/transformation_portal/depth_intelligence/depth_estimator.py": [
+        {
+          "line": 4,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 19,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth.models.depth_anything_v2"
+        },
+        {
+          "line": 20,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 34,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 105,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 157,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 167,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 20,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 157,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 167,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 19,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 20,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 153,
+          "pattern": "depth.*model",
+          "match": "depth estimation model"
+        },
+        {
+          "line": 154,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 157,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 162,
+          "pattern": "depth.*model",
+          "match": "Depth model"
+        },
+        {
+          "line": 164,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 167,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 40,
+          "pattern": "depth.*map",
+          "match": "DepthMap"
+        },
+        {
+          "line": 41,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 65,
+          "pattern": "depth.*map",
+          "match": "depth_colored = self._apply_colormap"
+        },
+        {
+          "line": 83,
+          "pattern": "depth.*map",
+          "match": "DepthMap"
+        },
+        {
+          "line": 86,
+          "pattern": "depth.*map",
+          "match": "DepthMap"
+        },
+        {
+          "line": 177,
+          "pattern": "depth.*map",
+          "match": "DepthMap"
+        },
+        {
+          "line": 186,
+          "pattern": "depth.*map",
+          "match": "DepthMap"
+        },
+        {
+          "line": 203,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 224,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 225,
+          "pattern": "depth.*map",
+          "match": "depth_map = DepthMap"
+        },
+        {
+          "line": 238,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 244,
+          "pattern": "depth.*map",
+          "match": "DepthMap"
+        },
+        {
+          "line": 253,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 255,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 258,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 259,
+          "pattern": "depth.*map",
+          "match": "depth_maps.append(depth_map"
+        },
+        {
+          "line": 261,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 294,
+          "pattern": "depth.*map",
+          "match": "depth_map: DepthMap"
+        },
+        {
+          "line": 299,
+          "pattern": "depth.*map",
+          "match": "depth map with colormap"
+        },
+        {
+          "line": 302,
+          "pattern": "depth.*map",
+          "match": "depth_map: Depth map"
+        },
+        {
+          "line": 309,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 322,
+          "pattern": "depth.*map",
+          "match": "depth_statistics(self, depth_map: DepthMap"
+        },
+        {
+          "line": 323,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 324,
+          "pattern": "depth.*map",
+          "match": "depth = depth_map"
+        }
+      ],
+      "test_lux_depth_pool.py": [
+        {
+          "line": 13,
+          "pattern": "LuxDepth",
+          "match": "LuxDepth"
+        },
+        {
+          "line": 7,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 8,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "lux_depth_v2/tests/test_material_profiles.py": [
+        {
+          "line": 15,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "lux_depth_v2/tests/test_pipeline.py": [
+        {
+          "line": 84,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 17,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 18,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "config/montecito_santa_barbara_presets.yaml": [
+        {
+          "line": 360,
+          "pattern": "depth.*processing",
+          "match": "Depth processing"
+        }
+      ],
+      "test_lux_depth_pool_with_depth.py": [
+        {
+          "line": 2,
+          "pattern": "depth.*map",
+          "match": "depth v2 with depth map"
+        },
+        {
+          "line": 13,
+          "pattern": "depth.*map",
+          "match": "depth_dir = Path(\"output_750_Picacho_Depth_Map"
+        },
+        {
+          "line": 36,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 46,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 14,
+          "pattern": "LuxDepth",
+          "match": "LuxDepth"
+        },
+        {
+          "line": 7,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 8,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "lux_depth_v2/pipeline.py": [
+        {
+          "line": 383,
+          "pattern": "LuxDepth",
+          "match": "LuxDepth"
+        },
+        {
+          "line": 88,
+          "pattern": "depth.*pipeline",
+          "match": "Depth Pipeline"
+        }
+      ],
+      "scripts/utilities/depth_predict_coreml.py": [
+        {
+          "line": 4,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_predict_coreml.py \u2014 run DepthAnything V2"
+        },
+        {
+          "line": 15,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 32,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnything V2"
+        },
+        {
+          "line": 35,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 36,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 4,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 15,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 32,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 35,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 36,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 10,
+          "pattern": "depth.*model",
+          "match": "depth_predict_coreml.py --in-dir INPUT_DIR --out-dir OUTPUT_DIR [--model-path MODEL"
+        }
+      ],
+      "docs/LUX_DEPTH_V2_QUICK_START.md": [
+        {
+          "line": 114,
+          "pattern": "depth.*model",
+          "match": "depth_v2/tools/export_material_model"
+        },
+        {
+          "line": 44,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 47,
+          "pattern": "depth.*map",
+          "match": "depth-dir /path/to/depth_map"
+        }
+      ],
+      "config/aerial_preset.yaml": [
+        {
+          "line": 1,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        }
+      ],
+      "lux_depth_v2/telemetry.py": [
+        {
+          "line": 1,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2 pipeline"
+        }
+      ],
+      "lux_depth_v2/tests/test_weights.py": [
+        {
+          "line": 16,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "scripts/utilities/depth_anything_v2.py": [
+        {
+          "line": 2,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 75,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 76,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 77,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 78,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 81,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 82,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 87,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 88,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 89,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 93,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 95,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 103,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 150,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 311,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 312,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth-Anything-V2"
+        },
+        {
+          "line": 328,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 366,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 367,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 377,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 381,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 530,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 603,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 612,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 93,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 103,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 377,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 603,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 612,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 2,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 Model"
+        },
+        {
+          "line": 75,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 model"
+        },
+        {
+          "line": 93,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 95,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 depth estimation model"
+        },
+        {
+          "line": 103,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 107,
+          "pattern": "depth.*model",
+          "match": "depth = model"
+        },
+        {
+          "line": 121,
+          "pattern": "depth.*model",
+          "match": "depth estimation model"
+        },
+        {
+          "line": 247,
+          "pattern": "depth.*model",
+          "match": "depth map as float32, shape varies by model"
+        },
+        {
+          "line": 311,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 ONNX model"
+        },
+        {
+          "line": 603,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 612,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 620,
+          "pattern": "depth.*model",
+          "match": "Depth estimation model"
+        },
+        {
+          "line": 108,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 247,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 392,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 400,
+          "pattern": "depth.*map",
+          "match": "depth': Depth map"
+        },
+        {
+          "line": 648,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 33,
+          "pattern": "depth.*pipeline",
+          "match": "DepthEstimation, pipeline"
+        }
+      ],
+      "lux_depth_v2/__init__.py": [
+        {
+          "line": 1,
+          "pattern": "depth.*pipeline",
+          "match": "Depth Pipeline"
+        },
+        {
+          "line": 12,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        }
+      ],
+      "src/transformation_portal/depth/models/depth_anything_v2.py": [
+        {
+          "line": 2,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 77,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 78,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 79,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 80,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 83,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 84,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 89,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 90,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 91,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 95,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 97,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 105,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 152,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 315,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 316,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth-Anything-V2"
+        },
+        {
+          "line": 332,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 370,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 371,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 383,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 387,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 536,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 609,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 618,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 95,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 105,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 383,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 609,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 618,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 2,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 Model"
+        },
+        {
+          "line": 77,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 model"
+        },
+        {
+          "line": 95,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 97,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 depth estimation model"
+        },
+        {
+          "line": 105,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 109,
+          "pattern": "depth.*model",
+          "match": "depth = model"
+        },
+        {
+          "line": 123,
+          "pattern": "depth.*model",
+          "match": "depth estimation model"
+        },
+        {
+          "line": 251,
+          "pattern": "depth.*model",
+          "match": "depth map as float32, shape varies by model"
+        },
+        {
+          "line": 315,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 ONNX model"
+        },
+        {
+          "line": 609,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 618,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 626,
+          "pattern": "depth.*model",
+          "match": "Depth estimation model"
+        },
+        {
+          "line": 110,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 251,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 398,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 406,
+          "pattern": "depth.*map",
+          "match": "depth': Depth map"
+        },
+        {
+          "line": 654,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 33,
+          "pattern": "depth.*pipeline",
+          "match": "DepthEstimation, pipeline"
+        },
+        {
+          "line": 34,
+          "pattern": "depth.*pipeline",
+          "match": "depth_estimation import DepthEstimationPipeline"
+        },
+        {
+          "line": 38,
+          "pattern": "depth.*pipeline",
+          "match": "DepthEstimationPipeline"
+        },
+        {
+          "line": 147,
+          "pattern": "depth.*pipeline",
+          "match": "DepthEstimationPipeline"
+        }
+      ],
+      "utils/depth_processor.py": [
+        {
+          "line": 30,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 73,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 78,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 281,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 62,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 65,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 66,
+          "pattern": "depth.*model",
+          "match": "depth estimation model"
+        },
+        {
+          "line": 67,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 68,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 70,
+          "pattern": "depth.*model",
+          "match": "depth model: {self.config.model"
+        },
+        {
+          "line": 76,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 81,
+          "pattern": "depth.*model",
+          "match": "Depth model"
+        },
+        {
+          "line": 83,
+          "pattern": "depth.*model",
+          "match": "depth model: {self.config.model"
+        },
+        {
+          "line": 85,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 86,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 88,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 104,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 106,
+          "pattern": "depth.*model",
+          "match": "Depth model"
+        },
+        {
+          "line": 289,
+          "pattern": "depth.*model",
+          "match": "Depth model"
+        },
+        {
+          "line": 56,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 92,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 98,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 120,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 122,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 124,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 126,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 128,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 129,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 132,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 133,
+          "pattern": "depth.*map",
+          "match": "depth_map = depth_map"
+        },
+        {
+          "line": 135,
+          "pattern": "depth.*map",
+          "match": "depth_min = depth_map"
+        },
+        {
+          "line": 136,
+          "pattern": "depth.*map",
+          "match": "depth_max = depth_map"
+        },
+        {
+          "line": 138,
+          "pattern": "depth.*map",
+          "match": "depth_map = (depth_map"
+        },
+        {
+          "line": 141,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 143,
+          "pattern": "depth.*map",
+          "match": "depth_pil = PILImage.fromarray((depth_map"
+        },
+        {
+          "line": 145,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 147,
+          "pattern": "depth.*map",
+          "match": "Depth estimation complete: {depth_map"
+        },
+        {
+          "line": 148,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 154,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 156,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 159,
+          "pattern": "depth.*map",
+          "match": "depth_map: Depth map"
+        },
+        {
+          "line": 165,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 170,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 171,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 191,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 198,
+          "pattern": "depth.*map",
+          "match": "depth_map: Depth map"
+        },
+        {
+          "line": 209,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 246,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 249,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 251,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 256,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 258,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 262,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 266,
+          "pattern": "depth.*map",
+          "match": "depth map with colormap"
+        },
+        {
+          "line": 272,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 313,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 315,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 318,
+          "pattern": "depth.*map",
+          "match": "Depth map shape: {depth_map"
+        },
+        {
+          "line": 3,
+          "pattern": "depth.*processing",
+          "match": "Depth Processing"
+        },
+        {
+          "line": 6,
+          "pattern": "depth.*processing",
+          "match": "depth-aware processing"
+        },
+        {
+          "line": 29,
+          "pattern": "depth.*processing",
+          "match": "depth processing"
+        },
+        {
+          "line": 240,
+          "pattern": "depth.*processing",
+          "match": "depth-aware processing"
+        },
+        {
+          "line": 316,
+          "pattern": "depth.*processing",
+          "match": "Depth processing"
+        },
+        {
+          "line": 321,
+          "pattern": "depth.*processing",
+          "match": "Depth processing"
+        },
+        {
+          "line": 76,
+          "pattern": "depth.*pipeline",
+          "match": "depth_model = pipeline"
+        },
+        {
+          "line": 240,
+          "pattern": "depth.*pipeline",
+          "match": "depth-aware processing pipeline"
+        }
+      ],
+      "test_lux_depth_pool_upscale.py": [
+        {
+          "line": 13,
+          "pattern": "LuxDepth",
+          "match": "LuxDepth"
+        },
+        {
+          "line": 7,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 8,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "tests/test_depth_processor.py": [
+        {
+          "line": 28,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 116,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 122,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 67,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 71,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 73,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 75,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 76,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 77,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 90,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 92,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 102,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 103,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 137,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 99,
+          "pattern": "depth.*processing",
+          "match": "DepthConfig(enable_zone_processing"
+        }
+      ],
+      "tests/test_depth_anything_v2_onnx.py": [
+        {
+          "line": 5,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 29,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 34,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 37,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 45,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 103,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 107,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 111,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 115,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 124,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2"
+        },
+        {
+          "line": 138,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 139,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 140,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 150,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2"
+        },
+        {
+          "line": 159,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth-Anything-V2"
+        },
+        {
+          "line": 160,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 161,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 168,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth-Anything-V2"
+        },
+        {
+          "line": 169,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 170,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 177,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth-Anything-V2"
+        },
+        {
+          "line": 178,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 179,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 188,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2"
+        },
+        {
+          "line": 201,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2"
+        },
+        {
+          "line": 224,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2"
+        },
+        {
+          "line": 37,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 45,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 103,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 107,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 111,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 115,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 124,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 124,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 150,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 150,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 188,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 188,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 201,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 201,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 224,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 224,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 37,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 45,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 103,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 107,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model, '_load_onnx_model"
+        },
+        {
+          "line": 111,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model, '_download_onnx_model"
+        },
+        {
+          "line": 115,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 124,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2Model"
+        },
+        {
+          "line": 150,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2Model"
+        },
+        {
+          "line": 188,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2Model"
+        },
+        {
+          "line": 201,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2Model"
+        },
+        {
+          "line": 224,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model.__new__(DepthAnythingV2Model"
+        }
+      ],
+      "lux_depth_v2/examples/09_monitoring.py": [
+        {
+          "line": 178,
+          "pattern": "depth.*map",
+          "match": "depth_dir=Path(\"depth_map"
+        },
+        {
+          "line": 27,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 28,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "config/750_picacho_rag_pipeline.yaml": [
+        {
+          "line": 63,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Processing (Depth Anything V2"
+        },
+        {
+          "line": 67,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth_anything_v2"
+        },
+        {
+          "line": 220,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 63,
+          "pattern": "depth.*processing",
+          "match": "Depth Processing"
+        }
+      ],
+      "lux_depth_v2/examples/07_production_pipeline.py": [
+        {
+          "line": 143,
+          "pattern": "depth.*map",
+          "match": "depth_dir=Path(\"depth_map"
+        },
+        {
+          "line": 65,
+          "pattern": "depth.*processing",
+          "match": "DEPTH V2 - PRODUCTION PROCESSING"
+        },
+        {
+          "line": 17,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.pipeline import LuxPipeline"
+        },
+        {
+          "line": 18,
+          "pattern": "depth.*pipeline",
+          "match": "depth_v2.config import Pipeline"
+        }
+      ],
+      "scripts/automation/depth_integrated_luxury_pipeline_ultimate.py": [
+        {
+          "line": 7,
+          "pattern": "depth.*map",
+          "match": "Depth Map"
+        },
+        {
+          "line": 48,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 99,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 104,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 105,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 108,
+          "pattern": "depth.*map",
+          "match": "depth_dir = self.config.depth_map"
+        },
+        {
+          "line": 110,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 113,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 116,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 117,
+          "pattern": "depth.*map",
+          "match": "depth map: {self.depth_map"
+        },
+        {
+          "line": 489,
+          "pattern": "depth.*map",
+          "match": "depth_dir = Path(\"output_750_Picacho_Depth_Map"
+        },
+        {
+          "line": 500,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 521,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 183,
+          "pattern": "depth.*processing",
+          "match": "depth-based processing"
+        },
+        {
+          "line": 3,
+          "pattern": "depth.*pipeline",
+          "match": "Depth-Integrated Luxury Real Estate Enhancement Pipeline"
+        },
+        {
+          "line": 94,
+          "pattern": "depth.*pipeline",
+          "match": "DepthPipeline"
+        },
+        {
+          "line": 417,
+          "pattern": "depth.*pipeline",
+          "match": "DEPTH-INTEGRATED ENHANCEMENT PIPELINE"
+        },
+        {
+          "line": 483,
+          "pattern": "depth.*pipeline",
+          "match": "Depth-Integrated Luxury Real Estate Pipeline"
+        },
+        {
+          "line": 525,
+          "pattern": "depth.*pipeline",
+          "match": "DepthPipeline"
+        }
+      ],
+      ".venv/lib/python3.11/site-packages/transformers/pipelines/depth_estimation.py": [
+        {
+          "line": 27,
+          "pattern": "depth.*model",
+          "match": "Depth estimation pipeline using any `AutoModel"
+        },
+        {
+          "line": 34,
+          "pattern": "depth.*model",
+          "match": "depth_estimator = pipeline(task=\"depth-estimation\", model"
+        },
+        {
+          "line": 98,
+          "pattern": "depth.*model",
+          "match": "depth** (`torch.Tensor`) -- The predicted depth by the model"
+        },
+        {
+          "line": 99,
+          "pattern": "depth.*model",
+          "match": "depth** (`PIL.Image`) -- The predicted depth by the model"
+        },
+        {
+          "line": 133,
+          "pattern": "depth.*model",
+          "match": "Depth and as `target_sizes` for the rest of the model"
+        },
+        {
+          "line": 19,
+          "pattern": "depth.*map",
+          "match": "DEPTH_ESTIMATION_MAP"
+        },
+        {
+          "line": 58,
+          "pattern": "depth.*map",
+          "match": "DEPTH_ESTIMATION_MAP"
+        },
+        {
+          "line": 25,
+          "pattern": "depth.*pipeline",
+          "match": "DepthEstimationPipeline(Pipeline"
+        },
+        {
+          "line": 27,
+          "pattern": "depth.*pipeline",
+          "match": "Depth estimation pipeline using any `AutoModelForDepthEstimation`. This pipeline"
+        },
+        {
+          "line": 34,
+          "pattern": "depth.*pipeline",
+          "match": "depth_estimator = pipeline"
+        },
+        {
+          "line": 44,
+          "pattern": "depth.*pipeline",
+          "match": "depth estimation pipeline can currently be loaded from [`pipeline"
+        },
+        {
+          "line": 105,
+          "pattern": "depth.*pipeline",
+          "match": "depth-estimation pipeline"
+        }
+      ],
+      "lux_depth_v2/service.py": [
+        {
+          "line": 55,
+          "pattern": "LuxDepth",
+          "match": "LuxDepth"
+        }
+      ],
+      "config/pro_pipeline_config.yaml": [
+        {
+          "line": 24,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 112,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 141,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth-anything-v2"
+        },
+        {
+          "line": 22,
+          "pattern": "depth.*processing",
+          "match": "Depth-Aware Processing"
+        }
+      ],
+      "src/training/property_specific/depth_synthesis.py": [
+        {
+          "line": 5,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth map synthesis using Depth Anything V2"
+        },
+        {
+          "line": 50,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 82,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Anything V2"
+        },
+        {
+          "line": 215,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth synthesis pipeline using Depth Anything V2"
+        },
+        {
+          "line": 284,
+          "pattern": "depth.*anything.*v2",
+          "match": "depth.models.depth_anything_v2"
+        },
+        {
+          "line": 285,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 301,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnythingV2"
+        },
+        {
+          "line": 312,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthModelVariant.SMALL: \"depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 313,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthModelVariant.BASE: \"depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 314,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthModelVariant.LARGE: \"depth-anything/Depth-Anything-V2"
+        },
+        {
+          "line": 285,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 301,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 49,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 50,
+          "pattern": "depth.*model",
+          "match": "Depth Anything V2 model"
+        },
+        {
+          "line": 69,
+          "pattern": "depth.*model",
+          "match": "DepthModelVariant = DepthModel"
+        },
+        {
+          "line": 70,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 71,
+          "pattern": "depth.*model",
+          "match": "DepthModelVariant.LARGE, DepthModel"
+        },
+        {
+          "line": 215,
+          "pattern": "depth.*model",
+          "match": "Depth synthesis pipeline using Depth Anything V2 Large model"
+        },
+        {
+          "line": 223,
+          "pattern": "depth.*model",
+          "match": "depth estimation model"
+        },
+        {
+          "line": 235,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 254,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 276,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 280,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 281,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 284,
+          "pattern": "depth.*model",
+          "match": "depth.model"
+        },
+        {
+          "line": 285,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 291,
+          "pattern": "depth.*model",
+          "match": "DepthModelVariant.SMALL: DAModel"
+        },
+        {
+          "line": 292,
+          "pattern": "depth.*model",
+          "match": "DepthModelVariant.BASE: DAModel"
+        },
+        {
+          "line": 293,
+          "pattern": "depth.*model",
+          "match": "DepthModelVariant.LARGE: DAModel"
+        },
+        {
+          "line": 301,
+          "pattern": "depth.*model",
+          "match": "DepthAnythingV2Model"
+        },
+        {
+          "line": 312,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 313,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 314,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 348,
+          "pattern": "depth.*model",
+          "match": "depth using model"
+        },
+        {
+          "line": 433,
+          "pattern": "depth.*model",
+          "match": "depth using model"
+        },
+        {
+          "line": 439,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 441,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 443,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 449,
+          "pattern": "depth.*model",
+          "match": "depth = self._estimate_single_model(model"
+        },
+        {
+          "line": 474,
+          "pattern": "depth.*model",
+          "match": "depth using a single model"
+        },
+        {
+          "line": 5,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 120,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 130,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 131,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 133,
+          "pattern": "depth.*map",
+          "match": "depth_normalized = (self.depth_map - self.depth_map"
+        },
+        {
+          "line": 134,
+          "pattern": "depth.*map",
+          "match": "depth_map.max() - self.depth_map"
+        },
+        {
+          "line": 141,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 142,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 143,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 147,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 148,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 157,
+          "pattern": "depth.*map",
+          "match": "depth_normalized = (self.depth_map - self.depth_map"
+        },
+        {
+          "line": 158,
+          "pattern": "depth.*map",
+          "match": "depth_map.max() - self.depth_map"
+        },
+        {
+          "line": 165,
+          "pattern": "depth.*map",
+          "match": "depth_normalized = (self.depth_map - self.depth_map"
+        },
+        {
+          "line": 166,
+          "pattern": "depth.*map",
+          "match": "depth_map.max() - self.depth_map"
+        },
+        {
+          "line": 182,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 217,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 331,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 338,
+          "pattern": "depth.*map",
+          "match": "Depth with depth map"
+        },
+        {
+          "line": 350,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 352,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 355,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 356,
+          "pattern": "depth.*map",
+          "match": "depth_map = self._resize_depth(depth_map"
+        },
+        {
+          "line": 360,
+          "pattern": "depth.*map",
+          "match": "depth_map = self._apply_architectural_priors(depth_map"
+        },
+        {
+          "line": 365,
+          "pattern": "depth.*map",
+          "match": "depth_map = self._enhance_depth_edges(depth_map, edge_map"
+        },
+        {
+          "line": 370,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 374,
+          "pattern": "depth.*map",
+          "match": "depth_map=depth_map"
+        },
+        {
+          "line": 378,
+          "pattern": "depth.*map",
+          "match": "depth=float(depth_map"
+        },
+        {
+          "line": 379,
+          "pattern": "depth.*map",
+          "match": "depth=float(depth_map"
+        },
+        {
+          "line": 394,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 462,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 527,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 3,
+          "pattern": "depth.*pipeline",
+          "match": "Depth Synthesis Pipeline"
+        },
+        {
+          "line": 67,
+          "pattern": "depth.*pipeline",
+          "match": "depth synthesis pipeline"
+        },
+        {
+          "line": 215,
+          "pattern": "depth.*pipeline",
+          "match": "Depth synthesis pipeline"
+        },
+        {
+          "line": 229,
+          "pattern": "depth.*pipeline",
+          "match": "depth synthesis pipeline"
+        },
+        {
+          "line": 258,
+          "pattern": "depth.*pipeline",
+          "match": "depth synthesis pipeline"
+        }
+      ],
+      "src/transformation_portal/plugins/builtin/depth_models.py": [
+        {
+          "line": 43,
+          "pattern": "depth.*anything.*v2",
+          "match": "DepthAnything v2"
+        },
+        {
+          "line": 7,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 43,
+          "pattern": "DepthAnything",
+          "match": "DepthAnything"
+        },
+        {
+          "line": 1,
+          "pattern": "depth.*model",
+          "match": "depth model plugins demonstrating DepthModel"
+        },
+        {
+          "line": 17,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 24,
+          "pattern": "depth.*model",
+          "match": "DEPTH_MODEL"
+        },
+        {
+          "line": 31,
+          "pattern": "depth.*model",
+          "match": "DepthEstimator(DepthModel"
+        },
+        {
+          "line": 34,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 38,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 42,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 69,
+          "pattern": "depth.*model",
+          "match": "DEPTH_MODEL"
+        },
+        {
+          "line": 196,
+          "pattern": "depth.*model",
+          "match": "DEPTH_MODEL"
+        },
+        {
+          "line": 203,
+          "pattern": "depth.*model",
+          "match": "DepthEstimator(DepthModel"
+        },
+        {
+          "line": 227,
+          "pattern": "depth.*model",
+          "match": "DEPTH_MODEL"
+        },
+        {
+          "line": 308,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 309,
+          "pattern": "depth.*model",
+          "match": "DEPTH_MODEL"
+        },
+        {
+          "line": 311,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 318,
+          "pattern": "depth.*model",
+          "match": "DepthModel(DepthModel"
+        },
+        {
+          "line": 319,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 340,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        },
+        {
+          "line": 342,
+          "pattern": "depth.*model",
+          "match": "DEPTH_MODEL"
+        },
+        {
+          "line": 343,
+          "pattern": "depth.*model",
+          "match": "depth model"
+        },
+        {
+          "line": 356,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 357,
+          "pattern": "depth.*model",
+          "match": "depth estimation model"
+        },
+        {
+          "line": 50,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 111,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 139,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 141,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 145,
+          "pattern": "depth.*map",
+          "match": "depth_map = self._create_distance_field(depth_map"
+        },
+        {
+          "line": 149,
+          "pattern": "depth.*map",
+          "match": "depth_map.min(), depth_map"
+        },
+        {
+          "line": 151,
+          "pattern": "depth.*map",
+          "match": "depth_map = (depth_map"
+        },
+        {
+          "line": 155,
+          "pattern": "depth.*map",
+          "match": "depth_map = 1.0 - depth_map"
+        },
+        {
+          "line": 157,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 262,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 286,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 287,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 289,
+          "pattern": "depth.*map",
+          "match": "depth_map = ndimage.gaussian_filter(depth_map"
+        },
+        {
+          "line": 292,
+          "pattern": "depth.*map",
+          "match": "depth_map.min(), depth_map"
+        },
+        {
+          "line": 294,
+          "pattern": "depth.*map",
+          "match": "depth_map = (depth_map"
+        },
+        {
+          "line": 296,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 321,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 364,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 371,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        }
+      ],
+      "tests/test_depth_tools.py": [
+        {
+          "line": 70,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 97,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 132,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 163,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 227,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 246,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 264,
+          "pattern": "depth.*map",
+          "match": "depth_map"
+        },
+        {
+          "line": 265,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 5,
+          "pattern": "depth.*processing",
+          "match": "depth_tools.py batch processing"
+        },
+        {
+          "line": 26,
+          "pattern": "depth.*pipeline",
+          "match": "depth_tools module (via pipeline"
+        }
+      ],
+      "src/training/depth_dataset.py": [
+        {
+          "line": 257,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        },
+        {
+          "line": 263,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 325,
+          "pattern": "depth.*map",
+          "match": "depth: Whether this is a depth map"
+        },
+        {
+          "line": 340,
+          "pattern": "depth.*map",
+          "match": "Depth map"
+        },
+        {
+          "line": 420,
+          "pattern": "depth.*map",
+          "match": "depth: Whether this is a depth map"
+        }
+      ],
+      ".venv/lib/python3.11/site-packages/controlnet_aux/zoe/zoedepth/models/depth_model.py": [
+        {
+          "line": 35,
+          "pattern": "depth.*model",
+          "match": "DepthModel"
+        },
+        {
+          "line": 60,
+          "pattern": "depth.*map",
+          "match": "depth map"
+        }
+      ],
+      "config/interior_preset.yaml": [
+        {
+          "line": 4,
+          "pattern": "depth.*model",
+          "match": "depth_model"
+        }
+      ],
+      "config/rendering_4k_pipeline.yaml": [
+        {
+          "line": 10,
+          "pattern": "depth.*anything.*v2",
+          "match": "Depth Estimation (Depth Anything V2"
+        }
+      ]
+    },
+    "Depth-Aware Techniques": {
+      "src/transformation_portal/depth/processors/depth_aware_denoise.py": [
+        {
+          "line": 2,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 28,
+          "pattern": "depth.*aware",
+          "match": "DepthAware"
+        },
+        {
+          "line": 30,
+          "pattern": "depth.*aware",
+          "match": "Depth-aware"
+        },
+        {
+          "line": 50,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 70,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 236,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        }
+      ],
+      "src/transformation_portal/pipelines/depth_tools.py": [
+        {
+          "line": 509,
+          "pattern": "depth.*aware",
+          "match": "Depth-aware"
+        },
+        {
+          "line": 786,
+          "pattern": "depth.*aware",
+          "match": "Depth-aware"
+        },
+        {
+          "line": 675,
+          "pattern": "clarity.*depth",
+          "match": "clarity(img, depth"
+        },
+        {
+          "line": 786,
+          "pattern": "clarity.*depth",
+          "match": "clarity\", help=\"Depth"
+        }
+      ],
+      "lux_depth_v2/torch_ops.py": [
+        {
+          "line": 268,
+          "pattern": "depth.*aware",
+          "match": "Depth-aware"
+        }
+      ],
+      "src/transformation_portal/depth/processors/depth_guided_filters.py": [
+        {
+          "line": 4,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 6,
+          "pattern": "depth.*aware",
+          "match": "Depth-aware"
+        },
+        {
+          "line": 352,
+          "pattern": "depth.*aware",
+          "match": "Depth-aware"
+        },
+        {
+          "line": 88,
+          "pattern": "clarity.*depth",
+          "match": "clarity(image, depth"
+        }
+      ],
+      "config/default_config.yaml": [
+        {
+          "line": 14,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 15,
+          "pattern": "depth.*aware",
+          "match": "depth_aware"
+        }
+      ],
+      "tools/depth_aware_lut.py": [
+        {
+          "line": 3,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 42,
+          "pattern": "depth.*aware",
+          "match": "DepthAware"
+        },
+        {
+          "line": 43,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 160,
+          "pattern": "depth.*aware",
+          "match": "DepthAware"
+        },
+        {
+          "line": 165,
+          "pattern": "depth.*aware",
+          "match": "DepthAware"
+        },
+        {
+          "line": 167,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 170,
+          "pattern": "depth.*aware",
+          "match": "Depth-aware"
+        },
+        {
+          "line": 196,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 479,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 483,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 511,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 566,
+          "pattern": "depth.*aware",
+          "match": "DepthAware"
+        },
+        {
+          "line": 572,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 573,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 574,
+          "pattern": "depth.*aware",
+          "match": "DepthAware"
+        },
+        {
+          "line": 253,
+          "pattern": "atmospheric.*depth",
+          "match": "atmospheric_perspective(result, depth"
+        },
+        {
+          "line": 349,
+          "pattern": "atmospheric.*depth",
+          "match": "atmospheric haze effect based on depth"
+        },
+        {
+          "line": 9,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground/midground/background"
+        }
+      ],
+      "docs/LUX_DEPTH_V2_INTEGRATION_PLAN.md": [
+        {
+          "line": 290,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 316,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        }
+      ],
+      "lux_depth_v2/weights.py": [
+        {
+          "line": 32,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground/midground/background"
+        },
+        {
+          "line": 35,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground/midground/background"
+        },
+        {
+          "line": 41,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground\", \"midground\", \"background"
+        }
+      ],
+      "config/750_picacho_elite_preset.yaml": [
+        {
+          "line": 75,
+          "pattern": "depth.*aware",
+          "match": "depth_controlnet: true  # Depth-aware"
+        }
+      ],
+      "config/750_picacho_master_preset.yaml": [
+        {
+          "line": 23,
+          "pattern": "atmospheric.*depth",
+          "match": "atmospheric depth"
+        }
+      ],
+      "scripts/automation/depth_integrated_luxury_pipeline.py": [
+        {
+          "line": 8,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 11,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 114,
+          "pattern": "depth.*aware",
+          "match": "depth_aware"
+        },
+        {
+          "line": 116,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 248,
+          "pattern": "depth.*aware",
+          "match": "depth_aware"
+        },
+        {
+          "line": 249,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 250,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 303,
+          "pattern": "depth.*aware",
+          "match": "depth_aware"
+        },
+        {
+          "line": 306,
+          "pattern": "depth.*aware",
+          "match": "depth_aware"
+        },
+        {
+          "line": 15,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground/midground/background"
+        },
+        {
+          "line": 102,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground', 'midground', 'background"
+        }
+      ],
+      "config/exterior_preset.yaml": [
+        {
+          "line": 10,
+          "pattern": "depth.*aware",
+          "match": "depth_aware"
+        }
+      ],
+      "config/phase2_perceptual.yaml": [
+        {
+          "line": 190,
+          "pattern": "atmospheric.*depth",
+          "match": "atmospheric_depth"
+        }
+      ],
+      "config/montecito_santa_barbara_presets.yaml": [
+        {
+          "line": 364,
+          "pattern": "zone.*based.*processing",
+          "match": "zone_based_processing"
+        },
+        {
+          "line": 156,
+          "pattern": "atmospheric.*depth",
+          "match": "atmospheric depth"
+        },
+        {
+          "line": 193,
+          "pattern": "atmospheric.*depth",
+          "match": "Atmospheric depth"
+        }
+      ],
+      "lux_depth_v2/pipeline.py": [
+        {
+          "line": 40,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground\", \"midground\", \"background"
+        }
+      ],
+      "config/aerial_preset.yaml": [
+        {
+          "line": 7,
+          "pattern": "depth.*aware",
+          "match": "depth_aware"
+        }
+      ],
+      "utils/depth_processor.py": [
+        {
+          "line": 6,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 54,
+          "pattern": "depth.*aware",
+          "match": "Depth-aware"
+        },
+        {
+          "line": 240,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 156,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground/midground/background"
+        },
+        {
+          "line": 162,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground, midground, background"
+        },
+        {
+          "line": 181,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground + midground + background"
+        },
+        {
+          "line": 186,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground, midground, background"
+        },
+        {
+          "line": 209,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground, midground, background"
+        }
+      ],
+      "tests/test_depth_processor.py": [
+        {
+          "line": 73,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground, midground, background"
+        },
+        {
+          "line": 80,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground + midground + background"
+        }
+      ],
+      "scripts/automation/depth_integrated_luxury_pipeline_ultimate.py": [
+        {
+          "line": 8,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 11,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 184,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 367,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 368,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        },
+        {
+          "line": 509,
+          "pattern": "depth.*aware",
+          "match": "depth-aware"
+        },
+        {
+          "line": 120,
+          "pattern": "foreground.*midground.*background",
+          "match": "foreground', 'midground', 'background"
+        }
+      ],
+      "config/pro_pipeline_config.yaml": [
+        {
+          "line": 22,
+          "pattern": "depth.*aware",
+          "match": "Depth-Aware"
+        }
+      ],
+      "config/interior_preset.yaml": [
+        {
+          "line": 10,
+          "pattern": "depth.*aware",
+          "match": "depth_aware"
+        }
+      ]
+    },
+    "Caching & Performance": {
+      "src/transformation_portal/pipelines/depth_tools.py": [
+        {
+          "line": 136,
+          "pattern": "depth.*cache",
+          "match": "depth_cache = BoundedCache"
+        },
+        {
+          "line": 141,
+          "pattern": "depth.*cache",
+          "match": "depth_cache"
+        },
+        {
+          "line": 143,
+          "pattern": "depth.*cache",
+          "match": "Depth cache"
+        },
+        {
+          "line": 147,
+          "pattern": "depth.*cache",
+          "match": "depth_cache"
+        },
+        {
+          "line": 383,
+          "pattern": "depth.*cache",
+          "match": "depth_cache.get(cache"
+        },
+        {
+          "line": 406,
+          "pattern": "depth.*cache",
+          "match": "depth_cache.put(cache"
+        },
+        {
+          "line": 659,
+          "pattern": "depth.*cache",
+          "match": "depth = load_depth_normalized(dp, target_size=(H, W), method=\"percentile\", use_cache"
+        },
+        {
+          "line": 381,
+          "pattern": "cache.*depth",
+          "match": "cache_key = (depth"
+        },
+        {
+          "line": 383,
+          "pattern": "cache.*depth",
+          "match": "cached = _depth"
+        }
+      ],
+      "tests/test_coreml_depth.py": [
+        {
+          "line": 84,
+          "pattern": "depth.*cache",
+          "match": "DepthEstimator(cache_dir=temp_cache"
+        },
+        {
+          "line": 109,
+          "pattern": "depth.*cache",
+          "match": "depth(self, temp_cache"
+        }
+      ],
+      "config/750_picacho_elite_preset.yaml": [
+        {
+          "line": 156,
+          "pattern": "depth.*cache",
+          "match": "depth_maps: true  # Cache"
+        },
+        {
+          "line": 156,
+          "pattern": "cache.*depth",
+          "match": "cache_depth_maps: true  # Cache depth"
+        }
+      ],
+      "config/750_picacho_master_preset.yaml": [
+        {
+          "line": 25,
+          "pattern": "depth.*cache",
+          "match": "Depth Anything V2 if not cache"
+        },
+        {
+          "line": 171,
+          "pattern": "cache.*depth",
+          "match": "Cache depth"
+        }
+      ],
+      "scripts/utilities/depth_anything_v2.py": [
+        {
+          "line": 328,
+          "pattern": "cache.*depth",
+          "match": "cache_dir=Path.home() / \".cache\" / \"depth"
+        },
+        {
+          "line": 381,
+          "pattern": "cache.*depth",
+          "match": "cache_dir=Path.home() / \".cache\" / \"depth"
+        }
+      ],
+      "src/transformation_portal/depth/models/depth_anything_v2.py": [
+        {
+          "line": 332,
+          "pattern": "cache.*depth",
+          "match": "cache_dir=Path.home() / \".cache\" / \"depth"
+        },
+        {
+          "line": 387,
+          "pattern": "cache.*depth",
+          "match": "cache_dir=Path.home() / \".cache\" / \"depth"
+        }
+      ],
+      "tests/test_depth_anything_v2_onnx.py": [
+        {
+          "line": 161,
+          "pattern": "cache.*depth",
+          "match": "cache_dir=Path.home() / \".cache\" / \"depth"
+        },
+        {
+          "line": 170,
+          "pattern": "cache.*depth",
+          "match": "cache_dir=Path.home() / \".cache\" / \"depth"
+        },
+        {
+          "line": 179,
+          "pattern": "cache.*depth",
+          "match": "cache_dir=Path.home() / \".cache\" / \"depth"
+        }
+      ],
+      "config/750_picacho_rag_pipeline.yaml": [
+        {
+          "line": 220,
+          "pattern": "cache.*depth",
+          "match": "cache_depth"
+        }
+      ],
+      "src/training/depth_dataset.py": [
+        {
+          "line": 385,
+          "pattern": "depth.*cache",
+          "match": "depth = self._cache"
+        },
+        {
+          "line": 399,
+          "pattern": "cache.*depth",
+          "match": "cache[idx] = (image, depth"
+        }
+      ]
+    },
+    "Configuration": {
+      "lux_depth_v2/examples/02_batch_processing.py": [
+        {
+          "line": 13,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 13,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 13,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 18,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/cli.py": [
+        {
+          "line": 6,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 57,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "test_lux_depth_pool_mps.py": [
+        {
+          "line": 9,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 9,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 9,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 18,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/tests/test_config.py": [
+        {
+          "line": 5,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config"
+        },
+        {
+          "line": 7,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 85,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 86,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 90,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 103,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 112,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 121,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 129,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 137,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 145,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 149,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 155,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 159,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 165,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 173,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 181,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 190,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 199,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 208,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "config/default_config.yaml": [
+        {
+          "line": 1,
+          "pattern": "depth.*config",
+          "match": "Depth Anything V2 Pipeline Config"
+        },
+        {
+          "line": 4,
+          "pattern": "depth.*config",
+          "match": "Depth Model Config"
+        }
+      ],
+      "tools/depth_aware_lut.py": [
+        {
+          "line": 42,
+          "pattern": "depth.*config",
+          "match": "DepthAwareLUTConfig"
+        },
+        {
+          "line": 43,
+          "pattern": "depth.*config",
+          "match": "depth-aware LUT config"
+        },
+        {
+          "line": 44,
+          "pattern": "depth.*config",
+          "match": "DepthZone, ZoneLUTConfig"
+        },
+        {
+          "line": 165,
+          "pattern": "depth.*config",
+          "match": "DepthAwareLUTConfig"
+        },
+        {
+          "line": 170,
+          "pattern": "depth.*config",
+          "match": "Depth-aware LUT config"
+        },
+        {
+          "line": 362,
+          "pattern": "depth.*config",
+          "match": "depth_map, 1.5) * self.config"
+        },
+        {
+          "line": 538,
+          "pattern": "depth.*config",
+          "match": "DepthZone.FOREGROUND] = ZoneLUTConfig"
+        },
+        {
+          "line": 546,
+          "pattern": "depth.*config",
+          "match": "DepthZone.MIDGROUND] = ZoneLUTConfig"
+        },
+        {
+          "line": 554,
+          "pattern": "depth.*config",
+          "match": "DepthZone.BACKGROUND] = ZoneLUTConfig"
+        },
+        {
+          "line": 566,
+          "pattern": "depth.*config",
+          "match": "DepthAwareLUTConfig"
+        },
+        {
+          "line": 574,
+          "pattern": "depth.*config",
+          "match": "DepthAwareLUT(config"
+        }
+      ],
+      "docs/LUX_DEPTH_V2_INTEGRATION_PLAN.md": [
+        {
+          "line": 301,
+          "pattern": "depth.*preset",
+          "match": "depth-v2 --input-dir images/ --output-dir output/ --preset"
+        },
+        {
+          "line": 704,
+          "pattern": "depth.*preset",
+          "match": "DepthProcessor(preset"
+        }
+      ],
+      "lux_depth_v2/examples/01_basic_processing.py": [
+        {
+          "line": 14,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 14,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 14,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 19,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "scripts/automation/depth_integrated_luxury_pipeline.py": [
+        {
+          "line": 90,
+          "pattern": "depth.*config",
+          "match": "depth_dir = self.config"
+        },
+        {
+          "line": 385,
+          "pattern": "depth.*config",
+          "match": "DepthIntegratedPipeline(config"
+        },
+        {
+          "line": 43,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 80,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 375,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/tests/conftest.py": [
+        {
+          "line": 118,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 118,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 117,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 118,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 119,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "src/transformation_portal/depth_intelligence/depth_estimator.py": [
+        {
+          "line": 29,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 114,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 121,
+          "pattern": "depth.*config",
+          "match": "Depth estimation config"
+        },
+        {
+          "line": 124,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 134,
+          "pattern": "depth.*config",
+          "match": "DepthEstimator with {self.config"
+        },
+        {
+          "line": 154,
+          "pattern": "depth.*config",
+          "match": "depth model: {self.config"
+        },
+        {
+          "line": 337,
+          "pattern": "depth.*config",
+          "match": "DepthEstimator(variant={self.config"
+        },
+        {
+          "line": 29,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 114,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 124,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        }
+      ],
+      "test_lux_depth_pool.py": [
+        {
+          "line": 8,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 8,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 8,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 16,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/tests/test_material_profiles.py": [
+        {
+          "line": 15,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 15,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 122,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 128,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 135,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 152,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 170,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 173,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 183,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 197,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 216,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/tests/test_pipeline.py": [
+        {
+          "line": 18,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 83,
+          "pattern": "depth.*config",
+          "match": "depth(self, temp_dir, sample_image_file, sample_depth_file, mock_config"
+        },
+        {
+          "line": 18,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 18,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 33,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 40,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 46,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 50,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 193,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "test_lux_depth_pool_with_depth.py": [
+        {
+          "line": 8,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 8,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 8,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 17,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/pipeline.py": [
+        {
+          "line": 11,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 90,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 396,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/tests/test_weights.py": [
+        {
+          "line": 16,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 16,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 24,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 45,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 57,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 75,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 105,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 125,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 156,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 197,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/config.py": [
+        {
+          "line": 50,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "utils/depth_processor.py": [
+        {
+          "line": 28,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 60,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 63,
+          "pattern": "depth.*config",
+          "match": "depth processor (device: {config"
+        },
+        {
+          "line": 70,
+          "pattern": "depth.*config",
+          "match": "depth model: {self.config"
+        },
+        {
+          "line": 83,
+          "pattern": "depth.*config",
+          "match": "depth model: {self.config"
+        },
+        {
+          "line": 296,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 301,
+          "pattern": "depth.*config",
+          "match": "DepthProcessor(config"
+        },
+        {
+          "line": 28,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 60,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 296,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        }
+      ],
+      "test_lux_depth_pool_upscale.py": [
+        {
+          "line": 8,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 8,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 8,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 16,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "tests/test_depth_processor.py": [
+        {
+          "line": 13,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 22,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 23,
+          "pattern": "depth.*config",
+          "match": "depth config"
+        },
+        {
+          "line": 27,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 35,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 56,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 57,
+          "pattern": "depth.*config",
+          "match": "DepthProcessor(config"
+        },
+        {
+          "line": 99,
+          "pattern": "depth.*config",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 100,
+          "pattern": "depth.*config",
+          "match": "DepthProcessor(config"
+        },
+        {
+          "line": 13,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 22,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 27,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 35,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 56,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        },
+        {
+          "line": 99,
+          "pattern": "DepthConfig",
+          "match": "DepthConfig"
+        }
+      ],
+      "lux_depth_v2/examples/09_monitoring.py": [
+        {
+          "line": 28,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 28,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 28,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 94,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 174,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/tests/test_security_hardening.py": [
+        {
+          "line": 101,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import SegmentationConfig"
+        },
+        {
+          "line": 122,
+          "pattern": "depth.*config",
+          "match": "depth_v2 import config"
+        },
+        {
+          "line": 125,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/examples/07_production_pipeline.py": [
+        {
+          "line": 18,
+          "pattern": "depth.*config",
+          "match": "depth_v2.config import PipelineConfig"
+        },
+        {
+          "line": 18,
+          "pattern": "depth.*preset",
+          "match": "depth_v2.config import PipelineConfig, Preset"
+        },
+        {
+          "line": 18,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 137,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "scripts/automation/depth_integrated_luxury_pipeline_ultimate.py": [
+        {
+          "line": 108,
+          "pattern": "depth.*config",
+          "match": "depth_dir = self.config"
+        },
+        {
+          "line": 525,
+          "pattern": "depth.*config",
+          "match": "DepthPipeline(config"
+        },
+        {
+          "line": 44,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 97,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 519,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "lux_depth_v2/service.py": [
+        {
+          "line": 10,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 35,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        },
+        {
+          "line": 148,
+          "pattern": "PipelineConfig",
+          "match": "PipelineConfig"
+        }
+      ],
+      "src/training/property_specific/depth_synthesis.py": [
+        {
+          "line": 66,
+          "pattern": "depth.*config",
+          "match": "DepthSynthesisConfig"
+        },
+        {
+          "line": 222,
+          "pattern": "depth.*config",
+          "match": "Depth synthesis config"
+        },
+        {
+          "line": 227,
+          "pattern": "depth.*config",
+          "match": "DepthSynthesisConfig"
+        },
+        {
+          "line": 234,
+          "pattern": "depth.*config",
+          "match": "DepthSynthesisConfig"
+        },
+        {
+          "line": 439,
+          "pattern": "depth.*config",
+          "match": "DepthModelVariant.LARGE: self.config"
+        },
+        {
+          "line": 441,
+          "pattern": "depth.*config",
+          "match": "DepthModelVariant.BASE: self.config"
+        },
+        {
+          "line": 443,
+          "pattern": "depth.*config",
+          "match": "DepthModelVariant.SMALL: self.config"
+        },
+        {
+          "line": 657,
+          "pattern": "depth.*config",
+          "match": "DepthSynthesis(backend={self.config"
+        }
+      ],
+      "src/transformation_portal/plugins/builtin/depth_models.py": [
+        {
+          "line": 352,
+          "pattern": "depth.*config",
+          "match": "depth = config"
+        }
+      ],
+      "src/training/depth_dataset.py": [
+        {
+          "line": 50,
+          "pattern": "depth.*config",
+          "match": "DepthDataConfig"
+        },
+        {
+          "line": 100,
+          "pattern": "depth.*config",
+          "match": "DepthDataConfig"
+        },
+        {
+          "line": 104,
+          "pattern": "depth.*config",
+          "match": "DepthDataset(config"
+        },
+        {
+          "line": 110,
+          "pattern": "depth.*config",
+          "match": "DepthDataConfig"
+        },
+        {
+          "line": 395,
+          "pattern": "depth.*config",
+          "match": "depth = self._resize(depth, self.config"
+        },
+        {
+          "line": 473,
+          "pattern": "depth.*config",
+          "match": "DepthDataConfig"
+        }
+      ]
+    },
+    "Optimizations": {
+      "lux_depth_v2/cli.py": [
+        {
+          "line": 12,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU-accelerat"
+        }
+      ],
+      "test_lux_depth_pool_mps.py": [
+        {
+          "line": 34,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU accelerat"
+        }
+      ],
+      "config/default_config.yaml": [
+        {
+          "line": 7,
+          "pattern": "CoreML",
+          "match": "coreml"
+        }
+      ],
+      "docs/LUX_DEPTH_V2_INTEGRATION_SUMMARY.md": [
+        {
+          "line": 129,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU-accelerat"
+        }
+      ],
+      "docs/LUX_DEPTH_V2_INTEGRATION_PLAN.md": [
+        {
+          "line": 47,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU-accelerat"
+        },
+        {
+          "line": 290,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU accelerat"
+        },
+        {
+          "line": 319,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU-accelerat"
+        },
+        {
+          "line": 326,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU-accelerat"
+        }
+      ],
+      "tests/test_coreml_depth.py": [
+        {
+          "line": 1,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 10,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 10,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 11,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 12,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 13,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 17,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 18,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 28,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 34,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 35,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 37,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 38,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 38,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 41,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 47,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 53,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 62,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 62,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 63,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 64,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 65,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 70,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 71,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 79,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 80,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 80,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 84,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 84,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 87,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 97,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 98,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 99,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 99,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 101,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 103,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 106,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 120,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 121,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 123,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 125,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 158,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 159,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 161,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 161,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 203,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 204,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 206,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 206,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 245,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        }
+      ],
+      "config/750_picacho_elite_preset.yaml": [
+        {
+          "line": 14,
+          "pattern": "CoreML",
+          "match": "coreml"
+        }
+      ],
+      "lux_depth_v2/tests/test_torch_ops.py": [
+        {
+          "line": 72,
+          "pattern": "MPS.*device",
+          "match": "mps(self, torch_device"
+        }
+      ],
+      "config/750_picacho_master_preset.yaml": [
+        {
+          "line": 19,
+          "pattern": "CoreML",
+          "match": "coreml"
+        }
+      ],
+      "src/transformation_portal/depth_intelligence/depth_estimator.py": [
+        {
+          "line": 142,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 144,
+          "pattern": "CoreML",
+          "match": "COREML"
+        }
+      ],
+      "lux_depth_v2/pipeline.py": [
+        {
+          "line": 88,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU-accelerat"
+        }
+      ],
+      "scripts/utilities/depth_predict_coreml.py": [
+        {
+          "line": 4,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 10,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 15,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 22,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 36,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 22,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        }
+      ],
+      "config/aerial_preset.yaml": [
+        {
+          "line": 3,
+          "pattern": "CoreML",
+          "match": "coreml"
+        }
+      ],
+      "config/phase1_foundation.yaml": [
+        {
+          "line": 37,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 10,
+          "pattern": "Apple.*Neural.*Engine",
+          "match": "Apple Neural Engine"
+        },
+        {
+          "line": 37,
+          "pattern": "Apple.*Neural.*Engine",
+          "match": "Apple Neural Engine"
+        }
+      ],
+      "scripts/utilities/depth_anything_v2.py": [
+        {
+          "line": 6,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 40,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 41,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 43,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 44,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 44,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 70,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 70,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 80,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 81,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 81,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 82,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 82,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 158,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 159,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 160,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 177,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 178,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 189,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 190,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 292,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 333,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 334,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 335,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 337,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 337,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 338,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 346,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 350,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 352,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 358,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 359,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 364,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 365,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 366,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 367,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 370,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 372,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 379,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 415,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 416,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 488,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 489,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 493,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 513,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 70,
+          "pattern": "Apple.*Neural.*Engine",
+          "match": "Apple Neural Engine"
+        },
+        {
+          "line": 334,
+          "pattern": "Apple.*Neural.*Engine",
+          "match": "Apple Neural Engine"
+        },
+        {
+          "line": 216,
+          "pattern": "MPS.*device",
+          "match": "mps\" else 0,  # MPS uses device"
+        },
+        {
+          "line": 40,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        },
+        {
+          "line": 44,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        },
+        {
+          "line": 44,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        },
+        {
+          "line": 337,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        },
+        {
+          "line": 338,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        }
+      ],
+      "lux_depth_v2/__init__.py": [
+        {
+          "line": 3,
+          "pattern": "GPU.*accelerat",
+          "match": "GPU-accelerat"
+        }
+      ],
+      "src/transformation_portal/depth/models/depth_anything_v2.py": [
+        {
+          "line": 6,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 42,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 43,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 45,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 46,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 46,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 72,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 72,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 82,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 83,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 83,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 84,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 84,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 160,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 161,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 162,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 179,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 180,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 191,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 192,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 296,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 337,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 338,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 339,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 341,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 341,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 342,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 350,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 354,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 356,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 362,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 363,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 368,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 369,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 370,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 371,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 374,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 376,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 385,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 421,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 422,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 494,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 495,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 499,
+          "pattern": "CoreML",
+          "match": "CoreML"
+        },
+        {
+          "line": 519,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 72,
+          "pattern": "Apple.*Neural.*Engine",
+          "match": "Apple Neural Engine"
+        },
+        {
+          "line": 338,
+          "pattern": "Apple.*Neural.*Engine",
+          "match": "Apple Neural Engine"
+        },
+        {
+          "line": 218,
+          "pattern": "MPS.*device",
+          "match": "mps\" else 0,  # MPS uses device"
+        },
+        {
+          "line": 42,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        },
+        {
+          "line": 46,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        },
+        {
+          "line": 46,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        },
+        {
+          "line": 341,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        },
+        {
+          "line": 342,
+          "pattern": "coremltools",
+          "match": "coremltools"
+        }
+      ],
+      "tests/test_depth_anything_v2_onnx.py": [
+        {
+          "line": 76,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 84,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 84,
+          "pattern": "CoreML",
+          "match": "coreml"
+        }
+      ],
+      "config/750_picacho_rag_pipeline.yaml": [
+        {
+          "line": 69,
+          "pattern": "CoreML",
+          "match": "coreml"
+        }
+      ],
+      "config/pro_pipeline_config.yaml": [
+        {
+          "line": 25,
+          "pattern": "CoreML",
+          "match": "coreml"
+        },
+        {
+          "line": 25,
+          "pattern": "Apple.*Neural.*Engine",
+          "match": "Apple Neural Engine"
+        }
+      ],
+      "src/training/property_specific/depth_synthesis.py": [
+        {
+          "line": 61,
+          "pattern": "CoreML",
+          "match": "COREML"
+        },
+        {
+          "line": 61,
+          "pattern": "CoreML",
+          "match": "coreml"
+        }
+      ],
+      "config/rendering_4k_pipeline.yaml": [
+        {
+          "line": 14,
+          "pattern": "CoreML",
+          "match": "coreml"
+        }
+      ]
+    }
+  },
+  "key_file_analysis": {
+    "lux_depth_v2/pipeline.py": {
+      "lines": 409,
+      "classes": 1,
+      "functions": 6,
+      "imports": [
+        "__future__ import annotations",
+        "json",
+        "time",
+        "dataclasses import asdict",
+        "pathlib import Path",
+        "typing import Dict, List, Optional, Tuple",
+        "numpy as np",
+        ".config import PipelineConfig",
+        ".logging_utils import setup_logging",
+        ". import io_utils"
+      ],
+      "description": "Optional manual zone masks. Convention: stem_foreground.png etc."
+    },
+    "lux_depth_v2/config.py": {
+      "lines": 218,
+      "classes": 4,
+      "functions": 0,
+      "imports": [
+        "__future__ import annotations",
+        "dataclasses import dataclass, field",
+        "enum import Enum",
+        "pathlib import Path",
+        "typing import Optional, Tuple"
+      ],
+      "description": "Curated looks (conservative defaults; tuned for photorealism)."
+    },
+    "lux_depth_v2/cli.py": {
+      "lines": 97,
+      "classes": 0,
+      "functions": 2,
+      "imports": [
+        "__future__ import annotations",
+        "argparse",
+        "pathlib import Path",
+        ".config import PipelineConfig, Preset",
+        ".logging_utils import setup_logging",
+        ".pipeline import LuxPipelineV2"
+      ]
+    },
+    "lux_depth_v2/upscaling.py": {
+      "lines": 123,
+      "classes": 4,
+      "functions": 3,
+      "imports": [
+        "__future__ import annotations",
+        "hashlib",
+        "pathlib import Path",
+        "typing import Optional, Tuple",
+        "numpy as np",
+        ". import torch_ops"
+      ],
+      "description": "Torch-based upscaling using torchvision (safe alternative to Real-ESRGAN)."
+    }
+  }
+}

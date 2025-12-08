@@ -93,3 +93,38 @@ No dependencies, fast, but least accurate.
   - `cfg.post_tile` and `cfg.post_overlap` (or modify config defaults).
 - For best results, prefer a consistent depth convention where **near = low, far = high** after normalization.
 
+
+## Production Quality Validation
+
+Lux Depth V2 includes a comprehensive quality validation framework for production deployments.
+
+### Features
+- **Synthetic reference mode**: Create controlled test pairs by degrading high-quality originals
+- **Real-world mode**: Validate production images with no-reference metrics
+- **Baseline comparison**: Compare against industry tools (Topaz, Adobe, etc.)
+- **Multiple metric categories**: Fidelity (SSIM, PSNR), Perceptual (LPIPS), Aesthetic (NIMA)
+- **Reproducibility stamping**: Every report includes git commit, config hash, device info
+
+### Quick Example
+
+```python
+from lux_depth_v2.validation import QualityValidator
+
+validator = QualityValidator(device="cuda")
+test_images = list(Path("output/").glob("*_upscaled16.tif"))
+report = validator.validate_batch(
+    test_images=test_images,
+    output_dir=Path("validation_results/"),
+    mode="real"
+)
+print(f"Quality Score: {report.composite_score:.3f}")
+```
+
+### Production Presets Now Include Safety Defaults
+
+All production presets automatically enforce:
+- `validate_ai=True` - AI safety checks enabled
+- `post_tile=2048` - UHR tiling for 324MP+ capability
+- `post_overlap=64` - Increased overlap for quality
+
+See `../docs/PRODUCTION_VALIDATION_GUIDE.md` for complete documentation.

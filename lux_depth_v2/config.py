@@ -147,16 +147,17 @@ class PipelineConfig:
     material_strength: float = 0.75
     surfaces: Tuple[str, ...] = ("wood", "metal", "glass", "stone", "sky", "foliage")
 
-    # Guard-rails for AI
-    validate_ai: bool = True
+    # Guard-rails for AI (MANDATORY in production)
+    validate_ai: bool = True  # PRODUCTION: Must be True for safety
     ai_color_warn: float = 0.06
     ai_color_fail: float = 0.12
     ai_luma_warn: float = 0.06
     ai_luma_fail: float = 0.12
 
     # Tiling for post-processing (memory safety)
-    post_tile: int = 0  # 0 disables tiling; else tile size at FINAL res
-    post_overlap: int = 32  # pixels overlap at FINAL res
+    # PRODUCTION DEFAULT: Enable tiling for UHR (324MP+) capability
+    post_tile: int = 2048  # tile size at FINAL res (0 disables, 2048 for UHR support)
+    post_overlap: int = 64  # pixels overlap at FINAL res (increased for quality)
 
     # Sub-configs
     segmentation: SegmentationConfig = field(default_factory=SegmentationConfig)
@@ -183,6 +184,10 @@ class PipelineConfig:
             self.detail_strength = 0.70
             self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.20, 0.12, 0.06
             self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.09, 0.06, 0.035
+            # Production: Enable UHR tiling and enforce validation
+            self.post_tile = 2048
+            self.post_overlap = 64
+            self.validate_ai = True
 
         elif p == Preset.EXTERIOR_SHOWCASE:
             self.material_strength = 0.80
@@ -192,6 +197,10 @@ class PipelineConfig:
             self.detail_strength = 0.72
             self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.22, 0.13, 0.06
             self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.09, 0.06, 0.03
+            # Production: Enable UHR tiling and enforce validation
+            self.post_tile = 2048
+            self.post_overlap = 64
+            self.validate_ai = True
 
         elif p == Preset.ARCHITECTURAL:
             self.material_strength = 0.75
@@ -211,6 +220,10 @@ class PipelineConfig:
             self.detail_strength = 0.55
             self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.14, 0.08, 0.03
             self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.06, 0.04, 0.02
+            # Production: Enable UHR tiling and enforce validation
+            self.post_tile = 2048
+            self.post_overlap = 64
+            self.validate_ai = True
 
         # clamp some sanity
         self.upscale = 4 if int(self.upscale) not in (2, 4) else int(self.upscale)
