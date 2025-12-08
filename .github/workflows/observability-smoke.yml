@@ -33,4 +33,4 @@ jobs:
           LUX_METRICS_ENABLED: "1"
           LUX_HTTP_ACCESS_LOG: "0"
         run: |
-          pytest -q lux_depth_v2/tests/observability/test_observability_smoke.py --rootdir=lux_depth_v2/tests/observability
+          pytest -q lux_depth_v2/tests/observability/test_observability_smoke.py --noconftest
