@@ -26,6 +26,32 @@ from lux_depth_v2.materials_v2 import (
 from lux_depth_v2.cache_manager import MaskCacheManager
 
 
+# Utility functions
+
+def _torch_available() -> bool:
+    """Check if PyTorch is available."""
+    try:
+        import torch
+        return True
+    except ImportError:
+        return False
+
+
+def _create_test_image(height: int = 100, width: int = 100) -> np.ndarray:
+    """Create a simple test image."""
+    return np.random.rand(height, width, 3).astype(np.float32)
+
+
+def _create_test_segmentation(height: int = 100, width: int = 100) -> SegmentationResult:
+    """Create mock segmentation result."""
+    return SegmentationResult(
+        mask=np.random.rand(height, width).astype(np.float32) > 0.5,
+        confidence=np.random.rand(height, width).astype(np.float32) * 0.5 + 0.5,
+        material_type='wood',
+        source='test'
+    )
+
+
 class TestConfidenceGating:
     """Test confidence-gated material response."""
     
