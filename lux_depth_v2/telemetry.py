@@ -13,7 +13,7 @@ import json
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Mapping
 from contextlib import contextmanager
 
 try:
@@ -314,3 +314,21 @@ class MetricsCollector:
     def export_prometheus(self, path: Path) -> None:
         """Export batch metrics in Prometheus format."""
         path.write_text(self.batch.to_prometheus())
+
+
+# --- Observability additions (additive; safe to ignore if unused) -------------
+
+
+def observe_pipeline_timings(timing_s: Optional[Mapping[str, float]]) -> None:
+    """
+    Optional bridge: pipe timing breakdowns into Prometheus histograms.
+    Call this with result['timing_s'] (see migration docs) when available.
+    """
+    if not timing_s:
+        return
+    try:
+        from lux_depth_v2.observability.metrics import get_metrics
+        get_metrics().observe_pipeline_timings(dict(timing_s))
+    except Exception:
+        # Fully additive: telemetry must never fail the pipeline
+        return
