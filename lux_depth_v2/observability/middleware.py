@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 from .context import REQUEST_ID_HEADERS, bind_request_id, new_request_id
 from .metrics import get_metrics
@@ -55,8 +55,11 @@ class ObservabilityMiddleware:
         request_id = None
         for h in REQUEST_ID_HEADERS:
             if h in hdrs and hdrs[h].strip():
-                request_id = hdrs[h].strip()
-                break
+                candidate_id = hdrs[h].strip()
+                # Validate: max 64 chars, only alphanumeric and hyphens to prevent injection
+                if len(candidate_id) <= 64 and all(c.isalnum() or c == '-' for c in candidate_id):
+                    request_id = candidate_id
+                    break
         if request_id is None:
             request_id = new_request_id()
 

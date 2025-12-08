@@ -8,7 +8,7 @@ Features:
 
 All behavior is additive and gated via environment variables:
 - LUX_METRICS_ENABLED=1|0 (default: 1)
-- LUX_METRICS_TOKEN=<bearer token> (optional)
+- LUX_METRICS_TOKEN=<bearer token> (optional, enables /metrics auth when set)
 - LUX_LOG_FORMAT=json|text (default: json for service installs, otherwise unchanged)
 - LUX_HTTP_ACCESS_LOG=1|0 (default: 1)
 """

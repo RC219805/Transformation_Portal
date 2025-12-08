@@ -5,6 +5,9 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -30,4 +33,4 @@ jobs:
           LUX_METRICS_ENABLED: "1"
           LUX_HTTP_ACCESS_LOG: "0"
         run: |
-          pytest -q lux_depth_v2/tests/test_observability_smoke.py
+          pytest -q lux_depth_v2/tests/observability/test_observability_smoke.py

@@ -13,7 +13,7 @@ import json
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Mapping
 from contextlib import contextmanager
 
 try:
@@ -317,14 +317,6 @@ class MetricsCollector:
 
 
 # --- Observability additions (additive; safe to ignore if unused) -------------
-
-from typing import Mapping, Optional
-
-try:
-    from lux_depth_v2.observability.context import get_request_id as current_request_id  # re-export
-except Exception:  # pragma: no cover
-    def current_request_id() -> Optional[str]:
-        return None
 
 
 def observe_pipeline_timings(timing_s: Optional[Mapping[str, float]]) -> None:

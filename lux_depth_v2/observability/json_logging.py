@@ -80,7 +80,7 @@ class JsonFormatter(logging.Formatter):
             base[k] = _safe(v)
 
         # Exception info, if any
-        if record.exc_info:
+        if record.exc_info and record.exc_info[0] is not None:
             base["exc_type"] = getattr(record.exc_info[0], "__name__", str(record.exc_info[0]))
             base["exc"] = "".join(traceback.format_exception(*record.exc_info)).strip()
 
@@ -113,8 +113,9 @@ def configure_structured_logging(
         root.addHandler(handler)
 
     for h in root.handlers:
-        # Attach filter always; formatter depends on JSON mode
-        h.addFilter(RequestIdFilter())
+        # Attach filter only if not already present; formatter depends on JSON mode
+        if not any(isinstance(f, RequestIdFilter) for f in h.filters):
+            h.addFilter(RequestIdFilter())
         if use_json:
             h.setFormatter(JsonFormatter())
 
