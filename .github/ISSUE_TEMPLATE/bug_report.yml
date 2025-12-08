@@ -1,0 +1,22 @@
+name: Bug Report
+description: File a bug report
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include exact steps, expected vs actual.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Commit / version
+      placeholder: "git rev-parse --short HEAD"

@@ -1,0 +1,70 @@
+site_name: Transformation Portal
+site_description: Production-grade transformation + validation framework for luxury real estate and architectural workflows.
+site_url: https://rc219805.github.io/Transformation_Portal/
+repo_name: RC219805/Transformation_Portal
+repo_url: https://github.com/RC219805/Transformation_Portal
+edit_uri: edit/main/docs_site/
+
+docs_dir: docs_site
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
+    - search.suggest
+    - search.highlight
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/RC219805/Transformation_Portal
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Hardening: architecture/hardening.md
+      - Observability: architecture/observability.md
+  - Validation: validation.md
+  - Deployment: deployment.md
+  - Contributing: contributing.md

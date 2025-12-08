@@ -232,3 +232,4 @@ validation_v1_baseline_pack.zip
 # One-off processing scripts (use archive/ for permanent scripts)
 process_*_max_quality.py
 test_lux_depth_*.py
+site/
