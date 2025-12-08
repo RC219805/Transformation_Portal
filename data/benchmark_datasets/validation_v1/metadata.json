@@ -1,0 +1,71 @@
+{
+  "dataset_id": "validation_v1",
+  "version": "1.0.0",
+  "description": "Validation dataset covering interiors, exteriors, glossy materials, patterned surfaces, HDR range, and architectural conditions.",
+  "target_image_count": 20,
+  "current_image_count": 2,
+  "planned_image_count": 9,
+  "image_count_notes": "current_image_count: images with full metadata. planned_image_count: total images planned for next milestone (includes current). target_image_count: final target for complete dataset.",
+  "status": "work-in-progress",
+  "created_utc": "2025-12-08T00:00:00Z",
+  "expected_format": "tiff",
+  "expected_bit_depth": 16,
+  "input_dir": "data/benchmark_datasets/validation_v1/input",
+  "categories": {
+    "interior_luxury": [
+      "0001_living_room.tif",
+      "0002_kitchen.tif"
+    ],
+    "exterior_showcase": [
+      "0003_front_elevation.tif",
+      "0004_rear_elevation.tif"
+    ],
+    "glossy_surfaces": [
+      "0005_glossy_kitchen_island.tif"
+    ],
+    "fine_patterns": [
+      "0006_patterned_tile.tif"
+    ],
+    "mixed_lighting_hdr": [
+      "0007_sunset_exterior_hdr.tif"
+    ],
+    "texture_critical": [
+      "0008_stone_wall.tif",
+      "0009_landscape_detail.tif"
+    ]
+  },
+  "images": [
+    {
+      "id": "0001_living_room",
+      "filename": "0001_living_room.tif",
+      "categories": [
+        "interior_luxury",
+        "texture_critical"
+      ],
+      "notes": "Wide DR interior; wood+fabric; fine texture retention is critical.",
+      "source": {
+        "origin": "internal",
+        "license": "internal-use"
+      },
+      "sha256": null
+    },
+    {
+      "id": "0002_kitchen",
+      "filename": "0002_kitchen.tif",
+      "categories": [
+        "interior_luxury",
+        "glossy_surfaces"
+      ],
+      "notes": "Glossy counters, mixed lighting; checks for haloing and specular control.",
+      "source": {
+        "origin": "internal",
+        "license": "internal-use"
+      },
+      "sha256": null
+    }
+  ],
+  "naming_convention": {
+    "input": "<id>_<slug>.tif",
+    "baseline": "<id>_<slug>_<baseline_id>.tif"
+  }
+}
