@@ -20,5 +20,5 @@ tifffile>=2023.7.18,<2025
 imagecodecs>=2023.9.18,<2025
 
 # Phase 2 enhancements
-psutil>=5.9.0,<6           # Performance profiling
-scikit-image>=0.21,<0.25   # Image quality metrics (PSNR, SSIM)
+psutil>=5.9.0,<8           # Performance profiling (allow v7.x for latest features)
+scikit-image>=0.21,<0.26   # Image quality metrics (PSNR, SSIM), allow 0.25.x

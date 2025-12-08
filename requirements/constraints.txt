@@ -17,7 +17,12 @@
 #   - Update pins via a locked requirements file and after testing for compatibility.
 
 # ML dependency constraints to prevent resolver conflicts
-controlnet-aux<0.0.9
+# controlnet-aux<0.0.9  # Removed: 0.0.10 is compatible with current dependencies
+
+# Security Advisory: CVE-2024-73169
+# sentence-transformers <3.1.0 has arbitrary code execution vulnerability via torch.load
+# Require >=3.1.0 to mitigate this vulnerability
+sentence-transformers>=3.1.0
 
 # Python 3.10 compatibility constraint
 # networkx 3.5+ requires Python 3.11+
