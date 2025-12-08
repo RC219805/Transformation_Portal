@@ -28,6 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r lux_depth_v2/requirements-repo.txt
           python -m pip install pytest ruff bandit pip-audit
+          python -m pip install -e .
 
       - name: Dependency ban guard (basicsr/realesrgan/gfpgan)
         run: |
