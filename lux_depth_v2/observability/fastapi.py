@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import os
 import secrets
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+# Import Request at module level for type annotations in nested functions
+# (FastAPI's eval_str=True requires it in globals)
+from fastapi import Request  # noqa: F401
 
 from .json_logging import configure_structured_logging
 from .metrics import get_metrics
@@ -50,7 +54,7 @@ def install_observability(
 
     # /metrics endpoint with optional bearer token authentication
     @app.get("/metrics", include_in_schema=False, response_class=Response)
-    async def metrics_endpoint(request):
+    async def metrics_endpoint(request: Request):
         m = get_metrics()
         # Check if authentication is required
         if m.auth.token:
