@@ -1,0 +1,15 @@
+{
+  "max_input_bytes": 52428800,
+  "max_input_megapixels": null,
+  "allowed_input_exts": [".tif", ".tiff", ".png", ".jpg", ".jpeg"],
+  "enforce_output_within": null,
+  "stamp_reports": true,
+  "stamp_include_input_hash": false,
+  "write_run_manifest": true,
+  "run_manifest_name": "run_manifest.json",
+  "enable_rate_limit": false,
+  "rate_limit_per_minute": 60,
+  "enable_request_ids": true,
+  "redact_paths": true,
+  "allowed_input_roots": []
+}
