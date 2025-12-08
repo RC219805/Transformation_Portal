@@ -233,3 +233,11 @@ validation_v1_baseline_pack.zip
 process_*_max_quality.py
 test_lux_depth_*.py
 site/
+
+# External storage symlinks (point to T9 SSD)
+output_750_Picacho_Optimized_Production_20251208_112751
+output_750_Picacho_GoldStandard_Production_20251208_102806
+output_750_Picacho_Retry_*
+output_Kitchen_MaxQuality_*
+output_Aerial_MaxQuality_*
+output_GreatRoom_MaxQuality_*
