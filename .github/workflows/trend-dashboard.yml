@@ -396,7 +396,7 @@ jobs:
           
       - name: Upload Trend Report
         id: upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: trend-dashboard-${{ github.run_number }}
           path: |
