@@ -221,3 +221,14 @@ assets/hdr_toning/**/*.cube
 !assets/luts/3DLUTs
 !assets/hdr_toning/HDR\ Toning
 data/training_demo/
+
+# Test data and validation baselines (local only)
+input_images/16_Seaview/
+input_images/750_Picacho/
+input_images/800_Picacho/
+validation_v1_baseline_pack/
+validation_v1_baseline_pack.zip
+
+# One-off processing scripts (use archive/ for permanent scripts)
+process_*_max_quality.py
+test_lux_depth_*.py
