@@ -46,5 +46,7 @@ jobs:
           bandit -q -r lux_depth_v2/hardening scripts/hardening -ll
 
       - name: pip-audit (HIGH+ severity)
+        # pip-audit is a blocking check: PRs will fail if HIGH severity vulnerabilities are found.
+        # To make this advisory instead, add `continue-on-error: true` to this step.
         run: |
           pip-audit -r lux_depth_v2/requirements-repo.txt --severity high

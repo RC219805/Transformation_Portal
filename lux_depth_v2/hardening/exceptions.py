@@ -28,12 +28,3 @@ class PolicyViolationError(HardeningError):
     def __str__(self) -> str:
         r = f" rule={self.rule!r}" if self.rule else ""
         return f"{self.message}{r}"
-
-
-@dataclass(frozen=True)
-class ManifestError(HardeningError):
-    message: str
-    details: Optional[dict[str, Any]] = None
-
-    def __str__(self) -> str:
-        return self.message

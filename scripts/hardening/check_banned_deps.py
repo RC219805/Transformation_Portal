@@ -14,6 +14,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from packaging.requirements import Requirement, InvalidRequirement
+
 from lux_depth_v2.hardening.policy import HardeningPolicy, find_requirement_files
 
 
@@ -46,8 +48,13 @@ def main() -> int:
     for f in files:
         try:
             for line in parse_req_lines(f):
-                pkg = line.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0]
-                pkg = pkg.split("[")[0].strip()
+                try:
+                    req = Requirement(line)
+                    pkg = req.name.lower()
+                except InvalidRequirement:
+                    # Fallback for malformed requirements
+                    pkg = line.split("==")[0].split(">=")[0].split("<=")[0].split("~=")[0]
+                    pkg = pkg.split("[")[0].strip()
                 if pkg in banned:
                     violations.append((f, pkg))
         except Exception as e:

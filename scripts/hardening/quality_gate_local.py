@@ -12,7 +12,6 @@ PRODUCTION_VALIDATION_GUIDE.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 
@@ -24,8 +23,12 @@ def main() -> int:
         print("Golden gate skipped (missing baseline_report.json or current_report.json).")
         return 0
 
-    b = json.loads(baseline.read_text())
-    c = json.loads(current.read_text())
+    try:
+        b = json.loads(baseline.read_text())
+        c = json.loads(current.read_text())
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Invalid JSON in report file: {e}")
+        return 1
 
     b_score = float(b.get("composite_score", 0.0))
     c_score = float(c.get("composite_score", 0.0))

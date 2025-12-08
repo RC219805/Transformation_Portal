@@ -9,10 +9,16 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 
-def _run(cmd: list[str]) -> str:
+def _run(cmd: list[str], timeout: float = 5.0) -> str:
+    """
+    Run a command and return its output as a string.
+    WARNING: Only use with trusted input. Currently used only for git commands.
+    """
     try:
-        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True).strip()
+        out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True, timeout=timeout).strip()
         return out
+    except subprocess.TimeoutExpired:
+        return "timeout"
     except Exception:
         return "unknown"
 

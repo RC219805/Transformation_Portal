@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -11,12 +10,6 @@ from .policy import HardeningPolicy
 from .profiling import StageProfiler
 from .safe_io import safe_mkdir, validate_image_file
 from .stamping import stamp_report, write_run_manifest
-
-
-@dataclass(frozen=True)
-class HardenedRunResult:
-    report: Dict[str, Any]
-    manifest_path: Optional[Path] = None
 
 
 class LuxPipelineV2Hardened:

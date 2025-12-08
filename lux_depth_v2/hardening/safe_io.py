@@ -94,7 +94,6 @@ def validate_image_file(path: Path, policy: HardeningPolicy) -> None:
             details={"ext": ext, "sniffed": kind},
         )
 
-    # Optional MP cap (cheap estimate; real decode happens later)
     # Megapixel cap is not enforced here; real decode happens later if available.
     # Kept here for API completeness.
 

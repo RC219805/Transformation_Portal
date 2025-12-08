@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, Iterator, Optional
+from typing import Dict, Iterator
 
 
 @dataclass
@@ -28,7 +28,7 @@ class StageProfiler:
         try:
             yield
         finally:
-            _, start = self._stack.pop()
+            start = self._stack.pop()[1]
             dt_ms = (time.perf_counter() - start) * 1000.0
             self.stages_ms[name] = self.stages_ms.get(name, 0.0) + dt_ms
 

@@ -128,9 +128,10 @@ class HardeningPolicy:
         policy = HardeningPolicy.from_json(path) if path else HardeningPolicy()
         env_policy = HardeningPolicy.from_env(env_prefix)
         # Merge env overrides over json/base where env differs from default.
+        default_policy = HardeningPolicy()
         merged = policy.__dict__.copy()
         for k, v in env_policy.__dict__.items():
-            if v != HardeningPolicy().__dict__[k]:
+            if v != default_policy.__dict__[k]:
                 merged[k] = v
         return HardeningPolicy(**merged)
 
