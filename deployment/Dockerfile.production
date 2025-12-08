@@ -1,0 +1,76 @@
+# Production Dockerfile for Transformation Portal Lux Depth V2
+# Security-hardened, multi-stage build
+
+# Build stage
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    --no-install-recommends \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt requirements-repo.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-repo.txt
+
+# Production stage
+FROM python:3.11-slim AS production
+
+# Security: Create non-root user
+RUN groupadd --gid 1000 appuser && \
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash appuser
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy Python packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY --chown=appuser:appuser lux_depth_v2/ ./lux_depth_v2/
+COPY --chown=appuser:appuser transformation_portal/ ./transformation_portal/
+COPY --chown=appuser:appuser config/ ./config/
+
+# Create necessary directories with correct permissions
+RUN mkdir -p /data/input /data/output /app/logs && \
+    chown -R appuser:appuser /data /app/logs
+
+# Security: Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8088/health || exit 1
+
+# Expose port
+EXPOSE 8088
+
+# Environment variables with secure defaults
+ENV PYTHONUNBUFFERED=1 \
+    LUX_LOG_FORMAT=json \
+    LUX_LOG_LEVEL=INFO \
+    LUX_METRICS_ENABLED=1 \
+    LUX_OUTPUT_DIR=/data/output
+
+# Run service
+CMD ["python", "-m", "lux_depth_v2.service", "--output-dir", "/data/output", "--service", "--port", "8088"]
+
+# Metadata
+LABEL maintainer="Transformation Portal Team" \
+      version="2.0.0" \
+      description="Production-hardened Lux Depth V2 Service" \
+      security.hardened="true"

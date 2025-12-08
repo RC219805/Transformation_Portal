@@ -1,0 +1,103 @@
+# Prometheus alert rules for Transformation Portal
+
+groups:
+  - name: lux_depth_alerts
+    interval: 30s
+    rules:
+      # High p95 latency alert
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(lux_http_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: lux-depth-v2
+        annotations:
+          summary: "High p95 latency detected"
+          description: "p95 latency is {{ $value }}s (threshold: 5s)"
+      
+      # Critical latency alert
+      - alert: CriticalLatency
+        expr: histogram_quantile(0.95, rate(lux_http_request_duration_seconds_bucket[5m])) > 10
+        for: 2m
+        labels:
+          severity: critical
+          service: lux-depth-v2
+        annotations:
+          summary: "Critical p95 latency detected"
+          description: "p95 latency is {{ $value }}s (threshold: 10s)"
+      
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: rate(lux_exceptions_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: lux-depth-v2
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }}/s (threshold: 0.05/s)"
+      
+      # Critical error rate alert
+      - alert: CriticalErrorRate
+        expr: rate(lux_exceptions_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          service: lux-depth-v2
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value }}/s (threshold: 0.1/s)"
+      
+      # Service down alert
+      - alert: ServiceDown
+        expr: up{job="lux-depth-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: lux-depth-v2
+        annotations:
+          summary: "Lux Depth V2 service is down"
+          description: "The service has been unreachable for 1 minute"
+      
+      # High request rate (potential DDoS or abuse)
+      - alert: HighRequestRate
+        expr: rate(lux_http_requests_total[1m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: lux-depth-v2
+        annotations:
+          summary: "Unusually high request rate detected"
+          description: "Request rate is {{ $value }}/s (threshold: 100/s)"
+      
+      # High in-flight requests (saturation)
+      - alert: HighInFlightRequests
+        expr: lux_http_inflight_requests > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: lux-depth-v2
+        annotations:
+          summary: "High number of in-flight requests"
+          description: "{{ $value }} requests in-flight (threshold: 50)"
+      
+      # Pipeline stage bottleneck
+      - alert: PipelineStageBottleneck
+        expr: histogram_quantile(0.95, rate(lux_pipeline_stage_duration_seconds_bucket[5m])) > 3
+        for: 10m
+        labels:
+          severity: info
+          service: lux-depth-v2
+        annotations:
+          summary: "Pipeline stage {{ $labels.stage }} is slow"
+          description: "p95 duration for stage {{ $labels.stage }} is {{ $value }}s"
+      
+      # Prometheus targets down
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target {{ $labels.job }} is down"
+          description: "Target has been down for 2 minutes"
