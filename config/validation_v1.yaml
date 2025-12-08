@@ -1,0 +1,33 @@
+dataset: validation_v1
+dataset_root: data/benchmark_datasets/validation_v1
+
+scoring:
+  # Adjust weights per use case (luxury real estate may prefer aesthetic ↑)
+  categories:
+    fidelity: 0.45
+    detail: 0.30
+    aesthetic: 0.25
+
+baselines:
+  - id: topaz_photo
+    label: "Topaz Photo AI"
+    weight_category: fidelity
+
+  - id: topaz_gigapixel
+    label: "Topaz Gigapixel 4x"
+    weight_category: detail
+
+  - id: adobe_sr
+    label: "Adobe Super Resolution"
+    weight_category: fidelity
+
+  - id: adobe_neutral
+    label: "Adobe Neutral Enhance"
+    weight_category: aesthetic
+
+metrics:
+  # Computed separately so runtime weighting can be customized without reruns
+  - ssim
+  - psnr
+  - lpips
+  - nima
