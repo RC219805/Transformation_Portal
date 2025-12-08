@@ -15,9 +15,20 @@ from lux_depth_v2.observability.context import bind_request_id
 
 @pytest.fixture(autouse=True)
 def _env():
+    # Save original values
+    keys = ["LUX_METRICS_ENABLED", "LUX_HTTP_ACCESS_LOG"]
+    original = {k: os.environ.get(k) for k in keys}
     os.environ["LUX_METRICS_ENABLED"] = "1"
     os.environ["LUX_HTTP_ACCESS_LOG"] = "0"  # keep test output clean
-    yield
+    try:
+        yield
+    finally:
+        # Restore original values
+        for k, v in original.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def test_request_id_propagation():

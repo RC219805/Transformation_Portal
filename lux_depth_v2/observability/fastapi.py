@@ -30,8 +30,7 @@ def install_observability(
     No changes to existing routes required.
     """
     # Defer heavy imports; keeps non-service contexts clean.
-    from fastapi import Response
-    from fastapi.responses import PlainTextResponse
+    from fastapi import HTTPException, Request, Response
 
     from .middleware import ObservabilityMiddleware
 
@@ -42,9 +41,17 @@ def install_observability(
     # Middleware (request id + metrics + access logging)
     app.add_middleware(ObservabilityMiddleware, service_name=service_name)
 
-    # /metrics endpoint
+    # /metrics endpoint with optional bearer token authentication
     @app.get("/metrics", include_in_schema=False, response_class=Response)
-    async def metrics_endpoint():
+    async def metrics_endpoint(request: Request):
         m = get_metrics()
+        # Check if authentication is required
+        if m.auth.token:
+            auth_header = request.headers.get("authorization", "")
+            if not auth_header.startswith("Bearer "):
+                raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+            token = auth_header[7:]  # Remove "Bearer " prefix
+            if token != m.auth.token:
+                raise HTTPException(status_code=403, detail="Invalid metrics token")
         body, content_type, status = m.render()
         return Response(content=body, media_type=content_type, status_code=status)
