@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Sequence
 
 from .exceptions import InputValidationError
 from .policy import HardeningPolicy
