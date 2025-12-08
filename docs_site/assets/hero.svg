@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="520" viewBox="0 0 720 520" role="img" aria-label="Transformation Portal">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0f0f10"/>
+      <stop offset="1" stop-color="#2a2a2d"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.10"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="684" height="484" rx="28" fill="url(#bg)"/>
+  <rect x="56" y="70" width="608" height="94" rx="18" fill="url(#accent)"/>
+  <rect x="56" y="188" width="420" height="28" rx="14" fill="#ffffff" opacity="0.35"/>
+  <rect x="56" y="232" width="520" height="28" rx="14" fill="#ffffff" opacity="0.22"/>
+  <rect x="56" y="276" width="360" height="28" rx="14" fill="#ffffff" opacity="0.16"/>
+  <g opacity="0.7">
+    <circle cx="574" cy="302" r="72" fill="#ffffff" opacity="0.08"/>
+    <circle cx="574" cy="302" r="46" fill="#ffffff" opacity="0.10"/>
+    <circle cx="574" cy="302" r="20" fill="#ffffff" opacity="0.14"/>
+  </g>
+  <rect x="56" y="346" width="608" height="110" rx="18" fill="#ffffff" opacity="0.06"/>
+  <path d="M84 392h190" stroke="#fff" stroke-opacity="0.35" stroke-width="8" stroke-linecap="round"/>
+  <path d="M84 416h240" stroke="#fff" stroke-opacity="0.25" stroke-width="8" stroke-linecap="round"/>
+  <path d="M84 440h160" stroke="#fff" stroke-opacity="0.18" stroke-width="8" stroke-linecap="round"/>
+</svg>

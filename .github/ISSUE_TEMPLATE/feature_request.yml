@@ -1,0 +1,16 @@
+name: Feature Request
+description: Propose a feature or improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What should be added or improved?
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: How will we measure success?
+      description: Metrics, latency, quality, UX, etc.

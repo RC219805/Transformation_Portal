@@ -1,0 +1,58 @@
+/* Transformation Portal Docs UI — premium, readable, fast */
+
+:root {
+  --tp-radius: 14px;
+}
+
+.tp-hero {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 28px;
+  align-items: center;
+  margin-top: 12px;
+  margin-bottom: 20px;
+}
+
+.tp-hero-left h1 { margin-bottom: 10px; }
+.tp-hero-right img { width: 100%; height: auto; }
+
+.tp-cta-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0 18px;
+}
+
+.tp-btn {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: var(--tp-radius);
+  border: 1px solid rgba(140,140,140,0.35);
+  text-decoration: none !important;
+  font-weight: 600;
+}
+
+.tp-btn-primary {
+  border-color: rgba(140,140,140,0.55);
+}
+
+.tp-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.tp-kpi {
+  padding: 12px 12px;
+  border-radius: var(--tp-radius);
+  border: 1px solid rgba(140,140,140,0.25);
+}
+
+.tp-kpi-num { font-size: 18px; font-weight: 800; }
+.tp-kpi-label { opacity: 0.8; font-size: 12px; }
+
+@media (max-width: 900px) {
+  .tp-hero { grid-template-columns: 1fr; }
+  .tp-kpis { grid-template-columns: 1fr; }
+}
