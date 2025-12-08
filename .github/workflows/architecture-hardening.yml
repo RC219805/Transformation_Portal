@@ -45,9 +45,10 @@ jobs:
         run: |
           bandit -q -r lux_depth_v2/hardening scripts/hardening -ll
 
-      - name: pip-audit (HIGH+ severity)
+      - name: pip-audit (env, fail on any vuln)
         run: |
           # Environment is installed strictly from lux_depth_v2/requirements-repo.txt
-          # (SAFE baseline per SECURITY.md / validation docs), so auditing the current
-          # environment is equivalent and avoids the -r / project_path clash.
-          pip-audit --severity high
+          # (SAFE baseline per SECURITY/validation docs), so auditing the current
+          # environment is equivalent. This version of pip-audit does not support
+          # --severity, so we fail on any reported vulnerability.
+          pip-audit
