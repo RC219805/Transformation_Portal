@@ -37,3 +37,6 @@ onnxruntime>=1.16
 
 # Optional: segformer backend
 transformers>=4.40
+
+# Observability: Prometheus metrics endpoint
+prometheus-client>=0.20.0

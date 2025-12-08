@@ -1,0 +1,36 @@
+name: Observability Smoke
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install observability deps (fast)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r lux_depth_v2/requirements-observability.txt
+
+      - name: Run smoke tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          LUX_METRICS_ENABLED: "1"
+          LUX_HTTP_ACCESS_LOG: "0"
+        run: |
+          pytest -q lux_depth_v2/tests/observability/test_observability_smoke.py --noconftest
