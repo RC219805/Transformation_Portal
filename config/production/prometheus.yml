@@ -1,0 +1,34 @@
+# Prometheus configuration for Transformation Portal
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'production'
+    service: 'transformation-portal'
+
+# Alert rule files
+rule_files:
+  - 'alerts.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Lux Depth V2 Service
+  - job_name: 'lux-depth-service'
+    static_configs:
+      - targets: ['lux-depth-service:8088']
+    metrics_path: '/metrics'
+    scheme: 'http'
+    
+    # Optional: Bearer token authentication
+    # bearer_token: '${METRICS_TOKEN}'
+    
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'lux-depth-v2'
+  
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

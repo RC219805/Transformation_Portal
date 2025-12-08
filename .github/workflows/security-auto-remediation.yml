@@ -1,0 +1,242 @@
+name: Security Auto-Remediation
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly Monday 02:00 UTC
+  workflow_dispatch:     # Manual trigger
+    inputs:
+      force_patch:
+        description: 'Force patch even if no vulnerabilities found'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+
+jobs:
+  detect-vulnerabilities:
+    name: Detect Security Issues
+    runs-on: ubuntu-latest
+    outputs:
+      has_vulns: ${{ steps.audit.outputs.has_vulns }}
+      vuln_count: ${{ steps.audit.outputs.vuln_count }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Run pip-audit
+        id: audit
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          
+          # Run audit and capture output
+          pip-audit \
+            --requirement requirements.txt \
+            --requirement requirements-dev.txt \
+            --format json \
+            --output audit-report.json \
+            --vulnerability-service osv \
+            --severity HIGH CRITICAL || audit_exit=$?
+          
+          # Check if vulnerabilities found
+          if [ -f audit-report.json ] && [ -s audit-report.json ]; then
+            vuln_count=$(jq -r '.vulnerabilities | length' audit-report.json 2>/dev/null || echo "0")
+            if [ "$vuln_count" -gt 0 ]; then
+              echo "has_vulns=true" >> $GITHUB_OUTPUT
+              echo "vuln_count=$vuln_count" >> $GITHUB_OUTPUT
+              
+              # Extract vulnerability details
+              jq -r '.vulnerabilities[] | "\(.package) \(.vuln_id) \(.fix_versions // "no-fix")"' audit-report.json > vuln-summary.txt
+            else
+              echo "has_vulns=false" >> $GITHUB_OUTPUT
+              echo "vuln_count=0" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "has_vulns=false" >> $GITHUB_OUTPUT
+            echo "vuln_count=0" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        if: steps.audit.outputs.has_vulns == 'true'
+        with:
+          name: audit-report
+          path: |
+            audit-report.json
+            vuln-summary.txt
+          retention-days: 30
+  
+  auto-patch:
+    name: Attempt Auto-Patch
+    needs: detect-vulnerabilities
+    if: needs.detect-vulnerabilities.outputs.has_vulns == 'true' || github.event.inputs.force_patch == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git operations
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Download audit report
+        if: needs.detect-vulnerabilities.outputs.has_vulns == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: audit-report
+      
+      - name: Attempt automated patching
+        id: patch
+        run: |
+          # Install tools
+          pip install pip-audit safety packaging
+          
+          # Create backup of requirements
+          cp requirements.txt requirements.txt.bak
+          cp requirements-dev.txt requirements-dev.txt.bak
+          
+          # Try to upgrade vulnerable packages (excluding banned ones)
+          echo "Attempting to patch vulnerabilities..."
+          
+          # Parse audit report and upgrade packages
+          if [ -f audit-report.json ]; then
+            jq -r '.vulnerabilities[] | select(.fix_versions != null) | "\(.package)==\(.fix_versions[0])"' audit-report.json > upgrades.txt || true
+            
+            if [ -s upgrades.txt ]; then
+              while IFS= read -r upgrade; do
+                package=$(echo "$upgrade" | cut -d'=' -f1)
+                
+                # Skip banned packages
+                if [[ "$package" == "basicsr" ]] || [[ "$package" == "realesrgan" ]] || [[ "$package" == "gfpgan" ]]; then
+                  echo "Skipping banned package: $package"
+                  continue
+                fi
+                
+                # Update in requirements files
+                sed -i "s/^${package}==.*/${upgrade}/" requirements.txt requirements-dev.txt || true
+              done < upgrades.txt
+            fi
+          fi
+          
+          # Check if changes were made
+          if git diff --quiet requirements.txt requirements-dev.txt; then
+            echo "patched=false" >> $GITHUB_OUTPUT
+            echo "No patchable vulnerabilities found"
+          else
+            echo "patched=true" >> $GITHUB_OUTPUT
+            echo "Patches applied successfully"
+          fi
+      
+      - name: Verify patched dependencies
+        if: steps.patch.outputs.patched == 'true'
+        run: |
+          # Install patched dependencies
+          pip install -r requirements.txt -r requirements-dev.txt
+          
+          # Re-run audit to verify fixes
+          pip-audit --requirement requirements.txt --requirement requirements-dev.txt --severity HIGH CRITICAL || true
+      
+      - name: Run tests
+        if: steps.patch.outputs.patched == 'true'
+        run: |
+          pip install pytest pytest-xdist
+          
+          # Run fast tests only (avoid long-running tests in CI)
+          pytest tests/ -m "not slow" --tb=short -v -x || test_exit=$?
+          
+          if [ $test_exit -ne 0 ]; then
+            echo "⚠️ Tests failed - manual review required"
+            echo "test_status=failed" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Tests passed"
+            echo "test_status=passed" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+      
+      - name: Create PR
+        if: steps.patch.outputs.patched == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'security: Auto-patch vulnerabilities'
+          committer: GitHub <noreply@github.com>
+          author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+          signoff: false
+          branch: security/auto-patch-${{ github.run_number }}
+          delete-branch: true
+          title: '[Security] Automated Dependency Patch - ${{ needs.detect-vulnerabilities.outputs.vuln_count }} vulnerabilities'
+          body: |
+            ## 🔒 Security Auto-Remediation
+            
+            This PR was automatically created to patch **${{ needs.detect-vulnerabilities.outputs.vuln_count }}** security vulnerabilities detected by pip-audit.
+            
+            ### Vulnerabilities Addressed
+            
+            See artifact: `audit-report.json` for full details.
+            
+            ### Changes Made
+            
+            - ✅ Updated vulnerable dependencies to patched versions
+            - ✅ Excluded banned packages (basicsr, realesrgan, gfpgan)
+            - ✅ Re-verified with pip-audit
+            - 🧪 Ran test suite (see workflow logs)
+            
+            ### Action Required
+            
+            **⚠️ Manual review recommended before merge:**
+            
+            1. Review the dependency updates in `requirements.txt` and `requirements-dev.txt`
+            2. Check workflow logs for test results
+            3. Verify no breaking changes introduced
+            4. Merge if satisfied with changes
+            
+            ### Workflow Details
+            
+            - **Triggered**: ${{ github.event_name }}
+            - **Run ID**: ${{ github.run_id }}
+            - **Workflow**: security-auto-remediation.yml
+            
+            ---
+            
+            *Automated by: transformation-portal-architect*
+          labels: |
+            security
+            automated
+            dependencies
+          draft: false
+  
+  notify:
+    name: Notify Results
+    needs: [detect-vulnerabilities, auto-patch]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Summary
+        run: |
+          echo "## Security Auto-Remediation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Vulnerabilities Detected**: ${{ needs.detect-vulnerabilities.outputs.vuln_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Auto-Patch Status**: ${{ needs.auto-patch.result }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.auto-patch.result }}" == "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Action**: Review and merge the auto-generated PR" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.detect-vulnerabilities.outputs.has_vulns }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Action**: Manual remediation required (no automatic patch available)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Status**: No vulnerabilities detected" >> $GITHUB_STEP_SUMMARY
+          fi

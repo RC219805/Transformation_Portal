@@ -32,7 +32,7 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-networkx==3.6
+networkx==3.4.2
     # via
     #   -c all.txt
     #   scikit-image

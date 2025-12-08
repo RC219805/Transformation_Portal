@@ -172,7 +172,7 @@ mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
-networkx==3.6
+networkx==3.4.2
     # via
     #   scikit-image
     #   torch
