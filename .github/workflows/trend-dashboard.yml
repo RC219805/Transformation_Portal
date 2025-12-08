@@ -428,7 +428,7 @@ jobs:
           name: trend-dashboard-${{ github.run_number }}
           
       - name: Create Issue
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
