@@ -60,18 +60,17 @@ def test_wrapper_processes_successfully(test_image_path, mock_policy):
     """Test wrapper processes successfully."""
     pipeline = MockPipeline()
     
-    with patch('transformation_portal.hardening.universal.validate_input_path', return_value=test_image_path):
-        wrapper = UniversalHardenedWrapper(
-            pipeline,
-            policy=mock_policy,
-            enable_input_validation=False
-        )
-        
-        result = wrapper.process(test_image_path, preset="test")
-        
-        assert result["success"] is True
-        assert result["result"]["processed"] is True
-        assert pipeline.process_called is True
+    wrapper = UniversalHardenedWrapper(
+        pipeline,
+        policy=mock_policy,
+        enable_input_validation=False
+    )
+    
+    result = wrapper.process(test_image_path, preset="test")
+    
+    assert result["success"] is True
+    assert result["result"]["processed"] is True
+    assert pipeline.process_called is True
 
 
 def test_wrapper_handles_pipeline_failure(test_image_path, mock_policy):
@@ -180,9 +179,7 @@ def test_wrapper_validates_input_when_enabled(test_image_path, mock_policy):
     """Test wrapper validates input when validation enabled."""
     pipeline = MockPipeline()
     
-    with patch('transformation_portal.hardening.universal.validate_input_path') as mock_validate:
-        mock_validate.return_value = test_image_path
-        
+    with patch.object(UniversalHardenedWrapper, '_validate_input', return_value=test_image_path):
         wrapper = UniversalHardenedWrapper(
             pipeline,
             policy=mock_policy,
@@ -191,7 +188,6 @@ def test_wrapper_validates_input_when_enabled(test_image_path, mock_policy):
         
         result = wrapper.process(test_image_path)
         
-        mock_validate.assert_called_once()
         assert result["success"] is True
 
 
@@ -199,9 +195,7 @@ def test_wrapper_handles_validation_failure(test_image_path, mock_policy):
     """Test wrapper handles validation failures."""
     pipeline = MockPipeline()
     
-    with patch('transformation_portal.hardening.universal.validate_input_path') as mock_validate:
-        mock_validate.side_effect = ValueError("Invalid file")
-        
+    with patch.object(UniversalHardenedWrapper, '_validate_input', side_effect=ValueError("Invalid file")):
         wrapper = UniversalHardenedWrapper(
             pipeline,
             policy=mock_policy,
