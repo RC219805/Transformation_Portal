@@ -19,6 +19,11 @@
 # ML dependency constraints to prevent resolver conflicts
 controlnet-aux<0.0.9
 
+# Python 3.10 compatibility constraint
+# networkx 3.5+ requires Python 3.11+
+# Constrain to 3.4.x for Python 3.10 compatibility
+networkx<3.5
+
 # Security Advisory: CVE-2024-27763
 # BasicSR <= 1.4.2 has a command injection vulnerability via SLURM_NODELIST.
 # This constraint uses an impossible version specifier to exclude basicsr from being resolved.
