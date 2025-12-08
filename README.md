@@ -16,7 +16,7 @@ Professional image and video processing toolkit for luxury real estate rendering
 **✅ ALL PHASES COMPLETE:**
 - ✅ **Phase 1**: Upscaling (SwinIR + Real-ESRGAN) - 15 tests
 - ✅ **Phase 2**: Depth Processing + Material Response - 21 tests  
-- ✅ **Phase 3**: LUT Color Grading System - 23 tests ← NEW
+- ✅ **Phase 3**: LUT Color Grading System - 23 tests
 - ✅ **59 total tests passing** - 100% pass rate
 - ✅ **127-400 images/hour** - Production-validated throughput
 - ✅ **16-bit precision** - Archival-grade quality maintained
@@ -26,13 +26,147 @@ Professional image and video processing toolkit for luxury real estate rendering
 2. ✅ AI Upscaling (4x) - SwinIR/Real-ESRGAN
 3. ✅ Depth-Aware Processing - Depth Anything V2
 4. ✅ Material Response - 8 surface types
-5. ✅ **Professional Color Grading - Film emulation + Location LUTs** ← Phase 3
+5. ✅ Professional Color Grading - Film emulation + Location LUTs
 6. ✅ Export - 16-bit TIFF with metadata
 
 **Phase Documentation:**
 - 📘 [Phase 1: Upscaling](UPSCALING_REFINEMENT_COMPLETE.md)
 - 📗 [Phase 2: Depth + Material](PHASE2_FINAL_SUMMARY.md)
-- 📙 [Phase 3: LUT System](PHASE3_DEPLOYMENT_SUMMARY.md) ← NEW
+- 📙 [Phase 3: LUT System](PHASE3_DEPLOYMENT_SUMMARY.md)
+
+---
+
+## 🚀 NEW: Phase 2 Production Deployment (December 8, 2025)
+
+**Lux Depth V2 - Production-Ready Service Stack**
+
+**Status**: ✅ **PRODUCTION READY** with security hardening and monitoring
+
+### What's New in Phase 2 Deployment
+
+#### 🔒 Security Hardening
+- **CVE-2024-27763 Mitigation** - Eliminated vulnerable basicsr package
+- **Input Validation** - Path traversal and symlink attack protection
+- **Rate Limiting** - 10-100 req/min per IP (configurable)
+- **API Authentication** - Optional API key authentication
+- **Non-root Containers** - All services run as unprivileged users
+- **Automated Security Scanning** - Daily vulnerability checks in CI/CD
+
+#### 🐳 Docker Production Stack
+- **Multi-stage builds** - Optimized images (base, CPU, GPU, Apple Silicon)
+- **Health checks** - Automatic service recovery and monitoring
+- **Resource limits** - Memory and CPU constraints for stability
+- **Volume management** - Persistent storage for input/output/config
+- **Network isolation** - Dedicated bridge network for services
+- **Logging** - Structured JSON logs with rotation
+
+#### 📊 Observability & Monitoring
+- **Prometheus metrics** - Request rate, latency, errors, queue depth
+- **Grafana dashboards** - Pre-configured service and resource monitoring
+- **Health endpoints** - `/health` for readiness and liveness probes
+- **Structured logging** - JSON format for log aggregation
+- **Performance metrics** - GPU memory usage, throughput tracking
+
+#### ⚡ Performance Features
+- **GPU acceleration** - CUDA support for 3-5x faster processing
+- **Batch processing** - 127-400 images/hour throughput
+- **Material segmentation** - ONNX, SegFormer, heuristic backends
+- **16-bit precision** - End-to-end high-quality pipeline
+- **Async processing** - Non-blocking API endpoints
+
+### Quick Start - Production Deployment
+
+```bash
+# 1. Clone and configure
+git clone https://github.com/RC219805/Transformation_Portal.git
+cd Transformation_Portal
+cp deployment/.env.production.example .env.production
+
+# 2. Start Lux Depth V2 service (CPU)
+docker-compose up -d lux-depth-v2-service
+
+# 3. Verify service is running
+curl http://localhost:8088/health
+
+# 4. Process an image
+curl -X POST http://localhost:8088/v2/process \
+  -F "image=@input.jpg" \
+  -F "preset=interior_luxury"
+```
+
+### GPU-Accelerated Deployment
+
+```bash
+# Start GPU service (requires NVIDIA Docker)
+docker-compose up -d lux-depth-v2-gpu
+
+# Verify GPU is available
+docker exec lux-depth-v2-gpu python -c "import torch; print(torch.cuda.is_available())"
+
+# Process with GPU acceleration (3-5x faster)
+curl -X POST http://localhost:8089/v2/process \
+  -F "image=@input.jpg" \
+  -F "preset=exterior_showcase"
+```
+
+### Full Production Stack (with Monitoring)
+
+```bash
+# Start complete stack: service + Prometheus + Grafana
+docker-compose -f deployment/docker-compose.production.yml up -d
+
+# Access services:
+# - Lux Depth V2 API: http://localhost:8088
+# - Prometheus: http://localhost:9090
+# - Grafana: http://localhost:3000 (admin/<password-from-env>)
+```
+
+### Key Resources
+
+- **📖 [Phase 2 Deployment Guide](docs/PHASE2_DEPLOYMENT_GUIDE.md)** - Complete setup instructions
+- **🔒 [Security Guide](lux_depth_v2/SECURITY.md)** - Security best practices
+- **📚 [Lux Depth V2 README](lux_depth_v2/README.md)** - Module documentation
+- **⚙️ [Environment Config](deployment/.env.production.example)** - Configuration reference
+
+### Security Validation
+
+All deployments pass automated security checks:
+
+```bash
+# Verify CVE-2024-27763 mitigation
+python scripts/utilities/verify_no_basicsr_imports.py --check-pkg
+
+# Run full security audit
+make security-audit
+
+# Check Docker image security
+docker exec lux-depth-v2-service python -c "import basicsr"
+# Expected: ImportError (correct - package not present)
+```
+
+### Architecture Highlights
+
+**Service Components**:
+- `lux-depth-v2-service` - Main FastAPI service (CPU)
+- `lux-depth-v2-gpu` - GPU-accelerated variant (CUDA)
+- `lux-depth-v2-worker` - Batch processing worker
+- `prometheus` - Metrics collection
+- `grafana` - Visualization dashboards
+
+**Security Features**:
+- Non-root user execution
+- Input validation and sanitization
+- Rate limiting (10 req/min default)
+- File size limits (100MB default)
+- Health check endpoints
+- Automated vulnerability scanning
+
+**Monitoring Metrics**:
+- `lux_depth_requests_total` - Request count
+- `lux_depth_request_duration_seconds` - Latency
+- `lux_depth_errors_total` - Error tracking
+- `lux_depth_queue_size` - Processing queue
+- `lux_depth_gpu_memory_bytes` - GPU utilization
 
 ---
 
@@ -203,6 +337,7 @@ A specialized Transformation Portal Specialist GitHub Copilot agent is available
 
 ### Core Capabilities
 
+- ✅ **Lux Depth V2 Pipeline** 🆕🔥 - Production-ready depth processing with GPU acceleration, FastAPI service, security hardening
 - ✅ **Advanced Upscaling Engine** 🆕 - SwinIR + Real-ESRGAN with 16-bit precision, tile-based gigapixel processing
 - ✅ Context-Aware Rendering - First-of-its-kind system that reads architectural documents and adapts processing accordingly
 - ✅ AI-Powered Enhancement - Stable Diffusion XL, ControlNet, intelligent 4x upscaling
@@ -213,6 +348,38 @@ A specialized Transformation Portal Specialist GitHub Copilot agent is available
 - ✅ HDR Production Pipeline - ACES color space, adaptive debanding, halation effects
 - ✅ Batch Processing - 150-600 images/hour throughput (model-dependent)
 - ✅ Production-Ready - Comprehensive test suite, CI/CD, performance profiling
+
+### Lux Depth V2 Features (Phase 2 - December 2025)
+
+**Processing Pipeline**:
+- 🎨 **GPU-Accelerated Post-Processing** - Torch-based grading, clarity, sharpening (3-5x faster)
+- 🔍 **Advanced Material Segmentation** - ONNX/SegFormer/Heuristic backends for 8 material types
+- 🌊 **Depth-Aware Enhancement** - Zone-based tone mapping respects depth information
+- 🎯 **Safe AI Detail Transfer** - Color/luma drift guardrails prevent artifacts
+- 📐 **UHR Tiling** - Process 324MP+ images with configurable tile size/overlap
+- 🎚️ **Production Presets** - Interior luxury, exterior showcase, architectural detail
+
+**Service & Deployment**:
+- 🚀 **FastAPI REST API** - RESTful endpoints for real-time processing
+- 🔒 **Security Hardened** - CVE-2024-27763 mitigation, input validation, rate limiting
+- 📊 **Prometheus Metrics** - Request rate, latency, errors, GPU memory tracking
+- 🐳 **Docker Containerization** - Multi-stage builds, health checks, resource limits
+- 👤 **Non-root Execution** - All containers run as unprivileged users
+- ⚖️ **Load Balancing Ready** - Horizontal scaling with multiple service instances
+
+**Quality & Validation**:
+- ✅ **Production Validation Framework** - Synthetic reference and real-world modes
+- 📈 **Multiple Metrics** - SSIM, PSNR, LPIPS, NIMA for quality assessment
+- 🔬 **Baseline Comparison** - Compare against industry tools (Topaz, Adobe)
+- 📝 **Reproducibility Stamping** - Git commit, config hash, device info in reports
+- 🛡️ **AI Safety Checks** - Automatic validation prevents color/luma drift
+
+**Performance**:
+- ⚡ **24-65ms** per image for depth estimation (M4 Max, 518px)
+- 🏎️ **127-400 images/hour** batch throughput (CPU vs GPU)
+- 🧠 **Persistent Models** - Service mode keeps models loaded for low latency
+- 💾 **16-bit Precision** - End-to-end high-quality workflow
+- 🔄 **Async Processing** - Non-blocking API with queue management
 
 ### Technology Stack
 

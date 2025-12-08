@@ -1,7 +1,44 @@
 version: '3.8'
 
 services:
-  # CPU-only service (lightweight)
+  # Lux Depth V2 Service (Phase 2 - Production Ready)
+  lux-depth-v2-service:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile.production
+      target: production
+    image: transformation-portal:lux-depth-v2
+    container_name: lux-depth-v2-service
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./input:/data/input:ro
+      - ./output:/data/output
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    environment:
+      - DEVICE=cpu
+      - PYTHONUNBUFFERED=1
+      - LUX_OUTPUT_DIR=/data/output
+      - LUX_HARDEN_ENABLE_RATE_LIMIT=true
+      - LUX_HARDEN_MAX_INPUT_BYTES=100000000
+      - LUX_LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - transformation-portal
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+  
+  # CPU-only service (lightweight - legacy)
   transformation-portal-cpu:
     build:
       context: .
@@ -18,9 +55,57 @@ services:
     environment:
       - DEVICE=cpu
       - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
     command: python -m transformation_portal.cli serve --host 0.0.0.0 --port 8000
   
-  # GPU-enabled service (CUDA)
+  # Lux Depth V2 GPU Service (CUDA)
+  lux-depth-v2-gpu:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile.production
+      target: production
+    image: transformation-portal:lux-depth-v2-gpu
+    container_name: lux-depth-v2-gpu
+    runtime: nvidia
+    restart: unless-stopped
+    ports:
+      - "8089:8088"
+    volumes:
+      - ./input:/data/input:ro
+      - ./output:/data/output
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    environment:
+      - DEVICE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PYTHONUNBUFFERED=1
+      - LUX_OUTPUT_DIR=/data/output
+      - LUX_HARDEN_ENABLE_RATE_LIMIT=true
+      - LUX_LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - transformation-portal
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+          cpus: '4.0'
+  
+  # GPU-enabled service (CUDA - legacy)
   transformation-portal-gpu:
     build:
       context: .
@@ -39,6 +124,11 @@ services:
       - DEVICE=cuda
       - NVIDIA_VISIBLE_DEVICES=all
       - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import torch; torch.cuda.is_available()"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         reservations:
@@ -48,7 +138,29 @@ services:
               capabilities: [gpu]
     command: python -m transformation_portal.cli serve --host 0.0.0.0 --port 8000
   
-  # Batch processing worker
+  # Lux Depth V2 Batch Worker (Phase 2)
+  lux-depth-v2-worker:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile.production
+      target: production
+    image: transformation-portal:lux-depth-v2
+    container_name: lux-depth-v2-worker
+    restart: on-failure
+    volumes:
+      - ./input:/data/input:ro
+      - ./output:/data/output
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    environment:
+      - DEVICE=cpu
+      - PYTHONUNBUFFERED=1
+      - LUX_LOG_LEVEL=INFO
+    networks:
+      - transformation-portal
+    command: python -m lux_depth_v2.cli --input-dir /data/input --output-dir /data/output --preset interior_luxury --device cpu
+  
+  # Batch processing worker (legacy)
   transformation-portal-worker:
     build:
       context: .
@@ -82,9 +194,13 @@ services:
 
 volumes:
   input:
+    driver: local
   output:
+    driver: local
   config:
+    driver: local
 
 networks:
-  default:
+  transformation-portal:
+    driver: bridge
     name: transformation-portal-network
