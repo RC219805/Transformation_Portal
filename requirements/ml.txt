@@ -8,20 +8,38 @@ accelerate==0.34.2
     # via
     #   -c all.txt
     #   -r ml.in
+anyio==4.12.0
+    # via
+    #   -c all.txt
+    #   httpx
+attrs==25.4.0
+    # via
+    #   -c all.txt
+    #   cattrs
+    #   coremltools
+cattrs==25.3.0
+    # via
+    #   -c all.txt
+    #   coremltools
 certifi==2025.11.12
     # via
     #   -c all.txt
+    #   httpcore
+    #   httpx
     #   requests
 charset-normalizer==3.4.4
     # via
     #   -c all.txt
     #   requests
-controlnet-aux==0.0.8
+controlnet-aux==0.0.10
     # via
     #   -c all.txt
-    #   -c constraints.txt
     #   -r ml.in
-diffusers==0.35.2
+coremltools==9.0
+    # via
+    #   -c all.txt
+    #   -r ml.in
+diffusers==0.36.0
     # via
     #   -c all.txt
     #   -r ml.in
@@ -42,10 +60,22 @@ fsspec==2025.12.0
     #   -c all.txt
     #   huggingface-hub
     #   torch
+h11==0.16.0
+    # via
+    #   -c all.txt
+    #   httpcore
 hf-xet==1.2.0
     # via
     #   -c all.txt
     #   huggingface-hub
+httpcore==1.0.9
+    # via
+    #   -c all.txt
+    #   httpx
+httpx==0.28.1
+    # via
+    #   -c all.txt
+    #   diffusers
 huggingface-hub==0.36.0
     # via
     #   -c all.txt
@@ -53,11 +83,15 @@ huggingface-hub==0.36.0
     #   accelerate
     #   controlnet-aux
     #   diffusers
+    #   sentence-transformers
+    #   timm
     #   tokenizers
     #   transformers
 idna==3.11
     # via
     #   -c all.txt
+    #   anyio
+    #   httpx
     #   requests
 imageio==2.37.2
     # via
@@ -72,6 +106,10 @@ jinja2==3.1.6
     # via
     #   -c all.txt
     #   torch
+joblib==1.5.2
+    # via
+    #   -c all.txt
+    #   scikit-learn
 lazy-loader==0.4
     # via
     #   -c all.txt
@@ -81,17 +119,27 @@ markupsafe==3.0.3
     #   -c all.txt
     #   jinja2
 mpmath==1.3.0
+    # via
+    #   -c all.txt
+    #   sympy
 networkx==3.4.2
+    # via
+    #   -c all.txt
+    #   -c constraints.txt
+    #   scikit-image
+    #   torch
 numpy==2.2.6
     # via
     #   -c all.txt
     #   accelerate
     #   controlnet-aux
+    #   coremltools
     #   diffusers
     #   imageio
     #   opencv-python
     #   opencv-python-headless
     #   scikit-image
+    #   scikit-learn
     #   scipy
     #   tifffile
     #   torchvision
@@ -174,6 +222,7 @@ packaging==25.0
     # via
     #   -c all.txt
     #   accelerate
+    #   coremltools
     #   huggingface-hub
     #   lazy-loader
     #   scikit-image
@@ -186,16 +235,27 @@ pillow==11.3.0
     #   diffusers
     #   imageio
     #   scikit-image
+    #   sentence-transformers
     #   torchvision
-psutil==5.9.8
+protobuf==6.33.2
+    # via
+    #   -c all.txt
+    #   coremltools
+psutil==7.1.3
     # via
     #   -c all.txt
     #   accelerate
+pyaml==25.7.0
+    # via
+    #   -c all.txt
+    #   coremltools
 pyyaml==6.0.3
     # via
     #   -c all.txt
     #   accelerate
     #   huggingface-hub
+    #   pyaml
+    #   timm
     #   transformers
 regex==2025.11.3
     # via
@@ -214,25 +274,42 @@ safetensors==0.7.0
     #   -r ml.in
     #   accelerate
     #   diffusers
+    #   timm
     #   transformers
-scikit-image==0.24.0
+scikit-image==0.25.2
     # via
     #   -c all.txt
     #   controlnet-aux
+scikit-learn==1.7.2
+    # via
+    #   -c all.txt
+    #   sentence-transformers
 scipy==1.15.3
     # via
     #   -c all.txt
     #   controlnet-aux
     #   scikit-image
+    #   scikit-learn
+    #   sentence-transformers
+sentence-transformers==3.4.1
+    # via
+    #   -c all.txt
+    #   -c constraints.txt
+    #   -r ml.in
 sympy==1.14.0
     # via
     #   -c all.txt
+    #   coremltools
     #   torch
+threadpoolctl==3.6.0
+    # via
+    #   -c all.txt
+    #   scikit-learn
 tifffile==2024.12.12
     # via
     #   -c all.txt
     #   scikit-image
-timm==0.6.7
+timm==1.0.22
     # via
     #   -c all.txt
     #   controlnet-aux
@@ -246,6 +323,7 @@ torch==2.9.1
     #   -r ml.in
     #   accelerate
     #   controlnet-aux
+    #   sentence-transformers
     #   timm
     #   torchvision
 torchvision==0.24.1
@@ -256,12 +334,15 @@ torchvision==0.24.1
 tqdm==4.67.1
     # via
     #   -c all.txt
+    #   coremltools
     #   huggingface-hub
+    #   sentence-transformers
     #   transformers
 transformers==4.57.3
     # via
     #   -c all.txt
     #   -r ml.in
+    #   sentence-transformers
 triton==3.5.1
     # via
     #   -c all.txt
@@ -269,6 +350,8 @@ triton==3.5.1
 typing-extensions==4.15.0
     # via
     #   -c all.txt
+    #   anyio
+    #   cattrs
     #   huggingface-hub
     #   torch
 urllib3==2.6.0
