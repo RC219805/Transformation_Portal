@@ -1,0 +1,129 @@
+version: '3.8'
+
+# Production deployment stack for Transformation Portal
+# Includes: Lux Depth V2 Service, Prometheus, Grafana
+
+services:
+  # Main application service
+  lux-depth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: production
+    image: transformation-portal:${VERSION:-latest}
+    container_name: lux-depth-service
+    restart: unless-stopped
+    
+    environment:
+      # Hardening Policy
+      - LUX_HARDEN_MAX_INPUT_BYTES=${LUX_HARDEN_MAX_INPUT_BYTES:-100000000}
+      - LUX_HARDEN_ENABLE_RATE_LIMIT=${LUX_HARDEN_ENABLE_RATE_LIMIT:-true}
+      - LUX_HARDEN_STAMP_INCLUDE_INPUT_HASH=${LUX_HARDEN_STAMP_INCLUDE_INPUT_HASH:-false}
+      
+      # Observability
+      - LUX_METRICS_ENABLED=${LUX_METRICS_ENABLED:-1}
+      - LUX_METRICS_TOKEN=${LUX_METRICS_TOKEN}
+      - LUX_LOG_FORMAT=${LUX_LOG_FORMAT:-json}
+      - LUX_LOG_LEVEL=${LUX_LOG_LEVEL:-INFO}
+      
+      # Service
+      - LUX_OUTPUT_DIR=/data/output
+      - LUX_PORT=8088
+    
+    ports:
+      - "${LUX_PORT:-8088}:8088"
+    
+    volumes:
+      - ${INPUT_DIR:-./data/input}:/data/input:ro
+      - ${OUTPUT_DIR:-./data/output}:/data/output
+      - ${LOG_DIR:-./logs}:/app/logs
+      - ${CONFIG_DIR:-./config}:/app/config:ro
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-8G}
+          cpus: '${CPU_LIMIT:-4.0}'
+        reservations:
+          memory: ${MEMORY_RESERVATION:-4G}
+          cpus: '${CPU_RESERVATION:-2.0}'
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+        labels: "service=lux-depth-v2,env=production"
+    
+    networks:
+      - monitoring
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    
+    volumes:
+      - ./config/production/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/production/prometheus-alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    
+    networks:
+      - monitoring
+    
+    depends_on:
+      - lux-depth-service
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
+      - GF_INSTALL_PLUGINS=
+    
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    
+    volumes:
+      - ./config/production/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/production/grafana-datasources:/etc/grafana/provisioning/datasources:ro
+      - grafana-data:/var/lib/grafana
+    
+    networks:
+      - monitoring
+    
+    depends_on:
+      - prometheus
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
