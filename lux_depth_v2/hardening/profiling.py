@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, Iterator, Optional
+from typing import Dict, Iterator
 
 
 @dataclass

@@ -11,7 +11,15 @@ Primary entrypoints:
 """
 
 from .policy import HardeningPolicy
-from .wrapper import LuxPipelineV2Hardened
+from .wrapper import LuxPipelineV2Hardened, HardenedRunResult
 from .service_factory import create_hardened_app
+from .safe_io import safe_resolve_under, redact_path
 
-__all__ = ["HardeningPolicy", "LuxPipelineV2Hardened", "create_hardened_app"]
+__all__ = [
+    "HardeningPolicy",
+    "LuxPipelineV2Hardened",
+    "HardenedRunResult",
+    "create_hardened_app",
+    "safe_resolve_under",
+    "redact_path",
+]

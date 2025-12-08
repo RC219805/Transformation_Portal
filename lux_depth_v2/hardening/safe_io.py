@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Sequence
 
 from .exceptions import InputValidationError
 from .policy import HardeningPolicy
@@ -94,11 +94,8 @@ def validate_image_file(path: Path, policy: HardeningPolicy) -> None:
             details={"ext": ext, "sniffed": kind},
         )
 
-    # Optional MP cap (cheap estimate; real decode happens later)
-    if policy.max_input_megapixels is not None:
-        # Without decoding, we can't know MP. This cap is enforced in wrapper after decode if available.
-        # Kept here for API completeness.
-        pass
+    # Megapixel cap is not enforced here; real decode happens later if available.
+    # Kept here for API completeness.
 
 
 def safe_mkdir(path: Path, mode: int = 0o750) -> None:

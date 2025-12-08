@@ -56,8 +56,11 @@ def create_hardened_app(policy: Optional[HardeningPolicy] = None):
         except Exception:
             return app
 
-        # Simple in-memory token bucket per client IP.
-        # For production multi-worker deployments, replace with Redis (future enhancement).
+        # WARNING: This is a demonstration/placeholder implementation with known limitations:
+        # 1. NOT per-client: Shares a single bucket across all requests (ignores IP)
+        # 2. NOT thread-safe: Race conditions possible with concurrent requests
+        # 3. NOT multi-worker safe: Each worker process has independent state
+        # For production use, replace with Redis-backed rate limiting (e.g., slowapi, redis-py).
         bucket = {"tokens": float(p.rate_limit_per_minute), "t": time.time()}
 
         class RateLimitMiddleware(BaseHTTPMiddleware):
