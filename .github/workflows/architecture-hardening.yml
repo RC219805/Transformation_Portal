@@ -47,4 +47,7 @@ jobs:
 
       - name: pip-audit (HIGH+ severity)
         run: |
-          pip-audit -r lux_depth_v2/requirements-repo.txt --severity high
+          # Environment is installed strictly from lux_depth_v2/requirements-repo.txt
+          # (SAFE baseline per SECURITY.md / validation docs), so auditing the current
+          # environment is equivalent and avoids the -r / project_path clash.
+          pip-audit --severity high
