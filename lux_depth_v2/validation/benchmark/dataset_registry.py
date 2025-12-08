@@ -16,7 +16,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
+
+
+# Standard baseline IDs for validation_v1 dataset
+BASELINE_IDS = [
+    "topaz_photo",
+    "topaz_gigapixel",
+    "topaz_video",
+    "adobe_sr",
+    "adobe_neutral",
+]
 
 
 @dataclass(frozen=True)
@@ -41,13 +51,7 @@ def get_dataset_spec(dataset_id: str) -> DatasetSpec:
     metadata_file = root / "metadata.json"
     baselines_dir = root / "baselines"
 
-    baselines = {
-        "topaz_photo": baselines_dir / "topaz_photo",
-        "topaz_gigapixel": baselines_dir / "topaz_gigapixel",
-        "topaz_video": baselines_dir / "topaz_video",
-        "adobe_sr": baselines_dir / "adobe_sr",
-        "adobe_neutral": baselines_dir / "adobe_neutral",
-    }
+    baselines = {baseline_id: baselines_dir / baseline_id for baseline_id in BASELINE_IDS}
     return DatasetSpec(
         dataset_id=dataset_id,
         root_dir=root,
