@@ -5,13 +5,16 @@ This module provides a generic hardening layer that can wrap any pipeline
 to add security, reproducibility, and observability features.
 """
 
-from typing import Any, Callable, Dict, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Protocol, runtime_checkable
 from pathlib import Path
 import time
 import hashlib
 import json
 import logging
 from dataclasses import dataclass, asdict
+
+if TYPE_CHECKING:
+    from lux_depth_v2.hardening.policy import HardeningPolicy
 
 
 logger = logging.getLogger(__name__)
