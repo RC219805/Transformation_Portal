@@ -268,20 +268,31 @@ class TestErrorRecovery:
         original = {
             "device": "cuda",
             "upscale": 4,
-            "upscaler_backend": "realesrgan"
+            "upscaler_backend": "realesrgan",
+            "materials_v2_enabled": True,
+            "max_segmentation_side": 1536
         }
         
-        # First retry: switch to CPU
+        # Resource error fallback sequence:
+        # Attempt 0: Reduce Materials v2 segmentation
         error = RuntimeError("CUDA out of memory")
         fallback = recovery.get_fallback_config(original, error, attempt=0)
+        assert fallback["max_segmentation_side"] == 768
+        
+        # Attempt 1: Switch to CPU
+        fallback = recovery.get_fallback_config(original, error, attempt=1)
         assert fallback["device"] == "cpu"
         
-        # Second retry: reduce upscale
-        fallback = recovery.get_fallback_config(original, error, attempt=1)
+        # Attempt 2: Disable Materials v2
+        fallback = recovery.get_fallback_config(original, error, attempt=2)
+        assert fallback["materials_v2_enabled"] is False
+        
+        # Attempt 3: Reduce upscale
+        fallback = recovery.get_fallback_config(original, error, attempt=3)
         assert fallback["upscale"] == 2
         
-        # Third retry: disable upscaling
-        fallback = recovery.get_fallback_config(original, error, attempt=2)
+        # Attempt 4+: Disable upscaling
+        fallback = recovery.get_fallback_config(original, error, attempt=4)
         assert fallback["upscaler_backend"] == "none"
     
     def test_execute_with_retry_success(self):
