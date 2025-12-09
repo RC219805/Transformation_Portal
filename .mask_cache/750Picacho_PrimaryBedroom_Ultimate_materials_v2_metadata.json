@@ -1,0 +1,36 @@
+{
+  "task_id": "750Picacho_PrimaryBedroom_Ultimate_materials_v2",
+  "input_hash": "sha256:4c68a59a9fd28c6a0b252c9299e2c7cae4e1893a3a648737cc1eb03f20b7228e",
+  "timestamp": 1765259061.936448,
+  "segmentation_config": {
+    "backend": "heuristic",
+    "max_segmentation_side": 1024,
+    "edge_feather_radius": 3
+  },
+  "confidence_metrics": {
+    "confidence_avg": 0.11263350397348404,
+    "confidence_min": -0.3164035379886627,
+    "confidence_max": 1.0521577596664429,
+    "high_confidence_pct": 0.13210629861111112,
+    "low_confidence_pct": 0.8678937013888889,
+    "coverage_ratio": 0.12425660416666667,
+    "material_counts": {
+      "sky": 36412,
+      "foliage": 105998,
+      "wood": 11366905,
+      "metal": 3460767,
+      "glass": 2897729,
+      "stone": 25140
+    }
+  },
+  "version": "2.0",
+  "original_size": [
+    4000,
+    6000
+  ],
+  "segmentation_size": [
+    682,
+    1024
+  ],
+  "upsampled": true
+}

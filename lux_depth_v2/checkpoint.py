@@ -25,6 +25,7 @@ class ProcessingStage(str, Enum):
     INIT = "init"
     DEPTH_LOAD = "depth_load"
     MATERIAL_SEGMENTATION = "material_segmentation"
+    MATERIALS_V2 = "materials_v2"  # New: Materials v2 stage
     POST_PROCESSING = "post_processing"
     UPSCALING = "upscaling"
     EXPORT = "export"
@@ -89,6 +90,7 @@ class TaskCheckpoint:
             ProcessingStage.INIT,
             ProcessingStage.DEPTH_LOAD,
             ProcessingStage.MATERIAL_SEGMENTATION,
+            ProcessingStage.MATERIALS_V2,  # New: Materials v2 stage
             ProcessingStage.POST_PROCESSING,
             ProcessingStage.UPSCALING,
             ProcessingStage.EXPORT,

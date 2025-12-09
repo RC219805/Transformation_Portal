@@ -83,6 +83,14 @@ output_*/
 test_output/
 test_artifacts/
 
+# Phase 2 test outputs
+output_Materials_V2_*/
+output_Phase2_*/
+output_Cache_Test_*/
+
+# Cache directories
+.mask_cache/
+
 # Large image files (exclude binary outputs)
 *.tif
 *.tiff

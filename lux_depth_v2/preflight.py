@@ -405,12 +405,92 @@ class PreFlightValidator:
                 severity="error"
             )
     
+    def validate_materials_v2_config(
+        self,
+        config: Optional[Dict[str, any]]
+    ) -> ValidationResult:
+        """Validate Materials v2 configuration.
+        
+        Args:
+            config: Materials v2 configuration dictionary
+            
+        Returns:
+            ValidationResult
+        """
+        if not config or not config.get('enabled'):
+            return ValidationResult(
+                passed=True,
+                message="Materials v2 disabled (skipping validation)",
+                severity="info"
+            )
+        
+        issues = []
+        
+        # Check backend availability
+        backend = config.get('backend', 'heuristic')
+        if backend == 'onnx':
+            try:
+                import onnxruntime
+            except ImportError:
+                issues.append("ONNX backend requested but onnxruntime not installed")
+        
+        # Check cache directory writable
+        if config.get('cache_enabled'):
+            cache_dir = config.get('cache_dir')
+            if cache_dir:
+                cache_path = Path(cache_dir)
+                try:
+                    cache_path.mkdir(parents=True, exist_ok=True)
+                    # Test write
+                    test_file = cache_path / ".test_write"
+                    test_file.touch()
+                    test_file.unlink()
+                except Exception as e:
+                    issues.append(f"Cache directory not writable: {cache_dir} ({e})")
+        
+        # Check confidence threshold valid
+        confidence_config = config.get('confidence', {})
+        threshold = confidence_config.get('confidence_threshold', 0.6)
+        if not 0.0 <= threshold <= 1.0:
+            issues.append(f"Invalid confidence threshold: {threshold} (must be 0.0-1.0)")
+        
+        # Check segmentation size valid
+        seg_config = config.get('segmentation', {})
+        max_seg_side = seg_config.get('max_segmentation_side', 1536)
+        min_seg_side = seg_config.get('min_segmentation_side', 512)
+        
+        if max_seg_side < min_seg_side:
+            issues.append(
+                f"Invalid segmentation sizes: max={max_seg_side} < min={min_seg_side}"
+            )
+        
+        if issues:
+            return ValidationResult(
+                passed=False,
+                message=f"Materials v2 configuration issues: {'; '.join(issues)}",
+                severity="error",
+                details={"issues": issues}
+            )
+        
+        return ValidationResult(
+            passed=True,
+            message="Materials v2 configuration valid",
+            severity="info",
+            details={
+                "backend": backend,
+                "confidence_threshold": threshold,
+                "cache_enabled": config.get('cache_enabled', False),
+                "max_segmentation_side": max_seg_side,
+            }
+        )
+    
     def validate_all(
         self,
         input_path: Path,
         depth_dir: Optional[Path] = None,
         device: str = "auto",
-        upscale: int = 4
+        upscale: int = 4,
+        materials_v2_config: Optional[Dict[str, any]] = None
     ) -> ValidationReport:
         """Comprehensive validation of all aspects.
         
@@ -444,6 +524,10 @@ class PreFlightValidator:
         
         # Depth map validation (warning only, not fatal)
         results.append(self.validate_depth_map(input_path, depth_dir))
+        
+        # Materials v2 validation (if enabled)
+        if materials_v2_config:
+            results.append(self.validate_materials_v2_config(materials_v2_config))
         
         # Overall pass/fail (only errors count)
         errors = [r for r in results if r.severity == "error" and not r.passed]
