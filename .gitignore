@@ -241,3 +241,12 @@ output_750_Picacho_Retry_*
 output_Kitchen_MaxQuality_*
 output_Aerial_MaxQuality_*
 output_GreatRoom_MaxQuality_*
+
+# Archive directories (historical documentation)
+archive/
+
+# Zip distribution files
+*.zip
+
+# Quick reference temporary files
+*_QUICK_REFERENCE.txt
