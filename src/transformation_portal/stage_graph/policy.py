@@ -266,12 +266,13 @@ class PolicyEngine:
         """Detect available devices."""
         try:
             import torch
-            device_policy.has_cuda = torch.cuda.is_available()
+            device_policy.has_cuda = torch.cuda.is_available() if hasattr(torch, 'cuda') else False
             device_policy.has_mps = (
-                hasattr(torch.backends, "mps") and
+                hasattr(torch, 'backends') and
+                hasattr(torch.backends, 'mps') and
                 torch.backends.mps.is_available()
             )
-        except ImportError:
+        except (ImportError, AttributeError):
             pass
 
         # Check for CoreML
