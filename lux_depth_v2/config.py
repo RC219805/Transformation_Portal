@@ -5,6 +5,19 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional, Tuple, TYPE_CHECKING
 
+# Platform Core integration for unified configuration
+try:
+    from transformation_portal.core.config.schemas import DeviceConfig as CoreDeviceConfig
+    from transformation_portal.core.config.schemas import PathsConfig as CorePathsConfig
+    from transformation_portal.core.config.schemas import DeviceType, PrecisionType
+    CORE_CONFIG_AVAILABLE = True
+except ImportError:
+    CORE_CONFIG_AVAILABLE = False
+    CoreDeviceConfig = None
+    CorePathsConfig = None
+    DeviceType = None
+    PrecisionType = None
+
 if TYPE_CHECKING:
     from lux_depth_v2.materials_v2 import MaterialsV2Config
 
@@ -286,3 +299,63 @@ class PipelineConfig:
         # clamp some sanity
         self.upscale = 4 if int(self.upscale) not in (2, 4) else int(self.upscale)
         self.material_strength = float(max(0.0, min(1.25, self.material_strength)))
+    
+    # --- Platform Core Integration ---
+    
+    def get_device_config(self) -> Optional['CoreDeviceConfig']:
+        """
+        Get Platform Core DeviceConfig from legacy fields.
+        
+        Provides backward-compatible bridge to unified device configuration.
+        Returns None if core module not available.
+        """
+        if not CORE_CONFIG_AVAILABLE:
+            return None
+        
+        # Map legacy device string to DeviceType enum
+        device_map = {
+            "auto": DeviceType.AUTO,
+            "cpu": DeviceType.CPU,
+            "cuda": DeviceType.CUDA,
+            "mps": DeviceType.MPS,
+        }
+        device_type = device_map.get(self.device.lower(), DeviceType.AUTO)
+        
+        # Map legacy precision string to PrecisionType enum
+        precision_map = {
+            "fp32": PrecisionType.FP32,
+            "fp16": PrecisionType.FP16,
+        }
+        precision_type = precision_map.get(self.precision.lower(), PrecisionType.FP16)
+        
+        # Calculate memory fraction from warn_float_gb (assume 64GB total as baseline)
+        memory_fraction = 0.85  # Default
+        if hasattr(self, 'warn_float_gb'):
+            # Conservative: if warning at 6GB, allow 85% of available memory
+            memory_fraction = min(0.95, max(0.1, 1.0 - (self.warn_float_gb / 64.0)))
+        
+        return CoreDeviceConfig(
+            device=device_type,
+            precision=precision_type,
+            enable_cudnn_benchmark=self.cudnn_benchmark,
+            memory_fraction=memory_fraction,
+            prefer_neural_engine=True  # Always prefer ANE on Apple Silicon
+        )
+    
+    def get_paths_config(self) -> Optional['CorePathsConfig']:
+        """
+        Get Platform Core PathsConfig from legacy fields.
+        
+        Provides backward-compatible bridge to unified path configuration.
+        Returns None if core module not available.
+        """
+        if not CORE_CONFIG_AVAILABLE:
+            return None
+        
+        return CorePathsConfig(
+            input_dir=self.input_dir,
+            output_dir=self.output_dir,
+            cache_dir=Path('.cache'),
+            checkpoint_dir=Path(self.orchestrator.checkpoint_dir) if self.orchestrator else Path('.checkpoints'),
+            model_weights_dir=None  # Not used in lux_depth_v2
+        )
