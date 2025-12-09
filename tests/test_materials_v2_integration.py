@@ -29,6 +29,7 @@ from lux_depth_v2.cache_manager import MaskCacheManager
 def _torch_available() -> bool:
     """Check if PyTorch is available."""
     try:
+        import torch  # noqa: F401
         return True
     except ImportError:
         return False
