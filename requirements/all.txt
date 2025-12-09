@@ -4,7 +4,7 @@
 #
 #    pip-compile --constraint=constraints.txt --output-file=all.txt all.in
 #
-accelerate==0.34.2
+accelerate==1.12.0
     # via -r requirements/ml.in
 annotated-types==0.7.0
     # via pydantic
