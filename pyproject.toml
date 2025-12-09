@@ -93,13 +93,48 @@ lux-depth-v2-service = "lux_depth_v2.service:main"
 luxury_video_grader = "transformation_portal.processors.luxury_video_master_grader:main"
 lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-# Automatic discovery - finds all packages recursively
-# No include/exclude constraints
-
-[tool.setuptools.package-dir]
-"" = "src"
+[tool.setuptools]
+# Explicit package list for reliable editable installs
+packages = [
+    "transformation_portal",
+    "transformation_portal.analyzers",
+    "transformation_portal.atmosphere",
+    "transformation_portal.cli",
+    "transformation_portal.comfyui",
+    "transformation_portal.compat",
+    "transformation_portal.core",
+    "transformation_portal.core.artifacts",
+    "transformation_portal.core.config",
+    "transformation_portal.core.device",
+    "transformation_portal.core.observability",
+    "transformation_portal.core.security",
+    "transformation_portal.depth",
+    "transformation_portal.depth.models",
+    "transformation_portal.depth.processors",
+    "transformation_portal.depth.utils",
+    "transformation_portal.depth_intelligence",
+    "transformation_portal.diffusion",
+    "transformation_portal.enhancers",
+    "transformation_portal.events",
+    "transformation_portal.foundation",
+    "transformation_portal.hardening",
+    "transformation_portal.interfaces",
+    "transformation_portal.metrics",
+    "transformation_portal.neuroaesthetics",
+    "transformation_portal.perceptual",
+    "transformation_portal.pipelines",
+    "transformation_portal.plugins",
+    "transformation_portal.plugins.builtin",
+    "transformation_portal.processors",
+    "transformation_portal.processors.material_response",
+    "transformation_portal.rendering",
+    "transformation_portal.segmentation",
+    "transformation_portal.streaming",
+    "transformation_portal.style_transfer",
+    "transformation_portal.utils",
+    "transformation_portal.vlm",
+]
+package-dir = {"" = "src"}
 
 [tool.pylint.main]
 # Increase limits for complex image/video processing functions
