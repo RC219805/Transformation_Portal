@@ -134,12 +134,14 @@ class DeviceDetector:
     def _detect_device_type(self, torch) -> DeviceType:
         """Detect primary device type."""
         # Check for Apple Silicon MPS
-        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        if (hasattr(torch, 'backends') and 
+            hasattr(torch.backends, 'mps') and 
+            torch.backends.mps.is_available()):
             logger.info("✓ Apple Silicon MPS detected")
             return DeviceType.MPS
         
         # Check for CUDA
-        if torch.cuda.is_available():
+        if hasattr(torch, 'cuda') and torch.cuda.is_available():
             logger.info("✓ CUDA device detected")
             return DeviceType.CUDA
         

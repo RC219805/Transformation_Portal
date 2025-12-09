@@ -92,6 +92,7 @@ lux-depth-v2-service = "lux_depth_v2.service:main"
 # Legacy compatibility (can be removed in future versions)
 luxury_video_grader = "transformation_portal.processors.luxury_video_master_grader:main"
 lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
+luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
 
 [tool.setuptools]
 # Explicit package list for reliable editable installs
@@ -133,6 +134,7 @@ packages = [
     "transformation_portal.style_transfer",
     "transformation_portal.utils",
     "transformation_portal.vlm",
+    "luxury_tiff_batch_processor",
 ]
 package-dir = {"" = "src"}
 
