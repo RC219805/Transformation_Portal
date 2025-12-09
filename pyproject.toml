@@ -84,10 +84,8 @@ transform-render = "transformation_portal.cli:render_cli"
 transform-process = "transformation_portal.cli:process_cli"
 transform-analyze = "transformation_portal.cli:analyze_cli"
 
-# Luxury TIFF Batch Processor CLI
-luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
-
 # Lux Depth V2 Pipeline CLI (production-oriented, GPU-accelerated)
+# Note: lux_depth_v2 is a root-level package (not in src/)
 lux-depth-v2 = "lux_depth_v2.cli:main"
 lux-depth-v2-service = "lux_depth_v2.service:main"
 
@@ -97,8 +95,13 @@ lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
-include = ["transformation_portal*", "luxury_tiff_batch_processor*", "lux_depth_v2*"]
-exclude = ["tests*", "data*", "docs*", "scripts*", "examples*", "archive*", "deprecated*"]
+include = ["transformation_portal*", "lux_depth_v2*"]
+exclude = ["tests*", "data*", "docs*", "scripts*", "examples*", "archive*", "deprecated*", "basicsr_tp*", "utils*"]
+namespaces = false
+
+[tool.setuptools.package-dir]
+"" = "src"
+"lux_depth_v2" = "lux_depth_v2"
 
 [tool.pylint.main]
 # Increase limits for complex image/video processing functions
