@@ -1,0 +1,36 @@
+{
+  "task_id": "750Picacho_Kitchen_Ultimate_materials_v2",
+  "input_hash": "sha256:731b4ad62a318375a83ab14af384e7004268bafb20c3a1da4216f0878790d5a8",
+  "timestamp": 1765258975.044557,
+  "segmentation_config": {
+    "backend": "heuristic",
+    "max_segmentation_side": 1024,
+    "edge_feather_radius": 3
+  },
+  "confidence_metrics": {
+    "confidence_avg": 0.179756760597229,
+    "confidence_min": -0.2993231415748596,
+    "confidence_max": 1.0379056930541992,
+    "high_confidence_pct": 0.19948711111111112,
+    "low_confidence_pct": 0.8005128888888888,
+    "coverage_ratio": 0.18938767901234568,
+    "material_counts": {
+      "sky": 69,
+      "foliage": 3755,
+      "wood": 4414601,
+      "metal": 9819128,
+      "glass": 8718593,
+      "stone": 54457
+    }
+  },
+  "version": "2.0",
+  "original_size": [
+    3375,
+    6000
+  ],
+  "segmentation_size": [
+    576,
+    1024
+  ],
+  "upsampled": true
+}

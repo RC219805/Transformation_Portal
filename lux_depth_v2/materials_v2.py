@@ -432,12 +432,16 @@ class MaterialsV2Engine:
         self.logger.info(f"Loading segmentation model: {self.config.backend}")
         
         from .material_segmentation import create_material_segmenter
+        from .config import SegmentationConfig
         
-        # Create config-like object for segmenter
-        seg_config = type('obj', (object,), {
-            'segmentation_backend': self.config.backend,
-            'enable_material': True,
-        })()
+        # Create proper SegmentationConfig for segmenter
+        seg_config = SegmentationConfig(
+            backend=self.config.backend,
+            input_long_side=self.config.segmentation.max_segmentation_side,
+            soften_sigma_px=self.config.segmentation.edge_feather_sigma,
+            min_confidence=self.config.confidence.confidence_threshold,
+            allow_downloads=False,  # Never download in production
+        )
         
         self._segmenter = create_material_segmenter(seg_config, self.device)
         

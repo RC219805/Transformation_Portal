@@ -22,6 +22,18 @@ from . import upscaling
 from .material_segmentation import create_material_segmenter
 from . import material_profiles
 
+# Materials v2 imports (lazy load to avoid import errors if not used)
+try:
+    from .materials_v2 import MaterialsV2Engine, MaterialsV2Config, SegmentationResult
+    from .cache_manager import MaskCacheManager
+    MATERIALS_V2_AVAILABLE = True
+except ImportError:
+    MATERIALS_V2_AVAILABLE = False
+    MaterialsV2Engine = None
+    MaterialsV2Config = None
+    SegmentationResult = None
+    MaskCacheManager = None
+
 
 def _is_image_file(p: Path) -> bool:
     return p.suffix.lower() in (".tif", ".tiff", ".png", ".jpg", ".jpeg", ".webp", ".bmp")
@@ -120,6 +132,34 @@ class LuxPipelineV2:
 
         # Post tiler
         self.tiler = torch_ops.Tiler(tile=int(cfg.post_tile), overlap=int(cfg.post_overlap)) if int(cfg.post_tile) > 0 else None
+
+        # Materials v2 integration
+        self.materials_v2_engine = None
+        self.mask_cache_manager = None
+        if MATERIALS_V2_AVAILABLE and cfg.materials_v2 and cfg.materials_v2.enabled:
+            try:
+                self.materials_v2_engine = MaterialsV2Engine(
+                    config=cfg.materials_v2,
+                    device=str(self.device),
+                    logger=self.logger
+                )
+                
+                if cfg.materials_v2.cache_enabled and cfg.materials_v2.cache_dir:
+                    self.mask_cache_manager = MaskCacheManager(
+                        cache_dir=Path(cfg.materials_v2.cache_dir),
+                        logger=self.logger
+                    )
+                
+                self.logger.info(
+                    f"Materials v2 enabled | "
+                    f"backend={cfg.materials_v2.backend} "
+                    f"confidence_threshold={cfg.materials_v2.confidence.confidence_threshold} "
+                    f"cache={cfg.materials_v2.cache_enabled}"
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Materials v2: {e}; continuing without")
+                self.materials_v2_engine = None
+                self.mask_cache_manager = None
 
         # Capture reproducibility metadata on init
         self._repro_metadata = self._collect_reproducibility_metadata()
@@ -326,6 +366,7 @@ class LuxPipelineV2:
         rgb_t = torch_ops.to_torch_rgb(rgb01, self.device)
 
         # Material segmentation (optional)
+        # Stage 3a: Legacy material segmentation
         with self._stage(report, "material/segmentation"):
             mods0: Optional[material_profiles.MaterialMods] = None
             if cfg.enable_material and self.segmenter is not None:
@@ -335,6 +376,79 @@ class LuxPipelineV2:
                 except Exception as e:
                     self.logger.exception(f"Material segmentation failed for {img_path.name}: {e}")
                     mods0 = None
+        
+        # Stage 3b: Materials v2 integration (NEW)
+        materials_v2_result = None
+        materials_v2_metadata = {}
+        
+        if self.materials_v2_engine is not None:
+            with self._stage(report, "material/materials_v2"):
+                try:
+                    # Generate task ID for caching
+                    task_id = f"{stem}_materials_v2"
+                    
+                    # Check cache first
+                    cached_result = None
+                    if self.mask_cache_manager is not None:
+                        try:
+                            input_hash = self.mask_cache_manager.compute_input_hash(img_path)
+                            if self.mask_cache_manager.is_cached(task_id, input_hash):
+                                # Load from cache
+                                cached_data = self.mask_cache_manager.load(task_id, input_hash)
+                                if cached_data:
+                                    self.logger.info(f"Materials v2 loaded from cache: {task_id}")
+                                    # Reconstruct result from cache
+                                    cached_result = cached_data
+                        except Exception as e:
+                            self.logger.debug(f"Cache lookup failed: {e}")
+                    
+                    # Generate if not cached
+                    if cached_result is None:
+                        # Perform segmentation
+                        materials_v2_result = self.materials_v2_engine.segment_with_confidence(
+                            image=rgb01,
+                            task_id=task_id
+                        )
+                        
+                        # Store metadata
+                        materials_v2_metadata = {
+                            'confidence_avg': materials_v2_result.metrics.confidence_avg,
+                            'confidence_min': materials_v2_result.metrics.confidence_min,
+                            'confidence_max': materials_v2_result.metrics.confidence_max,
+                            'high_confidence_pct': materials_v2_result.metrics.high_confidence_pct,
+                            'low_confidence_pct': materials_v2_result.metrics.low_confidence_pct,
+                            'coverage_ratio': materials_v2_result.metrics.coverage_ratio,
+                            'material_counts': materials_v2_result.metrics.material_counts,
+                            'is_high_quality': materials_v2_result.metrics.is_high_quality(),
+                            'original_size': materials_v2_result.original_size,
+                            'segmentation_size': materials_v2_result.segmentation_size,
+                            'upsampled': materials_v2_result.upsampled,
+                        }
+                        
+                        # Save to cache if enabled
+                        if self.mask_cache_manager is not None:
+                            try:
+                                input_hash = self.mask_cache_manager.compute_input_hash(img_path)
+                                self.mask_cache_manager.save(
+                                    task_id=task_id,
+                                    input_hash=input_hash,
+                                    masks=materials_v2_result.masks,
+                                    confidences=materials_v2_result.confidences,
+                                    metadata=materials_v2_metadata
+                                )
+                                self.logger.debug(f"Materials v2 saved to cache: {task_id}")
+                            except Exception as e:
+                                self.logger.debug(f"Cache save failed: {e}")
+                    else:
+                        # Use cached result
+                        materials_v2_result = cached_result
+                        materials_v2_metadata = cached_result.get('metadata', {}) if isinstance(cached_result, dict) else {}
+                    
+                except Exception as e:
+                    # Graceful fallback: log warning and continue without Materials v2
+                    self.logger.warning(f"Materials v2 failed for {img_path.name}: {e}; continuing without")
+                    materials_v2_result = None
+                    materials_v2_metadata = {'error': str(e), 'fallback': True}
 
         # Grade at original resolution
         with self._stage(report, "grade/master"):
@@ -367,6 +481,15 @@ class LuxPipelineV2:
                     except Exception:
                         pass
 
+        # VRAM cleanup before upscaling (critical for Materials v2)
+        if self.materials_v2_engine is not None:
+            with self._stage(report, "material/cleanup"):
+                try:
+                    self.materials_v2_engine.release_resources()
+                    self.logger.debug("Materials v2 resources released before upscaling")
+                except Exception as e:
+                    self.logger.debug(f"Materials v2 cleanup failed: {e}")
+        
         # Upscaling path
         with self._stage(report, "upscale/base"):
             # Base upsample: GPU bicubic
@@ -453,6 +576,8 @@ class LuxPipelineV2:
             "depth": str(depth_path) if depth_path else None,
             "zone_weights": w.source,
             "material_mods": mods0.source if mods0 is not None else None,
+            "materials_v2_enabled": bool(self.materials_v2_engine),
+            "materials_v2_metadata": materials_v2_metadata if materials_v2_metadata else None,
             "upscaler": ai_status,
             "ai_color_diff": color_diff,
             "ai_luma_diff": luma_diff,

@@ -6,10 +6,12 @@ Provides fault-tolerant batch processing with:
 - Resource allocation per task
 - Graceful shutdown with cleanup
 - Progress tracking and reporting
+- Phase 2: Parallel processing with 2-4 concurrent workers
 """
 
 from __future__ import annotations
 
+import asyncio
 import multiprocessing as mp
 import queue
 import signal
@@ -342,3 +344,371 @@ def _worker_task(task_config: TaskConfig, device: str, logger):
     except Exception as e:
         logger.error(f"Worker exception | task_id={task_config.task_id} error={e}")
         return 1  # Failure
+
+
+@dataclass
+class WorkerState:
+    """Track state of a parallel worker."""
+    worker_id: int
+    task_id: str
+    process: mp.Process
+    start_time: float
+    memory_budget_gb: float
+
+
+@dataclass
+class ParallelCapacityCheck:
+    """Result of parallel capacity checking."""
+    can_support_requested: bool
+    recommended_workers: int
+    memory_per_worker_gb: float
+    total_memory_required_gb: float
+    available_memory_gb: float
+    available_disk_gb: float
+    warnings: List[str] = field(default_factory=list)
+
+
+class ParallelOrchestrator(ProcessOrchestrator):
+    """Enhanced orchestrator with parallel processing support (Phase 2).
+    
+    Extends ProcessOrchestrator with:
+    - 2-4 concurrent workers (configurable)
+    - Resource-aware worker scheduling
+    - Memory budget per worker
+    - Dynamic worker allocation based on available resources
+    
+    Features:
+    - Backward compatible (enable_parallel=False for Phase 1 mode)
+    - Resource monitoring before starting workers
+    - Graceful degradation when resources constrained
+    - Progress tracking across parallel workers
+    
+    Args:
+        max_workers: Maximum concurrent workers (1-4)
+        memory_budget_per_worker: GB of memory per worker (default: 25GB)
+        enable_parallel: Enable parallel processing (default: False for Phase 1 compat)
+        resource_monitor: Optional ResourceMonitor instance
+        device: Device assignment per worker
+        logger: Optional logger instance
+    """
+    
+    def __init__(
+        self,
+        max_workers: int = 1,
+        memory_budget_per_worker: float = 25.0,
+        enable_parallel: bool = False,
+        resource_monitor=None,
+        device: str = "auto",
+        logger=None
+    ):
+        super().__init__(
+            max_workers=1 if not enable_parallel else max_workers,
+            memory_budget_gb=memory_budget_per_worker,
+            device=device,
+            logger=logger
+        )
+        
+        self.enable_parallel = enable_parallel
+        self.max_parallel_workers = max_workers if enable_parallel else 1
+        self.memory_budget_per_worker = memory_budget_per_worker
+        
+        # Import resource monitor only if needed
+        self.resource_monitor = resource_monitor
+        if self.resource_monitor is None and enable_parallel:
+            try:
+                from .resource_monitor import ResourceMonitor
+                self.resource_monitor = ResourceMonitor()
+            except ImportError:
+                self.logger.warning("ResourceMonitor not available, disabling resource checks")
+                self.resource_monitor = None
+        
+        self.worker_states: List[WorkerState] = []
+        self.next_worker_id = 0
+        
+        if enable_parallel:
+            self.logger.info(
+                f"ParallelOrchestrator initialized | "
+                f"max_workers={max_workers} "
+                f"memory_per_worker={memory_budget_per_worker}GB "
+                f"parallel_enabled={enable_parallel}"
+            )
+    
+    def get_available_worker_slots(self) -> int:
+        """Check how many workers can run concurrently based on resources.
+        
+        Returns:
+            Number of available worker slots (0 to max_workers)
+        """
+        if not self.enable_parallel:
+            return 1 if len(self.worker_states) == 0 else 0
+        
+        # Count active workers
+        active_count = len(self.worker_states)
+        if active_count >= self.max_parallel_workers:
+            return 0
+        
+        # Check memory availability if resource monitor available
+        if self.resource_monitor:
+            try:
+                # Get available memory
+                metrics = self.resource_monitor.get_metrics()
+                available_memory_gb = metrics.ram_total_gb - metrics.ram_used_gb
+                
+                # Calculate how many workers can fit
+                possible_workers = int(available_memory_gb / self.memory_budget_per_worker)
+                available_slots = min(
+                    possible_workers - active_count,
+                    self.max_parallel_workers - active_count
+                )
+                
+                return max(0, available_slots)
+            except Exception as e:
+                self.logger.warning(f"Resource check failed: {e}, allowing slots")
+                # Fallback to simple counting
+                return self.max_parallel_workers - active_count
+        
+        # No resource monitor, use simple counting
+        return self.max_parallel_workers - active_count
+    
+    def check_parallel_capacity(
+        self,
+        required_workers: int
+    ) -> ParallelCapacityCheck:
+        """Check if system can support requested parallel workers.
+        
+        Args:
+            required_workers: Number of workers requested
+            
+        Returns:
+            ParallelCapacityCheck with recommendations
+        """
+        if not self.resource_monitor:
+            # No monitoring, optimistically allow requested workers
+            return ParallelCapacityCheck(
+                can_support_requested=True,
+                recommended_workers=min(required_workers, self.max_parallel_workers, 4),
+                memory_per_worker_gb=self.memory_budget_per_worker,
+                total_memory_required_gb=required_workers * self.memory_budget_per_worker,
+                available_memory_gb=0.0,
+                available_disk_gb=0.0,
+                warnings=["Resource monitoring not available"]
+            )
+        
+        try:
+            metrics = self.resource_monitor.get_metrics()
+            available_memory_gb = metrics.ram_total_gb - metrics.ram_used_gb
+            
+            # Calculate maximum possible workers
+            max_workers_by_memory = int(available_memory_gb / self.memory_budget_per_worker)
+            recommended_workers = min(required_workers, max_workers_by_memory, 4)
+            
+            # Check disk space
+            available_disk_gb = 0.0
+            for path, disk_metrics in metrics.disk_metrics.items():
+                available_disk_gb = max(available_disk_gb, disk_metrics.get('available_gb', 0))
+            
+            # Generate warnings
+            warnings = []
+            if recommended_workers < required_workers:
+                warnings.append(
+                    f"Insufficient memory for {required_workers} workers. "
+                    f"Recommended: {recommended_workers}"
+                )
+            if available_disk_gb < 20.0:
+                warnings.append(
+                    f"Low disk space: {available_disk_gb:.1f}GB available"
+                )
+            
+            return ParallelCapacityCheck(
+                can_support_requested=recommended_workers >= required_workers,
+                recommended_workers=recommended_workers,
+                memory_per_worker_gb=self.memory_budget_per_worker,
+                total_memory_required_gb=recommended_workers * self.memory_budget_per_worker,
+                available_memory_gb=available_memory_gb,
+                available_disk_gb=available_disk_gb,
+                warnings=warnings
+            )
+        except Exception as e:
+            self.logger.error(f"Capacity check failed: {e}")
+            return ParallelCapacityCheck(
+                can_support_requested=False,
+                recommended_workers=1,
+                memory_per_worker_gb=self.memory_budget_per_worker,
+                total_memory_required_gb=0.0,
+                available_memory_gb=0.0,
+                available_disk_gb=0.0,
+                warnings=[f"Capacity check error: {e}"]
+            )
+    
+    def process_batch_with_parallelism(
+        self,
+        tasks: List[TaskConfig],
+        max_concurrent: Optional[int] = None,
+        progress_callback: Optional[Callable[[TaskResult], None]] = None
+    ) -> List[TaskResult]:
+        """Process batch with parallel workers.
+        
+        Args:
+            tasks: List of task configurations
+            max_concurrent: Override max workers (None = use configured max)
+            progress_callback: Optional callback for progress updates
+            
+        Returns:
+            List of task results
+        """
+        if not self.enable_parallel or self.max_parallel_workers == 1:
+            # Fallback to sequential Phase 1 processing
+            self.logger.info("Parallel disabled, using sequential processing")
+            return self.process_batch(tasks, progress_callback)
+        
+        # Override max workers if specified
+        original_max = self.max_parallel_workers
+        if max_concurrent:
+            self.max_parallel_workers = min(max_concurrent, 4)
+        
+        try:
+            # Check capacity before starting
+            capacity = self.check_parallel_capacity(self.max_parallel_workers)
+            if capacity.warnings:
+                for warning in capacity.warnings:
+                    self.logger.warning(f"Capacity check: {warning}")
+            
+            self.logger.info(
+                f"Starting parallel batch | "
+                f"total_tasks={len(tasks)} "
+                f"max_workers={self.max_parallel_workers} "
+                f"available_memory={capacity.available_memory_gb:.1f}GB"
+            )
+            
+            # Submit all tasks to queue
+            for task in tasks:
+                self.submit_task(task, priority=task.priority)
+            
+            start_time = time.time()
+            
+            # Process queue with parallel workers
+            while not self.task_queue.empty() and not self.shutdown_requested:
+                # Start new workers if slots available
+                available_slots = self.get_available_worker_slots()
+                
+                while available_slots > 0 and not self.task_queue.empty():
+                    try:
+                        # Get next task
+                        priority, counter, task_config = self.task_queue.get(timeout=0.1)
+                        
+                        # Start worker
+                        self._start_parallel_worker(task_config, progress_callback)
+                        available_slots -= 1
+                        
+                    except queue.Empty:
+                        break
+                
+                # Reap finished workers
+                self._reap_finished_workers()
+                time.sleep(0.1)
+            
+            # Wait for all workers to complete
+            self.logger.info("Waiting for parallel workers to complete...")
+            while self.worker_states and not self.shutdown_requested:
+                self._reap_finished_workers()
+                time.sleep(0.5)
+            
+            elapsed = time.time() - start_time
+            
+            self.logger.info(
+                f"Parallel batch complete | "
+                f"total={self.total_tasks} "
+                f"completed={self.completed_tasks} "
+                f"failed={self.failed_tasks} "
+                f"elapsed={elapsed:.1f}s"
+            )
+            
+            return self.results
+            
+        finally:
+            # Restore original max workers
+            self.max_parallel_workers = original_max
+    
+    def _start_parallel_worker(
+        self,
+        task_config: TaskConfig,
+        progress_callback: Optional[Callable[[TaskResult], None]]
+    ):
+        """Start a parallel worker process."""
+        worker_id = self.next_worker_id
+        self.next_worker_id += 1
+        
+        # Create worker process
+        process = mp.Process(
+            target=_worker_task,
+            args=(task_config, self.device, self.logger),
+            name=f"parallel-worker-{worker_id}"
+        )
+        process.start()
+        
+        # Track worker state
+        worker_state = WorkerState(
+            worker_id=worker_id,
+            task_id=task_config.task_id,
+            process=process,
+            start_time=time.time(),
+            memory_budget_gb=self.memory_budget_per_worker
+        )
+        self.worker_states.append(worker_state)
+        self.active_workers[task_config.task_id] = process
+        
+        self.logger.info(
+            f"Parallel worker started | "
+            f"worker_id={worker_id} "
+            f"task_id={task_config.task_id} "
+            f"pid={process.pid} "
+            f"active_workers={len(self.worker_states)}"
+        )
+    
+    def _reap_finished_workers(self):
+        """Check for and clean up finished worker processes."""
+        finished = []
+        
+        for worker_state in self.worker_states:
+            if not worker_state.process.is_alive():
+                finished.append(worker_state)
+                
+                # Get exit code
+                worker_state.process.join(timeout=1.0)
+                exit_code = worker_state.process.exitcode
+                
+                elapsed = time.time() - worker_state.start_time
+                
+                if exit_code == 0:
+                    self.completed_tasks += 1
+                    status = TaskStatus.SUCCESS
+                    self.logger.info(
+                        f"Parallel worker completed | "
+                        f"worker_id={worker_state.worker_id} "
+                        f"task_id={worker_state.task_id} "
+                        f"elapsed={elapsed:.1f}s"
+                    )
+                else:
+                    self.failed_tasks += 1
+                    status = TaskStatus.FAILED
+                    self.logger.error(
+                        f"Parallel worker failed | "
+                        f"worker_id={worker_state.worker_id} "
+                        f"task_id={worker_state.task_id} "
+                        f"exit_code={exit_code}"
+                    )
+                
+                # Create result
+                result = TaskResult(
+                    task_id=worker_state.task_id,
+                    status=status,
+                    input_path=Path("unknown"),
+                    elapsed_time=elapsed
+                )
+                self.results.append(result)
+        
+        # Remove finished workers
+        for worker_state in finished:
+            self.worker_states.remove(worker_state)
+            if worker_state.task_id in self.active_workers:
+                del self.active_workers[worker_state.task_id]

@@ -187,18 +187,30 @@ class ErrorRecovery:
         
         # Resource errors: try reducing resource usage
         if category == ErrorCategory.RESOURCE:
-            # Attempt 1: Switch to CPU if using GPU
-            if attempt == 0 and config.get("device") in ["auto", "cuda", "mps"]:
+            # Attempt 1: Reduce Materials v2 segmentation resolution
+            if attempt == 0 and config.get("materials_v2_enabled"):
+                if "max_segmentation_side" in config:
+                    current_size = config.get("max_segmentation_side", 1536)
+                    config["max_segmentation_side"] = max(512, current_size // 2)
+                    self.logger.info(f"Fallback: Reducing Materials v2 segmentation to {config['max_segmentation_side']}px")
+            
+            # Attempt 2: Switch to CPU if using GPU
+            elif attempt == 1 and config.get("device") in ["auto", "cuda", "mps"]:
                 config["device"] = "cpu"
                 self.logger.info("Fallback: Switching to CPU device")
             
-            # Attempt 2: Reduce upscale factor
-            elif attempt == 1 and config.get("upscale", 4) == 4:
+            # Attempt 3: Disable Materials v2
+            elif attempt == 2 and config.get("materials_v2_enabled"):
+                config["materials_v2_enabled"] = False
+                self.logger.info("Fallback: Disabling Materials v2")
+            
+            # Attempt 4: Reduce upscale factor
+            elif attempt == 3 and config.get("upscale", 4) == 4:
                 config["upscale"] = 2
                 self.logger.info("Fallback: Reducing upscale 4x → 2x")
             
-            # Attempt 3: Disable upscaling
-            elif attempt >= 2:
+            # Attempt 5: Disable upscaling
+            elif attempt >= 4:
                 config["upscaler_backend"] = "none"
                 config["upscale"] = 1
                 self.logger.info("Fallback: Disabling upscaling")
@@ -318,3 +330,90 @@ def with_retry(
             return result
         return wrapper
     return decorator
+
+
+class MaterialsV2FallbackStrategy:
+    """Fallback strategies specifically for Materials v2 failures.
+    
+    Features:
+    - Progressive degradation (high→medium→low quality)
+    - Backend fallback (ONNX→Heuristic)
+    - Resolution reduction
+    - Complete disable as last resort
+    """
+    
+    def __init__(self, logger=None):
+        self.logger = logger or setup_logging("INFO")
+    
+    def get_fallback_config(
+        self,
+        error: Exception,
+        config: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Return fallback configuration based on error type.
+        
+        Args:
+            error: Exception that occurred
+            config: Current Materials v2 configuration
+            
+        Returns:
+            Fallback configuration or None to disable Materials v2
+        """
+        error_str = str(error).lower()
+        
+        # Memory errors: reduce segmentation resolution
+        if 'memory' in error_str or 'oom' in error_str:
+            current_size = config.get('max_segmentation_side', 1536)
+            new_size = current_size // 2
+            
+            if new_size >= 512:  # Minimum viable size
+                fallback = config.copy()
+                fallback['max_segmentation_side'] = new_size
+                # Increase feathering to compensate for lower resolution
+                fallback['edge_feather_radius'] = config.get('edge_feather_radius', 3) * 2
+                
+                self.logger.warning(
+                    f"Materials v2 memory fallback: {current_size}px → {new_size}px"
+                )
+                return fallback
+            else:
+                self.logger.warning(
+                    "Materials v2 resolution already at minimum; disabling"
+                )
+                return None
+        
+        # Segmentation errors: switch to heuristic backend
+        elif 'segmentation' in error_str or 'model' in error_str:
+            if config.get('backend') != 'heuristic':
+                fallback = config.copy()
+                fallback['backend'] = 'heuristic'
+                
+                self.logger.warning(
+                    f"Materials v2 backend fallback: {config.get('backend')} → heuristic"
+                )
+                return fallback
+            else:
+                self.logger.warning(
+                    "Materials v2 already using heuristic backend; disabling"
+                )
+                return None
+        
+        # Confidence errors: lower threshold
+        elif 'confidence' in error_str or 'quality' in error_str:
+            current_threshold = config.get('confidence_threshold', 0.6)
+            new_threshold = max(0.3, current_threshold - 0.2)
+            
+            fallback = config.copy()
+            fallback['confidence_threshold'] = new_threshold
+            
+            self.logger.warning(
+                f"Materials v2 confidence fallback: {current_threshold} → {new_threshold}"
+            )
+            return fallback
+        
+        # Unknown error: disable Materials v2 as last resort
+        else:
+            self.logger.warning(
+                f"Materials v2 unknown error ({error}); disabling as last resort"
+            )
+            return None
