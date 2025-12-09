@@ -38,6 +38,25 @@ class SegmentationConfig:
 
 
 @dataclass
+class OrchestratorConfig:
+    """Process orchestrator configuration for Phase 1 stability."""
+    enabled: bool = True
+    max_workers: int = 1  # Sequential processing for GPU safety
+    memory_budget_gb: Optional[float] = None  # None = no limit
+    checkpoint_dir: str = ".checkpoints"
+    max_retries: int = 3
+    pre_flight_check: bool = True
+    
+    # Resource thresholds
+    mps_memory_threshold_gb: float = 55.0  # 64GB - 9GB buffer
+    disk_space_threshold_gb: float = 10.0
+    
+    # Retry strategy
+    retry_backoff_base: float = 2.0
+    retry_max_delay_s: float = 300.0
+
+
+@dataclass
 class ServiceConfig:
     enabled: bool = False
     host: str = "0.0.0.0"
@@ -162,6 +181,7 @@ class PipelineConfig:
     # Sub-configs
     segmentation: SegmentationConfig = field(default_factory=SegmentationConfig)
     service: ServiceConfig = field(default_factory=ServiceConfig)
+    orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
 
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""

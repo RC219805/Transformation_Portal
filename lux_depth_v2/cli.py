@@ -42,10 +42,42 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seg-long-side", type=int, default=768)
     p.add_argument("--seg-min-conf", type=float, default=0.25)
 
+    # Materials v2 (Phase 1 Integration Pack)
+    p.add_argument("--materials-v2", action="store_true", 
+                   help="Enable Materials v2 confidence-gated material response.")
+    p.add_argument("--confidence-threshold", type=float, default=0.6, 
+                   help="Confidence threshold for Materials v2 gating (default: 0.6).")
+    p.add_argument("--confidence-blend-range", type=float, default=0.1,
+                   help="Blend range for soft confidence falloff (default: 0.1).")
+    p.add_argument("--confidence-blend-mode", type=str, default="soft", choices=["soft", "hard"],
+                   help="Confidence blending mode (default: soft).")
+    p.add_argument("--cache-masks", action="store_true", 
+                   help="Enable mask caching for Materials v2.")
+    p.add_argument("--cache-dir", type=str, default=".mask_cache",
+                   help="Mask cache directory (default: .mask_cache).")
+    p.add_argument("--max-segmentation-side", type=int, default=1024,
+                   help="Max segmentation resolution for Materials v2 (default: 1024).")
+
     # Service mode (optional)
     p.add_argument("--service", action="store_true", help="Run as HTTP service (FastAPI).")
     p.add_argument("--host", type=str, default="0.0.0.0")
     p.add_argument("--port", type=int, default=8088)
+
+    # Phase 1 Stability Architecture
+    p.add_argument("--enable-orchestrator", action="store_true", default=True, 
+                   help="Enable process orchestrator (default: True).")
+    p.add_argument("--disable-orchestrator", action="store_true", 
+                   help="Disable process orchestrator (legacy mode).")
+    p.add_argument("--checkpoint-dir", type=str, default=".checkpoints", 
+                   help="Checkpoint directory for resume capability.")
+    p.add_argument("--max-retries", type=int, default=3, 
+                   help="Maximum retry attempts for failed tasks.")
+    p.add_argument("--memory-budget", type=float, default=None, 
+                   help="Memory budget per task in GB (None=no limit).")
+    p.add_argument("--pre-flight-check", action="store_true", default=True,
+                   help="Enable pre-flight validation (default: True).")
+    p.add_argument("--skip-pre-flight", action="store_true",
+                   help="Skip pre-flight validation checks.")
 
     return p
 
@@ -76,12 +108,48 @@ def main() -> None:
     cfg.segmentation.allow_downloads = bool(args.seg_allow_downloads)
     cfg.segmentation.input_long_side = int(args.seg_long_side)
     cfg.segmentation.min_confidence = float(args.seg_min_conf)
+    
+    # Phase 1 Stability: Configure orchestrator
+    cfg.orchestrator.enabled = args.enable_orchestrator and not args.disable_orchestrator
+    cfg.orchestrator.checkpoint_dir = args.checkpoint_dir
+    cfg.orchestrator.max_retries = args.max_retries
+    cfg.orchestrator.memory_budget_gb = args.memory_budget
+    
+    # Materials v2: Configure confidence gating and caching
+    if hasattr(args, 'materials_v2') and args.materials_v2:
+        cfg.materials_v2.enabled = True
+        cfg.materials_v2.confidence.confidence_threshold = args.confidence_threshold
+        cfg.materials_v2.confidence.blend_range = args.confidence_blend_range
+        cfg.materials_v2.confidence.blend_mode = args.confidence_blend_mode
+        cfg.materials_v2.segmentation.max_segmentation_side = args.max_segmentation_side
+        if args.cache_masks:
+            # Import cache manager and configure
+            from .cache_manager import MaskCacheManager
+            cfg.materials_v2.cache_manager = MaskCacheManager(cache_dir=args.cache_dir)
+    cfg.orchestrator.pre_flight_check = args.pre_flight_check and not args.skip_pre_flight
 
     if args.service:
         # Defer imports so batch-only users don't need server deps installed.
         from .service import run_service
         run_service(cfg, host=args.host, port=int(args.port), logger=logger)
         return
+
+    # Phase 1 Stability: Pre-flight validation
+    if cfg.orchestrator.pre_flight_check and args.input:
+        from .preflight import PreFlightValidator
+        
+        validator = PreFlightValidator(logger=logger)
+        report = validator.validate_all(
+            input_path=Path(args.input),
+            depth_dir=cfg.depth_dir,
+            device=cfg.device,
+            upscale=cfg.upscale
+        )
+        validator.log_report(report)
+        
+        if not report.passed:
+            logger.error("Pre-flight validation failed. Use --skip-pre-flight to bypass.")
+            return
 
     pipe = LuxPipelineV2(cfg, logger=logger)
 
