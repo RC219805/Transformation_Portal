@@ -437,22 +437,6 @@ class TestErrorRecoveryFallbacks:
         assert fallback['edge_feather_radius'] == 6
 
 
-# Utility functions
-
-def _torch_available() -> bool:
-    """Check if PyTorch is available."""
-    try:
-        import torch
-        return True
-    except ImportError:
-        return False
-
-
-def _create_test_image(height: int = 100, width: int = 100) -> np.ndarray:
-    """Create a test RGB image."""
-    return np.random.rand(height, width, 3).astype(np.float32)
-
-
 # Fixtures
 
 @pytest.fixture
