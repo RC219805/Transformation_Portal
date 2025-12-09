@@ -93,15 +93,20 @@ lux-depth-v2-service = "lux_depth_v2.service:main"
 luxury_video_grader = "transformation_portal.processors.luxury_video_master_grader:main"
 lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
 
-[tool.setuptools.packages.find]
-where = ["src", "."]
-include = ["transformation_portal*", "lux_depth_v2*"]
-exclude = ["tests*", "data*", "docs*", "scripts*", "examples*", "archive*", "deprecated*", "basicsr_tp*", "utils*"]
-namespaces = false
+[tool.setuptools]
+# Explicitly list packages to avoid ambiguity
+packages = [
+    "transformation_portal",
+    "transformation_portal.core",
+    "transformation_portal.core.artifacts",
+    "transformation_portal.core.config",
+    "transformation_portal.core.device",
+    "transformation_portal.core.observability",
+    "transformation_portal.core.security",
+]
 
 [tool.setuptools.package-dir]
-"" = "src"
-"lux_depth_v2" = "lux_depth_v2"
+"transformation_portal" = "src/transformation_portal"
 
 [tool.pylint.main]
 # Increase limits for complex image/video processing functions
