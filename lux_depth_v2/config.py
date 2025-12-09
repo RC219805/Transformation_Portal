@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lux_depth_v2.materials_v2 import MaterialsV2Config
 
 
 class Preset(str, Enum):
