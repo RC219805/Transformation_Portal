@@ -89,7 +89,7 @@ class TestConfidenceGating:
             confidence_threshold=0.6,
             blend_mode='hard',
             fallback_strength=0.0,
-            material_thresholds={}  # Override defaults to use global threshold
+            material_thresholds={}  # Clear material-specific overrides
         )
 
         confidence_map = np.array([
@@ -217,10 +217,13 @@ class TestVRAMLifecycle:
     )
     def test_vram_cleanup_cuda(self):
         """Test CUDA memory cleanup (mock)."""
-        with patch('lux_depth_v2.materials_v2.torch') as mock_torch:
-            mock_torch.cuda.empty_cache = Mock()
-            mock_torch.cuda.synchronize = Mock()
-
+        import sys
+        import torch
+        
+        # Mock CUDA operations on the actual torch module
+        with patch.object(torch.cuda, 'empty_cache') as mock_empty, \
+             patch.object(torch.cuda, 'synchronize') as mock_sync:
+            
             config = MaterialsV2Config(enabled=True)
             engine = MaterialsV2Engine(config, device='cuda')
             engine._segmenter = Mock()
@@ -228,8 +231,8 @@ class TestVRAMLifecycle:
             engine.release_resources()
 
             # Check cleanup called
-            mock_torch.cuda.empty_cache.assert_called_once()
-            mock_torch.cuda.synchronize.assert_called_once()
+            mock_empty.assert_called_once()
+            mock_sync.assert_called_once()
 
 
 class TestMaskCaching:
