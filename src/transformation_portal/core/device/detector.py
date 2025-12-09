@@ -98,12 +98,14 @@ class DeviceDetector:
             import torch
         except ImportError:
             logger.warning("PyTorch not available, using CPU-only mode")
-            return self._create_cpu_only_info()
+            self._cached_info = self._create_cpu_only_info()
+            return self._cached_info
         
         # Check if torch has device class (minimal torch installs may not)
         if not hasattr(torch, 'device'):
             logger.warning("PyTorch minimal version detected, using CPU-only mode")
-            return self._create_cpu_only_info()
+            self._cached_info = self._create_cpu_only_info()
+            return self._cached_info
         
         # Detect device type
         device_type = self._detect_device_type(torch)
