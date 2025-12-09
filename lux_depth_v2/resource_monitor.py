@@ -360,3 +360,68 @@ class ResourceMonitor:
         if "alerts" in summary:
             for alert in summary["alerts"]:
                 self.logger.warning(f"⚠️  {alert}")
+    
+    def check_parallel_capacity(
+        self,
+        required_workers: int,
+        memory_per_worker_gb: float
+    ) -> Dict[str, Any]:
+        """Check if system can support requested parallel workers.
+        
+        Args:
+            required_workers: Number of workers requested
+            memory_per_worker_gb: Memory budget per worker
+            
+        Returns:
+            Dictionary with capacity check results
+        """
+        metrics = self.get_metrics()
+        
+        # Calculate available memory
+        available_memory_gb = metrics.ram_total_gb - metrics.ram_used_gb
+        
+        # Calculate maximum possible workers
+        max_workers_by_memory = int(available_memory_gb / memory_per_worker_gb)
+        recommended_workers = min(required_workers, max_workers_by_memory, 4)
+        
+        # Check disk space
+        available_disk_gb = 0.0
+        for path, disk_metrics in metrics.disk_metrics.items():
+            available_disk_gb = max(available_disk_gb, disk_metrics.get('free_gb', 0))
+        
+        # Check MPS memory (Apple Silicon)
+        mps_info = {}
+        if metrics.mps_available:
+            mps_stats = self.check_mps_memory()
+            mps_info = {
+                'available': True,
+                'allocated_gb': mps_stats.get('allocated_gb', 0),
+                'reserved_gb': mps_stats.get('reserved_gb', 0),
+            }
+        
+        # Generate warnings
+        warnings = []
+        if recommended_workers < required_workers:
+            warnings.append(
+                f"Insufficient memory for {required_workers} workers. "
+                f"Recommended: {recommended_workers}"
+            )
+        if available_disk_gb < 20.0:
+            warnings.append(
+                f"Low disk space: {available_disk_gb:.1f}GB available"
+            )
+        if metrics.ram_percent > 80.0:
+            warnings.append(
+                f"High RAM usage: {metrics.ram_percent:.1f}%"
+            )
+        
+        return {
+            'can_support_requested': recommended_workers >= required_workers,
+            'recommended_workers': recommended_workers,
+            'memory_per_worker_gb': memory_per_worker_gb,
+            'total_memory_required_gb': recommended_workers * memory_per_worker_gb,
+            'available_memory_gb': available_memory_gb,
+            'available_disk_gb': available_disk_gb,
+            'mps': mps_info,
+            'warnings': warnings
+        }
