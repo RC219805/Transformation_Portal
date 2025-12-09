@@ -12,3 +12,6 @@ hypothesis>=6,<7
 # Phase 2 dependencies
 psutil>=5.9.0
 scikit-image>=0.21
+
+# Platform Core dependencies
+pydantic>=2.0.0

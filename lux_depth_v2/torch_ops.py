@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 
@@ -19,8 +19,23 @@ except Exception as e:  # pragma: no cover
     torch = None  # type: ignore
     F = None  # type: ignore
 
+# Platform Core integration for enhanced device detection
+try:
+    from transformation_portal.core.device.detector import DeviceDetector, DeviceInfo
+    CORE_DEVICE_AVAILABLE = True
+except ImportError:
+    CORE_DEVICE_AVAILABLE = False
+    DeviceDetector = None
+    DeviceInfo = None
+
+if TYPE_CHECKING:
+    from transformation_portal.core.device.detector import DeviceInfo
+
 
 EPS = 1e-6
+
+# Global device detector instance (lazy initialization)
+_device_detector: Optional['DeviceDetector'] = None
 
 
 def require_torch() -> None:
@@ -28,9 +43,37 @@ def require_torch() -> None:
         raise RuntimeError("PyTorch is required for V2 GPU pipeline. Install torch.")
 
 
-def pick_device(device: str = "auto") -> "torch.device":
+def pick_device(device: str = "auto", memory_fraction: float = 0.85) -> "torch.device":
+    """
+    Select compute device with optional Platform Core integration.
+    
+    Args:
+        device: Device string ("auto", "cuda", "mps", "cpu")
+        memory_fraction: Memory fraction hint for core detector (0.1-0.95)
+    
+    Returns:
+        torch.device
+    
+    Notes:
+        - Backward compatible with legacy behavior
+        - Uses Platform Core DeviceDetector when available for enhanced capabilities
+        - Falls back to simple detection if core not available
+    """
     require_torch()
     d = (device or "auto").lower()
+    
+    # Use Platform Core detector for auto mode (enhanced detection)
+    if d == "auto" and CORE_DEVICE_AVAILABLE:
+        global _device_detector
+        if _device_detector is None:
+            _device_detector = DeviceDetector(
+                memory_fraction=memory_fraction,
+                prefer_neural_engine=True
+            )
+        device_info = _device_detector.detect()
+        return device_info.device
+    
+    # Legacy fallback detection (backward compatible)
     if d == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
@@ -43,6 +86,29 @@ def pick_device(device: str = "auto") -> "torch.device":
     if d == "mps":
         return torch.device("mps")
     return torch.device("cpu")
+
+
+def get_device_info() -> Optional['DeviceInfo']:
+    """
+    Get enhanced device information from Platform Core.
+    
+    Returns:
+        DeviceInfo with capabilities, or None if core not available
+    
+    Example:
+        >>> info = get_device_info()
+        >>> if info:
+        >>>     print(f"Memory: {info.capabilities.available_memory_gb:.1f} GB")
+        >>>     print(f"Neural Engine: {info.capabilities.neural_engine_available}")
+    """
+    if not CORE_DEVICE_AVAILABLE:
+        return None
+    
+    global _device_detector
+    if _device_detector is None:
+        _device_detector = DeviceDetector()
+    
+    return _device_detector.detect()
 
 
 def configure_torch(cudnn_benchmark: bool = True) -> None:

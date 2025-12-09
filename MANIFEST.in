@@ -1,0 +1,24 @@
+# Include all Python packages and modules
+recursive-include src *.py
+recursive-include src */__init__.py
+
+# Include configuration files
+include pyproject.toml
+include setup.py
+include setup.cfg
+include pytest.ini
+include requirements*.txt
+
+# Include documentation
+include README.md
+include LICENSE
+include *.md
+
+# Include core module completely
+graft src/transformation_portal/core
+
+# Exclude build artifacts and caches
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *$py.class
+global-exclude *.so
