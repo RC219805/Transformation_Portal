@@ -10,6 +10,7 @@ scikit-learn>=1.0,<2       # classical ML (used in core features)
 
 # Configuration and data formats
 PyYAML>=6.0,<7             # YAML config file parsing
+pydantic>=2.0,<3           # Required by Platform Core (config schemas)
 
 # CLI framework and utilities
 typer>=0.10.0,<1           # CLI framework
