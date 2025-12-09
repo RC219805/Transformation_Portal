@@ -95,7 +95,11 @@ lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["transformation_portal*"]
+# Explicitly include all nested packages
+include = [
+    "transformation_portal",
+    "transformation_portal.*",
+]
 
 [tool.setuptools.package-dir]
 "" = "src"
