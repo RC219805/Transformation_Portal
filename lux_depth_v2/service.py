@@ -16,15 +16,15 @@ def validate_filepath(filename: str) -> None:
     """Validate uploaded filename to prevent path traversal attacks."""
     if not filename:
         raise ValueError("Filename cannot be empty")
-    
+
     # Check for path traversal attempts
     if ".." in filename or "/" in filename or "\\" in filename:
         raise ValueError(f"Invalid filename: path traversal detected in '{filename}'")
-    
+
     # Check for suspicious characters
     if any(c in filename for c in ['\x00', '\n', '\r']):
         raise ValueError(f"Invalid filename: null or newline characters in '{filename}'")
-    
+
     # Verify extension is allowed
     allowed_extensions = {'.tif', '.tiff', '.png', '.jpg', '.jpeg', '.webp', '.bmp'}
     ext = Path(filename).suffix.lower()
@@ -101,7 +101,7 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
             # Use sanitized filename
             safe_img_name = Path(image.filename or "image.png").name
             img_path = incoming_dir / f"{req_id}_{safe_img_name}"
-            
+
             with open(img_path, "wb") as f:
                 f.write(img_data)
 
@@ -145,15 +145,15 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8088, help="Port to bind to (default: 8088)")
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"],
                        help="Device to use (default: auto)")
-    
+
     args = parser.parse_args()
-    
+
     # Create minimal config for service mode
     cfg = PipelineConfig(
         output_dir=Path(args.output_dir),
         device=args.device
     )
-    
+
     logger = setup_logging("INFO")
     run_service(cfg, host=args.host, port=args.port, logger=logger)
 

@@ -29,12 +29,12 @@ class TestWeightsFromAssets:
             masks={},
             cfg=cfg
         )
-        
+
         assert w.source == "uniform_no_depth"
         assert w.wfg.shape == (1, 1, 64, 64)
         assert w.wmid.shape == (1, 1, 64, 64)
         assert w.wbg.shape == (1, 1, 64, 64)
-        
+
         # Weights should be roughly equal
         assert w.wfg.mean().item() == pytest.approx(0.34, abs=0.01)
         assert w.wmid.mean().item() == pytest.approx(0.33, abs=0.01)
@@ -62,10 +62,10 @@ class TestWeightsFromAssets:
             masks={},
             cfg=cfg
         )
-        
+
         assert w.source == "depth_percentiles"
         assert w.wfg.shape == (1, 1, 64, 64)
-        
+
         # Weights should sum to 1
         total = w.wfg + w.wmid + w.wbg
         assert torch.allclose(total, torch.ones_like(total), atol=1e-4)
@@ -73,18 +73,18 @@ class TestWeightsFromAssets:
     def test_zone_mask_weights(self, torch_device, sample_mask_array):
         """Test weights from explicit zone masks."""
         cfg = PipelineConfig()
-        
+
         # Create simple zone masks
         fg_mask = sample_mask_array.copy()
         bg_mask = 1.0 - fg_mask
         mid_mask = np.ones_like(fg_mask) * 0.5
-        
+
         masks = {
             "foreground": fg_mask,
             "midground": mid_mask,
             "background": bg_mask,
         }
-        
+
         w = weights_mod.weights_from_assets(
             h=64, w=64,
             device=torch_device,
@@ -92,10 +92,10 @@ class TestWeightsFromAssets:
             masks=masks,
             cfg=cfg
         )
-        
+
         assert w.source == "zone_masks"
         assert w.wfg.shape == (1, 1, 64, 64)
-        
+
         # Weights should sum to 1 after normalization
         total = w.wfg + w.wmid + w.wbg
         assert torch.allclose(total, torch.ones_like(total), atol=1e-3)
@@ -103,13 +103,13 @@ class TestWeightsFromAssets:
     def test_zone_mask_priority_over_depth(self, torch_device, sample_depth_array, sample_mask_array):
         """Test zone masks take priority over depth."""
         cfg = PipelineConfig()
-        
+
         masks = {
             "foreground": sample_mask_array,
             "midground": np.ones_like(sample_mask_array) * 0.5,
             "background": 1.0 - sample_mask_array,
         }
-        
+
         w = weights_mod.weights_from_assets(
             h=64, w=64,
             device=torch_device,
@@ -117,19 +117,19 @@ class TestWeightsFromAssets:
             masks=masks,
             cfg=cfg
         )
-        
+
         assert w.source == "zone_masks"  # Not depth_percentiles
 
     def test_mask_softening(self, torch_device, sample_mask_array):
         """Test mask softening with gaussian blur."""
         cfg = PipelineConfig(mask_soften_sigma=4.0)
-        
+
         masks = {
             "foreground": sample_mask_array,
             "midground": np.ones_like(sample_mask_array) * 0.5,
             "background": 1.0 - sample_mask_array,
         }
-        
+
         w = weights_mod.weights_from_assets(
             h=64, w=64,
             device=torch_device,
@@ -137,7 +137,7 @@ class TestWeightsFromAssets:
             masks=masks,
             cfg=cfg
         )
-        
+
         # Softened masks should have smooth transitions
         wfg_np = w.wfg[0, 0].cpu().numpy()
         # Check that values near edges are not strictly 0 or 1
@@ -152,7 +152,7 @@ class TestWeightsFromAssets:
         depth[:20, :] = 0.0  # Foreground
         depth[20:44, :] = 0.5  # Midground
         depth[44:, :] = 1.0  # Background
-        
+
         cfg = PipelineConfig(fg_q=0.25, bg_q=0.75, transition=0.05)
         w = weights_mod.weights_from_assets(
             h=64, w=64,
@@ -161,11 +161,11 @@ class TestWeightsFromAssets:
             masks={},
             cfg=cfg
         )
-        
+
         # Check foreground zone has high wfg (relaxed for device variance)
         wfg_fg = w.wfg[0, 0, :20, :].mean().item()
         assert wfg_fg > 0.4, f"Expected wfg > 0.4, got {wfg_fg}"
-        
+
         # Check background zone has high wbg (relaxed for device variance)
         wbg_bg = w.wbg[0, 0, 44:, :].mean().item()
         assert wbg_bg > 0.4, f"Expected wbg > 0.4, got {wbg_bg}"
@@ -179,14 +179,14 @@ class TestWeightsDataclass:
         wfg = torch.ones((1, 1, 32, 32), device=torch_device) * 0.3
         wmid = torch.ones((1, 1, 32, 32), device=torch_device) * 0.4
         wbg = torch.ones((1, 1, 32, 32), device=torch_device) * 0.3
-        
+
         w = weights_mod.Weights(
             wfg=wfg,
             wmid=wmid,
             wbg=wbg,
             source="test"
         )
-        
+
         assert w.wfg.shape == (1, 1, 32, 32)
         assert w.wmid.shape == (1, 1, 32, 32)
         assert w.wbg.shape == (1, 1, 32, 32)
@@ -196,7 +196,7 @@ class TestWeightsDataclass:
         """Test that generated weights sum to approximately 1."""
         cfg = PipelineConfig()
         depth = np.random.rand(64, 64).astype(np.float32)
-        
+
         w = weights_mod.weights_from_assets(
             h=64, w=64,
             device=torch_device,
@@ -204,6 +204,6 @@ class TestWeightsDataclass:
             masks={},
             cfg=cfg
         )
-        
+
         total = w.wfg + w.wmid + w.wbg
         assert torch.allclose(total, torch.ones_like(total), atol=1e-3)

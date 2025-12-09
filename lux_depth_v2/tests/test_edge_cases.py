@@ -31,16 +31,16 @@ class TestExtremeDimensions:
         small_image_path = temp_dir / "small.png"
         small_img = Image.new("RGB", (32, 32), color=(128, 128, 128))
         small_img.save(small_image_path)
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"  # Skip upscaling for speed
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(small_image_path)
-        
+
         assert result["status"] in ("ok", "error")
 
     def test_non_square_image(self, temp_dir, mock_config):
@@ -49,23 +49,23 @@ class TestExtremeDimensions:
         landscape_path = temp_dir / "landscape.png"
         landscape_img = Image.new("RGB", (800, 400), color=(100, 150, 200))
         landscape_img.save(landscape_path)
-        
+
         # Portrait
         portrait_path = temp_dir / "portrait.png"
         portrait_img = Image.new("RGB", (400, 800), color=(200, 150, 100))
         portrait_img.save(portrait_path)
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
-        
+
         result1 = pipeline.process_one(landscape_path)
         assert result1["status"] in ("ok", "error")
-        
+
         result2 = pipeline.process_one(portrait_path)
         assert result2["status"] in ("ok", "error")
 
@@ -74,16 +74,16 @@ class TestExtremeDimensions:
         wide_path = temp_dir / "wide.png"
         wide_img = Image.new("RGB", (2000, 100), color=(128, 128, 128))
         wide_img.save(wide_path)
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(wide_path)
-        
+
         assert result["status"] in ("ok", "error")
 
 
@@ -93,13 +93,13 @@ class TestInvalidInputs:
     def test_nonexistent_image(self, temp_dir, mock_config):
         """Test processing nonexistent image file."""
         nonexistent = temp_dir / "does_not_exist.jpg"
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
-        
+
         pipeline = LuxPipelineV2(mock_config)
-        
+
         # Should raise FileNotFoundError
         with pytest.raises(FileNotFoundError):
             result = pipeline.process_one(nonexistent)
@@ -110,13 +110,13 @@ class TestInvalidInputs:
         # Write invalid JPEG data
         with open(corrupted_path, "wb") as f:
             f.write(b"Not a valid image file\x00\x01\x02")
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
-        
+
         pipeline = LuxPipelineV2(mock_config)
-        
+
         # Should raise an error (PIL.UnidentifiedImageError or similar)
         with pytest.raises(Exception):
             result = pipeline.process_one(corrupted_path)
@@ -127,16 +127,16 @@ class TestInvalidInputs:
         # Create a simple BMP (if supported, should still work)
         img = Image.new("RGB", (256, 256), color=(128, 128, 128))
         img.save(unsupported_path)
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(unsupported_path)
-        
+
         # Should handle gracefully (either ok or error with message)
         assert result["status"] in ("ok", "error")
 
@@ -144,13 +144,13 @@ class TestInvalidInputs:
         """Test processing empty file."""
         empty_path = temp_dir / "empty.jpg"
         empty_path.touch()  # Create empty file
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
-        
+
         pipeline = LuxPipelineV2(mock_config)
-        
+
         # Should raise an error
         with pytest.raises(Exception):
             result = pipeline.process_one(empty_path)
@@ -163,23 +163,23 @@ class TestDepthMapEdgeCases:
         """Test processing with corrupted depth map."""
         depth_dir = temp_dir / "depth"
         depth_dir.mkdir()
-        
+
         # Create invalid depth map (wrong dimensions) - use TIFF format
         import tifffile
         invalid_depth_path = depth_dir / f"{sample_image_file.stem}.tif"
         invalid_depth = np.full((64, 64), 32768, dtype=np.uint16)  # Wrong size
         tifffile.imwrite(str(invalid_depth_path), invalid_depth)
-        
+
         mock_config.input_dir = sample_image_file.parent
         mock_config.depth_dir = depth_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.strict_depth = False
         mock_config.upscaler_backend = "none"
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         # Should handle gracefully (generate new depth or error)
         assert result["status"] in ("ok", "error")
 
@@ -187,24 +187,24 @@ class TestDepthMapEdgeCases:
         """Test processing with all-zero depth map."""
         depth_dir = temp_dir / "depth"
         depth_dir.mkdir()
-        
+
         # Create all-zero depth map - use TIFF format
         import tifffile
         img = Image.open(sample_image_file)
         zero_depth = np.zeros(img.size[::-1], dtype=np.uint16)  # Height x Width
         zero_depth_path = depth_dir / f"{sample_image_file.stem}.tif"
         tifffile.imwrite(str(zero_depth_path), zero_depth)
-        
+
         mock_config.input_dir = sample_image_file.parent
         mock_config.depth_dir = depth_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         # Should handle gracefully
         assert result["status"] in ("ok", "error")
 
@@ -212,24 +212,24 @@ class TestDepthMapEdgeCases:
         """Test processing with all-max-value depth map."""
         depth_dir = temp_dir / "depth"
         depth_dir.mkdir()
-        
+
         # Create all-max depth map - use TIFF format
         import tifffile
         img = Image.open(sample_image_file)
         max_depth = np.full(img.size[::-1], 65535, dtype=np.uint16)  # Height x Width
         max_depth_path = depth_dir / f"{sample_image_file.stem}.tif"
         tifffile.imwrite(str(max_depth_path), max_depth)
-        
+
         mock_config.input_dir = sample_image_file.parent
         mock_config.depth_dir = depth_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         assert result["status"] in ("ok", "error")
 
     def test_strict_depth_missing(self, temp_dir, sample_image_file, mock_config):
@@ -239,9 +239,9 @@ class TestDepthMapEdgeCases:
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.strict_depth = True
-        
+
         pipeline = LuxPipelineV2(mock_config)
-        
+
         # Should raise FileNotFoundError when strict_depth=True and depth missing
         with pytest.raises(FileNotFoundError):
             result = pipeline.process_one(sample_image_file)
@@ -261,7 +261,7 @@ class TestConfigurationEdgeCases:
         """Test negative quantile values."""
         config = PipelineConfig()
         config.fg_q = -0.1  # Invalid
-        
+
         # Pipeline initialization may handle gracefully or clamp
         pipeline = LuxPipelineV2(config)
         # Pipeline may adjust invalid values
@@ -272,7 +272,7 @@ class TestConfigurationEdgeCases:
         config = PipelineConfig()
         config.fg_q = 0.7
         config.bg_q = 0.3  # Should be > fg_q
-        
+
         # Pipeline may adjust invalid values or handle gracefully
         pipeline = LuxPipelineV2(config)
         assert pipeline.cfg.fg_q is not None
@@ -281,7 +281,7 @@ class TestConfigurationEdgeCases:
         """Test extreme exposure values."""
         config = PipelineConfig(preset=Preset.PHOTO_REALISTIC)
         config.exp_fg = 10.0  # Very high
-        
+
         # Pipeline should handle extreme values
         pipeline = LuxPipelineV2(config)
         # exp_fg may be clamped or used as-is
@@ -291,7 +291,7 @@ class TestConfigurationEdgeCases:
         """Test extreme contrast values."""
         config = PipelineConfig(preset=Preset.PHOTO_REALISTIC)
         config.con_fg = 5.0  # Very high
-        
+
         pipeline = LuxPipelineV2(config)
         # con_fg may be clamped or used as-is
         assert pipeline.cfg.con_fg is not None
@@ -304,21 +304,21 @@ class TestOutputEdgeCases:
         """Test processing when output directory is read-only."""
         readonly_dir = temp_dir / "readonly"
         readonly_dir.mkdir()
-        
+
         # Make directory read-only (Unix only)
         import os
         if os.name == 'nt':  # Skip on Windows
             pytest.skip("Read-only test not supported on Windows")
-        
+
         try:
             readonly_dir.chmod(0o555)  # Read+execute only
-            
+
             mock_config.input_dir = sample_image_file.parent
             mock_config.output_dir = readonly_dir
             mock_config.upscaler_backend = "none"
-            
+
             pipeline = LuxPipelineV2(mock_config)
-            
+
             # Should raise PermissionError due to write permission
             with pytest.raises(PermissionError):
                 result = pipeline.process_one(sample_image_file)
@@ -329,17 +329,17 @@ class TestOutputEdgeCases:
     def test_output_dir_does_not_exist(self, temp_dir, sample_image_file, mock_config):
         """Test processing when output directory doesn't exist."""
         nonexistent_output = temp_dir / "output" / "subdir" / "nested"
-        
+
         mock_config.input_dir = sample_image_file.parent
         mock_config.output_dir = nonexistent_output
         mock_config.upscaler_backend = "none"
-        
+
         pipeline = LuxPipelineV2(mock_config)
-        
+
         # Should create directory automatically
         result = pipeline.process_one(sample_image_file)
         assert result["status"] in ("ok", "error")
-        
+
         if result["status"] == "ok":
             assert nonexistent_output.exists()
 
@@ -350,10 +350,10 @@ class TestOutputEdgeCases:
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.warn_float_gb = 0.001  # Very low threshold to trigger warning
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         # Should complete even with low memory warning
         assert result["status"] in ("ok", "error")
 
@@ -370,7 +370,7 @@ class TestMemoryEdgeCases:
             upscaler_backend="none",
             post_tile=4096  # Test large tile size instead
         )
-        
+
         # Should initialize without error (may warn about memory)
         pipeline = LuxPipelineV2(config)
         assert pipeline.cfg.post_tile == 4096
@@ -383,7 +383,7 @@ class TestMemoryEdgeCases:
             precision="fp16",
             upscaler_backend="none"
         )
-        
+
         pipeline = LuxPipelineV2(config)
         # Autocast should be disabled on CPU
         assert pipeline.autocast is False
@@ -398,16 +398,16 @@ class TestSkipExistingLogic:
         mock_config.output_dir = temp_dir
         mock_config.skip_existing = True
         mock_config.upscaler_backend = "none"
-        
+
         # Create partial outputs (only master)
         stem = sample_image_file.stem
         master_path = temp_dir / f"{stem}_master16.tif"
         img = Image.open(sample_image_file)
         img.save(master_path)
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         # Should skip or reprocess based on implementation
         assert result["status"] in ("ok", "skipped")
 
@@ -417,16 +417,16 @@ class TestSkipExistingLogic:
         mock_config.output_dir = temp_dir
         mock_config.skip_existing = True
         mock_config.upscaler_backend = "none"
-        
+
         # Create corrupted output
         stem = sample_image_file.stem
         master_path = temp_dir / f"{stem}_master16.tif"
         with open(master_path, "wb") as f:
             f.write(b"corrupted")
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         # Should detect corruption and reprocess
         assert result["status"] in ("ok", "error")
 
@@ -437,13 +437,13 @@ class TestPresetInteraction:
     def test_preset_override_persistence(self):
         """Test that manual overrides persist after preset application."""
         config = PipelineConfig(preset=Preset.PHOTO_REALISTIC)
-        
+
         # Manual overrides before apply_preset
         config.exposure = 0.5
         config.contrast = 1.5
-        
+
         config.apply_preset()
-        
+
         # Overrides should be preserved or noted
         # (Implementation may vary - test documents behavior)
         assert config.exposure is not None
@@ -454,11 +454,11 @@ class TestPresetInteraction:
         config = PipelineConfig(preset=Preset.PHOTO_REALISTIC)
         config.apply_preset()
         initial_clarity = config.clarity_fg
-        
+
         # Change preset
         config.preset = Preset.INTERIOR_LUXURY
         config.apply_preset()
-        
+
         # Clarity should change
         assert config.clarity_fg != initial_clarity
 
@@ -472,7 +472,7 @@ class TestZoneSynthesis:
         config.fg_q = 0.0
         config.mg_q = 0.0
         config.bg_q = 1.0
-        
+
         # All pixels in background zone
         # Should handle gracefully
         pipeline = LuxPipelineV2(config)
@@ -484,7 +484,7 @@ class TestZoneSynthesis:
         config.fg_q = 0.33
         config.mg_q = 0.34  # Very close to fg_q
         config.bg_q = 1.0
-        
+
         pipeline = LuxPipelineV2(config)
         # Should handle narrow zones
         assert pipeline.cfg.mg_q > pipeline.cfg.fg_q
@@ -505,7 +505,7 @@ class TestDeviceSelection:
         """Test fallback when CUDA requested but not available."""
         if not torch.cuda.is_available():
             config = PipelineConfig(device="cuda", upscaler_backend="none")
-            
+
             # Should either error or fall back to CPU
             try:
                 pipeline = LuxPipelineV2(config)
@@ -517,7 +517,7 @@ class TestDeviceSelection:
         """Test fallback when MPS requested but not available."""
         if not (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()):
             config = PipelineConfig(device="mps", upscaler_backend="none")
-            
+
             try:
                 pipeline = LuxPipelineV2(config)
                 assert pipeline.device.type in ("cpu", "mps")
@@ -534,10 +534,10 @@ class TestMaterialSegmentationEdgeCases:
         mock_config.output_dir = temp_dir
         mock_config.enable_material = False
         mock_config.upscaler_backend = "none"
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         assert result["status"] in ("ok", "error")
         # Should not detect materials when disabled
         if "material_detected" in result:
@@ -553,18 +553,18 @@ class TestReportGeneration:
         mock_config.output_dir = temp_dir
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         stem = sample_image_file.stem
         report_path = temp_dir / f"{stem}_report.json"
-        
+
         if report_path.exists():
             # Should be valid JSON
             with open(report_path) as f:
                 report = json.load(f)
-            
+
             assert isinstance(report, dict)
             assert "status" in report
 
@@ -574,13 +574,13 @@ class TestReportGeneration:
         mock_config.output_dir = temp_dir
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         assert "timing_s" in result
         timing = result["timing_s"]
-        
+
         # Should have timing breakdown (exact keys may vary)
         assert isinstance(timing, (dict, float, int))
 
@@ -592,14 +592,14 @@ class TestBatchProcessingEdgeCases:
         """Test batch processing on empty directory."""
         empty_dir = temp_dir / "empty"
         empty_dir.mkdir()
-        
+
         mock_config.input_dir = empty_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
-        
+
         pipeline = LuxPipelineV2(mock_config)
         results = pipeline.process_directory()
-        
+
         assert results == []
 
     def test_mixed_valid_invalid_files(self, temp_dir, sample_image_file, mock_config):
@@ -607,15 +607,15 @@ class TestBatchProcessingEdgeCases:
         # Create invalid file
         invalid_path = temp_dir / "invalid.txt"
         invalid_path.write_text("Not an image")
-        
+
         mock_config.input_dir = sample_image_file.parent
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"
-        
+
         pipeline = LuxPipelineV2(mock_config)
         results = pipeline.process_directory()
-        
+
         # Should process valid files and skip/error on invalid
         assert len(results) >= 1
 
@@ -632,16 +632,16 @@ class TestPerformanceEdgeCases:
             img_path = temp_dir / f"small_{i}.png"
             img = Image.new("RGB", (128, 128), color=(i * 25, 100, 200))
             img.save(img_path)
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         results = pipeline.process_directory()
-        
+
         assert len(results) == 10
         # Most should succeed
         successful = sum(1 for r in results if r["status"] == "ok")
@@ -656,19 +656,19 @@ class TestPerformanceEdgeCases:
             img = Image.new("RGB", (256, 256), color=(i * 80, 100, 150))
             img.save(img_path)
             image_paths.append(img_path)
-        
+
         mock_config.input_dir = temp_dir
         mock_config.output_dir = temp_dir / "output"
         mock_config.output_dir.mkdir()
         mock_config.upscaler_backend = "none"
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
-        
+
         # Process sequentially
         for img_path in image_paths:
             result = pipeline.process_one(img_path)
             assert result["status"] in ("ok", "error")
-        
+
         # If we get here without OOM, test passes
         assert True

@@ -46,11 +46,11 @@ class OrchestratorConfig:
     checkpoint_dir: str = ".checkpoints"
     max_retries: int = 3
     pre_flight_check: bool = True
-    
+
     # Resource thresholds
     mps_memory_threshold_gb: float = 55.0  # 64GB - 9GB buffer
     disk_space_threshold_gb: float = 10.0
-    
+
     # Retry strategy
     retry_backoff_base: float = 2.0
     retry_max_delay_s: float = 300.0

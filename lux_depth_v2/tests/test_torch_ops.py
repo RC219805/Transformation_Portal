@@ -94,11 +94,11 @@ class TestImageOperations:
         rgb[0:3, :, 0] = 1.0  # Red
         rgb[3:6, :, 1] = 1.0  # Green
         rgb[6:9, :, 2] = 1.0  # Blue
-        
+
         rgb_t = torch_ops.to_torch_rgb(rgb, torch_device)
         luma_t = torch_ops.luma(rgb_t)
         luma_np = luma_t[0, 0].cpu().numpy()
-        
+
         # Check approximate luma values (Rec. 709 weights)
         assert np.allclose(luma_np[1, 0], 0.2126, atol=0.01)  # Red
         assert np.allclose(luma_np[4, 0], 0.7152, atol=0.01)  # Green
@@ -136,7 +136,7 @@ class TestBlurOperations:
         """Test basic Gaussian blur."""
         img = torch.ones((1, 3, 32, 32), device=torch_device, dtype=torch.float32)
         img[:, :, 15:17, 15:17] = 0.0  # Add a dark square
-        
+
         blurred = torch_ops.gaussian_blur(img, sigma=2.0)
         assert blurred.shape == img.shape
         assert blurred.dtype == torch.float32
@@ -225,7 +225,7 @@ class TestEdgeDetection:
         # Create image with clear edge
         luma = torch.zeros((1, 1, 64, 64), device=torch_device)
         luma[:, :, :32, :] = 1.0  # Half white, half black
-        
+
         edges = torch_ops.edge_map(luma)
         assert edges.shape == luma.shape
         assert torch.all(edges >= 0.0)
@@ -242,7 +242,7 @@ class TestParameterMapping:
         wfg = torch.ones((1, 1, 32, 32), device=torch_device) * 0.3
         wmid = torch.ones((1, 1, 32, 32), device=torch_device) * 0.4
         wbg = torch.ones((1, 1, 32, 32), device=torch_device) * 0.3
-        
+
         result = torch_ops.param_map(wfg, wmid, wbg, 1.0, 0.8, 0.6)
         assert result.shape == (1, 1, 32, 32)
         expected = 0.3 * 1.0 + 0.4 * 0.8 + 0.3 * 0.6
@@ -256,10 +256,10 @@ class TestTiler:
         """Test tiler with tile=0 (no tiling)."""
         tiler = torch_ops.Tiler(tile=0, overlap=0)
         img = torch.rand((1, 3, 64, 64), device=torch_device)
-        
+
         def identity_fn(tile, ya0, xa0, ya1, xa1, y0, x0, y1, x1):
             return tile
-        
+
         result = tiler.run(img, identity_fn)
         assert torch.allclose(result, img)
 
@@ -267,10 +267,10 @@ class TestTiler:
         """Test tiler with actual tiling."""
         tiler = torch_ops.Tiler(tile=32, overlap=8)
         img = torch.rand((1, 3, 64, 64), device=torch_device)
-        
+
         def add_one_fn(tile, ya0, xa0, ya1, xa1, y0, x0, y1, x1):
             return tile + 1.0
-        
+
         result = tiler.run(img, add_one_fn)
         assert result.shape == img.shape
         # All pixels should be incremented by 1
@@ -284,7 +284,7 @@ class TestValidationMetrics:
         """Test RGB difference metric."""
         a = torch.rand((1, 3, 64, 64), device=torch_device)
         b = a + 0.1
-        
+
         diff = torch_ops.mean_abs_rgb(a, b)
         assert isinstance(diff, float)
         assert diff == pytest.approx(0.1, abs=0.01)
@@ -293,7 +293,7 @@ class TestValidationMetrics:
         """Test luma difference metric."""
         a = torch.rand((1, 3, 64, 64), device=torch_device)
         b = a * 1.2
-        
+
         diff = torch_ops.mean_abs_luma(a, b)
         assert isinstance(diff, float)
         assert diff > 0
@@ -306,7 +306,7 @@ class TestMaybeAutocast:
         """Test autocast with CUDA device."""
         if torch_device.type != "cuda":
             pytest.skip("CUDA not available")
-        
+
         with torch_ops.maybe_autocast(True, torch_device):
             x = torch.rand((1, 3, 32, 32), device=torch_device)
             # Operations inside should work

@@ -8,7 +8,7 @@ Provides reference-based and no-reference metrics:
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional
 import numpy as np
 
 
@@ -30,18 +30,22 @@ def compute_ssim(img1: np.ndarray, img2: np.ndarray, multichannel: bool = True) 
         # Fallback: simplified SSIM implementation
         if img1.ndim == 3 and multichannel:
             # Average across channels
-            return float(np.mean([compute_ssim(img1[..., i], img2[..., i], multichannel=False) for i in range(img1.shape[-1])]))
-        
+            ssim_per_channel = [
+                compute_ssim(img1[..., i], img2[..., i], multichannel=False)
+                for i in range(img1.shape[-1])
+            ]
+            return float(np.mean(ssim_per_channel))
+
         # Single channel simplified SSIM
         c1 = (0.01 * 1.0) ** 2
         c2 = (0.03 * 1.0) ** 2
-        
+
         mu1 = img1.mean()
         mu2 = img2.mean()
         sigma1_sq = ((img1 - mu1) ** 2).mean()
         sigma2_sq = ((img2 - mu2) ** 2).mean()
         sigma12 = ((img1 - mu1) * (img2 - mu2)).mean()
-        
+
         ssim_val = ((2 * mu1 * mu2 + c1) * (2 * sigma12 + c2)) / ((mu1**2 + mu2**2 + c1) * (sigma1_sq + sigma2_sq + c2))
         return float(np.clip(ssim_val, -1, 1))
 
@@ -78,27 +82,27 @@ def compute_lpips(img1: np.ndarray, img2: np.ndarray, net: str = "alex", device:
     try:
         import lpips
         import torch
-        
+
         # Initialize model (cached after first call)
         if not hasattr(compute_lpips, "_model"):
             compute_lpips._model = lpips.LPIPS(net=net).to(device)
             compute_lpips._model.eval()
-        
+
         model = compute_lpips._model
-        
+
         # Convert to torch tensors [N, C, H, W]
         t1 = torch.from_numpy(img1).permute(2, 0, 1).unsqueeze(0).float().to(device)
         t2 = torch.from_numpy(img2).permute(2, 0, 1).unsqueeze(0).float().to(device)
-        
+
         # Normalize to [-1, 1] as expected by LPIPS
         t1 = t1 * 2.0 - 1.0
         t2 = t2 * 2.0 - 1.0
-        
+
         with torch.no_grad():
             dist = model(t1, t2)
-        
+
         return float(dist.item())
-    
+
     except ImportError:
         # Fallback: use MSE as proxy for perceptual similarity
         mse = np.mean((img1 - img2) ** 2)
@@ -119,7 +123,7 @@ def compute_nima(img: np.ndarray, device: str = "cpu") -> float:
         # NIMA implementation would require pre-trained model
         # For now, use heuristic-based aesthetic proxy
         return _heuristic_aesthetic_score(img)
-    
+
     except Exception:
         return _heuristic_aesthetic_score(img)
 
@@ -138,14 +142,14 @@ def _heuristic_aesthetic_score(img: np.ndarray) -> float:
     """
     # Dynamic range (0-1 scale)
     dr = float(img.max() - img.min())
-    
+
     # Color balance (RGB variance)
     if img.ndim == 3 and img.shape[-1] == 3:
         rgb_mean = img.mean(axis=(0, 1))
         color_balance = 1.0 - float(np.std(rgb_mean))
     else:
         color_balance = 0.5
-    
+
     # Sharpness (gradient magnitude)
     try:
         from scipy.ndimage import sobel
@@ -165,10 +169,10 @@ def _heuristic_aesthetic_score(img: np.ndarray) -> float:
         gx = np.abs(np.diff(gray, axis=1)).mean()
         gy = np.abs(np.diff(gray, axis=0)).mean()
         sharpness = float(gx + gy)
-    
+
     # Contrast (standard deviation)
     contrast = float(img.std())
-    
+
     # Combine factors (weighted heuristic)
     score = (
         dr * 3.0 +
@@ -176,7 +180,7 @@ def _heuristic_aesthetic_score(img: np.ndarray) -> float:
         min(sharpness * 10, 3.0) +
         min(contrast * 5, 2.0)
     )
-    
+
     # Scale to [1, 10]
     return float(np.clip(score, 1.0, 10.0))
 
@@ -197,14 +201,14 @@ def compute_all_metrics(
         Dictionary with metric scores
     """
     metrics = {}
-    
+
     # No-reference metrics (always computed)
     metrics["nima"] = compute_nima(img, device=device)
-    
+
     # Reference-based metrics (if reference provided)
     if reference is not None:
         metrics["ssim"] = compute_ssim(img, reference)
         metrics["psnr"] = compute_psnr(img, reference)
         metrics["lpips"] = compute_lpips(img, reference, device=device)
-    
+
     return metrics

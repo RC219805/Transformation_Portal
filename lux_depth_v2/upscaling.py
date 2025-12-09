@@ -56,12 +56,12 @@ class TorchUpscaler(Upscaler):
         except Exception as e:
             raise RuntimeError("torchvision is required for torch upscaling") from e
         self.TF = TF
-        
+
     def upscale(self, rgb: "torch_ops.torch.Tensor") -> "torch_ops.torch.Tensor":
         """High-quality bicubic upscaling with edge enhancement."""
         _, _, h, w = rgb.shape
         target_h, target_w = h * self.scale, w * self.scale
-        
+
         # Use torchvision's high-quality bicubic interpolation
         upscaled = self.TF.resize(
             rgb, 

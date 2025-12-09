@@ -100,7 +100,7 @@ class LuxPipelineV2:
 
         # PRODUCTION SAFETY: Validate dependencies before starting
         self._validate_dependencies()
-        
+
         # PRODUCTION SAFETY: Warn if validate_ai is disabled
         if not cfg.validate_ai:
             self.logger.warning(
@@ -137,14 +137,14 @@ class LuxPipelineV2:
             # Check for vulnerable packages
             vulnerable_packages = ["basicsr", "realesrgan", "gfpgan"]
             found_vulnerable = []
-            
+
             for pkg in vulnerable_packages:
                 try:
                     version = importlib.metadata.version(pkg)
                     found_vulnerable.append(f"{pkg}=={version}")
                 except importlib.metadata.PackageNotFoundError:
                     pass
-            
+
             if found_vulnerable:
                 msg = (
                     f"⚠️  SECURITY WARNING: Vulnerable packages detected: {', '.join(found_vulnerable)}\n"
@@ -160,7 +160,7 @@ class LuxPipelineV2:
     def _collect_reproducibility_metadata(self) -> Dict[str, object]:
         """Collect reproducibility metadata for production stamping."""
         metadata: Dict[str, object] = {}
-        
+
         # Git commit hash
         try:
             result = subprocess.run(
@@ -171,7 +171,7 @@ class LuxPipelineV2:
                 metadata["git_commit"] = result.stdout.strip()
         except Exception:
             pass
-        
+
         # Config hash (deterministic)
         try:
             cfg_dict = asdict(self.cfg)
@@ -179,7 +179,7 @@ class LuxPipelineV2:
             metadata["config_hash"] = hashlib.sha256(cfg_json.encode()).hexdigest()[:16]
         except Exception:
             pass
-        
+
         # Device info
         try:
             import torch
@@ -191,29 +191,29 @@ class LuxPipelineV2:
                 metadata["gpu_name"] = "Apple Silicon (MPS)"
         except Exception:
             metadata["device"] = str(getattr(self, "device", "unknown"))
-        
+
         # Python version
         metadata["python_version"] = platform.python_version()
-        
+
         # PyTorch version
         try:
             import torch
             metadata["torch_version"] = torch.__version__
         except Exception:
             pass
-        
+
         # Model versions
         metadata["upscaler_backend"] = self.cfg.upscaler_backend
         if self.cfg.model_path:
             metadata["model_path"] = str(self.cfg.model_path)
             metadata["model_sha256"] = self.cfg.model_sha256 or "not_specified"
-        
+
         # Tiling settings
         metadata["post_tile"] = self.cfg.post_tile
         metadata["post_overlap"] = self.cfg.post_overlap
         metadata["upscale_tile"] = self.cfg.tile
         metadata["upscale_tile_pad"] = self.cfg.tile_pad
-        
+
         return metadata
 
     def _sync_for_timing(self) -> None:
@@ -345,7 +345,7 @@ class LuxPipelineV2:
                     master_t = torch_ops.material_highlight_compress(master_t, mods0.highlight_compress, knee=0.85)
 
             master01 = torch_ops.from_torch_rgb(master_t)
-        
+
         # Write master and preview only if enabled
         if cfg.write_outputs:
             with self._stage(report, "io/write_master"):
@@ -468,7 +468,7 @@ class LuxPipelineV2:
 
         # Backward compatibility alias
         report["stage_times"] = report.get("stage_times_sec", {})
-        
+
         # PRODUCTION: Add reproducibility stamping
         report["reproducibility"] = self._repro_metadata.copy()
         report["reproducibility"]["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())

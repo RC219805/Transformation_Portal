@@ -59,7 +59,7 @@ class TestReadRgbAny:
         gray_path = temp_dir / "gray.png"
         gray = np.random.randint(0, 256, (64, 64), dtype=np.uint8)
         cv2.imwrite(str(gray_path), gray)
-        
+
         rgb, info = io_utils.read_rgb_any(gray_path)
         assert rgb.shape == (64, 64, 3)
         # All channels should be identical
@@ -90,10 +90,10 @@ class TestReadDepthU16:
         depth = np.random.randint(1000, 60000, (64, 64), dtype=np.uint16)
         depth[0, 0] = 100  # Outlier low
         depth[0, 1] = 65000  # Outlier high
-        
+
         depth_path = temp_dir / "depth_outliers.tif"
         tifffile.imwrite(str(depth_path), depth)
-        
+
         depth_norm = io_utils.read_depth_u16(depth_path)
         # Should be normalized and outliers handled
         assert depth_norm.min() >= 0.0
@@ -108,7 +108,7 @@ class TestReadMaskAny:
         mask_path = temp_dir / "mask.png"
         mask8 = (sample_mask_array * 255).astype(np.uint8)
         cv2.imwrite(str(mask_path), mask8)
-        
+
         mask = io_utils.read_mask_any(mask_path)
         assert mask.shape == (64, 64)
         assert mask.dtype == np.float32
@@ -120,7 +120,7 @@ class TestReadMaskAny:
         mask_path = temp_dir / "mask.tif"
         mask16 = (sample_mask_array * 65535).astype(np.uint16)
         tifffile.imwrite(str(mask_path), mask16)
-        
+
         mask = io_utils.read_mask_any(mask_path)
         assert mask.shape == (64, 64)
         assert mask.dtype == np.float32
@@ -130,7 +130,7 @@ class TestReadMaskAny:
         mask_path = temp_dir / "mask_rgb.png"
         rgb = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
         cv2.imwrite(str(mask_path), rgb)
-        
+
         mask = io_utils.read_mask_any(mask_path)
         assert mask.shape == (64, 64)  # Should extract single channel
 
@@ -142,7 +142,7 @@ class TestAtomicWriteRgb16Tiff:
         """Test writing 16-bit RGB TIFF."""
         out_path = temp_dir / "output.tif"
         io_utils.atomic_write_rgb16_tiff(out_path, sample_rgb_array)
-        
+
         assert out_path.exists()
         # Verify can read back
         rgb, info = io_utils.read_rgb_any(out_path)
@@ -160,7 +160,7 @@ class TestAtomicWriteRgb16Tiff:
         rgb = np.array([[[2.0, -0.5, 0.5]]], dtype=np.float32)
         out_path = temp_dir / "clamped.tif"
         io_utils.atomic_write_rgb16_tiff(out_path, rgb)
-        
+
         rgb_read, _ = io_utils.read_rgb_any(out_path)
         assert np.all(rgb_read >= 0.0)
         assert np.all(rgb_read <= 1.0)
@@ -169,9 +169,9 @@ class TestAtomicWriteRgb16Tiff:
         """Test atomic write removes temporary file."""
         out_path = temp_dir / "atomic.tif"
         tmp_path = out_path.with_suffix(".tif.tmp")
-        
+
         io_utils.atomic_write_rgb16_tiff(out_path, sample_rgb_array)
-        
+
         assert out_path.exists()
         assert not tmp_path.exists()
 
@@ -183,7 +183,7 @@ class TestAtomicWritePng8:
         """Test writing 8-bit PNG."""
         out_path = temp_dir / "output.png"
         io_utils.atomic_write_png8(out_path, sample_rgb_array)
-        
+
         assert out_path.exists()
         rgb, info = io_utils.read_rgb_any(out_path)
         assert rgb.shape == sample_rgb_array.shape
@@ -193,7 +193,7 @@ class TestAtomicWritePng8:
         """Test PNG is compressed."""
         out_path = temp_dir / "compressed.png"
         io_utils.atomic_write_png8(out_path, sample_rgb_array)
-        
+
         # File should exist and be reasonable size
         assert out_path.exists()
         assert out_path.stat().st_size > 0
@@ -206,7 +206,7 @@ class TestAtomicWriteJpg8:
         """Test writing 8-bit JPG."""
         out_path = temp_dir / "output.jpg"
         io_utils.atomic_write_jpg8(out_path, sample_rgb_array, quality=95)
-        
+
         assert out_path.exists()
         rgb, info = io_utils.read_rgb_any(out_path)
         assert rgb.shape == sample_rgb_array.shape
@@ -215,10 +215,10 @@ class TestAtomicWriteJpg8:
         """Test JPG quality parameter."""
         low_path = temp_dir / "low_quality.jpg"
         high_path = temp_dir / "high_quality.jpg"
-        
+
         io_utils.atomic_write_jpg8(low_path, sample_rgb_array, quality=50)
         io_utils.atomic_write_jpg8(high_path, sample_rgb_array, quality=95)
-        
+
         # Higher quality should produce larger file
         assert high_path.stat().st_size > low_path.stat().st_size
 

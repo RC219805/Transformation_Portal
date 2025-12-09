@@ -108,13 +108,13 @@ def main() -> None:
     cfg.segmentation.allow_downloads = bool(args.seg_allow_downloads)
     cfg.segmentation.input_long_side = int(args.seg_long_side)
     cfg.segmentation.min_confidence = float(args.seg_min_conf)
-    
+
     # Phase 1 Stability: Configure orchestrator
     cfg.orchestrator.enabled = args.enable_orchestrator and not args.disable_orchestrator
     cfg.orchestrator.checkpoint_dir = args.checkpoint_dir
     cfg.orchestrator.max_retries = args.max_retries
     cfg.orchestrator.memory_budget_gb = args.memory_budget
-    
+
     # Materials v2: Configure confidence gating and caching
     if hasattr(args, 'materials_v2') and args.materials_v2:
         cfg.materials_v2.enabled = True
@@ -137,7 +137,7 @@ def main() -> None:
     # Phase 1 Stability: Pre-flight validation
     if cfg.orchestrator.pre_flight_check and args.input:
         from .preflight import PreFlightValidator
-        
+
         validator = PreFlightValidator(logger=logger)
         report = validator.validate_all(
             input_path=Path(args.input),
@@ -146,7 +146,7 @@ def main() -> None:
             upscale=cfg.upscale
         )
         validator.log_report(report)
-        
+
         if not report.passed:
             logger.error("Pre-flight validation failed. Use --skip-pre-flight to bypass.")
             return

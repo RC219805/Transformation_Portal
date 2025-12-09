@@ -80,12 +80,12 @@ def apply_jpeg_compression(img: np.ndarray, quality: int = 70) -> np.ndarray:
         import cv2
         # Convert to uint8 for JPEG encoding
         img_u8 = (img * 255).astype(np.uint8)
-        
+
         # Encode and decode to simulate compression
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
         _, encoded = cv2.imencode('.jpg', img_u8, encode_param)
         decoded = cv2.imdecode(encoded, cv2.IMREAD_UNCHANGED)
-        
+
         # Convert back to float [0, 1]
         return decoded.astype(np.float32) / 255.0
     except ImportError:
@@ -117,9 +117,9 @@ def create_synthetic_pair(
     """
     if degradations is None:
         degradations = ["downsample", "blur", "noise", "compress"]
-    
+
     degraded = original.copy()
-    
+
     for deg in degradations:
         if deg == "downsample":
             degraded = apply_downsample_degradation(degraded, scale=downsample_scale)
@@ -129,7 +129,7 @@ def create_synthetic_pair(
             degraded = apply_noise_degradation(degraded, noise_level=noise_level)
         elif deg == "compress":
             degraded = apply_jpeg_compression(degraded, quality=jpeg_quality)
-    
+
     return degraded, original
 
 
@@ -152,10 +152,10 @@ def save_synthetic_pair(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     degraded_path = output_dir / f"{basename}_degraded.png"
     reference_path = output_dir / f"{basename}_reference.tif"
-    
+
     # Save degraded as PNG (8-bit)
     try:
         import cv2
@@ -168,7 +168,7 @@ def save_synthetic_pair(
             Image.fromarray(degraded_u8).save(degraded_path)
         except ImportError:
             pass
-    
+
     # Save reference as 16-bit TIFF
     try:
         import tifffile
@@ -181,5 +181,5 @@ def save_synthetic_pair(
             Image.fromarray(reference_u16).save(reference_path)
         except ImportError:
             pass
-    
+
     return degraded_path, reference_path

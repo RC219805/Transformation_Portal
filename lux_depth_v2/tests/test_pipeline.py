@@ -46,7 +46,7 @@ class TestLuxPipelineV2Init:
         cfg_cpu = PipelineConfig(device="cpu", precision="fp16", upscaler_backend="none")
         pipe_cpu = LuxPipelineV2(cfg_cpu)
         assert pipe_cpu.autocast is False  # CPU doesn't use fp16 autocast
-        
+
         cfg_fp32 = PipelineConfig(device="cpu", precision="fp32", upscaler_backend="none")
         pipe_fp32 = LuxPipelineV2(cfg_fp32)
         assert pipe_fp32.autocast is False
@@ -65,14 +65,14 @@ class TestPipelineProcessOne:
         mock_config.strict_depth = False
         mock_config.save_preview_jpg = False
         mock_config.enable_material = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         assert result["status"] == "ok"
         assert "timing_s" in result
         assert result["zone_weights"] == "uniform_no_depth"
-        
+
         # Check outputs exist
         stem = sample_image_file.stem
         assert (temp_dir / f"{stem}_master16.tif").exists()
@@ -86,10 +86,10 @@ class TestPipelineProcessOne:
         mock_config.output_dir = temp_dir
         mock_config.depth_dir = sample_depth_file.parent
         mock_config.save_preview_jpg = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file, depth_path=sample_depth_file)
-        
+
         assert result["status"] == "ok"
         assert result["zone_weights"] == "depth_percentiles"
         assert result["depth"] == str(sample_depth_file)
@@ -99,13 +99,13 @@ class TestPipelineProcessOne:
         mock_config.output_dir = temp_dir
         mock_config.skip_existing = True
         mock_config.save_preview_jpg = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
-        
+
         # First run
         result1 = pipeline.process_one(sample_image_file)
         assert result1["status"] == "ok"
-        
+
         # Second run should skip
         result2 = pipeline.process_one(sample_image_file)
         assert result2["status"] == "skipped"
@@ -114,17 +114,17 @@ class TestPipelineProcessOne:
         """Test report file contains expected information."""
         mock_config.output_dir = temp_dir
         mock_config.save_preview_jpg = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         result = pipeline.process_one(sample_image_file)
-        
+
         stem = sample_image_file.stem
         report_path = temp_dir / f"{stem}_report.json"
         assert report_path.exists()
-        
+
         with open(report_path) as f:
             report = json.load(f)
-        
+
         assert report["status"] == "ok"
         assert "config" in report
         assert "timing_s" in report
@@ -133,7 +133,7 @@ class TestPipelineProcessOne:
     def test_process_one_missing_output_dir(self, sample_image_file, mock_config):
         """Test error when output_dir not set."""
         mock_config.output_dir = None
-        
+
         pipeline = LuxPipelineV2(mock_config)
         with pytest.raises(ValueError, match="output_dir is required"):
             pipeline.process_one(sample_image_file)
@@ -149,17 +149,17 @@ class TestPipelineProcessDirectory:
         mock_config.input_dir = sample_image_file.parent
         mock_config.output_dir = temp_dir
         mock_config.save_preview_jpg = False
-        
+
         pipeline = LuxPipelineV2(mock_config)
         results = pipeline.process_directory()
-        
+
         assert len(results) >= 1
         assert results[0]["status"] in ("ok", "skipped", "error")
 
     def test_process_directory_missing_dirs(self, mock_config):
         """Test error when input/output dirs not set."""
         mock_config.input_dir = None
-        
+
         pipeline = LuxPipelineV2(mock_config)
         with pytest.raises(ValueError, match="cfg.input_dir and cfg.output_dir"):
             pipeline.process_directory()
@@ -168,13 +168,13 @@ class TestPipelineProcessDirectory:
         """Test processing empty directory."""
         empty_dir = temp_dir / "empty"
         empty_dir.mkdir()
-        
+
         mock_config.input_dir = empty_dir
         mock_config.output_dir = temp_dir / "output"
-        
+
         pipeline = LuxPipelineV2(mock_config)
         results = pipeline.process_directory()
-        
+
         assert results == []
 
 

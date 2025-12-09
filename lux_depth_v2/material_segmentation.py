@@ -216,7 +216,7 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
         model_id = cfg.segformer_model or "nvidia/segformer-b2-finetuned-ade-512-512"
         # Pin to specific revision for security and reproducibility (bandit B615 mitigation)
         model_revision = cfg.segformer_revision or "9bcfaf5c6a0df63c26e76e9d16c3d2e5c7e5e7e0"
-        
+
         # block downloads unless explicitly allowed
         if not cfg.allow_downloads and not (Path(model_id).exists() and Path(model_id).is_dir()):
             raise RuntimeError(
@@ -229,7 +229,7 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
         if not (Path(model_id).exists() and Path(model_id).is_dir()):
             # Only add revision for Hugging Face Hub models (not local paths)
             download_kwargs["revision"] = model_revision
-        
+
         self.processor = SegformerImageProcessor.from_pretrained(model_id, **download_kwargs)
         self.model = SegformerForSemanticSegmentation.from_pretrained(model_id, **download_kwargs)
         self.model.to(device)
@@ -259,7 +259,7 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
     def predict(self, rgb: "torch_ops.torch.Tensor") -> Dict[str, "torch_ops.torch.Tensor"]:
         torch_ops.require_torch()
         device = rgb.device
-        
+
         # Use context manager instead of decorator to avoid import-time issues
         with torch_ops.torch.no_grad():
             rgb_in, scale = _resize_long_side(rgb, int(self.cfg.input_long_side))

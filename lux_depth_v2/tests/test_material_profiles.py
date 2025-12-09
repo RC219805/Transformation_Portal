@@ -134,13 +134,13 @@ class TestBuildMaterialMods:
         """Test building mods with single surface mask."""
         cfg = PipelineConfig(enable_material=True, material_strength=0.8)
         mask = torch.ones((1, 1, 32, 32), device=torch_device) * 0.5
-        
+
         mods = material_profiles.build_material_mods({"wood": mask}, cfg)
-        
+
         assert mods is not None
         assert mods.source == "material_segmentation"
         assert mods.temp_offset.shape == (1, 1, 32, 32)
-        
+
         # Check wood profile is applied
         wood_prof = material_profiles.SURFACE_PROFILES["wood"]
         # Temperature should be influenced by wood profile
@@ -150,15 +150,15 @@ class TestBuildMaterialMods:
     def test_build_with_multiple_surfaces(self, torch_device):
         """Test building mods with multiple surface masks."""
         cfg = PipelineConfig(enable_material=True, material_strength=1.0)
-        
+
         masks = {
             "wood": torch.ones((1, 1, 32, 32), device=torch_device) * 0.5,
             "metal": torch.ones((1, 1, 32, 32), device=torch_device) * 0.3,
             "glass": torch.ones((1, 1, 32, 32), device=torch_device) * 0.2,
         }
-        
+
         mods = material_profiles.build_material_mods(masks, cfg)
-        
+
         assert mods is not None
         # Mods should be combination of all surface profiles
         assert mods.temp_offset.shape == (1, 1, 32, 32)
@@ -166,13 +166,13 @@ class TestBuildMaterialMods:
     def test_material_strength_scaling(self, torch_device):
         """Test material strength scales effect."""
         mask = torch.ones((1, 1, 32, 32), device=torch_device)
-        
+
         cfg_low = PipelineConfig(enable_material=True, material_strength=0.3)
         mods_low = material_profiles.build_material_mods({"wood": mask}, cfg_low)
-        
+
         cfg_high = PipelineConfig(enable_material=True, material_strength=0.9)
         mods_high = material_profiles.build_material_mods({"wood": mask}, cfg_high)
-        
+
         # Higher strength should produce stronger effect
         temp_low = abs(mods_low.temp_offset.mean().item())
         temp_high = abs(mods_high.temp_offset.mean().item())
@@ -184,9 +184,9 @@ class TestBuildMaterialMods:
         masks = {
             "unknown_material": torch.ones((1, 1, 32, 32), device=torch_device),
         }
-        
+
         mods = material_profiles.build_material_mods(masks, cfg)
-        
+
         # Should still create mods but with neutral values
         assert mods is not None
         # Since no known surfaces, should be close to identity
@@ -196,9 +196,9 @@ class TestBuildMaterialMods:
         """Test safety clamping of mod values."""
         cfg = PipelineConfig(enable_material=True, material_strength=5.0)  # Extreme
         mask = torch.ones((1, 1, 32, 32), device=torch_device)
-        
+
         mods = material_profiles.build_material_mods({"wood": mask}, cfg)
-        
+
         # Check all values are within safe ranges
         assert torch.all(mods.sat_mult >= 0.80)
         assert torch.all(mods.sat_mult <= 1.35)
@@ -215,9 +215,9 @@ class TestBuildMaterialMods:
         """Test zero mask produces no modification."""
         cfg = PipelineConfig(enable_material=True, material_strength=1.0)
         mask = torch.zeros((1, 1, 32, 32), device=torch_device)
-        
+
         mods = material_profiles.build_material_mods({"wood": mask}, cfg)
-        
+
         # Should still create mods but with identity values
         assert mods is not None
         # No mask means no modification

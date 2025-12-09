@@ -17,7 +17,7 @@ class TestConfigBasics:
         """Test upscale factors."""
         config = PipelineConfig(upscale=2)
         assert config.upscale == 2
-        
+
         config = PipelineConfig(upscale=4)
         assert config.upscale == 4
 
@@ -31,10 +31,10 @@ class TestConfigBasics:
         """Test device configuration."""
         config = PipelineConfig(device="auto")
         assert config.device == "auto"
-        
+
         config = PipelineConfig(device="cpu")
         assert config.device == "cpu"
-        
+
         config = PipelineConfig(device="cuda")
         assert config.device == "cuda"
 
@@ -42,7 +42,7 @@ class TestConfigBasics:
         """Test precision configuration."""
         config = PipelineConfig(precision="fp16")
         assert config.precision == "fp16"
-        
+
         config = PipelineConfig(precision="fp32")
         assert config.precision == "fp32"
 
@@ -50,10 +50,10 @@ class TestConfigBasics:
         """Test upscaler backend configuration."""
         config = PipelineConfig(upscaler_backend="realesrgan")
         assert config.upscaler_backend == "realesrgan"
-        
+
         config = PipelineConfig(upscaler_backend="onnx")
         assert config.upscaler_backend == "onnx"
-        
+
         config = PipelineConfig(upscaler_backend="none")
         assert config.upscaler_backend == "none"
 
@@ -69,7 +69,7 @@ class TestConfigBasics:
         assert config.save_upscaled
         assert config.save_marketing_png
         assert config.save_preview_jpg
-        
+
         config = PipelineConfig(
             save_master=False,
             save_upscaled=False,
@@ -82,7 +82,7 @@ class TestConfigBasics:
         """Test material segmentation configuration."""
         config = PipelineConfig(enable_material=True)
         assert config.enable_material
-        
+
         config = PipelineConfig(enable_material=False)
         assert not config.enable_material
 
@@ -91,7 +91,7 @@ class TestConfigBasics:
         # Note: atmospheric effects are controlled by detail/clarity/sharpen parameters
         config = PipelineConfig(detail_strength=0.8)
         assert config.detail_strength == 0.8
-        
+
         config = PipelineConfig(detail_strength=0.0)
         assert config.detail_strength == 0.0
 
@@ -99,7 +99,7 @@ class TestConfigBasics:
         """Test skip_existing configuration."""
         config = PipelineConfig(skip_existing=True)
         assert config.skip_existing
-        
+
         config = PipelineConfig(skip_existing=False)
         assert not config.skip_existing
 
@@ -111,7 +111,7 @@ class TestPresetApplication:
         """Test INTERIOR_LUXURY preset."""
         config = PipelineConfig(preset=Preset.INTERIOR_LUXURY)
         config.apply_preset()
-        
+
         # Interior luxury should have high clarity (fg) and material strength
         assert config.clarity_fg >= 0.15
         assert config.material_strength >= 0.8
@@ -120,7 +120,7 @@ class TestPresetApplication:
         """Test ARCHITECTURAL preset."""
         config = PipelineConfig(preset=Preset.ARCHITECTURAL)
         config.apply_preset()
-        
+
         # Architectural should be conservative
         assert config.clarity_fg <= 0.5
 
@@ -128,7 +128,7 @@ class TestPresetApplication:
         """Test preset application changes values."""
         config = PipelineConfig(preset=Preset.PHOTO_REALISTIC)
         config.apply_preset()
-        
+
         # Should have valid values after preset
         assert config.clarity_fg is not None
         assert config.material_strength is not None

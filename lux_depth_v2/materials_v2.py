@@ -24,10 +24,10 @@ from .logging_utils import setup_logging
 @dataclass
 class ConfidenceConfig:
     """Configuration for confidence-gated material response."""
-    
+
     # Global confidence threshold [0, 1]
     confidence_threshold: float = 0.6
-    
+
     # Per-material thresholds (override global)
     material_thresholds: Dict[str, float] = field(default_factory=lambda: {
         'wood': 0.7,        # High confidence required for wood
@@ -39,14 +39,14 @@ class ConfidenceConfig:
         'water': 0.4,       # Very low for water (highly variable)
         'polished': 0.5,    # Lower for polished surfaces
     })
-    
+
     # Blending parameters for smooth transitions
     blend_range: float = 0.1  # Blend from (threshold - range) to threshold
     blend_mode: str = 'soft'  # 'soft' (smooth) or 'hard' (sharp cutoff)
-    
+
     # Fallback behavior for low-confidence regions
     fallback_strength: float = 0.2  # Apply at 20% strength
-    
+
     def get_threshold(self, material_type: str) -> float:
         """Get threshold for specific material type."""
         return self.material_thresholds.get(material_type, self.confidence_threshold)
@@ -55,18 +55,18 @@ class ConfidenceConfig:
 @dataclass
 class SegmentationConfig:
     """Configuration for downscaled segmentation."""
-    
+
     # Resolution limits
     max_segmentation_side: int = 1536  # Max side for segmentation
     min_segmentation_side: int = 512   # Min side (quality floor)
-    
+
     # Upsampling strategy
     upsample_mode: str = 'bicubic'  # bicubic, lanczos, bilinear
-    
+
     # Edge feathering (soft masks)
     edge_feather_radius: int = 3  # Gaussian blur radius
     edge_feather_sigma: float = 1.0  # Gaussian blur sigma
-    
+
     # Quality validation
     require_high_quality: bool = True
     quality_threshold: float = 0.6  # Minimum average confidence
@@ -75,19 +75,19 @@ class SegmentationConfig:
 @dataclass
 class MaterialsV2Config:
     """Complete Materials v2 configuration."""
-    
+
     enabled: bool = False  # Feature gate (default: disabled)
-    
+
     confidence: ConfidenceConfig = field(default_factory=ConfidenceConfig)
     segmentation: SegmentationConfig = field(default_factory=SegmentationConfig)
-    
+
     # Caching
     cache_dir: Optional[str] = None
     cache_enabled: bool = False
-    
+
     # Backend
     backend: str = 'heuristic'  # heuristic, onnx, segformer
-    
+
     def __post_init__(self):
         """Initialize after creation."""
         if self.cache_dir:
@@ -97,7 +97,7 @@ class MaterialsV2Config:
 @dataclass
 class ConfidenceMetrics:
     """Confidence quality metrics for validation and audit."""
-    
+
     confidence_avg: float = 0.0
     confidence_min: float = 0.0
     confidence_max: float = 0.0
@@ -105,14 +105,14 @@ class ConfidenceMetrics:
     low_confidence_pct: float = 0.0   # % pixels below threshold
     coverage_ratio: float = 0.0       # % of image with material detected
     material_counts: Dict[str, int] = field(default_factory=dict)
-    
+
     def is_high_quality(self, threshold: float = 0.6) -> bool:
         """Check if segmentation is high quality."""
         return (
             self.confidence_avg >= threshold and
             self.high_confidence_pct >= 0.7
         )
-    
+
     def to_dict(self) -> Dict:
         """Convert to dictionary."""
         return asdict(self)
@@ -121,11 +121,11 @@ class ConfidenceMetrics:
 @dataclass
 class SegmentationResult:
     """Result of material segmentation."""
-    
+
     masks: Dict[str, np.ndarray]  # Material masks [0, 1]
     confidences: Dict[str, np.ndarray]  # Confidence maps [0, 1]
     metrics: ConfidenceMetrics
-    
+
     # Metadata
     original_size: Tuple[int, int]  # (H, W)
     segmentation_size: Tuple[int, int]  # Size used for segmentation
@@ -147,19 +147,19 @@ def calculate_segmentation_size(
     """
     h, w = original_size
     max_side = max(h, w)
-    
+
     if max_side <= config.max_segmentation_side:
         return original_size  # No downscaling needed
-    
+
     # Scale down to max_segmentation_side
     scale = config.max_segmentation_side / max_side
     new_h = int(h * scale)
     new_w = int(w * scale)
-    
+
     # Ensure minimum size
     new_h = max(new_h, config.min_segmentation_side)
     new_w = max(new_w, config.min_segmentation_side)
-    
+
     return (new_h, new_w)
 
 
@@ -178,16 +178,16 @@ def create_soft_mask(
     """
     if config.edge_feather_radius == 0:
         return mask
-    
+
     try:
         from scipy.ndimage import gaussian_filter
-        
+
         sigma = config.edge_feather_sigma
         soft_mask = gaussian_filter(mask, sigma=sigma)
-        
+
         # Normalize to [0, 1]
         soft_mask = np.clip(soft_mask, 0.0, 1.0)
-        
+
         return soft_mask
     except ImportError:
         # Fallback: no feathering if scipy not available
@@ -211,7 +211,7 @@ def generate_confidence_mask(
     """
     threshold = config.get_threshold(material_type)
     blend_range = config.blend_range
-    
+
     if config.blend_mode == 'soft':
         # Smooth transition from (threshold - blend_range) to threshold
         mask = np.clip(
@@ -220,11 +220,11 @@ def generate_confidence_mask(
         )
     else:  # 'hard'
         mask = (confidence_map >= threshold).astype(np.float32)
-    
+
     # Apply fallback strength for low-confidence regions
     low_confidence_mask = 1.0 - mask
     mask = mask + low_confidence_mask * config.fallback_strength
-    
+
     return mask
 
 
@@ -242,7 +242,7 @@ class MaterialsV2Engine:
         device: Device for processing ('cuda', 'mps', 'cpu')
         logger: Optional logger
     """
-    
+
     def __init__(
         self,
         config: MaterialsV2Config,
@@ -252,13 +252,13 @@ class MaterialsV2Engine:
         self.config = config
         self.device = device
         self.logger = logger or setup_logging("INFO")
-        
+
         # Segmentation backend (lazy load)
         self._segmenter = None
-        
+
         # Cache manager (lazy init)
         self._cache_manager = None
-        
+
         if config.enabled:
             self.logger.info(
                 f"MaterialsV2Engine initialized | "
@@ -267,7 +267,7 @@ class MaterialsV2Engine:
                 f"max_seg_side={config.segmentation.max_segmentation_side} "
                 f"cache={config.cache_enabled}"
             )
-    
+
     def segment_with_confidence(
         self,
         image: np.ndarray,
@@ -284,24 +284,24 @@ class MaterialsV2Engine:
         """
         if not self.config.enabled:
             raise RuntimeError("Materials v2 not enabled")
-        
+
         original_size = image.shape[:2]  # (H, W)
-        
+
         # Check cache first
         if self.config.cache_enabled and task_id:
             cached = self._load_from_cache(task_id, image)
             if cached:
                 self.logger.info(f"Loaded segmentation from cache: {task_id}")
                 return cached
-        
+
         # Calculate segmentation size
         seg_size = calculate_segmentation_size(
             original_size,
             self.config.segmentation
         )
-        
+
         needs_downscale = seg_size != original_size
-        
+
         # Downscale image if needed
         if needs_downscale:
             image_seg = self._resize_image(image, seg_size)
@@ -310,32 +310,32 @@ class MaterialsV2Engine:
             )
         else:
             image_seg = image
-        
+
         # Load segmenter (lazy)
         if self._segmenter is None:
             self._load_segmenter()
-        
+
         # Perform segmentation
         t0 = time.time()
         try:
             # Import here to avoid dependency if not used
             from .material_segmentation import create_material_segmenter
-            
+
             # Segment at reduced resolution
             masks_seg, confidences_seg = self._segment_image(image_seg)
-            
+
             elapsed = time.time() - t0
             self.logger.debug(f"Segmentation completed in {elapsed:.3f}s")
-            
+
         except Exception as e:
             self.logger.error(f"Segmentation failed: {e}")
             raise
-        
+
         # Upsample masks to original resolution if needed
         if needs_downscale:
             masks = self._upsample_masks(masks_seg, original_size)
             confidences = self._upsample_masks(confidences_seg, original_size)
-            
+
             # Apply soft masking after upsampling
             masks = {
                 k: create_soft_mask(v, self.config.segmentation)
@@ -346,10 +346,10 @@ class MaterialsV2Engine:
             masks = masks_seg
             confidences = confidences_seg
             upsampled = False
-        
+
         # Calculate confidence metrics
         metrics = self._calculate_metrics(masks, confidences)
-        
+
         # Create result
         result = SegmentationResult(
             masks=masks,
@@ -359,13 +359,13 @@ class MaterialsV2Engine:
             segmentation_size=seg_size,
             upsampled=upsampled
         )
-        
+
         # Cache result if enabled
         if self.config.cache_enabled and task_id:
             self._save_to_cache(task_id, image, result)
-        
+
         return result
-    
+
     def apply_gated_response(
         self,
         image: np.ndarray,
@@ -385,34 +385,34 @@ class MaterialsV2Engine:
         """
         if not self.config.enabled:
             return image
-        
+
         # Generate confidence-gated masks
         gated_masks = {}
         for material_type, mask in segmentation.masks.items():
             confidence_map = segmentation.confidences.get(material_type, mask)
-            
+
             gated_mask = generate_confidence_mask(
                 confidence_map,
                 material_type,
                 self.config.confidence
             )
-            
+
             gated_masks[material_type] = gated_mask
-        
+
         # Apply material response with gated masks
         enhanced = material_response_fn(image, gated_masks)
-        
+
         return enhanced
-    
+
     def release_resources(self):
         """Release VRAM and cleanup resources."""
         if self._segmenter is not None:
             self.logger.info("Releasing segmentation model...")
-            
+
             # Explicit cleanup
             del self._segmenter
             self._segmenter = None
-            
+
             # GPU memory cleanup
             try:
                 if self.device == "cuda":
@@ -424,25 +424,25 @@ class MaterialsV2Engine:
                     torch.mps.empty_cache()
             except Exception:
                 pass
-            
+
             self.logger.debug("Segmentation model released")
-    
+
     def _load_segmenter(self):
         """Load segmentation model."""
         self.logger.info(f"Loading segmentation model: {self.config.backend}")
-        
+
         from .material_segmentation import create_material_segmenter
-        
+
         # Create config-like object for segmenter
         seg_config = type('obj', (object,), {
             'segmentation_backend': self.config.backend,
             'enable_material': True,
         })()
-        
+
         self._segmenter = create_material_segmenter(seg_config, self.device)
-        
+
         self.logger.debug("Segmentation model loaded")
-    
+
     def _segment_image(self, image: np.ndarray) -> Tuple[Dict, Dict]:
         """Segment image and return masks + confidences.
         
@@ -456,24 +456,24 @@ class MaterialsV2Engine:
         try:
             from . import torch_ops
             image_t = torch_ops.to_torch_rgb(image, self.device)
-            
+
             # Run segmentation
             masks = self._segmenter.predict(image_t)
-            
+
             # For now, use masks as confidence (TODO: get actual confidence from segmenter)
             masks_np = {
                 k: v.cpu().numpy().squeeze() if hasattr(v, 'cpu') else v
                 for k, v in masks.items()
             }
-            
+
             confidences_np = masks_np.copy()  # Placeholder
-            
+
             return masks_np, confidences_np
-            
+
         except Exception as e:
             self.logger.error(f"Segmentation failed: {e}")
             raise
-    
+
     def _resize_image(self, image: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """Resize image using high-quality interpolation."""
         try:
@@ -488,7 +488,7 @@ class MaterialsV2Engine:
             img_pil = Image.fromarray((image * 255).astype(np.uint8))
             img_pil = img_pil.resize((w, h), Image.BICUBIC)
             return np.array(img_pil).astype(np.float32) / 255.0
-    
+
     def _upsample_masks(
         self,
         masks: Dict[str, np.ndarray],
@@ -521,7 +521,7 @@ class MaterialsV2Engine:
                 mask_pil = mask_pil.resize((w, h), Image.BICUBIC)
                 upsampled[material_type] = np.array(mask_pil).astype(np.float32) / 255.0
             return upsampled
-    
+
     def _calculate_metrics(
         self,
         masks: Dict[str, np.ndarray],
@@ -531,36 +531,36 @@ class MaterialsV2Engine:
         # Aggregate all confidence values
         all_confidences = []
         material_counts = {}
-        
+
         for material_type, confidence_map in confidences.items():
             conf_values = confidence_map.flatten()
             all_confidences.extend(conf_values)
-            
+
             # Count pixels above threshold
             threshold = self.config.confidence.get_threshold(material_type)
             count = np.sum(confidence_map >= threshold)
             material_counts[material_type] = int(count)
-        
+
         all_confidences = np.array(all_confidences)
-        
+
         if len(all_confidences) == 0:
             return ConfidenceMetrics()
-        
+
         # Calculate global metrics
         confidence_avg = float(np.mean(all_confidences))
         confidence_min = float(np.min(all_confidences))
         confidence_max = float(np.max(all_confidences))
-        
+
         # High/low confidence percentages
         threshold = self.config.confidence.confidence_threshold
         high_confidence_pct = float(np.sum(all_confidences >= threshold) / len(all_confidences))
         low_confidence_pct = 1.0 - high_confidence_pct
-        
+
         # Coverage ratio (any material detected)
         total_pixels = all_confidences.size
         detected_pixels = sum(material_counts.values())
         coverage_ratio = float(detected_pixels / max(total_pixels, 1))
-        
+
         return ConfidenceMetrics(
             confidence_avg=confidence_avg,
             confidence_min=confidence_min,
@@ -570,7 +570,7 @@ class MaterialsV2Engine:
             coverage_ratio=coverage_ratio,
             material_counts=material_counts
         )
-    
+
     def _load_from_cache(
         self,
         task_id: str,
@@ -579,7 +579,7 @@ class MaterialsV2Engine:
         """Load segmentation result from cache."""
         if not self.config.cache_enabled:
             return None
-        
+
         # Initialize cache manager if needed
         if self._cache_manager is None:
             from .cache_manager import MaskCacheManager
@@ -587,24 +587,24 @@ class MaterialsV2Engine:
                 Path(self.config.cache_dir),
                 logger=self.logger
             )
-        
+
         # Compute input hash
         input_hash = self._cache_manager.compute_input_hash_from_array(image)
-        
+
         # Check if cached
         if not self._cache_manager.is_cached(task_id, input_hash):
             return None
-        
+
         # Load masks
         try:
             masks, metadata = self._cache_manager.load_masks(task_id)
-            
+
             # Reconstruct result
             # Note: We lose confidences in cache (only masks stored)
             confidences = masks.copy()  # Use masks as confidences
-            
+
             metrics = ConfidenceMetrics(**metadata.get('confidence_metrics', {}))
-            
+
             result = SegmentationResult(
                 masks=masks,
                 confidences=confidences,
@@ -613,12 +613,12 @@ class MaterialsV2Engine:
                 segmentation_size=tuple(metadata.get('segmentation_size', image.shape[:2])),
                 upsampled=metadata.get('upsampled', False)
             )
-            
+
             return result
         except Exception as e:
             self.logger.warning(f"Failed to load from cache: {e}")
             return None
-    
+
     def _save_to_cache(
         self,
         task_id: str,
@@ -628,7 +628,7 @@ class MaterialsV2Engine:
         """Save segmentation result to cache."""
         if not self.config.cache_enabled:
             return
-        
+
         # Initialize cache manager if needed
         if self._cache_manager is None:
             from .cache_manager import MaskCacheManager
@@ -636,18 +636,18 @@ class MaterialsV2Engine:
                 Path(self.config.cache_dir),
                 logger=self.logger
             )
-        
+
         try:
             # Compute input hash
             input_hash = self._cache_manager.compute_input_hash_from_array(image)
-            
+
             # Save masks and metadata
             config_dict = {
                 'backend': self.config.backend,
                 'max_segmentation_side': self.config.segmentation.max_segmentation_side,
                 'edge_feather_radius': self.config.segmentation.edge_feather_radius,
             }
-            
+
             self._cache_manager.save_masks(
                 task_id=task_id,
                 masks=result.masks,

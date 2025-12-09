@@ -24,7 +24,7 @@ from . import degradation
 @dataclass
 class ValidationReport:
     """Validation results for a single image or batch."""
-    
+
     mode: str  # "synthetic" or "real"
     test_images: List[str]
     metrics_scores: Dict[str, float] = field(default_factory=dict)
@@ -33,7 +33,7 @@ class ValidationReport:
     baseline_comparison: Optional[Dict[str, object]] = None
     timestamp: Optional[str] = None
     config: Optional[Dict[str, object]] = None
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -46,7 +46,7 @@ class ValidationReport:
             "timestamp": self.timestamp,
             "config": self.config,
         }
-    
+
     def save(self, output_path: Path) -> None:
         """Save report to JSON file."""
         output_path = Path(output_path)
@@ -58,27 +58,27 @@ class ValidationReport:
 @dataclass
 class ComparisonReport:
     """Comparison between two methods (ours vs baseline)."""
-    
+
     our_method: str
     baseline_method: str
     test_images: List[str]
     reference_images: Optional[List[str]] = None
-    
+
     # Aggregate scores
     our_scores: Dict[str, float] = field(default_factory=dict)
     baseline_scores: Dict[str, float] = field(default_factory=dict)
-    
+
     # Per-image comparisons
     per_image_comparisons: List[Dict[str, object]] = field(default_factory=list)
-    
+
     # Summary statistics
     our_wins: int = 0
     baseline_wins: int = 0
     ties: int = 0
-    
+
     # Statistical significance (if available)
     p_values: Optional[Dict[str, float]] = None
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -94,7 +94,7 @@ class ComparisonReport:
             "ties": self.ties,
             "p_values": self.p_values,
         }
-    
+
     def save(self, output_path: Path) -> None:
         """Save comparison report to JSON file."""
         output_path = Path(output_path)
@@ -105,7 +105,7 @@ class ComparisonReport:
 
 class QualityValidator:
     """Production-grade quality validation framework."""
-    
+
     def __init__(
         self,
         device: str = "cpu",
@@ -125,7 +125,7 @@ class QualityValidator:
             "lpips": 0.35,
             "nima": 0.25,
         }
-    
+
     def validate_batch(
         self,
         test_images: List[Path],
@@ -150,57 +150,57 @@ class QualityValidator:
         """
         if metrics_list is None:
             metrics_list = ["ssim", "psnr", "lpips", "nima"]
-        
+
         if weights is None:
             weights = self.default_weights
-        
+
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         report = ValidationReport(
             mode=mode,
             test_images=[str(p) for p in test_images],
             timestamp=self._get_timestamp(),
         )
-        
+
         # Process each image
         for test_path in test_images:
             test_path = Path(test_path)
-            
+
             # Load test image
             test_img = self._load_image(test_path)
-            
+
             # Find reference image if in synthetic mode
             reference_img = None
             if mode == "synthetic":
                 ref_path = self._find_reference(test_path)
                 if ref_path and ref_path.exists():
                     reference_img = self._load_image(ref_path)
-            
+
             # Compute metrics
             img_metrics = metrics.compute_all_metrics(
                 test_img,
                 reference=reference_img,
                 device=self.device
             )
-            
+
             # Filter to requested metrics
             img_metrics = {k: v for k, v in img_metrics.items() if k in metrics_list}
-            
+
             report.per_image_scores.append({
                 "image": str(test_path),
                 "metrics": img_metrics,
             })
-        
+
         # Compute aggregate scores
         report.metrics_scores = self._aggregate_scores(report.per_image_scores)
-        
+
         # Compute composite score
         report.composite_score = self._compute_composite_score(
             report.metrics_scores,
             weights
         )
-        
+
         # Baseline comparison if provided
         if baseline_dir:
             report.baseline_comparison = self._compare_with_baseline(
@@ -209,9 +209,9 @@ class QualityValidator:
                 mode=mode,
                 metrics_list=metrics_list
             )
-        
+
         return report
-    
+
     def create_synthetic_reference(
         self,
         original: Path,
@@ -230,16 +230,16 @@ class QualityValidator:
         """
         if degradations is None:
             degradations = ["downsample", "blur", "noise", "compress"]
-        
+
         # Load original
         original_img = self._load_image(Path(original))
-        
+
         # Create degraded pair
         degraded, reference = degradation.create_synthetic_pair(
             original_img,
             degradations=degradations
         )
-        
+
         # Save pair
         basename = Path(original).stem
         return degradation.save_synthetic_pair(
@@ -248,7 +248,7 @@ class QualityValidator:
             output_dir,
             basename
         )
-    
+
     def compare_baselines(
         self,
         ours: Path,
@@ -269,12 +269,12 @@ class QualityValidator:
         """
         if metrics_list is None:
             metrics_list = ["ssim", "psnr", "lpips", "nima"]
-        
+
         # Load images
         our_img = self._load_image(Path(ours))
         baseline_img = self._load_image(Path(baseline))
         reference_img = self._load_image(Path(reference)) if reference else None
-        
+
         # Compute metrics for both
         our_metrics = metrics.compute_all_metrics(
             our_img,
@@ -286,11 +286,11 @@ class QualityValidator:
             reference=reference_img,
             device=self.device
         )
-        
+
         # Filter to requested metrics
         our_metrics = {k: v for k, v in our_metrics.items() if k in metrics_list}
         baseline_metrics = {k: v for k, v in baseline_metrics.items() if k in metrics_list}
-        
+
         # Create comparison report
         report = ComparisonReport(
             our_method="LuxDepthV2",
@@ -300,7 +300,7 @@ class QualityValidator:
             our_scores=our_metrics,
             baseline_scores=baseline_metrics,
         )
-        
+
         # Determine winner for this comparison
         our_better = self._compare_metrics(our_metrics, baseline_metrics)
         if our_better > 0:
@@ -309,16 +309,16 @@ class QualityValidator:
             report.baseline_wins = 1
         else:
             report.ties = 1
-        
+
         report.per_image_comparisons.append({
             "image": str(ours),
             "our_metrics": our_metrics,
             "baseline_metrics": baseline_metrics,
             "winner": "ours" if our_better > 0 else ("baseline" if our_better < 0 else "tie"),
         })
-        
+
         return report
-    
+
     def _load_image(self, path: Path) -> np.ndarray:
         """Load image as float [0, 1] array."""
         try:
@@ -326,7 +326,7 @@ class QualityValidator:
             img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
             if img is None:
                 raise ValueError(f"Failed to load image: {path}")
-            
+
             # Convert to RGB if needed
             if img.ndim == 2:
                 img = np.stack([img, img, img], axis=-1)
@@ -334,7 +334,7 @@ class QualityValidator:
                 img = img[..., :3]  # Drop alpha
             elif img.ndim == 3 and img.shape[-1] == 3:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            
+
             # Convert to float [0, 1]
             if img.dtype == np.uint16:
                 return img.astype(np.float32) / 65535.0
@@ -342,19 +342,19 @@ class QualityValidator:
                 return img.astype(np.float32) / 255.0
             else:
                 return img.astype(np.float32)
-        
+
         except ImportError:
             # Fallback to PIL
             from PIL import Image
             img = np.array(Image.open(path))
-            
+
             if img.dtype == np.uint16:
                 return img.astype(np.float32) / 65535.0
             elif img.dtype == np.uint8:
                 return img.astype(np.float32) / 255.0
             else:
                 return img.astype(np.float32)
-    
+
     def _find_reference(self, test_path: Path) -> Optional[Path]:
         """Find corresponding reference image for a test image."""
         # Convention: test_degraded.png -> test_reference.tif
@@ -366,31 +366,31 @@ class QualityValidator:
             ref_stem = stem.replace("_upscaled16", "_reference")
         else:
             ref_stem = f"{stem}_reference"
-        
+
         # Try common extensions
         parent = test_path.parent
         for ext in [".tif", ".tiff", ".png", ".jpg"]:
             ref_path = parent / f"{ref_stem}{ext}"
             if ref_path.exists():
                 return ref_path
-        
+
         return None
-    
+
     def _aggregate_scores(self, per_image_scores: List[Dict[str, object]]) -> Dict[str, float]:
         """Aggregate per-image scores into overall scores."""
         if not per_image_scores:
             return {}
-        
+
         all_metrics = {}
         for img_score in per_image_scores:
             for metric_name, value in img_score.get("metrics", {}).items():
                 if metric_name not in all_metrics:
                     all_metrics[metric_name] = []
                 all_metrics[metric_name].append(float(value))
-        
+
         # Compute mean for each metric
         return {k: float(np.mean(v)) for k, v in all_metrics.items()}
-    
+
     def _compute_composite_score(
         self,
         metric_scores: Dict[str, float],
@@ -405,7 +405,7 @@ class QualityValidator:
         - NIMA: normalize to [0, 1] from typical range [1, 10]
         """
         normalized_scores = {}
-        
+
         for metric_name, score in metric_scores.items():
             if metric_name == "ssim":
                 normalized_scores[metric_name] = score  # Already [0, 1]
@@ -421,7 +421,7 @@ class QualityValidator:
             else:
                 # Unknown metric, assume [0, 1] higher-is-better
                 normalized_scores[metric_name] = np.clip(score, 0.0, 1.0)
-        
+
         # Compute weighted average
         composite = 0.0
         total_weight = 0.0
@@ -429,12 +429,12 @@ class QualityValidator:
             weight = weights.get(metric_name, 0.0)
             composite += weight * norm_score
             total_weight += weight
-        
+
         if total_weight > 0:
             composite /= total_weight
-        
+
         return float(composite)
-    
+
     def _compare_metrics(
         self,
         ours: Dict[str, float],
@@ -442,14 +442,14 @@ class QualityValidator:
     ) -> int:
         """Compare two metric sets, return 1 if ours better, -1 if baseline better, 0 if tie."""
         score_diff = 0
-        
+
         for metric_name in ours.keys():
             if metric_name not in baseline:
                 continue
-            
+
             our_val = ours[metric_name]
             base_val = baseline[metric_name]
-            
+
             # Higher-is-better for all except LPIPS
             if metric_name == "lpips":
                 # Lower is better for LPIPS
@@ -463,9 +463,9 @@ class QualityValidator:
                     score_diff += 1
                 elif our_val < base_val - 0.01:
                     score_diff -= 1
-        
+
         return np.sign(score_diff)
-    
+
     def _compare_with_baseline(
         self,
         test_images: List[Path],
@@ -475,7 +475,7 @@ class QualityValidator:
     ) -> Dict[str, object]:
         """Compare test images with baseline outputs."""
         baseline_dir = Path(baseline_dir)
-        
+
         comparisons = []
         for test_path in test_images:
             # Find corresponding baseline image
@@ -483,11 +483,11 @@ class QualityValidator:
             if not baseline_path.exists():
                 # Try alternate naming
                 baseline_path = baseline_dir / test_path.stem.replace("_upscaled16", "") + test_path.suffix
-            
+
             if baseline_path.exists():
                 # Find reference if in synthetic mode
                 reference_path = self._find_reference(test_path) if mode == "synthetic" else None
-                
+
                 # Compare
                 comp = self.compare_baselines(
                     test_path,
@@ -496,12 +496,12 @@ class QualityValidator:
                     metrics_list=metrics_list
                 )
                 comparisons.append(comp.per_image_comparisons[0])
-        
+
         # Aggregate comparison results
         our_wins = sum(1 for c in comparisons if c.get("winner") == "ours")
         baseline_wins = sum(1 for c in comparisons if c.get("winner") == "baseline")
         ties = sum(1 for c in comparisons if c.get("winner") == "tie")
-        
+
         return {
             "comparisons": comparisons,
             "our_wins": our_wins,
@@ -509,7 +509,7 @@ class QualityValidator:
             "ties": ties,
             "win_rate": our_wins / len(comparisons) if comparisons else 0.0,
         }
-    
+
     @staticmethod
     def _get_timestamp() -> str:
         """Get current timestamp as ISO 8601 string."""
