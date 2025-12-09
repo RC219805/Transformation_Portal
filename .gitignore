@@ -199,6 +199,8 @@ input_images/**/*.png
 # Generated logs and artifacts
 logs/
 artifacts/
+# But allow transformation_portal core modules
+!src/transformation_portal/core/artifacts/
 
 # Organized outputs directory (all generated content)
 outputs/

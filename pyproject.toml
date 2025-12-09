@@ -18,6 +18,7 @@ dependencies = [
     "scipy>=1.15,<1.16",  # scipy 1.16+ requires Python 3.11+, constrain for Python 3.10 compatibility
     "scikit-learn>=1.0,<2",
     "PyYAML>=6.0,<7",
+    "pydantic>=2.0,<3",  # Required by Platform Core (config schemas)
     "typer>=0.10.0,<1",
     "tqdm>=4.66,<5",
     "tifffile>=2023.7.18,<2025",
@@ -84,21 +85,59 @@ transform-render = "transformation_portal.cli:render_cli"
 transform-process = "transformation_portal.cli:process_cli"
 transform-analyze = "transformation_portal.cli:analyze_cli"
 
-# Luxury TIFF Batch Processor CLI
-luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
-
 # Lux Depth V2 Pipeline CLI (production-oriented, GPU-accelerated)
+# Note: lux_depth_v2 is a root-level package (not in src/)
 lux-depth-v2 = "lux_depth_v2.cli:main"
 lux-depth-v2-service = "lux_depth_v2.service:main"
 
 # Legacy compatibility (can be removed in future versions)
 luxury_video_grader = "transformation_portal.processors.luxury_video_master_grader:main"
 lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
+luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src", "."]
-include = ["transformation_portal*", "luxury_tiff_batch_processor*", "lux_depth_v2*"]
-exclude = ["tests*", "data*", "docs*", "scripts*", "examples*", "archive*", "deprecated*"]
+[tool.setuptools]
+# Explicit package list for reliable editable installs
+packages = [
+    "transformation_portal",
+    "transformation_portal.analyzers",
+    "transformation_portal.atmosphere",
+    "transformation_portal.cli",
+    "transformation_portal.comfyui",
+    "transformation_portal.compat",
+    "transformation_portal.core",
+    "transformation_portal.core.artifacts",
+    "transformation_portal.core.config",
+    "transformation_portal.core.device",
+    "transformation_portal.core.observability",
+    "transformation_portal.core.security",
+    "transformation_portal.depth",
+    "transformation_portal.depth.models",
+    "transformation_portal.depth.processors",
+    "transformation_portal.depth.utils",
+    "transformation_portal.depth_intelligence",
+    "transformation_portal.diffusion",
+    "transformation_portal.enhancers",
+    "transformation_portal.events",
+    "transformation_portal.foundation",
+    "transformation_portal.hardening",
+    "transformation_portal.interfaces",
+    "transformation_portal.metrics",
+    "transformation_portal.neuroaesthetics",
+    "transformation_portal.perceptual",
+    "transformation_portal.pipelines",
+    "transformation_portal.plugins",
+    "transformation_portal.plugins.builtin",
+    "transformation_portal.processors",
+    "transformation_portal.processors.material_response",
+    "transformation_portal.rendering",
+    "transformation_portal.segmentation",
+    "transformation_portal.streaming",
+    "transformation_portal.style_transfer",
+    "transformation_portal.utils",
+    "transformation_portal.vlm",
+    "luxury_tiff_batch_processor",
+]
+package-dir = {"" = "src"}
 
 [tool.pylint.main]
 # Increase limits for complex image/video processing functions
