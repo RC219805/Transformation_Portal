@@ -42,7 +42,7 @@ class CacheStats:
         total = self.hit_count + self.miss_count
         if total == 0:
             return 0.0
-        return self.hit_count / total
+        return float(self.hit_count) / float(total)
 
 
 class ContentAddressedCache:
