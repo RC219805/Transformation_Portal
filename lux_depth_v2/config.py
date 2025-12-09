@@ -213,6 +213,7 @@ class PipelineConfig:
     segmentation: SegmentationConfig = field(default_factory=SegmentationConfig)
     service: ServiceConfig = field(default_factory=ServiceConfig)
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
+    phase2: Optional[Phase2Config] = None  # Phase 2 optimizations (optional)
 
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""
