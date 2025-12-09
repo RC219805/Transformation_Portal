@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import Sequence, Optional
+from typing import Sequence
 
 from .exceptions import InputValidationError
 from .policy import HardeningPolicy
@@ -80,7 +80,7 @@ def validate_image_file(path: Path, policy: HardeningPolicy, use_core: bool = Tr
         )
         
         try:
-            result = core_validator.validate_file(p, strict=True)
+            core_validator.validate_file(p, strict=True)
         except CoreValidationError as e:
             # Convert core validation error to local format
             raise InputValidationError(
