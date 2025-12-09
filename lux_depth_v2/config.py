@@ -57,6 +57,37 @@ class OrchestratorConfig:
 
 
 @dataclass
+class Phase2Config:
+    """Phase 2 performance optimization configuration."""
+    
+    # I/O Optimization
+    async_io_enabled: bool = True
+    tiff_compression: Optional[str] = 'lzw'  # 'lzw' | 'deflate' | None
+    streaming_upscale: bool = True
+    
+    # Storage Management
+    storage_internal_path: str = "."
+    storage_external_t9: Optional[str] = None
+    auto_migrate_large_files: bool = True
+    migrate_threshold_gb: float = 2.0
+    
+    # Parallel Processing
+    max_concurrent_workers: int = 2
+    memory_budget_per_worker_gb: float = 25.0
+    
+    # Caching
+    model_cache_enabled: bool = True
+    depth_map_cache_enabled: bool = True
+    cache_dir: str = '.cache'
+    
+    # Upscaling Optimization
+    tile_based_upscaling: bool = True
+    upscale_tile_size: int = 512
+    upscale_overlap: int = 64
+    progressive_upscaling: bool = True  # 2×2 instead of 4× for memory safety
+
+
+@dataclass
 class ServiceConfig:
     enabled: bool = False
     host: str = "0.0.0.0"
