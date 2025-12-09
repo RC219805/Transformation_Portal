@@ -1,0 +1,36 @@
+{
+  "task_id": "750Picacho_GreatRoom_Ultimate_materials_v2",
+  "input_hash": "sha256:d3ae53b07da9c7deebc627a5795c9ad3c3d90ae41016ba798169657d661011f5",
+  "timestamp": 1765258953.348504,
+  "segmentation_config": {
+    "backend": "heuristic",
+    "max_segmentation_side": 1024,
+    "edge_feather_radius": 3
+  },
+  "confidence_metrics": {
+    "confidence_avg": 0.18209531903266907,
+    "confidence_min": -0.31053322553634644,
+    "confidence_max": 1.0697680711746216,
+    "high_confidence_pct": 0.21091281944444445,
+    "low_confidence_pct": 0.7890871805555555,
+    "coverage_ratio": 0.17768286111111112,
+    "material_counts": {
+      "sky": 2209,
+      "foliage": 13390,
+      "wood": 1694787,
+      "metal": 6066793,
+      "glass": 4790234,
+      "stone": 225753
+    }
+  },
+  "version": "2.0",
+  "original_size": [
+    3000,
+    4000
+  ],
+  "segmentation_size": [
+    768,
+    1024
+  ],
+  "upsampled": true
+}

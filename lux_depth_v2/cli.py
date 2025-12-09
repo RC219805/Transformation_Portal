@@ -161,15 +161,23 @@ def main() -> None:
     
     # Materials v2: Configure confidence gating and caching
     if hasattr(args, 'materials_v2') and args.materials_v2:
-        cfg.materials_v2.enabled = True
-        cfg.materials_v2.confidence.confidence_threshold = args.confidence_threshold
-        cfg.materials_v2.confidence.blend_range = args.confidence_blend_range
-        cfg.materials_v2.confidence.blend_mode = args.confidence_blend_mode
-        cfg.materials_v2.segmentation.max_segmentation_side = args.max_segmentation_side
-        if args.cache_masks:
-            # Import cache manager and configure
-            from .cache_manager import MaskCacheManager
-            cfg.materials_v2.cache_manager = MaskCacheManager(cache_dir=args.cache_dir)
+        from .materials_v2 import MaterialsV2Config, ConfidenceConfig, SegmentationConfig as Mat2SegConfig
+        
+        # Initialize Materials v2 config
+        cfg.materials_v2 = MaterialsV2Config(
+            enabled=True,
+            confidence=ConfidenceConfig(
+                confidence_threshold=args.confidence_threshold,
+                blend_range=args.confidence_blend_range,
+                blend_mode=args.confidence_blend_mode,
+            ),
+            segmentation=Mat2SegConfig(
+                max_segmentation_side=args.max_segmentation_side,
+            ),
+            cache_enabled=args.cache_masks,
+            cache_dir=args.cache_dir if args.cache_masks else None,
+            backend='heuristic',  # Default backend
+        )
     cfg.orchestrator.pre_flight_check = args.pre_flight_check and not args.skip_pre_flight
     
     # Phase 2 Performance Optimizations
