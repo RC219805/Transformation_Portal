@@ -188,8 +188,9 @@ def main() -> None:
     
     # Phase 2 Performance Optimizations
     phase2_enabled = args.phase2_optimizations if hasattr(args, 'phase2_optimizations') else False
+    autotune_requested = getattr(args, 'autotune_export', False)
     
-    if phase2_enabled or (hasattr(args, 'parallel_workers') and args.parallel_workers > 1):
+    if phase2_enabled or autotune_requested or (hasattr(args, 'parallel_workers') and args.parallel_workers > 1):
         from .config import Phase2Config
         
         # Build Phase2Config from CLI options

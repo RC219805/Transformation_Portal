@@ -429,9 +429,10 @@ class LuxPipelineV2:
                         },
                     }
                     
+                    complexity_str = f"{image_stats.scene_complexity:.3f}" if image_stats.scene_complexity is not None else "N/A"
                     self.logger.info(
                         f"ExportManager autotuned | {image_stats.megapixels:.1f}MP "
-                        f"complexity={image_stats.scene_complexity:.3f if image_stats.scene_complexity else 'N/A'} "
+                        f"complexity={complexity_str} "
                         f"tiled={export_config.tiff_tile_size is not None} "
                         f"atomic={export_config.use_atomic_image_writes}"
                     )
