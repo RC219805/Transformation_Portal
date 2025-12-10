@@ -48,7 +48,7 @@ Marketing export is where **90-96% of the time** is spent. This is the optimizat
 
 #### Code Changes:
 
-1. **Add marketing metadata to reports**:
+1. **Add marketing metadata to reports** (includes CPU awareness):
 ```python
 report["marketing_export"] = {
     "encoder": "png",  # or "webp", "jpeg"
@@ -58,6 +58,7 @@ report["marketing_export"] = {
     "height": marketing_h,
     "bytes_written": marketing_bytes,
     "write_time_s": export_marketing_time,
+    "cpu_percent": cpu_usage,  # Track CPU bottleneck
 }
 ```
 
@@ -109,12 +110,14 @@ class MarketingExportConfig:
 ```
 
 **Benchmark Process**:
-1. Run Pool, Aerial, GreatRoom with each level
-2. Measure: `export_marketing` time, file size
-3. Visual check: PNG is lossless, so quality unchanged
-4. Choose optimal level per preset
+1. Run Pool, Aerial, GreatRoom with each level (5+ images per category, 3 runs each)
+2. Measure: **median** `export_marketing` time (not mean, to avoid outlier noise)
+3. Measure: file size, CPU utilization during export
+4. Visual check: PNG is lossless, so quality unchanged
+5. Compute p75/p95 for variance understanding
+6. Choose optimal level per preset based on median times
 
-**Expected Outcome**: 20-40s savings with level 1-3 vs level 6-9
+**Hypothesis**: For our workloads, lower PNG compression levels may save 20-40s vs high levels. Actual gains will be validated via benchmarks.
 
 ---
 
@@ -122,14 +125,16 @@ class MarketingExportConfig:
 
 **Hypothesis**: Lossy formats acceptable for marketing, much faster encoding
 
-**Test Matrix**:
+**Test Matrix** (historically typical, subject to validation):
 | Format | Quality | Expected Speed | Expected Size | Quality |
 |--------|---------|----------------|---------------|---------|
 | PNG level 3 | Lossless | Baseline | Baseline | Perfect |
-| WebP q=90 | Near-lossless | **2-3x faster** | 50-70% smaller | Excellent |
-| WebP q=95 | Near-lossless | 2x faster | 60-80% smaller | Excellent |
-| JPEG q=90 | Lossy | **3-4x faster** | 40-60% smaller | Good |
-| JPEG q=95 | Lossy | 2-3x faster | 50-70% smaller | Very good |
+| WebP q=90 | Near-lossless | ~2-3x faster | ~50-70% smaller | Excellent |
+| WebP q=95 | Near-lossless | ~2x faster | ~60-80% smaller | Excellent |
+| JPEG q=90 | Lossy | ~3-4x faster | ~40-60% smaller | Good |
+| JPEG q=95 | Lossy | ~2-3x faster | ~50-70% smaller | Very good |
+
+**Important**: WebP/JPEG are for marketing-only artifacts that never re-enter the internal pipeline. Master/upscaled remain PNG/TIFF for downstream editing compatibility.
 
 **Implementation**:
 ```python
@@ -148,10 +153,12 @@ def write_marketing(self, img: np.ndarray, stem: str) -> Path:
 ```
 
 **Benchmark Process**:
-1. Run same 3 images with all formats
-2. Visual comparison (side-by-side)
-3. PSNR/SSIM metrics (optional)
-4. Timing and size measurements
+1. Run 5+ images per category with each format (3 runs each)
+2. Visual comparison (side-by-side) for quality acceptance
+3. PSNR/SSIM metrics (optional validation)
+4. Timing: **median** export_marketing (not mean)
+5. Size: distribution and median file size
+6. CPU: utilization during encoding (ensure no bottleneck shift)
 
 **Decision Matrix**:
 - **Interiors**: PNG level 3 or WebP q=95 (high quality)
@@ -205,13 +212,24 @@ class ExportManager:
     def write_marketing(self, img: np.ndarray, stem: str):
         if self._marketing_async:
             # Queue for background processing
+            # CRITICAL: img.copy() to avoid data corruption if caller mutates array
+            img_copy = img.copy()
             future = self._executor.submit(
-                self._do_write_marketing, img.copy(), stem
+                self._do_write_marketing, img_copy, stem
             )
             return future  # Don't wait
         else:
             # Synchronous (current behavior)
             return self._do_write_marketing(img, stem)
+    
+    def _do_write_marketing(self, img: np.ndarray, stem: str) -> Path:
+        """
+        Idempotent atomic write:
+        1. Write to temporary file (stem__MARKETING.tmp)
+        2. Atomic rename to final path
+        3. Safe to retry on failure
+        """
+        # Implementation details...
     
     def close(self):
         """Block until all async work completes."""
@@ -269,12 +287,19 @@ class ExportConfig:
 
 #### Phased Rollout:
 
-1. **Phase 1**: Batch/offline mode only
-   - Safe: call `export_manager.close()` at end
-   - Validate correctness
-2. **Phase 2**: Service mode (optional)
-   - Return response before marketing completes
-   - Track completion via separate endpoint
+1. **Phase 1**: Batch/offline mode only (**Initial scope**)
+   - Always call `export_manager.close()` at job end (blocks until complete)
+   - Treat async errors as job failures (logged loudly)
+   - Start with `max_workers=1`, small batches
+   - Log queue depth and memory usage
+   - Validate correctness before expanding
+   
+2. **Phase 2**: Service mode (**Separate decision, requires discussion**)
+   - Only enable if:
+     * OK to return response before marketing completes
+     * Clear retry mechanism for failures
+     * Observable status (logs, DB metadata)
+   - Requires additional monitoring infrastructure
 
 ---
 
@@ -325,11 +350,14 @@ def autotune_marketing_config(
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| **export_marketing reduction** | ≥30% | Median time across 20+ images |
-| **OR async completion** | User sees "done" 90s earlier | Pipeline returns before marketing |
-| **File size increase** | ≤+20% | Compare to PNG level 6 baseline |
+| **export_marketing reduction** | ≥30% | **Median** time over ≥5 images per category (Pool/Aerial/GreatRoom) |
+| **OR async completion** | User sees "done" 90s earlier | Pipeline returns before marketing (batch mode only) |
+| **File size increase** | ≤+20% | Compare to PNG level 6 baseline (median) |
 | **Visual quality** | No regressions | PSNR/SSIM + manual review |
-| **Overall pipeline speedup** | 20-30% | Total time reduction |
+| **Overall pipeline speedup** | 20-30% | Total time reduction (median) |
+| **CPU overhead** | No bottleneck shift | Ensure encoding doesn't saturate CPU |
+
+**Note**: All comparisons use **median** over minimum 5 images per category with outliers examined separately.
 
 ### Test Cases:
 
@@ -353,10 +381,12 @@ python scripts/analyze_marketing_encoders.py out_png*/ out_webp*/
 # Baseline (sync)
 lux-depth-v2 --input-dir aerial_batch/ --output-dir out_sync/
 
-# Async
+# Async (batch mode only)
 lux-depth-v2 --input-dir aerial_batch/ --output-dir out_async/ --marketing-async
 
 # Compare perceived completion times
+# NOTE: In async mode, export_marketing StageProfiler reflects queueing time,
+# not actual completion. Rely on executor completion + logs for full timing.
 ```
 
 ---
@@ -411,14 +441,16 @@ After implementation:
 
 ## 🎯 Expected Outcomes
 
-### Conservative Estimates:
+### Conservative Estimates (Hypotheses):
 
-| Optimization | Time Savings | Effort | Priority |
-|--------------|-------------|--------|----------|
-| PNG level 3 vs 6 | **20-30s** | Low | **HIGH** |
-| WebP vs PNG | **40-60s** | Medium | **HIGH** |
-| Async marketing | **Perceived: 90s** | Medium | Medium |
-| **Total (M1+M2)** | **50-90s reduction** OR async | | |
+| Optimization | Expected Savings | Effort | Priority |
+|--------------|-----------------|--------|----------|
+| PNG level 3 vs 6 | **~20-30s** | Low | **HIGH** |
+| WebP vs PNG | **~40-60s** | Medium | **HIGH** |
+| Async marketing | **Perceived: ~90s** | Medium | Medium |
+| **Total (M1+M2)** | **~50-90s reduction** OR async | | |
+
+**Note**: These are hypotheses based on typical encoder behavior. Actual gains will be validated via benchmarks before production rollout.
 
 ### Overall Impact:
 
