@@ -51,7 +51,6 @@ run_benchmark() {
       --output-dir "$output_dir" \
       --preset exterior_showcase \
       --marketing-png-compression 1 \
-      --no-autotune-export \
       2>&1 | tee "$output_dir.log" | grep -E "(Done|ERROR|WARNING|stage)" || true
       
   elif [ "$config" = "heavy" ]; then
@@ -61,7 +60,6 @@ run_benchmark() {
       --output-dir "$output_dir" \
       --preset exterior_showcase \
       --marketing-png-compression 1 \
-      --no-autotune-export \
       --materials-v2 \
       --max-segmentation-side 1536 \
       --cache-masks \
