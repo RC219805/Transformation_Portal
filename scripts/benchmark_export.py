@@ -238,10 +238,18 @@ def run_benchmark(
     
     # Aggregate results (average)
     def avg(key_path: List[str]) -> float:
-        values = [result]
-        for key in key_path:
-            values = [v[key] for v in values if isinstance(v, dict) and key in v]
-        if not values or not all(isinstance(v, (int, float)) for v in values):
+        """Compute true arithmetic mean across all runs."""
+        values = []
+        for result in results:
+            val = result
+            try:
+                for key in key_path:
+                    val = val[key]
+                if isinstance(val, (int, float)):
+                    values.append(val)
+            except (KeyError, TypeError):
+                continue
+        if not values:
             return 0.0
         return sum(values) / len(values)
     

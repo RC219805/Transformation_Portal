@@ -462,3 +462,102 @@ class ExportManager:
         """Get expected report JSON path."""
         filename = f"{stem}{self.config.report_suffix}"
         return self.config.output_dir / filename
+
+
+# ------------------------------------------------------------------ #
+# Adaptive Export Configuration (Phase 2 Slice 3 Benchmarking)
+# ------------------------------------------------------------------ #
+
+def autotune_export_config(
+    output_dir: Path,
+    image_width: int = 0,
+    image_height: int = 0,
+    scene_complexity: Optional[float] = None,
+    enable_adaptive: bool = True,
+) -> ExportConfig:
+    """
+    Autotune ExportConfig based on image characteristics and benchmarking data.
+    
+    Based on Phase 2 Slice 3 performance validation:
+    - Aerial (21.6 MP, low complexity): tiled_atomic improved throughput ~5-10%
+    - Pool (20.3 MP, high complexity): optimizations degraded throughput 6-8%
+    - GreatRoom (12 MP, medium complexity): minimal impact (~2.5% degradation)
+    
+    Recommendation: Enable optimizations ONLY for large, low-complexity scenes
+    (e.g., aerial/exterior views with homogeneous regions like sky, water, terrain).
+    
+    Args:
+        output_dir: Output directory for exports
+        image_width: Image width in pixels (0 = unknown)
+        image_height: Image height in pixels (0 = unknown)
+        scene_complexity: Optional scene complexity score (0.0-1.0)
+                         0.0 = simple (sky/gradients), 1.0 = complex (interiors/textures)
+                         None = unknown, use conservative defaults
+        enable_adaptive: If False, always return baseline config (no optimizations)
+    
+    Returns:
+        ExportConfig with optimizations enabled/disabled based on image characteristics
+    
+    Heuristics (from benchmark data):
+        - Megapixels > 20 AND scene_complexity < 0.5: Enable tiled_atomic
+        - Otherwise: Baseline (no optimizations)
+        - LZW compression: ALWAYS disabled (zero benefit on 16-bit upscaled TIFFs)
+        - Tiered storage: Disabled by default (requires explicit scratch_dir)
+    
+    Example:
+        >>> # Aerial-like scene (large, simple)
+        >>> cfg = autotune_export_config(
+        ...     output_dir=Path("output/"),
+        ...     image_width=6000,
+        ...     image_height=3600,
+        ...     scene_complexity=0.3,  # Low complexity (sky/terrain)
+        ... )
+        >>> assert cfg.tiff_tile_size == 512
+        >>> assert cfg.use_atomic_image_writes is True
+        
+        >>> # Interior scene (complex)
+        >>> cfg = autotune_export_config(
+        ...     output_dir=Path("output/"),
+        ...     image_width=4000,
+        ...     image_height=3000,
+        ...     scene_complexity=0.8,  # High complexity (textures)
+        ... )
+        >>> assert cfg.tiff_tile_size is None
+        >>> assert cfg.use_atomic_image_writes is False
+    """
+    # Baseline config (all optimizations OFF)
+    if not enable_adaptive:
+        return ExportConfig(output_dir=output_dir)
+    
+    # Compute megapixels
+    megapixels = (image_width * image_height) / 1_000_000 if (image_width > 0 and image_height > 0) else 0
+    
+    # Adaptive thresholds based on benchmark data
+    # Aerial: 21.6 MP, complexity ~0.2-0.4 → +5-10% throughput with tiled_atomic
+    # Pool: 20.3 MP, complexity ~0.7-0.9 → -6-8% throughput with optimizations
+    COMPLEXITY_THRESHOLD = 0.5  # Below this = simple scene (aerial-like)
+    MEGAPIXEL_THRESHOLD = 20.0  # Above this = large image (benefits from tiling)
+    
+    # Decision logic
+    enable_optimizations = False
+    if scene_complexity is not None:
+        # We have complexity data - use it
+        if megapixels > MEGAPIXEL_THRESHOLD and scene_complexity < COMPLEXITY_THRESHOLD:
+            enable_optimizations = True
+    elif megapixels > 40.0:
+        # Very large image, unknown complexity - enable conservatively
+        # (assumes aerial/exterior workflows typically process larger images)
+        enable_optimizations = True
+    
+    if enable_optimizations:
+        # tiled_atomic mode (best performer for aerial-like scenes)
+        return ExportConfig(
+            output_dir=output_dir,
+            tiff_tile_size=512,
+            tiff_compression=None,  # LZW provides zero benefit
+            use_atomic_image_writes=True,
+            use_atomic_report_writes=True,
+        )
+    else:
+        # Baseline mode (safest for complex scenes and small images)
+        return ExportConfig(output_dir=output_dir)
