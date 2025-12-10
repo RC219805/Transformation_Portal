@@ -13,7 +13,7 @@ Phase 2 Slice 2 successfully introduces **ExportManager**, a first-class export 
 ### ✅ Complete Implementation
 
 1. **ExportManager Module** (`src/transformation_portal/core/storage/export_manager.py`)
-   - 213 lines of production code
+   - 195 lines of production code
    - Clean API for all export operations
    - Behavior-identical delegation to existing I/O functions
    - Thread-safe frozen configuration
@@ -92,9 +92,9 @@ Phase 2 Slice 2 successfully introduces **ExportManager**, a first-class export 
 
 ### New Files Created (5)
 1. `src/transformation_portal/core/storage/__init__.py` (4 lines)
-2. `src/transformation_portal/core/storage/export_manager.py` (213 lines)
+2. `src/transformation_portal/core/storage/export_manager.py` (195 lines)
 3. `tests/core/storage/__init__.py` (1 line)
-4. `tests/core/storage/test_export_manager.py` (311 lines)
+4. `tests/core/storage/test_export_manager.py` (257 lines)
 5. `lux_depth_v2/tests/test_pipeline_export_manager_integration.py` (287 lines)
 
 ### Modified Files (1)

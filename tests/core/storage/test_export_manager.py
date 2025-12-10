@@ -9,7 +9,7 @@ Tests verify:
 """
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -150,8 +150,8 @@ class TestExportManager:
         
         assert result_path.exists()
     
-    def test_custom_prefixes(self, tmp_path, mock_io_utils, sample_image):
-        """Verify custom prefixes are applied correctly."""
+    def test_export_manager_custom_prefixes(self, tmp_path, mock_io_utils, sample_image):
+        """Test ExportManager with custom prefix configuration."""
         cfg = ExportConfig(
             output_dir=tmp_path,
             master_prefix="gold_",

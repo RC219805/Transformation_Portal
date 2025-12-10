@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import numpy as np
 
@@ -162,11 +162,10 @@ class ExportManager:
         filename = f"{stem}{self.config.report_suffix}"
         path = self.config.output_dir / filename
         
-        # Match existing behavior: atomic write with indent=2
+        # Match existing behavior: direct write with indent=2 (non-atomic)
+        # Note: atomic writes (.tmp + replace) can be added in Slice 3
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps(report_dict, indent=2))
-        tmp.replace(path)
+        path.write_text(json.dumps(report_dict, indent=2))
         
         return path
     

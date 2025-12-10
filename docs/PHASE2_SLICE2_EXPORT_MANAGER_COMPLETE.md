@@ -271,9 +271,9 @@ When ExportManager becomes mandatory:
 
 ### New Files
 1. `src/transformation_portal/core/storage/__init__.py` (4 lines)
-2. `src/transformation_portal/core/storage/export_manager.py` (213 lines)
+2. `src/transformation_portal/core/storage/export_manager.py` (195 lines)
 3. `tests/core/storage/__init__.py` (1 line)
-4. `tests/core/storage/test_export_manager.py` (311 lines)
+4. `tests/core/storage/test_export_manager.py` (257 lines)
 5. `lux_depth_v2/tests/test_pipeline_export_manager_integration.py` (287 lines)
 
 ### Modified Files

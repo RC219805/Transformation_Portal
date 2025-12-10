@@ -8,7 +8,6 @@ Verifies:
 4. Behavior parity with direct I/O path
 """
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest
