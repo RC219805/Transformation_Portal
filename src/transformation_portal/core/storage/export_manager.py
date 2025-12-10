@@ -20,6 +20,14 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 
+@dataclass
+class MarketingExportConfig:
+    """Marketing export configuration (M1 encoding strategy)."""
+    
+    format: str = "png"
+    png_compression_level: int = 6
+
+
 @dataclass(frozen=True)
 class ExportConfig:
     """
@@ -42,6 +50,9 @@ class ExportConfig:
     marketing_suffix: str = "_marketing"
     preview_jpg_suffix: str = "_preview"
     
+    # Marketing export settings (M0+M1.1)
+    marketing_config: MarketingExportConfig = None
+    
     # Slice 3 PR-1: Tiered storage / scratch (infrastructure only)
     enable_tiered_storage: bool = False
     scratch_dir: Optional[Path] = None
@@ -60,6 +71,10 @@ class ExportConfig:
     # Slice 3 PR-1: Async flush (skeleton only, wired in PR-3)
     async_flush: bool = False
     max_async_workers: int = 2
+    
+    def __post_init__(self):
+        if self.marketing_config is None:
+            object.__setattr__(self, 'marketing_config', MarketingExportConfig())
 
 
 class ExportManager:
@@ -108,6 +123,9 @@ class ExportManager:
         
         # Slice 3 PR-1: Async executor placeholder (wired in PR-3)
         self._executor = None
+        
+        # M0: Marketing export metadata tracking
+        self._last_marketing_metadata: Optional[Dict[str, Any]] = None
     
     # ------------------------------------------------------------------ #
     # Slice 3 PR-1: Config validation (fail-fast on misconfiguration)
@@ -391,7 +409,9 @@ class ExportManager:
     
     def write_marketing_png(self, stem: str, png_arr: np.ndarray) -> Path:
         """
-        Write 8-bit marketing PNG (behavior-identical to pipeline.py:571).
+        Write 8-bit marketing PNG with instrumentation (M0+M1.1).
+        
+        Captures timing, file size, CPU usage, and compression metadata for analysis.
         
         Args:
             stem: Base filename without extension
@@ -400,11 +420,49 @@ class ExportManager:
         Returns:
             Path to written file
         """
+        import time
+        try:
+            import psutil
+            cpu_available = True
+        except ImportError:
+            cpu_available = False
+        
         filename = f"{self.config.upscaled_prefix}{stem}{self.config.marketing_suffix}.png"
         path = self.config.output_dir / filename
         
-        self._io.atomic_write_png8(path, png_arr)
+        # M0: Capture timing and CPU metrics
+        start_time = time.time()
+        cpu_start = psutil.cpu_percent(interval=None) if cpu_available else 0.0
+        
+        # M1.1: Write with compression level
+        compression_level = self.config.marketing_config.png_compression_level
+        self._io.atomic_write_png8(path, png_arr, compression=compression_level)
+        
+        elapsed = time.time() - start_time
+        cpu_end = psutil.cpu_percent(interval=None) if cpu_available else 0.0
+        file_size = path.stat().st_size if path.exists() else 0
+        
+        # M0: Store metadata for report
+        self._last_marketing_metadata = {
+            "encoder": self.config.marketing_config.format,
+            "compression_level": compression_level,
+            "width": png_arr.shape[1],
+            "height": png_arr.shape[0],
+            "bytes_written": file_size,
+            "write_time_s": round(elapsed, 3),
+            "cpu_percent_delta": round(cpu_end - cpu_start, 1) if cpu_available else None,
+        }
+        
         return path
+    
+    def get_marketing_metadata(self) -> Optional[Dict[str, Any]]:
+        """
+        Get marketing export metadata from last write (M0).
+        
+        Returns:
+            Metadata dict or None if no marketing write has occurred
+        """
+        return self._last_marketing_metadata
     
     def write_report(self, stem: str, report_dict: Dict[str, Any]) -> Path:
         """
