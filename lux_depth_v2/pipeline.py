@@ -187,7 +187,14 @@ class LuxPipelineV2:
         if not self._export_manager_autotune_enabled and EXPORT_MANAGER_AVAILABLE and cfg.output_dir:
             # Static config: build ExportManager at init (backward compatible)
             try:
-                export_config = ExportConfig(output_dir=Path(cfg.output_dir))
+                from transformation_portal.core.storage.export_manager import MarketingExportConfig
+                marketing_cfg = MarketingExportConfig(
+                    png_compression_level=cfg.marketing_png_compression
+                )
+                export_config = ExportConfig(
+                    output_dir=Path(cfg.output_dir),
+                    marketing_config=marketing_cfg
+                )
                 self.export_manager = ExportManager(export_config, io_utils)
                 self.logger.info("ExportManager initialized (static config)")
             except Exception as e:
@@ -408,6 +415,7 @@ class LuxPipelineV2:
                         image_height=image_stats.height,
                         scene_complexity=image_stats.scene_complexity,
                         enable_adaptive=True,
+                        marketing_png_compression=cfg.marketing_png_compression,
                     )
                     
                     self.export_manager = ExportManager(export_config, io_utils)

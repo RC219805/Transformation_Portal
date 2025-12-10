@@ -151,6 +151,9 @@ class PipelineConfig:
     save_marketing_png: bool = True
     save_preview_jpg: bool = True
     preview_scale: float = 0.25
+    
+    # Marketing Export (M0+M1.1)
+    marketing_png_compression: int = 6  # PNG compression level (1-9)
 
     skip_existing: bool = True
     overwrite: bool = False
