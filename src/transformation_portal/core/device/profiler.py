@@ -369,3 +369,71 @@ class GPUProfiler:
     def clear(self):
         """Clear all profiling events."""
         self.events.clear()
+
+
+class StageProfiler:
+    """
+    Zero-overhead stage timing profiler for pipeline instrumentation.
+    
+    Designed for Phase 2 performance optimization with <3% overhead.
+    Returns timing in seconds with snake_case keys for consistency.
+    
+    Example:
+        >>> profiler = StageProfiler(enabled=True)
+        >>> with profiler.stage("load"):
+        ...     image = load_image()
+        >>> with profiler.stage("depth"):
+        ...     depth = estimate_depth(image)
+        >>> 
+        >>> timings = profiler.summary_s()
+        >>> print(f"Load: {timings['load']:.3f}s")
+    """
+    
+    def __init__(self, enabled: bool = True):
+        """
+        Initialize stage profiler.
+        
+        Args:
+            enabled: Enable profiling (default True for production monitoring)
+        """
+        self.enabled = enabled
+        self._stage_times: dict[str, float] = {}
+    
+    @contextmanager
+    def stage(self, name: str):
+        """
+        Profile a pipeline stage with minimal overhead.
+        
+        Args:
+            name: Stage name (use stable names like 'load', 'depth', 'upscale_infer')
+            
+        Yields:
+            None
+            
+        Note:
+            Accumulates time if the same stage is entered multiple times.
+        """
+        if not self.enabled:
+            yield
+            return
+        
+        start_time = time.perf_counter()
+        
+        try:
+            yield
+        finally:
+            elapsed = time.perf_counter() - start_time
+            self._stage_times[name] = self._stage_times.get(name, 0.0) + elapsed
+    
+    def summary_s(self) -> dict[str, float]:
+        """
+        Get timing summary in seconds.
+        
+        Returns:
+            Dictionary mapping stage names to elapsed time in seconds
+        """
+        return self._stage_times.copy()
+    
+    def clear(self):
+        """Clear all stage timings."""
+        self._stage_times.clear()
