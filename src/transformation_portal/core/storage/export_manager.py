@@ -159,16 +159,26 @@ class ExportManager:
         Otherwise returns final_path (backward compatible).
         
         Args:
-            final_path: Intended final output path
+            final_path: Intended final output path (must be within output_dir)
         
         Returns:
             Path where file should be written (scratch or final)
+        
+        Raises:
+            ValueError: If final_path is not within output_dir when tiered storage enabled
         """
         if not self.config.enable_tiered_storage or self.config.scratch_dir is None:
             return final_path
         
-        # Map final path to scratch path
-        rel = final_path.relative_to(self.config.output_dir)
+        # Map final path to scratch path (validate it's within output_dir)
+        try:
+            rel = final_path.relative_to(self.config.output_dir)
+        except ValueError as e:
+            raise ValueError(
+                f"Tiered storage requires output files to be within output_dir={self.config.output_dir!r}, "
+                f"got final_path={final_path!r}"
+            ) from e
+        
         scratch_path = self.config.scratch_dir / rel
         scratch_path.parent.mkdir(parents=True, exist_ok=True)
         return scratch_path
@@ -182,31 +192,39 @@ class ExportManager:
         Args:
             src: Source path (typically in scratch dir)
             dst: Destination path (final output location)
+        
+        Raises:
+            FileNotFoundError: If src does not exist (indicates upstream write failure)
         """
         dst.parent.mkdir(parents=True, exist_ok=True)
         src.replace(dst)
     
-    def _write_tiff16(self, path: Path, arr: np.ndarray, compression: str = "deflate") -> None:
+    def _write_tiff16(self, path: Path, arr: np.ndarray, compression: Optional[str] = "deflate") -> None:
         """
         Slice 3 PR-2: Central 16-bit TIFF writer with tiled/legacy selection.
         
         Chooses tiled BigTIFF writer if tiff_tile_size is set, otherwise uses legacy writer.
         
+        Compression precedence: config.tiff_compression provides default when compression=None,
+        but explicit compression argument always wins.
+        
         Args:
             path: Output TIFF path
             arr: RGB float32 array in [0, 1]
-            compression: TIFF compression method
+            compression: TIFF compression method (explicit override of config default)
         """
+        # Determine effective compression (explicit arg > config default)
+        effective_comp = compression if compression is not None else self.config.tiff_compression
+        
         if self.config.tiff_tile_size is not None:
             # Slice 3 PR-2 optimization: use tiled BigTIFF
             from lux_depth_v2.io_utils import write_tiff16_tiled
             tile_size = int(self.config.tiff_tile_size)
-            comp = self.config.tiff_compression if self.config.tiff_compression else compression
-            write_tiff16_tiled(path, arr, tile_size=tile_size, compression=comp)
+            write_tiff16_tiled(path, arr, tile_size=tile_size, compression=effective_comp)
         else:
             # Slice 2 compatibility: use existing _io method (works with mocks in tests)
             from lux_depth_v2.io_utils import write_tiff16_legacy
-            write_tiff16_legacy(path, arr, compression=compression)
+            write_tiff16_legacy(path, arr, compression=effective_comp)
     
     def _write_image_atomic(self, final_path: Path, arr: np.ndarray, compression: str = "deflate") -> None:
         """

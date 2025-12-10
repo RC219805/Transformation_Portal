@@ -8,8 +8,9 @@ Tests focus on actual optimization behavior added in Slice 3 PR-2:
 - Tiered storage (scratch dir + finalization)
 - Behavior parity when all flags are OFF
 """
+import json
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -73,7 +74,7 @@ class TestTiledWriterSelection:
     
     @patch("lux_depth_v2.io_utils.write_tiff16_tiled")
     def test_tiled_uses_config_compression(self, mock_tiled, tmp_path, mock_io_utils, sample_image):
-        """Verify tiled writer uses compression from config."""
+        """Verify tiled writer uses compression from config when arg is None."""
         # Mock needs to create file for _atomic_move
         def create_file(path, arr, tile_size=None, compression=None):
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -87,12 +88,37 @@ class TestTiledWriterSelection:
         )
         mgr = ExportManager(cfg, mock_io_utils)
         
-        mgr.write_master("test", sample_image)
+        # Pass compression=None to allow config to be used (precedence: explicit arg > config)
+        mgr.write_master("test", sample_image, compression=None)
         
-        # Tiled writer should use lzw compression
+        # Tiled writer should use lzw compression from config
         assert mock_tiled.called
         call_args = mock_tiled.call_args
         assert call_args.kwargs["compression"] == "lzw"
+    
+    @patch("lux_depth_v2.io_utils.write_tiff16_tiled")
+    def test_explicit_compression_overrides_config(self, mock_tiled, tmp_path, mock_io_utils, sample_image):
+        """Verify explicit compression argument overrides config (precedence test)."""
+        # Mock needs to create file for _atomic_move
+        def create_file(path, arr, tile_size=None, compression=None):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        mock_tiled.side_effect = create_file
+        
+        cfg = ExportConfig(
+            output_dir=tmp_path / "out",
+            tiff_tile_size=256,
+            tiff_compression="lzw",  # Config says lzw
+        )
+        mgr = ExportManager(cfg, mock_io_utils)
+        
+        # Explicitly pass deflate - should override config
+        mgr.write_master("test", sample_image, compression="deflate")
+        
+        # Tiled writer should use deflate (explicit arg wins)
+        assert mock_tiled.called
+        call_args = mock_tiled.call_args
+        assert call_args.kwargs["compression"] == "deflate"
 
 
 class TestAtomicImageWrites:
@@ -157,9 +183,10 @@ class TestAtomicReportWrites:
         report = {"status": "ok", "timing_s": 1.5}
         result_path = mgr.write_report("test", report)
         
-        # Final JSON should exist
+        # Final JSON should exist and match expected content
         assert result_path.exists()
-        assert result_path.read_text() == '{\n  "status": "ok",\n  "timing_s": 1.5\n}'
+        loaded = json.loads(result_path.read_text())
+        assert loaded == report
         
         # No .tmp file should remain
         tmp_file = result_path.with_suffix(result_path.suffix + ".tmp")
@@ -267,7 +294,6 @@ class TestBehaviorParity:
         assert result_path.exists()
         
         # Content should be correct
-        import json
         loaded = json.loads(result_path.read_text())
         assert loaded == report
 
