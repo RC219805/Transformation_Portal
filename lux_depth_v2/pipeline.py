@@ -586,18 +586,29 @@ class LuxPipelineV2:
             "write_outputs": bool(cfg.write_outputs),
         })
 
-        # Write report JSON only if enabled
-        if cfg.write_outputs:
-            with self._stage(report, "io/write_report"):
-                self._write_json(report_path, report)
-
         # Backward compatibility alias
         report["stage_times"] = report.get("stage_times_sec", {})
+        
+        # Phase 2 timing instrumentation:
+        # - timing_s: total execution time (float, preserved for backward compatibility)
+        # - timing_stages_s: per-stage timings (dict[str, float])
+        report["timing_stages_s"] = report.get("stage_times_sec", {})
+        
+        # Optional: structured timing object for future use
+        report["timing"] = {
+            "total_s": report["timing_s"],
+            "stages_s": report.get("stage_times_sec", {}),
+        }
         
         # PRODUCTION: Add reproducibility stamping
         report["reproducibility"] = self._repro_metadata.copy()
         report["reproducibility"]["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         report["reproducibility"]["preset"] = str(cfg.preset.value)
+
+        # Write report JSON only if enabled (after all fields added)
+        if cfg.write_outputs:
+            with self._stage(report, "io/write_report"):
+                self._write_json(report_path, report)
 
         return report
 
