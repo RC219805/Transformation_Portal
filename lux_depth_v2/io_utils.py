@@ -18,6 +18,25 @@ except Exception:  # pragma: no cover
     tifffile = None  # type: ignore
 
 
+# Slice 3 PR-2: Compression validation constants
+VALID_TIFF_COMPRESSION = frozenset({None, "lzw", "zstd", "deflate"})
+
+
+def validate_tiff_compression(compression: Optional[str]) -> None:
+    """
+    Validate TIFF compression parameter.
+    
+    Raises:
+        ValueError: If compression is not in VALID_TIFF_COMPRESSION
+    """
+    if compression not in VALID_TIFF_COMPRESSION:
+        valid_str = ", ".join(sorted(str(c) for c in VALID_TIFF_COMPRESSION if c))
+        raise ValueError(
+            f"tiff_compression={compression!r} is invalid. "
+            f"Valid options: {valid_str}, or None"
+        )
+
+
 @dataclass
 class ImageInfo:
     path: Path
@@ -182,3 +201,93 @@ def atomic_write_jpg8(path: Path, rgb01: np.ndarray, quality: int = 92) -> None:
     tmp = p.parent / (p.stem + ".tmp" + p.suffix)
     cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_JPEG_QUALITY, int(quality)])
     os.replace(str(tmp), str(p))
+
+
+# ------------------------------------------------------------------ #
+# Slice 3 PR-2: Tiled BigTIFF + non-atomic legacy writer
+# ------------------------------------------------------------------ #
+
+def write_tiff16_legacy(path: Path, rgb01: np.ndarray, compression: Optional[str] = "deflate") -> None:
+    """
+    Write uint16 RGB TIFF (non-atomic, direct write).
+    
+    Slice 3 PR-2: Legacy behavior for backward compatibility.
+    This is the default when use_atomic_image_writes=False.
+    
+    Args:
+        path: Output TIFF path
+        rgb01: RGB float32 array in [0, 1], shape (H, W, 3)
+        compression: TIFF compression ("deflate", "lzw", "zstd", None)
+    
+    Raises:
+        ValueError: If compression is invalid
+    """
+    ensure_deps()
+    validate_tiff_compression(compression)
+    
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    
+    rgb01 = np.asarray(rgb01, dtype=np.float32)
+    rgb_u16 = (np.clip(rgb01, 0.0, 1.0) * 65535.0 + 0.5).astype(np.uint16)
+    
+    tifffile.imwrite(str(p), rgb_u16, photometric="rgb", compression=compression, metadata=None)
+
+
+def write_tiff16_tiled(
+    path: Path,
+    rgb01: np.ndarray,
+    tile_size: int,
+    compression: Optional[str] = None,
+) -> None:
+    """
+    Write uint16 RGB TIFF with tiling for large images (Slice 3 PR-2 optimization).
+    
+    Tiling reduces peak memory and improves write performance for large TIFFs.
+    Automatically uses BigTIFF format for files >2GB uncompressed.
+    
+    Args:
+        path: Output TIFF path
+        rgb01: RGB float32 array in [0, 1], shape (H, W, 3)
+        tile_size: Tile dimension in pixels (e.g., 512), must be positive int
+        compression: TIFF compression ("lzw", "zstd", "deflate", None)
+    
+    Raises:
+        ValueError: If tile_size is invalid or compression unsupported
+    """
+    ensure_deps()
+    validate_tiff_compression(compression)
+    
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Convert to uint16
+    rgb01 = np.asarray(rgb01, dtype=np.float32)
+    rgb_u16 = (np.clip(rgb01, 0.0, 1.0) * 65535.0 + 0.5).astype(np.uint16)
+    
+    # Validate tile_size
+    if not isinstance(tile_size, int) or tile_size <= 0:
+        raise ValueError(f"tile_size must be a positive int, got {tile_size!r}")
+    
+    h, w = rgb_u16.shape[:2]
+    if tile_size > max(h, w):
+        raise ValueError(
+            f"tile_size={tile_size} cannot exceed max image dimension={max(h, w)}"
+        )
+    
+    # Determine if BigTIFF is needed (>2GB uncompressed size threshold)
+    channels = rgb_u16.shape[2] if rgb_u16.ndim == 3 else 1
+    uncompressed_size = h * w * channels * 2  # 2 bytes per uint16
+    use_bigtiff = uncompressed_size > (2 * 1024 * 1024 * 1024)  # >2GB
+    
+    # Write tiled TIFF
+    tifffile.imwrite(
+        str(p),
+        rgb_u16,
+        bigtiff=use_bigtiff,
+        tile=(tile_size, tile_size),
+        compression=compression,
+        photometric="rgb" if channels == 3 else None,
+        planarconfig="contig",  # Interleaved RGB
+        metadata=None,
+    )
