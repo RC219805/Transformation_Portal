@@ -130,9 +130,9 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Use scene complexity in autotune decisions (default: True).")
     
     # Marketing Export (M0+M1.1)
-    phase2_group.add_argument("--marketing-png-compression", type=int, default=6,
+    phase2_group.add_argument("--marketing-png-compression", type=int, default=1,
                              choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-                             help="PNG compression for marketing export (0=no compression/fastest, 9=max compression/slowest, default=6).")
+                             help="PNG compression for marketing export (0=no compression, 1=fast/recommended [default], 3=balanced, 6=old default, 9=max/slow).")
 
     return p
 
