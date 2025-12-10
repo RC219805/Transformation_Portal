@@ -152,8 +152,8 @@ class PipelineConfig:
     save_preview_jpg: bool = True
     preview_scale: float = 0.25
     
-    # Marketing Export (M0+M1.1)
-    marketing_png_compression: int = 6  # PNG compression level (1-9)
+    # Marketing Export (M0+M1.1) - Benchmarked 2025-12-10
+    marketing_png_compression: int = 1  # PNG compression level (0-9, default 1 for 84% speedup)
 
     skip_existing: bool = True
     overwrite: bool = False
