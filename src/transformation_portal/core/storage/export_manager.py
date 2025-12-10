@@ -148,15 +148,15 @@ class ExportManager:
             raise ValueError("max_async_workers must be >= 1")
     
     # ------------------------------------------------------------------ #
-    # Slice 3 PR-1: Skeleton helpers (infrastructure only, no optimization yet)
+    # Slice 3 PR-2: Tiered storage + optimization helpers (actual implementation)
     # ------------------------------------------------------------------ #
     
     def _resolve_scratch_path(self, final_path: Path) -> Path:
         """
-        Slice 3 PR-1: Skeleton for tiered storage path resolution.
+        Slice 3 PR-2: Tiered storage path resolution (now active when enabled).
         
-        For now, returns final_path directly (tiered storage not yet active).
-        PR-2 will wire actual scratch path logic when enable_tiered_storage=True.
+        When enable_tiered_storage=True and scratch_dir is set, returns path in scratch.
+        Otherwise returns final_path (backward compatible).
         
         Args:
             final_path: Intended final output path
@@ -164,23 +164,83 @@ class ExportManager:
         Returns:
             Path where file should be written (scratch or final)
         """
-        # PR-1: Always return final path (no behavior change)
-        return final_path
+        if not self.config.enable_tiered_storage or self.config.scratch_dir is None:
+            return final_path
+        
+        # Map final path to scratch path
+        rel = final_path.relative_to(self.config.output_dir)
+        scratch_path = self.config.scratch_dir / rel
+        scratch_path.parent.mkdir(parents=True, exist_ok=True)
+        return scratch_path
     
     def _atomic_move(self, src: Path, dst: Path) -> None:
         """
-        Slice 3 PR-1: Skeleton for atomic file move.
+        Slice 3 PR-2: Atomic file move (finalize from scratch to final).
         
         Uses Path.replace() which is atomic on POSIX when src/dst on same filesystem.
-        PR-2 will add error handling and logging.
         
         Args:
             src: Source path (typically in scratch dir)
             dst: Destination path (final output location)
         """
-        # PR-1: Simple replace, same as current behavior
         dst.parent.mkdir(parents=True, exist_ok=True)
         src.replace(dst)
+    
+    def _write_tiff16(self, path: Path, arr: np.ndarray, compression: str = "deflate") -> None:
+        """
+        Slice 3 PR-2: Central 16-bit TIFF writer with tiled/legacy selection.
+        
+        Chooses tiled BigTIFF writer if tiff_tile_size is set, otherwise uses legacy writer.
+        
+        Args:
+            path: Output TIFF path
+            arr: RGB float32 array in [0, 1]
+            compression: TIFF compression method
+        """
+        if self.config.tiff_tile_size is not None:
+            # Slice 3 PR-2 optimization: use tiled BigTIFF
+            from lux_depth_v2.io_utils import write_tiff16_tiled
+            tile_size = int(self.config.tiff_tile_size)
+            comp = self.config.tiff_compression if self.config.tiff_compression else compression
+            write_tiff16_tiled(path, arr, tile_size=tile_size, compression=comp)
+        else:
+            # Slice 2 compatibility: use existing _io method (works with mocks in tests)
+            from lux_depth_v2.io_utils import write_tiff16_legacy
+            write_tiff16_legacy(path, arr, compression=compression)
+    
+    def _write_image_atomic(self, final_path: Path, arr: np.ndarray, compression: str = "deflate") -> None:
+        """
+        Slice 3 PR-2: Atomic write for TIFF images.
+        
+        Writes to .tmp file, then atomically moves to final path.
+        
+        Args:
+            final_path: Final output path
+            arr: RGB float32 array in [0, 1]
+            compression: TIFF compression method
+        """
+        tmp = final_path.with_suffix(final_path.suffix + ".tmp")
+        self._write_tiff16(tmp, arr, compression=compression)
+        self._atomic_move(tmp, final_path)
+    
+    def _write_image_direct(self, final_path: Path, arr: np.ndarray, compression: str = "deflate") -> None:
+        """
+        Slice 3 PR-2: Direct write for TIFF images.
+        
+        When optimizations are OFF (default), uses Slice 2 behavior via _io module.
+        When optimizations are ON, uses new tiled writer.
+        
+        Args:
+            final_path: Final output path
+            arr: RGB float32 array in [0, 1]
+            compression: TIFF compression method
+        """
+        if self.config.tiff_tile_size is not None:
+            # PR-2 optimization: use tiled writer
+            self._write_tiff16(final_path, arr, compression=compression)
+        else:
+            # Slice 2 compatibility: use _io module (preserves test mocks)
+            self._io.atomic_write_rgb16_tiff(final_path, arr, compression=compression)
     
     def cleanup_scratch(self) -> None:
         """
@@ -212,35 +272,60 @@ class ExportManager:
                 pass
     
     # ------------------------------------------------------------------ #
-    # Write methods (unchanged from Slice 2 for PR-1)
+    # Slice 3 PR-2: Write methods with optimization support
     # ------------------------------------------------------------------ #
     
     def write_master(self, stem: str, master_arr: np.ndarray, compression: str = "deflate") -> Path:
         """
-        Write 16-bit master TIFF (behavior-identical to pipeline.py:467).
+        Write 16-bit master TIFF with Slice 3 PR-2 optimizations.
+        
+        Behavior depends on config flags:
+        - tiff_tile_size: Use tiled BigTIFF if set (performance optimization)
+        - use_atomic_image_writes: Use atomic writes if True (reliability)
+        - enable_tiered_storage: Write to scratch first if True (I/O optimization)
+        
+        With all flags at default, behavior matches Slice 2 exactly.
         
         Args:
             stem: Base filename without extension
             master_arr: RGB float32 array in [0, 1]
-            compression: TIFF compression (deflate, lzw, none)
+            compression: TIFF compression (deflate, lzw, zstd, none)
         
         Returns:
-            Path to written file
+            Path to written file (final output location)
         
         Raises:
             RuntimeError: If I/O dependencies missing
             OSError: If write fails
         """
         filename = f"{self.config.master_prefix}{stem}{self.config.master_suffix}.tif"
-        path = self.config.output_dir / filename
+        final_path = self.config.output_dir / filename
         
-        # Delegate to existing atomic writer (bit-identical behavior)
-        self._io.atomic_write_rgb16_tiff(path, master_arr, compression=compression)
-        return path
+        # Slice 3 PR-2: Resolve write path (scratch or final)
+        write_path = self._resolve_scratch_path(final_path)
+        
+        # Slice 3 PR-2: Use atomic or direct write based on config
+        if self.config.use_atomic_image_writes:
+            self._write_image_atomic(write_path, master_arr, compression=compression)
+        else:
+            self._write_image_direct(write_path, master_arr, compression=compression)
+        
+        # Slice 3 PR-2: Finalize from scratch to final if needed
+        if write_path != final_path:
+            self._atomic_move(write_path, final_path)
+        
+        return final_path
     
     def write_upscaled(self, stem: str, upscaled_arr: np.ndarray, compression: str = "deflate") -> Path:
         """
-        Write 16-bit upscaled TIFF (behavior-identical to pipeline.py:569).
+        Write 16-bit upscaled TIFF with Slice 3 PR-2 optimizations.
+        
+        Behavior depends on config flags:
+        - tiff_tile_size: Use tiled BigTIFF if set (performance optimization)
+        - use_atomic_image_writes: Use atomic writes if True (reliability)
+        - enable_tiered_storage: Write to scratch first if True (I/O optimization)
+        
+        With all flags at default, behavior matches Slice 2 exactly.
         
         Args:
             stem: Base filename without extension
@@ -248,13 +333,25 @@ class ExportManager:
             compression: TIFF compression
         
         Returns:
-            Path to written file
+            Path to written file (final output location)
         """
         filename = f"{self.config.upscaled_prefix}{stem}{self.config.upscaled_suffix}.tif"
-        path = self.config.output_dir / filename
+        final_path = self.config.output_dir / filename
         
-        self._io.atomic_write_rgb16_tiff(path, upscaled_arr, compression=compression)
-        return path
+        # Slice 3 PR-2: Resolve write path (scratch or final)
+        write_path = self._resolve_scratch_path(final_path)
+        
+        # Slice 3 PR-2: Use atomic or direct write based on config
+        if self.config.use_atomic_image_writes:
+            self._write_image_atomic(write_path, upscaled_arr, compression=compression)
+        else:
+            self._write_image_direct(write_path, upscaled_arr, compression=compression)
+        
+        # Slice 3 PR-2: Finalize from scratch to final if needed
+        if write_path != final_path:
+            self._atomic_move(write_path, final_path)
+        
+        return final_path
     
     def write_preview(self, stem: str, preview_arr: np.ndarray, quality: int = 92) -> Path:
         """
@@ -293,7 +390,12 @@ class ExportManager:
     
     def write_report(self, stem: str, report_dict: Dict[str, Any]) -> Path:
         """
-        Write processing report JSON (behavior-identical to pipeline.py:611).
+        Write processing report JSON with Slice 3 PR-2 atomic write support.
+        
+        Behavior depends on config flags:
+        - use_atomic_report_writes: Use atomic writes if True (prevents partial JSON)
+        
+        With flag at default (False), behavior matches Slice 2 exactly.
         
         Args:
             stem: Base filename without extension
@@ -303,14 +405,20 @@ class ExportManager:
             Path to written file
         """
         filename = f"{stem}{self.config.report_suffix}"
-        path = self.config.output_dir / filename
+        final_path = self.config.output_dir / filename
+        final_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Match existing behavior: direct write with indent=2 (non-atomic)
-        # Note: atomic writes (.tmp + replace) can be added in Slice 3
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(report_dict, indent=2))
+        # Slice 3 PR-2: Use atomic or direct write based on config
+        if self.config.use_atomic_report_writes:
+            # Atomic write: .tmp + replace
+            tmp = final_path.with_suffix(final_path.suffix + ".tmp")
+            tmp.write_text(json.dumps(report_dict, indent=2))
+            self._atomic_move(tmp, final_path)
+        else:
+            # Legacy behavior: direct write (non-atomic)
+            final_path.write_text(json.dumps(report_dict, indent=2))
         
-        return path
+        return final_path
     
     def get_master_path(self, stem: str) -> Path:
         """Get expected master output path (for skip_existing check)."""
