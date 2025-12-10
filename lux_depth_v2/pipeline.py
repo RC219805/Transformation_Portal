@@ -178,15 +178,22 @@ class LuxPipelineV2:
         # Capture reproducibility metadata on init
         self._repro_metadata = self._collect_reproducibility_metadata()
 
-        # Phase 2 Slice 2: Initialize ExportManager
+        # Phase 2 Slice 2/3: ExportManager (deferred to JIT if autotune enabled)
         self.export_manager = None
-        if EXPORT_MANAGER_AVAILABLE and cfg.output_dir:
+        self._export_manager_autotune_enabled = (
+            cfg.phase2 and cfg.phase2.autotune_export if cfg.phase2 else False
+        )
+        
+        if not self._export_manager_autotune_enabled and EXPORT_MANAGER_AVAILABLE and cfg.output_dir:
+            # Static config: build ExportManager at init (backward compatible)
             try:
                 export_config = ExportConfig(output_dir=Path(cfg.output_dir))
                 self.export_manager = ExportManager(export_config, io_utils)
-                self.logger.info("ExportManager initialized")
+                self.logger.info("ExportManager initialized (static config)")
             except Exception as e:
                 self.logger.warning(f"ExportManager init failed, using direct I/O: {e}")
+        elif self._export_manager_autotune_enabled:
+            self.logger.info("ExportManager will be built JIT with autotune")
 
         self.logger.info(
             f"PipelineV2 init | device={self.device} autocast={self.autocast} "
@@ -377,6 +384,65 @@ class LuxPipelineV2:
             self.logger.warning(
                 f"Large image {W}x{H} may stress RAM/VRAM: ~{float_gb:.2f} GB per float32 RGB buffer"
             )
+        
+        # Phase 2 Slice 3: Build ExportManager JIT with autotune (if enabled)
+        if self._export_manager_autotune_enabled and self.export_manager is None and EXPORT_MANAGER_AVAILABLE:
+            with self._stage(report, "export/autotune"):
+                try:
+                    from transformation_portal.core.storage import (
+                        autotune_export_config,
+                        compute_image_stats,
+                    )
+                    
+                    # Compute image stats
+                    use_complexity = cfg.phase2.autotune_use_complexity if cfg.phase2 else True
+                    image_stats = compute_image_stats(
+                        img_path,
+                        rgb_array=rgb01 if use_complexity else None
+                    )
+                    
+                    # Autotune export config
+                    export_config = autotune_export_config(
+                        output_dir=Path(cfg.output_dir),
+                        image_width=image_stats.width,
+                        image_height=image_stats.height,
+                        scene_complexity=image_stats.scene_complexity,
+                        enable_adaptive=True,
+                    )
+                    
+                    self.export_manager = ExportManager(export_config, io_utils)
+                    
+                    # Store autotune metadata for report
+                    report["export_autotune"] = {
+                        "enabled": True,
+                        "image_stats": {
+                            "width": image_stats.width,
+                            "height": image_stats.height,
+                            "megapixels": image_stats.megapixels,
+                            "scene_complexity": image_stats.scene_complexity,
+                        },
+                        "final_export_config": {
+                            "tiff_tile_size": export_config.tiff_tile_size,
+                            "tiff_compression": export_config.tiff_compression,
+                            "use_atomic_image_writes": export_config.use_atomic_image_writes,
+                            "use_atomic_report_writes": export_config.use_atomic_report_writes,
+                        },
+                    }
+                    
+                    self.logger.info(
+                        f"ExportManager autotuned | {image_stats.megapixels:.1f}MP "
+                        f"complexity={image_stats.scene_complexity:.3f if image_stats.scene_complexity else 'N/A'} "
+                        f"tiled={export_config.tiff_tile_size is not None} "
+                        f"atomic={export_config.use_atomic_image_writes}"
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Autotune failed, using baseline config: {e}")
+                    export_config = ExportConfig(output_dir=Path(cfg.output_dir))
+                    self.export_manager = ExportManager(export_config, io_utils)
+                    report["export_autotune"] = {"enabled": True, "error": str(e)}
+        elif not self._export_manager_autotune_enabled:
+            # Add metadata indicating autotune was disabled
+            report["export_autotune"] = {"enabled": False}
 
         # Depth and weights
         with self._stage(report, "io/read_depth"):

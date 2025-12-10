@@ -122,6 +122,12 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Use tile-based upscaling (memory efficient).")
     phase2_group.add_argument("--upscale-tile-size", type=int, default=512,
                              help="Tile size for upscaling in pixels (default: 512).")
+    
+    # Export Autotune (Phase 2 Slice 3)
+    phase2_group.add_argument("--autotune-export", action="store_true",
+                             help="Enable adaptive export configuration (autotune based on image stats).")
+    phase2_group.add_argument("--autotune-complexity", action="store_true", default=True,
+                             help="Use scene complexity in autotune decisions (default: True).")
 
     return p
 
@@ -211,6 +217,10 @@ def main() -> None:
             # Upscaling
             tile_based_upscaling=getattr(args, 'tile_based_upscale', False) or phase2_enabled,
             upscale_tile_size=getattr(args, 'upscale_tile_size', 512),
+            
+            # Autotune (Phase 2 Slice 3)
+            autotune_export=getattr(args, 'autotune_export', False),
+            autotune_use_complexity=getattr(args, 'autotune_complexity', True),
         )
         
         # Store in config for pipeline access

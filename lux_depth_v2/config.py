@@ -101,6 +101,10 @@ class Phase2Config:
     upscale_tile_size: int = 512
     upscale_overlap: int = 64
     progressive_upscaling: bool = True  # 2×2 instead of 4× for memory safety
+    
+    # Autotune Export Configuration (Phase 2 Slice 3)
+    autotune_export: bool = False  # Default OFF
+    autotune_use_complexity: bool = True
 
 
 @dataclass
