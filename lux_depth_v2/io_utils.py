@@ -179,7 +179,19 @@ def atomic_write_rgb16_tiff(path: Path, rgb01: np.ndarray, compression: str = "d
     os.replace(str(tmp), str(p))
 
 
-def atomic_write_png8(path: Path, rgb01: np.ndarray) -> None:
+def atomic_write_png8(path: Path, rgb01: np.ndarray, compression: int = 6) -> None:
+    """
+    Write 8-bit PNG atomically with configurable compression (M1.1).
+    
+    Args:
+        path: Output PNG path
+        rgb01: RGB float32 array in [0, 1]
+        compression: PNG compression level (0-9, default 6)
+                    0 = no compression (fastest, largest files)
+                    1 = best speed
+                    6 = balanced (default)
+                    9 = best compression (slowest)
+    """
     ensure_deps()
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -187,7 +199,7 @@ def atomic_write_png8(path: Path, rgb01: np.ndarray) -> None:
     bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
     # Keep .png extension for OpenCV to recognize the format
     tmp = p.parent / (p.stem + ".tmp" + p.suffix)
-    cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_PNG_COMPRESSION, 7])
+    cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_PNG_COMPRESSION, int(compression)])
     os.replace(str(tmp), str(p))
 
 
