@@ -589,8 +589,16 @@ class LuxPipelineV2:
         # Backward compatibility alias
         report["stage_times"] = report.get("stage_times_sec", {})
         
-        # Phase 2 timing instrumentation
-        report["timing_s"] = report.get("stage_times_sec", {})
+        # Phase 2 timing instrumentation:
+        # - timing_s: total execution time (float, preserved for backward compatibility)
+        # - timing_stages_s: per-stage timings (dict[str, float])
+        report["timing_stages_s"] = report.get("stage_times_sec", {})
+        
+        # Optional: structured timing object for future use
+        report["timing"] = {
+            "total_s": report["timing_s"],
+            "stages_s": report.get("stage_times_sec", {}),
+        }
         
         # PRODUCTION: Add reproducibility stamping
         report["reproducibility"] = self._repro_metadata.copy()
