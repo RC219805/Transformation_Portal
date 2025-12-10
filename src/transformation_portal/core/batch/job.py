@@ -41,6 +41,7 @@ class JobItem:
     duration_ms: Optional[float] = None
     attempt: int = 0
     metadata: Optional[dict] = None
+    timing_s: Optional[dict[str, float]] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -154,10 +155,11 @@ class BatchJob:
         item.attempt += 1
         self.save_checkpoint()
 
-    def mark_completed(self, item: JobItem, duration_ms: float):
+    def mark_completed(self, item: JobItem, duration_ms: float, timing_s: Optional[dict[str, float]] = None):
         """Mark item as completed."""
         item.status = JobStatus.COMPLETED
         item.duration_ms = duration_ms
+        item.timing_s = timing_s
         self.save_checkpoint()
 
     def mark_failed(self, item: JobItem, error: str):
@@ -351,8 +353,16 @@ class BatchProcessor:
                 if hasattr(result, 'save'):
                     result.save(Path(item.output_path))
 
+                # Extract timing_s if available
+                timing_s = None
+                if isinstance(result, dict) and 'timing_s' in result:
+                    timing_s = result['timing_s']
+                elif isinstance(result, dict) and 'stage_times_sec' in result:
+                    # Backward compatibility: convert stage_times_sec to timing_s
+                    timing_s = result['stage_times_sec']
+
                 # Mark success
-                job.mark_completed(item, duration_ms)
+                job.mark_completed(item, duration_ms, timing_s=timing_s)
                 logger.info(f"  Completed in {duration_ms:.0f}ms")
                 return
 
