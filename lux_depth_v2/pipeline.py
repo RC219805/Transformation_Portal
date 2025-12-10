@@ -56,10 +56,12 @@ def _is_image_file(p: Path) -> bool:
 def _find_depth(depth_dir: Optional[Path], stem: str) -> Optional[Path]:
     if not depth_dir:
         return None
-    for ext in (".tif", ".tiff", ".png"):
-        cand = depth_dir / f"{stem}{ext}"
-        if cand.exists():
-            return cand
+    # Try both {stem}_depth.{ext} and {stem}.{ext} patterns
+    for pattern in (f"{stem}_depth", f"{stem}"):
+        for ext in (".tif", ".tiff", ".png"):
+            cand = depth_dir / f"{pattern}{ext}"
+            if cand.exists():
+                return cand
     return None
 
 

@@ -367,11 +367,15 @@ class PreFlightValidator:
         depth_found = False
         depth_path = None
         
-        for ext in [".tif", ".tiff", ".png"]:
-            candidate = depth_dir / f"{stem}{ext}"
-            if candidate.exists():
-                depth_found = True
-                depth_path = candidate
+        # Try both {stem}_depth.{ext} and {stem}.{ext} patterns (matches _find_depth in pipeline.py)
+        for pattern in (f"{stem}_depth", f"{stem}"):
+            for ext in [".tif", ".tiff", ".png"]:
+                candidate = depth_dir / f"{pattern}{ext}"
+                if candidate.exists():
+                    depth_found = True
+                    depth_path = candidate
+                    break
+            if depth_found:
                 break
         
         if not depth_found:
