@@ -245,12 +245,24 @@ def run_benchmark(
             return 0.0
         return sum(values) / len(values)
     
+    # Convert config to JSON-serializable dict
+    config = get_mode_config(mode, output_dir, scratch_dir)
+    config_dict = {
+        "output_dir": str(config.output_dir),
+        "enable_tiered_storage": config.enable_tiered_storage,
+        "scratch_dir": str(config.scratch_dir) if config.scratch_dir else None,
+        "tiff_tile_size": config.tiff_tile_size,
+        "tiff_compression": config.tiff_compression,
+        "use_atomic_image_writes": config.use_atomic_image_writes,
+        "use_atomic_report_writes": config.use_atomic_report_writes,
+    }
+    
     aggregated = {
         "test_id": f"{mode}_{input_path.stem}",
         "mode": mode,
-        "config": get_mode_config(mode, output_dir, scratch_dir).__dict__,
+        "config": config_dict,
         "runs": runs,
-        "input": results[0]["input"],  # Same for all runs
+        "input": results[0]["input"],  # Already contains path as string
         "timing_avg": {
             "export_master": round(avg(["timing", "export_master"]), 3),
             "export_upscaled": round(avg(["timing", "export_upscaled"]), 3),
