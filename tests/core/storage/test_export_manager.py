@@ -209,10 +209,16 @@ class TestExportManagerIntegration:
             
             import io_utils
             
+            # Check if dependencies are available
+            try:
+                io_utils.ensure_deps()
+            except RuntimeError as e:
+                pytest.skip(f"Missing dependencies: {e}")
+            
             cfg = ExportConfig(output_dir=tmp_path)
             return ExportManager(cfg, io_utils)
-        except ImportError:
-            pytest.skip("lux_depth_v2.io_utils not available")
+        except ImportError as e:
+            pytest.skip(f"lux_depth_v2.io_utils not available: {e}")
     
     def test_real_tiff_write(self, real_export_manager, tmp_path):
         """Test real TIFF write produces valid file."""
