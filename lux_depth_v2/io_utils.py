@@ -187,7 +187,7 @@ def atomic_write_png8(path: Path, rgb01: np.ndarray, compression: int = 6) -> No
         path: Output PNG path
         rgb01: RGB float32 array in [0, 1]
         compression: PNG compression level (0-9, default 6)
-                    0 = no compression (fastest)
+                    0 = no compression (fastest, largest files)
                     1 = best speed
                     6 = balanced (default)
                     9 = best compression (slowest)
