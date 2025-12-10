@@ -7,15 +7,25 @@
 
 ## Executive Summary
 
-Comprehensive benchmarking of export optimizations (tiled BigTIFF, atomic writes, tiered storage) across 4 real-world luxury real estate images revealed **mixed results** that are highly dependent on image characteristics and scene complexity.
+⚠️ **CORRECTED ANALYSIS** (December 2025): Original benchmarking contained an aggregation bug where `timing_avg` fields copied the last run instead of computing true arithmetic means. This inflated the Aerial performance gain from actual ~5-10% to reported +18%.
 
-### Key Findings
+Comprehensive benchmarking of export optimizations (tiled BigTIFF, atomic writes, tiered storage) across 4 real-world luxury real estate images revealed **modest, scene-dependent results**.
+
+### Key Findings (Corrected)
 
 | Image | Resolution | Result | Best Mode |
 |-------|------------|--------|-----------|
-| **Aerial** | 21.6 MP | ✅ **+18% throughput** | tiled_atomic |
+| **Aerial** | 21.6 MP | ✅ **~5-10% throughput gain** | tiled_atomic |
 | **Pool** | 20.3 MP | ⚠️ **-6-8% slower** | baseline (no optimization) |
 | **GreatRoom** | 12.0 MP | ⚠️ **-2.5% slower** | baseline (no optimization) |
+
+### Critical Discovery: Marketing Export Bottleneck
+
+Across all images, **export_marketing accounts for 90-96% of total export time**.
+TIFF writing (master + upscaled) is only 4-6% of export time.
+
+**Implication**: Even if we made TIFF writing 2x faster, we'd only save ~2-3% overall.
+The real performance opportunity is in Phase 3/4 marketing export optimization.
 
 **Recommendation**: Implement **adaptive thresholds** that enable optimizations based on image characteristics, not just resolution.
 
@@ -40,16 +50,21 @@ Comprehensive benchmarking of export optimizations (tiled BigTIFF, atomic writes
 
 ### Aerial Image (6000×3600, 21.6 MP)
 
-| Mode | Export Time | Total Time | Throughput | vs Baseline |
-|------|-------------|------------|------------|-------------|
-| **baseline** | 119.2s | 190.8s | 18.9 img/hr | — |
-| **tiled** | 120.3s | 180.4s | 20.0 img/hr | **+5.8%** ✅ |
-| **tiled_atomic** | 120.2s | 161.5s | 22.3 img/hr | **+18.0%** ✅ |
-| **full_optimized** | 125.2s | 189.4s | 19.0 img/hr | **+0.5%** ✅ |
+⚠️ **CORRECTED**: Original numbers compared worst baseline run vs better optimized run.
+True mean-to-mean comparison shows ~5-6% improvement, not 18%.
+
+| Mode | Total Time (Mean) | Throughput (Mean) | vs Baseline |
+|------|-------------------|-------------------|-------------|
+| **baseline** | ~155s | ~23.2 img/hr | — |
+| **tiled_atomic** | ~147s | ~24.5 img/hr | **~5-6%** ✅ |
+
+**Original (Incorrect) Numbers**:
+- Baseline: 190.8s total (worst run), 18.9 img/hr
+- Tiled_atomic: 161.5s total (middle run), 22.3 img/hr → "+18%" gain
 
 **File Size**: 1,756.3 MB (no compression benefit)
 
-**Analysis**: **Significant improvement** with tiled_atomic mode. The combination of tiling + atomic writes reduced total pipeline time by ~15%, resulting in +18% throughput. This is the target use case for Slice 3 optimizations.
+**Analysis**: Modest but real improvement with tiled_atomic mode for aerial-like scenes with large homogeneous regions (sky, terrain). Gains are scene-dependent and typically single-digit.
 
 ---
 
@@ -70,7 +85,7 @@ Comprehensive benchmarking of export optimizations (tiled BigTIFF, atomic writes
 
 ### Why Aerial Benefited but Pool Did Not
 
-Despite similar resolutions (20-22 MP), **Aerial showed +18% gains** while **Pool showed -7% slowdown**. Possible explanations:
+Despite similar resolutions (20-22 MP), **Aerial showed ~5-10% gains** while **Pool showed -7% slowdown**. Explanations:
 
 1. **Scene Complexity**
    - Aerial: Large homogeneous regions (sky, terrain) → tiles compress/write efficiently
@@ -93,7 +108,22 @@ Despite similar resolutions (20-22 MP), **Aerial showed +18% gains** while **Poo
 
 **Reason**: These are upscaled 16-bit TIFFs with high-frequency detail that doesn't compress well with LZW. The CPU cost of compression provides no benefit.
 
-**Recommendation**: Disable LZW compression for upscaled outputs, or test ZSTD for better ratio.
+**Recommendation**: Disable LZW compression for upscaled outputs (already implemented in `autotune_export_config()`).
+
+### The Real Bottleneck: Marketing Export
+
+**Stage Profiler data** reveals the critical insight:
+
+| Image | Total Export | export_marketing | TIFF Critical (master + upscaled) | TIFF % |
+|-------|-------------|------------------|----------------------------------|---------|
+| Pool | ~114s | ~110s | ~5.2s | **4.5%** |
+| Aerial | ~119s | ~113s | ~6.0s | **5.0%** |
+| GreatRoom | ~46s | ~44s | ~2.0s | **4.3%** |
+
+**Key Finding**: Marketing export consumes 90-96% of export time across all test cases.
+Even 2x faster TIFF writing only saves 2-3% overall.
+
+**Implication**: Phase 3/4 performance work should prioritize the marketing export pipeline, not TIFF optimization.
 
 ---
 
@@ -189,4 +219,6 @@ All benchmark results are available in:
 
 ---
 
-**Conclusion**: Slice 3 optimizations provide measurable benefits for certain image types (simple scenes, large files) but introduce overhead for others. **Adaptive enablement** is essential for production deployment.
+**Conclusion**: Slice 3 optimizations provide modest (~5-10%) benefits for aerial-like scenes (large homogeneous regions) but introduce overhead for complex interiors. **Adaptive enablement** is essential for production deployment. The bigger performance opportunity lies in optimizing the marketing export pipeline (90-96% of export time).
+
+**Implementation**: `autotune_export_config()` added to `export_manager.py` with adaptive thresholds based on benchmark findings.
