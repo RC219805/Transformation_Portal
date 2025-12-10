@@ -22,10 +22,15 @@ import numpy as np
 
 @dataclass
 class MarketingExportConfig:
-    """Marketing export configuration (M1 encoding strategy)."""
+    """
+    Configuration for marketing image export.
     
-    format: str = "png"
-    png_compression_level: int = 6
+    Controls export format (png/webp/jpeg) and compression settings
+    for marketing deliverables (web, social media, client previews).
+    """
+    
+    format: str = "png"  # Future: "webp", "jpeg" (M1.2)
+    png_compression_level: int = 6  # 0=no compression (fastest), 9=max (slowest)
 
 
 @dataclass(frozen=True)

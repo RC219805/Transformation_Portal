@@ -131,8 +131,8 @@ def build_parser() -> argparse.ArgumentParser:
     
     # Marketing Export (M0+M1.1)
     phase2_group.add_argument("--marketing-png-compression", type=int, default=6,
-                             choices=[1, 2, 3, 4, 5, 6, 7, 8, 9],
-                             help="PNG compression level for marketing export (1=fast/larger, 9=slow/smaller, default=6).")
+                             choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                             help="PNG compression for marketing export (0=no compression/fastest, 9=max compression/slowest, default=6).")
 
     return p
 
