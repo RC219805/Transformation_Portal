@@ -532,6 +532,7 @@ def autotune_export_config(
     image_height: int = 0,
     scene_complexity: Optional[float] = None,
     enable_adaptive: bool = True,
+    marketing_png_compression: int = 6,
 ) -> ExportConfig:
     """
     Autotune ExportConfig based on image characteristics and benchmarking data.
@@ -583,9 +584,12 @@ def autotune_export_config(
         >>> assert cfg.tiff_tile_size is None
         >>> assert cfg.use_atomic_image_writes is False
     """
+    # Marketing config (M0+M1.1)
+    marketing_cfg = MarketingExportConfig(png_compression_level=marketing_png_compression)
+    
     # Baseline config (all optimizations OFF)
     if not enable_adaptive:
-        return ExportConfig(output_dir=output_dir)
+        return ExportConfig(output_dir=output_dir, marketing_config=marketing_cfg)
     
     # Compute megapixels
     megapixels = (image_width * image_height) / 1_000_000 if (image_width > 0 and image_height > 0) else 0
@@ -611,6 +615,7 @@ def autotune_export_config(
         # tiled_atomic mode (best performer for aerial-like scenes)
         return ExportConfig(
             output_dir=output_dir,
+            marketing_config=marketing_cfg,
             tiff_tile_size=512,
             tiff_compression=None,  # LZW provides zero benefit
             use_atomic_image_writes=True,
@@ -618,4 +623,4 @@ def autotune_export_config(
         )
     else:
         # Baseline mode (safest for complex scenes and small images)
-        return ExportConfig(output_dir=output_dir)
+        return ExportConfig(output_dir=output_dir, marketing_config=marketing_cfg)

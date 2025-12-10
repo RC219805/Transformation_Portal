@@ -128,6 +128,11 @@ def build_parser() -> argparse.ArgumentParser:
                              help="Enable adaptive export configuration (autotune based on image stats).")
     phase2_group.add_argument("--autotune-complexity", action="store_true", default=True,
                              help="Use scene complexity in autotune decisions (default: True).")
+    
+    # Marketing Export (M0+M1.1)
+    phase2_group.add_argument("--marketing-png-compression", type=int, default=6,
+                             choices=[1, 2, 3, 4, 5, 6, 7, 8, 9],
+                             help="PNG compression level for marketing export (1=fast/larger, 9=slow/smaller, default=6).")
 
     return p
 
@@ -150,6 +155,7 @@ def main() -> None:
         tile=int(args.tile),
         tile_pad=int(args.tile_pad),
         half=bool(args.half),
+        marketing_png_compression=int(args.marketing_png_compression),
     )
     cfg.segmentation.backend = args.seg_backend
     cfg.segmentation.onnx_model_path = Path(args.seg_onnx_model) if args.seg_onnx_model else None
