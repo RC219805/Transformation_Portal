@@ -22,6 +22,20 @@ from . import upscaling
 from .material_segmentation import create_material_segmenter
 from . import material_profiles
 
+# Phase 2 Slice 2: ExportManager integration
+try:
+    import sys
+    from pathlib import Path as _Path
+    _repo_root = _Path(__file__).parent.parent
+    if str(_repo_root / "src") not in sys.path:
+        sys.path.insert(0, str(_repo_root / "src"))
+    from transformation_portal.core.storage import ExportManager, ExportConfig
+    EXPORT_MANAGER_AVAILABLE = True
+except ImportError:
+    ExportManager = None
+    ExportConfig = None
+    EXPORT_MANAGER_AVAILABLE = False
+
 # Materials v2 imports (lazy load to avoid import errors if not used)
 try:
     from .materials_v2 import MaterialsV2Engine, MaterialsV2Config, SegmentationResult
@@ -164,10 +178,20 @@ class LuxPipelineV2:
         # Capture reproducibility metadata on init
         self._repro_metadata = self._collect_reproducibility_metadata()
 
+        # Phase 2 Slice 2: Initialize ExportManager
+        self.export_manager = None
+        if EXPORT_MANAGER_AVAILABLE and cfg.output_dir:
+            try:
+                export_config = ExportConfig(output_dir=Path(cfg.output_dir))
+                self.export_manager = ExportManager(export_config, io_utils)
+                self.logger.info("ExportManager initialized")
+            except Exception as e:
+                self.logger.warning(f"ExportManager init failed, using direct I/O: {e}")
+
         self.logger.info(
             f"PipelineV2 init | device={self.device} autocast={self.autocast} "
             f"upscaler={type(self.upscaler).__name__} seg={type(self.segmenter).__name__ if self.segmenter else 'None'} "
-            f"post_tile={cfg.post_tile} validate_ai={cfg.validate_ai}"
+            f"post_tile={cfg.post_tile} validate_ai={cfg.validate_ai} export_manager={self.export_manager is not None}"
         )
 
     def _validate_dependencies(self) -> None:
@@ -326,12 +350,19 @@ class LuxPipelineV2:
         out_dir = Path(cfg.output_dir)
         self._ensure_output_dir(out_dir)
 
-        # Output paths
-        master_path = out_dir / f"{stem}_master16.tif"
-        up_path = out_dir / f"{stem}_upscaled16.tif"
-        marketing_path = out_dir / f"{stem}_marketing.png"
-        preview_path = out_dir / f"{stem}_preview.jpg"
-        report_path = out_dir / f"{stem}_report.json"
+        # Output paths - use ExportManager if available
+        if self.export_manager:
+            master_path = self.export_manager.get_master_path(stem)
+            up_path = self.export_manager.get_upscaled_path(stem)
+            marketing_path = self.export_manager.get_marketing_path(stem)
+            preview_path = self.export_manager.get_preview_path(stem)
+            report_path = self.export_manager.get_report_path(stem)
+        else:
+            master_path = out_dir / f"{stem}_master16.tif"
+            up_path = out_dir / f"{stem}_upscaled16.tif"
+            marketing_path = out_dir / f"{stem}_marketing.png"
+            preview_path = out_dir / f"{stem}_preview.jpg"
+            report_path = out_dir / f"{stem}_report.json"
 
         if cfg.skip_existing and master_path.exists() and up_path.exists() and (marketing_path.exists() or not cfg.save_marketing_png):
             self.logger.info(f"skip_existing: {img_path.name}")
@@ -462,12 +493,15 @@ class LuxPipelineV2:
         
         # Write master and preview only if enabled
         if cfg.write_outputs:
-            with self._stage(report, "io/write_master"):
+            with self._stage(report, "export_master"):
                 if cfg.save_master:
-                    io_utils.atomic_write_rgb16_tiff(master_path, master01)
+                    if self.export_manager:
+                        self.export_manager.write_master(stem, master01)
+                    else:
+                        io_utils.atomic_write_rgb16_tiff(master_path, master01)
 
             # Preview (small JPG)
-            with self._stage(report, "io/write_preview"):
+            with self._stage(report, "export_preview"):
                 if cfg.save_preview_jpg:
                     try:
                         import cv2
@@ -477,7 +511,10 @@ class LuxPipelineV2:
                             prev = cv2.resize(master01, (pw, ph), interpolation=cv2.INTER_AREA)
                         else:
                             prev = master01
-                        io_utils.atomic_write_jpg8(preview_path, prev, quality=92)
+                        if self.export_manager:
+                            self.export_manager.write_preview(stem, prev, quality=92)
+                        else:
+                            io_utils.atomic_write_jpg8(preview_path, prev, quality=92)
                     except Exception:
                         pass
 
@@ -564,11 +601,19 @@ class LuxPipelineV2:
 
         # Write upscaled outputs only if enabled
         if cfg.write_outputs:
-            with self._stage(report, "io/write_upscaled"):
+            with self._stage(report, "export_upscaled"):
                 if cfg.save_upscaled:
-                    io_utils.atomic_write_rgb16_tiff(up_path, out01)
+                    if self.export_manager:
+                        self.export_manager.write_upscaled(stem, out01)
+                    else:
+                        io_utils.atomic_write_rgb16_tiff(up_path, out01)
+            
+            with self._stage(report, "export_marketing"):
                 if cfg.save_marketing_png:
-                    io_utils.atomic_write_png8(marketing_path, out01)
+                    if self.export_manager:
+                        self.export_manager.write_marketing_png(stem, out01)
+                    else:
+                        io_utils.atomic_write_png8(marketing_path, out01)
 
         # Update report with final status
         report.update({
@@ -607,8 +652,11 @@ class LuxPipelineV2:
 
         # Write report JSON only if enabled (after all fields added)
         if cfg.write_outputs:
-            with self._stage(report, "io/write_report"):
-                self._write_json(report_path, report)
+            with self._stage(report, "export_report"):
+                if self.export_manager:
+                    self.export_manager.write_report(stem, report)
+                else:
+                    self._write_json(report_path, report)
 
         return report
 
