@@ -422,6 +422,10 @@ def test_batch_processor_retry_failed(tmp_path):
     # Load job from checkpoint and retry with fixed processor
     loaded_job = BatchJob.load_checkpoint(checkpoint_path)
     
+    # Verify initial state: 1 failed item
+    assert len(loaded_job.get_failed_items()) == 1
+    assert len(loaded_job.get_completed_items()) == 0
+    
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -431,5 +435,8 @@ def test_batch_processor_retry_failed(tmp_path):
     completed = retried_job.get_completed_items()
     failed = retried_job.get_failed_items()
     
-    # At least one should complete (may have residual failures from checkpoint)
-    assert len(completed) >= 0  # May still have failures if output dir didn't exist
+    # Retry semantics: previously failed item should now complete with working processor
+    assert len(completed) == 1, "Failed item should complete after retry with working processor"
+    assert len(failed) == 0, "No items should fail with working processor"
+    assert completed[0].status == JobStatus.COMPLETED
+    assert completed[0].duration_ms > 0, "Completed item should have timing data"

@@ -206,6 +206,8 @@ def test_unicode_filename_handling(tmp_path):
 
 def test_symlink_attack_prevention(tmp_path):
     """Test prevention of symlink attacks."""
+    from src.transformation_portal.core.security.path import PathValidator
+    
     # Create a file outside allowed directory
     outside_dir = tmp_path.parent / "outside"
     outside_dir.mkdir(exist_ok=True)
@@ -220,12 +222,15 @@ def test_symlink_attack_prevention(tmp_path):
         symlink = allowed_dir / "link"
         symlink.symlink_to(outside_file)
         
-        # Check if symlink can be detected
-        assert symlink.is_symlink()
+        # PathValidator should detect and reject symlink that points outside allowed root
+        validator = PathValidator(allowed_roots=[allowed_dir])
         
-        # Basic security check
-        resolved = symlink.resolve()
-        assert not resolved.is_relative_to(allowed_dir)
+        # validate() returns False for paths outside allowed roots
+        assert not validator.validate(symlink), "Symlink pointing outside allowed root should be rejected"
+        
+        # safe_resolve() should raise ValueError for traversal attempts
+        with pytest.raises(ValueError, match="escapes allowed root"):
+            validator.safe_resolve(symlink, root=allowed_dir)
     
     except OSError:
         # Symlink creation may fail on some systems (Windows without admin)
@@ -234,21 +239,40 @@ def test_symlink_attack_prevention(tmp_path):
 
 def test_path_traversal_prevention():
     """Test prevention of path traversal attacks."""
+    from src.transformation_portal.core.security.path import PathValidator, safe_resolve_path
     import tempfile
     
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         
-        # Test that path traversal can be detected
-        dangerous_path = tmp_path / ".." / "outside.txt"
-        resolved = dangerous_path.resolve()
+        # Test traversal attempts that actually escape the root
+        traversal_attempts = [
+            tmp_path / ".." / "outside.txt",
+            tmp_path / "subdir" / ".." / ".." / "outside.txt",
+        ]
         
-        # Should resolve outside the allowed directory
-        try:
-            assert not resolved.is_relative_to(tmp_path)
-        except AttributeError:
-            # is_relative_to not available in Python < 3.9
-            assert str(tmp_path) not in str(resolved) or ".." in str(dangerous_path)
+        validator = PathValidator(allowed_roots=[tmp_path])
+        
+        for dangerous_path in traversal_attempts:
+            # Resolve the path to see where it actually points
+            resolved = dangerous_path.resolve()
+            
+            # PathValidator.validate() should return False for paths outside allowed roots
+            # The validator logs warnings but returns False (doesn't raise)
+            is_valid = validator.validate(dangerous_path)
+            
+            # Check if path actually escapes (resolve normalizes ..)
+            try:
+                resolved.relative_to(tmp_path)
+                # Path is inside root - should be valid
+                assert is_valid, f"Path inside root should be valid: {dangerous_path}"
+            except ValueError:
+                # Path is outside root - should be invalid
+                assert not is_valid, f"Path outside root should be invalid: {dangerous_path} -> {resolved}"
+        
+        # Explicitly test safe_resolve_path raises on traversal
+        with pytest.raises(ValueError, match="escapes allowed root"):
+            safe_resolve_path(tmp_path / ".." / "outside.txt", root=tmp_path)
 
 
 def test_large_batch_checkpoint_performance(tmp_path):
