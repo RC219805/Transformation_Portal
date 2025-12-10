@@ -74,7 +74,7 @@ class ExportManager:
     2. Maintain exact compatibility with existing file naming
     3. Delegate to proven I/O implementations (io_utils)
     4. Validate configuration early (fail-fast on misconfiguration)
-    4. Enable future optimizations without pipeline changes
+    5. Enable future optimizations without pipeline changes
     
     Non-Goals (Future Slices):
     - Scratch directory management
