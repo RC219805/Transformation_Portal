@@ -260,3 +260,6 @@ archive/
 
 # Quick reference temporary files
 *_QUICK_REFERENCE.txt
+
+# Benchmark output directories
+benchmarks_*/
