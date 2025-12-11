@@ -10,7 +10,6 @@ Verifies that the workspace cleanup utility:
 import sys
 from pathlib import Path
 import tempfile
-import shutil
 
 # Add tools directory to path
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -230,8 +229,8 @@ def test_get_tracked_files_graceful_failure():
             clean_workspace.ROOT = original_root
 
 
-def test_cleanup_skips_external_paths_old(tmp_path):
-    """Verify cleanup skips paths outside the repository."""
+def test_cleanup_handles_external_paths_gracefully(tmp_path):
+    """Verify cleanup handles paths outside the repository gracefully."""
     # Create a file outside the repo (simulated by tmpdir)
     external_file = tmp_path / "external.log"
     external_file.write_text("external")

@@ -106,6 +106,17 @@ def get_tracked_files() -> Set[Path]:
 
 
 def iter_paths() -> Iterable[Path]:
+    """
+    Yield all candidate file and directory paths for workspace cleanup.
+
+    Patterns:
+      - FILE_PATTERNS: root-level files (e.g. *.log, safety-report.json)
+      - DIR_PATTERNS: root-level and wildcard dirs (e.g. benchmarks_*, **/__pycache__)
+      - RECURSIVE_FILE_PATTERNS: recursive files (e.g. **/*.pyc, **/.DS_Store)
+
+    Exclusions (.git, .venv, weights) and tracked-file checks are applied later
+    in cleanup(); iter_paths() only enumerates candidates from the patterns.
+    """
     # Root-level files
     for pattern in FILE_PATTERNS:
         yield from ROOT.glob(pattern)
@@ -119,6 +130,14 @@ def iter_paths() -> Iterable[Path]:
 
 
 def classify_path(p: Path) -> str:
+    """
+    Classify a path for human-readable output.
+
+    Returns:
+        "DIR "  for directories,
+        "FILE"  for regular files,
+        "UNK "  for anything else (symlinks, special files, etc.).
+    """
     if p.is_dir():
         return "DIR "
     if p.is_file():
@@ -127,6 +146,26 @@ def classify_path(p: Path) -> str:
 
 
 def cleanup(apply: bool, verbose: bool) -> None:
+    """
+    Perform workspace cleanup by identifying and optionally deleting local-only artifacts.
+
+    Args:
+        apply: If True, delete matched files/directories. If False, run in
+            dry-run mode and only print what would be removed.
+        verbose: If True, print detailed information about skipped and deleted
+            paths.
+
+    Behavior:
+        - Dry-run (apply=False): list candidate paths, no deletions.
+        - Apply (apply=True): delete paths matching cleanup patterns, subject
+          to safety checks.
+
+    Safety guarantees:
+        - Skips paths outside the repository root.
+        - Excludes .git, .venv, and weights/ entirely.
+        - Protects tracked files (via get_tracked_files()) from deletion even
+          if they match cleanup patterns.
+    """
     tracked_files = get_tracked_files()
     
     seen = set()
@@ -201,6 +240,7 @@ def cleanup(apply: bool, verbose: bool) -> None:
             try:
                 p.unlink()
             except FileNotFoundError:
+                # File already missing (e.g. concurrent cleanup); safe to ignore.
                 pass
 
     print("\nCleanup complete.")
