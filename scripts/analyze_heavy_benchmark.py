@@ -27,9 +27,9 @@ def analyze_stage_breakdown(reports: List[Dict[str, Any]], config_name: str) -> 
             stage_times[stage].append(time_val)
         
         # Extract totals
-        timing = report.get("timing_s", {})
-        if "total" in timing:
-            total_times.append(timing["total"])
+        timing = report.get("timing_s", 0)
+        if timing:
+            total_times.append(timing)
         
         # Extract memory
         memory = report.get("memory_usage_mb", {})
