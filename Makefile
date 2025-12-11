@@ -16,7 +16,7 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
-.PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean clean-dry \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
         lock lock-prod lock-ci lock-dev verify-security security-quick security-full security-audit \
         setup-upscaling setup-swinir download-weights test-upscaling test-unified-pipeline \
@@ -33,7 +33,8 @@ help:
 	@echo "  test-lux-depth-v2  Run lux_depth_v2 module tests (fast, no GPU)"
 	@echo "  test-all-modules   Run all module tests (main + lux-depth-v2)"
 	@echo "  venv               Create local .venv if missing"
-	@echo "  clean              Remove Python cache files and build artifacts"
+	@echo "  clean              Remove all workspace artifacts (logs, outputs, caches)"
+	@echo "  clean-dry          Preview what would be cleaned (dry-run mode)"
 	@echo ""
 	@echo "Security (Continuous Verification):"
 	@echo "  verify-security    Verify no vulnerable basicsr imports (CVE-2024-27763)"
@@ -91,13 +92,10 @@ test-utils:
 	@"$(PY)" -m pytest -v tests/test_performance_utils.py tests/test_error_handling.py
 
 clean:
-	@echo "Cleaning Python cache files and build artifacts..."
-	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
-	@find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-	@rm -rf build/ dist/ .pytest_cache/ .hypothesis/ 2>/dev/null || true
-	@echo "✓ Cleanup complete"
+	@"$(PY)" tools/clean_workspace.py --apply
+
+clean-dry:
+	@"$(PY)" tools/clean_workspace.py
 
 # --- Additional developer + CI helpers ---
 
