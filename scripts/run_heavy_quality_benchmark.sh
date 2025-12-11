@@ -17,6 +17,7 @@ IMAGES=(
 CONFIGS=(
   "baseline"    # Current production defaults (PNG level 1, materials v2 off)
   "heavy"       # Max quality (materials v2 on, higher seg resolution, etc.)
+  "heavy_depth" # Max quality + depth-aware processing
 )
 
 # Create benchmark directory
@@ -63,6 +64,19 @@ run_benchmark() {
       --materials-v2 \
       --max-segmentation-side 1536 \
       --cache-masks \
+      2>&1 | tee "$output_dir.log" | grep -E "(Done|ERROR|WARNING|stage)" || true
+      
+  elif [ "$config" = "heavy_depth" ]; then
+    # Heavy + Depth: Max quality with depth-aware processing
+    lux-depth-v2 \
+      --input "$img" \
+      --output-dir "$output_dir" \
+      --preset exterior_showcase \
+      --marketing-png-compression 1 \
+      --materials-v2 \
+      --max-segmentation-side 1536 \
+      --cache-masks \
+      --depth-dir depth_maps/750_Picacho \
       2>&1 | tee "$output_dir.log" | grep -E "(Done|ERROR|WARNING|stage)" || true
   fi
   
