@@ -435,12 +435,14 @@ class MaterialsV2Engine:
         from .config import SegmentationConfig
         
         # Create proper SegmentationConfig for segmenter
+        # PHASE 1 FIX: Enable downloads for production SegFormer-B5
         seg_config = SegmentationConfig(
             backend=self.config.backend,
             input_long_side=self.config.segmentation.max_segmentation_side,
             soften_sigma_px=self.config.segmentation.edge_feather_sigma,
             min_confidence=self.config.confidence.confidence_threshold,
-            allow_downloads=False,  # Never download in production
+            allow_downloads=True,  # PHASE 1: Enable SegFormer-B5 downloads
+            segformer_model="nvidia/segformer-b5-finetuned-ade-640-640",
         )
         
         self._segmenter = create_material_segmenter(seg_config, self.device)

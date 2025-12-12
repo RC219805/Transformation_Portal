@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Optional, Tuple, TYPE_CHECKING
 
 # Platform Core integration for unified configuration
 try:
@@ -32,6 +32,167 @@ class Preset(str, Enum):
     EXTERIOR_SHOWCASE = "exterior_showcase"
     ARCHITECTURAL = "architectural"
     ARCHIVAL_QUALITY = "archival_quality"
+
+
+@dataclass
+class MaterialPropertySchema:
+    """Material Property Schema for PHASE 1 Task 2.
+    
+    Physics-based material properties for enhanced rendering.
+    Enables per-material enhancement strength and surface characteristics.
+    """
+    
+    # Surface reflectance properties
+    matte_gloss: float = 0.5  # 0=matte, 1=glossy
+    specular_intensity: float = 0.5  # 0=diffuse, 1=specular
+    roughness: float = 0.5  # 0=smooth, 1=rough (microfacet distribution)
+    albedo: float = 0.5  # 0=dark, 1=bright (base reflectance)
+    
+    # Material-specific enhancement strength
+    enhancement_strength: float = 1.0  # Multiplier for material response
+    
+    # Lighting interaction parameters
+    highlight_response: float = 1.0  # How material responds to highlights
+    shadow_response: float = 1.0  # How material responds to shadows
+    midtone_response: float = 1.0  # How material responds to midtones
+    
+    # Advanced surface properties
+    metalness: float = 0.0  # 0=dielectric, 1=metal (PBR)
+    subsurface_scattering: float = 0.0  # 0=none, 1=full (e.g., skin, wax)
+    
+    @classmethod
+    def wood(cls) -> 'MaterialPropertySchema':
+        """Wood material preset."""
+        return cls(
+            matte_gloss=0.3,
+            specular_intensity=0.4,
+            roughness=0.6,
+            albedo=0.5,
+            enhancement_strength=1.0,
+            highlight_response=0.8,
+            shadow_response=1.1,
+            midtone_response=1.0,
+            metalness=0.0,
+            subsurface_scattering=0.0
+        )
+    
+    @classmethod
+    def metal(cls) -> 'MaterialPropertySchema':
+        """Metal material preset."""
+        return cls(
+            matte_gloss=0.9,
+            specular_intensity=0.95,
+            roughness=0.2,
+            albedo=0.7,
+            enhancement_strength=1.0,
+            highlight_response=1.3,
+            shadow_response=0.8,
+            midtone_response=0.9,
+            metalness=1.0,
+            subsurface_scattering=0.0
+        )
+    
+    @classmethod
+    def glass(cls) -> 'MaterialPropertySchema':
+        """Glass material preset."""
+        return cls(
+            matte_gloss=1.0,
+            specular_intensity=0.85,
+            roughness=0.05,
+            albedo=0.8,
+            enhancement_strength=0.8,
+            highlight_response=1.4,
+            shadow_response=0.6,
+            midtone_response=0.9,
+            metalness=0.0,
+            subsurface_scattering=0.1
+        )
+    
+    @classmethod
+    def stone(cls) -> 'MaterialPropertySchema':
+        """Stone material preset."""
+        return cls(
+            matte_gloss=0.2,
+            specular_intensity=0.3,
+            roughness=0.8,
+            albedo=0.4,
+            enhancement_strength=1.0,
+            highlight_response=0.7,
+            shadow_response=1.2,
+            midtone_response=1.0,
+            metalness=0.0,
+            subsurface_scattering=0.0
+        )
+    
+    @classmethod
+    def fabric(cls) -> 'MaterialPropertySchema':
+        """Fabric material preset."""
+        return cls(
+            matte_gloss=0.1,
+            specular_intensity=0.2,
+            roughness=0.9,
+            albedo=0.5,
+            enhancement_strength=0.9,
+            highlight_response=0.6,
+            shadow_response=1.1,
+            midtone_response=1.0,
+            metalness=0.0,
+            subsurface_scattering=0.15
+        )
+
+
+@dataclass
+class HybridDepthZoneConfig:
+    """Hybrid Depth Zone Configuration for PHASE 1 Task 3.
+    
+    Combines percentile-based zones (relative) with metric-based zones (absolute).
+    Enables scene-aware zone selection for optimal processing.
+    """
+    
+    # Zone selection mode
+    mode: str = "percentile"  # percentile|metric|hybrid|auto
+    
+    # Percentile-based zones (relative, scene-adaptive)
+    fg_percentile: float = 0.35  # 0-35th percentile = foreground
+    bg_percentile: float = 0.65  # 65-100th percentile = background
+    
+    # Metric-based zones (absolute, physically meaningful)
+    close_range_m: float = 2.0  # 0-2m = close/foreground
+    mid_range_m: float = 10.0  # 2-10m = midground
+    far_range_m: float = 20.0  # 10-20m = background
+    infinity_m: float = 1000.0  # 20m-1km+ = sky/infinity
+    
+    # Hybrid mode: Scene-aware zone selection
+    auto_select_threshold: float = 0.7  # Confidence threshold for auto mode
+    prefer_metric_outdoor: bool = True  # Use metric zones for outdoor scenes
+    prefer_percentile_interior: bool = True  # Use percentile zones for interiors
+    
+    # Scene classification hints
+    scene_type: Optional[str] = None  # interior|exterior|auto
+    
+    # Zone blending (smooth transitions)
+    transition_blend_range: float = 0.08  # Blend range between zones
+    
+    def get_zones_for_scene(self, scene_type: Optional[str] = None) -> str:
+        """Get optimal zone mode for scene type.
+        
+        Args:
+            scene_type: interior|exterior|auto
+            
+        Returns:
+            Zone mode to use (percentile|metric|hybrid)
+        """
+        if self.mode != "auto":
+            return self.mode
+        
+        scene = scene_type or self.scene_type or "auto"
+        
+        if scene == "interior" and self.prefer_percentile_interior:
+            return "percentile"
+        elif scene == "exterior" and self.prefer_metric_outdoor:
+            return "metric"
+        else:
+            return "hybrid"
 
 
 @dataclass
@@ -243,6 +404,12 @@ class PipelineConfig:
     
     # Materials v2 configuration (imported lazily to avoid circular dependency)
     materials_v2: Optional['MaterialsV2Config'] = None
+    
+    # PHASE 1 Task 2: Material Property Schema
+    material_properties: Dict[str, MaterialPropertySchema] = field(default_factory=dict)
+    
+    # PHASE 1 Task 3: Hybrid Depth Zones
+    depth_zones: HybridDepthZoneConfig = field(default_factory=HybridDepthZoneConfig)
 
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""
@@ -357,7 +524,7 @@ class PipelineConfig:
             # APEX: Export Quality
             self.marketing_png_compression = 0  # Lossless PNG
             
-            # APEX: Maximum Segmentation Quality
+            # APEX: Maximum Segmentation Quality (PHASE 1: SegFormer-B5 Activated)
             self.segmentation.backend = "segformer"
             self.segmentation.segformer_model = "nvidia/segformer-b5-finetuned-ade-640-640"
             self.segmentation.input_long_side = 2048  # +60% resolution (vs 1280)
@@ -365,12 +532,13 @@ class PipelineConfig:
             self.segmentation.soften_sigma_px = 2.0
             self.segmentation.allow_downloads = True
             
-            # APEX: Maximum Materials V2 Quality
+            # APEX: Maximum Materials V2 Quality (PHASE 1: SegFormer-B5 Activated)
             if self.materials_v2 is None:
                 from lux_depth_v2.materials_v2 import MaterialsV2Config
                 self.materials_v2 = MaterialsV2Config()
             
             self.materials_v2.enabled = True
+            self.materials_v2.backend = "segformer"  # PHASE 1 FIX: Activate SegFormer-B5
             
             # APEX: Lower confidence thresholds for maximum coverage
             self.materials_v2.confidence.confidence_threshold = 0.3  # -25% (vs 0.4)
@@ -396,6 +564,29 @@ class PipelineConfig:
             self.materials_v2.segmentation.edge_feather_sigma = 1.0
             self.materials_v2.segmentation.require_high_quality = True  # ENFORCE quality
             self.materials_v2.segmentation.quality_threshold = 0.55  # +37.5% (vs 0.4)
+            
+            # PHASE 1 Task 2: Material Property Schema (Physics-based properties)
+            self.material_properties = {
+                "wood": MaterialPropertySchema.wood(),
+                "metal": MaterialPropertySchema.metal(),
+                "glass": MaterialPropertySchema.glass(),
+                "stone": MaterialPropertySchema.stone(),
+                "fabric": MaterialPropertySchema.fabric(),
+            }
+            
+            # PHASE 1 Task 3: Hybrid Depth Zones (Interior scene)
+            self.depth_zones = HybridDepthZoneConfig(
+                mode="auto",  # Automatic scene-aware selection
+                fg_percentile=0.35,
+                bg_percentile=0.65,
+                close_range_m=2.0,
+                mid_range_m=10.0,
+                far_range_m=20.0,
+                infinity_m=1000.0,
+                scene_type="interior",  # Interior scene hint
+                prefer_percentile_interior=True,
+                transition_blend_range=0.08
+            )
 
         elif p == Preset.EXTERIOR_SHOWCASE:
             self.material_strength = 0.80
