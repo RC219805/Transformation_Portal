@@ -199,7 +199,7 @@ class HybridDepthZoneConfig:
 class SegmentationConfig:
     """Material segmentation configuration."""
 
-    backend: str = "auto"  # auto|onnx|segformer|sam_clip|heuristic|none
+    backend: str = "auto"  # auto|onnx|segformer|efficientSAM|sam_clip|heuristic|none
     # For backend=onnx: path to ONNX model (expects NCHW float input 0..1, RGB)
     onnx_model_path: Optional[Path] = None
     onnx_labels_path: Optional[Path] = None  # optional JSON mapping class index->surface name
@@ -210,6 +210,12 @@ class SegmentationConfig:
     segformer_revision: Optional[str] = None
     # For backend=sam_clip: local SAM checkpoint path
     sam_checkpoint: Optional[Path] = None
+    
+    # PHASE 2: EfficientSAM backend configuration (STUB)
+    # TODO: Implement EfficientSAM integration (Task 1: 24-32h)
+    efficientSAM_model: Optional[str] = None  # Path to EfficientSAM checkpoint
+    efficientSAM_variant: str = "s"  # s|ti|distilled (model size variant)
+    efficientSAM_prompt_strategy: str = "grid"  # grid|edge_aware|adaptive
 
     input_long_side: int = 768  # segmentation input resolution (long side)
     soften_sigma_px: float = 2.0  # soften masks (in ORIGINAL px)
@@ -234,6 +240,41 @@ class OrchestratorConfig:
     # Retry strategy
     retry_backoff_base: float = 2.0
     retry_max_delay_s: float = 300.0
+
+
+@dataclass
+class LightingConfig:
+    """Lighting condition detection and adaptation (PHASE 2 - STUB).
+    
+    TODO - PHASE 2 IMPLEMENTATION (Task 4: 12-14h):
+    - Implement lighting detection in lighting_detector.py
+    - Enable adaptive tone mapping based on time of day
+    - Enable adaptive color grading based on lighting condition
+    """
+    
+    enabled: bool = False  # Feature gate (default: disabled)
+    
+    # Detection parameters
+    use_sky_mask: bool = True  # Use material segmentation sky mask
+    analyze_depth: bool = True  # Use depth map for lighting analysis
+    
+    # Adaptation parameters
+    adapt_tone_mapping: bool = True  # Adjust tone mapping per lighting
+    adapt_color_grading: bool = True  # Adjust color grading per lighting
+    adaptation_strength: float = 0.7  # Blend factor [0, 1]
+    
+    # Time-of-day classification thresholds
+    golden_hour_warmth_threshold: float = 0.5  # Warmth score to classify golden hour
+    dawn_twilight_coolness_threshold: float = -0.3  # Coolness score for dawn/twilight
+    
+    # Color temperature adjustments per time of day (Kelvin offset)
+    color_temp_adjustments: Dict[str, float] = field(default_factory=lambda: {
+        "dawn": -500.0,  # Cooler
+        "golden_hour": +800.0,  # Warmer
+        "twilight": -400.0,  # Cooler
+        "midday": 0.0,  # Neutral
+        "overcast": -200.0,  # Slightly cooler
+    })
 
 
 @dataclass
@@ -410,6 +451,9 @@ class PipelineConfig:
     
     # PHASE 1 Task 3: Hybrid Depth Zones
     depth_zones: HybridDepthZoneConfig = field(default_factory=HybridDepthZoneConfig)
+    
+    # PHASE 2: Lighting Condition Detection (STUB)
+    lighting: LightingConfig = field(default_factory=LightingConfig)
 
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""

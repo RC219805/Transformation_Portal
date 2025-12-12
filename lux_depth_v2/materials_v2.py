@@ -86,7 +86,28 @@ class MaterialsV2Config:
     cache_enabled: bool = False
     
     # Backend
-    backend: str = 'heuristic'  # heuristic, onnx, segformer
+    backend: str = 'heuristic'  # heuristic, onnx, segformer, efficientSAM
+    
+    # PHASE 2: CLIP Material Classification (STUB)
+    # TODO: Implement CLIP integration (Task 2: 16-24h)
+    clip_enabled: bool = False  # Enable CLIP zero-shot classification
+    clip_model: str = "ViT-B/32"  # CLIP model variant (ViT-B/32, ViT-L/14)
+    clip_hybrid_fusion: bool = False  # Enable SegFormer+CLIP hybrid fusion
+    clip_fusion_alpha: float = 0.5  # Fusion weight (0=CLIP only, 1=SegFormer only)
+    
+    # PHASE 2: Expanded Material Classes (STUB)
+    # TODO: Implement expanded taxonomy (Task 3: 12-16h)
+    use_expanded_taxonomy: bool = False  # Enable 18-24 material classes
+    material_classes: List[str] = field(default_factory=lambda: [
+        # Current classes (Phase 1)
+        "wood", "metal", "glass", "water", "fabric", "stone", "ceramic", "polished",
+        # TODO Phase 2: Add remaining classes (uncomment when implemented)
+        # "stucco_wall", "stone_column", "aluminum_frame", "wood_structure",
+        # "concrete_surface", "tile_surface", "pool_tile_mosaic", "pool_deck_paver",
+        # "stone_paver", "concrete_deck", "pool_water_surface", "pool_water_volume",
+        # "water_feature", "tree_canopy", "flowering_tree", "shrub", "grass",
+        # "succulent", "sky_gradient", "mountain_distant",
+    ])
     
     def __post_init__(self):
         """Initialize after creation."""
@@ -668,3 +689,261 @@ class MaterialsV2Engine:
             )
         except Exception as e:
             self.logger.warning(f"Failed to save to cache: {e}")
+
+
+# ============================================================================
+# PHASE 2: Expanded Material Taxonomy and CLIP Classification (STUB)
+# ============================================================================
+
+class MaterialClass:
+    """Expanded material taxonomy for PHASE 2 (18-24 classes).
+    
+    Maps to ADE20K semantic classes where applicable, with additional
+    architectural and hardscape categories for luxury real estate.
+    
+    TODO - PHASE 2 IMPLEMENTATION (Task 3: 12-16h):
+    1. Define complete material class enum (18-24 classes)
+    2. Map to ADE20K semantic classes
+    3. Create MaterialPropertySchema presets for each class
+    4. Implement class hierarchy (e.g., pool_tile_mosaic < ceramic)
+    5. Add material detection confidence thresholds per class
+    """
+    
+    # Architecture materials
+    STUCCO_WALL = "stucco_wall"  # ADE20K: wall
+    STONE_COLUMN = "stone_column"  # ADE20K: column
+    ALUMINUM_FRAME = "aluminum_frame"  # ADE20K: window frame
+    WOOD_STRUCTURE = "wood_structure"  # ADE20K: wood, door
+    CONCRETE_SURFACE = "concrete_surface"  # ADE20K: floor, ceiling
+    TILE_SURFACE = "tile_surface"  # ADE20K: tile
+    
+    # Hardscape materials
+    POOL_TILE_MOSAIC = "pool_tile_mosaic"  # Custom: ceramic tile in pool
+    POOL_DECK_PAVER = "pool_deck_paver"  # ADE20K: pavement
+    STONE_PAVER = "stone_paver"  # ADE20K: stone, pavement
+    CONCRETE_DECK = "concrete_deck"  # ADE20K: floor, concrete
+    
+    # Water materials
+    POOL_WATER_SURFACE = "pool_water_surface"  # ADE20K: pool (surface)
+    POOL_WATER_VOLUME = "pool_water_volume"  # Custom: underwater volume
+    WATER_FEATURE = "water_feature"  # ADE20K: fountain, waterfall
+    
+    # Vegetation materials
+    TREE_CANOPY = "tree_canopy"  # ADE20K: tree
+    FLOWERING_TREE = "flowering_tree"  # ADE20K: tree + color analysis
+    SHRUB = "shrub"  # ADE20K: plant
+    GRASS = "grass"  # ADE20K: grass
+    SUCCULENT = "succulent"  # ADE20K: plant + shape analysis
+    
+    # Sky materials
+    SKY_GRADIENT = "sky_gradient"  # ADE20K: sky
+    MOUNTAIN_DISTANT = "mountain_distant"  # ADE20K: mountain
+    
+    # TODO: Add remaining classes (ceramic, glass variants, metal types, etc.)
+    
+    @classmethod
+    def get_property_schema(cls, material_class: str) -> "MaterialPropertySchema":
+        """Get MaterialPropertySchema preset for material class.
+        
+        TODO: Implement complete mapping of all 18-24 classes to schemas.
+        """
+        # Import here to avoid circular dependency
+        from .config import MaterialPropertySchema
+        
+        # Example mappings (Phase 2: expand to all classes)
+        schema_map = {
+            cls.POOL_TILE_MOSAIC: MaterialPropertySchema.ceramic(),
+            cls.POOL_WATER_SURFACE: MaterialPropertySchema.water(),
+            cls.TREE_CANOPY: MaterialPropertySchema.wood(),  # Organic, similar to wood
+            cls.SKY_GRADIENT: MaterialPropertySchema(
+                matte_gloss=0.0,
+                specular_intensity=0.0,
+                roughness=1.0,
+                albedo=0.8,
+                enhancement_strength=0.3,  # Minimal enhancement for sky
+            ),
+        }
+        
+        return schema_map.get(material_class, MaterialPropertySchema())
+    
+    @classmethod
+    def get_ade20k_mapping(cls) -> Dict[str, List[str]]:
+        """Get mapping from material classes to ADE20K semantic labels.
+        
+        TODO: Complete mapping for all 18-24 material classes.
+        """
+        return {
+            cls.POOL_WATER_SURFACE: ["pool", "water"],
+            cls.TREE_CANOPY: ["tree"],
+            cls.SKY_GRADIENT: ["sky"],
+            cls.GRASS: ["grass"],
+            # TODO: Add remaining mappings
+        }
+
+
+class CLIPMaterialClassifier:
+    """CLIP-based zero-shot material classification (PHASE 2 - STUB).
+    
+    Uses CLIP vision-language model for zero-shot material classification.
+    Enables natural language queries and hybrid fusion with SegFormer.
+    
+    Expected accuracy: >85% for common architectural materials.
+    
+    TODO - PHASE 2 IMPLEMENTATION (Task 2: 16-24h):
+    1. Research CLIP model variants (ViT-B/32, ViT-L/14)
+    2. Implement model loading and initialization
+    3. Design zero-shot classification templates:
+       - "a photo of {material}"
+       - "this surface is made of {material}"
+       - "{material} texture in architectural photography"
+    4. Implement natural language query interface
+    5. Design hybrid SegFormer+CLIP fusion algorithm:
+       - SegFormer provides spatial priors
+       - CLIP refines material classification
+       - Confidence-weighted fusion
+    6. Create material query templates for pool/architecture/nature
+    7. Benchmark accuracy on validation set
+    
+    Expected API:
+        >>> classifier = CLIPMaterialClassifier(device)
+        >>> materials = classifier.classify_image(rgb_tensor)
+        >>> # {'pool_water': 0.95, 'stone_paver': 0.87, ...}
+        >>> 
+        >>> # Natural language query
+        >>> mask = classifier.query("surfaces that would reflect light")
+        >>> # Returns mask of glass, water, polished metal
+    
+    Integration Points:
+        - materials_v2.MaterialsV2Engine (hybrid fusion)
+        - material_segmentation.EfficientSAMSegmenter (mask classification)
+        - config.MaterialsV2Config.clip_enabled = True
+    """
+    
+    def __init__(self, device: "torch_ops.torch.device", model_name: str = "ViT-B/32"):
+        """Initialize CLIP material classifier.
+        
+        TODO: Implement model loading:
+        - Load CLIP model from OpenAI or HuggingFace
+        - Initialize vision and text encoders
+        - Set up device placement and mixed precision
+        - Precompute text embeddings for material templates
+        
+        Args:
+            device: Torch device
+            model_name: CLIP model variant (ViT-B/32, ViT-L/14, etc.)
+        """
+        torch_ops.require_torch()
+        self.device = device
+        self.model_name = model_name
+        
+        # TODO: Replace with actual model loading
+        raise NotImplementedError(
+            "CLIP Material Classifier is a Phase 2 stub. "
+            "Implementation required: model loading, zero-shot classification, hybrid fusion. "
+            "See PHASE2_IMPLEMENTATION_GUIDE.md for details."
+        )
+    
+    def classify_image(
+        self,
+        rgb: "torch_ops.torch.Tensor",
+        material_classes: Optional[List[str]] = None
+    ) -> Dict[str, float]:
+        """Classify materials in image using zero-shot CLIP.
+        
+        TODO: Implement zero-shot classification:
+        1. Encode image with CLIP vision encoder
+        2. Encode material class templates with text encoder
+        3. Compute cosine similarity between image and text embeddings
+        4. Return confidence scores for each material class
+        
+        Args:
+            rgb: RGB tensor (1x3xHxW)
+            material_classes: List of material classes to classify (None = all)
+        
+        Returns:
+            Dict mapping material class to confidence score [0, 1]
+        """
+        raise NotImplementedError("CLIP classify_image() - Phase 2 stub")
+    
+    def query_natural_language(
+        self,
+        rgb: "torch_ops.torch.Tensor",
+        query: str
+    ) -> "torch_ops.torch.Tensor":
+        """Query image regions using natural language.
+        
+        TODO: Implement natural language query:
+        1. Encode query text with CLIP text encoder
+        2. Generate dense image embeddings (patch-level)
+        3. Compute similarity map between query and image patches
+        4. Return attention mask highlighting query-relevant regions
+        
+        Examples:
+            >>> mask = classifier.query("surfaces that would reflect light")
+            >>> mask = classifier.query("natural materials like wood or stone")
+            >>> mask = classifier.query("water features")
+        
+        Args:
+            rgb: RGB tensor (1x3xHxW)
+            query: Natural language query string
+        
+        Returns:
+            Attention mask (1x1xHxW) highlighting relevant regions
+        """
+        raise NotImplementedError("CLIP query_natural_language() - Phase 2 stub")
+    
+    def fuse_with_segformer(
+        self,
+        rgb: "torch_ops.torch.Tensor",
+        segformer_masks: Dict[str, "torch_ops.torch.Tensor"],
+        segformer_confidences: Dict[str, "torch_ops.torch.Tensor"]
+    ) -> Dict[str, "torch_ops.torch.Tensor"]:
+        """Hybrid fusion of SegFormer spatial priors with CLIP classification.
+        
+        TODO: Implement hybrid fusion algorithm:
+        1. For each SegFormer mask region:
+            a. Extract region features from RGB
+            b. Classify region with CLIP
+            c. Compute confidence-weighted fusion
+        2. Resolve conflicts (same region, different materials)
+        3. Refine boundaries using CLIP attention maps
+        4. Return refined material masks
+        
+        Fusion strategy:
+            - SegFormer provides spatial localization (WHERE)
+            - CLIP provides material classification (WHAT)
+            - Confidence weighting: alpha * segformer + (1-alpha) * clip
+            - Alpha based on segformer confidence (high conf → trust segformer)
+        
+        Args:
+            rgb: RGB tensor (1x3xHxW)
+            segformer_masks: Material masks from SegFormer
+            segformer_confidences: Confidence maps from SegFormer
+        
+        Returns:
+            Refined material masks with CLIP classification
+        """
+        raise NotImplementedError("CLIP fuse_with_segformer() - Phase 2 stub")
+    
+    def _get_material_templates(self) -> Dict[str, List[str]]:
+        """Get text templates for material classification.
+        
+        TODO: Design comprehensive template set:
+        - Generic: "a photo of {material}"
+        - Context-aware: "{material} in luxury real estate photography"
+        - Surface-specific: "smooth {material} surface"
+        - Lighting-aware: "{material} under natural lighting"
+        """
+        return {
+            "pool_water": [
+                "a photo of pool water",
+                "clear blue swimming pool water",
+                "reflective water surface in a luxury pool",
+            ],
+            "stone_paver": [
+                "a photo of stone pavers",
+                "natural stone paving in architectural design",
+                "textured stone surface",
+            ],
+            # TODO: Add templates for all 18-24 material classes
+        }
