@@ -1,6 +1,6 @@
 """Tests for Expanded Material Taxonomy (PHASE 2 - STUB).
 
-TODO - PHASE 2 IMPLEMENTATION (Task 3: 12-16h):
+Phase 2 implementation:
 1. Implement material class enum tests
 2. Implement ADE20K mapping tests
 3. Implement material property schema tests
@@ -10,14 +10,14 @@ TODO - PHASE 2 IMPLEMENTATION (Task 3: 12-16h):
 
 import pytest
 
-# TODO: Import MaterialClass once implemented
+# Phase 2: Import MaterialClass once implemented
 # from lux_depth_v2.materials_v2 import MaterialClass
 
 
 class TestMaterialClassEnum:
     """Test material class enum and constants.
     
-    TODO: Implement once MaterialClass is complete.
+    Phase 2: Implement once MaterialClass is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -32,7 +32,7 @@ class TestMaterialClassEnum:
         - CONCRETE_SURFACE
         - TILE_SURFACE
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         # assert MaterialClass.STUCCO_WALL == "stucco_wall"
         # assert MaterialClass.STONE_COLUMN == "stone_column"
         pass
@@ -47,7 +47,7 @@ class TestMaterialClassEnum:
         - STONE_PAVER
         - CONCRETE_DECK
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -59,7 +59,7 @@ class TestMaterialClassEnum:
         - POOL_WATER_VOLUME
         - WATER_FEATURE
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -73,7 +73,7 @@ class TestMaterialClassEnum:
         - GRASS
         - SUCCULENT
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -84,7 +84,7 @@ class TestMaterialClassEnum:
         - SKY_GRADIENT
         - MOUNTAIN_DISTANT
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -96,14 +96,14 @@ class TestMaterialClassEnum:
         - Maximum 24 classes
         - Each class has unique identifier
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestADE20KMapping:
     """Test ADE20K semantic class mapping.
     
-    TODO: Implement once get_ade20k_mapping() is complete.
+    Phase 2: Implement once get_ade20k_mapping() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -114,7 +114,7 @@ class TestADE20KMapping:
         - POOL_WATER_SURFACE → ["pool", "water"]
         - Maps to ADE20K classes 22, 26
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         # mapping = MaterialClass.get_ade20k_mapping()
         # assert "pool" in mapping[MaterialClass.POOL_WATER_SURFACE]
         pass
@@ -128,7 +128,7 @@ class TestADE20KMapping:
         - STONE_COLUMN → ["column"]
         - TILE_SURFACE → ["tile"]
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -140,7 +140,7 @@ class TestADE20KMapping:
         - GRASS → ["grass"]
         - SHRUB → ["plant"]
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -152,14 +152,14 @@ class TestADE20KMapping:
         - Mappings are non-empty
         - No orphaned material classes
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestMaterialPropertySchemas:
     """Test material property schema presets per class.
     
-    TODO: Implement once get_property_schema() is complete.
+    Phase 2: Implement once get_property_schema() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -172,7 +172,7 @@ class TestMaterialPropertySchemas:
         - Low roughness (smooth tile)
         - High highlight response
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         # schema = MaterialClass.get_property_schema(MaterialClass.POOL_TILE_MOSAIC)
         # assert schema.matte_gloss > 0.7
         # assert schema.specular_intensity > 0.7
@@ -188,7 +188,7 @@ class TestMaterialPropertySchemas:
         - Minimal roughness
         - High subsurface scattering
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -201,7 +201,7 @@ class TestMaterialPropertySchemas:
         - High roughness
         - Medium albedo
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -214,7 +214,7 @@ class TestMaterialPropertySchemas:
         - Maximum roughness
         - Minimal enhancement strength
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -226,14 +226,14 @@ class TestMaterialPropertySchemas:
         - No missing schemas
         - All parameters within valid ranges [0, 1]
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestMaterialClassHierarchy:
     """Test material class hierarchy relationships.
     
-    TODO: Implement once hierarchy system is complete.
+    Phase 2: Implement once hierarchy system is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -245,7 +245,7 @@ class TestMaterialClassHierarchy:
         - Inherits base ceramic properties
         - Overrides pool-specific properties
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -257,14 +257,14 @@ class TestMaterialClassHierarchy:
         - Inherits wood base properties
         - Customized for structural elements
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestSegmentationCoverage:
     """Test segmentation coverage with expanded taxonomy.
     
-    TODO: Implement once full integration is complete.
+    Phase 2: Implement once full integration is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -278,7 +278,7 @@ class TestSegmentationCoverage:
         - Sky: SKY_GRADIENT detected
         - Coverage > 85% of image area
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -292,7 +292,7 @@ class TestSegmentationCoverage:
         - Windows: ALUMINUM_FRAME detected
         - Coverage > 80% of image area
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -305,14 +305,14 @@ class TestSegmentationCoverage:
         - Confusion matrix analysis
         - Compare to baseline (8 classes)
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestMaterialConfidenceThresholds:
     """Test per-class confidence thresholds.
     
-    TODO: Implement once confidence system is extended.
+    Phase 2: Implement once confidence system is extended.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -324,7 +324,7 @@ class TestMaterialConfidenceThresholds:
         - Allows detection in various lighting conditions
         - Still filters very low confidence regions
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -336,14 +336,14 @@ class TestMaterialConfidenceThresholds:
         - Requires high confidence for structural elements
         - Prevents false positives
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestBackwardCompatibility:
     """Test backward compatibility with Phase 1.
     
-    TODO: Implement to ensure smooth migration.
+    Phase 2: Implement to ensure smooth migration.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -355,7 +355,7 @@ class TestBackwardCompatibility:
         - Existing configs load without errors
         - No breaking changes to API
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -367,7 +367,7 @@ class TestBackwardCompatibility:
         - use_expanded_taxonomy=True: use 18-24 classes
         - Default: False (backward compatible)
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 

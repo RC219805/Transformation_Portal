@@ -1,6 +1,6 @@
 """Tests for EfficientSAM Backend (PHASE 2 - STUB).
 
-TODO - PHASE 2 IMPLEMENTATION (Task 1: 24-32h):
+Phase 2 implementation:
 1. Implement model loading tests
 2. Implement prompt engineering tests
 3. Implement mask generation tests
@@ -11,7 +11,7 @@ TODO - PHASE 2 IMPLEMENTATION (Task 1: 24-32h):
 import pytest
 import numpy as np
 
-# TODO: Import EfficientSAMSegmenter once implemented
+# Phase 2: Import EfficientSAMSegmenter once implemented
 # from lux_depth_v2.material_segmentation import EfficientSAMSegmenter
 
 
@@ -19,7 +19,7 @@ import numpy as np
 def sample_rgb_image():
     """Sample RGB image for testing (pool scene).
     
-    TODO: Replace with actual pool/kitchen test images.
+    Phase 2: Replace with actual pool/kitchen test images.
     """
     # 512x512 synthetic RGB image
     return np.random.rand(512, 512, 3).astype(np.float32)
@@ -29,13 +29,13 @@ def sample_rgb_image():
 def efficientSAM_config():
     """EfficientSAM configuration for testing.
     
-    TODO: Create proper SegmentationConfig with efficientSAM backend.
+    Phase 2: Create proper SegmentationConfig with efficientSAM backend.
     """
     from lux_depth_v2.config import SegmentationConfig
     
     return SegmentationConfig(
         backend="efficientSAM",
-        efficientSAM_model="path/to/checkpoint.pth",  # TODO: Replace with actual path
+        efficientSAM_model="path/to/checkpoint.pth",  # Phase 2: Replace with actual path
         efficientSAM_variant="s",
         efficientSAM_prompt_strategy="grid",
     )
@@ -44,7 +44,7 @@ def efficientSAM_config():
 class TestEfficientSAMModelLoading:
     """Test EfficientSAM model loading and initialization.
     
-    TODO: Implement once EfficientSAMSegmenter is complete.
+    Phase 2: Implement once EfficientSAMSegmenter is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -56,7 +56,7 @@ class TestEfficientSAMModelLoading:
         - Model is moved to correct device (CPU/CUDA/MPS)
         - Model is set to eval mode
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -68,14 +68,14 @@ class TestEfficientSAMModelLoading:
         - 'ti' variant: ~24MB model
         - 'distilled' variant: custom distilled model
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestEfficientSAMPromptEngineering:
     """Test prompt engineering for architectural scenes.
     
-    TODO: Implement once _generate_architectural_prompts() is complete.
+    Phase 2: Implement once _generate_architectural_prompts() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -87,7 +87,7 @@ class TestEfficientSAMPromptEngineering:
         - Prompts cover 90%+ of image area
         - Adaptive density based on scene complexity
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -99,7 +99,7 @@ class TestEfficientSAMPromptEngineering:
         - Box prompts for large structural elements
         - Point prompts for small details
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -111,14 +111,14 @@ class TestEfficientSAMPromptEngineering:
         - Sky: prompts in top third
         - Architecture: prompts on vertical/horizontal edges
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestEfficientSAMMaskGeneration:
     """Test mask generation and quality.
     
-    TODO: Implement once predict() method is complete.
+    Phase 2: Implement once predict() method is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -131,7 +131,7 @@ class TestEfficientSAMMaskGeneration:
         - Detects vegetation masks
         - Boundary precision > 80% (60-80% improvement over SegFormer)
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         # segmenter = EfficientSAMSegmenter(efficientSAM_config, device)
         # masks = segmenter.predict(rgb_tensor)
         # assert "water" in masks
@@ -147,14 +147,14 @@ class TestEfficientSAMMaskGeneration:
         - Masks with low confidence are discarded
         - Only high-quality masks returned
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestEfficientSAMCLIPIntegration:
     """Test CLIP classification of EfficientSAM masks.
     
-    TODO: Implement once _classify_masks_with_CLIP() is complete.
+    Phase 2: Implement once _classify_masks_with_CLIP() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -166,7 +166,7 @@ class TestEfficientSAMCLIPIntegration:
         - Correct material labels assigned
         - Confidence scores provided per mask
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -178,14 +178,14 @@ class TestEfficientSAMCLIPIntegration:
         - Boundaries preserved
         - Confidence weighted merging
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestEfficientSAMBenchmarking:
     """Benchmark EfficientSAM vs SegFormer-B5.
     
-    TODO: Implement comprehensive benchmarking suite.
+    Phase 2: Implement comprehensive benchmarking suite.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -197,7 +197,7 @@ class TestEfficientSAMBenchmarking:
         - Measured on pool/kitchen validation scenes
         - Quantitative metrics (IoU, F1, boundary recall)
         """
-        # TODO: Implement benchmark
+        # Phase 2: Implement benchmark
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -209,7 +209,7 @@ class TestEfficientSAMBenchmarking:
         - Acceptable for batch processing
         - Document time per image
         """
-        # TODO: Implement benchmark
+        # Phase 2: Implement benchmark
         pass
 
 

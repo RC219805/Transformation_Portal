@@ -29,7 +29,7 @@ class InputNorm(nn.Module):
 
 
 def load_model(ckpt: Path) -> nn.Module:
-    # TODO: Replace with your model definition.
+    # Replace with actual model definition when implementing custom ONNX export
     raise NotImplementedError("Edit load_model() to return your material segmentation model.")
 
 

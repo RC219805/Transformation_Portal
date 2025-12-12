@@ -89,20 +89,18 @@ class MaterialsV2Config:
     # Backend
     backend: str = 'heuristic'  # heuristic, onnx, segformer, efficientSAM
     
-    # PHASE 2: CLIP Material Classification (STUB)
-    # TODO: Implement CLIP integration (Task 2: 16-24h)
+    # PHASE 2: CLIP Material Classification (stub - 16-24h implementation)
     clip_enabled: bool = False  # Enable CLIP zero-shot classification
     clip_model: str = "ViT-B/32"  # CLIP model variant (ViT-B/32, ViT-L/14)
     clip_hybrid_fusion: bool = False  # Enable SegFormer+CLIP hybrid fusion
     clip_fusion_alpha: float = 0.5  # Fusion weight (0=CLIP only, 1=SegFormer only)
     
-    # PHASE 2: Expanded Material Classes (STUB)
-    # TODO: Implement expanded taxonomy (Task 3: 12-16h)
+    # PHASE 2: Expanded Material Classes (stub - 12-16h implementation)
     use_expanded_taxonomy: bool = False  # Enable 18-24 material classes
     material_classes: List[str] = field(default_factory=lambda: [
         # Current classes (Phase 1)
         "wood", "metal", "glass", "water", "fabric", "stone", "ceramic", "polished",
-        # TODO Phase 2: Add remaining classes (uncomment when implemented)
+        # Phase 2: Additional classes (uncomment when implemented)
         # "stucco_wall", "stone_column", "aluminum_frame", "wood_structure",
         # "concrete_surface", "tile_surface", "pool_tile_mosaic", "pool_deck_paver",
         # "stone_paver", "concrete_deck", "pool_water_surface", "pool_water_volume",
@@ -488,7 +486,7 @@ class MaterialsV2Engine:
             # Run segmentation
             masks = self._segmenter.predict(image_t)
             
-            # For now, use masks as confidence (TODO: get actual confidence from segmenter)
+            # Phase 2: integrate actual confidence scores from segmenter
             masks_np = {
                 k: v.cpu().numpy().squeeze() if hasattr(v, 'cpu') else v
                 for k, v in masks.items()
@@ -702,7 +700,7 @@ class MaterialClass:
     Maps to ADE20K semantic classes where applicable, with additional
     architectural and hardscape categories for luxury real estate.
     
-    TODO - PHASE 2 IMPLEMENTATION (Task 3: 12-16h):
+    Phase 2 Implementation (12-16h):
     1. Define complete material class enum (18-24 classes)
     2. Map to ADE20K semantic classes
     3. Create MaterialPropertySchema presets for each class
@@ -740,13 +738,13 @@ class MaterialClass:
     SKY_GRADIENT = "sky_gradient"  # ADE20K: sky
     MOUNTAIN_DISTANT = "mountain_distant"  # ADE20K: mountain
     
-    # TODO: Add remaining classes (ceramic, glass variants, metal types, etc.)
+    # Phase 2: Add remaining classes (ceramic, glass variants, metal types, etc.)
     
     @classmethod
     def get_property_schema(cls, material_class: str):  # -> MaterialPropertySchema
         """Get MaterialPropertySchema preset for material class.
         
-        TODO: Implement complete mapping of all 18-24 classes to schemas.
+        Phase 2: Implement complete mapping of all 18-24 classes to schemas.
         
         Returns:
             MaterialPropertySchema: Schema for the specified material class
@@ -774,14 +772,14 @@ class MaterialClass:
     def get_ade20k_mapping(cls) -> Dict[str, List[str]]:
         """Get mapping from material classes to ADE20K semantic labels.
         
-        TODO: Complete mapping for all 18-24 material classes.
+        Phase 2: Complete mapping for all 18-24 material classes.
         """
         return {
             cls.POOL_WATER_SURFACE: ["pool", "water"],
             cls.TREE_CANOPY: ["tree"],
             cls.SKY_GRADIENT: ["sky"],
             cls.GRASS: ["grass"],
-            # TODO: Add remaining mappings
+            # Phase 2: Add remaining mappings
         }
 
 
@@ -793,7 +791,7 @@ class CLIPMaterialClassifier:
     
     Expected accuracy: >85% for common architectural materials.
     
-    TODO - PHASE 2 IMPLEMENTATION (Task 2: 16-24h):
+    Phase 2 Implementation (16-24h):
     1. Research CLIP model variants (ViT-B/32, ViT-L/14)
     2. Implement model loading and initialization
     3. Design zero-shot classification templates:

@@ -5,13 +5,10 @@ PHASE 2 - STUB for adaptive tone mapping and color grading.
 Detects lighting conditions (time of day, sky characteristics) to enable
 context-aware processing that adapts to the scene's natural lighting.
 
-TODO - PHASE 2 IMPLEMENTATION (Task 4: 12-14h):
-1. Implement sky region analysis
-2. Design time-of-day classification algorithm
-3. Create tone mapping adaptation rules
-4. Design color grading adaptation rules
-5. Integrate with processing pipeline
-6. Benchmark on dawn/golden hour/twilight scenes
+Phase 2 Implementation (12-14h):
+- Sky region analysis and time-of-day classification
+- Tone mapping and color grading adaptation rules
+- Pipeline integration and benchmarking
 """
 
 from __future__ import annotations
