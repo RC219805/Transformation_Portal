@@ -1,6 +1,6 @@
 """Tests for Lighting Condition Detector (PHASE 2 - STUB).
 
-TODO - PHASE 2 IMPLEMENTATION (Task 4: 12-14h):
+Phase 2 implementation:
 1. Implement lighting detection tests
 2. Implement time-of-day classification tests
 3. Implement tone mapping adaptation tests
@@ -11,7 +11,7 @@ TODO - PHASE 2 IMPLEMENTATION (Task 4: 12-14h):
 import pytest
 import numpy as np
 
-# TODO: Import LightingConditionDetector once implemented
+# Phase 2: Import LightingConditionDetector once implemented
 # from lux_depth_v2.lighting_detector import LightingConditionDetector, TimeOfDay
 
 
@@ -19,7 +19,7 @@ import numpy as np
 def golden_hour_scene():
     """Sample golden hour scene (warm, low sun).
     
-    TODO: Replace with actual golden hour test image.
+    Phase 2: Replace with actual golden hour test image.
     """
     # Synthetic golden hour: warm tones, medium brightness
     scene = np.ones((512, 512, 3), dtype=np.float32)
@@ -33,7 +33,7 @@ def golden_hour_scene():
 def dawn_scene():
     """Sample dawn scene (cool, low brightness).
     
-    TODO: Replace with actual dawn test image.
+    Phase 2: Replace with actual dawn test image.
     """
     # Synthetic dawn: cool blue tones, low brightness
     scene = np.ones((512, 512, 3), dtype=np.float32) * 0.3
@@ -46,7 +46,7 @@ def dawn_scene():
 class TestLightingDetection:
     """Test lighting condition detection.
     
-    TODO: Implement once detect() method is complete.
+    Phase 2: Implement once detect() method is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -59,7 +59,7 @@ class TestLightingDetection:
         - warmth > 0.5
         - sky_color_temp > 3500K
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         # detector = LightingConditionDetector(device)
         # condition = detector.detect(rgb_tensor, depth_map, sky_mask)
         # assert condition.time_of_day == TimeOfDay.GOLDEN_HOUR
@@ -77,7 +77,7 @@ class TestLightingDetection:
         - warmth < -0.3 (cool)
         - sky_brightness low
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -90,7 +90,7 @@ class TestLightingDetection:
         - low brightness
         - dominant_hue in [240, 300] degrees
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -103,14 +103,14 @@ class TestLightingDetection:
         - medium brightness
         - diffuse lighting (no strong shadows)
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestSkyRegionAnalysis:
     """Test sky region analysis.
     
-    TODO: Implement once _analyze_sky_region() is complete.
+    Phase 2: Implement once _analyze_sky_region() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -122,7 +122,7 @@ class TestSkyRegionAnalysis:
         - Uses sky mask from material segmentation
         - Handles missing sky mask gracefully
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -135,7 +135,7 @@ class TestSkyRegionAnalysis:
         - Midday: 5500-6500K
         - Twilight: 7000-9000K
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -147,14 +147,14 @@ class TestSkyRegionAnalysis:
         - Distinguishes from uniform sky
         - Helps classify time of day
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestTimeOfDayClassification:
     """Test time-of-day classification logic.
     
-    TODO: Implement once _classify_time_of_day() is complete.
+    Phase 2: Implement once _classify_time_of_day() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -167,7 +167,7 @@ class TestTimeOfDayClassification:
         - Twilight: cool (<-0.2), low brightness, hue [240, 300]
         - Midday: neutral, high brightness
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -179,14 +179,14 @@ class TestTimeOfDayClassification:
         - Ambiguous cases: confidence 0.5-0.7
         - Uncertain cases: confidence < 0.5
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestShadowDetection:
     """Test shadow detection and direction estimation.
     
-    TODO: Implement once _detect_shadows() is complete.
+    Phase 2: Implement once _detect_shadows() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -198,7 +198,7 @@ class TestShadowDetection:
         - Uses depth map to distinguish shadows from geometry
         - Returns has_strong_shadows=True for clear cases
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -210,14 +210,14 @@ class TestShadowDetection:
         - Uses gradient orientation analysis
         - Handles multiple shadow directions
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestToneMappingAdaptation:
     """Test adaptive tone mapping based on lighting.
     
-    TODO: Implement once adapt_tone_mapping() is complete.
+    Phase 2: Implement once adapt_tone_mapping() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -229,7 +229,7 @@ class TestToneMappingAdaptation:
         - Gentle shadow adjustments
         - Preserve warm tones in highlights
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -241,7 +241,7 @@ class TestToneMappingAdaptation:
         - Increase global contrast
         - Handle harsh overhead lighting
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -253,14 +253,14 @@ class TestToneMappingAdaptation:
         - Reduce global contrast
         - Compensate for flat lighting
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestColorGradingAdaptation:
     """Test adaptive color grading based on lighting.
     
-    TODO: Implement once adapt_color_grading() is complete.
+    Phase 2: Implement once adapt_color_grading() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -272,7 +272,7 @@ class TestColorGradingAdaptation:
         - Reduce cool tones slightly
         - Preserve natural warmth
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -284,7 +284,7 @@ class TestColorGradingAdaptation:
         - Preserve purple-blue gradient
         - Avoid overcorrection to neutral
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -296,14 +296,14 @@ class TestColorGradingAdaptation:
         - Low confidence: gentle adaptation (alpha ~ 0.3)
         - Smooth blending between base and adapted configs
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestLightingDetectorIntegration:
     """Test integration with processing pipeline.
     
-    TODO: Implement once pipeline integration is complete.
+    Phase 2: Implement once pipeline integration is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -316,7 +316,7 @@ class TestLightingDetectorIntegration:
         - Color grading adapted based on lighting
         - Metadata saved to output
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -328,7 +328,7 @@ class TestLightingDetectorIntegration:
         - lighting.enabled=True: full detection and adaptation
         - Backward compatible with existing configs
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 

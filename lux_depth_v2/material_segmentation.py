@@ -309,17 +309,12 @@ class EfficientSAMSegmenter(MaterialSegmenter):
     
     This is an architectural stub for Phase 2 implementation.
     
-    TODO - PHASE 2 IMPLEMENTATION (Task 1: 24-32h):
-    1. Research EfficientSAM model variants (S/Ti/distilled)
-    2. Implement model loading and initialization
-    3. Design prompt engineering for architectural scenes:
-       - Grid-based prompts for comprehensive coverage
-       - Edge-aware prompts for boundary refinement
-       - Material-specific prompt templates
-    4. Implement mask generation with quality filtering
-    5. Integrate with Materials V2 property schema
-    6. Add confidence scoring per mask
-    7. Benchmark vs SegFormer-B5 on pool/kitchen scenes
+    Phase 2 Implementation Tasks (24-32h):
+    - EfficientSAM model loading and initialization
+    - Prompt engineering for architectural scenes (grid-based, edge-aware)
+    - Mask generation with quality filtering and confidence scoring
+    - Integration with Materials V2 property schema
+    - Benchmarking vs SegFormer-B5
     
     Expected API:
         >>> segmenter = EfficientSAMSegmenter(cfg, device)
@@ -335,50 +330,33 @@ class EfficientSAMSegmenter(MaterialSegmenter):
     def __init__(self, cfg, device: "torch_ops.torch.device"):
         """Initialize EfficientSAM segmenter.
         
-        TODO: Implement model loading:
-        - Load EfficientSAM checkpoint from cfg.efficientSAM_model
-        - Initialize prompt encoder and mask decoder
-        - Set up device placement and mixed precision
-        - Validate model variant (S/Ti/distilled)
+        Phase 2 stub - requires implementation of:
+        model loading, prompt encoder, mask decoder, mixed precision setup
         """
         torch_ops.require_torch()
         self.cfg = cfg
         self.device = device
         
-        # TODO: Replace with actual model loading
         raise NotImplementedError(
             "EfficientSAM backend is a Phase 2 stub. "
-            "Implementation required: model loading, prompt engineering, mask generation. "
-            "See PHASE2_IMPLEMENTATION_GUIDE.md for details."
+            "See PHASE2_IMPLEMENTATION_GUIDE.md for implementation details."
         )
     
     def predict(self, rgb: "torch_ops.torch.Tensor") -> Dict[str, "torch_ops.torch.Tensor"]:
         """Generate material masks using EfficientSAM prompting.
         
-        TODO: Implement mask generation:
-        1. Preprocess RGB to EfficientSAM input format
-        2. Generate grid-based prompts for scene coverage
-        3. Run EfficientSAM inference with prompts
-        4. Post-process masks (resize, soften, threshold)
-        5. Map SAM masks to material buckets using CLIP classifier
-        6. Return Dict[material_name, mask_tensor]
-        
-        Expected workflow:
-            prompts = self._generate_architectural_prompts(rgb)
-            sam_masks = self._run_efficientSAM(rgb, prompts)
-            material_masks = self._classify_masks_with_CLIP(rgb, sam_masks)
-            return material_masks
+        Phase 2 workflow:
+        1. Generate architectural prompts (grid-based, edge-aware)
+        2. Run EfficientSAM inference
+        3. Post-process and classify masks with CLIP
+        4. Return material-specific masks
         """
         raise NotImplementedError("EfficientSAM predict() - Phase 2 stub")
     
     def _generate_architectural_prompts(self, rgb: "torch_ops.torch.Tensor") -> List[Dict]:
         """Generate prompts optimized for architectural scenes.
         
-        TODO: Implement prompt engineering:
-        - Grid-based point prompts for uniform coverage
-        - Edge-aware box prompts for structural elements
-        - Material-specific prompt templates (water=low points, sky=top region)
-        - Adaptive prompt density based on scene complexity
+        Phase 2: Grid-based, edge-aware, and material-specific prompts.
         """
         raise NotImplementedError("Prompt engineering - Phase 2")
     
@@ -389,10 +367,7 @@ class EfficientSAMSegmenter(MaterialSegmenter):
     ) -> Dict[str, "torch_ops.torch.Tensor"]:
         """Classify SAM masks using CLIP zero-shot classification.
         
-        TODO: Integrate with CLIPMaterialClassifier (materials_v2.py)
-        - Extract region features for each SAM mask
-        - Run CLIP zero-shot classification
-        - Group masks by material type
+        Phase 2: Integrate with CLIPMaterialClassifier for mask classification.
         - Merge overlapping masks for same material
         """
         raise NotImplementedError("CLIP classification integration - Phase 2")

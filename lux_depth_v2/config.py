@@ -212,7 +212,7 @@ class SegmentationConfig:
     sam_checkpoint: Optional[Path] = None
     
     # PHASE 2: EfficientSAM backend configuration (STUB)
-    # TODO: Implement EfficientSAM integration (Task 1: 24-32h)
+    # Phase 2: EfficientSAM integration (24-32h implementation)
     efficientSAM_model: Optional[str] = None  # Path to EfficientSAM checkpoint
     efficientSAM_variant: str = "s"  # s|ti|distilled (model size variant)
     efficientSAM_prompt_strategy: str = "grid"  # grid|edge_aware|adaptive
@@ -246,7 +246,7 @@ class OrchestratorConfig:
 class LightingConfig:
     """Lighting condition detection and adaptation (PHASE 2 - STUB).
     
-    TODO - PHASE 2 IMPLEMENTATION (Task 4: 12-14h):
+    Phase 2 Implementation (12-14h):
     - Implement lighting detection in lighting_detector.py
     - Enable adaptive tone mapping based on time of day
     - Enable adaptive color grading based on lighting condition

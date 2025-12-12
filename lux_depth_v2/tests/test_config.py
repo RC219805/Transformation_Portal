@@ -35,12 +35,14 @@ class TestSegmentationConfig:
         assert cfg.backend == "auto"
         assert cfg.onnx_model_path is None
         assert cfg.onnx_labels_path is None
-        assert cfg.segformer_model is None
+        # Production default: SegFormer-B5 (highest quality)
+        assert cfg.segformer_model == "nvidia/segformer-b5-finetuned-ade-640-640"
         assert cfg.sam_checkpoint is None
         assert cfg.input_long_side == 768
         assert cfg.soften_sigma_px == 2.0
         assert cfg.min_confidence == 0.25
-        assert cfg.allow_downloads is False
+        # Production default: allow downloads for SegFormer-B5
+        assert cfg.allow_downloads is True
 
     def test_custom_values(self):
         """Test custom configuration."""

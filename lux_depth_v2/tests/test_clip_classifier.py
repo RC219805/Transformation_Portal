@@ -1,6 +1,6 @@
 """Tests for CLIP Material Classifier (PHASE 2 - STUB).
 
-TODO - PHASE 2 IMPLEMENTATION (Task 2: 16-24h):
+Phase 2 implementation:
 1. Implement CLIP model loading tests
 2. Implement zero-shot classification tests
 3. Implement natural language query tests
@@ -11,7 +11,7 @@ TODO - PHASE 2 IMPLEMENTATION (Task 2: 16-24h):
 import pytest
 import numpy as np
 
-# TODO: Import CLIPMaterialClassifier once implemented
+# Phase 2: Import CLIPMaterialClassifier once implemented
 # from lux_depth_v2.materials_v2 import CLIPMaterialClassifier
 
 
@@ -19,7 +19,7 @@ import numpy as np
 def sample_rgb_tensor():
     """Sample RGB tensor for testing.
     
-    TODO: Replace with actual pool/kitchen test images.
+    Phase 2: Replace with actual pool/kitchen test images.
     """
     # Mock torch tensor (will need actual torch tensor in implementation)
     return np.random.rand(1, 3, 512, 512).astype(np.float32)
@@ -29,7 +29,7 @@ def sample_rgb_tensor():
 def clip_classifier_config():
     """CLIP classifier configuration.
     
-    TODO: Create proper configuration dataclass.
+    Phase 2: Create proper configuration dataclass.
     """
     return {
         "model_name": "ViT-B/32",
@@ -40,7 +40,7 @@ def clip_classifier_config():
 class TestCLIPModelLoading:
     """Test CLIP model loading and initialization.
     
-    TODO: Implement once CLIPMaterialClassifier is complete.
+    Phase 2: Implement once CLIPMaterialClassifier is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -53,7 +53,7 @@ class TestCLIPModelLoading:
         - Device placement correct
         - Mixed precision enabled if supported
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -65,14 +65,14 @@ class TestCLIPModelLoading:
         - ViT-L/14: Slower, 336px, best accuracy
         - Model loads and runs correctly
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestZeroShotClassification:
     """Test zero-shot material classification.
     
-    TODO: Implement once classify_image() is complete.
+    Phase 2: Implement once classify_image() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -85,7 +85,7 @@ class TestZeroShotClassification:
         - Detects sky_gradient with high confidence (>0.8)
         - Returns confidence scores [0, 1]
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         # classifier = CLIPMaterialClassifier(**clip_classifier_config)
         # materials = classifier.classify_image(sample_rgb_tensor)
         # assert materials["pool_water"] > 0.8
@@ -100,7 +100,7 @@ class TestZeroShotClassification:
         - Overall accuracy > 85%
         - Per-material accuracy > 75%
         """
-        # TODO: Implement test with validation dataset
+        # Phase 2: Implement test with validation dataset
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -112,14 +112,14 @@ class TestZeroShotClassification:
         - Context-aware templates improve accuracy
         - Lighting-aware templates help with ambiguous cases
         """
-        # TODO: Implement template comparison test
+        # Phase 2: Implement template comparison test
         pass
 
 
 class TestNaturalLanguageQuery:
     """Test natural language query interface.
     
-    TODO: Implement once query_natural_language() is complete.
+    Phase 2: Implement once query_natural_language() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -131,7 +131,7 @@ class TestNaturalLanguageQuery:
         - Returns mask highlighting glass, water, polished metal
         - Attention mask has high values on relevant regions
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -143,7 +143,7 @@ class TestNaturalLanguageQuery:
         - Returns mask highlighting wood, stone, vegetation
         - Excludes synthetic materials (metal, glass, ceramic)
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -155,14 +155,14 @@ class TestNaturalLanguageQuery:
         - Returns mask highlighting pool, fountains
         - High precision on water boundaries
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestHybridSegFormerCLIPFusion:
     """Test hybrid SegFormer+CLIP fusion.
     
-    TODO: Implement once fuse_with_segformer() is complete.
+    Phase 2: Implement once fuse_with_segformer() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -174,7 +174,7 @@ class TestHybridSegFormerCLIPFusion:
         - CLIP refines classification (WHAT)
         - Fusion accuracy > max(segformer_alone, clip_alone)
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -186,7 +186,7 @@ class TestHybridSegFormerCLIPFusion:
         - Low SegFormer confidence: trust CLIP (alpha ~ 0.2)
         - Adaptive alpha based on confidence scores
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -199,7 +199,7 @@ class TestHybridSegFormerCLIPFusion:
           - Default to higher confidence prediction
           - Log conflicts for analysis
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -211,14 +211,14 @@ class TestHybridSegFormerCLIPFusion:
         - Boundaries refined to align with attention edges
         - Improved boundary precision over SegFormer alone
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestMaterialQueryTemplates:
     """Test material query template effectiveness.
     
-    TODO: Implement once _get_material_templates() is complete.
+    Phase 2: Implement once _get_material_templates() is complete.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -230,7 +230,7 @@ class TestMaterialQueryTemplates:
         - "clear blue swimming pool water"
         - "reflective water surface in a luxury pool"
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -242,14 +242,14 @@ class TestMaterialQueryTemplates:
         - Stone: "natural stone paving in architectural design"
         - Concrete: "smooth concrete surface"
         """
-        # TODO: Implement test
+        # Phase 2: Implement test
         pass
 
 
 class TestCLIPBenchmarking:
     """Benchmark CLIP classifier performance.
     
-    TODO: Implement comprehensive benchmarking suite.
+    Phase 2: Implement comprehensive benchmarking suite.
     """
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -262,7 +262,7 @@ class TestCLIPBenchmarking:
         - Confusion matrix analysis
         - Top-k accuracy (k=3) > 95%
         """
-        # TODO: Implement benchmark
+        # Phase 2: Implement benchmark
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -274,7 +274,7 @@ class TestCLIPBenchmarking:
         - Batch processing: < 50ms/image (batch=8)
         - Document time breakdown (encoding, similarity)
         """
-        # TODO: Implement benchmark
+        # Phase 2: Implement benchmark
         pass
     
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
@@ -286,7 +286,7 @@ class TestCLIPBenchmarking:
         - CLIP alone: comparison accuracy
         - Hybrid fusion: +5-10% accuracy improvement
         """
-        # TODO: Implement benchmark
+        # Phase 2: Implement benchmark
         pass
 
 
