@@ -19,6 +19,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Look
     p.add_argument("--preset", type=str, default=Preset.PHOTO_REALISTIC.value, choices=[e.value for e in Preset])
+    p.add_argument("--auto-preset", action="store_true", 
+                   help="Auto-select preset based on CLIP scene classification (requires --quality-tier).")
+    p.add_argument("--quality-tier", type=str, default="max", choices=["standard", "max", "apex"],
+                   help="Quality tier for auto-preset selection (default: max).")
 
     # Device
     p.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"])
@@ -140,12 +144,38 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     logger = setup_logging("INFO")
+    
+    # Auto-preset selection if requested
+    preset = Preset(args.preset)
+    if args.auto_preset:
+        if not args.input:
+            logger.error("--auto-preset requires --input (single image path)")
+            return
+        
+        logger.info(f"Auto-selecting preset for: {args.input}")
+        from lux_depth_v2.preset_selector import auto_select_preset
+        
+        try:
+            preset = auto_select_preset(
+                image_path=args.input,
+                quality_tier=args.quality_tier,
+                confidence_threshold=0.5
+            )
+            logger.info(f"✓ Auto-selected preset: {preset.value} (tier: {args.quality_tier})")
+        except ImportError as e:
+            logger.error(f"Auto-preset requires CLIP. Install with: pip install transformers torch")
+            logger.error(f"Error: {e}")
+            return
+        except Exception as e:
+            logger.warning(f"Auto-preset failed: {e}")
+            logger.warning(f"Falling back to default preset: {args.preset}")
+            preset = Preset(args.preset)
 
     cfg = PipelineConfig(
         input_dir=Path(args.input_dir) if args.input_dir else None,
         depth_dir=Path(args.depth_dir) if args.depth_dir else None,
         output_dir=Path(args.output_dir),
-        preset=Preset(args.preset),
+        preset=preset,  # Use auto-selected or manual preset
         device=args.device,
         precision=args.precision,
         upscale=int(args.upscale),
