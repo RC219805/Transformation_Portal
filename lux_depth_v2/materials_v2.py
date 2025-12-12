@@ -743,13 +743,16 @@ class MaterialClass:
     # TODO: Add remaining classes (ceramic, glass variants, metal types, etc.)
     
     @classmethod
-    def get_property_schema(cls, material_class: str) -> "MaterialPropertySchema":
+    def get_property_schema(cls, material_class: str):  # -> MaterialPropertySchema
         """Get MaterialPropertySchema preset for material class.
         
         TODO: Implement complete mapping of all 18-24 classes to schemas.
+        
+        Returns:
+            MaterialPropertySchema: Schema for the specified material class
         """
         # Import here to avoid circular dependency
-        from .config import MaterialPropertySchema
+        from .config import MaterialPropertySchema  # noqa: F401
         
         # Example mappings (Phase 2: expand to all classes)
         schema_map = {
