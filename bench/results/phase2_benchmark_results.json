@@ -1,0 +1,221 @@
+{
+  "system_info": {
+    "cpu_count": 16,
+    "cpu_count_logical": 16,
+    "cpu_freq_mhz": 4,
+    "total_gb": 48.0,
+    "available_gb": 26.42,
+    "system": "Darwin",
+    "release": "25.0.0",
+    "machine": "arm64",
+    "processor": "arm",
+    "python_version": "3.11.14",
+    "cuda_available": false,
+    "mps_available": true
+  },
+  "config": {
+    "test_images": [
+      "input_images/750_Picacho/Source_JPEGS/750Picacho_Kitchen.jpg",
+      "input_images/750_Picacho/Source_JPEGS/750Picacho_Pool.jpg",
+      "input_images/750_Picacho/Source_JPEGS/750Picacho_PrimaryBedroom.jpg"
+    ],
+    "tiers": [
+      "standard",
+      "max",
+      "apex"
+    ],
+    "presets": [
+      "interior_luxury",
+      "interior_luxury_max_quality",
+      "interior_luxury_apex_quality"
+    ],
+    "output_dir": "bench/results",
+    "results_json": "bench/results/phase2_benchmark_results.json",
+    "warmup_runs": 0,
+    "iterations": 1,
+    "enable_clip": true,
+    "measure_init_only": true
+  },
+  "results": [
+    {
+      "preset": "interior_luxury",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Kitchen.jpg",
+      "timing": {
+        "total_time_s": 2.920850459006033,
+        "clip_classification_s": 1.9642232079932,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 0.956616582989227,
+        "model_loading_s": 0.7652932663913816,
+        "memory_peak_mb": 809520.0,
+        "memory_rss_mb": 790.546875,
+        "input_width": 3998,
+        "input_height": 2249,
+        "preset_name": "interior_luxury",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "preset": "interior_luxury_max_quality",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Kitchen.jpg",
+      "timing": {
+        "total_time_s": 1.157887124994886,
+        "clip_classification_s": 0.14581133300089277,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 1.0120663330017123,
+        "model_loading_s": 0.8096530664013699,
+        "memory_peak_mb": 837456.0,
+        "memory_rss_mb": 817.8125,
+        "input_width": 3998,
+        "input_height": 2249,
+        "preset_name": "interior_luxury_max_quality",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "preset": "interior_luxury_apex_quality",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Kitchen.jpg",
+      "timing": {
+        "total_time_s": 1.212426833997597,
+        "clip_classification_s": 0.14218662500206847,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 1.0702318750118138,
+        "model_loading_s": 0.8561855000094512,
+        "memory_peak_mb": 837664.0,
+        "memory_rss_mb": 818.015625,
+        "input_width": 3998,
+        "input_height": 2249,
+        "preset_name": "interior_luxury_apex_quality",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "preset": "interior_luxury",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Pool.jpg",
+      "timing": {
+        "total_time_s": 1.1666506670007948,
+        "clip_classification_s": 0.1524183329893276,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 1.0142204159928951,
+        "model_loading_s": 0.8113763327943162,
+        "memory_peak_mb": 838624.0,
+        "memory_rss_mb": 818.96875,
+        "input_width": 3998,
+        "input_height": 2249,
+        "preset_name": "interior_luxury",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "preset": "interior_luxury_max_quality",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Pool.jpg",
+      "timing": {
+        "total_time_s": 1.1453186669969,
+        "clip_classification_s": 0.1500481669936562,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 0.9952629999897908,
+        "model_loading_s": 0.7962103999918327,
+        "memory_peak_mb": 838704.0,
+        "memory_rss_mb": 818.984375,
+        "input_width": 3998,
+        "input_height": 2249,
+        "preset_name": "interior_luxury_max_quality",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "preset": "interior_luxury_apex_quality",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Pool.jpg",
+      "timing": {
+        "total_time_s": 1.250960417004535,
+        "clip_classification_s": 0.15195416699862108,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 1.0989942919986788,
+        "model_loading_s": 0.8791954335989431,
+        "memory_peak_mb": 838704.0,
+        "memory_rss_mb": 819.0,
+        "input_width": 3998,
+        "input_height": 2249,
+        "preset_name": "interior_luxury_apex_quality",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "preset": "interior_luxury",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_PrimaryBedroom.jpg",
+      "timing": {
+        "total_time_s": 1.2340810419991612,
+        "clip_classification_s": 0.17029700000421144,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 1.0637762919941451,
+        "model_loading_s": 0.8510210335953161,
+        "memory_peak_mb": 914784.0,
+        "memory_rss_mb": 893.328125,
+        "input_width": 3991,
+        "input_height": 2661,
+        "preset_name": "interior_luxury",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "preset": "interior_luxury_max_quality",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_PrimaryBedroom.jpg",
+      "timing": {
+        "total_time_s": 1.1756794579996495,
+        "clip_classification_s": 0.17301583399239462,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 1.002633790994878,
+        "model_loading_s": 0.8021070327959023,
+        "memory_peak_mb": 914848.0,
+        "memory_rss_mb": 893.390625,
+        "input_width": 3991,
+        "input_height": 2661,
+        "preset_name": "interior_luxury_max_quality",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "preset": "interior_luxury_apex_quality",
+      "image_path": "/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_PrimaryBedroom.jpg",
+      "timing": {
+        "total_time_s": 1.1221592079964466,
+        "clip_classification_s": 0.17708483299065847,
+        "preset_selection_s": 0.0,
+        "pipeline_init_s": 0.9450669580110116,
+        "model_loading_s": 0.7560535664088093,
+        "memory_peak_mb": 919808.0,
+        "memory_rss_mb": 898.234375,
+        "input_width": 3991,
+        "input_height": 2661,
+        "preset_name": "interior_luxury_apex_quality",
+        "segmentation_backend": "auto",
+        "upscale_factor": 4
+      },
+      "success": true,
+      "error": null
+    }
+  ]
+}
