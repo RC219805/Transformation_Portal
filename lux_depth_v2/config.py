@@ -30,6 +30,7 @@ class Preset(str, Enum):
     INTERIOR_LUXURY_MAX_QUALITY = "interior_luxury_max_quality"
     INTERIOR_LUXURY_APEX_QUALITY = "interior_luxury_apex_quality"
     EXTERIOR_SHOWCASE = "exterior_showcase"
+    EXTERIOR_POOL_APEX_QUALITY = "exterior_pool_apex_quality"
     ARCHITECTURAL = "architectural"
     ARCHIVAL_QUALITY = "archival_quality"
 
@@ -644,6 +645,115 @@ class PipelineConfig:
             self.post_tile = 2048
             self.post_overlap = 64
             self.validate_ai = True
+
+        elif p == Preset.EXTERIOR_POOL_APEX_QUALITY:
+            # APEX quality for exterior pool/twilight scenes
+            # Optimized for: water, sky, vegetation, stucco, stone
+            self.material_strength = 0.95
+            self.temp_fg, self.temp_mid, self.temp_bg = 0.005, 0.000, -0.008
+            self.sat_fg, self.sat_mid, self.sat_bg = 1.065, 1.040, 1.020
+            self.con_fg, self.con_mid, self.con_bg = 1.050, 1.035, 1.025
+            self.detail_strength = 0.80
+            self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.25, 0.16, 0.08
+            self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.11, 0.08, 0.04
+            
+            # APEX: Production tiling and strict validation
+            self.post_tile = 2048
+            self.post_overlap = 128
+            self.validate_ai = True
+            self.ai_color_warn, self.ai_color_fail = 0.04, 0.08
+            self.ai_luma_warn, self.ai_luma_fail = 0.04, 0.08
+            
+            # APEX: Maximum segmentation quality for SegFormer
+            if self.segmentation is None:
+                from lux_depth_v2.config import SegmentationConfig
+                self.segmentation = SegmentationConfig()
+            
+            self.segmentation.backend = "segformer"
+            self.segmentation.input_long_side = 2048  # Max resolution for pool scene
+            self.segmentation.min_confidence = 0.15  # Maximum recall
+            self.segmentation.soften_sigma_px = 2.5
+            
+            # APEX: Materials V2 with exterior-optimized settings
+            if self.materials_v2 is None:
+                from lux_depth_v2.materials_v2 import MaterialsV2Config
+                self.materials_v2 = MaterialsV2Config()
+            
+            self.materials_v2.enabled = True
+            self.materials_v2.backend = "segformer"
+            
+            # APEX: Exterior-specific thresholds (water, sky, vegetation critical)
+            self.materials_v2.confidence.confidence_threshold = 0.30
+            self.materials_v2.confidence.material_thresholds = {
+                "wood": 0.50,
+                "metal": 0.50,
+                "glass": 0.40,
+                "fabric": 0.45,
+                "stone": 0.48,      # Critical for pool deck/columns
+                "ceramic": 0.45,
+                "water": 0.30,      # Critical for pool - lower threshold
+                "polished": 0.38,   # For glossy surfaces
+                "vegetation": 0.35, # Critical for landscaping
+                "sky": 0.25,        # Critical for twilight gradient
+            }
+            self.materials_v2.confidence.blend_range = 0.12  # Smoother blending for sky/water
+            self.materials_v2.confidence.blend_mode = "soft"
+            self.materials_v2.confidence.fallback_strength = 0.25
+            
+            # APEX: Maximum segmentation resolution
+            self.materials_v2.segmentation.max_segmentation_side = 2048
+            self.materials_v2.segmentation.min_segmentation_side = 512
+            self.materials_v2.segmentation.upsample_mode = "bicubic"
+            self.materials_v2.segmentation.edge_feather_radius = 4  # Wider feather for exterior
+            self.materials_v2.segmentation.edge_feather_sigma = 1.2
+            self.materials_v2.segmentation.require_high_quality = True
+            self.materials_v2.segmentation.quality_threshold = 0.55
+            
+            # PHASE 1 Task 2: Material Property Schema (Exterior scene)
+            self.material_properties = {
+                "wood": MaterialPropertySchema.wood(),
+                "metal": MaterialPropertySchema.metal(),
+                "glass": MaterialPropertySchema.glass(),
+                "stone": MaterialPropertySchema.stone(),
+                "water": MaterialPropertySchema(  # Custom water properties
+                    matte_gloss=0.95,
+                    specular_intensity=0.90,
+                    roughness=0.15,
+                    albedo=0.4,
+                    enhancement_strength=1.2,
+                    highlight_response=1.4,
+                    shadow_response=0.9,
+                    midtone_response=1.0,
+                    metalness=0.0,
+                    subsurface_scattering=0.3
+                ),
+                "vegetation": MaterialPropertySchema(  # Custom vegetation properties
+                    matte_gloss=0.2,
+                    specular_intensity=0.3,
+                    roughness=0.8,
+                    albedo=0.35,
+                    enhancement_strength=1.1,
+                    highlight_response=0.7,
+                    shadow_response=1.2,
+                    midtone_response=1.0,
+                    metalness=0.0,
+                    subsurface_scattering=0.4
+                ),
+            }
+            
+            # PHASE 1 Task 3: Hybrid Depth Zones (Exterior pool scene)
+            self.depth_zones = HybridDepthZoneConfig(
+                mode="auto",
+                fg_percentile=0.30,  # Pool edge/foreground vegetation
+                bg_percentile=0.70,  # Building/distant hills
+                close_range_m=1.5,   # Immediate foreground
+                mid_range_m=8.0,     # Pool + seating area
+                far_range_m=25.0,    # Building facade
+                infinity_m=5000.0,   # Distant mountains/sky
+                scene_type="exterior",
+                prefer_percentile_interior=False,
+                transition_blend_range=0.10  # Wider for exterior depth
+            )
 
         elif p == Preset.ARCHITECTURAL:
             self.material_strength = 0.75
