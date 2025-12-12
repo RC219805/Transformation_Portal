@@ -4,11 +4,16 @@
 **Pipeline:** lux_depth_v2  
 **Validated On:** 750 Picacho Kitchen (81MP, 16-bit TIFF)
 
+**📖 New User?** Start with the [Phase 2 User Guide](PHASE2_USER_GUIDE.md) for a complete walkthrough with examples.  
+**⚡ Quick Reference:** See the [Quick Reference Card](QUICK_REFERENCE_PHASE2.md) for one-page CLI cheat sheet.
+
 ---
 
 ## Overview
 
 The lux_depth_v2 pipeline offers **three quality tiers** for interior luxury real estate processing, each optimized for different use cases. All tiers use the same core technologies (Depth Anything V2, SegFormer-B5, Materials V2) but with different quality/performance tradeoffs.
+
+**Phase 2 Features:** All tiers now support intelligent material classification (CLIP) and lighting detection for adaptive processing. See the [Phase 2 User Guide](PHASE2_USER_GUIDE.md) for details on enabling these features.
 
 ---
 

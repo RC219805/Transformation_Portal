@@ -1,5 +1,20 @@
 # Lux Depth Pipeline V2 (Production-Oriented)
 
+## �� New to Phase 2?
+
+**Start here for user-friendly guides:**
+- **[Phase 2 User Guide](../docs/PHASE2_USER_GUIDE.md)** - Complete walkthrough with real-world examples
+- **[Quick Reference Card](../docs/QUICK_REFERENCE_PHASE2.md)** - One-page CLI cheat sheet
+- **[Quality Tiers Guide](../docs/QUALITY_TIERS.md)** - Preset selection decision tree
+
+**Technical documentation:**
+- **[Phase 2 Performance](../docs/PHASE2_PERFORMANCE.md)** - Benchmarks and overhead analysis
+- **[CI/CD Integration](../docs/CI_PHASE2_INTEGRATION.md)** - Testing and deployment
+- **[Phase 2 Implementation Complete](PHASE2_IMPLEMENTATION_COMPLETE.md)** - Technical deep dive
+
+---
+
+
 This is a modular, GPU-accelerated rewrite of the V1 “Gold Standard Depth-Aware 16-bit Lux” pipeline, designed for:
 - **Real-time / service mode** (persistent models, low latency)
 - **GPU-accelerated post** (Torch-based grading + clarity/sharpen/detail transfer)
