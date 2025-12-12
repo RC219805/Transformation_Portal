@@ -36,6 +36,16 @@ on:
         required: false
         default: 'false'
         type: boolean
+      enable_phase2_features:
+        description: 'Enable Phase 2 features (CLIP, Lighting Detection)'
+        required: false
+        default: 'true'
+        type: boolean
+      run_benchmark_regression:
+        description: 'Run Phase 2 performance benchmark regression tests'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: read
@@ -55,6 +65,9 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: '1'
   TRANSFORMERS_OFFLINE: '1'
   HF_HUB_OFFLINE: '1'
+  # Phase 2 Feature Flags
+  ENABLE_PHASE2_FEATURES: ${{ github.event.inputs.enable_phase2_features || 'true' }}
+  RUN_BENCHMARK_REGRESSION: ${{ github.event.inputs.run_benchmark_regression || 'false' }}
 
 jobs:
   # ===========================================================================
@@ -89,6 +102,11 @@ jobs:
               - 'lux_render_pipeline.py'
               - 'material_response.py'
               - 'requirements/ml.txt'
+            phase2:
+              - 'lux_depth_v2/materials_v2.py'
+              - 'lux_depth_v2/lighting_detector.py'
+              - 'tests/test_phase2_*.py'
+              - 'bench/bench_phase2.py'
             tests:
               - 'tests/**'
             docs:
@@ -396,6 +414,31 @@ jobs:
           fi
           pip install -c requirements/constraints.txt -e .
 
+      - name: Download Phase 2 Models (Conditional)
+        if: env.ENABLE_PHASE2_FEATURES == 'true'
+        run: |
+          echo "📦 Downloading Phase 2 models (CLIP)..."
+          python -c "
+          from transformers import CLIPProcessor, CLIPModel
+          import os
+          
+          # Disable offline mode temporarily for model download
+          os.environ['TRANSFORMERS_OFFLINE'] = '0'
+          os.environ['HF_HUB_OFFLINE'] = '0'
+          
+          try:
+              # Download CLIP model to cache
+              model_name = 'openai/clip-vit-base-patch32'
+              print(f'Downloading {model_name}...')
+              processor = CLIPProcessor.from_pretrained(model_name)
+              model = CLIPModel.from_pretrained(model_name)
+              print('✅ CLIP model downloaded successfully')
+          except Exception as e:
+              print(f'⚠️  CLIP model download failed: {e}')
+              print('Tests requiring CLIP will be skipped')
+          "
+        continue-on-error: true
+
       - name: Verify basicsr Not Installed (CVE-2024-27763)
         run: |
           if pip show basicsr > /dev/null 2>&1; then
@@ -410,10 +453,154 @@ jobs:
         env:
           PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:128"
         run: |
+          # Filter Phase 2 tests based on feature flag
+          if [ "$ENABLE_PHASE2_FEATURES" == "true" ]; then
+            echo "🧪 Running ML tests with Phase 2 features enabled"
+            TEST_FILTER="ml or slow"
+          else
+            echo "🧪 Running ML tests with Phase 2 features disabled"
+            TEST_FILTER="ml or slow and not phase2"
+          fi
+          
           pytest tests/ \
-            -k "ml or slow" \
+            -k "$TEST_FILTER" \
             -v --tb=short \
             --maxfail=5
+            
+  # ===========================================================================
+  # Stage 4.2: Phase 2 Performance Benchmark (Optional)
+  # ===========================================================================
+  benchmark-phase2:
+    name: Phase 2 Performance Benchmark
+    needs: [setup, test-core]
+    if: |
+      always() &&
+      needs.test-core.result == 'success' &&
+      github.event.inputs.run_benchmark_regression == 'true'
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
+          
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -c requirements/constraints.txt -r requirements/ml.txt
+          pip install -c requirements/constraints.txt -e .
+          
+      - name: Download CLIP Model
+        run: |
+          python -c "
+          from transformers import CLIPProcessor, CLIPModel
+          import os
+          os.environ['TRANSFORMERS_OFFLINE'] = '0'
+          os.environ['HF_HUB_OFFLINE'] = '0'
+          model_name = 'openai/clip-vit-base-patch32'
+          CLIPProcessor.from_pretrained(model_name)
+          CLIPModel.from_pretrained(model_name)
+          print('✅ CLIP model cached')
+          "
+          
+      - name: Run Benchmark
+        run: |
+          python bench/bench_phase2.py
+          
+      - name: Check Performance Regression
+        run: |
+          # Parse benchmark results and check for regressions
+          python -c "
+          import json
+          from pathlib import Path
+          
+          results_file = Path('bench/results/phase2_benchmark_results.json')
+          if not results_file.exists():
+              print('❌ Benchmark results not found')
+              exit(1)
+          
+          with open(results_file) as f:
+              results = json.load(f)
+          
+          # Define performance thresholds
+          MAX_CLIP_TIME_MS = 500  # CLIP classification should be < 500ms
+          MAX_INIT_TIME_S = 2.0   # Pipeline init should be < 2s
+          MAX_MEMORY_MB = 1200    # Peak memory should be < 1200MB
+          
+          failures = []
+          
+          # Check CLIP performance
+          clip_time = results.get('clip_classification', {}).get('avg_time_ms', 0)
+          if clip_time > MAX_CLIP_TIME_MS:
+              failures.append(f'CLIP classification: {clip_time:.1f}ms > {MAX_CLIP_TIME_MS}ms threshold')
+          
+          # Check initialization time
+          for tier, data in results.get('quality_tiers', {}).items():
+              init_time = data.get('init_time_s', 0)
+              if init_time > MAX_INIT_TIME_S:
+                  failures.append(f'{tier} init: {init_time:.2f}s > {MAX_INIT_TIME_S}s threshold')
+          
+          # Check memory usage
+          for tier, data in results.get('quality_tiers', {}).items():
+              memory_mb = data.get('peak_memory_mb', 0)
+              if memory_mb > MAX_MEMORY_MB:
+                  failures.append(f'{tier} memory: {memory_mb:.0f}MB > {MAX_MEMORY_MB}MB threshold')
+          
+          if failures:
+              print('❌ Performance regression detected:')
+              for failure in failures:
+                  print(f'  - {failure}')
+              exit(1)
+          else:
+              print('✅ All performance benchmarks passed')
+              print(f'  - CLIP: {clip_time:.1f}ms')
+              for tier, data in results.get('quality_tiers', {}).items():
+                  print(f'  - {tier}: {data.get(\"init_time_s\", 0):.2f}s, {data.get(\"peak_memory_mb\", 0):.0f}MB')
+          "
+          
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v5
+        with:
+          name: phase2-benchmark-results
+          path: |
+            bench/results/phase2_benchmark_results.json
+            docs/PHASE2_PERFORMANCE.md
+          retention-days: 30
+          
+      - name: Comment Benchmark Results (PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('bench/results/phase2_benchmark_results.json', 'utf8'));
+            
+            const clipTime = results.clip_classification?.avg_time_ms || 0;
+            const tiers = results.quality_tiers || {};
+            
+            let comment = '## 📊 Phase 2 Performance Benchmark\n\n';
+            comment += '| Metric | Value | Threshold | Status |\n';
+            comment += '|--------|-------|-----------|--------|\n';
+            comment += `| CLIP Classification | ${clipTime.toFixed(1)}ms | 500ms | ${clipTime < 500 ? '✅' : '❌'} |\n`;
+            
+            for (const [tier, data] of Object.entries(tiers)) {
+              const initTime = data.init_time_s || 0;
+              const memory = data.peak_memory_mb || 0;
+              comment += `| ${tier} Init | ${initTime.toFixed(2)}s | 2.0s | ${initTime < 2.0 ? '✅' : '❌'} |\n`;
+              comment += `| ${tier} Memory | ${memory.toFixed(0)}MB | 1200MB | ${memory < 1200 ? '✅' : '❌'} |\n`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
             
   # ===========================================================================
   # Stage 4.5: Lux Depth V2 Module Tests
@@ -661,7 +848,7 @@ jobs:
   # ===========================================================================
   summary:
     name: Pipeline Summary
-    needs: [setup, lint, test-core, test-ml, test-lux-depth-v2, rag-validation, build, manifest]
+    needs: [setup, lint, test-core, test-ml, benchmark-phase2, test-lux-depth-v2, rag-validation, build, manifest]
     if: always()
     runs-on: ubuntu-24.04
     
@@ -676,6 +863,7 @@ jobs:
           echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Core Tests | ${{ needs.test-core.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ML Tests | ${{ needs.test-ml.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase 2 Benchmark | ${{ needs.benchmark-phase2.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Lux Depth V2 Tests | ${{ needs.test-lux-depth-v2.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| RAG Validation | ${{ needs.rag-validation.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -683,6 +871,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Phase 2 Features:** ${{ env.ENABLE_PHASE2_FEATURES }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Benchmark Regression:** ${{ env.RUN_BENCHMARK_REGRESSION }}" >> $GITHUB_STEP_SUMMARY
           
       - name: Check Overall Status
         run: |
