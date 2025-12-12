@@ -19,16 +19,35 @@ The repository includes multiple CI/CD and automation workflows to ensure code q
 - RAG system validation stage
 - Security checks (basicsr CVE-2024-27763 mitigation)
 - ML tests with CPU-only PyTorch for efficiency
+- **Phase 2 feature flags** for CLIP/Lighting Detection (NEW)
+- **Optional performance benchmarking** with regression checks (NEW)
 
 **Stages:**
 1. Setup & Change Detection
 2. Lint & Quality Checks
 3. Core Tests (no ML dependencies)
-4. ML Tests (requires PyTorch)
-5. RAG System Validation
-6. Build Artifacts
-7. Generate Montecito Manifest
-8. Pipeline Summary
+4. ML Tests (requires PyTorch, conditional Phase 2 features)
+4.2. Phase 2 Performance Benchmark (optional)
+5. Lux Depth V2 Module Tests
+6. RAG System Validation
+7. Build Artifacts
+8. Generate Montecito Manifest
+9. Pipeline Summary
+
+**Phase 2 Feature Flags:**
+- `enable_phase2_features` (default: `true`) - Enable CLIP classification and Lighting Detection
+- `run_benchmark_regression` (default: `false`) - Run Phase 2 performance benchmarks
+
+**Usage:**
+```bash
+# Disable Phase 2 features for testing
+gh workflow run ci-consolidated.yml -f enable_phase2_features=false
+
+# Run with benchmark regression
+gh workflow run ci-consolidated.yml -f run_benchmark_regression=true
+```
+
+**Documentation:** See `docs/CI_PHASE2_INTEGRATION.md` for detailed Phase 2 integration guide.
 
 **Note:** This workflow replaces the deprecated `build.yml` and `python-app.yml`.
 
