@@ -123,10 +123,18 @@ docker-compose -f deployment/docker-compose.production.yml up -d
 
 ### Key Resources
 
+**Getting Started:**
+- **📖 [Phase 2 User Guide](docs/PHASE2_USER_GUIDE.md)** - 🆕 **Start here!** Complete walkthrough with examples
+- **⚡ [Quick Reference Card](docs/QUICK_REFERENCE_PHASE2.md)** - 🆕 One-page cheat sheet for CLI and common use cases
+- **📊 [Quality Tiers Guide](docs/QUALITY_TIERS.md)** - Preset comparison and selection guide
+
+**Technical Documentation:**
 - **📖 [Phase 2 Deployment Guide](docs/PHASE2_DEPLOYMENT_GUIDE.md)** - Complete setup instructions
 - **🔒 [Security Guide](lux_depth_v2/SECURITY.md)** - Security best practices
 - **📚 [Lux Depth V2 README](lux_depth_v2/README.md)** - Module documentation
 - **⚙️ [Environment Config](deployment/.env.production.example)** - Configuration reference
+- **🚀 [Performance Benchmarks](docs/PHASE2_PERFORMANCE.md)** - Throughput and timing data
+- **🔧 [CI/CD Integration](docs/CI_PHASE2_INTEGRATION.md)** - Automated testing and deployment
 
 ### Security Validation
 
