@@ -301,6 +301,103 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
             return masks
 
 
+class EfficientSAMSegmenter(MaterialSegmenter):
+    """EfficientSAM-based material segmentation (PHASE 2 - STUB).
+    
+    Provides high-precision boundary detection using EfficientSAM prompting.
+    Expected 60-80% improvement in boundary precision over SegFormer-B5.
+    
+    This is an architectural stub for Phase 2 implementation.
+    
+    TODO - PHASE 2 IMPLEMENTATION (Task 1: 24-32h):
+    1. Research EfficientSAM model variants (S/Ti/distilled)
+    2. Implement model loading and initialization
+    3. Design prompt engineering for architectural scenes:
+       - Grid-based prompts for comprehensive coverage
+       - Edge-aware prompts for boundary refinement
+       - Material-specific prompt templates
+    4. Implement mask generation with quality filtering
+    5. Integrate with Materials V2 property schema
+    6. Add confidence scoring per mask
+    7. Benchmark vs SegFormer-B5 on pool/kitchen scenes
+    
+    Expected API:
+        >>> segmenter = EfficientSAMSegmenter(cfg, device)
+        >>> masks = segmenter.predict(rgb_tensor)  # Dict[str, Tensor]
+        >>> # masks["water"], masks["stone"], etc.
+    
+    Integration Points:
+        - config.SegmentationConfig.backend = "efficientSAM"
+        - config.SegmentationConfig.efficientSAM_model = "path/to/model"
+        - materials_v2.MaterialsV2Engine (via create_material_segmenter)
+    """
+    
+    def __init__(self, cfg, device: "torch_ops.torch.device"):
+        """Initialize EfficientSAM segmenter.
+        
+        TODO: Implement model loading:
+        - Load EfficientSAM checkpoint from cfg.efficientSAM_model
+        - Initialize prompt encoder and mask decoder
+        - Set up device placement and mixed precision
+        - Validate model variant (S/Ti/distilled)
+        """
+        torch_ops.require_torch()
+        self.cfg = cfg
+        self.device = device
+        
+        # TODO: Replace with actual model loading
+        raise NotImplementedError(
+            "EfficientSAM backend is a Phase 2 stub. "
+            "Implementation required: model loading, prompt engineering, mask generation. "
+            "See PHASE2_IMPLEMENTATION_GUIDE.md for details."
+        )
+    
+    def predict(self, rgb: "torch_ops.torch.Tensor") -> Dict[str, "torch_ops.torch.Tensor"]:
+        """Generate material masks using EfficientSAM prompting.
+        
+        TODO: Implement mask generation:
+        1. Preprocess RGB to EfficientSAM input format
+        2. Generate grid-based prompts for scene coverage
+        3. Run EfficientSAM inference with prompts
+        4. Post-process masks (resize, soften, threshold)
+        5. Map SAM masks to material buckets using CLIP classifier
+        6. Return Dict[material_name, mask_tensor]
+        
+        Expected workflow:
+            prompts = self._generate_architectural_prompts(rgb)
+            sam_masks = self._run_efficientSAM(rgb, prompts)
+            material_masks = self._classify_masks_with_CLIP(rgb, sam_masks)
+            return material_masks
+        """
+        raise NotImplementedError("EfficientSAM predict() - Phase 2 stub")
+    
+    def _generate_architectural_prompts(self, rgb: "torch_ops.torch.Tensor") -> List[Dict]:
+        """Generate prompts optimized for architectural scenes.
+        
+        TODO: Implement prompt engineering:
+        - Grid-based point prompts for uniform coverage
+        - Edge-aware box prompts for structural elements
+        - Material-specific prompt templates (water=low points, sky=top region)
+        - Adaptive prompt density based on scene complexity
+        """
+        raise NotImplementedError("Prompt engineering - Phase 2")
+    
+    def _classify_masks_with_CLIP(
+        self,
+        rgb: "torch_ops.torch.Tensor",
+        sam_masks: List["torch_ops.torch.Tensor"]
+    ) -> Dict[str, "torch_ops.torch.Tensor"]:
+        """Classify SAM masks using CLIP zero-shot classification.
+        
+        TODO: Integrate with CLIPMaterialClassifier (materials_v2.py)
+        - Extract region features for each SAM mask
+        - Run CLIP zero-shot classification
+        - Group masks by material type
+        - Merge overlapping masks for same material
+        """
+        raise NotImplementedError("CLIP classification integration - Phase 2")
+
+
 def create_material_segmenter(seg_cfg, device: "torch_ops.torch.device") -> Optional[MaterialSegmenter]:
     """Factory for material segmenter."""
     backend = (seg_cfg.backend or "auto").lower()
@@ -323,6 +420,8 @@ def create_material_segmenter(seg_cfg, device: "torch_ops.torch.device") -> Opti
         return SegFormerAdekMaterialSegmenter(seg_cfg, device)
     if backend == "heuristic":
         return HeuristicMaterialSegmenter(seg_cfg, device)
+    if backend == "efficientSAM":
+        return EfficientSAMSegmenter(seg_cfg, device)
 
     if backend == "sam_clip":
         raise RuntimeError("sam_clip backend is a placeholder in V2 scaffold. Use onnx/segformer/heuristic for now.")
