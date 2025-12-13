@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from .logging_utils import setup_logging
+from .backends.prompt_generation import PromptGenerationConfig  # Use PR-2 tested config
 
 
 log = setup_logging(__name__)
@@ -85,34 +86,6 @@ class ConfidenceSemantics:
         if is_edge and self.use_edge_confidence:
             return max(self.edge_threshold, base * 0.7)  # Lower at edges
         return base
-
-
-@dataclass
-class PromptGenerationConfig:
-    """EfficientSAM prompt generation configuration.
-    
-    Stage 6 identified that box→center prompts produce low IoU.
-    V3 uses mask-aware prompt sampling.
-    """
-    
-    strategy: str = "mask_peaks"  # mask_peaks | distance_transform | grid
-    
-    # Foreground point sampling
-    num_fg_points: int = 4  # Sample N points from high-confidence region
-    fg_confidence_percentile: float = 80.0  # Top 20% of mask
-    fg_spacing_min_px: int = 32  # Minimum spacing between points
-    
-    # Background point sampling (optional)
-    num_bg_points: int = 2  # Negative prompts
-    bg_margin_px: int = 16  # Distance outside bbox
-    
-    # ROI cropping for efficiency
-    use_roi_crop: bool = True
-    roi_padding_px: int = 32  # Padding around bbox
-    roi_max_side: int = 1024  # Maximum ROI dimension
-    
-    # Fallback to box prompts
-    fallback_to_box: bool = True
 
 
 @dataclass
@@ -242,7 +215,10 @@ class MaterialsV3Engine:
         segmentation_result: dict,
         depth_map: Optional[np.ndarray] = None,
     ) -> dict:
-        """Process materials with V3 enhancements.
+        """Process materials with V3 enhancements (Plan Mode).
+        
+        PR-3A: Implements plan+stats mode (no pixel changes yet).
+        Canonicalizes material keys, computes per-class stats, decides refinement.
         
         Args:
             image: RGB image (HxWx3)
@@ -250,29 +226,147 @@ class MaterialsV3Engine:
             depth_map: Optional depth map (HxW)
             
         Returns:
-            Enhanced segmentation result with V3 metadata
-            
-        Raises:
-            NotImplementedError: Scaffolding only
+            Segmentation result with V3 metadata attached
         """
         if not self.config.enabled:
             # Pass-through when disabled
             return segmentation_result
         
-        # TODO: Implement V3 processing pipeline
-        raise NotImplementedError("Materials V3 processing not yet implemented")
+        # Import taxonomy helpers
+        from .materials_v3_taxonomy import (
+            normalize_material_name,
+            normalize_material_dict,
+            get_material_metadata,
+            should_refine_material,
+        )
+        
+        # Extract masks from segmentation result
+        # Segmentation result is typically dict with 'materials' key containing masks
+        if 'materials' not in segmentation_result:
+            log.warning("No 'materials' key in segmentation_result; V3 pass-through")
+            return segmentation_result
+        
+        raw_materials = segmentation_result['materials']
+        
+        # PR-3A Step 1: Canonicalize material keys
+        canonical_materials = normalize_material_dict(raw_materials)
+        
+        # PR-3A Step 2: Compute per-class stats
+        h, w = image.shape[:2] if image.ndim >= 2 else (1, 1)
+        total_pixels = h * w
+        
+        per_class_stats = {}
+        
+        for canonical_name, mask in canonical_materials.items():
+            metadata = get_material_metadata(canonical_name)
+            
+            # Compute coverage
+            if isinstance(mask, np.ndarray):
+                if mask.dtype == bool:
+                    coverage = mask.sum() / total_pixels
+                    mean_conf = 1.0 if mask.any() else 0.0
+                    edge_conf = mean_conf  # simplified for boolean masks
+                else:
+                    # Float confidence mask
+                    coverage = (mask > metadata.confidence_threshold).sum() / total_pixels
+                    mean_conf = float(mask.mean())
+                    
+                    # Edge confidence: compute from boundary band
+                    edge_conf = self._compute_edge_confidence(mask, metadata)
+            else:
+                # Fallback for unexpected types
+                coverage = 0.0
+                mean_conf = 0.0
+                edge_conf = 0.0
+            
+            # PR-3A Step 3: Decide should_refine per class
+            refine_decision = should_refine_material(
+                canonical_name,
+                refinement_strategy=self.config.refine_edges.value,
+            )
+            
+            per_class_stats[canonical_name] = {
+                "coverage": float(coverage),
+                "mean_confidence": float(mean_conf),
+                "edge_confidence": float(edge_conf),
+                "should_refine": refine_decision,
+                "refinement_priority": metadata.refinement_priority,
+                "threshold": metadata.confidence_threshold,
+            }
+        
+        # PR-3A Step 4: Attach V3 metadata to result (no pixel modifications)
+        segmentation_result['materials_v3'] = {
+            "enabled": True,
+            "taxonomy": self.config.taxonomy.value,
+            "refinement_strategy": self.config.refine_edges.value,
+            "per_class_stats": per_class_stats,
+            "canonical_materials": list(canonical_materials.keys()),
+        }
+        
+        # Still return original masks (no pixel changes in PR-3A)
+        return segmentation_result
     
-    def get_v3_report(self) -> dict:
+    def _compute_edge_confidence(
+        self,
+        mask: np.ndarray,
+        metadata,
+    ) -> float:
+        """Compute mean confidence in edge band.
+        
+        Uses edge_gating config to define edge band width.
+        
+        Args:
+            mask: Float confidence mask (HxW)
+            metadata: MaterialMetadata with thresholds
+            
+        Returns:
+            Mean confidence in edge band
+        """
+        from scipy.ndimage import binary_erosion, binary_dilation
+        
+        # Create binary mask from confidence
+        binary = mask > metadata.confidence_threshold
+        
+        if not binary.any():
+            return 0.0
+        
+        # Edge band: pixels near boundary
+        # Use edge_gating config if available
+        edge_width = getattr(self.config.edge_gating, 'edge_low', 0.20)
+        iterations = max(1, int(edge_width * 10))  # heuristic
+        
+        # Erode and dilate to get boundary band
+        eroded = binary_erosion(binary, iterations=iterations)
+        dilated = binary_dilation(binary, iterations=iterations)
+        edge_band = dilated & ~eroded
+        
+        if not edge_band.any():
+            return float(mask.mean())  # fallback
+        
+        return float(mask[edge_band].mean())
+    
+    def get_v3_report(self, segmentation_result: Optional[dict] = None) -> dict:
         """Get Materials V3 processing report.
+        
+        Args:
+            segmentation_result: Optional result dict from process()
         
         Returns:
             Report dict with V3-specific metrics
         """
-        return {
+        report = {
             "enabled": self.config.enabled,
             "taxonomy": self.config.taxonomy.value if isinstance(self.config.taxonomy, MaterialTaxonomy) else str(self.config.taxonomy),
             "refinement_strategy": self.config.refine_edges.value if isinstance(self.config.refine_edges, RefinementStrategy) else str(self.config.refine_edges),
             "edge_gating_enabled": self.config.edge_gating.enabled,
-            "lighting_aware": self.config.lighting_aware,
-            # TODO: Add per-material stats when implemented
         }
+        
+        # Include per-class stats if available
+        if segmentation_result and 'materials_v3' in segmentation_result:
+            v3_data = segmentation_result['materials_v3']
+            report.update({
+                "per_class_stats": v3_data.get("per_class_stats", {}),
+                "canonical_materials": v3_data.get("canonical_materials", []),
+            })
+        
+        return report
