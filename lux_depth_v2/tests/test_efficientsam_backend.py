@@ -83,6 +83,63 @@ def test_preprocess_builds_prompt_tensors():
     assert tensors["boxes"].shape == (1, 4)
 
 
+def _model_exists() -> bool:
+    """Check if efficientsam_s.onnx model exists locally."""
+    from pathlib import Path
+    return (Path("weights") / "efficientsam" / "efficientsam_s.onnx").exists()
+
+
+@pytest.mark.skipif(not _model_exists(), reason="efficientsam_s.onnx model not available")
+def test_segment_runs_with_real_model_efficientsam_s():
+    """
+    Stage 5A: Real ONNX inference test with efficientsam_s.onnx.
+    
+    Only runs when model is present (e.g., after manual download via CLI).
+    CI skips this test by default (offline, no model).
+    """
+    backend = EfficientSAMBackend(
+        model_name="efficientsam_s",
+        lazy_load=False,
+    )
+    
+    # Create simple test image: 64x64 with a white square in center
+    img = np.zeros((64, 64, 3), dtype=np.uint8)
+    img[20:44, 20:44] = 255  # white square
+    
+    # Test with box prompt around the square
+    mask = backend.segment(img, [BoxPrompt(0.25, 0.25, 0.75, 0.75)])
+    
+    # Validate output
+    assert mask.shape == (64, 64), f"Expected (64,64), got {mask.shape}"
+    assert mask.dtype == np.float32
+    assert np.all(np.isfinite(mask)), "Mask contains NaN or Inf"
+    assert mask.min() >= 0.0 and mask.max() <= 1.0, f"Mask values outside [0,1]: [{mask.min()}, {mask.max()}]"
+    
+    # Mask should not be constant (variance > epsilon)
+    assert mask.std() > 0.01, "Mask is constant (no segmentation detected)"
+    
+    # Center region should have higher confidence than edges (basic sanity)
+    center_val = mask[32, 32]
+    edge_val = mask[4, 4]
+    assert center_val > edge_val, f"Center ({center_val}) should be > edge ({edge_val})"
+
+
+@pytest.mark.skipif(not _model_exists(), reason="efficientsam_s.onnx model not available")
+def test_segment_with_point_prompts_real_model():
+    """Stage 5A: Test with point prompts on real model."""
+    backend = EfficientSAMBackend(model_name="efficientsam_s", lazy_load=False)
+    
+    img = np.random.randint(0, 255, (48, 48, 3), dtype=np.uint8)
+    
+    # Single foreground point at center
+    mask = backend.segment(img, [PointPrompt(0.5, 0.5, label=1)])
+    
+    assert mask.shape == (48, 48)
+    assert mask.dtype == np.float32
+    assert np.all(np.isfinite(mask))
+    assert mask.std() > 0.01
+
+
 @pytest.mark.skip(reason="Requires real EfficientSAM ONNX model; use mocked tests for CI")
 def test_segment_runs_with_real_model():
     backend = EfficientSAMBackend(
@@ -165,16 +222,20 @@ def test_prepare_onnx_inputs_box_prompts(monkeypatch, tmp_path):
 
     feed = backend._prepare_onnx_inputs(img_preprocessed, prompt_tensors, 32, 32)
 
-    # Check image tensor
-    assert "image" in feed
-    assert feed["image"].shape == (1, 3, 32, 32)
+    # Stage 5A: Check actual efficientsam_s tensor names
+    assert "batched_images" in feed
+    assert feed["batched_images"].shape == (1, 3, 32, 32)
 
-    # Check box tensor (scaled to pixel coords)
-    assert "boxes" in feed
-    boxes = feed["boxes"]
-    assert boxes.shape == (1, 1, 4)
-    # Box should be in pixel coords: (0.1*32, 0.1*32, 0.9*32, 0.9*32)
-    np.testing.assert_allclose(boxes[0, 0], [3.2, 3.2, 28.8, 28.8], rtol=1e-5)
+    # Box converted to point prompts (center only in Stage 5A)
+    assert "batched_point_coords" in feed
+    assert "batched_point_labels" in feed
+    coords = feed["batched_point_coords"]
+    labels = feed["batched_point_labels"]
+    assert coords.shape == (1, 1, 1, 2)  # 1 box → 1 center point
+    assert labels.shape == (1, 1, 1)
+    # Center of box (0.5, 0.5) in pixel coords = (16, 16)
+    np.testing.assert_allclose(coords[0, 0, 0], [16.0, 16.0], rtol=1e-5)
+    assert labels[0, 0, 0] == 1.0  # foreground
 
 
 def test_postprocess_outputs_handles_4d_tensor():
@@ -269,5 +330,5 @@ def test_segment_raises_on_missing_model(monkeypatch, tmp_path):
 
     img = np.zeros((32, 32, 3), dtype=np.uint8)
 
-    with pytest.raises(EfficientSAMNotAvailable, match="model not found"):
+    with pytest.raises(EfficientSAMNotAvailable, match="not available"):
         backend.segment(img, [PointPrompt(0.5, 0.5)])

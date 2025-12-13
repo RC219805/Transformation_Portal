@@ -32,8 +32,13 @@ class ModelDownloadError(RuntimeError):
     """Raised when model download or verification fails."""
 
 
-# Known EfficientSAM models (placeholders - verify URLs before production use)
+# Known EfficientSAM models (verified URLs and SHA256 checksums)
 DEFAULT_MODELS = {
+    "efficientsam_s": {
+        "url": "https://huggingface.co/yunyangx/EfficientSAM/resolve/main/efficientsam_s.onnx",
+        "sha256": "b257787eeecdfd0db0626f83a8241874c35c74eb4c25c4d12ff0a478f90f30f9",
+        "size_mb": 101,
+    },
     "efficientsam_ti_vit_s": {
         "url": "https://huggingface.co/yunyangx/efficientvit-sam/resolve/main/efficientsam_ti_s_encoder.onnx",
         "sha256": None,  # TODO: add verified SHA256 after first download

@@ -347,13 +347,11 @@ class EfficientSAMBackend:
         """
         Prepare ONNX Runtime feed dictionary from preprocessed inputs.
 
-        Stage 4: Implements standard EfficientSAM ONNX I/O contract.
-        Adapts to actual model tensor names via introspection.
-
-        Expected model contract (typical EfficientSAM ONNX):
-        - Image input: 'image' or 'pixel_values', shape (1, 3, H, W), float32
-        - Box prompts: 'boxes', shape (1, N, 4), float32, in normalized coords
-        - Optional point prompts: 'points', 'labels'
+        Stage 5A: Implements actual efficientsam_s.onnx I/O contract.
+        Model expects:
+        - batched_images: [batch, 3, height, width], float32
+        - batched_point_coords: [1, 1, num_points, 2], float32 (pixel coords)
+        - batched_point_labels: [1, 1, num_points], float32
 
         Returns
         -------
@@ -362,53 +360,49 @@ class EfficientSAMBackend:
         """
         # Convert HxWx3 to 1x3xHxW (NCHW)
         img_nchw = np.transpose(image, (2, 0, 1))[None, :, :, :]  # (1,3,H,W)
+        
+        feed = {
+            "batched_images": img_nchw.astype(np.float32)
+        }
 
-        # Build feed dict with model-specific tensor names
-        # For now, use common naming convention; can be made configurable
-        feed = {}
-
-        # Image input (check common names)
-        if "image" in self._input_names:
-            feed["image"] = img_nchw
-        elif "pixel_values" in self._input_names:
-            feed["pixel_values"] = img_nchw
-        else:
-            # Fallback: use first input
-            feed[self._input_names[0]] = img_nchw
-
-        # Box prompts (if present)
+        # Convert prompts to batched point format: [1, 1, N, 2] coords + [1, 1, N] labels
+        point_coords_list = []
+        point_labels_list = []
+        
+        # Box prompts → convert to center point (simplest, most reliable)
         if "boxes" in prompt_tensors:
-            boxes = prompt_tensors["boxes"]  # (N, 4) normalized
-            # Expand to (1, N, 4) for ONNX
-            boxes_batch = boxes[None, :, :]
+            boxes = prompt_tensors["boxes"]  # (N, 4) normalized [x0,y0,x1,y1]
+            for box in boxes:
+                x0, y0, x1, y1 = box
+                cx = (x0 + x1) * 0.5
+                cy = (y0 + y1) * 0.5
+                
+                # Use center point as single FG prompt
+                # This is simpler and more reliable than multi-point strategies
+                point_coords_list.append([cx * w_orig, cy * h_orig])
+                point_labels_list.append(1.0)
 
-            # Convert normalized [0,1] to pixel coords if required by model
-            # Standard EfficientSAM expects pixel coords, so scale:
-            boxes_px = boxes_batch.copy()
-            boxes_px[..., [0, 2]] *= w_orig  # x coords
-            boxes_px[..., [1, 3]] *= h_orig  # y coords
-
-            if "boxes" in self._input_names:
-                feed["boxes"] = boxes_px.astype(np.float32)
-            elif "box" in self._input_names:
-                feed["box"] = boxes_px.astype(np.float32)
-
-        # Point prompts (if present and supported)
+        
+        # Point prompts → convert normalized to pixel coords
         if "points" in prompt_tensors:
-            points = prompt_tensors["points"]  # (N, 3) [x, y, label]
-            points_batch = points[None, :, :2]  # (1, N, 2) drop label for now
-
-            # Scale to pixel coords
-            points_px = points_batch.copy()
-            points_px[..., 0] *= w_orig
-            points_px[..., 1] *= h_orig
-
-            if "point_coords" in self._input_names:
-                feed["point_coords"] = points_px.astype(np.float32)
-            if "point_labels" in self._input_names:
-                labels = points[:, 2][None, :]  # (1, N)
-                feed["point_labels"] = labels.astype(np.int64)
-
+            points = prompt_tensors["points"]  # (N, 3) [x, y, label] normalized
+            for pt in points:
+                x, y, label = pt
+                point_coords_list.append([x * w_orig, y * h_orig])
+                point_labels_list.append(float(label))
+        
+        # Build batched tensors: [1, 1, N, 2] and [1, 1, N]
+        if len(point_coords_list) == 0:
+            # Fallback: use image center as single FG point
+            point_coords_list = [[w_orig * 0.5, h_orig * 0.5]]
+            point_labels_list = [1.0]
+        
+        coords = np.asarray(point_coords_list, dtype=np.float32).reshape(1, 1, -1, 2)
+        labels = np.asarray(point_labels_list, dtype=np.float32).reshape(1, 1, -1)
+        
+        feed["batched_point_coords"] = coords
+        feed["batched_point_labels"] = labels
+        
         return feed
 
     def _postprocess_outputs(
@@ -420,10 +414,11 @@ class EfficientSAMBackend:
         """
         Parse ONNX outputs and return a single HxW float32 mask.
 
-        Stage 4: Handles typical EfficientSAM output formats.
+        Stage 5A: Handles efficientsam_s.onnx output format.
 
-        Expected outputs:
-        - Logits or probability masks, typically shape (1, 1, H, W) or (1, H, W)
+        Expected outputs (from model introspection):
+        - output_masks: [1, 1, num_masks, height, width], float32 (logits)
+        - iou_predictions: [1, 1, num_masks], float32
 
         Returns
         -------
@@ -433,22 +428,37 @@ class EfficientSAMBackend:
         if len(outputs) == 0:
             raise ValueError("ONNX model returned no outputs")
 
-        # Take first output (typically the mask)
-        raw = outputs[0]
+        # First output is output_masks (logits): [1, 1, num_masks, H, W]
+        mask_logits = outputs[0]
+        
+        # Second output is iou_predictions: [1, 1, num_masks]
+        iou_preds = outputs[1] if len(outputs) > 1 else None
 
-        # Handle different output shapes
-        if raw.ndim == 4:  # (1, 1, H, W) or (1, C, H, W)
-            mask = raw[0, 0]  # Take first batch, first channel
-        elif raw.ndim == 3:  # (1, H, W)
-            mask = raw[0]
-        elif raw.ndim == 2:  # (H, W)
-            mask = raw
+        # Handle efficientsam_s shape: [1, 1, num_masks, H, W]
+        if mask_logits.ndim == 5:
+            logits_3d = mask_logits[0, 0]  # [num_masks, H, W]
+            
+            # Select best mask using IoU predictions
+            if iou_preds is not None and iou_preds.size > 0:
+                iou_flat = iou_preds.flatten()
+                best_idx = int(np.argmax(iou_flat))
+                log.debug(f"Selecting mask {best_idx} with IoU={iou_flat[best_idx]:.4f}")
+                mask_logits_2d = logits_3d[best_idx]
+            else:
+                # Fallback: use first mask
+                mask_logits_2d = logits_3d[0]
+        elif mask_logits.ndim == 4:  # Fallback: (1, 1, H, W)
+            mask_logits_2d = mask_logits[0, 0]
+        elif mask_logits.ndim == 3:  # (1, H, W)
+            mask_logits_2d = mask_logits[0]
+        elif mask_logits.ndim == 2:  # (H, W)
+            mask_logits_2d = mask_logits
         else:
-            raise ValueError(f"Unexpected output shape: {raw.shape}")
+            raise ValueError(f"Unexpected output shape: {mask_logits.shape}")
 
-        # Apply sigmoid if output is logits (values outside [0,1])
-        if mask.min() < -0.1 or mask.max() > 1.1:
-            mask = 1.0 / (1.0 + np.exp(-mask))
+        # Apply sigmoid to convert logits to probabilities
+        # EfficientSAM outputs raw logits, need sigmoid activation
+        mask = 1.0 / (1.0 + np.exp(-mask_logits_2d.astype(np.float32)))
 
         # Resize to original dimensions if needed
         h_out, w_out = mask.shape
