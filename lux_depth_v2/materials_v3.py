@@ -209,6 +209,86 @@ class MaterialsV3Engine:
         
         # TODO: Initialize backends, caches, etc.
     
+    def _audit_class_presence(
+        self,
+        raw_materials: dict,
+        canonical_materials: dict,
+        requested_targets: Optional[List[str]] = None,
+    ) -> dict:
+        """Audit class presence for debugging taxonomy/coverage issues.
+        
+        This addresses Stage 6 "water missing" problems by reporting:
+        - What classes the segmenter actually emitted
+        - How they mapped to canonical keys
+        - Which requested targets are missing and why
+        
+        Args:
+            raw_materials: Original output from segmenter
+            canonical_materials: After taxonomy normalization
+            requested_targets: Optional list of expected classes (glass, water, foliage)
+            
+        Returns:
+            Audit report dict with diagnostics
+        """
+        if requested_targets is None:
+            requested_targets = ["glass", "water", "foliage"]
+        
+        from .materials_v3_taxonomy import normalize_material_name
+        
+        audit = {
+            "emitted_classes": sorted(raw_materials.keys()),
+            "emitted_count": len(raw_materials),
+            "canonical_classes": sorted(canonical_materials.keys()),
+            "canonical_count": len(canonical_materials),
+            "requested_targets": requested_targets,
+            "target_status": {},
+        }
+        
+        # Check each requested target
+        for target in requested_targets:
+            canonical_target = normalize_material_name(target)
+            
+            if canonical_target in canonical_materials:
+                mask = canonical_materials[canonical_target]
+                if isinstance(mask, np.ndarray):
+                    if mask.dtype == bool:
+                        coverage_px = int(mask.sum())
+                    else:
+                        coverage_px = int((mask > 0.5).sum())
+                else:
+                    coverage_px = 0
+                
+                status = {
+                    "present": True,
+                    "canonical_name": canonical_target,
+                    "coverage_pixels": coverage_px,
+                    "reason": "found" if coverage_px > 0 else "zero_coverage",
+                }
+            else:
+                # Try to find which emitted classes might have mapped
+                possible_sources = [
+                    k for k in raw_materials.keys()
+                    if normalize_material_name(k) == canonical_target
+                ]
+                
+                status = {
+                    "present": False,
+                    "canonical_name": canonical_target,
+                    "coverage_pixels": 0,
+                    "reason": "not_emitted_by_segmenter",
+                    "possible_raw_names": possible_sources,
+                }
+            
+            audit["target_status"][target] = status
+        
+        # Identify unmapped classes (emitted but not in canonical)
+        unmapped = [k for k in raw_materials.keys() if normalize_material_name(k) not in canonical_materials]
+        if unmapped:
+            audit["unmapped_classes"] = sorted(unmapped)
+            audit["warning"] = f"{len(unmapped)} emitted classes did not map to canonical names"
+        
+        return audit
+    
     def process(
         self,
         image: np.ndarray,
@@ -250,6 +330,11 @@ class MaterialsV3Engine:
         
         # PR-3A Step 1: Canonicalize material keys
         canonical_materials = normalize_material_dict(raw_materials)
+        
+        # NEW: Class presence audit (addresses Stage 6 "water missing" issue)
+        class_audit = self._audit_class_presence(
+            raw_materials, canonical_materials, requested_targets=["glass", "water", "foliage"]
+        )
         
         # PR-3A Step 2: Compute per-class stats
         h, w = image.shape[:2] if image.ndim >= 2 else (1, 1)
@@ -301,6 +386,7 @@ class MaterialsV3Engine:
             "refinement_strategy": self.config.refine_edges.value,
             "per_class_stats": per_class_stats,
             "canonical_materials": list(canonical_materials.keys()),
+            "class_presence_audit": class_audit,  # NEW: diagnose missing classes
         }
         
         # Still return original masks (no pixel changes in PR-3A)
