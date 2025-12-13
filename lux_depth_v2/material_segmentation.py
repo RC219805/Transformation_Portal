@@ -543,15 +543,15 @@ def create_material_segmenter(seg_cfg, device: "torch_ops.torch.device") -> Opti
             base_segmenter = SegFormerAdekMaterialSegmenter(seg_cfg, device)
         elif backend == "heuristic":
             base_segmenter = HeuristicMaterialSegmenter(seg_cfg, device)
-        elif backend == "efficientSAM":
+        elif backend in ("efficientsam", "efficientsam_backend", "efficientsam_v3"):
             base_segmenter = EfficientSAMSegmenter(seg_cfg, device)
         elif backend == "sam_clip":
             raise RuntimeError("sam_clip backend is a placeholder. Use onnx/segformer/heuristic.")
         else:
             raise ValueError(f"Unknown segmentation backend: {backend}")
 
-    # V3 fusion wrapper (if enabled)
-    if use_fusion or fusion_mode != FusionMode.NONE or backend_v3 == SegmentationBackend.FUSED:
+    # V3 fusion wrapper (only if explicitly requested)
+    if backend_v3 == SegmentationBackend.FUSED or use_fusion:
         # Try to create EfficientSAM refinement provider
         refinement_provider = None
         try:
