@@ -733,6 +733,10 @@ class LuxPipelineV2:
         report["reproducibility"]["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         report["reproducibility"]["preset"] = str(cfg.preset.value)
 
+        # Stage 6.5: Add EfficientSAM V3 fusion observability
+        if hasattr(self.segmenter, "get_segmentation_v3_report"):
+            report["segmentation_v3"] = self.segmenter.get_segmentation_v3_report()
+
         # Write report JSON only if enabled (after all fields added)
         if cfg.write_outputs:
             with self._stage(report, "export_report"):
