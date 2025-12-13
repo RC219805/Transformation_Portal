@@ -35,6 +35,7 @@ try:
 except Exception:  # pragma: no cover - environment dependent
     ort = None  # type: ignore
 
+from .model_cache import get_model_path, check_model_available, ModelDownloadError
 
 log = logging.getLogger(__name__)
 
@@ -116,14 +117,15 @@ class EfficientSAMBackend:
         device: str = "cpu",
         providers: Optional[Sequence[str]] = None,
         lazy_load: bool = True,
+        auto_download: bool = False,
+        cache_dir: Optional[Path] = None,
     ) -> None:
         """
         Parameters
         ----------
         model_path : Optional[str | Path]
             Optional explicit path to the EfficientSAM ONNX file.
-            If None, the backend will later derive a default location
-            based on `model_name` (to be implemented in Stage 2).
+            If None, will use model_name to resolve from cache.
         model_name : str
             Logical model identifier (e.g. 'efficientsam_ti_vit_s').
         device : str
@@ -132,11 +134,18 @@ class EfficientSAMBackend:
             Optional explicit ONNX Runtime providers.
         lazy_load : bool
             If True, the ONNX session is created on first use (segment()).
+        auto_download : bool
+            If True and model is missing, attempt download.
+            Default False (offline-by-default).
+        cache_dir : Optional[Path]
+            Model cache directory. Default: weights/efficientsam/
         """
         self.model_path = Path(model_path) if model_path is not None else None
         self.model_name = model_name
         self.device = device
         self.providers = list(providers) if providers is not None else None
+        self.auto_download = auto_download
+        self.cache_dir = cache_dir
 
         self._session: Optional["ort.InferenceSession"] = None  # type: ignore
 
@@ -150,16 +159,18 @@ class EfficientSAMBackend:
     @property
     def available(self) -> bool:
         """
-        Returns True if onnxruntime is importable and a model path is known.
+        Returns True if onnxruntime is available AND model exists or can be downloaded.
 
-        This does not guarantee that the session has been initialized; it only
-        checks that EfficientSAM *could* be used in this environment.
+        Stage 5B: Stricter semantics - only True if model is actually usable.
         """
         if ort is None:
             return False
-        # For Stage 1 we only require that either a model_path is set or
-        # we have a model_name that future logic can resolve.
-        return True
+        
+        try:
+            resolved = self._resolve_model_path()
+            return resolved.exists()
+        except (EfficientSAMNotAvailable, ModelDownloadError):
+            return False
 
     def segment(
         self,
@@ -287,17 +298,31 @@ class EfficientSAMBackend:
         """
         Determine the ONNX model path to use.
 
-        For Stage 1 we keep this simple:
-        - If `model_path` was provided, use it.
-        - Else, default to `weights/efficientsam/{model_name}.onnx`.
+        Stage 5B: Use model_cache for resolution + optional auto-download.
 
-        This is easy to override later based on how you actually store models.
+        Returns
+        -------
+        Path
+            Path to ONNX model file.
+
+        Raises
+        ------
+        EfficientSAMNotAvailable
+            If model cannot be resolved or downloaded.
         """
         if self.model_path is not None:
             return self.model_path
 
-        default_root = Path("weights") / "efficientsam"
-        return default_root / f"{self.model_name}.onnx"
+        try:
+            return get_model_path(
+                self.model_name,
+                cache_dir=self.cache_dir,
+                auto_download=self.auto_download,
+            )
+        except ModelDownloadError as exc:
+            raise EfficientSAMNotAvailable(
+                f"Could not resolve model {self.model_name}: {exc}"
+            ) from exc
 
     def _resolve_providers(self) -> Sequence[str]:
         """

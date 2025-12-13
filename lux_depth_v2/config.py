@@ -29,8 +29,10 @@ class Preset(str, Enum):
     INTERIOR_LUXURY = "interior_luxury"
     INTERIOR_LUXURY_MAX_QUALITY = "interior_luxury_max_quality"
     INTERIOR_LUXURY_APEX_QUALITY = "interior_luxury_apex_quality"
+    INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM = "interior_luxury_apex_quality_efficientsam"  # Canary V3
     EXTERIOR_SHOWCASE = "exterior_showcase"
     EXTERIOR_POOL_APEX_QUALITY = "exterior_pool_apex_quality"
+    EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM = "exterior_pool_apex_quality_efficientsam"  # Canary V3
     ARCHITECTURAL = "architectural"
     ARCHIVAL_QUALITY = "archival_quality"
 
@@ -809,6 +811,38 @@ class PipelineConfig:
             self.post_tile = 2048
             self.post_overlap = 64
             self.validate_ai = True
+
+        elif p in (Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM, 
+                   Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM):
+            # CANARY EfficientSAM V3 presets: APEX + FUSED segmentation
+            # Inherits all settings from base APEX preset, then enables fusion
+            
+            # First, apply base APEX preset
+            if p == Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM:
+                base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
+            else:
+                base_preset = Preset.EXTERIOR_POOL_APEX_QUALITY
+            
+            # Recursively apply base preset settings
+            self.apply_preset(base_preset)
+            
+            # Now overlay EfficientSAM V3 fusion settings
+            if self.segmentation is None:
+                from lux_depth_v2.config import SegmentationConfig
+                self.segmentation = SegmentationConfig()
+            
+            # Enable FUSED backend (SegFormer + EfficientSAM edge refinement)
+            self.segmentation.backend_v3 = SegmentationBackend.FUSED
+            self.segmentation.use_efficientsam_for_edges = True
+            self.segmentation.fusion_mode = FusionMode.CONFIDENCE_WEIGHTED
+            self.segmentation.fusion_min_iou = 0.30  # IoU gating threshold
+            self.segmentation.fusion_alpha_edge = 0.70  # Prefer EfficientSAM on edges
+            self.segmentation.fusion_alpha_core = 0.30  # Prefer SegFormer in core
+            
+            # Note: This preset will gracefully fall back to SegFormer-only if:
+            # - EfficientSAM model not available
+            # - onnxruntime not installed
+            # - Fusion IoU gating fails
 
         # clamp some sanity
         self.upscale = 4 if int(self.upscale) not in (2, 4) else int(self.upscale)

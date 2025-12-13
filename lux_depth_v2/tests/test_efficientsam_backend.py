@@ -24,6 +24,46 @@ def test_backend_available_flag_without_onnx(monkeypatch):
         backend.segment(np.zeros((32, 32, 3), dtype=np.uint8), [PointPrompt(0.5, 0.5)])
 
 
+def test_backend_available_with_model_missing(monkeypatch, tmp_path):
+    """Stage 5B: available is False when model doesn't exist (stricter semantics)."""
+    import lux_depth_v2.backends.efficientsam_backend as backend_mod
+    
+    # Mock onnxruntime as available
+    monkeypatch.setattr(backend_mod, "ort", type("ort", (), {"InferenceSession": type}))
+    
+    # Model doesn't exist, auto_download=False
+    backend = EfficientSAMBackend(
+        model_name="missing_model",
+        cache_dir=tmp_path,
+        auto_download=False,
+        lazy_load=True,
+    )
+    
+    # Stage 5B: available should be False (model missing)
+    assert backend.available is False
+
+
+def test_backend_available_with_model_present(monkeypatch, tmp_path):
+    """Stage 5B: available is True when model exists."""
+    import lux_depth_v2.backends.efficientsam_backend as backend_mod
+    
+    # Mock onnxruntime
+    monkeypatch.setattr(backend_mod, "ort", type("ort", (), {"InferenceSession": type}))
+    
+    # Create model file
+    model_name = "test_model"
+    model_file = tmp_path / f"{model_name}.onnx"
+    model_file.touch()
+    
+    backend = EfficientSAMBackend(
+        model_path=model_file,
+        lazy_load=True,
+    )
+    
+    # Stage 5B: available should be True
+    assert backend.available is True
+
+
 def test_preprocess_builds_prompt_tensors():
     backend = EfficientSAMBackend(lazy_load=True)
 
