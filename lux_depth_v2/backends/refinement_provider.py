@@ -13,11 +13,14 @@ concrete implementation, but this interface allows for:
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Protocol
+from typing import TYPE_CHECKING, Dict, Optional, Protocol
 
 import numpy as np
 
 from .. import torch_ops
+
+if TYPE_CHECKING:
+    from .efficientsam_backend import EfficientSAMBackend
 
 
 class RefinementProvider(Protocol):
