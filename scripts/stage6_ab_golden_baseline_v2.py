@@ -25,18 +25,35 @@ from lux_depth_v2.pipeline import LuxPipelineV2
 
 BENCHMARK_SET = {
     "interior_kitchen_750": {
-        "path": "assets/phase2_bench/interior_kitchen_750.tiff",
+        "path": "assets/phase2_bench/750Picacho_Kitchen_Ultimate.tif",
         "baseline_preset": Preset.INTERIOR_LUXURY_APEX_QUALITY,
         "canary_preset": Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM,
         "scene_type": "interior",
     },
     "exterior_pool_750": {
-        "path": "assets/phase2_bench/exterior_pool_750.tiff",
+        "path": "assets/phase2_bench/750Picacho_Pool_Ultimate.tif",
         "baseline_preset": Preset.EXTERIOR_POOL_APEX_QUALITY,
         "canary_preset": Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM,
         "scene_type": "exterior",
     },
-    # Add more benchmark images as needed
+    "interior_bedroom": {
+        "path": "assets/phase2_bench/750Picacho_PrimaryBedroom_Ultimate.tif",
+        "baseline_preset": Preset.INTERIOR_LUXURY_APEX_QUALITY,
+        "canary_preset": Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM,
+        "scene_type": "interior",
+    },
+    "interior_bathroom": {
+        "path": "assets/phase2_bench/750Picacho_PrimaryBathroom_Ultimate.tif",
+        "baseline_preset": Preset.INTERIOR_LUXURY_APEX_QUALITY,
+        "canary_preset": Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM,
+        "scene_type": "interior",
+    },
+    "exterior_aerial": {
+        "path": "assets/phase2_bench/750Picacho_Aerial_Ultimate.tif",
+        "baseline_preset": Preset.INTERIOR_LUXURY_MAX_QUALITY,  # Use Max for aerial
+        "canary_preset": Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM,
+        "scene_type": "exterior",
+    },
 }
 
 
