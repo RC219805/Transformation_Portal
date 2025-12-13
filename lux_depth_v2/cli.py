@@ -90,6 +90,21 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_group.add_argument("--phase2-optimizations", action="store_true",
                              help="Enable all Phase 2 performance optimizations.")
     
+    # EfficientSAM V3 (Stage 5B)
+    efficientsam_group = p.add_argument_group('EfficientSAM V3 (Experimental)')
+    efficientsam_group.add_argument("--download-efficientsam", action="store_true",
+                                   help="Download EfficientSAM model and exit (no processing).")
+    efficientsam_group.add_argument("--efficientsam-model", type=str, 
+                                   default="efficientsam_ti_vit_s",
+                                   choices=["efficientsam_ti_vit_s", "efficientsam_ti_vit_b"],
+                                   help="EfficientSAM model variant (default: ti_vit_s).")
+    efficientsam_group.add_argument("--efficientsam-url", type=str, default=None,
+                                   help="Override model download URL.")
+    efficientsam_group.add_argument("--efficientsam-sha256", type=str, default=None,
+                                   help="Expected SHA256 for model verification.")
+    efficientsam_group.add_argument("--check-efficientsam", action="store_true",
+                                   help="Check EfficientSAM model availability and exit.")
+    
     # I/O Optimization
     phase2_group.add_argument("--async-io", action="store_true",
                              help="Enable asynchronous TIFF writing (5-7× I/O speedup).")
@@ -144,6 +159,37 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     logger = setup_logging("INFO")
+    
+    # Handle EfficientSAM utilities (download/check)
+    if args.check_efficientsam:
+        from lux_depth_v2.backends.model_cache import check_model_available
+        model_name = args.efficientsam_model
+        available = check_model_available(model_name)
+        if available:
+            logger.info(f"✓ EfficientSAM model '{model_name}' is cached and available")
+        else:
+            logger.warning(f"✗ EfficientSAM model '{model_name}' is NOT available")
+            logger.info(f"  Download with: --download-efficientsam --efficientsam-model {model_name}")
+        return
+    
+    if args.download_efficientsam:
+        from lux_depth_v2.backends.model_cache import get_model_path, ModelDownloadError
+        model_name = args.efficientsam_model
+        
+        logger.info(f"Downloading EfficientSAM model: {model_name}")
+        try:
+            model_path = get_model_path(
+                model_name,
+                auto_download=True,
+                url_override=args.efficientsam_url,
+                sha256_override=args.efficientsam_sha256,
+            )
+            logger.info(f"✓ Model downloaded successfully: {model_path}")
+            logger.info(f"  Size: {model_path.stat().st_size / (1024**2):.1f} MB")
+        except ModelDownloadError as e:
+            logger.error(f"✗ Download failed: {e}")
+            return
+        return
     
     # Auto-preset selection if requested
     preset = Preset(args.preset)
