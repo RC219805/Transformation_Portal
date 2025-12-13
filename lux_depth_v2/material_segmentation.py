@@ -408,6 +408,18 @@ class FusedMaterialSegmenter(MaterialSegmenter):
         self.device = device
         self.refinement_provider = refinement_provider
         self.fusion_stats: Dict[str, Dict[str, float]] = {}
+        
+        # Stage 6.5: Log fusion initialization for observability
+        import logging
+        self.logger = logging.getLogger(__name__)
+        fusion_mode = getattr(cfg, "fusion_mode", "NONE")
+        model_name = getattr(cfg, "efficientSAM_model", None)
+        self.logger.debug(
+            "FusedMaterialSegmenter initialized: fusion_mode=%s, provider=%s, model=%s",
+            fusion_mode,
+            "present" if refinement_provider else "None",
+            model_name,
+        )
 
     def predict(self, rgb: "torch_ops.torch.Tensor") -> Dict[str, "torch_ops.torch.Tensor"]:
         """
@@ -473,6 +485,15 @@ class FusedMaterialSegmenter(MaterialSegmenter):
                 # Apply fusion with IoU gating
                 fused_np, stats = fuse_masks(base_np, refined_np, fusion_cfg)
 
+                # Stage 6.5: Debug log refinement outcome
+                self.logger.debug(
+                    "V3 refine %s: refined=%s iou=%.3f applied=%s",
+                    material_class,
+                    refined_mask is not None,
+                    stats.get("iou_base_vs_refined", 0.0),
+                    bool(stats.get("fusion_applied", 0.0)),
+                )
+
                 # Convert back to torch
                 fused_tensor = (
                     torch_ops.torch.from_numpy(fused_np)
@@ -498,6 +519,27 @@ class FusedMaterialSegmenter(MaterialSegmenter):
                 }
 
         return fused_masks
+
+    def get_segmentation_v3_report(self) -> dict:
+        """
+        Stage 6.5: Generate observability report for EfficientSAM V3 fusion.
+        
+        Returns dict containing:
+        - backend_v3: segmentation backend used
+        - fusion_mode: fusion strategy applied
+        - model: EfficientSAM model name (if applicable)
+        - refined_classes: list of classes eligible for refinement
+        - per_class: fusion stats per material class
+        """
+        from .config import SegmentationBackend, FusionMode
+        
+        return {
+            "backend_v3": str(getattr(self.cfg, "backend_v3", SegmentationBackend.SEGFORMER)),
+            "fusion_mode": str(getattr(self.cfg, "fusion_mode", FusionMode.NONE)),
+            "model": getattr(self.cfg, "efficientSAM_model", None),
+            "refined_classes": sorted(list(EDGE_REFINEMENT_CLASSES)),
+            "per_class": self.fusion_stats,
+        }
 
 
 def create_material_segmenter(seg_cfg, device: "torch_ops.torch.device") -> Optional[MaterialSegmenter]:
