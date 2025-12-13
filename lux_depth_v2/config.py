@@ -35,6 +35,14 @@ class Preset(str, Enum):
     ARCHIVAL_QUALITY = "archival_quality"
 
 
+class SegmentationBackend(str, Enum):
+    """Material segmentation backend options (EfficientSAM V3)."""
+    
+    SEGFORMER = "segformer"
+    EFFICIENTSAM = "efficientsam"
+    FUSED = "fused"  # SegFormer + EfficientSAM edge refinement
+
+
 @dataclass
 class MaterialPropertySchema:
     """Material Property Schema for PHASE 1 Task 2.
@@ -201,6 +209,11 @@ class SegmentationConfig:
     """Material segmentation configuration."""
 
     backend: str = "auto"  # auto|onnx|segformer|efficientSAM|sam_clip|heuristic|none
+    
+    # EfficientSAM V3 backend selection
+    backend_v3: SegmentationBackend = SegmentationBackend.SEGFORMER
+    use_efficientsam_for_edges: bool = False  # Enable edge refinement via EfficientSAM
+    fusion_mode: str = "none"  # none|union|intersection|confidence_weighted
     # For backend=onnx: path to ONNX model (expects NCHW float input 0..1, RGB)
     onnx_model_path: Optional[Path] = None
     onnx_labels_path: Optional[Path] = None  # optional JSON mapping class index->surface name
