@@ -839,6 +839,9 @@ class PipelineConfig:
             self.segmentation.fusion_alpha_edge = 0.70  # Prefer EfficientSAM on edges
             self.segmentation.fusion_alpha_core = 0.30  # Prefer SegFormer in core
             
+            # Explicitly use the verified efficientsam_s model
+            self.segmentation.efficientSAM_model = "efficientsam_s"
+            
             # Note: This preset will gracefully fall back to SegFormer-only if:
             # - EfficientSAM model not available
             # - onnxruntime not installed
