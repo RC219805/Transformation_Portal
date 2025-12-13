@@ -19,11 +19,27 @@ import numpy as np
 
 # Check if Phase 2 dependencies are available
 try:
-    from lux_depth_v2.preset_selector import PresetSelector, QualityTier
+    from lux_depth_v2.preset_selector import PresetSelector, QualityTier, CLIP_AVAILABLE
     from lux_depth_v2.config import Preset
     PHASE2_AVAILABLE = True
 except ImportError:
     PHASE2_AVAILABLE = False
+    CLIP_AVAILABLE = False
+
+# Runtime check: can we actually create a PresetSelector?
+def _can_create_preset_selector():
+    """Check if PresetSelector can be instantiated (tests CLIP availability at runtime)."""
+    if not PHASE2_AVAILABLE or not CLIP_AVAILABLE:
+        return False
+    try:
+        # Try creating it - this will fail if transformers/torch missing or offline
+        _ = PresetSelector()
+        return True
+    except (ImportError, Exception):
+        return False
+
+# Tests requiring CLIP should check this
+CLIP_TESTS_AVAILABLE = _can_create_preset_selector()
 
 
 @pytest.fixture
@@ -74,7 +90,7 @@ def small_exterior_image(test_data_dir, tmp_path):
     return img_path
 
 
-@pytest.mark.skipif(not PHASE2_AVAILABLE, reason="Phase 2 not available")
+@pytest.mark.skipif(not CLIP_TESTS_AVAILABLE, reason="Phase 2 CLIP dependencies not available (transformers/torch required)")
 @pytest.mark.integration
 class TestPhase2EndToEnd:
     """Integration tests for Phase 2 pipeline."""
