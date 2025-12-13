@@ -180,6 +180,7 @@ class EfficientSAMRefinementProvider:
         - Backend is unavailable
         - Base mask is empty
         - EfficientSAM execution fails
+        - Image exceeds safe size threshold (OOM protection)
         """
         torch_ops.require_torch()
 
@@ -199,6 +200,18 @@ class EfficientSAMRefinementProvider:
 
             base_np = base_mask[0, 0].to("cpu").numpy().astype(np.float32)
             h, w = base_np.shape
+            
+            # OOM safety guard: skip refinement on very large images
+            MAX_EFFICIENTSAM_MEGAPIXELS = 30  # conservative safe limit
+            megapixels = (h * w) / 1e6
+            if megapixels > MAX_EFFICIENTSAM_MEGAPIXELS:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Image too large for EfficientSAM refinement (%.1f MP > %d MP), "
+                    "skipping class '%s' to prevent OOM",
+                    megapixels, MAX_EFFICIENTSAM_MEGAPIXELS, material_class
+                )
+                return None
 
             # Find bounding box of base mask
             binary = base_np > 0.5
