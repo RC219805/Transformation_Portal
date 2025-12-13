@@ -20,6 +20,7 @@ except ImportError:
 
 if TYPE_CHECKING:
     from lux_depth_v2.materials_v2 import MaterialsV2Config
+    from lux_depth_v2.materials_v3 import MaterialsV3Config
 
 
 class Preset(str, Enum):
@@ -478,6 +479,9 @@ class PipelineConfig:
     
     # Materials v2 configuration (imported lazily to avoid circular dependency)
     materials_v2: Optional['MaterialsV2Config'] = None
+    
+    # Materials V3 configuration (advanced EfficientSAM integration)
+    materials_v3: Optional['MaterialsV3Config'] = None
     
     # PHASE 1 Task 2: Material Property Schema
     material_properties: Dict[str, MaterialPropertySchema] = field(default_factory=dict)
