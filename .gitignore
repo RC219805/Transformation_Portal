@@ -263,3 +263,7 @@ archive/
 
 # Benchmark output directories
 benchmarks_*/
+
+# Phase 2 benchmark images (large TIFF files)
+assets/phase2_bench/*.tiff
+assets/phase2_bench/*.tif
