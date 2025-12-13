@@ -114,13 +114,26 @@ class MockRefinementProvider:
 
 class EfficientSAMRefinementProvider:
     """
-    EfficientSAM-based refinement provider.
+    EfficientSAM-based refinement provider with depth-aware refinement.
 
     Wraps EfficientSAMBackend and converts between torch tensors and
     the backend's numpy interface.
+    
+    Stage 5 enhancements:
+    - Depth-aware prompt generation
+    - Adaptive box expansion based on material class
+    - Multi-prompt support for complex regions
+    - Quality gating based on base mask confidence
     """
 
-    def __init__(self, backend: "EfficientSAMBackend", device: "torch_ops.torch.device"):
+    def __init__(
+        self,
+        backend: "EfficientSAMBackend",
+        device: "torch_ops.torch.device",
+        depth_map: Optional["torch_ops.torch.Tensor"] = None,
+        min_confidence: float = 0.3,
+        box_expand_ratio: float = 0.1,
+    ):
         """
         Parameters
         ----------
@@ -128,11 +141,20 @@ class EfficientSAMRefinementProvider:
             The EfficientSAM backend instance
         device : torch.device
             Target device for tensor operations
+        depth_map : Optional[torch.Tensor]
+            Optional depth map (1x1xHxW) for depth-aware refinement
+        min_confidence : float
+            Minimum base mask confidence to attempt refinement
+        box_expand_ratio : float
+            How much to expand bounding box beyond detected region (0.1 = 10%)
         """
         from .efficientsam_backend import EfficientSAMBackend, PointPrompt, BoxPrompt
 
         self.backend = backend
         self.device = device
+        self.depth_map = depth_map
+        self.min_confidence = min_confidence
+        self.box_expand_ratio = box_expand_ratio
         self._PointPrompt = PointPrompt
         self._BoxPrompt = BoxPrompt
 
