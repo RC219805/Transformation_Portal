@@ -117,16 +117,16 @@ class MockRefinementProvider:
 
 class EfficientSAMRefinementProvider:
     """
-    EfficientSAM-based refinement provider with depth-aware refinement.
+    EfficientSAM-based refinement provider with intelligent prompt generation.
 
     Wraps EfficientSAMBackend and converts between torch tensors and
     the backend's numpy interface.
     
-    Stage 5 enhancements:
-    - Depth-aware prompt generation
-    - Adaptive box expansion based on material class
-    - Multi-prompt support for complex regions
-    - Quality gating based on base mask confidence
+    PR-2 enhancements:
+    - Mask-driven prompt generation (high-confidence sampling)
+    - ROI cropping for efficiency and focus
+    - Comprehensive skip guards (OOM, tiny masks, etc.)
+    - Per-class observability and stats emission
     """
 
     def __init__(
@@ -135,7 +135,8 @@ class EfficientSAMRefinementProvider:
         device: "torch_ops.torch.device",
         depth_map: Optional["torch_ops.torch.Tensor"] = None,
         min_confidence: float = 0.3,
-        box_expand_ratio: float = 0.1,
+        use_roi_cropping: bool = True,
+        roi_padding: int = 50,
     ):
         """
         Parameters
@@ -148,18 +149,26 @@ class EfficientSAMRefinementProvider:
             Optional depth map (1x1xHxW) for depth-aware refinement
         min_confidence : float
             Minimum base mask confidence to attempt refinement
-        box_expand_ratio : float
-            How much to expand bounding box beyond detected region (0.1 = 10%)
+        use_roi_cropping : bool
+            Whether to crop ROI before running EfficientSAM
+        roi_padding : int
+            Pixels to pad around mask bbox when cropping ROI
         """
         from .efficientsam_backend import EfficientSAMBackend, PointPrompt, BoxPrompt
+        from .prompt_generation import PromptGenerationConfig
 
         self.backend = backend
         self.device = device
         self.depth_map = depth_map
         self.min_confidence = min_confidence
-        self.box_expand_ratio = box_expand_ratio
+        self.use_roi_cropping = use_roi_cropping
+        self.roi_padding = roi_padding
         self._PointPrompt = PointPrompt
         self._BoxPrompt = BoxPrompt
+        self.prompt_cfg = PromptGenerationConfig()
+        
+        # Per-class stats for observability
+        self.refinement_stats: Dict[str, dict] = {}
 
     def get_refined_mask(
         self,
@@ -168,23 +177,36 @@ class EfficientSAMRefinementProvider:
         material_class: str,
     ) -> Optional["torch_ops.torch.Tensor"]:
         """
-        Use EfficientSAM to refine edges of the base mask.
+        Use EfficientSAM to refine edges of the base mask with intelligent prompts.
 
-        Strategy:
-        1. Compute bounding box of base mask (> 0.5)
-        2. Extract a few point prompts from high-confidence core (> 0.7)
-        3. Run EfficientSAM with box + points
-        4. Convert output back to torch tensor
+        PR-2 Strategy:
+        1. Generate mask-driven prompts (high-confidence FG + boundary BG)
+        2. Optionally crop ROI for efficiency
+        3. Run EfficientSAM with smart prompts
+        4. Resize back to original resolution if ROI was used
+        5. Emit detailed stats for observability
 
         Returns None if:
         - Backend is unavailable
-        - Base mask is empty
+        - Base mask is empty or too small
         - EfficientSAM execution fails
         - Image exceeds safe size threshold (OOM protection)
         """
         torch_ops.require_torch()
+        import logging
+        from .prompt_generation import generate_prompts_from_mask, compute_roi_from_mask
+
+        stats = {
+            "skip_reason": None,
+            "prompt_count_fg": 0,
+            "prompt_count_bg": 0,
+            "roi_used": False,
+            "roi_size": None,
+        }
 
         if not self.backend.available:
+            stats["skip_reason"] = "backend_unavailable"
+            self.refinement_stats[material_class] = stats
             return None
 
         # Extract HxWx3 numpy image
@@ -205,55 +227,90 @@ class EfficientSAMRefinementProvider:
             MAX_EFFICIENTSAM_MEGAPIXELS = 30  # conservative safe limit
             megapixels = (h * w) / 1e6
             if megapixels > MAX_EFFICIENTSAM_MEGAPIXELS:
-                import logging
                 logging.getLogger(__name__).warning(
                     "Image too large for EfficientSAM refinement (%.1f MP > %d MP), "
                     "skipping class '%s' to prevent OOM",
                     megapixels, MAX_EFFICIENTSAM_MEGAPIXELS, material_class
                 )
+                stats["skip_reason"] = f"image_too_large_{megapixels:.1f}MP"
+                self.refinement_stats[material_class] = stats
                 return None
 
-            # Find bounding box of base mask
-            binary = base_np > 0.5
-            if not binary.any():
-                return None
-
-            rows = np.any(binary, axis=1)
-            cols = np.any(binary, axis=0)
-            y_min, y_max = np.where(rows)[0][[0, -1]]
-            x_min, x_max = np.where(cols)[0][[0, -1]]
-
-            # Normalize to [0, 1]
-            box = self._BoxPrompt(
-                x0=float(x_min) / w,
-                y0=float(y_min) / h,
-                x1=float(x_max) / w,
-                y1=float(y_max) / h,
+            # Generate intelligent prompts from mask
+            fg_points_yx, bg_points_yx, prompt_stats = generate_prompts_from_mask(
+                base_np, self.prompt_cfg
             )
+            
+            if prompt_stats["skip_reason"] is not None:
+                stats.update(prompt_stats)
+                self.refinement_stats[material_class] = stats
+                return None
+            
+            stats["prompt_count_fg"] = prompt_stats["fg_points_generated"]
+            stats["prompt_count_bg"] = prompt_stats["bg_points_generated"]
 
-            # Extract a few high-confidence points
-            core = base_np > 0.7
-            y_pts, x_pts = np.where(core)
-            points = []
-            if len(y_pts) > 0:
-                # Sample up to 4 points uniformly
-                step = max(1, len(y_pts) // 4)
-                for i in range(0, len(y_pts), step):
-                    if len(points) >= 4:
-                        break
-                    points.append(
-                        self._PointPrompt(
-                            x=float(x_pts[i]) / w,
-                            y=float(y_pts[i]) / h,
-                            label=1,
-                        )
+            # Decide whether to use ROI cropping
+            use_roi = self.use_roi_cropping
+            roi_bbox = None
+            
+            if use_roi:
+                roi_bbox, roi_stats = compute_roi_from_mask(
+                    base_np,
+                    padding=self.roi_padding,
+                    max_side=self.prompt_cfg.max_roi_side,
+                )
+                if roi_bbox is None:
+                    stats.update(roi_stats)
+                    self.refinement_stats[material_class] = stats
+                    return None
+                
+                y0, x0, y1, x1 = roi_bbox
+                stats["roi_used"] = True
+                stats["roi_size"] = f"{y1-y0}x{x1-x0}"
+                
+                # Crop image and mask to ROI
+                rgb_crop = rgb_np[y0:y1, x0:x1, :]
+                
+                # Adjust prompt coordinates to ROI
+                fg_points_yx = fg_points_yx - np.array([[y0, x0]])
+                if len(bg_points_yx) > 0:
+                    bg_points_yx = bg_points_yx - np.array([[y0, x0]])
+                
+                h_roi, w_roi = y1 - y0, x1 - x0
+                process_img = rgb_crop
+                process_h, process_w = h_roi, w_roi
+            else:
+                process_img = rgb_np
+                process_h, process_w = h, w
+
+            # Convert points to normalized prompts
+            prompts = []
+            for yx in fg_points_yx:
+                prompts.append(
+                    self._PointPrompt(
+                        x=float(yx[1]) / process_w,
+                        y=float(yx[0]) / process_h,
+                        label=1,  # foreground
                     )
+                )
+            for yx in bg_points_yx:
+                prompts.append(
+                    self._PointPrompt(
+                        x=float(yx[1]) / process_w,
+                        y=float(yx[0]) / process_h,
+                        label=0,  # background
+                    )
+                )
 
-            prompts = [box] + points
+            # Call EfficientSAM
+            mask_np = self.backend.segment(process_img, prompts)
 
-            # Call EfficientSAM (raises NotImplementedError in Stage 1/2)
-            # In Stage 4+ this will return a real mask
-            mask_np = self.backend.segment(rgb_np, prompts)
+            # Resize back to original if ROI was used
+            if use_roi and roi_bbox is not None:
+                full_mask = np.zeros((h, w), dtype=np.float32)
+                y0, x0, y1, x1 = roi_bbox
+                full_mask[y0:y1, x0:x1] = mask_np
+                mask_np = full_mask
 
             # Convert back to torch
             mask_tensor = (
@@ -262,15 +319,19 @@ class EfficientSAMRefinementProvider:
                 .unsqueeze(0)
                 .unsqueeze(0)
             )
+            
+            self.refinement_stats[material_class] = stats
             return mask_tensor
 
         except NotImplementedError:
             # EfficientSAM backend is still a stub
+            stats["skip_reason"] = "backend_not_implemented"
+            self.refinement_stats[material_class] = stats
             return None
         except Exception as e:
-            import logging
-
             logging.getLogger(__name__).warning(
                 "EfficientSAM refinement failed for %s: %s", material_class, e
             )
+            stats["skip_reason"] = f"exception_{type(e).__name__}"
+            self.refinement_stats[material_class] = stats
             return None
