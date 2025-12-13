@@ -373,32 +373,205 @@ class EfficientSAMSegmenter(MaterialSegmenter):
         raise NotImplementedError("CLIP classification integration - Phase 2")
 
 
+# -------------------------------------------------------------------------
+# EfficientSAM V3 Fusion Integration
+# -------------------------------------------------------------------------
+
+# Conservative edge refinement class list
+EDGE_REFINEMENT_CLASSES = {"glass", "water", "foliage"}
+
+
+class FusedMaterialSegmenter(MaterialSegmenter):
+    """
+    Material Segmentation V3: SegFormer + EfficientSAM fusion.
+
+    Wraps a base segmenter (typically SegFormer) and optionally refines
+    edges for specific material classes using EfficientSAM.
+
+    Stage 3 behavior:
+    - When fusion_mode != NONE and a refinement provider is available,
+      selected classes are refined via EfficientSAM and fused using
+      IoU gating + confidence-weighted blending.
+    - Falls back gracefully to base masks on any failure.
+    - Emits fusion statistics for quality monitoring.
+    """
+
+    def __init__(
+        self,
+        base_segmenter: MaterialSegmenter,
+        cfg,
+        device: "torch_ops.torch.device",
+        refinement_provider=None,
+    ):
+        self.base_segmenter = base_segmenter
+        self.cfg = cfg
+        self.device = device
+        self.refinement_provider = refinement_provider
+        self.fusion_stats: Dict[str, Dict[str, float]] = {}
+
+    def predict(self, rgb: "torch_ops.torch.Tensor") -> Dict[str, "torch_ops.torch.Tensor"]:
+        """
+        Generate material masks with optional edge refinement.
+
+        Returns base masks if:
+        - fusion_mode is NONE
+        - refinement_provider is None
+        - no classes are in EDGE_REFINEMENT_CLASSES
+        """
+        torch_ops.require_torch()
+        from .segmentation_fusion import FusionConfig, FusionMode, fuse_masks
+
+        # Always get base masks first
+        base_masks = self.base_segmenter.predict(rgb)
+
+        # Check if fusion is enabled
+        fusion_mode = getattr(self.cfg, "fusion_mode", FusionMode.NONE)
+        if fusion_mode == FusionMode.NONE or self.refinement_provider is None:
+            return base_masks
+
+        # Build fusion config from segmentation config
+        fusion_cfg = FusionConfig(
+            mode=fusion_mode,
+            min_iou=float(getattr(self.cfg, "fusion_min_iou", 0.30)),
+            core_thresh=float(getattr(self.cfg, "fusion_core_thresh", 0.70)),
+            edge_low=float(getattr(self.cfg, "fusion_edge_low", 0.20)),
+            edge_high=float(getattr(self.cfg, "fusion_edge_high", 0.70)),
+            alpha_edge=float(getattr(self.cfg, "fusion_alpha_edge", 0.70)),
+            alpha_core=float(getattr(self.cfg, "fusion_alpha_core", 0.30)),
+            clamp=True,
+        )
+
+        # Refine selected classes
+        fused_masks = {}
+        self.fusion_stats = {}
+
+        for material_class, base_mask in base_masks.items():
+            # Only refine targeted classes
+            if material_class not in EDGE_REFINEMENT_CLASSES:
+                fused_masks[material_class] = base_mask
+                continue
+
+            try:
+                # Get refined mask from provider
+                refined_mask = self.refinement_provider.get_refined_mask(
+                    rgb, base_mask, material_class
+                )
+
+                if refined_mask is None:
+                    # Provider unavailable or failed
+                    fused_masks[material_class] = base_mask
+                    self.fusion_stats[material_class] = {
+                        "iou_base_vs_refined": 0.0,
+                        "fusion_applied": 0.0,
+                    }
+                    continue
+
+                # Convert masks to numpy for fusion
+                base_np = base_mask[0, 0].detach().to("cpu").numpy().astype(np.float32)
+                refined_np = refined_mask[0, 0].detach().to("cpu").numpy().astype(np.float32)
+
+                # Apply fusion with IoU gating
+                fused_np, stats = fuse_masks(base_np, refined_np, fusion_cfg)
+
+                # Convert back to torch
+                fused_tensor = (
+                    torch_ops.torch.from_numpy(fused_np)
+                    .to(device=self.device, dtype=torch_ops.torch.float32)
+                    .unsqueeze(0)
+                    .unsqueeze(0)
+                )
+
+                fused_masks[material_class] = fused_tensor
+                self.fusion_stats[material_class] = stats
+
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Fusion failed for %s: %s. Falling back to base mask.",
+                    material_class,
+                    e,
+                )
+                fused_masks[material_class] = base_mask
+                self.fusion_stats[material_class] = {
+                    "iou_base_vs_refined": 0.0,
+                    "fusion_applied": 0.0,
+                }
+
+        return fused_masks
+
+
 def create_material_segmenter(seg_cfg, device: "torch_ops.torch.device") -> Optional[MaterialSegmenter]:
-    """Factory for material segmenter."""
+    """Factory for material segmenter with V3 fusion support."""
+    from .config import SegmentationBackend, FusionMode
+
+    # Handle legacy backend string for backward compatibility
     backend = (seg_cfg.backend or "auto").lower()
 
     if backend in ("none", "off", "disabled"):
         return None
 
-    # auto selection: prefer ONNX if provided, else segformer if allowed, else heuristic
-    if backend == "auto":
-        if seg_cfg.onnx_model_path:
-            backend = "onnx"
-        elif seg_cfg.segformer_model or seg_cfg.allow_downloads:
-            backend = "segformer"
+    # Check V3 backend setting (typed enum)
+    backend_v3 = getattr(seg_cfg, "backend_v3", None)
+    use_fusion = getattr(seg_cfg, "use_efficientsam_for_edges", False)
+    fusion_mode = getattr(seg_cfg, "fusion_mode", FusionMode.NONE)
+
+    # Determine base segmenter
+    base_segmenter = None
+
+    # V3 path: use backend_v3 if set and not SEGFORMER-only
+    if backend_v3 is not None and backend_v3 != SegmentationBackend.SEGFORMER:
+        if backend_v3 == SegmentationBackend.EFFICIENTSAM:
+            base_segmenter = EfficientSAMSegmenter(seg_cfg, device)
+        elif backend_v3 == SegmentationBackend.FUSED:
+            # FUSED means: SegFormer base + EfficientSAM refinement
+            base_segmenter = SegFormerAdekMaterialSegmenter(seg_cfg, device)
         else:
-            backend = "heuristic"
+            raise ValueError(f"Unknown backend_v3: {backend_v3}")
+    else:
+        # Legacy path: use backend string
+        if backend == "auto":
+            if seg_cfg.onnx_model_path:
+                backend = "onnx"
+            elif seg_cfg.segformer_model or seg_cfg.allow_downloads:
+                backend = "segformer"
+            else:
+                backend = "heuristic"
 
-    if backend == "onnx":
-        return OnnxMaterialSegmenter(seg_cfg, device)
-    if backend == "segformer":
-        return SegFormerAdekMaterialSegmenter(seg_cfg, device)
-    if backend == "heuristic":
-        return HeuristicMaterialSegmenter(seg_cfg, device)
-    if backend == "efficientSAM":
-        return EfficientSAMSegmenter(seg_cfg, device)
+        if backend == "onnx":
+            base_segmenter = OnnxMaterialSegmenter(seg_cfg, device)
+        elif backend == "segformer":
+            base_segmenter = SegFormerAdekMaterialSegmenter(seg_cfg, device)
+        elif backend == "heuristic":
+            base_segmenter = HeuristicMaterialSegmenter(seg_cfg, device)
+        elif backend == "efficientSAM":
+            base_segmenter = EfficientSAMSegmenter(seg_cfg, device)
+        elif backend == "sam_clip":
+            raise RuntimeError("sam_clip backend is a placeholder. Use onnx/segformer/heuristic.")
+        else:
+            raise ValueError(f"Unknown segmentation backend: {backend}")
 
-    if backend == "sam_clip":
-        raise RuntimeError("sam_clip backend is a placeholder in V2 scaffold. Use onnx/segformer/heuristic for now.")
+    # V3 fusion wrapper (if enabled)
+    if use_fusion or fusion_mode != FusionMode.NONE or backend_v3 == SegmentationBackend.FUSED:
+        # Try to create EfficientSAM refinement provider
+        refinement_provider = None
+        try:
+            from .backends.efficientsam_backend import EfficientSAMBackend
+            from .backends.refinement_provider import EfficientSAMRefinementProvider
 
-    raise ValueError(f"Unknown segmentation backend: {backend}")
+            esam_backend = EfficientSAMBackend(
+                model_name=getattr(seg_cfg, "efficientSAM_model", "efficientsam_ti_vit_s"),
+                device="cpu",  # EfficientSAM runs on CPU for Stage 3
+                lazy_load=True,
+            )
+
+            if esam_backend.available:
+                refinement_provider = EfficientSAMRefinementProvider(esam_backend, device)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "EfficientSAM refinement provider unavailable: %s. Fusion disabled.", e
+            )
+
+        return FusedMaterialSegmenter(base_segmenter, seg_cfg, device, refinement_provider)
+
+    return base_segmenter
