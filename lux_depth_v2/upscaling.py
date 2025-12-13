@@ -56,13 +56,24 @@ class TorchUpscaler(Upscaler):
         except Exception as e:
             raise RuntimeError("torchvision is required for torch upscaling") from e
         self.TF = TF
+        self.tile_size = getattr(cfg, "upscale_tile_size", 0)
+        self.tile_overlap = getattr(cfg, "upscale_tile_overlap", 64)
         
     def upscale(self, rgb: "torch_ops.torch.Tensor") -> "torch_ops.torch.Tensor":
-        """High-quality bicubic upscaling with edge enhancement."""
+        """High-quality bicubic upscaling with optional tiling for memory efficiency."""
+        _, _, h, w = rgb.shape
+        
+        # Use tiled upscaling for large images or when explicitly requested
+        if self.tile_size > 0 and (h > self.tile_size or w > self.tile_size):
+            return self._upscale_tiled(rgb)
+        else:
+            return self._upscale_full(rgb)
+    
+    def _upscale_full(self, rgb: "torch_ops.torch.Tensor") -> "torch_ops.torch.Tensor":
+        """Full-image upscaling (original behavior)."""
         _, _, h, w = rgb.shape
         target_h, target_w = h * self.scale, w * self.scale
         
-        # Use torchvision's high-quality bicubic interpolation
         upscaled = self.TF.resize(
             rgb, 
             [target_h, target_w], 
@@ -70,6 +81,126 @@ class TorchUpscaler(Upscaler):
             antialias=True
         )
         return upscaled.clamp(0.0, 1.0)
+    
+    def _upscale_tiled(self, rgb: "torch_ops.torch.Tensor") -> "torch_ops.torch.Tensor":
+        """Memory-efficient tiled upscaling for large images."""
+        import torch
+        
+        b, c, h, w = rgb.shape
+        tile_size = self.tile_size
+        overlap = self.tile_overlap
+        scale = self.scale
+        
+        # Output dimensions
+        out_h, out_w = h * scale, w * scale
+        out = torch.zeros((b, c, out_h, out_w), dtype=torch.float32, device=self.device)
+        weight = torch.zeros((b, c, out_h, out_w), dtype=torch.float32, device=self.device)
+        
+        # Compute tile grid
+        y_starts = list(range(0, h, tile_size - overlap))
+        x_starts = list(range(0, w, tile_size - overlap))
+        
+        # Process tiles with weighted blending
+        for i, y0 in enumerate(y_starts):
+            for j, x0 in enumerate(x_starts):
+                # Input tile bounds with overlap
+                y1 = min(y0 + tile_size, h)
+                x1 = min(x0 + tile_size, w)
+                
+                # Extract tile
+                tile_in = rgb[:, :, y0:y1, x0:x1]
+                
+                # Upscale tile
+                tile_h, tile_w = y1 - y0, x1 - x0
+                tile_out = self.TF.resize(
+                    tile_in,
+                    [tile_h * scale, tile_w * scale],
+                    interpolation=self.TF.InterpolationMode.BICUBIC,
+                    antialias=True
+                ).clamp(0.0, 1.0)
+                
+                # Output tile bounds
+                out_y0, out_x0 = y0 * scale, x0 * scale
+                out_y1, out_x1 = y1 * scale, x1 * scale
+                
+                # Determine which edges to fade based on tile position
+                is_first_row = (i == 0)
+                is_last_row = (i == len(y_starts) - 1)
+                is_first_col = (j == 0)
+                is_last_col = (j == len(x_starts) - 1)
+                
+                # Create blend weight for this tile
+                tile_weight = self._create_positional_blend_mask(
+                    tile_out.shape, 
+                    overlap * scale,
+                    fade_top=not is_first_row,
+                    fade_bottom=not is_last_row,
+                    fade_left=not is_first_col,
+                    fade_right=not is_last_col
+                )
+                
+                # Accumulate with weights
+                out[:, :, out_y0:out_y1, out_x0:out_x1] += tile_out * tile_weight
+                weight[:, :, out_y0:out_y1, out_x0:out_x1] += tile_weight
+        
+        # Normalize by accumulated weights
+        out = out / (weight + 1e-8)
+        
+        return out
+    
+    def _create_positional_blend_mask(
+        self, 
+        shape: Tuple[int, ...], 
+        overlap: int,
+        fade_top: bool = True,
+        fade_bottom: bool = True,
+        fade_left: bool = True,
+        fade_right: bool = True
+    ) -> "torch_ops.torch.Tensor":
+        """Create blend mask with selective edge fading based on tile position."""
+        import torch
+        
+        b, c, h, w = shape
+        mask = torch.ones((b, c, h, w), dtype=torch.float32, device=self.device)
+        
+        # Only apply feathering if we have actual overlap
+        if overlap > 0 and overlap < min(h, w):
+            fade = torch.linspace(0, 1, overlap, device=self.device)
+            
+            # Apply fade only on edges that overlap with other tiles
+            if fade_top and h > overlap:
+                mask[:, :, :overlap, :] *= fade.view(-1, 1)
+            if fade_bottom and h > overlap:
+                mask[:, :, -overlap:, :] *= fade.flip(0).view(-1, 1)
+            if fade_left and w > overlap:
+                mask[:, :, :, :overlap] *= fade.view(1, -1)
+            if fade_right and w > overlap:
+                mask[:, :, :, -overlap:] *= fade.flip(0).view(1, -1)
+        
+        return mask
+    
+    def _create_blend_mask(self, shape: Tuple[int, ...], overlap: int) -> "torch_ops.torch.Tensor":
+        """Create blend mask for seamless tile merging with linear feathering."""
+        import torch
+        
+        b, c, h, w = shape
+        mask = torch.ones((b, c, h, w), dtype=torch.float32, device=self.device)
+        
+        # Only apply feathering if we have actual overlap
+        if overlap > 0 and overlap < min(h, w):
+            fade = torch.linspace(0, 1, overlap, device=self.device)
+            
+            # Apply fade on all edges for consistent blending
+            # Top edge
+            mask[:, :, :overlap, :] *= fade.view(-1, 1)
+            # Bottom edge  
+            mask[:, :, -overlap:, :] *= fade.flip(0).view(-1, 1)
+            # Left edge
+            mask[:, :, :, :overlap] *= fade.view(1, -1)
+            # Right edge
+            mask[:, :, :, -overlap:] *= fade.flip(0).view(1, -1)
+        
+        return mask
 
 
 class OnnxUpscaler(Upscaler):

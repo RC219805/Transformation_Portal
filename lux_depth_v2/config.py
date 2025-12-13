@@ -565,6 +565,8 @@ class PipelineConfig:
             # APEX: Upscaling Quality
             self.tile = 1024  # +100% tile size for better quality
             self.tile_pad = 32  # +100% padding for edge quality
+            self.upscale_tile_size = 2048  # Memory-efficient tiling for large images
+            self.upscale_tile_overlap = 128  # Generous overlap for seamless blending
             
             # APEX: Export Quality
             self.marketing_png_compression = 0  # Lossless PNG
