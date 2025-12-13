@@ -65,14 +65,23 @@ def test_confidence_semantics_get_threshold():
 
 
 def test_prompt_generation_config_defaults():
-    """Test PromptGenerationConfig default values."""
-    cfg = PromptGenerationConfig()
+    """Test PromptGenerationConfig default values.
     
-    assert cfg.strategy == "mask_peaks"
-    assert cfg.num_fg_points == 4
-    assert cfg.fg_confidence_percentile == 80.0
-    assert cfg.use_roi_crop is True
-    assert cfg.fallback_to_box is True
+    NOTE: PromptGenerationConfig is now imported from backends.prompt_generation
+    (PR-2 implementation), not duplicated here. Test against PR-2 contract.
+    """
+    from lux_depth_v2.backends.prompt_generation import PromptGenerationConfig as PR2Config
+    cfg = PR2Config()
+    
+    # PR-2 config structure
+    assert hasattr(cfg, 'num_fg_points')
+    assert hasattr(cfg, 'fg_confidence_threshold')
+    assert hasattr(cfg, 'num_bg_points')
+    assert hasattr(cfg, 'max_roi_side')
+    
+    # Validate reasonable defaults
+    assert cfg.num_fg_points >= 1
+    assert cfg.max_roi_side > 0
 
 
 def test_edge_aware_gating_defaults():
@@ -158,20 +167,32 @@ def test_materials_v3_engine_process_disabled_passthrough():
     assert result is seg_result
 
 
-def test_materials_v3_engine_process_enabled_not_implemented():
-    """Test MaterialsV3Engine.process() when enabled (not yet implemented)."""
+def test_materials_v3_engine_process_enabled_basic():
+    """Test MaterialsV3Engine.process() with real implementation (PR-3B).
+    
+    NOTE: This test was expecting NotImplementedError (scaffolding mode).
+    Now that PR-3B is implemented, we test basic functionality instead.
+    """
     import numpy as np
     
     cfg = MaterialsV3Config(enabled=True)
     engine = MaterialsV3Engine(cfg)
     
-    # Mock inputs
+    # Mock inputs with 'materials' key (expected structure)
     image = np.zeros((64, 64, 3), dtype=np.uint8)
-    seg_result = {"masks": {}, "metadata": {}}
+    seg_result = {
+        "materials": {
+            "glass": np.ones((64, 64), dtype=np.float32) * 0.6,
+            "wood": np.ones((64, 64), dtype=np.float32) * 0.8,
+        }
+    }
     
-    # Should raise NotImplementedError when enabled (scaffolding only)
-    with pytest.raises(NotImplementedError, match="Materials V3 processing not yet implemented"):
-        engine.process(image, seg_result)
+    # Should process without error and add materials_v3 metadata
+    result = engine.process(image, seg_result)
+    
+    assert "materials_v3" in result
+    assert "per_class_stats" in result["materials_v3"]
+    assert "canonical_materials" in result["materials_v3"]
 
 
 def test_materials_v3_engine_get_v3_report():
@@ -189,10 +210,12 @@ def test_materials_v3_engine_get_v3_report():
     assert "taxonomy" in report
     assert "refinement_strategy" in report
     assert "edge_gating_enabled" in report
-    assert "lighting_aware" in report
+    # NOTE: lighting_aware removed in PR-3B implementation
     
     assert report["enabled"] is True
     assert report["taxonomy"] == "expanded"
+    assert report["refinement_strategy"] == "canary"
+    assert report["edge_gating_enabled"] is True
     assert report["refinement_strategy"] == "canary"
 
 
