@@ -43,6 +43,15 @@ class SegmentationBackend(str, Enum):
     FUSED = "fused"  # SegFormer + EfficientSAM edge refinement
 
 
+class FusionMode(str, Enum):
+    """Mask fusion modes for EfficientSAM V3."""
+    
+    NONE = "none"
+    UNION = "union"
+    INTERSECTION = "intersection"
+    CONFIDENCE_WEIGHTED = "confidence_weighted"
+
+
 @dataclass
 class MaterialPropertySchema:
     """Material Property Schema for PHASE 1 Task 2.
@@ -213,7 +222,15 @@ class SegmentationConfig:
     # EfficientSAM V3 backend selection
     backend_v3: SegmentationBackend = SegmentationBackend.SEGFORMER
     use_efficientsam_for_edges: bool = False  # Enable edge refinement via EfficientSAM
-    fusion_mode: str = "none"  # none|union|intersection|confidence_weighted
+    
+    # Fusion configuration (typed)
+    fusion_mode: FusionMode = FusionMode.NONE
+    fusion_min_iou: float = 0.30  # IoU gating threshold
+    fusion_core_thresh: float = 0.70  # Core region threshold
+    fusion_edge_low: float = 0.20  # Edge band lower threshold
+    fusion_edge_high: float = 0.70  # Edge band upper threshold
+    fusion_alpha_edge: float = 0.70  # Edge blending weight for EfficientSAM
+    fusion_alpha_core: float = 0.30  # Core blending weight for EfficientSAM
     # For backend=onnx: path to ONNX model (expects NCHW float input 0..1, RGB)
     onnx_model_path: Optional[Path] = None
     onnx_labels_path: Optional[Path] = None  # optional JSON mapping class index->surface name
