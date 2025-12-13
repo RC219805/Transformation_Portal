@@ -488,6 +488,13 @@ class PipelineConfig:
     # PHASE 2: Lighting Condition Detection (STUB)
     lighting: LightingConfig = field(default_factory=LightingConfig)
 
+    def __post_init__(self) -> None:
+        """
+        Called automatically after dataclass __init__.
+        Applies the preset configuration to populate all derived settings.
+        """
+        self.apply_preset()
+
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""
         p = self.preset
@@ -817,14 +824,21 @@ class PipelineConfig:
             # CANARY EfficientSAM V3 presets: APEX + FUSED segmentation
             # Inherits all settings from base APEX preset, then enables fusion
             
-            # First, apply base APEX preset
+            # Determine base APEX preset and recursion guard
             if p == Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM:
                 base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
             else:
                 base_preset = Preset.EXTERIOR_POOL_APEX_QUALITY
             
-            # Recursively apply base preset settings
-            self.apply_preset(base_preset)
+            # Recursion guard
+            if base_preset == p:
+                raise RuntimeError(f"Canary preset recursion detected: {p}")
+            
+            # Temporarily change preset to base, apply it, then restore
+            original_preset = self.preset
+            self.preset = base_preset
+            self.apply_preset()
+            self.preset = original_preset
             
             # Now overlay EfficientSAM V3 fusion settings
             if self.segmentation is None:
