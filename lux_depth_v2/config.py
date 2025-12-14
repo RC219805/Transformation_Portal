@@ -871,10 +871,10 @@ class PipelineConfig:
             # CANARY Materials V3 PR-4B: APEX + Glass Pixel Response
             # Inherits all settings from base APEX, then enables glass response
             
-            # Recursion guard
+            # Recursion guard (PR-4B.1: fix comparison to use .value)
             base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
-            if base_preset == p:
-                raise RuntimeError(f"Canary preset recursion detected: {p}")
+            if base_preset.value == self.preset.value:
+                raise RuntimeError(f"Canary preset recursion detected: {self.preset}")
             
             # Apply base APEX preset first
             original_preset = self.preset
@@ -911,10 +911,10 @@ class PipelineConfig:
             # 
             # Use only: python scripts/pr4b_glass_pixel_validation.py --force-apply
             
-            # Recursion guard
+            # Recursion guard (PR-4B.1: fix comparison to use .value)
             base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS
-            if base_preset == p:
-                raise RuntimeError(f"Validation preset recursion detected: {p}")
+            if base_preset.value == self.preset.value:
+                raise RuntimeError(f"Validation preset recursion detected: {self.preset}")
             
             # Apply base canary preset first
             original_preset = self.preset
