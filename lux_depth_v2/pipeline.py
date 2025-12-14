@@ -505,13 +505,21 @@ class LuxPipelineV2:
         # Stage 3a: Legacy material segmentation
         with self._stage(report, "material/segmentation"):
             mods0: Optional[material_profiles.MaterialMods] = None
-            if cfg.enable_material and self.segmenter is not None:
+            masks = None  # Initialize for Materials V3 access
+            
+            # Run segmentation if either legacy material OR Materials V3 is enabled
+            run_segmentation = (cfg.enable_material or self.materials_v3_engine is not None)
+            
+            if run_segmentation and self.segmenter is not None:
                 try:
                     masks = self.segmenter.predict(rgb_t)
-                    mods0 = material_profiles.build_material_mods(masks, cfg)
+                    # Only build legacy mods if enable_material is True
+                    if cfg.enable_material:
+                        mods0 = material_profiles.build_material_mods(masks, cfg)
                 except Exception as e:
                     self.logger.exception(f"Material segmentation failed for {img_path.name}: {e}")
                     mods0 = None
+                    masks = None
         
         # Stage 3b: Materials v2 integration (NEW)
         materials_v2_result = None
@@ -600,7 +608,8 @@ class LuxPipelineV2:
                     }
                     
                     # Populate with actual masks from Stage 3a segmenter output
-                    if cfg.enable_material and self.segmenter is not None and 'masks' in locals():
+                    # Note: masks is defined in Stage 3a and available here
+                    if masks is not None and self.segmenter is not None:
                         # Convert torch masks (1,1,H,W) to numpy (H,W) float32
                         for material_name, mask_t in masks.items():
                             try:
