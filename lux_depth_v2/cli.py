@@ -20,9 +20,13 @@ def build_parser() -> argparse.ArgumentParser:
     # Look
     p.add_argument("--preset", type=str, default=Preset.PHOTO_REALISTIC.value, choices=[e.value for e in Preset])
     p.add_argument("--auto-preset", action="store_true", 
-                   help="Auto-select preset based on CLIP scene classification (requires --quality-tier).")
-    p.add_argument("--quality-tier", type=str, default="max", choices=["standard", "max", "apex"],
-                   help="Quality tier for auto-preset selection (default: max).")
+                   help="Auto-select preset based on CLIP scene classification.")
+    p.add_argument("--quality-tier", type=str, default="max", choices=["standard", "max", "apex", "auto"],
+                   help="Quality tier for auto-preset selection. Use 'auto' to decide based on intent + complexity (default: max).")
+    p.add_argument("--intent", type=str, default=None, choices=["preview", "client", "hero"],
+                   help="Output intent for auto quality-tier selection. preview→standard, client→max (or apex if complex), hero→apex.")
+    p.add_argument("--allow-canary", action="store_true",
+                   help="Allow canary (experimental) presets in auto-preset selection (default: False).")
 
     # Device
     p.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"])
@@ -199,15 +203,37 @@ def main() -> None:
             return
         
         logger.info(f"Auto-selecting preset for: {args.input}")
-        from lux_depth_v2.preset_selector import auto_select_preset
+        from lux_depth_v2.preset_selector import PresetSelector, Intent, QualityTier
         
         try:
-            preset = auto_select_preset(
-                image_path=args.input,
-                quality_tier=args.quality_tier,
-                confidence_threshold=0.5
+            # Parse intent and quality tier
+            intent = Intent(args.intent) if args.intent else None
+            
+            # Handle auto tier selection
+            if args.quality_tier == "auto":
+                quality_tier = None  # Let selector auto-decide
+            else:
+                quality_tier = QualityTier(args.quality_tier)
+            
+            # Initialize selector
+            selector = PresetSelector(confidence_threshold=0.5)
+            
+            # Select preset with auto-tier if requested
+            recommendation = selector.select_preset_with_auto_tier(
+                image=args.input,
+                intent=intent,
+                quality_tier=quality_tier,
+                allow_canary=args.allow_canary,
             )
-            logger.info(f"✓ Auto-selected preset: {preset.value} (tier: {args.quality_tier})")
+            
+            preset = recommendation.preset
+            logger.info(f"✓ Auto-selected preset: {preset.value}")
+            logger.info(f"  Scene: {recommendation.scene.scene_type.value} {recommendation.scene.scene_subtype}")
+            logger.info(f"  Confidence: {recommendation.scene.confidence:.3f}")
+            logger.info(f"  Reason: {recommendation.reason}")
+            if recommendation.fallback_used:
+                logger.warning(f"  (Fallback preset used)")
+                
         except ImportError as e:
             logger.error(f"Auto-preset requires CLIP. Install with: pip install transformers torch")
             logger.error(f"Error: {e}")
