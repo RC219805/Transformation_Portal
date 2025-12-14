@@ -33,6 +33,19 @@ from lux_depth_v2 import torch_ops, io_utils
 log = logging.getLogger(__name__)
 
 
+def _coerce_report(obj: object) -> dict:
+    """Coerce LuxPipelineV2.process_one() return into a report dict.
+    
+    In this repo, process_one() returns the report dict directly.
+    Some legacy wrappers may return {'report': report}.
+    """
+    if isinstance(obj, dict):
+        if "report" in obj and isinstance(obj["report"], dict):
+            return obj["report"]
+        return obj
+    return {}
+
+
 def compute_edge_band_stats(
     image: np.ndarray,
     mask: np.ndarray,
@@ -220,7 +233,7 @@ def run_single_scene(
             baseline_cfg.device = device
         baseline_pipe = LuxPipelineV2(baseline_cfg)
         baseline_result = baseline_pipe.process_one(input_path)
-        baseline_report = baseline_result.get("report", {})
+        baseline_report = _coerce_report(baseline_result)
     except Exception as e:
         log.error(f"Baseline processing failed for {scene_name}: {e}")
         return {
@@ -240,7 +253,7 @@ def run_single_scene(
             canary_cfg.device = device
         canary_pipe = LuxPipelineV2(canary_cfg)
         canary_result = canary_pipe.process_one(input_path)
-        canary_report = canary_result.get("report", {})
+        canary_report = _coerce_report(canary_result)
     except Exception as e:
         log.error(f"Canary processing failed for {scene_name}: {e}")
         return {
@@ -273,14 +286,46 @@ def run_single_scene(
         return {"scene": scene_name, "status": "shape_mismatch"}
     
     # Check if pixel ops were actually applied
-    pixel_ops_report = canary_report.get("materials_v3_pixel_ops", {})
-    applied = pixel_ops_report.get("enabled", False)
-    
+    pixel_ops_report = canary_report.get("materials_v3_pixel_ops", {}) or {}
+    response_plan = canary_report.get("materials_v3_response_plan", {}) or {}
+    glass_plan = (response_plan.get("per_class", {}) or {}).get("glass", {}) or {}
+
+    applied_to = pixel_ops_report.get("applied_to") or pixel_ops_report.get("applied_to_classes") or []
+    applied = bool(applied_to) or bool(pixel_ops_report.get("applied", False))
+
+    plan_should_refine = glass_plan.get("should_refine")
+    plan_reason = (
+        glass_plan.get("refine_reason")
+        or glass_plan.get("skip_reason")
+        or glass_plan.get("reason")
+        or None
+    )
+
     if not applied:
+        # If the response plan explicitly says not to refine, that's a VALID skip.
+        if plan_should_refine is False:
+            return {
+                "scene": scene_name,
+                "status": "success_skipped",
+                "reason": plan_reason or "plan_skip_no_reason",
+                "pixel_ops_applied": False,
+                "pixel_ops_expected": False,
+                "glass_plan": {
+                    "should_refine": False,
+                    "refine_reason": plan_reason,
+                    "mean_conf": glass_plan.get("mean_conf"),
+                    "edge_conf": glass_plan.get("edge_conf"),
+                    "coverage": glass_plan.get("coverage"),
+                },
+            }
+
+        # Otherwise we expected ops (plan said refine), but nothing applied -> failure.
         return {
             "scene": scene_name,
             "status": "pixel_ops_not_applied",
-            "reason": pixel_ops_report.get("reason", "unknown"),
+            "reason": pixel_ops_report.get("reason") or plan_reason or "unknown",
+            "pixel_ops_applied": False,
+            "pixel_ops_expected": True if plan_should_refine is True else None,
         }
     
     # Extract glass mask from canary report (normalized)
@@ -430,7 +475,7 @@ Examples:
         log.info(f"Scene result saved: {incremental_path}")
     
     # Aggregate and decide (only count successful runs)
-    successful_results = [r for r in results if r.get("status") == "success"]
+    successful_results = [r for r in results if r.get("status") in ("success", "success_skipped")]
     applied_count = sum(1 for r in successful_results if r.get("pixel_ops_applied"))
     halo_risks = [r["halo_detection"]["halo_risk"] for r in successful_results if "halo_detection" in r]
     high_halo_count = sum(1 for risk in halo_risks if risk == "high")
