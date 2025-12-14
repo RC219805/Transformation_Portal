@@ -507,7 +507,7 @@ Examples:
     failed_results = [r for r in results if r.get("status") in ("baseline_failed", "canary_failed", "input_missing")]
     
     # Decision criteria (require at least 2 successful scenes with pixel ops)
-    promotion_ok = (
+    merge_recommended = (
         len(successful_results) >= 2  # At least 2 scenes completed
         and applied_count >= 2  # At least 2 scenes applied pixel ops
         and high_halo_count == 0  # No high halo risk
@@ -525,7 +525,7 @@ Examples:
         "scenes_applied": applied_count,
         "high_halo_risks": high_halo_count,
         "gradient_improvements": len(gradient_improvements),
-        "promotion_recommended": promotion_ok,
+        "merge_recommended": merge_recommended,  # Canary feature only
         "skipped_scenes": [r["scene"] for r in skipped_results],
         "failed_scenes": [r["scene"] for r in failed_results],
         "details": results,
@@ -543,10 +543,10 @@ Examples:
     log.info(f"Pixel ops applied: {applied_count}/{len(successful_results)}")
     log.info(f"High halo risks: {high_halo_count}")
     log.info(f"Gradient improvements: {len(gradient_improvements)}")
-    log.info(f"Promotion recommended: {promotion_ok}")
+    log.info(f"Merge recommended (canary): {merge_recommended}")
     log.info(f"\nFull report: {summary_path}")
     
-    return 0 if promotion_ok else 1
+    return 0 if merge_recommended else 1
 
 
 if __name__ == "__main__":

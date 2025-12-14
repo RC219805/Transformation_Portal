@@ -901,7 +901,15 @@ class PipelineConfig:
 
         elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE:
             # VALIDATION preset: identical to PR-4B canary, but forces glass pixel ops
-            # This is VALIDATION-ONLY and should NOT be used in production
+            # 
+            # ⚠️ VALIDATION-ONLY - DO NOT USE IN PRODUCTION
+            # This preset bypasses response plan quality gates to force pixel ops application.
+            # It exists solely to validate pixel ops correctness in testing.
+            # 
+            # MUST NOT be selected by auto-preset (even with --allow-canary).
+            # MUST NOT appear in any production workflow or documentation.
+            # 
+            # Use only: python scripts/pr4b_glass_pixel_validation.py --force-apply
             
             # Recursion guard
             base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS
