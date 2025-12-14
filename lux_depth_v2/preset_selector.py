@@ -27,9 +27,17 @@ except ImportError:
     CLIP_AVAILABLE = False
 
 from lux_depth_v2.config import Preset
+from lux_depth_v2.complexity_scorer import compute_complexity, ComplexityScore
 
 
 logger = logging.getLogger(__name__)
+
+
+class Intent(str, Enum):
+    """User intent for output usage."""
+    PREVIEW = "preview"      # Quick preview / WIP
+    CLIENT = "client"         # Client delivery / portfolio
+    HERO = "hero"            # Hero frame / archival / marketing
 
 
 class SceneType(str, Enum):
@@ -300,6 +308,135 @@ class PresetSelector:
             reason=reason
         )
     
+    def select_quality_tier(
+        self,
+        *,
+        intent: Optional[Intent] = None,
+        complexity: Optional[ComplexityScore] = None,
+        megapixels: Optional[float] = None,
+    ) -> QualityTier:
+        """
+        Auto-select quality tier based on intent and image complexity.
+        
+        Args:
+            intent: User intent (preview/client/hero). If None, defaults to CLIENT.
+            complexity: Image complexity score (optional).
+            megapixels: Image size in MP (used if complexity not provided).
+        
+        Returns:
+            Recommended quality tier
+        
+        Logic:
+            - preview → STANDARD
+            - client → MAX (or APEX if high complexity)
+            - hero → APEX
+            - auto (no intent) → MAX, but upgrade to APEX if complex/large
+        """
+        # Default intent
+        if intent is None:
+            intent = Intent.CLIENT
+        
+        # Simple intent-based mapping
+        if intent == Intent.PREVIEW:
+            return QualityTier.STANDARD
+        
+        if intent == Intent.HERO:
+            return QualityTier.APEX
+        
+        # CLIENT intent: use complexity to decide MAX vs APEX
+        if intent == Intent.CLIENT:
+            # Check complexity if available
+            if complexity is not None and complexity.is_high_complexity:
+                logger.info(
+                    f"Upgrading CLIENT tier to APEX due to high complexity "
+                    f"(gradient: {complexity.gradient_energy:.3f}, "
+                    f"edge_density: {complexity.edge_density:.3f}, "
+                    f"MP: {complexity.megapixels:.1f})"
+                )
+                return QualityTier.APEX
+            
+            # Fallback: check megapixels
+            if megapixels is not None and megapixels >= 20.0:
+                logger.info(f"Upgrading CLIENT tier to APEX due to large image ({megapixels:.1f} MP)")
+                return QualityTier.APEX
+            
+            return QualityTier.MAX
+        
+        # Fallback
+        return QualityTier.MAX
+    
+    def select_preset_with_auto_tier(
+        self,
+        image: Union[str, Path, Image.Image, np.ndarray],
+        *,
+        intent: Optional[Intent] = None,
+        quality_tier: Optional[QualityTier] = None,
+        allow_canary: bool = False,
+    ) -> PresetRecommendation:
+        """
+        Select preset with automatic tier selection based on intent + complexity.
+        
+        Args:
+            image: Input image (path, PIL Image, or numpy array)
+            intent: User intent (preview/client/hero). Used for auto-tier if quality_tier is None.
+            quality_tier: Explicit quality tier (overrides auto-selection if provided).
+            allow_canary: Whether to allow canary presets (default: False).
+        
+        Returns:
+            Preset recommendation
+        """
+        # Load image if path
+        if isinstance(image, (str, Path)):
+            pil_img = Image.open(image).convert("RGB")
+            img_array = np.array(pil_img, dtype=np.uint8)
+        elif isinstance(image, Image.Image):
+            pil_img = image
+            img_array = np.array(image, dtype=np.uint8)
+        elif isinstance(image, np.ndarray):
+            img_array = image
+            if image.dtype == np.uint8:
+                pil_img = Image.fromarray(image)
+            else:
+                img_u8 = np.clip(image * 255, 0, 255).astype(np.uint8)
+                pil_img = Image.fromarray(img_u8)
+        else:
+            raise TypeError(f"Unsupported image type: {type(image)}")
+        
+        # Auto-select tier if not provided
+        if quality_tier is None:
+            # Compute complexity
+            complexity = compute_complexity(img_array)
+            quality_tier = self.select_quality_tier(
+                intent=intent,
+                complexity=complexity,
+                megapixels=complexity.megapixels,
+            )
+            logger.info(
+                f"Auto-selected quality tier: {quality_tier.value} "
+                f"(intent={intent.value if intent else 'client'}, "
+                f"complexity={complexity.complexity_class})"
+            )
+        
+        # Select preset using existing logic
+        recommendation = self.select_preset(pil_img, quality_tier)
+        
+        # Block canary presets unless explicitly allowed
+        if not allow_canary and self._is_canary_preset(recommendation.preset):
+            # Fallback to non-canary equivalent
+            fallback_preset = self._get_non_canary_equivalent(recommendation.preset)
+            logger.warning(
+                f"Canary preset {recommendation.preset.value} blocked (allow_canary=False). "
+                f"Using fallback: {fallback_preset.value}"
+            )
+            recommendation = PresetRecommendation(
+                preset=fallback_preset,
+                scene=recommendation.scene,
+                fallback_used=True,
+                reason=f"{recommendation.reason} | Canary blocked, using non-canary equivalent",
+            )
+        
+        return recommendation
+    
     def select_preset_from_path(
         self,
         image_path: Union[str, Path],
@@ -317,6 +454,24 @@ class PresetSelector:
         """
         recommendation = self.select_preset(image_path, quality_tier)
         return recommendation.preset
+    
+    @staticmethod
+    def _is_canary_preset(preset: Preset) -> bool:
+        """Check if preset is a canary (experimental) preset."""
+        canary_names = {
+            "interior_luxury_apex_quality_efficientsam",
+            "exterior_pool_apex_quality_efficientsam",
+        }
+        return preset.value in canary_names
+    
+    @staticmethod
+    def _get_non_canary_equivalent(preset: Preset) -> Preset:
+        """Get non-canary equivalent of a canary preset."""
+        canary_map = {
+            Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM: Preset.INTERIOR_LUXURY_APEX_QUALITY,
+            Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM: Preset.EXTERIOR_POOL_APEX_QUALITY,
+        }
+        return canary_map.get(preset, preset)
 
 
 def auto_select_preset(
