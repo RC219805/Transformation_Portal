@@ -500,11 +500,14 @@ def generate_response_plan(
             "edge_pixels": stats["edge_pixels"],
             "core_pixels": stats["core_pixels"],
             
-            # Planned strengths
+            # Planned strengths (v3.1: nested, but keep deprecated flat keys)
             "strengths": {
                 "core": core_strength,
                 "edge": edge_strength,
             },
+            # Backward compatibility (deprecated in v3.1)
+            "core_strength": core_strength,
+            "edge_strength": edge_strength,
             
             # PR-4C: Refinement decision (EfficientSAM)
             "refinement": {

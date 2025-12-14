@@ -60,6 +60,13 @@ def test_response_plan_schema_v31_structure():
     # Backward compat (deprecated)
     assert "should_refine" in glass
     assert glass["should_refine"] == glass["refinement"]["should_refine_edges"]
+    
+    # Backward compat: strength fields (deprecated but preserved)
+    assert "core_strength" in glass
+    assert "edge_strength" in glass
+    assert "strengths" in glass
+    assert glass["core_strength"] == glass["strengths"]["core"]
+    assert glass["edge_strength"] == glass["strengths"]["edge"]
 
 
 def test_glass_pixel_ops_should_apply_flips_on_thresholds():
