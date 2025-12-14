@@ -180,6 +180,11 @@ class MaterialsV3Config:
     # PR-4B: Pixel operations (canary-only)
     apply_pixel_ops: bool = False  # Master gate for pixel modifications
     glass_response_enabled: bool = False  # Specific toggle for glass
+    
+    # PR-4B validation-only override:
+    # When True, bypass response_plan.should_refine for glass so we can validate
+    # pixel ops behavior at least once. Must remain False in production presets.
+    force_glass_pixel_ops: bool = False
 
 
 class MaterialsV3Engine:
@@ -507,10 +512,27 @@ class MaterialsV3Engine:
         per_class = response_plan.get("per_class", {})
         glass_plan = per_class.get("glass", {})
         
-        if not glass_plan.get("should_refine", False):
+        should_refine = bool(glass_plan.get("should_refine", False))
+        plan_reason = (
+            glass_plan.get("refine_reason")
+            or glass_plan.get("skip_reason")
+            or glass_plan.get("reason")
+            or None
+        )
+        
+        forced = bool(getattr(self.config, "force_glass_pixel_ops", False))
+        if forced:
+            # Validation-only: force apply to prove pixel ops correctness.
+            should_refine = True
+            plan_reason = "force_glass_pixel_ops"
+        
+        if not should_refine:
             return image, {
-                "enabled": False,
-                "reason": "glass_not_targeted_for_refinement",
+                "enabled": True,
+                "applied_to": [],
+                "applied": False,
+                "reason": plan_reason or "plan_skip_no_reason",
+                "forced": forced,
             }
         
         # Extract glass mask
@@ -549,6 +571,9 @@ class MaterialsV3Engine:
         
         return enhanced, {
             "enabled": True,
+            "applied": True,
             "applied_to": ["glass"],
+            "forced": forced,
+            "reason": plan_reason,
             "glass_stats": stats,
         }

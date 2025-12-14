@@ -190,6 +190,7 @@ def run_single_scene(
     input_path: Path,
     output_root: Path,
     device: Optional[str] = None,
+    force_apply: bool = False,
 ) -> dict:
     """Run baseline and canary on one scene and compare pixel impact."""
     
@@ -245,9 +246,17 @@ def run_single_scene(
     try:
         # Run canary
         log.info(f"Running glass canary APEX for {scene_name}...")
+        
+        # Select preset based on force_apply flag
+        canary_preset = (
+            Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE
+            if force_apply
+            else Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS
+        )
+        
         canary_cfg = PipelineConfig(
             output_dir=canary_dir,
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            preset=canary_preset,
         )
         if device:
             canary_cfg.device = device
@@ -310,6 +319,8 @@ def run_single_scene(
                 "reason": plan_reason or "plan_skip_no_reason",
                 "pixel_ops_applied": False,
                 "pixel_ops_expected": False,
+                "preset_used": canary_preset.value,
+                "forced_apply": force_apply,
                 "glass_plan": {
                     "should_refine": False,
                     "refine_reason": plan_reason,
@@ -420,6 +431,11 @@ Examples:
         default=30.0,
         help="Max megapixels for MPS before skipping (default: 30.0)",
     )
+    parser.add_argument(
+        "--force-apply",
+        action="store_true",
+        help="Use VALIDATE preset that forces glass pixel ops (validation-only).",
+    )
     
     args = parser.parse_args()
     
@@ -464,7 +480,7 @@ Examples:
                 "input_path": str(input_path),
             }
         else:
-            result = run_single_scene(scene_name, input_path, output_root, args.device)
+            result = run_single_scene(scene_name, input_path, output_root, args.device, args.force_apply)
         
         results.append(result)
         

@@ -32,6 +32,7 @@ class Preset(str, Enum):
     INTERIOR_LUXURY_APEX_QUALITY = "interior_luxury_apex_quality"
     INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM = "interior_luxury_apex_quality_efficientsam"  # Canary V3
     INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS = "interior_luxury_apex_quality_materials_v3_glass"  # Canary PR-4B
+    INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE = "interior_luxury_apex_quality_materials_v3_glass_validate"  # Validation-only (forced)
     EXTERIOR_SHOWCASE = "exterior_showcase"
     EXTERIOR_POOL_APEX_QUALITY = "exterior_pool_apex_quality"
     EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM = "exterior_pool_apex_quality_efficientsam"  # Canary V3
@@ -897,6 +898,28 @@ class PipelineConfig:
             # - Glass is detected by segmentation (>0.5% coverage)
             # - Response plan marks glass as "should_refine"
             # Otherwise gracefully falls back to standard APEX
+
+        elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE:
+            # VALIDATION preset: identical to PR-4B canary, but forces glass pixel ops
+            # This is VALIDATION-ONLY and should NOT be used in production
+            
+            # Recursion guard
+            base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS
+            if base_preset == p:
+                raise RuntimeError(f"Validation preset recursion detected: {p}")
+            
+            # Apply base canary preset first
+            original_preset = self.preset
+            self.preset = base_preset
+            self.apply_preset()
+            self.preset = original_preset
+            
+            if self.materials_v3 is None:
+                from lux_depth_v2.materials_v3 import MaterialsV3Config
+                self.materials_v3 = MaterialsV3Config()
+            
+            # Force pixel ops application for validation only
+            self.materials_v3.force_glass_pixel_ops = True
 
         # clamp some sanity
         self.upscale = 4 if int(self.upscale) not in (2, 4) else int(self.upscale)
