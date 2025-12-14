@@ -31,6 +31,7 @@ class Preset(str, Enum):
     INTERIOR_LUXURY_MAX_QUALITY = "interior_luxury_max_quality"
     INTERIOR_LUXURY_APEX_QUALITY = "interior_luxury_apex_quality"
     INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM = "interior_luxury_apex_quality_efficientsam"  # Canary V3
+    INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS = "interior_luxury_apex_quality_materials_v3_glass"  # Canary PR-4B
     EXTERIOR_SHOWCASE = "exterior_showcase"
     EXTERIOR_POOL_APEX_QUALITY = "exterior_pool_apex_quality"
     EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM = "exterior_pool_apex_quality_efficientsam"  # Canary V3
@@ -864,6 +865,36 @@ class PipelineConfig:
             # - EfficientSAM model not available
             # - onnxruntime not installed
             # - Fusion IoU gating fails
+
+        elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS:
+            # CANARY Materials V3 PR-4B: APEX + Glass Pixel Response
+            # Inherits all settings from base APEX, then enables glass response
+            
+            # Recursion guard
+            base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
+            if base_preset == p:
+                raise RuntimeError(f"Canary preset recursion detected: {p}")
+            
+            # Apply base APEX preset first
+            original_preset = self.preset
+            self.preset = base_preset
+            self.apply_preset()
+            self.preset = original_preset
+            
+            # Enable Materials V3 with glass pixel operations
+            if self.materials_v3 is None:
+                from lux_depth_v2.materials_v3 import MaterialsV3Config
+                self.materials_v3 = MaterialsV3Config()
+            
+            self.materials_v3.enabled = True
+            self.materials_v3.apply_pixel_ops = True  # Master gate for pixel ops
+            self.materials_v3.glass_response_enabled = True  # Glass-specific
+            self.materials_v3.refine_edges = "canary"  # Target glass only
+            
+            # Note: This preset will apply glass response enhancement if:
+            # - Glass is detected by segmentation (>0.5% coverage)
+            # - Response plan marks glass as "should_refine"
+            # Otherwise gracefully falls back to standard APEX
 
         # clamp some sanity
         self.upscale = 4 if int(self.upscale) not in (2, 4) else int(self.upscale)
