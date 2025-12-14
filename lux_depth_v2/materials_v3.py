@@ -781,20 +781,38 @@ class MaterialsV3Engine:
         # Try to run EfficientSAM
         try:
             # Check if EfficientSAM backend is available
-            from .backends.efficientsam_backend import EfficientSAMBackend, EfficientSAMNotAvailable
+            from .backends.efficientsam_backend import (
+                EfficientSAMBackend,
+                EfficientSAMNotAvailable,
+                PointPrompt
+            )
             
-            # Adjust prompts to ROI coordinates
+            # Adjust prompts to ROI coordinates and create PointPrompt objects
             y0, y1, x0, x1 = roi_bbox
-            roi_prompts = [(y - y0, x - x0) for y, x in prompts]
+            h_roi, w_roi = rgb_roi.shape[:2]
+            
+            # Convert to normalized coordinates and PointPrompt objects
+            roi_prompts = []
+            for y, x in prompts:
+                # Adjust to ROI coordinates
+                y_roi = y - y0
+                x_roi = x - x0
+                # Normalize to [0, 1]
+                y_norm = y_roi / h_roi
+                x_norm = x_roi / w_roi
+                # Create PointPrompt (label=1 for foreground)
+                roi_prompts.append(PointPrompt(x=x_norm, y=y_norm, label=1))
             
             # Initialize backend (lazy load)
             sam_backend = EfficientSAMBackend()
             
-            # Run segmentation (mock for now if model unavailable)
+            # Convert RGB to uint8 if needed (EfficientSAM expects uint8 or float32)
+            rgb_roi_uint8 = (rgb_roi * 255).astype(np.uint8) if rgb_roi.dtype == np.float32 else rgb_roi
+            
+            # Run segmentation
             sam_mask_roi = sam_backend.segment(
-                rgb_roi,
-                point_prompts=roi_prompts,
-                multimask_output=False
+                rgb_roi_uint8,
+                prompts=roi_prompts
             )
             
             # Map back to full resolution
