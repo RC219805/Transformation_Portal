@@ -48,6 +48,15 @@ except ImportError:
     SegmentationResult = None
     MaskCacheManager = None
 
+# Materials v3 imports (lazy load, disabled by default)
+try:
+    from .materials_v3 import MaterialsV3Engine, MaterialsV3Config
+    MATERIALS_V3_AVAILABLE = True
+except ImportError:
+    MATERIALS_V3_AVAILABLE = False
+    MaterialsV3Engine = None
+    MaterialsV3Config = None
+
 
 def _is_image_file(p: Path) -> bool:
     return p.suffix.lower() in (".tif", ".tiff", ".png", ".jpg", ".jpeg", ".webp", ".bmp")
@@ -176,6 +185,25 @@ class LuxPipelineV2:
                 self.logger.warning(f"Failed to initialize Materials v2: {e}; continuing without")
                 self.materials_v2_engine = None
                 self.mask_cache_manager = None
+
+        # Materials v3 integration (opt-in, disabled by default)
+        self.materials_v3_engine = None
+        if MATERIALS_V3_AVAILABLE and cfg.materials_v3 and cfg.materials_v3.enabled:
+            try:
+                self.materials_v3_engine = MaterialsV3Engine(
+                    config=cfg.materials_v3
+                )
+                
+                self.logger.info(
+                    f"Materials V3 enabled | "
+                    f"taxonomy={cfg.materials_v3.taxonomy} "
+                    f"refinement={cfg.materials_v3.refine_edges} "
+                    f"pixel_ops={cfg.materials_v3.apply_pixel_ops} "
+                    f"max_mp={cfg.materials_v3.max_megapixels}"
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Materials V3: {e}; continuing without")
+                self.materials_v3_engine = None
 
         # Capture reproducibility metadata on init
         self._repro_metadata = self._collect_reproducibility_metadata()
@@ -477,13 +505,21 @@ class LuxPipelineV2:
         # Stage 3a: Legacy material segmentation
         with self._stage(report, "material/segmentation"):
             mods0: Optional[material_profiles.MaterialMods] = None
-            if cfg.enable_material and self.segmenter is not None:
+            masks = None  # Initialize for Materials V3 access
+            
+            # Run segmentation if either legacy material OR Materials V3 is enabled
+            run_segmentation = (cfg.enable_material or self.materials_v3_engine is not None)
+            
+            if run_segmentation and self.segmenter is not None:
                 try:
                     masks = self.segmenter.predict(rgb_t)
-                    mods0 = material_profiles.build_material_mods(masks, cfg)
+                    # Only build legacy mods if enable_material is True
+                    if cfg.enable_material:
+                        mods0 = material_profiles.build_material_mods(masks, cfg)
                 except Exception as e:
                     self.logger.exception(f"Material segmentation failed for {img_path.name}: {e}")
                     mods0 = None
+                    masks = None
         
         # Stage 3b: Materials v2 integration (NEW)
         materials_v2_result = None
@@ -557,6 +593,79 @@ class LuxPipelineV2:
                     self.logger.warning(f"Materials v2 failed for {img_path.name}: {e}; continuing without")
                     materials_v2_result = None
                     materials_v2_metadata = {'error': str(e), 'fallback': True}
+
+        # Stage 3c: Materials V3 integration (NEW: PR-3A plan mode + PR-4B pixel ops)
+        materials_v3_metadata = {}
+        materials_v3_response_plan = {}
+        materials_v3_pixel_ops = {}
+        
+        if self.materials_v3_engine is not None:
+            with self._stage(report, "material/materials_v3"):
+                try:
+                    # Prepare segmentation result dict (matches MaterialsV3Engine.process() signature)
+                    seg_result_for_v3 = {
+                        'materials': {}
+                    }
+                    
+                    # Populate with actual masks from Stage 3a segmenter output
+                    # Note: masks is defined in Stage 3a and available here
+                    if masks is not None and self.segmenter is not None:
+                        # Convert torch masks (1,1,H,W) to numpy (H,W) float32
+                        for material_name, mask_t in masks.items():
+                            try:
+                                # mask_t is torch.Tensor of shape (1,1,H,W) or (1,H,W)
+                                mask_np = mask_t.cpu().numpy()
+                                # Squeeze to (H,W)
+                                if mask_np.ndim == 4:  # (1,1,H,W)
+                                    mask_np = mask_np[0, 0]
+                                elif mask_np.ndim == 3:  # (1,H,W)
+                                    mask_np = mask_np[0]
+                                seg_result_for_v3['materials'][material_name] = mask_np.astype(np.float32)
+                            except Exception as e:
+                                self.logger.debug(f"Failed to convert mask {material_name}: {e}")
+                    
+                    # Call Materials V3 engine (plan mode + optional pixel ops)
+                    v3_result = self.materials_v3_engine.process(
+                        image=rgb01,
+                        segmentation_result=seg_result_for_v3,
+                        depth_map=depth01 if depth01 is not None else None
+                    )
+                    
+                    # Extract metadata from V3 result
+                    # FIX: V3 engine emits 'materials_v3', not 'materials_v3_metadata'
+                    if 'materials_v3' in v3_result:
+                        materials_v3_metadata = v3_result['materials_v3']
+                    elif 'materials_v3_metadata' in v3_result:
+                        # Fallback for backward compatibility
+                        materials_v3_metadata = v3_result['materials_v3_metadata']
+                    
+                    if 'materials_v3_response_plan' in v3_result:
+                        materials_v3_response_plan = v3_result['materials_v3_response_plan']
+                    
+                    if 'materials_v3_pixel_ops' in v3_result:
+                        materials_v3_pixel_ops = v3_result['materials_v3_pixel_ops']
+                    
+                    # Apply pixel operations if enabled (PR-4B)
+                    # This modifies rgb01 in-place if glass response is applied
+                    enhanced_rgb01, pixel_ops_stats = self.materials_v3_engine.apply_glass_response_if_enabled(
+                        image=rgb01,
+                        segmentation_result=v3_result,
+                        response_plan=materials_v3_response_plan,
+                    )
+                    
+                    # If pixel ops were applied, rebuild rgb_t for downstream grading/upscaling
+                    if pixel_ops_stats.get('enabled', False):
+                        rgb01 = enhanced_rgb01
+                        rgb_t = torch_ops.to_torch_rgb(rgb01, self.device)
+                        self.logger.info(f"Materials V3 pixel ops applied to {img_path.name}: {pixel_ops_stats.get('applied_to', [])}")
+                        materials_v3_pixel_ops = pixel_ops_stats
+                    
+                    self.logger.debug(f"Materials V3 processed: {img_path.name}")
+                    
+                except Exception as e:
+                    # Graceful fallback: log warning and continue without Materials V3
+                    self.logger.warning(f"Materials V3 failed for {img_path.name}: {e}; continuing without")
+                    materials_v3_metadata = {'error': str(e), 'fallback': True}
 
         # Grade at original resolution
         with self._stage(report, "grade/master"):
@@ -705,6 +814,10 @@ class LuxPipelineV2:
             "material_mods": mods0.source if mods0 is not None else None,
             "materials_v2_enabled": bool(self.materials_v2_engine),
             "materials_v2_metadata": materials_v2_metadata if materials_v2_metadata else None,
+            "materials_v3_enabled": bool(self.materials_v3_engine),
+            "materials_v3_metadata": materials_v3_metadata if materials_v3_metadata else None,
+            "materials_v3_response_plan": materials_v3_response_plan if materials_v3_response_plan else None,
+            "materials_v3_pixel_ops": materials_v3_pixel_ops if materials_v3_pixel_ops else None,
             "upscaler": ai_status,
             "ai_color_diff": color_diff,
             "ai_luma_diff": luma_diff,
