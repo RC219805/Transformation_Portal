@@ -28,10 +28,7 @@ try:
 except (ImportError, ValueError):
     TORCH_AVAILABLE = False
 
-# Skip entire module if torch unavailable (Core Tests stage)
-pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="Requires torch (ML dependency)")
-
-# Mark as ML test (runs in ML Tests stage)
+# Mark as ML test (runs in ML Tests stage, skipped in Core Tests when torch unavailable)
 pytestmark = [
     pytest.mark.skipif(not TORCH_AVAILABLE, reason="Requires torch (ML dependency)"),
     pytest.mark.ml,
