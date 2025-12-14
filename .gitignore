@@ -1,3 +1,15 @@
+# Water detection dataset images (keep metadata only)
+# Recursive patterns to catch class subfolders (pool/, ocean/)
+data/water_*/images/**/*.jpg
+data/water_*/images/**/*.jpeg
+data/water_*/images/**/*.png
+!data/water_*/ground_truth.json
+!data/water_*/LABELING_GUIDE.md
+!data/water_*/README.md
+!data/water_*/ci_subset.txt
+!data/water_*/baseline_*.json
+!data/water_*/thumbnails/
+
 # Python
 __pycache__/
 *.py[cod]
