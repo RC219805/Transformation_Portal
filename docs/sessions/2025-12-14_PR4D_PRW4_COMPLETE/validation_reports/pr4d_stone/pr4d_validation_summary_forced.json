@@ -1,0 +1,41 @@
+[
+  {
+    "scene": "kitchen",
+    "status": "success",
+    "force_apply": true,
+    "pixel_ops_applied": true,
+    "coverage_px": 8943017,
+    "core_px": 8897147,
+    "edge_px": 45870,
+    "mean_delta": 0.008988185785710812,
+    "halo_risk": "NONE",
+    "clamp_count": 5911,
+    "edge_clamp_count": 14
+  },
+  {
+    "scene": "greatroom",
+    "status": "success",
+    "force_apply": true,
+    "pixel_ops_applied": true,
+    "coverage_px": 5945875,
+    "core_px": 5870469,
+    "edge_px": 75406,
+    "mean_delta": 0.009459963999688625,
+    "halo_risk": "NONE",
+    "clamp_count": 384,
+    "edge_clamp_count": 5
+  },
+  {
+    "scene": "bedroom",
+    "status": "success",
+    "force_apply": true,
+    "pixel_ops_applied": true,
+    "coverage_px": 10523408,
+    "core_px": 10477205,
+    "edge_px": 46203,
+    "mean_delta": 0.008086166344583035,
+    "halo_risk": "NONE",
+    "clamp_count": 12252,
+    "edge_clamp_count": 3
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {
+    "scene": "kitchen",
+    "status": "success",
+    "force_apply": false,
+    "pixel_ops_applied": false,
+    "skip_reason": "unknown"
+  }
+]
