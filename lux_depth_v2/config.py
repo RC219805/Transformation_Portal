@@ -33,6 +33,8 @@ class Preset(str, Enum):
     INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM = "interior_luxury_apex_quality_efficientsam"  # Canary V3
     INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS = "interior_luxury_apex_quality_materials_v3_glass"  # Canary PR-4B
     INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE = "interior_luxury_apex_quality_materials_v3_glass_validate"  # Validation-only (forced)
+    INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE = "interior_luxury_apex_quality_materials_v3_stone"  # Canary PR-4D
+    INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE = "interior_luxury_apex_quality_materials_v3_stone_validate"  # Validation-only (forced)
     EXTERIOR_SHOWCASE = "exterior_showcase"
     EXTERIOR_POOL_APEX_QUALITY = "exterior_pool_apex_quality"
     EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM = "exterior_pool_apex_quality_efficientsam"  # Canary V3
@@ -928,6 +930,68 @@ class PipelineConfig:
             
             # Force pixel ops application for validation only
             self.materials_v3.force_glass_pixel_ops = True
+
+        elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE:
+            # CANARY Materials V3 PR-4D: APEX + Stone Pixel Response
+            # Inherits all settings from base APEX, then enables stone response
+            
+            # Recursion guard
+            base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
+            if base_preset.value == self.preset.value:
+                raise RuntimeError(f"Canary preset recursion detected: {self.preset}")
+            
+            # Apply base APEX preset first
+            original_preset = self.preset
+            self.preset = base_preset
+            self.apply_preset()
+            self.preset = original_preset
+            
+            # Enable Materials V3 with stone pixel operations
+            if self.materials_v3 is None:
+                from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy
+                self.materials_v3 = MaterialsV3Config()
+            else:
+                from lux_depth_v2.materials_v3 import RefinementStrategy
+            
+            self.materials_v3.enabled = True
+            self.materials_v3.apply_pixel_ops = True  # Master gate for pixel ops
+            self.materials_v3.stone_response_enabled = True  # Stone-specific
+            self.materials_v3.refine_edges = RefinementStrategy.CANARY  # Conservative
+            
+            # Note: This preset will apply stone response enhancement if:
+            # - Stone is detected by segmentation (>50k pixels)
+            # - Response plan marks stone as "should_refine"
+            # Otherwise gracefully falls back to standard APEX
+
+        elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE:
+            # VALIDATION preset: identical to PR-4D canary, but forces stone pixel ops
+            # 
+            # ⚠️ VALIDATION-ONLY - DO NOT USE IN PRODUCTION
+            # This preset bypasses response plan quality gates to force pixel ops application.
+            # It exists solely to validate pixel ops correctness in testing.
+            # 
+            # MUST NOT be selected by auto-preset (even with --allow-canary).
+            # MUST NOT appear in any production workflow or documentation.
+            # 
+            # Use only: python scripts/pr4d_stone_pixel_validation.py --force-apply
+            
+            # Recursion guard
+            base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE
+            if base_preset.value == self.preset.value:
+                raise RuntimeError(f"Validation preset recursion detected: {self.preset}")
+            
+            # Apply base canary preset first
+            original_preset = self.preset
+            self.preset = base_preset
+            self.apply_preset()
+            self.preset = original_preset
+            
+            if self.materials_v3 is None:
+                from lux_depth_v2.materials_v3 import MaterialsV3Config
+                self.materials_v3 = MaterialsV3Config()
+            
+            # Force pixel ops application for validation only
+            self.materials_v3.force_stone_pixel_ops = True
 
         # clamp some sanity
         self.upscale = 4 if int(self.upscale) not in (2, 4) else int(self.upscale)
