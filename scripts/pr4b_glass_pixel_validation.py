@@ -13,11 +13,12 @@ Runs baseline APEX vs canary (glass-enabled) APEX.
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 import numpy as np
 
@@ -136,14 +137,71 @@ def detect_halos(
     }
 
 
+def should_skip_scene_for_device(
+    scene_name: str,
+    input_path: Path,
+    device_type: str,
+    max_mp_mps: float = 30.0,
+) -> Optional[str]:
+    """
+    Determine if scene should be skipped due to device limitations.
+    
+    Args:
+        scene_name: Scene identifier
+        input_path: Path to input image
+        device_type: Device type (cpu, cuda, mps)
+        max_mp_mps: Max megapixels for MPS (default 30.0)
+        
+    Returns:
+        Skip reason string if should skip, None otherwise
+    """
+    if device_type != "mps":
+        return None
+    
+    # Check megapixels for MPS OOM guard
+    try:
+        img, _ = io_utils.read_rgb_any(input_path)
+        h, w = img.shape[:2]
+        megapixels = (h * w) / 1_000_000
+        
+        if megapixels > max_mp_mps:
+            return f"mps_oom_guard_mp={megapixels:.1f}>limit={max_mp_mps}"
+    except Exception as e:
+        return f"image_load_failed: {e}"
+    
+    return None
+
+
 def run_single_scene(
     scene_name: str,
     input_path: Path,
     output_root: Path,
+    device: Optional[str] = None,
 ) -> dict:
     """Run baseline and canary on one scene and compare pixel impact."""
     
     log.info(f"=== Processing {scene_name} ===")
+    
+    # Check device and skip if needed
+    if device:
+        device_type = device
+    else:
+        import torch
+        if torch.cuda.is_available():
+            device_type = "cuda"
+        elif torch.backends.mps.is_available():
+            device_type = "mps"
+        else:
+            device_type = "cpu"
+    
+    skip_reason = should_skip_scene_for_device(scene_name, input_path, device_type)
+    if skip_reason:
+        log.warning(f"Skipping {scene_name}: {skip_reason}")
+        return {
+            "scene": scene_name,
+            "status": "skipped",
+            "skip_reason": skip_reason,
+        }
     
     # Create output dirs
     baseline_dir = output_root / f"{scene_name}_A_baseline"
@@ -151,25 +209,45 @@ def run_single_scene(
     baseline_dir.mkdir(parents=True, exist_ok=True)
     canary_dir.mkdir(parents=True, exist_ok=True)
     
-    # Run baseline
-    log.info(f"Running baseline APEX for {scene_name}...")
-    baseline_cfg = PipelineConfig(
-        output_dir=baseline_dir,
-        preset=Preset.INTERIOR_LUXURY_APEX_QUALITY,
-    )
-    baseline_pipe = LuxPipelineV2(baseline_cfg)
-    baseline_result = baseline_pipe.process_one(input_path)
-    baseline_report = baseline_result.get("report", {})
+    try:
+        # Run baseline
+        log.info(f"Running baseline APEX for {scene_name}...")
+        baseline_cfg = PipelineConfig(
+            output_dir=baseline_dir,
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY,
+        )
+        if device:
+            baseline_cfg.device = device
+        baseline_pipe = LuxPipelineV2(baseline_cfg)
+        baseline_result = baseline_pipe.process_one(input_path)
+        baseline_report = baseline_result.get("report", {})
+    except Exception as e:
+        log.error(f"Baseline processing failed for {scene_name}: {e}")
+        return {
+            "scene": scene_name,
+            "status": "baseline_failed",
+            "error": str(e),
+        }
     
-    # Run canary
-    log.info(f"Running glass canary APEX for {scene_name}...")
-    canary_cfg = PipelineConfig(
-        output_dir=canary_dir,
-        preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
-    )
-    canary_pipe = LuxPipelineV2(canary_cfg)
-    canary_result = canary_pipe.process_one(input_path)
-    canary_report = canary_result.get("report", {})
+    try:
+        # Run canary
+        log.info(f"Running glass canary APEX for {scene_name}...")
+        canary_cfg = PipelineConfig(
+            output_dir=canary_dir,
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+        )
+        if device:
+            canary_cfg.device = device
+        canary_pipe = LuxPipelineV2(canary_cfg)
+        canary_result = canary_pipe.process_one(input_path)
+        canary_report = canary_result.get("report", {})
+    except Exception as e:
+        log.error(f"Canary processing failed for {scene_name}: {e}")
+        return {
+            "scene": scene_name,
+            "status": "canary_failed",
+            "error": str(e),
+        }
     
     # Load output images for comparison
     baseline_outputs = sorted(baseline_dir.glob("*.png")) + sorted(baseline_dir.glob("*.tif"))
@@ -257,14 +335,76 @@ def run_single_scene(
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="PR-4B Glass Pixel Response Validation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Default: Kitchen + Bedroom only (skip Bathroom on MPS)
+  python scripts/pr4b_glass_pixel_validation.py
+  
+  # Explicit scene selection
+  python scripts/pr4b_glass_pixel_validation.py --scenes kitchen bedroom
+  
+  # Include Bathroom (may OOM on MPS)
+  python scripts/pr4b_glass_pixel_validation.py --include-bathroom
+  
+  # Force CPU device
+  python scripts/pr4b_glass_pixel_validation.py --device cpu
+        """,
+    )
+    parser.add_argument(
+        "--scenes",
+        nargs="+",
+        choices=["kitchen", "bedroom", "bathroom"],
+        help="Scenes to test (default: kitchen + bedroom)",
+    )
+    parser.add_argument(
+        "--include-bathroom",
+        action="store_true",
+        help="Include Bathroom scene (may OOM on MPS)",
+    )
+    parser.add_argument(
+        "--device",
+        choices=["cpu", "cuda", "mps"],
+        help="Force device (default: auto-detect)",
+    )
+    parser.add_argument(
+        "--max-mp-mps",
+        type=float,
+        default=30.0,
+        help="Max megapixels for MPS before skipping (default: 30.0)",
+    )
+    
+    args = parser.parse_args()
+    
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     
     # Define validation set (scenes with glass)
-    benchmark_scenes = {
-        "Kitchen": repo_root / "assets/phase2_bench/750Picacho_Kitchen_Ultimate.tif",
-        "Bedroom": repo_root / "assets/phase2_bench/750Picacho_PrimaryBedroom_Ultimate.tif",
-        "Bathroom": repo_root / "assets/phase2_bench/750Picacho_PrimaryBathroom_Ultimate.tif",
+    all_scenes = {
+        "kitchen": repo_root / "assets/phase2_bench/750Picacho_Kitchen_Ultimate.tif",
+        "bedroom": repo_root / "assets/phase2_bench/750Picacho_PrimaryBedroom_Ultimate.tif",
+        "bathroom": repo_root / "assets/phase2_bench/750Picacho_PrimaryBathroom_Ultimate.tif",
     }
+    
+    # Select scenes based on args
+    if args.scenes:
+        selected_scene_names = args.scenes
+    elif args.include_bathroom:
+        selected_scene_names = ["kitchen", "bedroom", "bathroom"]
+    else:
+        # Default: skip bathroom on MPS to avoid OOM
+        selected_scene_names = ["kitchen", "bedroom"]
+    
+    benchmark_scenes = {
+        name.capitalize(): all_scenes[name]
+        for name in selected_scene_names
+        if name in all_scenes
+    }
+    
+    log.info(f"Selected scenes: {list(benchmark_scenes.keys())}")
+    if args.device:
+        log.info(f"Forced device: {args.device}")
     
     output_root = repo_root / "outputs/pr4b_glass_validation"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -273,25 +413,42 @@ def main() -> int:
     for scene_name, input_path in benchmark_scenes.items():
         if not input_path.exists():
             log.warning(f"Missing input: {input_path}")
-            continue
-            
-        scene_result = run_single_scene(scene_name, input_path, output_root)
-        results.append(scene_result)
+            result = {
+                "scene": scene_name,
+                "status": "input_missing",
+                "input_path": str(input_path),
+            }
+        else:
+            result = run_single_scene(scene_name, input_path, output_root, args.device)
+        
+        results.append(result)
+        
+        # Write incremental results
+        incremental_path = output_root / f"pr4b_{scene_name.lower()}_result.json"
+        with open(incremental_path, "w") as f:
+            json.dump(result, f, indent=2)
+        log.info(f"Scene result saved: {incremental_path}")
     
-    # Aggregate and decide
-    applied_count = sum(1 for r in results if r.get("pixel_ops_applied"))
-    halo_risks = [r["halo_detection"]["halo_risk"] for r in results if "halo_detection" in r]
+    # Aggregate and decide (only count successful runs)
+    successful_results = [r for r in results if r.get("status") == "success"]
+    applied_count = sum(1 for r in successful_results if r.get("pixel_ops_applied"))
+    halo_risks = [r["halo_detection"]["halo_risk"] for r in successful_results if "halo_detection" in r]
     high_halo_count = sum(1 for risk in halo_risks if risk == "high")
     
     gradient_improvements = [
         r["edge_stats"]["gradient_delta"]
-        for r in results
+        for r in successful_results
         if "edge_stats" in r and r["edge_stats"]["gradient_delta"] > 0.0
     ]
     
-    # Decision criteria
+    # Track skipped/failed scenes
+    skipped_results = [r for r in results if r.get("status") == "skipped"]
+    failed_results = [r for r in results if r.get("status") in ("baseline_failed", "canary_failed", "input_missing")]
+    
+    # Decision criteria (require at least 2 successful scenes with pixel ops)
     promotion_ok = (
-        applied_count >= 2  # At least 2/3 scenes applied
+        len(successful_results) >= 2  # At least 2 scenes completed
+        and applied_count >= 2  # At least 2 scenes applied pixel ops
         and high_halo_count == 0  # No high halo risk
         and len(gradient_improvements) >= 2  # At least 2 scenes improved edges
     )
@@ -300,11 +457,16 @@ def main() -> int:
         "validation_date": "2025-12-14",
         "pr": "PR-4B",
         "feature": "glass_pixel_response",
-        "scenes_tested": len(results),
+        "scenes_total": len(results),
+        "scenes_successful": len(successful_results),
+        "scenes_skipped": len(skipped_results),
+        "scenes_failed": len(failed_results),
         "scenes_applied": applied_count,
         "high_halo_risks": high_halo_count,
         "gradient_improvements": len(gradient_improvements),
         "promotion_recommended": promotion_ok,
+        "skipped_scenes": [r["scene"] for r in skipped_results],
+        "failed_scenes": [r["scene"] for r in failed_results],
         "details": results,
     }
     
@@ -313,8 +475,11 @@ def main() -> int:
         json.dump(summary, f, indent=2)
     
     log.info(f"\n=== PR-4B Validation Summary ===")
-    log.info(f"Scenes tested: {len(results)}")
-    log.info(f"Pixel ops applied: {applied_count}/{len(results)}")
+    log.info(f"Scenes total: {len(results)}")
+    log.info(f"Scenes successful: {len(successful_results)}")
+    log.info(f"Scenes skipped: {len(skipped_results)} {skipped_results[0]['scene'] if skipped_results else ''}")
+    log.info(f"Scenes failed: {len(failed_results)}")
+    log.info(f"Pixel ops applied: {applied_count}/{len(successful_results)}")
     log.info(f"High halo risks: {high_halo_count}")
     log.info(f"Gradient improvements: {len(gradient_improvements)}")
     log.info(f"Promotion recommended: {promotion_ok}")
