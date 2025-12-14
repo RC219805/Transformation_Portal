@@ -176,6 +176,15 @@ class MaterialsV3Config:
     
     # Lighting-aware tuning (optional, deferred until lighting validated)
     lighting_aware: bool = False
+    
+    # PR-4B: Pixel operations (canary-only)
+    apply_pixel_ops: bool = False  # Master gate for pixel modifications
+    glass_response_enabled: bool = False  # Specific toggle for glass
+    
+    # PR-4B validation-only override:
+    # When True, bypass response_plan.should_refine for glass so we can validate
+    # pixel ops behavior at least once. Must remain False in production presets.
+    force_glass_pixel_ops: bool = False
 
 
 class MaterialsV3Engine:
@@ -474,3 +483,97 @@ class MaterialsV3Engine:
             })
         
         return report
+
+    def apply_glass_response_if_enabled(
+        self,
+        image: np.ndarray,
+        segmentation_result: dict,
+        response_plan: dict,
+    ) -> Tuple[np.ndarray, dict]:
+        """Apply glass pixel response if enabled and glass is present.
+        
+        PR-4B: Glass-only pixel operations (canary)
+        
+        Args:
+            image: HxWx3 float32 RGB in [0,1]
+            segmentation_result: Result from material_segmentation
+            response_plan: Response plan from PR-4A
+            
+        Returns:
+            Enhanced image (HxWx3 float32) + pixel_ops_stats dict
+        """
+        # Check if pixel ops are enabled
+        pixel_ops_enabled = getattr(self.config, 'apply_pixel_ops', False)
+        
+        if not pixel_ops_enabled:
+            return image, {"enabled": False, "reason": "disabled_by_config"}
+        
+        # Check if glass should be enhanced per response plan
+        per_class = response_plan.get("per_class", {})
+        glass_plan = per_class.get("glass", {})
+        
+        should_refine = bool(glass_plan.get("should_refine", False))
+        plan_reason = (
+            glass_plan.get("refine_reason")
+            or glass_plan.get("skip_reason")
+            or glass_plan.get("reason")
+            or None
+        )
+        
+        forced = bool(getattr(self.config, "force_glass_pixel_ops", False))
+        if forced:
+            # Validation-only: force apply to prove pixel ops correctness.
+            should_refine = True
+            plan_reason = "force_glass_pixel_ops"
+        
+        if not should_refine:
+            return image, {
+                "enabled": True,
+                "applied_to": [],
+                "applied": False,
+                "reason": plan_reason or "plan_skip_no_reason",
+                "forced": forced,
+            }
+        
+        # Extract glass mask
+        canonical_materials = segmentation_result.get("materials", {})
+        from .materials_v3_taxonomy import normalize_material_dict
+        normalized = normalize_material_dict(canonical_materials)
+        
+        glass_mask = normalized.get("glass")
+        if glass_mask is None:
+            return image, {"enabled": False, "reason": "glass_mask_missing"}
+        
+        # Convert mask to numpy float32 if needed
+        if hasattr(glass_mask, 'cpu'):  # torch tensor
+            glass_mask = glass_mask.cpu().numpy()
+        if glass_mask.ndim == 4:  # (1,1,H,W)
+            glass_mask = glass_mask[0, 0]
+        elif glass_mask.ndim == 3:  # (1,H,W)
+            glass_mask = glass_mask[0]
+        
+        glass_mask = glass_mask.astype(np.float32)
+        
+        # Apply glass response
+        from .materials_v3_pixel_ops import (
+            GlassResponseConfig,
+            apply_glass_response,
+        )
+        
+        glass_cfg = GlassResponseConfig()
+        enhanced, stats = apply_glass_response(image, glass_mask, glass_cfg, glass_plan)
+        
+        log.info(
+            f"PR-4B Glass Response: "
+            f"core={stats['core_pixels']}px, edge={stats['edge_pixels']}px, "
+            f"mean_delta={stats['mean_delta_core']:.4f}"
+        )
+        
+        return enhanced, {
+            "enabled": True,
+            "applied": True,
+            "applied_to": ["glass"],
+            "forced": forced,
+            "reason": plan_reason,
+            "glass_stats": stats,
+        }
