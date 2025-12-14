@@ -26,6 +26,38 @@ from lux_depth_v2.pipeline import LuxPipelineV2
 from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy, MaterialTaxonomy
 
 
+# Dummy segmenter for offline CI (no HuggingFace model download)
+class DummySegmenter:
+    """Mock segmenter that produces predictable masks without model downloads."""
+    
+    def predict(self, rgb_t):
+        """Generate synthetic glass mask (centered region)."""
+        import torch
+        _, _, H, W = rgb_t.shape
+        mask = torch.zeros((1, 1, H, W), device=rgb_t.device, dtype=torch.float32)
+        # Create glass region in center (25%-75% of image)
+        mask[:, :, H // 4:3 * H // 4, W // 4:3 * W // 4] = 0.85
+        return {"glass": mask}
+    
+    def get_segmentation_v3_report(self):
+        """Return dummy segmentation metadata."""
+        return {
+            "backend": "dummy",
+            "per_class": {"glass": {"fusion_applied": 0.0}}
+        }
+
+
+@pytest.fixture(autouse=True)
+def _mock_segmenter(monkeypatch):
+    """Mock create_material_segmenter to avoid HuggingFace downloads in CI."""
+    import lux_depth_v2.pipeline as pipe_mod
+    monkeypatch.setattr(
+        pipe_mod,
+        "create_material_segmenter",
+        lambda *args, **kwargs: DummySegmenter()
+    )
+
+
 def test_materials_v3_disabled_by_default():
     """Materials V3 should be disabled by default (no behavior change)."""
     cfg = PipelineConfig(output_dir=Path("/tmp/test"))
