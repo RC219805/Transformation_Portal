@@ -31,6 +31,7 @@ Usage:
 import argparse
 import json
 import time
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -102,13 +103,13 @@ class WaterValidationHarness:
         """Run validation on dataset using new schema."""
         results = []
         root = Path(ground_truth.get("root", "data/water_v0/images"))
-        
+
         for img_relpath, img_info in ground_truth.get("images", {}).items():
             img_path = root / img_relpath
             if not img_path.exists():
                 print(f"⚠️  Skipping missing image: {img_path}")
                 continue
-            
+
             result = self.validate_single(
                 img_path,
                 label=img_info.get("label", "unknown"),
@@ -121,17 +122,20 @@ class WaterValidationHarness:
         return results
 
     def validate_single(
-        self, 
-        img_path: Path, 
+        self,
+        img_path: Path,
         label: str,
         should_detect: bool,
         difficulty: str,
         tags: List[str]
     ) -> ValidationResult:
         """Validate single image (new schema)."""
-        # Reset seed for deterministic stability tests
+        # Set per-image deterministic seed (using stable CRC32 hash)
         if self.seed is not None:
-            np.random.seed(self.seed)
+            # Stable hash across runs (not process-salted like hash())
+            stable_hash = zlib.crc32(str(img_path).encode('utf-8')) & 0xFFFFFFFF
+            per_image = (self.seed ^ stable_hash) & 0xFFFFFFFF
+            np.random.seed(per_image)
 
         # Load image
         img = Image.open(img_path).convert("RGB")
@@ -143,21 +147,19 @@ class WaterValidationHarness:
         # For validation, we need the mask - call detector directly
         # This bypasses the normal pipeline to get mask access
         water_mask = None
-        detector_confidence = 0.0
-        detector_coverage = 0.0
-        
+
         if self.engine.config.water_detection_enabled:
             from lux_depth_v2.water_candidate import WaterCandidateDetector, SceneContext
             detector = WaterCandidateDetector()
             # Call with same signature as Materials V3 will use
             detector_result = detector.detect(
-                rgb01, 
+                rgb01,
                 depth01=depth,
                 scene_context=SceneContext.UNKNOWN
             )
             water_mask = detector_result.get('mask')
-            detector_confidence = detector_result.get('confidence', 0.0)
-            detector_coverage = detector_result.get('coverage', 0.0)
+            # Note: detector_confidence and detector_coverage not used
+            # (we use pipeline results for reporting)
 
         # Also run full pipeline for other metrics
         segmentation_result = {
@@ -257,7 +259,7 @@ class WaterValidationHarness:
             noise = rng.randn(*rgb01.shape) * 0.01
         else:
             noise = np.random.randn(*rgb01.shape) * 0.01
-        
+
         noisy = rgb01 + noise
         noisy = np.clip(noisy, 0, 1)
         noisy_seg = {"materials": {}, "confidence": {}}
@@ -296,22 +298,22 @@ class WaterValidationHarness:
         # Filter by label
         pool_results = [r for r in results if r.scene_type == "pool"]
         ocean_results = [r for r in results if r.scene_type == "ocean"]
-        
+
         # Filter by should_detect
         should_detect_true = [r for r in results if r.should_detect]
         should_detect_false = [r for r in results if not r.should_detect]
-        
+
         # Filter pool/ocean with should_detect=true (for recall)
         pool_true = [r for r in pool_results if r.should_detect]
         ocean_true = [r for r in ocean_results if r.should_detect]
-        
+
         # Count detected (use explicit 'detected' flag from water_candidate.present)
         pool_detected = [r for r in pool_true if r.detected]
         ocean_detected = [r for r in ocean_true if r.detected]
-        
+
         pool_recall = len(pool_detected) / len(pool_true) if pool_true else 0.0
         ocean_recall = len(ocean_detected) / len(ocean_true) if ocean_true else 0.0
-        
+
         # Coverage stats (only for detected water)
         pool_coverages = [r.coverage for r in pool_detected]
         ocean_coverages = [r.coverage for r in ocean_detected]
@@ -370,24 +372,41 @@ class WaterValidationHarness:
 
         print(f"✅ Validation report written to {output_path}")
         print("\n📊 Summary:")
-        print(f"  Total images: {len(results)} ({len(should_detect_true)} water, {len(should_detect_false)} hard negatives)")
+        print(
+            f"  Total images: {len(results)} "
+            f"({len(should_detect_true)} water, {len(should_detect_false)} hard negatives)"
+        )
         print(f"  Pool recall: {pool_recall:.1%} ({len(pool_detected)}/{len(pool_true)} detected)")
-        print(f"    - Avg coverage: {summary['pool_avg_coverage']:.2%}, median: {summary['pool_median_coverage']:.2%}")
+        print(
+            f"    - Avg coverage: {summary['pool_avg_coverage']:.2%}, "
+            f"median: {summary['pool_median_coverage']:.2%}"
+        )
         print(f"    - Avg edge alignment: {summary['pool_avg_edge_alignment']:.3f}")
         print(f"  Ocean recall: {ocean_recall:.1%} ({len(ocean_detected)}/{len(ocean_true)} detected)")
-        print(f"    - Avg coverage: {summary['ocean_avg_coverage']:.2%}, median: {summary['ocean_median_coverage']:.2%}")
+        print(
+            f"    - Avg coverage: {summary['ocean_avg_coverage']:.2%}, "
+            f"median: {summary['ocean_median_coverage']:.2%}"
+        )
         print(f"    - Avg edge alignment: {summary['ocean_avg_edge_alignment']:.3f}")
-        print(f"  False trigger rate: {summary['false_trigger_rate']:.1%} ({summary['false_trigger_count']}/{len(should_detect_false)})")
+        print(
+            f"  False trigger rate: {summary['false_trigger_rate']:.1%} "
+            f"({summary['false_trigger_count']}/{len(should_detect_false)})"
+        )
         print(f"  Avg processing time: {summary['overall_avg_processing_time_ms']:.1f}ms")
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Water validation harness (PR-W4)",
-        epilog="Example: python prw_water_validation.py --ground-truth data/water_v0/ground_truth.json --output report.json --seed 42"
+        epilog=(
+            "Example: python prw_water_validation.py "
+            "--ground-truth data/water_v0/ground_truth.json --output report.json --seed 42"
+        )
     )
-    parser.add_argument("--ground-truth", type=Path, required=True,
-                        help="Ground truth JSON (v0 schema with root, labels, images)")
+    parser.add_argument(
+        "--ground-truth", type=Path, required=True,
+        help="Ground truth JSON (v0 schema with root, labels, images)"
+    )
     parser.add_argument("--output", type=Path, default=Path("water_validation_report.json"),
                         help="Output JSON path (default: water_validation_report.json)")
     parser.add_argument("--subset-file", type=Path, default=None,
@@ -408,11 +427,11 @@ def main():
 
     # Validate schema
     if "images" not in ground_truth:
-        print(f"❌ ERROR: Ground truth missing 'images' key (v0 schema required)")
+        print("❌ ERROR: Ground truth missing 'images' key (v0 schema required)")
         return
-    
+
     if not ground_truth.get("images"):
-        print(f"⚠️  WARNING: No images in ground truth")
+        print("⚠️  WARNING: No images in ground truth")
         return
 
     # Filter subset if requested
