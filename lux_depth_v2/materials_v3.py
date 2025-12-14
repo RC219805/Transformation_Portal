@@ -404,7 +404,7 @@ class MaterialsV3Engine:
             "class_presence_audit": class_audit,  # NEW: diagnose missing classes
         }
         
-        # PR-4A: Generate response plan (no pixel ops)
+        # PR-4A: Generate response plan (PR-4C: pass RGB for edge signals)
         response_plan_config = ResponsePlanConfig()
         response_plan = generate_response_plan(
             canonical_materials=canonical_materials,
@@ -412,6 +412,7 @@ class MaterialsV3Engine:
             strategy=self.config.refine_edges.value,
             intent="client",  # TODO: get from auto-preset context
             quality_tier="max",  # TODO: get from pipeline config
+            rgb_image=image,  # PR-4C: for edge signal computation
         )
         
         segmentation_result['materials_v3_response_plan'] = response_plan
