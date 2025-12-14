@@ -883,13 +883,15 @@ class PipelineConfig:
             
             # Enable Materials V3 with glass pixel operations
             if self.materials_v3 is None:
-                from lux_depth_v2.materials_v3 import MaterialsV3Config
+                from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy
                 self.materials_v3 = MaterialsV3Config()
+            else:
+                from lux_depth_v2.materials_v3 import RefinementStrategy
             
             self.materials_v3.enabled = True
             self.materials_v3.apply_pixel_ops = True  # Master gate for pixel ops
             self.materials_v3.glass_response_enabled = True  # Glass-specific
-            self.materials_v3.refine_edges = "canary"  # Target glass only
+            self.materials_v3.refine_edges = RefinementStrategy.CANARY  # Target glass only
             
             # Note: This preset will apply glass response enhancement if:
             # - Glass is detected by segmentation (>0.5% coverage)
