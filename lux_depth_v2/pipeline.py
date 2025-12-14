@@ -660,6 +660,24 @@ class LuxPipelineV2:
                         self.logger.info(f"Materials V3 pixel ops applied to {img_path.name}: {pixel_ops_stats.get('applied_to', [])}")
                         materials_v3_pixel_ops = pixel_ops_stats
                     
+                    # Apply stone pixel operations if enabled (PR-4D)
+                    enhanced_rgb01_stone, stone_ops_stats = self.materials_v3_engine.apply_stone_response_if_enabled(
+                        image=rgb01,
+                        segmentation_result=v3_result,
+                        response_plan=materials_v3_response_plan,
+                    )
+                    
+                    # If stone ops were applied, rebuild rgb_t
+                    if stone_ops_stats.get('applied', False):
+                        rgb01 = enhanced_rgb01_stone
+                        rgb_t = torch_ops.to_torch_rgb(rgb01, self.device)
+                        self.logger.info(f"Materials V3 stone ops applied to {img_path.name}: {stone_ops_stats}")
+                        # Merge stone stats into materials_v3_pixel_ops
+                        if materials_v3_pixel_ops:
+                            materials_v3_pixel_ops['stone'] = stone_ops_stats
+                        else:
+                            materials_v3_pixel_ops = {'stone': stone_ops_stats}
+                    
                     self.logger.debug(f"Materials V3 processed: {img_path.name}")
                     
                 except Exception as e:
