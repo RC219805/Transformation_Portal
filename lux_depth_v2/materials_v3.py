@@ -320,6 +320,12 @@ class MaterialsV3Engine:
             should_refine_material,
         )
         
+        # Import response planning (PR-4A)
+        from .materials_v3_response import (
+            ResponsePlanConfig,
+            generate_response_plan,
+        )
+        
         # Extract masks from segmentation result
         # Segmentation result is typically dict with 'materials' key containing masks
         if 'materials' not in segmentation_result:
@@ -389,7 +395,19 @@ class MaterialsV3Engine:
             "class_presence_audit": class_audit,  # NEW: diagnose missing classes
         }
         
-        # Still return original masks (no pixel changes in PR-3A)
+        # PR-4A: Generate response plan (no pixel ops)
+        response_plan_config = ResponsePlanConfig()
+        response_plan = generate_response_plan(
+            canonical_materials=canonical_materials,
+            config=response_plan_config,
+            strategy=self.config.refine_edges.value,
+            intent="client",  # TODO: get from auto-preset context
+            quality_tier="max",  # TODO: get from pipeline config
+        )
+        
+        segmentation_result['materials_v3_response_plan'] = response_plan
+        
+        # Still return original masks (no pixel changes in PR-3A/PR-4A)
         return segmentation_result
     
     def _compute_edge_confidence(
