@@ -123,7 +123,7 @@ def test_edge_signals_boundary_pixels_guard():
     
     rgb = np.ones((256, 256, 3), dtype=np.float32) * 0.5
     
-    signals = compute_edge_signals(mask_small, rgb, edge_band_small)
+    signals = compute_edge_signals(rgb, edge_band_small)
     
     assert signals["boundary_pixels"] < 250
     assert signals["edge_alignment"] == 0.0
@@ -137,7 +137,7 @@ def test_edge_signals_boundary_pixels_guard():
     edge_band_large[59:197, 59:197] = True
     edge_band_large[64:192, 64:192] = False  # ~1000 boundary pixels
     
-    signals_large = compute_edge_signals(mask_large, rgb, edge_band_large)
+    signals_large = compute_edge_signals(rgb, edge_band_large)
     
     assert signals_large["boundary_pixels"] >= 250
     assert signals_large["edge_alignment"] >= 0.0
@@ -148,11 +148,11 @@ def test_refinement_decision_requires_edge_signals():
     """Refinement should require edge_alignment >= 0.10 and boundary >= 250."""
     config = ResponsePlanConfig()
     
-    # Use mean_conf below ambiguity threshold (default 0.5)
+    # Use mean_conf below ambiguity threshold (default 0.70)
     stats = {
         "coverage_px": 10000,
-        "mean_conf": 0.45,  # Ambiguous (below 0.5 threshold)
-        "edge_conf": 0.40,
+        "mean_conf": 0.65,  # Ambiguous (below 0.70 threshold)
+        "edge_conf": 0.60,
     }
     
     # Weak edge alignment → skip
@@ -248,6 +248,16 @@ def test_summary_tracks_eligible_classes():
     assert "glass" in plan["summary"]["eligible_for_refinement"]
     # Wood not in canary set
     assert "wood" not in plan["summary"]["eligible_for_refinement"]
+    
+    # PR-4C: Reason histograms
+    assert "pixel_ops_reasons" in plan["summary"]
+    assert "refinement_reasons" in plan["summary"]
+    
+    # Wood has no_implementation, glass has confidence decision
+    assert plan["summary"]["pixel_ops_reasons"]["no_implementation"] >= 1
+    
+    # Wood not in canary set
+    assert plan["summary"]["refinement_reasons"]["not_in_canary_set"] >= 1
 
 
 if __name__ == "__main__":

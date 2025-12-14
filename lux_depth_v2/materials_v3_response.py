@@ -27,6 +27,21 @@ from .materials_v3_taxonomy import normalize_material_name, get_material_metadat
 log = setup_logging(__name__)
 
 
+def _build_reason_histogram(reasons: list) -> dict:
+    """Build histogram of decision reasons for summary.
+    
+    Args:
+        reasons: List of reason strings
+        
+    Returns:
+        Dict of reason → count
+    """
+    histogram = {}
+    for reason in reasons:
+        histogram[reason] = histogram.get(reason, 0) + 1
+    return histogram
+
+
 @dataclass
 class ResponsePlanConfig:
     """Configuration for Materials V3 response planning."""
@@ -63,7 +78,7 @@ class ResponsePlanConfig:
     
     # Decision thresholds for should_refine
     refine_coverage_threshold_px: int = 1000
-    refine_conf_ambiguity_threshold: float = 0.50  # Refine if mean conf < this
+    refine_conf_ambiguity_threshold: float = 0.70  # Refine if mean conf < this (PR-4C: raised from 0.50)
 
 
 def extract_edge_band(
@@ -266,14 +281,12 @@ def decide_should_refine(
 
 
 def compute_edge_signals(
-    mask: np.ndarray,
     rgb_image: Optional[np.ndarray],
     edge_band_mask: np.ndarray,
 ) -> dict:
     """Compute edge signals (boundary pixels, gradient alignment).
     
     Args:
-        mask: HxW float32 material mask
         rgb_image: HxWx3 float32 RGB image (optional, for gradient alignment)
         edge_band_mask: HxW bool edge band mask
         
@@ -447,11 +460,11 @@ def generate_response_plan(
     for class_name, mask in canonical_materials.items():
         stats = compute_class_stats(mask, config.edge_band_width_px)
         
-        # Extract edge band for edge signals
+        # Compute edge band mask for edge signals
         core_mask, edge_mask = extract_edge_band(mask, config.edge_band_width_px)
         
         # Compute edge signals (PR-4C)
-        edge_signals = compute_edge_signals(mask, rgb_image, edge_mask)
+        edge_signals = compute_edge_signals(rgb_image, edge_mask)
         
         # Compute planned strengths
         core_strength, edge_strength = compute_response_strengths(
@@ -536,6 +549,9 @@ def generate_response_plan(
             "present_classes": list(per_class.keys()),
             "eligible_for_pixel_ops": [k for k, v in per_class.items() if v["pixel_ops"]["eligible"]],
             "eligible_for_refinement": [k for k, v in per_class.items() if v["refinement"]["eligible"]],
+            # PR-4C: Reason histograms for actionable insights
+            "pixel_ops_reasons": _build_reason_histogram([v["pixel_ops"]["reason"] for v in per_class.values()]),
+            "refinement_reasons": _build_reason_histogram([v["refinement"]["reason"] for v in per_class.values()]),
         },
         "notes": ["PR-4C: separated refinement + pixel ops decisions, added edge signals"],
     }
