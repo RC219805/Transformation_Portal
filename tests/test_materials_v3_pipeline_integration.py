@@ -1,7 +1,23 @@
-"""Test Materials V3 integration in LuxPipelineV2."""
+"""Test Materials V3 integration in LuxPipelineV2.
+
+Requires: torch (ML dependency)
+Marker: @pytest.mark.ml (runs in ML Tests stage, not Core Tests)
+"""
+
+import importlib.util
+from pathlib import Path
 
 import pytest
-from pathlib import Path
+
+# Check torch availability
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+
+# Mark as ML test (runs in ML Tests stage, skipped in Core Tests)
+pytestmark = [
+    pytest.mark.skipif(not TORCH_AVAILABLE, reason="Requires torch (ML dependency)"),
+    pytest.mark.ml,
+]
+
 from lux_depth_v2.config import PipelineConfig, Preset
 from lux_depth_v2.pipeline import LuxPipelineV2
 from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy, MaterialTaxonomy

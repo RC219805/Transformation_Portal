@@ -8,19 +8,31 @@ Validates the complete pipeline wiring:
 - Response plan is generated
 - Pixel ops stats are tracked
 - Report JSON schema is stable
+
+Requires: torch (ML dependency)
+Marker: @pytest.mark.ml (runs in ML Tests stage, not Core Tests)
 """
 
 from __future__ import annotations
 
+import importlib.util
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-# Skip if Materials V3 dependencies unavailable
-pytest.importorskip("torch")
-pytest.importorskip("PIL")
+# Check torch availability
+TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+
+# Skip entire module if torch unavailable (Core Tests stage)
+pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="Requires torch (ML dependency)")
+
+# Mark as ML test (runs in ML Tests stage)
+pytestmark = [
+    pytest.mark.skipif(not TORCH_AVAILABLE, reason="Requires torch (ML dependency)"),
+    pytest.mark.ml,
+]
 
 from lux_depth_v2.pipeline import LuxPipelineV2
 from lux_depth_v2.config import PipelineConfig, Preset
