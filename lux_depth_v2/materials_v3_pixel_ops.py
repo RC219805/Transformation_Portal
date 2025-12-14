@@ -120,8 +120,13 @@ def apply_local_contrast(
     
     contrast_luma = (luma - local_mean) * strength + local_mean
     
-    # Preserve relative chrominance
-    scale = np.where(luma > 0, contrast_luma / (luma + 1e-6), 1.0)
+    # Preserve relative chrominance with robust scaling
+    # PR-4B.1: Increase epsilon to prevent extreme scales in dark regions
+    epsilon = 1e-3  # Increased from 1e-6
+    scale = contrast_luma / (luma + epsilon)
+    # PR-4B.1: Clamp scale to prevent artifacts in near-black regions
+    scale = np.clip(scale, 0.33, 3.0)
+    scale = np.where(luma > 0, scale, 1.0)
     result = rgb * scale[..., None]
     
     # Preserve highlights
