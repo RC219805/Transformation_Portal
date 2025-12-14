@@ -9,8 +9,11 @@ from pathlib import Path
 
 import pytest
 
-# Check torch availability
-TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+# Check torch availability (safely handle broken torch.__spec__)
+try:
+    TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+except (ImportError, ValueError):
+    TORCH_AVAILABLE = False
 
 # Mark as ML test (runs in ML Tests stage, skipped in Core Tests)
 pytestmark = [

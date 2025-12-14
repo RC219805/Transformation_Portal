@@ -22,8 +22,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-# Check torch availability
-TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+# Check torch availability (safely handle broken torch.__spec__)
+try:
+    TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+except (ImportError, ValueError):
+    TORCH_AVAILABLE = False
 
 # Skip entire module if torch unavailable (Core Tests stage)
 pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="Requires torch (ML dependency)")
