@@ -261,9 +261,9 @@ def main() -> int:
     
     # Define validation set (scenes with glass)
     benchmark_scenes = {
-        "Kitchen": repo_root / "assets/phase2_bench/interior_kitchen_750.tiff",
-        "Bedroom": repo_root / "assets/phase2_bench/interior_bedroom.tiff",
-        "Bathroom": repo_root / "assets/phase2_bench/interior_bathroom.tiff",
+        "Kitchen": repo_root / "assets/phase2_bench/750Picacho_Kitchen_Ultimate.tif",
+        "Bedroom": repo_root / "assets/phase2_bench/750Picacho_PrimaryBedroom_Ultimate.tif",
+        "Bathroom": repo_root / "assets/phase2_bench/750Picacho_PrimaryBathroom_Ultimate.tif",
     }
     
     output_root = repo_root / "outputs/pr4b_glass_validation"

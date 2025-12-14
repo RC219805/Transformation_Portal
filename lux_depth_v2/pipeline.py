@@ -595,15 +595,25 @@ class LuxPipelineV2:
             with self._stage(report, "material/materials_v3"):
                 try:
                     # Prepare segmentation result dict (matches MaterialsV3Engine.process() signature)
-                    # If we have material mods from v2, we can pass those masks
-                    # Otherwise, we'll work with the segmenter output directly
                     seg_result_for_v3 = {
-                        'materials': {}  # Will be populated by the engine
+                        'materials': {}
                     }
                     
-                    # If we have segmenter output, pass it
-                    # TODO: In future, connect to actual segmentation masks from self.segmenter
-                    # For now, Materials V3 will be plan-only (no pixel ops unless canary enabled)
+                    # Populate with actual masks from Stage 3a segmenter output
+                    if cfg.enable_material and self.segmenter is not None and 'masks' in locals():
+                        # Convert torch masks (1,1,H,W) to numpy (H,W) float32
+                        for material_name, mask_t in masks.items():
+                            try:
+                                # mask_t is torch.Tensor of shape (1,1,H,W) or (1,H,W)
+                                mask_np = mask_t.cpu().numpy()
+                                # Squeeze to (H,W)
+                                if mask_np.ndim == 4:  # (1,1,H,W)
+                                    mask_np = mask_np[0, 0]
+                                elif mask_np.ndim == 3:  # (1,H,W)
+                                    mask_np = mask_np[0]
+                                seg_result_for_v3['materials'][material_name] = mask_np.astype(np.float32)
+                            except Exception as e:
+                                self.logger.debug(f"Failed to convert mask {material_name}: {e}")
                     
                     # Call Materials V3 engine (plan mode + optional pixel ops)
                     v3_result = self.materials_v3_engine.process(
@@ -613,7 +623,11 @@ class LuxPipelineV2:
                     )
                     
                     # Extract metadata from V3 result
-                    if 'materials_v3_metadata' in v3_result:
+                    # FIX: V3 engine emits 'materials_v3', not 'materials_v3_metadata'
+                    if 'materials_v3' in v3_result:
+                        materials_v3_metadata = v3_result['materials_v3']
+                    elif 'materials_v3_metadata' in v3_result:
+                        # Fallback for backward compatibility
                         materials_v3_metadata = v3_result['materials_v3_metadata']
                     
                     if 'materials_v3_response_plan' in v3_result:
@@ -621,6 +635,21 @@ class LuxPipelineV2:
                     
                     if 'materials_v3_pixel_ops' in v3_result:
                         materials_v3_pixel_ops = v3_result['materials_v3_pixel_ops']
+                    
+                    # Apply pixel operations if enabled (PR-4B)
+                    # This modifies rgb01 in-place if glass response is applied
+                    enhanced_rgb01, pixel_ops_stats = self.materials_v3_engine.apply_glass_response_if_enabled(
+                        image=rgb01,
+                        segmentation_result=v3_result,
+                        response_plan=materials_v3_response_plan,
+                    )
+                    
+                    # If pixel ops were applied, rebuild rgb_t for downstream grading/upscaling
+                    if pixel_ops_stats.get('enabled', False):
+                        rgb01 = enhanced_rgb01
+                        rgb_t = torch_ops.to_torch_rgb(rgb01, self.device)
+                        self.logger.info(f"Materials V3 pixel ops applied to {img_path.name}: {pixel_ops_stats.get('applied_to', [])}")
+                        materials_v3_pixel_ops = pixel_ops_stats
                     
                     self.logger.debug(f"Materials V3 processed: {img_path.name}")
                     

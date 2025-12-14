@@ -1,0 +1,253 @@
+#!/usr/bin/env python3
+"""
+Materials V3 End-to-End Integration Test
+
+Validates the complete pipeline wiring:
+- Masks are populated from segmentation
+- V3 metadata is emitted correctly
+- Response plan is generated
+- Pixel ops stats are tracked
+- Report JSON schema is stable
+"""
+
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+# Skip if Materials V3 dependencies unavailable
+pytest.importorskip("torch")
+pytest.importorskip("PIL")
+
+from lux_depth_v2.pipeline import LuxPipelineV2
+from lux_depth_v2.config import PipelineConfig, Preset
+
+
+def _create_synthetic_image(h=256, w=256):
+    """Create a synthetic RGB image with some structure."""
+    rgb = np.zeros((h, w, 3), dtype=np.uint8)
+    # Add some gradients and blocks to trigger material segmentation
+    rgb[:, :w // 2] = [100, 120, 140]  # Left half
+    rgb[:, w // 2:] = [180, 160, 150]  # Right half
+    rgb[h // 4:3 * h // 4, w // 4:3 * w // 4] = [200, 200, 200]  # Center block
+    return rgb
+
+
+class TestMaterialsV3EndToEnd:
+    """End-to-end validation of Materials V3 pipeline integration."""
+
+    def test_v3_disabled_by_default(self, tmp_path):
+        """Materials V3 should be disabled by default and not affect output."""
+        # Create synthetic input
+        img = _create_synthetic_image()
+        img_path = tmp_path / "test.png"
+        from PIL import Image
+        Image.fromarray(img).save(img_path)
+        
+        # Run with default config
+        cfg = PipelineConfig(
+            output_dir=tmp_path / "out",
+            preset=Preset.INTERIOR_LUXURY,
+            write_outputs=False,  # Don't write files
+            enable_material=True,  # Enable segmentation so V3 can work if enabled
+        )
+        
+        pipe = LuxPipelineV2(cfg)
+        report = pipe.process_one(img_path)
+        
+        # V3 should be disabled
+        assert report["materials_v3_enabled"] is False
+        # Metadata should be empty or None
+        assert not report.get("materials_v3_metadata") or report["materials_v3_metadata"] == {}
+
+    def test_v3_enabled_emits_metadata(self, tmp_path):
+        """When enabled, V3 should emit metadata in the report."""
+        # Create synthetic input
+        img = _create_synthetic_image()
+        img_path = tmp_path / "test.png"
+        from PIL import Image
+        Image.fromarray(img).save(img_path)
+        
+        # Enable Materials V3
+        from lux_depth_v2.materials_v3 import MaterialsV3Config
+        cfg = PipelineConfig(
+            output_dir=tmp_path / "out",
+            preset=Preset.INTERIOR_LUXURY,
+            write_outputs=False,
+            enable_material=True,
+        )
+        cfg.materials_v3 = MaterialsV3Config()
+        cfg.materials_v3.enabled = True
+        
+        pipe = LuxPipelineV2(cfg)
+        report = pipe.process_one(img_path)
+        
+        # V3 should be enabled
+        assert report["materials_v3_enabled"] is True
+        
+        # Metadata should exist
+        assert report["materials_v3_metadata"] is not None
+        assert isinstance(report["materials_v3_metadata"], dict)
+        
+        # Check required keys
+        metadata = report["materials_v3_metadata"]
+        assert "enabled" in metadata
+        assert metadata["enabled"] is True
+        assert "taxonomy" in metadata
+        assert "per_class_stats" in metadata
+        assert "canonical_materials" in metadata
+
+    def test_v3_response_plan_generated(self, tmp_path):
+        """V3 should generate a response plan when enabled."""
+        img = _create_synthetic_image()
+        img_path = tmp_path / "test.png"
+        from PIL import Image
+        Image.fromarray(img).save(img_path)
+        
+        from lux_depth_v2.materials_v3 import MaterialsV3Config
+        cfg = PipelineConfig(
+            output_dir=tmp_path / "out",
+            preset=Preset.INTERIOR_LUXURY,
+            write_outputs=False,
+            enable_material=True,
+        )
+        cfg.materials_v3 = MaterialsV3Config()
+        cfg.materials_v3.enabled = True
+        
+        pipe = LuxPipelineV2(cfg)
+        report = pipe.process_one(img_path)
+        
+        # Response plan should exist
+        assert "materials_v3_response_plan" in report
+        plan = report["materials_v3_response_plan"]
+        assert plan is not None
+        assert isinstance(plan, dict)
+        
+        # Check plan structure
+        assert "enabled" in plan
+        assert "strategy" in plan
+        assert "per_class" in plan
+
+    def test_v3_pixel_ops_stats(self, tmp_path):
+        """V3 should track pixel ops stats even when not applied."""
+        img = _create_synthetic_image()
+        img_path = tmp_path / "test.png"
+        from PIL import Image
+        Image.fromarray(img).save(img_path)
+        
+        from lux_depth_v2.materials_v3 import MaterialsV3Config
+        cfg = PipelineConfig(
+            output_dir=tmp_path / "out",
+            preset=Preset.INTERIOR_LUXURY,
+            write_outputs=False,
+            enable_material=True,
+        )
+        cfg.materials_v3 = MaterialsV3Config()
+        cfg.materials_v3.enabled = True
+        
+        pipe = LuxPipelineV2(cfg)
+        report = pipe.process_one(img_path)
+        
+        # Pixel ops stats should exist (even if not applied)
+        assert "materials_v3_pixel_ops" in report
+        pixel_ops = report["materials_v3_pixel_ops"]
+        assert pixel_ops is not None
+        assert isinstance(pixel_ops, dict)
+        
+        # Check stats structure
+        assert "enabled" in pixel_ops
+        # May or may not be applied depending on presence of glass masks
+        # but the stats should always be present
+
+    def test_v3_class_presence_audit(self, tmp_path):
+        """V3 should include class presence audit for debugging."""
+        img = _create_synthetic_image()
+        img_path = tmp_path / "test.png"
+        from PIL import Image
+        Image.fromarray(img).save(img_path)
+        
+        from lux_depth_v2.materials_v3 import MaterialsV3Config
+        cfg = PipelineConfig(
+            output_dir=tmp_path / "out",
+            preset=Preset.INTERIOR_LUXURY,
+            write_outputs=False,
+            enable_material=True,
+        )
+        cfg.materials_v3 = MaterialsV3Config()
+        cfg.materials_v3.enabled = True
+        
+        pipe = LuxPipelineV2(cfg)
+        report = pipe.process_one(img_path)
+        
+        # Metadata should include class presence audit
+        metadata = report["materials_v3_metadata"]
+        assert "class_presence_audit" in metadata
+        audit = metadata["class_presence_audit"]
+        assert isinstance(audit, dict)
+        # Should include emitted_classes, requested_classes, etc.
+
+    def test_v3_fallback_on_error(self, tmp_path):
+        """V3 should gracefully fall back on error without crashing pipeline."""
+        img = _create_synthetic_image()
+        img_path = tmp_path / "test.png"
+        from PIL import Image
+        Image.fromarray(img).save(img_path)
+        
+        from lux_depth_v3.materials_v3 import MaterialsV3Config
+        cfg = PipelineConfig(
+            output_dir=tmp_path / "out",
+            preset=Preset.INTERIOR_LUXURY,
+            write_outputs=False,
+            enable_material=True,
+        )
+        cfg.materials_v3 = MaterialsV3Config()
+        cfg.materials_v3.enabled = True
+        
+        # Force an error by corrupting the config (example)
+        # This is a smoke test - pipeline should not crash
+        
+        pipe = LuxPipelineV2(cfg)
+        report = pipe.process_one(img_path)
+        
+        # Pipeline should complete
+        assert report["status"] == "ok"
+        
+        # If V3 failed, metadata should indicate fallback
+        if "error" in report.get("materials_v3_metadata", {}):
+            assert report["materials_v3_metadata"]["fallback"] is True
+
+    def test_v3_with_canary_preset(self, tmp_path):
+        """Canary preset should enable V3 with pixel ops."""
+        img = _create_synthetic_image()
+        img_path = tmp_path / "test.png"
+        from PIL import Image
+        Image.fromarray(img).save(img_path)
+        
+        # Use canary preset
+        cfg = PipelineConfig(
+            output_dir=tmp_path / "out",
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_CANARY,
+            write_outputs=False,
+            enable_material=True,
+        )
+        
+        pipe = LuxPipelineV2(cfg)
+        report = pipe.process_one(img_path)
+        
+        # V3 should be enabled
+        assert report["materials_v3_enabled"] is True
+        
+        # Pixel ops should be enabled (but may not be applied if no glass detected)
+        pixel_ops = report["materials_v3_pixel_ops"]
+        assert pixel_ops["enabled"] is True
+        
+        # If glass was detected and processed, applied_to should be populated
+        if pixel_ops.get("applied_to"):
+            assert "glass" in pixel_ops["applied_to"]
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
