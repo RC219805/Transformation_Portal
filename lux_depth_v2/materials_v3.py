@@ -27,6 +27,45 @@ from .backends.prompt_generation import PromptGenerationConfig  # Use PR-2 teste
 log = setup_logging(__name__)
 
 
+@dataclass
+class WaterCandidateReport:
+    """Water detection telemetry (PR-W0: always present when Materials V3 enabled).
+    
+    Provides observability into water detection regardless of source:
+    - SegFormer-detected water (source="segformer")
+    - Heuristic-detected water (source="heuristic")
+    - No water detected (source="none")
+    
+    PR-W2 adds optional mask field for debugging/visualization.
+    PR-W3 adds edge refinement tracking.
+    """
+    present: bool  # Water detected and passed thresholds
+    coverage: float  # 0.0-1.0 (fraction of image)
+    coverage_px: int  # Absolute pixel count
+    confidence: float  # 0.0-1.0 (detection confidence)
+    source: str  # segformer|heuristic|efficientsam_refined|none
+    reason: str  # Explanation (e.g., "heuristic_confidence_0.750", "water_detection_disabled")
+    mask: Optional[np.ndarray] = None  # PR-W2: Optional mask for debugging
+    # PR-W3: Edge refinement tracking
+    edge_refined: bool = False  # True if edge refinement was applied
+    edge_refinement_boundary_px: int = 0  # Boundary pixel count (for BF1 gating)
+    edge_refinement_applied: bool = False  # True if refinement successful
+    
+    def to_dict(self) -> dict:
+        """Convert to JSON-serializable dict (excludes mask field)."""
+        return {
+            "present": self.present,
+            "coverage": float(self.coverage),
+            "coverage_px": int(self.coverage_px),
+            "confidence": float(self.confidence),
+            "source": self.source,
+            "reason": self.reason,
+            "edge_refined": self.edge_refined,
+            "edge_refinement_boundary_px": int(self.edge_refinement_boundary_px),
+            "edge_refinement_applied": self.edge_refinement_applied,
+        }
+
+
 class MaterialTaxonomy(str, Enum):
     """Material taxonomy depth for segmentation."""
     
@@ -185,6 +224,20 @@ class MaterialsV3Config:
     # When True, bypass response_plan.should_refine for glass so we can validate
     # pixel ops behavior at least once. Must remain False in production presets.
     force_glass_pixel_ops: bool = False
+    
+    # PR-4D: Stone pixel operations
+    stone_response_enabled: bool = False  # Specific toggle for stone
+    force_stone_pixel_ops: bool = False  # Validation-only override (dev-only)
+    
+    # PR-W0/W2: Water detection (opt-in only)
+    water_detection_enabled: bool = False  # Master gate for water candidate detection
+    water_candidate_confidence_threshold: float = 0.4  # Minimum confidence to inject
+    water_min_coverage: float = 0.05  # Minimum coverage (5% of image) to inject
+    
+    # PR-W3: Water edge refinement (opt-in, after candidate exists)
+    water_edge_refinement_enabled: bool = False  # Master gate for edge refinement
+    water_edge_refinement_min_confidence: float = 0.5  # Only refine high-confidence candidates
+    water_edge_refinement_min_boundary_px: int = 100  # Avoid BF1 failures on tiny boundaries
 
 
 class MaterialsV3Engine:
@@ -209,6 +262,13 @@ class MaterialsV3Engine:
             NotImplementedError: Scaffolding only
         """
         self.config = config
+        
+        # PR-W2: Initialize water detector (lazy, only when enabled)
+        self.water_detector = None
+        if config.water_detection_enabled:
+            from .water_candidate import WaterCandidateDetector
+            self.water_detector = WaterCandidateDetector()
+            log.info("Water candidate detection enabled")
         
         if config.enabled:
             log.info("Materials V3 enabled (experimental)")
@@ -298,6 +358,477 @@ class MaterialsV3Engine:
         
         return audit
     
+    def _build_water_audit(
+        self,
+        raw_materials: dict,
+        canonical_materials: dict,
+        water_candidate: WaterCandidateReport,
+        h: int,
+        w: int,
+    ) -> dict:
+        """Build water-specific audit for class presence audit.
+        
+        PR-W0/W2: Water audit includes both SegFormer and candidate detection metrics.
+        
+        Args:
+            raw_materials: Original output from segmenter
+            canonical_materials: After taxonomy normalization
+            water_candidate: Water candidate detection report
+            h, w: Image dimensions for coverage calculation
+            
+        Returns:
+            Water audit dict with raw_present, raw_coverage, candidate_* fields
+        """
+        from .materials_v3_taxonomy import normalize_material_name
+        
+        total_pixels = h * w
+        
+        # Check if SegFormer emitted water
+        raw_water_present = "water" in raw_materials
+        canonical_water_present = "water" in canonical_materials
+        
+        # Compute raw coverage from SegFormer
+        raw_coverage = 0.0
+        if raw_water_present:
+            water_mask = raw_materials["water"]
+            if isinstance(water_mask, np.ndarray):
+                if water_mask.dtype == bool:
+                    raw_coverage = float(water_mask.sum() / total_pixels)
+                else:
+                    raw_coverage = float((water_mask > 0.5).sum() / total_pixels)
+        elif canonical_water_present:
+            # May have been mapped from different name
+            water_mask = canonical_materials["water"]
+            if isinstance(water_mask, np.ndarray):
+                if water_mask.dtype == bool:
+                    raw_coverage = float(water_mask.sum() / total_pixels)
+                else:
+                    raw_coverage = float((water_mask > 0.5).sum() / total_pixels)
+        
+        return {
+            "raw_present": raw_water_present or canonical_water_present,
+            "raw_coverage": raw_coverage,
+            "candidate_present": water_candidate.present,
+            "candidate_coverage": water_candidate.coverage,
+            "candidate_source": water_candidate.source,
+        }
+    
+    def _infer_scene_context(
+        self,
+        canonical_materials: dict,
+    ):
+        """Infer pool vs ocean vs unknown from materials.
+        
+        PR-W2: Simple heuristic scene context for water detection tuning.
+        
+        Args:
+            canonical_materials: Canonical material dict
+            
+        Returns:
+            SceneContext enum value
+        """
+        from .water_candidate import SceneContext
+        
+        # Simple heuristic: if building/architecture present -> pool
+        # If large sky/horizon -> ocean, otherwise unknown
+        if "building" in canonical_materials or "wall" in canonical_materials:
+            return SceneContext.POOL
+        elif "sky" in canonical_materials:
+            sky_mask = canonical_materials["sky"]
+            if isinstance(sky_mask, np.ndarray):
+                if sky_mask.dtype == bool:
+                    sky_coverage = float(sky_mask.sum() / sky_mask.size)
+                else:
+                    sky_coverage = float((sky_mask > 0.5).sum() / sky_mask.size)
+                
+                if sky_coverage > 0.3:
+                    return SceneContext.OCEAN
+        
+        return SceneContext.UNKNOWN
+    
+    def _detect_water_candidate(
+        self,
+        rgb01: np.ndarray,
+        depth01: Optional[np.ndarray],
+        canonical_materials: dict,
+    ) -> WaterCandidateReport:
+        """Run water candidate detection (PR-W2).
+        
+        Checks if SegFormer already provided water, otherwise runs heuristic detector.
+        
+        Args:
+            rgb01: RGB image (HxWx3 float32 in [0,1])
+            depth01: Optional depth map (HxW float32)
+            canonical_materials: Canonical materials dict
+            
+        Returns:
+            WaterCandidateReport with detection results
+        """
+        h, w = rgb01.shape[:2]
+        total_pixels = h * w
+        
+        # If water detection disabled, return disabled report
+        if not self.config.water_detection_enabled:
+            return WaterCandidateReport(
+                present=False,
+                coverage=0.0,
+                coverage_px=0,
+                confidence=0.0,
+                source="none",
+                reason="water_detection_disabled",
+                mask=None,
+            )
+        
+        # Check if SegFormer already provided water with sufficient coverage
+        if "water" in canonical_materials:
+            water_mask = canonical_materials["water"]
+            if isinstance(water_mask, np.ndarray):
+                if water_mask.dtype == bool:
+                    coverage = float(water_mask.sum() / total_pixels)
+                else:
+                    coverage = float((water_mask > 0.5).sum() / total_pixels)
+                
+                coverage_px = int(coverage * total_pixels)
+                
+                # If SegFormer water has sufficient coverage, use it
+                if coverage >= self.config.water_min_coverage:
+                    return WaterCandidateReport(
+                        present=True,
+                        coverage=coverage,
+                        coverage_px=coverage_px,
+                        confidence=1.0,  # Trust SegFormer when it emits water
+                        source="segformer",
+                        reason="segformer_emitted_sufficient_coverage",
+                        mask=water_mask.astype(np.float32) if water_mask.dtype == bool else water_mask,
+                    )
+        
+        # Run heuristic detector
+        scene_context = self._infer_scene_context(canonical_materials)
+        result = self.water_detector.detect(rgb01, depth01, scene_context)
+        
+        # PR-W3: Optional edge refinement (only if candidate exists and passes thresholds)
+        refined_mask = None
+        edge_refined = False
+        edge_refinement_boundary_px = 0
+        edge_refinement_applied = False
+        
+        if result.confidence >= self.config.water_candidate_confidence_threshold:
+            refined_mask = self._refine_water_edges(
+                rgb01=rgb01,
+                water_candidate_mask=result.mask,
+                water_confidence=result.confidence
+            )
+            
+            if refined_mask is not None:
+                edge_refined = True
+                edge_refinement_applied = True
+                # Update coverage with refined mask
+                h, w = rgb01.shape[:2]
+                refined_coverage = float((refined_mask > 0.5).sum() / (h * w))
+                refined_coverage_px = int((refined_mask > 0.5).sum())
+                
+                # Compute boundary pixels for reporting
+                boundary_mask = self._extract_boundary(result.mask, width=5)
+                edge_refinement_boundary_px = int(np.sum(boundary_mask))
+                
+                return WaterCandidateReport(
+                    present=result.confidence >= self.config.water_candidate_confidence_threshold,
+                    coverage=refined_coverage,
+                    coverage_px=refined_coverage_px,
+                    confidence=result.confidence,
+                    source="efficientsam_refined",
+                    reason=f"heuristic_confidence_{result.confidence:.3f}_edge_refined",
+                    mask=refined_mask,
+                    edge_refined=edge_refined,
+                    edge_refinement_boundary_px=edge_refinement_boundary_px,
+                    edge_refinement_applied=edge_refinement_applied,
+                )
+        
+        # No refinement applied, return heuristic result
+        return WaterCandidateReport(
+            present=result.confidence >= self.config.water_candidate_confidence_threshold,
+            coverage=result.coverage,
+            coverage_px=result.coverage_px,
+            confidence=result.confidence,
+            source="heuristic",
+            reason=f"heuristic_confidence_{result.confidence:.3f}",
+            mask=result.mask,
+            edge_refined=edge_refined,
+            edge_refinement_boundary_px=edge_refinement_boundary_px,
+            edge_refinement_applied=edge_refinement_applied,
+        )
+    
+    def _should_inject_water_candidate(
+        self,
+        water_candidate: WaterCandidateReport,
+    ) -> bool:
+        """Decide if candidate should be added to canonical materials (PR-W2).
+        
+        Args:
+            water_candidate: Water candidate detection report
+            
+        Returns:
+            True if candidate passes thresholds and should be injected
+        """
+        return (
+            water_candidate.present and
+            water_candidate.source == "heuristic" and  # Only inject heuristics, not SegFormer
+            water_candidate.coverage >= self.config.water_min_coverage and
+            water_candidate.confidence >= self.config.water_candidate_confidence_threshold
+        )
+    
+    def _build_water_material(
+        self,
+        water_candidate: WaterCandidateReport,
+    ) -> np.ndarray:
+        """Convert water candidate to material mask (PR-W2).
+        
+        Args:
+            water_candidate: Water candidate detection report
+            
+        Returns:
+            Water mask as numpy array (HxW float32)
+        """
+        # Return the mask from candidate (already float32)
+        return water_candidate.mask
+    
+    def _extract_boundary(
+        self,
+        mask: np.ndarray,
+        width: int = 5
+    ) -> np.ndarray:
+        """Extract boundary region of mask (PR-W3).
+        
+        Args:
+            mask: Binary or float mask (HxW)
+            width: Boundary width in pixels
+            
+        Returns:
+            Boundary mask as float32
+        """
+        from scipy import ndimage
+        
+        # Convert to binary if needed
+        binary_mask = mask > 0.5
+        
+        # Dilate and erode to get boundary
+        dilated = ndimage.binary_dilation(binary_mask, iterations=width)
+        eroded = ndimage.binary_erosion(binary_mask, iterations=width)
+        boundary = (dilated & ~eroded).astype(np.float32)
+        
+        return boundary
+    
+    def _sample_prompts_from_mask(
+        self,
+        mask: np.ndarray,
+        confidence_threshold: float = 0.7,
+        num_samples: int = 5
+    ) -> List[Tuple[int, int]]:
+        """Sample point prompts from high-confidence regions (PR-W3).
+        
+        Args:
+            mask: Float mask (HxW)
+            confidence_threshold: Sample only where mask > threshold
+            num_samples: Target number of prompts
+            
+        Returns:
+            List of (y, x) coordinates
+        """
+        # Find high-confidence pixels
+        high_conf = mask > confidence_threshold
+        y_coords, x_coords = np.where(high_conf)
+        
+        if len(y_coords) == 0:
+            # Fallback: sample from any positive region
+            high_conf = mask > 0.5
+            y_coords, x_coords = np.where(high_conf)
+        
+        if len(y_coords) == 0:
+            return []
+        
+        # Sample uniformly
+        num_samples = min(num_samples, len(y_coords))
+        indices = np.linspace(0, len(y_coords) - 1, num_samples, dtype=int)
+        
+        prompts = [(int(y_coords[i]), int(x_coords[i])) for i in indices]
+        return prompts
+    
+    def _compute_roi_bbox(
+        self,
+        mask: np.ndarray,
+        padding: int = 50
+    ) -> Tuple[int, int, int, int]:
+        """Compute ROI bounding box around mask region (PR-W3).
+        
+        Args:
+            mask: Binary or float mask (HxW)
+            padding: Padding pixels around bbox
+            
+        Returns:
+            (y0, y1, x0, x1) bounding box
+        """
+        # Find non-zero regions
+        binary_mask = mask > 0.5
+        y_coords, x_coords = np.where(binary_mask)
+        
+        if len(y_coords) == 0:
+            # Fallback: full image
+            h, w = mask.shape
+            return (0, h, 0, w)
+        
+        # Compute bbox with padding
+        y0 = max(0, y_coords.min() - padding)
+        y1 = min(mask.shape[0], y_coords.max() + padding)
+        x0 = max(0, x_coords.min() - padding)
+        x1 = min(mask.shape[1], x_coords.max() + padding)
+        
+        return (int(y0), int(y1), int(x0), int(x1))
+    
+    def _crop_to_roi(
+        self,
+        image: np.ndarray,
+        bbox: Tuple[int, int, int, int]
+    ) -> np.ndarray:
+        """Crop image to ROI (PR-W3).
+        
+        Args:
+            image: Image array (HxW or HxWxC)
+            bbox: (y0, y1, x0, x1) bounding box
+            
+        Returns:
+            Cropped image
+        """
+        y0, y1, x0, x1 = bbox
+        return image[y0:y1, x0:x1]
+    
+    def _uncrop_from_roi(
+        self,
+        mask_roi: np.ndarray,
+        bbox: Tuple[int, int, int, int],
+        full_shape: Tuple[int, int]
+    ) -> np.ndarray:
+        """Map ROI mask back to full resolution (PR-W3).
+        
+        Args:
+            mask_roi: Mask in ROI coordinates
+            bbox: (y0, y1, x0, x1) bounding box
+            full_shape: (H, W) of full image
+            
+        Returns:
+            Full-resolution mask
+        """
+        y0, y1, x0, x1 = bbox
+        full_mask = np.zeros(full_shape, dtype=mask_roi.dtype)
+        full_mask[y0:y1, x0:x1] = mask_roi
+        return full_mask
+    
+    def _refine_water_edges(
+        self,
+        rgb01: np.ndarray,
+        water_candidate_mask: np.ndarray,
+        water_confidence: float
+    ) -> Optional[np.ndarray]:
+        """Refine water edges using EfficientSAM (PR-W3).
+        
+        Only runs after candidate exists and passes thresholds.
+        
+        Args:
+            rgb01: RGB image (HxWx3 float32 in [0,1])
+            water_candidate_mask: Water candidate mask (HxW float32)
+            water_confidence: Confidence score
+            
+        Returns:
+            Refined mask if successful, None otherwise
+        """
+        # Gate 1: Feature disabled
+        if not self.config.water_edge_refinement_enabled:
+            return None
+        
+        # Gate 2: Confidence too low
+        if water_confidence < self.config.water_edge_refinement_min_confidence:
+            log.debug(
+                f"PR-W3: Skipping edge refinement (confidence {water_confidence:.3f} "
+                f"< threshold {self.config.water_edge_refinement_min_confidence})"
+            )
+            return None
+        
+        # Gate 3: Extract boundary and check size (BF1 avoidance)
+        boundary_mask = self._extract_boundary(water_candidate_mask, width=5)
+        boundary_px = int(np.sum(boundary_mask))
+        
+        if boundary_px < self.config.water_edge_refinement_min_boundary_px:
+            log.debug(
+                f"PR-W3: Skipping edge refinement (boundary {boundary_px}px "
+                f"< min {self.config.water_edge_refinement_min_boundary_px}px)"
+            )
+            return None
+        
+        # Generate prompts from high-confidence regions
+        prompts = self._sample_prompts_from_mask(
+            water_candidate_mask,
+            confidence_threshold=0.7,
+            num_samples=5
+        )
+        
+        if len(prompts) == 0:
+            log.debug("PR-W3: No high-confidence prompts found, skipping refinement")
+            return None
+        
+        # Compute ROI bbox around candidate region
+        roi_bbox = self._compute_roi_bbox(water_candidate_mask, padding=50)
+        rgb_roi = self._crop_to_roi(rgb01, roi_bbox)
+        
+        # Try to run EfficientSAM
+        try:
+            # Check if EfficientSAM backend is available
+            from .backends.efficientsam_backend import (
+                EfficientSAMBackend,
+                EfficientSAMNotAvailable,
+                PointPrompt
+            )
+            
+            # Adjust prompts to ROI coordinates and create PointPrompt objects
+            y0, y1, x0, x1 = roi_bbox
+            h_roi, w_roi = rgb_roi.shape[:2]
+            
+            # Convert to normalized coordinates and PointPrompt objects
+            roi_prompts = []
+            for y, x in prompts:
+                # Adjust to ROI coordinates
+                y_roi = y - y0
+                x_roi = x - x0
+                # Normalize to [0, 1]
+                y_norm = y_roi / h_roi
+                x_norm = x_roi / w_roi
+                # Create PointPrompt (label=1 for foreground)
+                roi_prompts.append(PointPrompt(x=x_norm, y=y_norm, label=1))
+            
+            # Initialize backend (lazy load)
+            sam_backend = EfficientSAMBackend()
+            
+            # Convert RGB to uint8 if needed (EfficientSAM expects uint8 or float32)
+            rgb_roi_uint8 = (rgb_roi * 255).astype(np.uint8) if rgb_roi.dtype == np.float32 else rgb_roi
+            
+            # Run segmentation
+            sam_mask_roi = sam_backend.segment(
+                rgb_roi_uint8,
+                prompts=roi_prompts
+            )
+            
+            # Map back to full resolution
+            refined_mask = self._uncrop_from_roi(sam_mask_roi, roi_bbox, rgb01.shape[:2])
+            
+            log.info(
+                f"PR-W3: Edge refinement successful "
+                f"(boundary={boundary_px}px, prompts={len(prompts)})"
+            )
+            return refined_mask
+            
+        except Exception as e:
+            # Graceful degradation: log warning and return None
+            log.warning(f"PR-W3: Edge refinement failed ({e}), using original mask")
+            return None
+    
     def process(
         self,
         image: np.ndarray,
@@ -345,6 +876,18 @@ class MaterialsV3Engine:
         
         # PR-3A Step 1: Canonicalize material keys
         canonical_materials = normalize_material_dict(raw_materials)
+        
+        # PR-W2: Water candidate detection (before per-class stats)
+        water_candidate = self._detect_water_candidate(
+            rgb01=image,  # Assume image is already [0,1] float32
+            depth01=depth_map,
+            canonical_materials=canonical_materials,
+        )
+        
+        # PR-W2: Inject water candidate if it passes thresholds
+        if self._should_inject_water_candidate(water_candidate):
+            canonical_materials["water"] = self._build_water_material(water_candidate)
+            log.info(f"PR-W2: Injected heuristic water mask (confidence={water_candidate.confidence:.3f}, coverage={water_candidate.coverage:.3f})")
         
         # NEW: Class presence audit (addresses Stage 6 "water missing" issue)
         class_audit = self._audit_class_presence(
@@ -395,6 +938,16 @@ class MaterialsV3Engine:
             }
         
         # PR-3A Step 4: Attach V3 metadata to result (no pixel modifications)
+        # PR-W0/W2: Add water audit to class_presence_audit
+        water_audit = self._build_water_audit(
+            raw_materials=raw_materials,
+            canonical_materials=canonical_materials,
+            water_candidate=water_candidate,
+            h=h,
+            w=w,
+        )
+        class_audit["water"] = water_audit
+        
         segmentation_result['materials_v3'] = {
             "enabled": True,
             "taxonomy": self.config.taxonomy.value,
@@ -402,6 +955,7 @@ class MaterialsV3Engine:
             "per_class_stats": per_class_stats,
             "canonical_materials": list(canonical_materials.keys()),
             "class_presence_audit": class_audit,  # NEW: diagnose missing classes
+            "water_candidate": water_candidate.to_dict(),  # PR-W0/W2: Water detection report (JSON-safe)
         }
         
         # PR-4A: Generate response plan (PR-4C: pass RGB for edge signals)
@@ -578,3 +1132,101 @@ class MaterialsV3Engine:
             "reason": plan_reason,
             "glass_stats": stats,
         }
+
+    def apply_stone_response_if_enabled(
+        self,
+        image: np.ndarray,
+        segmentation_result: dict,
+        response_plan: dict,
+    ) -> Tuple[np.ndarray, dict]:
+        """Apply stone pixel response if enabled and stone is present.
+        
+        PR-4D: Stone-only pixel operations (canary)
+        
+        Args:
+            image: HxWx3 float32 RGB in [0,1]
+            segmentation_result: Result from material_segmentation
+            response_plan: Response plan from PR-4A
+            
+        Returns:
+            Enhanced image (HxWx3 float32) + pixel_ops_stats dict
+        """
+        # Check if pixel ops are enabled
+        pixel_ops_enabled = getattr(self.config, 'apply_pixel_ops', False)
+        stone_enabled = getattr(self.config, 'stone_response_enabled', False)
+        
+        if not pixel_ops_enabled or not stone_enabled:
+            return image, {"enabled": False, "reason": "disabled_by_config"}
+        
+        # Check if stone should be enhanced per response plan
+        per_class = response_plan.get("per_class", {})
+        stone_plan = per_class.get("stone", {})
+        
+        should_refine = bool(stone_plan.get("should_refine", False))
+        plan_reason = (
+            stone_plan.get("refine_reason")
+            or stone_plan.get("skip_reason")
+            or stone_plan.get("reason")
+            or None
+        )
+        
+        forced = bool(getattr(self.config, "force_stone_pixel_ops", False))
+        if forced:
+            # Validation-only: force apply to prove pixel ops correctness.
+            should_refine = True
+            plan_reason = "force_stone_pixel_ops"
+        
+        if not should_refine:
+            return image, {
+                "enabled": True,
+                "applied_to": [],
+                "applied": False,
+                "reason": plan_reason or "plan_skip_no_reason",
+                "forced": forced,
+            }
+        
+        # Extract stone mask
+        canonical_materials = segmentation_result.get("materials", {})
+        from .materials_v3_taxonomy import normalize_material_dict
+        normalized = normalize_material_dict(canonical_materials)
+        
+        stone_mask = normalized.get("stone")
+        if stone_mask is None:
+            return image, {"enabled": False, "reason": "stone_mask_missing"}
+        
+        # Convert mask to numpy float32 if needed
+        if hasattr(stone_mask, 'cpu'):  # torch tensor
+            stone_mask = stone_mask.cpu().numpy()
+        if stone_mask.ndim == 4:  # (1,1,H,W)
+            stone_mask = stone_mask[0, 0]
+        elif stone_mask.ndim == 3:  # (1,H,W)
+            stone_mask = stone_mask[0]
+        
+        stone_mask = stone_mask.astype(np.float32)
+        
+        # Apply stone response
+        from .materials_v3_pixel_ops_stone import (
+            StoneResponseConfig,
+            apply_stone_response,
+        )
+        
+        stone_cfg = StoneResponseConfig()
+        enhanced, stats = apply_stone_response(image, stone_mask, stone_cfg, stone_plan)
+        
+        if stats.get('applied', False):
+            log.info(
+                f"PR-4D Stone Response: "
+                f"core={stats.get('core_px', 0)}px, edge={stats.get('edge_px', 0)}px, "
+                f"mean_delta={stats.get('mean_delta', 0):.4f}, "
+                f"halo_risk={stats.get('halo_risk', 'N/A')}"
+            )
+        
+        return enhanced, {
+            "enabled": True,
+            "applied": stats.get('applied', False),
+            "applied_to": ["stone"] if stats.get('applied', False) else [],
+            "forced": forced,
+            "reason": plan_reason if stats.get('applied', False) else stats.get('reason', 'unknown'),
+            "stone_stats": stats,
+        }
+
