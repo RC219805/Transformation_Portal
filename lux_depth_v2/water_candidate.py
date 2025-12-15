@@ -5,14 +5,31 @@ Uses multi-cue analysis (chromaticity, specular, texture, planarity) to generate
 high-recall candidate water masks.
 
 Stage: Production (PR-W1 Complete)
-Dependencies: numpy, scipy, scikit-image (CPU-only, CI-safe)
+Dependencies: numpy, scipy (optional), scikit-image (optional), torch (optional)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
+
+# Optional dependencies (graceful degradation if missing)
+try:
+    from scipy import ndimage as scipy_ndimage
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    scipy_ndimage = None
+
+try:
+    from skimage.filters.rank import entropy as skimage_entropy
+    from skimage.morphology import disk as skimage_disk
+    SKIMAGE_AVAILABLE = True
+except ImportError:
+    SKIMAGE_AVAILABLE = False
+    skimage_entropy = None
+    skimage_disk = None
 
 
 class SceneContext(Enum):
@@ -179,8 +196,6 @@ class WaterCandidateDetector:
         self, rgb01: np.ndarray, hsv: np.ndarray
     ) -> Tuple[np.ndarray, float]:
         """High highlights + low saturation pockets (water reflections)."""
-        from scipy import ndimage
-        
         val = hsv[:, :, 2]
         sat = hsv[:, :, 1]
         
@@ -188,17 +203,22 @@ class WaterCandidateDetector:
         specular = (val >= self.params.specular_highlight_threshold) & \
                    (sat <= self.params.specular_low_sat_threshold)
         
-        # Dilate slightly to capture reflection context
-        mask = ndimage.binary_dilation(specular, iterations=2).astype(np.float32)
+        # Dilate slightly to capture reflection context (if scipy available)
+        if SCIPY_AVAILABLE:
+            mask = scipy_ndimage.binary_dilation(specular, iterations=2).astype(np.float32)
+        else:
+            # Fallback: simple mask without dilation
+            mask = specular.astype(np.float32)
         score = float(np.mean(mask))
         
         return mask, score
     
     def _texture_cue(self, rgb01: np.ndarray) -> Tuple[np.ndarray, float]:
         """Water tends to be lower-frequency than foliage/stone."""
-        from scipy import ndimage
-        from skimage.filters.rank import entropy
-        from skimage.morphology import disk
+        if not SKIMAGE_AVAILABLE:
+            # Fallback: return neutral mask
+            mask = np.ones_like(rgb01[:, :, 0], dtype=np.float32) * 0.5
+            return mask, 0.5
         
         # Convert to grayscale
         gray = np.mean(rgb01, axis=2)
@@ -206,7 +226,7 @@ class WaterCandidateDetector:
         # Local entropy (lower for water)
         # Use uint8 for entropy calculation
         gray_uint8 = (gray * 255).astype(np.uint8)
-        local_entropy = entropy(gray_uint8, disk(5))
+        local_entropy = skimage_entropy(gray_uint8, skimage_disk(5))
         
         # Normalize and invert (low entropy = high score)
         entropy_norm = local_entropy / 8.0  # Max entropy for 8-bit
@@ -219,11 +239,14 @@ class WaterCandidateDetector:
         self, depth01: np.ndarray
     ) -> Tuple[np.ndarray, float]:
         """Low depth-gradient bands if depth is present (optional)."""
-        from scipy import ndimage
+        if not SCIPY_AVAILABLE:
+            # Fallback: return neutral mask
+            mask = np.ones_like(depth01, dtype=np.float32) * 0.5
+            return mask, 0.5
         
         # Compute depth gradients
-        grad_x = ndimage.sobel(depth01, axis=1)
-        grad_y = ndimage.sobel(depth01, axis=0)
+        grad_x = scipy_ndimage.sobel(depth01, axis=1)
+        grad_y = scipy_ndimage.sobel(depth01, axis=0)
         grad_mag = np.sqrt(grad_x**2 + grad_y**2)
         
         # Low gradient = planar surface
@@ -255,7 +278,10 @@ class WaterCandidateDetector:
     
     def _postprocess(self, mask: np.ndarray) -> np.ndarray:
         """Morphological operations and hole filling."""
-        from scipy import ndimage
+        if not SCIPY_AVAILABLE or not SKIMAGE_AVAILABLE:
+            # Fallback: simple threshold
+            return (mask > 0.5).astype(np.float32)
+        
         from skimage.morphology import disk, binary_closing, binary_opening
         
         # Threshold to binary
@@ -277,7 +303,7 @@ class WaterCandidateDetector:
         
         # Fill holes
         if self.params.hole_fill_enabled:
-            binary_mask = ndimage.binary_fill_holes(binary_mask)
+            binary_mask = scipy_ndimage.binary_fill_holes(binary_mask)
         
         return binary_mask.astype(np.float32)
     
@@ -285,16 +311,18 @@ class WaterCandidateDetector:
         self, mask: np.ndarray
     ) -> Tuple[np.ndarray, float]:
         """Keep top-K components by area; suppress tiny blobs."""
-        from scipy import ndimage
+        if not SCIPY_AVAILABLE:
+            # Fallback: return mask as-is
+            return mask, 1.0
         
         # Label connected components
-        labeled, num_features = ndimage.label(mask > 0.5)
+        labeled, num_features = scipy_ndimage.label(mask > 0.5)
         
         if num_features == 0:
             return mask, 0.0
         
         # Compute component sizes
-        component_sizes = ndimage.sum(
+        component_sizes = scipy_ndimage.sum(
             mask, labeled, range(1, num_features + 1)
         )
         
