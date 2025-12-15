@@ -363,6 +363,12 @@ class WaterValidationHarness:
             "false_positive_rate": float(sum(r.is_false_positive for r in results) / max(len(should_detect_false), 1)),
         }
 
+        # Self-check: ensure summary aggregates match per-image flags (prevent silent drift)
+        assert summary["false_positive_count"] == summary["false_trigger_count"], \
+            f"Summary inconsistency: false_positive_count={summary['false_positive_count']} != false_trigger_count={summary['false_trigger_count']}"
+        assert abs(summary["false_positive_rate"] - summary["false_trigger_rate"]) < 1e-9, \
+            f"Summary inconsistency: false_positive_rate={summary['false_positive_rate']} != false_trigger_rate={summary['false_trigger_rate']}"
+
         report = {
             "summary": summary,
             "results": [vars(r) for r in results]
