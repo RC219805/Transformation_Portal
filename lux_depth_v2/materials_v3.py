@@ -781,20 +781,38 @@ class MaterialsV3Engine:
         # Try to run EfficientSAM
         try:
             # Check if EfficientSAM backend is available
-            from .backends.efficientsam_backend import EfficientSAMBackend, EfficientSAMNotAvailable
+            from .backends.efficientsam_backend import (
+                EfficientSAMBackend,
+                EfficientSAMNotAvailable,
+                PointPrompt
+            )
             
-            # Adjust prompts to ROI coordinates
+            # Adjust prompts to ROI coordinates and create PointPrompt objects
             y0, y1, x0, x1 = roi_bbox
-            roi_prompts = [(y - y0, x - x0) for y, x in prompts]
+            h_roi, w_roi = rgb_roi.shape[:2]
+            
+            # Convert to normalized coordinates and PointPrompt objects
+            roi_prompts = []
+            for y, x in prompts:
+                # Adjust to ROI coordinates
+                y_roi = y - y0
+                x_roi = x - x0
+                # Normalize to [0, 1]
+                y_norm = y_roi / h_roi
+                x_norm = x_roi / w_roi
+                # Create PointPrompt (label=1 for foreground)
+                roi_prompts.append(PointPrompt(x=x_norm, y=y_norm, label=1))
             
             # Initialize backend (lazy load)
             sam_backend = EfficientSAMBackend()
             
-            # Run segmentation (mock for now if model unavailable)
+            # Convert RGB to uint8 if needed (EfficientSAM expects uint8 or float32)
+            rgb_roi_uint8 = (rgb_roi * 255).astype(np.uint8) if rgb_roi.dtype == np.float32 else rgb_roi
+            
+            # Run segmentation
             sam_mask_roi = sam_backend.segment(
-                rgb_roi,
-                point_prompts=roi_prompts,
-                multimask_output=False
+                rgb_roi_uint8,
+                prompts=roi_prompts
             )
             
             # Map back to full resolution
@@ -868,8 +886,15 @@ class MaterialsV3Engine:
         
         # PR-W2: Inject water candidate if it passes thresholds
         if self._should_inject_water_candidate(water_candidate):
-            canonical_materials["water"] = self._build_water_material(water_candidate)
-            log.info(f"PR-W2: Injected heuristic water mask (confidence={water_candidate.confidence:.3f}, coverage={water_candidate.coverage:.3f})")
+            water_mask = self._build_water_material(water_candidate)
+            canonical_materials["water"] = water_mask
+            # Also inject into original materials dict so it's visible to downstream
+            segmentation_result['materials']["water"] = water_mask
+            log.info(
+                f"PR-W2: Injected heuristic water mask "
+                f"(confidence={water_candidate.confidence:.3f}, "
+                f"coverage={water_candidate.coverage:.3f})"
+            )
         
         # NEW: Class presence audit (addresses Stage 6 "water missing" issue)
         class_audit = self._audit_class_presence(
@@ -937,7 +962,7 @@ class MaterialsV3Engine:
             "per_class_stats": per_class_stats,
             "canonical_materials": list(canonical_materials.keys()),
             "class_presence_audit": class_audit,  # NEW: diagnose missing classes
-            "water_candidate": water_candidate.to_dict(),  # PR-W0/W2: Water detection report (JSON-safe)
+            "water_candidate": water_candidate,  # PR-W0/W2: Water detection report (keep as dataclass)
         }
         
         # PR-4A: Generate response plan (PR-4C: pass RGB for edge signals)
