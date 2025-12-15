@@ -358,9 +358,9 @@ class WaterValidationHarness:
             # Performance
             "overall_avg_processing_time_ms": float(np.mean([r.processing_time_ms for r in results])),
 
-            # Deprecated (kept for compatibility)
-            "false_positive_count": 0,
-            "false_positive_rate": 0.0,
+            # Deprecated (kept for compatibility) - same as false_trigger_*
+            "false_positive_count": sum(r.is_false_positive for r in results),
+            "false_positive_rate": float(sum(r.is_false_positive for r in results) / max(len(should_detect_false), 1)),
         }
 
         report = {
