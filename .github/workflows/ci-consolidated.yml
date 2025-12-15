@@ -438,7 +438,7 @@ jobs:
         run: |
           set +e
           python scripts/check_regression.py \
-            --baseline data/water_v0/baseline_ci_v0.json \
+            --baseline data/water_v0/baseline_ci_current_v1.json \
             --current outputs/water_validation_current.json \
             --mode warning
           ec=$?
