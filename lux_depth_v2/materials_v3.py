@@ -886,8 +886,15 @@ class MaterialsV3Engine:
         
         # PR-W2: Inject water candidate if it passes thresholds
         if self._should_inject_water_candidate(water_candidate):
-            canonical_materials["water"] = self._build_water_material(water_candidate)
-            log.info(f"PR-W2: Injected heuristic water mask (confidence={water_candidate.confidence:.3f}, coverage={water_candidate.coverage:.3f})")
+            water_mask = self._build_water_material(water_candidate)
+            canonical_materials["water"] = water_mask
+            # Also inject into original materials dict so it's visible to downstream
+            segmentation_result['materials']["water"] = water_mask
+            log.info(
+                f"PR-W2: Injected heuristic water mask "
+                f"(confidence={water_candidate.confidence:.3f}, "
+                f"coverage={water_candidate.coverage:.3f})"
+            )
         
         # NEW: Class presence audit (addresses Stage 6 "water missing" issue)
         class_audit = self._audit_class_presence(
