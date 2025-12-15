@@ -232,11 +232,10 @@ def test_false_trigger_detection():
         # If water is detected despite should_detect=false, mark as false trigger
         if result.coverage > 0 and result.confidence > 0:
             assert result.is_false_trigger is True
+            assert result.is_false_positive is True  # Legacy alias should match
         else:
             assert result.is_false_trigger is False
-        
-        # Legacy field should always be False in v0
-        assert result.is_false_positive is False
+            assert result.is_false_positive is False  # Legacy alias should match
 
     finally:
         temp_path.unlink()
@@ -546,7 +545,7 @@ def test_report_summary_statistics():
             edge_alignment_score=0.10,
             boundary_px=50,
             stability_score=0.95,
-            is_false_positive=False,
+            is_false_positive=True,  # Legacy alias for is_false_trigger
             is_false_trigger=True,  # Detected despite should_detect=false
             processing_time_ms=38.0
         )
@@ -587,9 +586,9 @@ def test_report_summary_statistics():
         assert summary["false_trigger_count"] == 1
         assert summary["false_trigger_rate"] == pytest.approx(1.0, abs=0.01)
 
-        # Verify backward compatibility
-        assert summary["false_positive_count"] == 0
-        assert summary["false_positive_rate"] == 0.0
+        # Verify backward compatibility (should match false_trigger fields)
+        assert summary["false_positive_count"] == 1
+        assert summary["false_positive_rate"] == pytest.approx(1.0, abs=0.01)
 
         # Verify performance
         assert summary["overall_avg_processing_time_ms"] == pytest.approx(40.0, abs=0.1)  # (40 + 42 + 38) / 3
