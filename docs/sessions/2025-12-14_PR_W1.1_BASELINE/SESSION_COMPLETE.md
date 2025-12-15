@@ -42,11 +42,13 @@ Interpretation:
   - v0 proves: detector executes, schema stable, determinism works.
   - v0 is NOT a quality baseline yet (fixtures are mostly full-frame; negatives are deliberately hard).
 
-Known issue to fix next:
+Known issue (baseline v0 artifact - RESOLVED):
 
-  - Metrics naming/aggregation: baseline summary reports false_trigger_count=2
-    but false_positive_count=0 despite per-image is_false_positive=true on both negatives.
-    Align definitions or remove the redundant field.
+  - The aggregation logic in prw_water_validation.py now correctly computes false_positive_*
+    fields from per-image is_false_positive predicates (aliased to is_false_trigger).
+  - baseline_ci_v0.json has been normalized: false_positive_count=2, false_positive_rate=1.0
+    (matching false_trigger_count=2, false_trigger_rate=1.0).
+  - Both fields now accurately reflect the two hard negatives that trigger false detections.
 
 ----------------------------------------------------------------------------
 ---
