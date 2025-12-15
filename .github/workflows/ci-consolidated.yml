@@ -355,7 +355,7 @@ jobs:
             
       - name: Upload Coverage
         if: matrix.python-version == env.PYTHON_VERSION_PRIMARY
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-core-py${{ matrix.python-version }}
           path: coverage.xml
@@ -448,7 +448,7 @@ jobs:
           
       - name: Upload Current Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: water-validation-report-current
           path: outputs/water_validation_current.json
@@ -658,7 +658,7 @@ jobs:
           "
           
       - name: Upload Benchmark Results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: phase2-benchmark-results
           path: |
@@ -900,7 +900,7 @@ jobs:
         run: twine check dist/*
         
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist/
@@ -931,7 +931,7 @@ jobs:
           python tools/montecito_manifest.py . montecito_manifest.csv
           
       - name: Upload Manifest
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: montecito-manifest
           path: montecito_manifest.csv
