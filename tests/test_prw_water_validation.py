@@ -454,10 +454,10 @@ def test_report_generation():
         assert "false_trigger_count" in summary
         assert "false_trigger_rate" in summary
         
-        # Backward compatibility
+        # Backward compatibility: false_positive_* should equal false_trigger_* (PR #560 fix)
         assert "false_positive_count" in summary
-        assert summary["false_positive_count"] == 0
-        assert summary["false_positive_rate"] == 0.0
+        assert summary["false_positive_count"] == summary["false_trigger_count"]
+        assert summary["false_positive_rate"] == summary["false_trigger_rate"]
 
         # Verify results array
         assert len(report["results"]) == 3

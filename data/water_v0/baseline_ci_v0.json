@@ -20,13 +20,13 @@
     "ocean_avg_stability": 1.0,
     "false_trigger_count": 0,
     "false_trigger_rate": 0.0,
-    "overall_avg_processing_time_ms": 105.82258928375917,
+    "overall_avg_processing_time_ms": 105.97427071063846,
     "false_positive_count": 0,
     "false_positive_rate": 0.0
   },
   "results": [
     {
-      "image_path": "images/pool/pool_0001.jpg",
+      "image_path": "data/water_v0/images/pool/pool_0001.jpg",
       "scene_type": "pool",
       "should_detect": true,
       "difficulty": "easy",
@@ -44,10 +44,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 109.99083300703205
+      "processing_time_ms": 109.60712502128445
     },
     {
-      "image_path": "images/pool/pool_0003.jpg",
+      "image_path": "data/water_v0/images/pool/pool_0003.jpg",
       "scene_type": "pool",
       "should_detect": true,
       "difficulty": "easy",
@@ -66,10 +66,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 113.97754200152121
+      "processing_time_ms": 114.21258299378678
     },
     {
-      "image_path": "images/pool/pool_0005.jpg",
+      "image_path": "data/water_v0/images/pool/pool_0005.jpg",
       "scene_type": "pool",
       "should_detect": true,
       "difficulty": "medium",
@@ -87,10 +87,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 110.06149998866022
+      "processing_time_ms": 110.52379198372364
     },
     {
-      "image_path": "images/pool/pool_0007.jpg",
+      "image_path": "data/water_v0/images/pool/pool_0007.jpg",
       "scene_type": "pool",
       "should_detect": true,
       "difficulty": "medium",
@@ -109,10 +109,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 106.52349999872968
+      "processing_time_ms": 105.7861250010319
     },
     {
-      "image_path": "images/pool/pool_0008.jpg",
+      "image_path": "data/water_v0/images/pool/pool_0008.jpg",
       "scene_type": "pool",
       "should_detect": true,
       "difficulty": "hard",
@@ -131,10 +131,10 @@
       "stability_score": 0.8968658447265625,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 102.44229098316282
+      "processing_time_ms": 102.51454098033719
     },
     {
-      "image_path": "images/pool/pool_0009.jpg",
+      "image_path": "data/water_v0/images/pool/pool_0009.jpg",
       "scene_type": "pool",
       "should_detect": true,
       "difficulty": "easy",
@@ -152,10 +152,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 109.46583401528187
+      "processing_time_ms": 110.68766698008403
     },
     {
-      "image_path": "images/ocean/ocean_0001.jpg",
+      "image_path": "data/water_v0/images/ocean/ocean_0001.jpg",
       "scene_type": "ocean",
       "should_detect": true,
       "difficulty": "easy",
@@ -173,10 +173,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 104.6110829920508
+      "processing_time_ms": 106.70491599012166
     },
     {
-      "image_path": "images/ocean/ocean_0003.jpg",
+      "image_path": "data/water_v0/images/ocean/ocean_0003.jpg",
       "scene_type": "ocean",
       "should_detect": true,
       "difficulty": "medium",
@@ -195,10 +195,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 107.8218329930678
+      "processing_time_ms": 108.4144169872161
     },
     {
-      "image_path": "images/ocean/ocean_0004.jpg",
+      "image_path": "data/water_v0/images/ocean/ocean_0004.jpg",
       "scene_type": "ocean",
       "should_detect": true,
       "difficulty": "easy",
@@ -217,10 +217,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 105.76020798180252
+      "processing_time_ms": 105.09333302616142
     },
     {
-      "image_path": "images/ocean/ocean_0005.jpg",
+      "image_path": "data/water_v0/images/ocean/ocean_0005.jpg",
       "scene_type": "ocean",
       "should_detect": true,
       "difficulty": "medium",
@@ -239,10 +239,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 106.68004202307202
+      "processing_time_ms": 105.70849999203347
     },
     {
-      "image_path": "images/ocean/ocean_0007.jpg",
+      "image_path": "data/water_v0/images/ocean/ocean_0007.jpg",
       "scene_type": "ocean",
       "should_detect": true,
       "difficulty": "easy",
@@ -260,10 +260,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 106.2287499953527
+      "processing_time_ms": 105.14004199649207
     },
     {
-      "image_path": "images/ocean/ocean_0009.jpg",
+      "image_path": "data/water_v0/images/ocean/ocean_0009.jpg",
       "scene_type": "ocean",
       "should_detect": true,
       "difficulty": "medium",
@@ -282,10 +282,10 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 107.11441698367707
+      "processing_time_ms": 107.03787498641759
     },
     {
-      "image_path": "images/pool/neg_blue_wall_0001.jpg",
+      "image_path": "data/water_v0/images/pool/neg_blue_wall_0001.jpg",
       "scene_type": "pool",
       "should_detect": false,
       "difficulty": "hard",
@@ -305,10 +305,10 @@
       "stability_score": 0.9996719360351562,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 101.45524999825284
+      "processing_time_ms": 101.50866600451991
     },
     {
-      "image_path": "images/ocean/neg_glass_building_0001.jpg",
+      "image_path": "data/water_v0/images/ocean/neg_glass_building_0001.jpg",
       "scene_type": "ocean",
       "should_detect": false,
       "difficulty": "hard",
@@ -328,7 +328,7 @@
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 89.38316701096483
+      "processing_time_ms": 90.7002080057282
     }
   ]
 }
