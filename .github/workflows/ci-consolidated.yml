@@ -362,6 +362,68 @@ jobs:
           retention-days: 7
 
   # ===========================================================================
+  # Stage 3.5: Water Detection Regression (Warn-Only)
+  # ===========================================================================
+  water-regression:
+    name: Water Detection Regression (Warn)
+    needs: [setup, test-core]
+    if: |
+      always() &&
+      needs.test-core.result == 'success'
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
+          
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install numpy pillow
+          pip install -c requirements/constraints.txt -r requirements-ci.txt
+          pip install -c requirements/constraints.txt -e .
+          
+      - name: Generate Synthetic CI Fixtures
+        run: |
+          python scripts/gen_water_ci_fixture.py \
+            --seed 42 \
+            --output data/water_v0/images/ \
+            --width 512 \
+            --height 512
+          echo "✅ Generated synthetic fixtures"
+          
+      - name: Run Water Validation Harness
+        run: |
+          python scripts/prw_water_validation.py \
+            --ground-truth data/water_v0/ground_truth.json \
+            --subset-file data/water_v0/ci_subset.txt \
+            --output outputs/water_validation_current.json \
+            --seed 42 \
+            --no-scipy-warning
+          echo "✅ Generated validation report"
+          
+      - name: Check for Regression
+        run: |
+          python scripts/check_regression.py \
+            --baseline data/water_v0/baseline_ci_v0.json \
+            --current outputs/water_validation_current.json \
+            --mode warning
+          
+      - name: Upload Current Report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: water-validation-report-current
+          path: outputs/water_validation_current.json
+          retention-days: 30
+
+  # ===========================================================================
   # Stage 4: ML Tests (Requires PyTorch)
   # ===========================================================================
   test-ml:

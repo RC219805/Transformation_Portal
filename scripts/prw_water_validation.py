@@ -98,11 +98,18 @@ class WaterValidationHarness:
 
     def validate_dataset(
         self,
-        ground_truth: dict  # Full ground truth JSON (v0 schema)
+        ground_truth: dict,  # Full ground truth JSON (v0 schema)
+        gt_base_dir: Optional[Path] = None  # Base directory for resolving root
     ) -> List[ValidationResult]:
         """Run validation on dataset using new schema."""
         results = []
-        root = Path(ground_truth.get("root", "data/water_v0/images"))
+        root_rel = ground_truth.get("root", "data/water_v0/images")
+        
+        # Resolve root relative to ground truth file location
+        if gt_base_dir is not None:
+            root = gt_base_dir / root_rel
+        else:
+            root = Path(root_rel)
 
         for img_relpath, img_info in ground_truth.get("images", {}).items():
             img_path = root / img_relpath
@@ -460,7 +467,7 @@ def main():
         water_edge_refinement_enabled=True
     )
     harness = WaterValidationHarness(config, seed=args.seed)
-    results = harness.validate_dataset(ground_truth)
+    results = harness.validate_dataset(ground_truth, gt_base_dir=args.ground_truth.parent)
 
     if not results:
         print("❌ No results generated (check image paths)")
