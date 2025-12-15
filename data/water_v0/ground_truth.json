@@ -1,0 +1,128 @@
+{
+  "root": "images",
+  "images": {
+    "pool/pool_0001.jpg": {
+      "label": "pool",
+      "should_detect": true,
+      "difficulty": "easy",
+      "tags": [
+        "synthetic"
+      ]
+    },
+    "pool/pool_0003.jpg": {
+      "label": "pool",
+      "should_detect": true,
+      "difficulty": "easy",
+      "tags": [
+        "synthetic",
+        "bright"
+      ]
+    },
+    "pool/pool_0005.jpg": {
+      "label": "pool",
+      "should_detect": true,
+      "difficulty": "medium",
+      "tags": [
+        "synthetic"
+      ]
+    },
+    "pool/pool_0007.jpg": {
+      "label": "pool",
+      "should_detect": true,
+      "difficulty": "medium",
+      "tags": [
+        "synthetic",
+        "dark"
+      ]
+    },
+    "pool/pool_0008.jpg": {
+      "label": "pool",
+      "should_detect": true,
+      "difficulty": "hard",
+      "tags": [
+        "synthetic",
+        "low_sat"
+      ]
+    },
+    "pool/pool_0009.jpg": {
+      "label": "pool",
+      "should_detect": true,
+      "difficulty": "easy",
+      "tags": [
+        "synthetic"
+      ]
+    },
+    "ocean/ocean_0001.jpg": {
+      "label": "ocean",
+      "should_detect": true,
+      "difficulty": "easy",
+      "tags": [
+        "synthetic"
+      ]
+    },
+    "ocean/ocean_0003.jpg": {
+      "label": "ocean",
+      "should_detect": true,
+      "difficulty": "medium",
+      "tags": [
+        "synthetic",
+        "waves"
+      ]
+    },
+    "ocean/ocean_0004.jpg": {
+      "label": "ocean",
+      "should_detect": true,
+      "difficulty": "easy",
+      "tags": [
+        "synthetic",
+        "calm"
+      ]
+    },
+    "ocean/ocean_0005.jpg": {
+      "label": "ocean",
+      "should_detect": true,
+      "difficulty": "medium",
+      "tags": [
+        "synthetic",
+        "green"
+      ]
+    },
+    "ocean/ocean_0007.jpg": {
+      "label": "ocean",
+      "should_detect": true,
+      "difficulty": "easy",
+      "tags": [
+        "synthetic"
+      ]
+    },
+    "ocean/ocean_0009.jpg": {
+      "label": "ocean",
+      "should_detect": true,
+      "difficulty": "medium",
+      "tags": [
+        "synthetic",
+        "waves"
+      ]
+    },
+    "pool/neg_blue_wall_0001.jpg": {
+      "label": "pool",
+      "should_detect": false,
+      "difficulty": "hard",
+      "tags": [
+        "synthetic",
+        "hard_negative",
+        "blue_wall"
+      ]
+    },
+    "ocean/neg_glass_building_0001.jpg": {
+      "label": "ocean",
+      "should_detect": false,
+      "difficulty": "hard",
+      "tags": [
+        "synthetic",
+        "hard_negative",
+        "glass"
+      ]
+    }
+  }
+}

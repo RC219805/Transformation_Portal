@@ -279,3 +279,6 @@ benchmarks_*/
 # Phase 2 benchmark images (large TIFF files)
 assets/phase2_bench/*.tiff
 assets/phase2_bench/*.tif
+
+# Water dataset images (generated synthetically, not tracked)
+data/water_v0/images/

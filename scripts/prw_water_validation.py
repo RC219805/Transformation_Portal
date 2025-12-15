@@ -456,6 +456,7 @@ def main():
 
     # Run validation
     config = MaterialsV3Config(
+        enabled=True,  # CRITICAL: master gate for Materials V3
         water_detection_enabled=True,
         water_edge_refinement_enabled=True
     )
