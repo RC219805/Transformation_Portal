@@ -25,22 +25,24 @@ Key achievement: CI is configured to run water validation on every PR without co
 ----------------------------------------------------------------------------
 ---
 
-Baseline V0 Characteristics (intentional "plumbing + contract" baseline)
+Baseline V0 Characteristics (with confidence suppressors)
 
 Pinned baseline metrics (from baseline_ci_v0.json):
 
   - Total images: 14
   - Positives: 12 (pool=6, ocean=6)
   - Negatives: 2
-  - Pool recall: 100% (6/6)
+  - Pool recall: 83.3% (5/6)  ← pool_0008 (low_sat) below threshold
   - Ocean recall: 100% (6/6)
-  - False trigger rate: 100% (2/2)  ← expected for uncalibrated heuristic + synthetic negatives
-  - Avg processing time: ~97.6ms
+  - False trigger rate: 0% (0/2)  ← suppressors working
+  - Avg processing time: ~105.8ms
 
 Interpretation:
 
-  - v0 proves: detector executes, schema stable, determinism works.
-  - v0 is NOT a quality baseline yet (fixtures are mostly full-frame; negatives are deliberately hard).
+  - v0 proves: detector executes, schema stable, determinism works, suppressors eliminate false triggers.
+  - Known limitation: Low-saturation water detection (pool_0008: conf=0.255 < 0.4)
+  - v0 is NOT a quality baseline yet (fixtures are mostly full-frame).
+  - Next: PR-W1.2 Phase 2 will improve fixtures + low-saturation tuning.
 
 Known issue (baseline v0 artifact - RESOLVED):
 
