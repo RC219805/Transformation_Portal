@@ -282,3 +282,9 @@ assets/phase2_bench/*.tif
 
 # Water dataset images (generated synthetically, not tracked)
 data/water_v0/images/
+
+# Session documentation (working notes, not part of codebase)
+BASELINE_*.md
+GLASS_SUPPRESSOR_*.md
+PATH_RESOLUTION_*.md
+REPOSITORY_CONSISTENCY_*.md
