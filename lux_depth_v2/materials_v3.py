@@ -266,9 +266,18 @@ class MaterialsV3Engine:
         # PR-W2: Initialize water detector (lazy, only when enabled)
         self.water_detector = None
         if config.water_detection_enabled:
-            from .water_candidate import WaterCandidateDetector
-            self.water_detector = WaterCandidateDetector()
-            log.info("Water candidate detection enabled")
+            try:
+                from .water_candidate import WaterCandidateDetector, SCIPY_AVAILABLE, SKIMAGE_AVAILABLE
+                if not (SCIPY_AVAILABLE and SKIMAGE_AVAILABLE):
+                    log.warning(
+                        "Water detection enabled but scipy/scikit-image not available. "
+                        "Water detection will use fallback behavior (reduced quality)."
+                    )
+                self.water_detector = WaterCandidateDetector()
+                log.info("Water candidate detection enabled")
+            except ImportError as e:
+                log.warning(f"Water detection enabled but dependencies missing: {e}")
+                self.water_detector = None
         
         if config.enabled:
             log.info("Materials V3 enabled (experimental)")
@@ -502,7 +511,19 @@ class MaterialsV3Engine:
                         mask=water_mask.astype(np.float32) if water_mask.dtype == bool else water_mask,
                     )
         
-        # Run heuristic detector
+        # Run heuristic detector (if available)
+        if self.water_detector is None:
+            # Detector failed to initialize (missing dependencies)
+            return WaterCandidateReport(
+                present=False,
+                coverage=0.0,
+                coverage_px=0,
+                confidence=0.0,
+                source="none",
+                reason="water_detector_unavailable_missing_dependencies",
+                mask=None,
+            )
+        
         scene_context = self._infer_scene_context(canonical_materials)
         result = self.water_detector.detect(rgb01, depth01, scene_context)
         
