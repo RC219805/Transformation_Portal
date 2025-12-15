@@ -209,7 +209,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
           
       - name: Cache Lint Tools
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: lint-${{ runner.os }}-${{ hashFiles('requirements-lint.txt') }}
@@ -314,7 +314,7 @@ jobs:
           
       - name: Cache Dependencies
         if: github.event.inputs.skip_cache != 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip
@@ -483,7 +483,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
           
       - name: Cache ML Dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/pip
