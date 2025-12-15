@@ -586,9 +586,9 @@ def test_report_summary_statistics():
         assert summary["false_trigger_count"] == 1
         assert summary["false_trigger_rate"] == pytest.approx(1.0, abs=0.01)
 
-        # Verify backward compatibility (should match false_trigger fields)
-        assert summary["false_positive_count"] == 1
-        assert summary["false_positive_rate"] == pytest.approx(1.0, abs=0.01)
+        # Verify backward compatibility (legacy false_positive_* should equal false_trigger_*)
+        assert summary["false_positive_count"] == summary["false_trigger_count"]
+        assert summary["false_positive_rate"] == pytest.approx(summary["false_trigger_rate"], abs=0.01)
 
         # Verify performance
         assert summary["overall_avg_processing_time_ms"] == pytest.approx(40.0, abs=0.1)  # (40 + 42 + 38) / 3
