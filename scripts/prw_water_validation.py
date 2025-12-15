@@ -157,7 +157,8 @@ class WaterValidationHarness:
                 depth01=depth,
                 scene_context=SceneContext.UNKNOWN
             )
-            water_mask = detector_result.get('mask')
+            # PR-W1: detector returns WaterCandidateResult dataclass (not dict)
+            water_mask = detector_result.mask if hasattr(detector_result, 'mask') else None
             # Note: detector_confidence and detector_coverage not used
             # (we use pipeline results for reporting)
 
