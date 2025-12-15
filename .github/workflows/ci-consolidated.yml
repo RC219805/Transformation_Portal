@@ -417,6 +417,7 @@ jobs:
         run: |
           set +e
           mkdir -p outputs
+          # Run from repo root with full path to ground_truth.json (portable, works from any directory)
           python scripts/prw_water_validation.py \
             --ground-truth data/water_v0/ground_truth.json \
             --subset-file data/water_v0/ci_subset.txt \

@@ -53,7 +53,7 @@ except ImportError:
 
 @dataclass
 class ValidationResult:
-    """Single validation test result (backward-compatible schema)."""
+    """Single validation test result (PR-W4 two-stage gating schema)."""
     image_path: str
     scene_type: str  # label: pool|ocean
     should_detect: bool  # from ground truth
@@ -63,14 +63,20 @@ class ValidationResult:
     # Detection status
     detected: bool  # detector's explicit present flag
 
-    # Coverage
-    coverage: float
+    # Coverage (PR-W4: separated by detection status)
+    coverage: float  # coverage if detected, else 0.0 (for regression compatibility)
     coverage_px: int
+    coverage_all: float  # raw coverage regardless of detection (new metric)
+    coverage_detected: float  # coverage only when detected (cleaner metric)
 
-    # Confidence
-    confidence: float
+    # Confidence (PR-W4: three-stage tracking)
+    confidence: float  # final confidence (for backward compatibility)
+    confidence_raw: float  # pre-suppressor
+    confidence_after_suppressors: float  # post-suppressor, pre-boost
+    confidence_final: float  # post-boost, pre-injection gate
+    
     source: str
-    implementation: str  # detector version (e.g., "stub_v0_blue_threshold")
+    implementation: str  # detector version
 
     # Edge quality (primary metric)
     edge_alignment_score: float  # vs image gradients
@@ -82,6 +88,11 @@ class ValidationResult:
     # False triggers
     is_false_positive: bool  # legacy alias for is_false_trigger
     is_false_trigger: bool  # should_detect=false but detected
+    
+    # PR-W4: Two-stage gating telemetry
+    saturation_boost_applied: bool
+    candidate_stage_passed: bool  # Stage A
+    injection_stage_passed: bool  # Stage B
 
     # Performance
     processing_time_ms: float
@@ -98,11 +109,17 @@ class WaterValidationHarness:
 
     def validate_dataset(
         self,
-        ground_truth: dict  # Full ground truth JSON (v0 schema)
+        ground_truth: dict,  # Full ground truth JSON (v0 schema)
+        ground_truth_path: Path  # Path to ground_truth.json file
     ) -> List[ValidationResult]:
         """Run validation on dataset using new schema."""
         results = []
-        root = Path(ground_truth.get("root", "data/water_v0/images"))
+        # Resolve root relative to ground_truth.json location (portable)
+        root_from_gt = ground_truth.get("root", "images")
+        if Path(root_from_gt).is_absolute():
+            root = Path(root_from_gt)
+        else:
+            root = (ground_truth_path.parent / root_from_gt).resolve()
 
         for img_relpath, img_info in ground_truth.get("images", {}).items():
             img_path = root / img_relpath
@@ -112,6 +129,7 @@ class WaterValidationHarness:
 
             result = self.validate_single(
                 img_path,
+                img_relpath=img_relpath,  # Store relative path for portable results
                 label=img_info.get("label", "unknown"),
                 should_detect=img_info.get("should_detect", True),
                 difficulty=img_info.get("difficulty", "medium"),
@@ -124,6 +142,7 @@ class WaterValidationHarness:
     def validate_single(
         self,
         img_path: Path,
+        img_relpath: str,  # Relative path for portable results
         label: str,
         should_detect: bool,
         difficulty: str,
@@ -188,17 +207,35 @@ class WaterValidationHarness:
         detected = water_dict.get('present', False)
         is_false_trigger = (not should_detect and detected)
         is_fp = is_false_trigger  # legacy alias, same semantics
+        
+        # PR-W4: Extract two-stage gating telemetry
+        confidence_raw = water_dict.get('confidence_raw', water_dict.get('confidence', 0.0))
+        confidence_after_suppressors = water_dict.get('confidence_after_suppressors', water_dict.get('confidence', 0.0))
+        confidence_final = water_dict.get('confidence_final', water_dict.get('confidence', 0.0))
+        saturation_boost_applied = water_dict.get('saturation_boost_applied', False)
+        candidate_stage_passed = water_dict.get('candidate_stage_passed', False)
+        injection_stage_passed = water_dict.get('injection_stage_passed', False)
+        
+        # PR-W4: Coverage metrics
+        coverage = water_dict.get('coverage', 0.0)
+        coverage_all = coverage  # Raw coverage (always present)
+        coverage_detected = coverage if detected else 0.0  # Coverage only when detected
 
         return ValidationResult(
-            image_path=str(img_path),
+            image_path=img_relpath,  # Use relative path for portability
             scene_type=label,
             should_detect=should_detect,
             difficulty=difficulty,
             tags=tags,
             detected=detected,
-            coverage=water_dict.get('coverage', 0.0),
+            coverage=coverage,  # Legacy field (for backward compatibility)
             coverage_px=water_dict.get('coverage_px', 0),
-            confidence=water_dict.get('confidence', 0.0),
+            coverage_all=coverage_all,
+            coverage_detected=coverage_detected,
+            confidence=confidence_final,  # Legacy field (use final confidence)
+            confidence_raw=confidence_raw,
+            confidence_after_suppressors=confidence_after_suppressors,
+            confidence_final=confidence_final,
             source=water_dict.get('source', 'none'),
             implementation=water_dict.get('implementation', 'unknown_v0'),
             edge_alignment_score=edge_score,
@@ -206,6 +243,9 @@ class WaterValidationHarness:
             stability_score=stability,
             is_false_positive=is_fp,
             is_false_trigger=is_false_trigger,
+            saturation_boost_applied=saturation_boost_applied,
+            candidate_stage_passed=candidate_stage_passed,
+            injection_stage_passed=injection_stage_passed,
             processing_time_ms=elapsed_ms
         )
 
@@ -318,6 +358,12 @@ class WaterValidationHarness:
         # Coverage stats (only for detected water)
         pool_coverages = [r.coverage for r in pool_detected]
         ocean_coverages = [r.coverage for r in ocean_detected]
+        
+        # PR-W4: Add coverage_all and coverage_detected variants
+        pool_coverages_all = [r.coverage_all for r in pool_true]
+        ocean_coverages_all = [r.coverage_all for r in ocean_true]
+        pool_coverages_detected = [r.coverage_detected for r in pool_true if r.detected]
+        ocean_coverages_detected = [r.coverage_detected for r in ocean_true if r.detected]
 
         summary = {
             "dataset_version": ground_truth.get("version", "v0"),
@@ -336,10 +382,24 @@ class WaterValidationHarness:
             "pool_median_coverage": float(np.median(pool_coverages)) if pool_coverages else 0.0,
             "ocean_avg_coverage": float(np.mean(ocean_coverages)) if ocean_coverages else 0.0,
             "ocean_median_coverage": float(np.median(ocean_coverages)) if ocean_coverages else 0.0,
+            
+            # PR-W4: New coverage metrics
+            "pool_avg_coverage_all": float(np.mean(pool_coverages_all)) if pool_coverages_all else 0.0,
+            "pool_avg_coverage_detected": float(np.mean(pool_coverages_detected)) if pool_coverages_detected else 0.0,
+            "ocean_avg_coverage_all": float(np.mean(ocean_coverages_all)) if ocean_coverages_all else 0.0,
+            "ocean_avg_coverage_detected": float(np.mean(ocean_coverages_detected)) if ocean_coverages_detected else 0.0,
 
             # Confidence
             "pool_avg_confidence": float(np.mean([r.confidence for r in pool_detected])) if pool_detected else 0.0,
             "ocean_avg_confidence": float(np.mean([r.confidence for r in ocean_detected])) if ocean_detected else 0.0,
+            
+            # PR-W4: Three-stage confidence tracking
+            "pool_avg_confidence_raw": float(np.mean([r.confidence_raw for r in pool_detected])) if pool_detected else 0.0,
+            "pool_avg_confidence_after_suppressors": float(np.mean([r.confidence_after_suppressors for r in pool_detected])) if pool_detected else 0.0,
+            "pool_avg_confidence_final": float(np.mean([r.confidence_final for r in pool_detected])) if pool_detected else 0.0,
+            "ocean_avg_confidence_raw": float(np.mean([r.confidence_raw for r in ocean_detected])) if ocean_detected else 0.0,
+            "ocean_avg_confidence_after_suppressors": float(np.mean([r.confidence_after_suppressors for r in ocean_detected])) if ocean_detected else 0.0,
+            "ocean_avg_confidence_final": float(np.mean([r.confidence_final for r in ocean_detected])) if ocean_detected else 0.0,
 
             # Edge alignment (primary metric)
             "pool_avg_edge_alignment": (float(np.mean([r.edge_alignment_score for r in pool_detected]))
@@ -467,7 +527,7 @@ def main():
         water_edge_refinement_enabled=True
     )
     harness = WaterValidationHarness(config, seed=args.seed)
-    results = harness.validate_dataset(ground_truth)
+    results = harness.validate_dataset(ground_truth, ground_truth_path=Path(args.ground_truth))
 
     if not results:
         print("❌ No results generated (check image paths)")
