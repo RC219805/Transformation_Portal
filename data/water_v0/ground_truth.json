@@ -1,6 +1,4 @@
 {
-  "dataset_version": "v0",
-  "schema_version": "1.0",
   "root": "images",
   "images": {
     "pool/pool_0001.jpg": {
