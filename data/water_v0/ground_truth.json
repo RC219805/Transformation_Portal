@@ -1,7 +1,5 @@
 {
-  "dataset_version": "v0",
-  "schema_version": "1.0",
-  "root": "data/water_v0/images",
+  "root": "images",
   "images": {
     "pool/pool_0001.jpg": {
       "label": "pool",
