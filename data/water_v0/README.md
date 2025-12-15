@@ -1,206 +1,149 @@
-# Water Detection Dataset v0
+# Water Detection Validation Dataset (v0)
 
-This dataset contains labeled images for validating water detection in pool and ocean scenes.
+**Version**: v0  
+**Created**: 2024-12-14  
+**Updated**: 2025-12-15 (Baseline v1 added)
 
-## Structure
+## Overview
+
+Synthetic water detection test dataset for pool and ocean scenes with negative controls (blue walls, glass buildings).
+
+## Dataset Structure
 
 ```
-water_v0/
-├── images/               # ⚠️  NOT TRACKED IN GIT (generated synthetically)
-│   ├── pool/             # Pool scenes
-│   └── ocean/            # Ocean scenes
-├── ground_truth.json     # ✅ TRACKED: Ground truth labels (v0 schema)
-├── ground_truth.schema.json  # ✅ TRACKED: JSON Schema validation
-├── baseline_ci_v0.json   # ✅ TRACKED: Pinned baseline report for regression checks
-├── ci_subset.txt         # ✅ TRACKED: 14 images for fast CI validation
-├── LABELING_GUIDE.md     # ✅ TRACKED: Labeling instructions
-└── README.md             # ✅ TRACKED: This file
+data/water_v0/
+├── images/
+│   ├── pool/          # 6 pool scenes
+│   │   ├── pool_0001.jpg ... pool_0009.jpg
+│   │   └── neg_blue_wall_0001.jpg (negative control)
+│   └── ocean/         # 6 ocean scenes
+│       ├── ocean_0001.jpg ... ocean_0009.jpg
+│       └── neg_glass_building_0001.jpg (negative control)
+├── ground_truth.json  # Labels, should_detect flags, difficulty, tags
+├── baseline_ci_v0.json  # Single threshold baseline (83.3% pool recall)
+└── baseline_ci_v1.json  # Two-stage gating baseline (100% pool recall)
 ```
 
-## What's Tracked in Git
+## Ground Truth Schema
 
-**Metadata and baselines only:**
-- ✅ `ground_truth.json` - Ground truth annotations
-- ✅ `ground_truth.schema.json` - JSON Schema for validation
-- ✅ `baseline_ci_v0.json` - Pinned baseline validation report
-- ✅ `ci_subset.txt` - List of images for CI testing
-- ✅ Documentation files
-
-**NOT tracked in git:**
-- ❌ `images/` directory - Images are generated synthetically or stored privately
-
-## How CI Obtains Images
-
-CI uses **synthetic image generation** to avoid committing large binary files:
-
-```bash
-# CI runs this before validation:
-python scripts/gen_water_ci_fixture.py --seed 42 --output data/water_v0/images/
+```json
+{
+  "version": "unknown",
+  "root": "data/water_v0/images",
+  "images": {
+    "pool/pool_0001.jpg": {
+      "label": "pool",
+      "should_detect": true,
+      "difficulty": "easy",
+      "tags": ["synthetic"]
+    },
+    "pool/neg_blue_wall_0001.jpg": {
+      "label": "pool",
+      "should_detect": false,
+      "difficulty": "hard",
+      "tags": ["synthetic", "negative_control", "flat_blue_surface"]
+    }
+  }
+}
 ```
 
-This generates 14 deterministic synthetic images matching `ci_subset.txt`:
-- 6 pool scenes (various lighting conditions)
-- 6 ocean scenes (waves, calm, different colors)
-- 2 hard negatives (blue wall, reflective glass)
+### Fields
 
-**Deterministic:** Same seed always produces identical images (pixel-perfect).
+- **label**: `pool` | `ocean` (scene type, NOT detection label)
+- **should_detect**: `true` (water) | `false` (hard negative)
+- **difficulty**: `easy` | `medium` | `hard`
+- **tags**: `["synthetic", "negative_control", "flat_blue_surface", "glass_grid", ...]`
 
-## Schema Version
+## Baselines
 
-**v0** - Two-label schema (pool, ocean) with negative controls
+### v0 (Single Threshold)
 
-See `ground_truth.schema.json` for complete JSON Schema validation.
+**Date**: 2024-12-14  
+**Config**: `water_candidate_confidence_threshold: 0.4` (single gate)
 
-## Key Fields
+**Results**:
+- Pool recall: 83.3% (5/6) - missed pool_0008
+- Ocean recall: 100% (6/6)
+- False trigger rate: 0% (0/2)
 
-- `label`: `pool` or `ocean` (folder organization)
-- `should_detect`: `true` for water, `false` for hard negatives
-- `difficulty`: `easy` | `medium` | `hard`
-- `tags`: Track failure modes (e.g., `low-light`, `reflection`, `waves`)
+**File**: `baseline_ci_v0.json`
 
-## Hard Negatives
+### v1 (Two-Stage Gating)
 
-Hard negatives (`should_detect: false`) are critical for measuring false trigger rate:
+**Date**: 2025-12-15  
+**Config**:
+- `water_candidate_threshold: 0.25` (Stage A - candidate detection)
+- `water_candidate_confidence_threshold: 0.4` (Stage B - injection decision)
+- `water_saturation_boost_enabled: True` (+0.15 for low-sat pools)
 
-**Pool hard negatives**:
-- Blue painted walls
-- Blue sky through windows
-- Blue fabric/umbrellas
+**Results**:
+- Pool recall: **100% (6/6)** ← recovered pool_0008
+- Ocean recall: 100% (6/6)
+- False trigger rate: 0% (0/2)
 
-**Ocean hard negatives**:
-- Reflective glass buildings
-- Blue painted surfaces
-- Sky reflections
+**File**: `baseline_ci_v1.json`
 
-## Running Validation Locally
+**Key Difference**: v1 recovered pool_0008 via saturation boost (0.255 + 0.15 = 0.405 > 0.4)
 
-### Step 1: Generate Synthetic Images
+## Running Validation
 
-```bash
-python scripts/gen_water_ci_fixture.py \
-    --seed 42 \
-    --output data/water_v0/images/
-```
-
-### Step 2: Validate Ground Truth Schema
-
-```bash
-python scripts/validate_ground_truth.py data/water_v0/ground_truth.json
-```
-
-### Step 3: Run Validation Harness
-
-Full dataset:
 ```bash
 python scripts/prw_water_validation.py \
-    --ground-truth data/water_v0/ground_truth.json \
-    --output water_validation_report.json \
-    --seed 42
+  --ground-truth data/water_v0/ground_truth.json \
+  --output report.json \
+  --seed 42
 ```
 
-CI subset only (faster):
-```bash
-python scripts/prw_water_validation.py \
-    --ground-truth data/water_v0/ground_truth.json \
-    --subset-file data/water_v0/ci_subset.txt \
-    --output ci_report.json \
-    --seed 42
-```
+**Output**: JSON report with per-image results and summary statistics.
 
-### Step 4: Check for Regression
+## Test Cases
 
-```bash
-python scripts/check_regression.py \
-    --baseline data/water_v0/baseline_ci_v0.json \
-    --current ci_report.json \
-    --mode fail
-```
+### Positive Controls (should_detect=true)
 
-## CI Regression Job
+**Pools** (6):
+- pool_0001, pool_0003, pool_0005, pool_0007, pool_0009: Clear pools (easy/medium)
+- pool_0008: Low-saturation pool (hard) - **recovered in v1**
 
-The CI workflow includes a **warn-only** water regression check:
+**Oceans** (6):
+- ocean_0001, ocean_0003, ocean_0004, ocean_0005, ocean_0007, ocean_0009: Ocean scenes (easy/medium)
 
-```yaml
-water-regression:
-  name: Water Detection Regression (Warn)
-  runs-on: ubuntu-24.04
-  continue-on-error: true  # Warn-only for now
-  steps:
-    - Generate synthetic fixtures (deterministic)
-    - Run validation harness
-    - Check for regression vs baseline
-    - Upload current report as artifact
-```
+### Negative Controls (should_detect=false)
 
-**Exit codes:**
-- `0` - No regression
-- `2` - Regression detected (warning mode, continues)
-- `1` - Regression detected (error mode, would fail)
+**Hard Negatives** (2):
+- `neg_blue_wall_0001.jpg`: Flat blue painted wall (tests flat surface suppressor)
+- `neg_glass_building_0001.jpg`: Blue-tinted glass building (tests glass suppressor)
 
-Currently set to **warning mode** to avoid blocking PRs during initial calibration.
+**Expected**: Both should trigger suppressors and be correctly rejected.
 
-## Baseline Calibration
+## Key Metrics
 
-The baseline report (`baseline_ci_v0.json`) is pinned and tracks:
-- **Recall:** % of water images correctly detected (pool/ocean separate)
-- **Coverage:** Mean/median % of image covered by water mask
-- **Edge alignment:** Quality of mask boundary vs image gradients
-- **False trigger rate:** % of hard negatives incorrectly flagged as water
-- **Stability:** Consistency across noise perturbations
+### Recall
+- **Pool recall**: Fraction of pools detected (target: 100%)
+- **Ocean recall**: Fraction of oceans detected (target: 100%)
 
-**Thresholds are targets, not calibrated against real data yet.**
+### Precision
+- **False trigger rate**: Fraction of negatives incorrectly detected (target: 0%)
 
-Complete PR-W1 (real detector) to establish meaningful baseline metrics.
+### Coverage
+- **coverage_all**: Raw coverage (all images, including misses)
+- **coverage_detected**: Coverage only when detected (cleaner metric)
 
-## Threshold Calibration Process
+### Confidence (v1 only)
+- **confidence_raw**: Pre-suppressor confidence
+- **confidence_after_suppressors**: Post-suppressor, pre-boost
+- **confidence_final**: Post-boost, pre-injection gate
 
-**Separate from baseline establishment:**
+## Validation History
 
-1. Collect diverse labeled images (20+ pool, 20+ ocean, 4+ hard negatives)
-2. Run validation to generate current report
-3. Analyze metrics distribution (histograms, percentiles)
-4. Set thresholds at acceptable failure rates:
-   - Recall: >= 90% (10% miss rate)
-   - Edge alignment: >= 0.7 (subjective quality)
-   - False trigger rate: <= 5% (95% specificity)
-5. Update `check_regression.py` with calibrated thresholds
-6. Re-pin baseline if needed
+| Date | Version | Pool Recall | Ocean Recall | FT Rate | Notes |
+|------|---------|-------------|--------------|---------|-------|
+| 2024-12-14 | v0 | 83.3% (5/6) | 100% (6/6) | 0% | Missed pool_0008 |
+| 2025-12-15 | v1 | **100% (6/6)** | 100% (6/6) | 0% | Two-stage gating |
 
-## Safety: Preventing Accidental Image Commits
+## References
 
-**Pre-commit hook:**
-
-```bash
-# Install hook to prevent staging images
-cp scripts/pre-commit-water-safety.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-```
-
-**Manual check:**
-
-```bash
-git diff --cached --name-only | grep -E '^data/water_v0/images/' \
-  && echo "ERROR: images staged" || echo "OK: no images staged"
-```
-
-## Status
-
-**Dataset:** Synthetic fixtures available (deterministic generation)
-
-**Validation harness:** Complete and deterministic (PR-W4 merged)
-
-**Detector:** WaterCandidateDetector heuristic (merged in PR #558)
-
-**Baseline:** Pinned at v0 (uncalibrated heuristic baseline)
-
-**CI Regression:** Active in warn-only mode
-
-## Next Steps
-
-1. ✅ Establish baseline infrastructure (this PR - PR-W1.1)
-2. ✅ Implement water detector (PR #558 merged)
-3. Calibrate thresholds with expanded dataset (PR-W1.2 pending)
-4. Collect diverse labeled images for validation
-5. Tune thresholds against measured failure modes
-6. Switch CI regression to fail mode when stable
-7. Monitor for regressions in production
+- **Implementation**: `TWO_STAGE_GATING_IMPLEMENTATION_SUMMARY.md`
+- **Comparison**: `BASELINE_V0_VS_V1_COMPARISON.md`
+- **Harness**: `scripts/prw_water_validation.py`
+- **Detector**: `lux_depth_v2/water_candidate.py`
+- **Integration**: `lux_depth_v2/materials_v3.py`

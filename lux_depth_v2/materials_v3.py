@@ -38,6 +38,7 @@ class WaterCandidateReport:
     
     PR-W2 adds optional mask field for debugging/visualization.
     PR-W3 adds edge refinement tracking.
+    PR-W4 adds two-stage gating telemetry.
     """
     present: bool  # Water detected and passed thresholds
     coverage: float  # 0.0-1.0 (fraction of image)
@@ -50,6 +51,13 @@ class WaterCandidateReport:
     edge_refined: bool = False  # True if edge refinement was applied
     edge_refinement_boundary_px: int = 0  # Boundary pixel count (for BF1 gating)
     edge_refinement_applied: bool = False  # True if refinement successful
+    # PR-W4: Two-stage gating telemetry
+    confidence_raw: float = 0.0  # Pre-suppressor confidence
+    confidence_after_suppressors: float = 0.0  # Post-suppressor, pre-boost
+    confidence_final: float = 0.0  # Post-boost, pre-injection gate
+    saturation_boost_applied: bool = False  # True if saturation boost was applied
+    candidate_stage_passed: bool = False  # Stage A: Candidate detection
+    injection_stage_passed: bool = False  # Stage B: Injection decision
     
     def to_dict(self) -> dict:
         """Convert to JSON-serializable dict (excludes mask field)."""
@@ -63,6 +71,13 @@ class WaterCandidateReport:
             "edge_refined": self.edge_refined,
             "edge_refinement_boundary_px": int(self.edge_refinement_boundary_px),
             "edge_refinement_applied": self.edge_refinement_applied,
+            # PR-W4: Two-stage gating telemetry
+            "confidence_raw": float(self.confidence_raw),
+            "confidence_after_suppressors": float(self.confidence_after_suppressors),
+            "confidence_final": float(self.confidence_final),
+            "saturation_boost_applied": self.saturation_boost_applied,
+            "candidate_stage_passed": self.candidate_stage_passed,
+            "injection_stage_passed": self.injection_stage_passed,
         }
 
 
@@ -231,8 +246,16 @@ class MaterialsV3Config:
     
     # PR-W0/W2: Water detection (opt-in only)
     water_detection_enabled: bool = False  # Master gate for water candidate detection
-    water_candidate_confidence_threshold: float = 0.4  # Minimum confidence to inject
+    
+    # PR-W4: Two-stage gating (decouples candidate detection from injection decision)
+    water_candidate_threshold: float = 0.25  # Stage A: Candidate detection (high recall)
+    water_candidate_confidence_threshold: float = 0.4  # Stage B: Injection decision (precision)
     water_min_coverage: float = 0.05  # Minimum coverage (5% of image) to inject
+    
+    # PR-W4: Saturation boost for low-saturation pools (controlled experiment)
+    water_saturation_boost_enabled: bool = True  # Enable saturation-based confidence boost
+    water_saturation_boost_amount: float = 0.15  # Boost for low-saturation candidates
+    water_saturation_boost_threshold: float = 0.20  # Saturation threshold for boost
     
     # PR-W3: Water edge refinement (opt-in, after candidate exists)
     water_edge_refinement_enabled: bool = False  # Master gate for edge refinement
@@ -455,6 +478,37 @@ class MaterialsV3Engine:
         
         return SceneContext.UNKNOWN
     
+    def _rgb_to_hsv_vectorized(self, rgb01: np.ndarray) -> np.ndarray:
+        """Convert RGB to HSV (vectorized, no dependencies).
+        
+        Args:
+            rgb01: RGB image (HxWx3 float32 in [0,1])
+            
+        Returns:
+            HSV image (HxWx3 float32 in [0,1])
+        """
+        # Vectorized RGB to HSV conversion (numpy only, no skimage)
+        r, g, b = rgb01[:, :, 0], rgb01[:, :, 1], rgb01[:, :, 2]
+        maxc = np.maximum(np.maximum(r, g), b)
+        minc = np.minimum(np.minimum(r, g), b)
+        v = maxc
+        
+        delta = maxc - minc
+        s = np.where(maxc != 0, delta / maxc, 0)
+        
+        # Hue calculation
+        rc = np.where(delta != 0, (maxc - r) / delta, 0)
+        gc = np.where(delta != 0, (maxc - g) / delta, 0)
+        bc = np.where(delta != 0, (maxc - b) / delta, 0)
+        
+        h = np.zeros_like(r)
+        h = np.where((maxc == r) & (delta != 0), bc - gc, h)
+        h = np.where((maxc == g) & (delta != 0), 2.0 + rc - bc, h)
+        h = np.where((maxc == b) & (delta != 0), 4.0 + gc - rc, h)
+        h = (h / 6.0) % 1.0  # Normalize to [0, 1]
+        
+        return np.stack([h, s, v], axis=2)
+    
     def _detect_water_candidate(
         self,
         rgb01: np.ndarray,
@@ -527,56 +581,120 @@ class MaterialsV3Engine:
         scene_context = self._infer_scene_context(canonical_materials)
         result = self.water_detector.detect(rgb01, depth01, scene_context)
         
-        # PR-W3: Optional edge refinement (only if candidate exists and passes thresholds)
+        # PR-W4: Two-stage gating implementation
+        # Stage 1: Extract raw confidence (before suppressors)
+        confidence_raw = result.confidence
+        if result.suppressor_telemetry:
+            # If suppressors were applied, extract original confidence
+            confidence_raw = result.suppressor_telemetry.get("original_confidence", result.confidence)
+        
+        # Stage 2: After suppressors (already applied in detector)
+        confidence_after_suppressors = result.confidence
+        
+        # Stage 3: Saturation boost (controlled experiment for low-saturation pools)
+        # PR-W4B/V1: Stricter gating - rescue legitimate pools, block glass negatives
+        saturation_boost_applied = False
+        confidence_final = confidence_after_suppressors
+        
+        if self.config.water_saturation_boost_enabled and result.mask is not None:
+            # Extract suppressor telemetry to check which suppressors fired
+            glass_grid_suppressed = False
+            
+            if result.suppressor_telemetry:
+                suppressors_applied = result.suppressor_telemetry.get("suppressors_applied", [])
+                glass_grid_suppressed = "architectural_glass" in suppressors_applied
+            
+            # Compute average saturation in detected region
+            h, w = rgb01.shape[:2]
+            hsv = self._rgb_to_hsv_vectorized(rgb01)
+            masked_saturation = hsv[:, :, 1] * (result.mask > 0.5)
+            avg_saturation = float(np.sum(masked_saturation) / max(np.sum(result.mask > 0.5), 1))
+            
+            # V1: Apply boost when low saturation detected, UNLESS glass suppressor fired
+            # Glass suppressor indicates architectural glass (false positive), not a pool
+            # Flat surface suppressor indicates a desaturated pool (legitimate, needs rescue)
+            if (avg_saturation < self.config.water_saturation_boost_threshold and
+                not glass_grid_suppressed):
+                confidence_final = min(1.0, confidence_after_suppressors + self.config.water_saturation_boost_amount)
+                saturation_boost_applied = True
+        
+        # Stage A: Candidate detection (high recall threshold)
+        candidate_stage_passed = confidence_raw >= self.config.water_candidate_threshold
+        
+        # Stage B: Injection decision (precision threshold, after suppressors and boost)
+        # CRITICAL: Suppressors should NOT veto if saturation boost can rescue
+        # Saturation boost is a controlled experiment for low-saturation pools
+        # Only veto if final boosted confidence still fails threshold
+        injection_stage_passed = confidence_final >= self.config.water_candidate_confidence_threshold
+        
+        # Final injection decision
+        present = injection_stage_passed and result.coverage >= self.config.water_min_coverage
+        
+        # PR-W3: Optional edge refinement (only if injection passes)
         refined_mask = None
         edge_refined = False
         edge_refinement_boundary_px = 0
         edge_refinement_applied = False
         
-        if result.confidence >= self.config.water_candidate_confidence_threshold:
-            refined_mask = self._refine_water_edges(
-                rgb01=rgb01,
-                water_candidate_mask=result.mask,
-                water_confidence=result.confidence
-            )
-            
-            if refined_mask is not None:
-                edge_refined = True
-                edge_refinement_applied = True
-                # Update coverage with refined mask
-                h, w = rgb01.shape[:2]
-                refined_coverage = float((refined_mask > 0.5).sum() / (h * w))
-                refined_coverage_px = int((refined_mask > 0.5).sum())
-                
-                # Compute boundary pixels for reporting
-                boundary_mask = self._extract_boundary(result.mask, width=5)
-                edge_refinement_boundary_px = int(np.sum(boundary_mask))
-                
-                return WaterCandidateReport(
-                    present=result.confidence >= self.config.water_candidate_confidence_threshold,
-                    coverage=refined_coverage,
-                    coverage_px=refined_coverage_px,
-                    confidence=result.confidence,
-                    source="efficientsam_refined",
-                    reason=f"heuristic_confidence_{result.confidence:.3f}_edge_refined",
-                    mask=refined_mask,
-                    edge_refined=edge_refined,
-                    edge_refinement_boundary_px=edge_refinement_boundary_px,
-                    edge_refinement_applied=edge_refinement_applied,
+        if present and self.config.water_edge_refinement_enabled:
+            if confidence_final >= self.config.water_edge_refinement_min_confidence:
+                refined_mask = self._refine_water_edges(
+                    rgb01=rgb01,
+                    water_candidate_mask=result.mask,
+                    water_confidence=confidence_final
                 )
+                
+                if refined_mask is not None:
+                    edge_refined = True
+                    edge_refinement_applied = True
+                    # Update coverage with refined mask
+                    h, w = rgb01.shape[:2]
+                    refined_coverage = float((refined_mask > 0.5).sum() / (h * w))
+                    refined_coverage_px = int((refined_mask > 0.5).sum())
+                    
+                    # Compute boundary pixels for reporting
+                    boundary_mask = self._extract_boundary(result.mask, width=5)
+                    edge_refinement_boundary_px = int(np.sum(boundary_mask))
+                    
+                    return WaterCandidateReport(
+                        present=present,
+                        coverage=refined_coverage,
+                        coverage_px=refined_coverage_px,
+                        confidence=confidence_final,  # Report final confidence
+                        source="efficientsam_refined",
+                        reason=f"two_stage_gating_final_{confidence_final:.3f}_edge_refined",
+                        mask=refined_mask,
+                        edge_refined=edge_refined,
+                        edge_refinement_boundary_px=edge_refinement_boundary_px,
+                        edge_refinement_applied=edge_refinement_applied,
+                        # PR-W4: Two-stage telemetry
+                        confidence_raw=confidence_raw,
+                        confidence_after_suppressors=confidence_after_suppressors,
+                        confidence_final=confidence_final,
+                        saturation_boost_applied=saturation_boost_applied,
+                        candidate_stage_passed=candidate_stage_passed,
+                        injection_stage_passed=injection_stage_passed,
+                    )
         
-        # No refinement applied, return heuristic result
+        # No refinement applied, return heuristic result with two-stage telemetry
         return WaterCandidateReport(
-            present=result.confidence >= self.config.water_candidate_confidence_threshold,
+            present=present,
             coverage=result.coverage,
             coverage_px=result.coverage_px,
-            confidence=result.confidence,
+            confidence=confidence_final,  # Report final confidence
             source="heuristic",
-            reason=f"heuristic_confidence_{result.confidence:.3f}",
+            reason=f"two_stage_gating_final_{confidence_final:.3f}",
             mask=result.mask,
             edge_refined=edge_refined,
             edge_refinement_boundary_px=edge_refinement_boundary_px,
             edge_refinement_applied=edge_refinement_applied,
+            # PR-W4: Two-stage telemetry
+            confidence_raw=confidence_raw,
+            confidence_after_suppressors=confidence_after_suppressors,
+            confidence_final=confidence_final,
+            saturation_boost_applied=saturation_boost_applied,
+            candidate_stage_passed=candidate_stage_passed,
+            injection_stage_passed=injection_stage_passed,
         )
     
     def _should_inject_water_candidate(
