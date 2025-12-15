@@ -49,7 +49,7 @@ libcst==1.8.6
     # via
     #   -c all.txt
     #   -r dev.in
-librt==0.7.3
+librt==0.7.4
     # via
     #   -c all.txt
     #   mypy
@@ -58,7 +58,7 @@ mccabe==0.7.0
     #   -c all.txt
     #   flake8
     #   pylint
-mypy==1.19.0
+mypy==1.19.1
     # via
     #   -c all.txt
     #   -r dev.in
