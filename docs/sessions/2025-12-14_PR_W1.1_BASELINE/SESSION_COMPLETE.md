@@ -20,7 +20,7 @@ What Shipped (PR-W1.1)
   - ✅ Warn-only CI regression job (non-blocking + artifact upload)
   - ✅ Baseline v0 pinned (data/water_v0/baseline_ci_v0.json)
 
-Key achievement: CI can run water validation on every PR without committing images.
+Key achievement: CI is configured to run water validation on every PR without committing images, and will emit warnings + artifacts when execution succeeds.
 
 ----------------------------------------------------------------------------
 ---

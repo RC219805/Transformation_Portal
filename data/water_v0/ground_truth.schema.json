@@ -4,8 +4,18 @@
   "title": "Water Detection Ground Truth v0",
   "description": "Schema for water detection ground truth annotations (pool/ocean labels)",
   "type": "object",
-  "required": ["root", "images"],
+  "required": ["dataset_version", "schema_version", "root", "images"],
   "properties": {
+    "dataset_version": {
+      "type": "string",
+      "enum": ["v0"],
+      "description": "Dataset version identifier for traceability"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$",
+      "description": "Schema version (semver-like, e.g., '1.0')"
+    },
     "root": {
       "type": "string",
       "description": "Base path for images (relative to this JSON file)"
