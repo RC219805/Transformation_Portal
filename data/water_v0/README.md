@@ -187,19 +187,20 @@ git diff --cached --name-only | grep -E '^data/water_v0/images/' \
 
 **Dataset:** Synthetic fixtures available (deterministic generation)
 
-**Validation harness:** Complete and deterministic (PR-W558 merged)
+**Validation harness:** Complete and deterministic (PR-W4 merged)
 
-**Detector:** Stub implementation (PR-W1 pending)
+**Detector:** WaterCandidateDetector heuristic (merged in PR #558)
 
-**Baseline:** Pinned at v0 (stub detector baseline)
+**Baseline:** Pinned at v0 (uncalibrated heuristic baseline)
 
 **CI Regression:** Active in warn-only mode
 
 ## Next Steps
 
-1. ✅ Establish baseline infrastructure (this PR)
-2. Implement real detector (PR-W1)
-3. Collect diverse labeled images for calibration
-4. Calibrate thresholds against labeled dataset
-5. Switch CI regression to fail mode
-6. Monitor for regressions in production
+1. ✅ Establish baseline infrastructure (this PR - PR-W1.1)
+2. ✅ Implement water detector (PR #558 merged)
+3. Calibrate thresholds with expanded dataset (PR-W1.2 pending)
+4. Collect diverse labeled images for validation
+5. Tune thresholds against measured failure modes
+6. Switch CI regression to fail mode when stable
+7. Monitor for regressions in production

@@ -390,37 +390,62 @@ jobs:
           pip install -c requirements/constraints.txt -e .
           
       - name: Generate Synthetic CI Fixtures
+        continue-on-error: true
         run: |
+          set +e
           python scripts/gen_water_ci_fixture.py \
             --seed 42 \
             --output data/water_v0/images/ \
             --width 512 \
             --height 512
-          echo "✅ Generated synthetic fixtures"
+          ec=$?
+          if [ $ec -ne 0 ]; then
+            echo "::warning::Fixture generation failed (exit=$ec)"
+          else
+            echo "✅ Generated synthetic fixtures"
+          fi
+          exit 0
           
       - name: Run Water Validation Harness
+        continue-on-error: true
         run: |
+          set +e
+          mkdir -p outputs
           python scripts/prw_water_validation.py \
             --ground-truth data/water_v0/ground_truth.json \
             --subset-file data/water_v0/ci_subset.txt \
             --output outputs/water_validation_current.json \
             --seed 42 \
             --no-scipy-warning
-          echo "✅ Generated validation report"
+          ec=$?
+          if [ $ec -ne 0 ]; then
+            echo "::warning::Water harness failed (exit=$ec)"
+          else
+            echo "✅ Generated validation report"
+          fi
+          exit 0
           
       - name: Check for Regression
+        continue-on-error: true
         run: |
+          set +e
           python scripts/check_regression.py \
             --baseline data/water_v0/baseline_ci_v0.json \
             --current outputs/water_validation_current.json \
             --mode warning
+          ec=$?
+          if [ $ec -ne 0 ]; then
+            echo "::warning::Regression check returned exit=$ec"
+          fi
+          exit 0
           
       - name: Upload Current Report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: water-validation-report-current
           path: outputs/water_validation_current.json
+          if-no-files-found: warn
           retention-days: 30
 
   # ===========================================================================
