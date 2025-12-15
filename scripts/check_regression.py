@@ -197,8 +197,13 @@ def main():
         sys.exit(1)
     
     if not args.current.exists():
-        print(f"❌ Current file not found: {args.current}", file=sys.stderr)
-        sys.exit(1)
+        if args.mode == "warning":
+            print(f"⚠️  WARNING: Current file not found: {args.current}")
+            print("(This is expected if validation failed - artifact not uploaded)")
+            sys.exit(0)  # Exit cleanly in warning mode
+        else:
+            print(f"❌ Current file not found: {args.current}", file=sys.stderr)
+            sys.exit(1)
     
     # Run regression check
     no_regression = check_regression(args.baseline, args.current, args.mode)

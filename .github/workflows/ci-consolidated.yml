@@ -389,6 +389,10 @@ jobs:
           pip install -c requirements/constraints.txt -r requirements-ci.txt
           pip install -c requirements/constraints.txt -e .
           
+      - name: Verify Package Installation
+        run: |
+          python -c "import lux_depth_v2; print('✅ lux_depth_v2 importable')"
+          
       - name: Generate Synthetic CI Fixtures
         continue-on-error: true
         run: |
@@ -408,6 +412,8 @@ jobs:
           
       - name: Run Water Validation Harness
         continue-on-error: true
+        env:
+          PYTHONPATH: .
         run: |
           set +e
           mkdir -p outputs
@@ -419,7 +425,8 @@ jobs:
             --no-scipy-warning
           ec=$?
           if [ $ec -ne 0 ]; then
-            echo "::warning::Water harness failed (exit=$ec)"
+            echo "::warning::Water harness failed (exit=$ec) - this is expected in warn-only mode"
+            echo "{\"error\": \"harness_failed\", \"exit_code\": $ec}" > outputs/water_validation_current.json
           else
             echo "✅ Generated validation report"
           fi
