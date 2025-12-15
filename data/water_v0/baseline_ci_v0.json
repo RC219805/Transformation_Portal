@@ -6,21 +6,21 @@
     "ocean_images": 7,
     "should_detect_true": 12,
     "should_detect_false": 2,
-    "pool_recall": 0.0,
-    "ocean_recall": 0.0,
-    "pool_avg_coverage": 0.0,
-    "pool_median_coverage": 0.0,
-    "ocean_avg_coverage": 0.0,
-    "ocean_median_coverage": 0.0,
-    "pool_avg_confidence": 0.0,
-    "ocean_avg_confidence": 0.0,
-    "pool_avg_edge_alignment": 0.0,
-    "ocean_avg_edge_alignment": 0.0,
-    "pool_avg_stability": 1.0,
+    "pool_recall": 1.0,
+    "ocean_recall": 1.0,
+    "pool_avg_coverage": 0.8537438710530599,
+    "pool_median_coverage": 1.0,
+    "ocean_avg_coverage": 1.0,
+    "ocean_median_coverage": 1.0,
+    "pool_avg_confidence": 0.6878592282533647,
+    "ocean_avg_confidence": 0.7590920130411786,
+    "pool_avg_edge_alignment": 0.2429534743229548,
+    "ocean_avg_edge_alignment": 0.22405042499303818,
+    "pool_avg_stability": 0.9828109741210938,
     "ocean_avg_stability": 1.0,
-    "false_trigger_count": 0,
-    "false_trigger_rate": 0.0,
-    "overall_avg_processing_time_ms": 0.001121921481431595,
+    "false_trigger_count": 2,
+    "false_trigger_rate": 1.0,
+    "overall_avg_processing_time_ms": 97.61405371994313,
     "false_positive_count": 0,
     "false_positive_rate": 0.0
   },
@@ -33,18 +33,18 @@
       "tags": [
         "synthetic"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.740390396118164,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.20645055174827576,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.00191599247045815
+      "processing_time_ms": 100.62591699534096
     },
     {
       "image_path": "data/water_v0/images/pool/pool_0003.jpg",
@@ -55,18 +55,18 @@
         "synthetic",
         "bright"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7416337966918946,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.20939750969409943,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.001541979145258665
+      "processing_time_ms": 103.89829199993983
     },
     {
       "image_path": "data/water_v0/images/pool/pool_0005.jpg",
@@ -76,18 +76,18 @@
       "tags": [
         "synthetic"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7403905868530274,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.20776031911373138,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0017919810488820076
+      "processing_time_ms": 99.53345800749958
     },
     {
       "image_path": "data/water_v0/images/pool/pool_0007.jpg",
@@ -98,18 +98,18 @@
         "synthetic",
         "dark"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7400381088256837,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.22789783775806427,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0009170034900307655
+      "processing_time_ms": 95.95220800838433
     },
     {
       "image_path": "data/water_v0/images/pool/pool_0008.jpg",
@@ -120,18 +120,18 @@
         "synthetic",
         "low_sat"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 0.12246322631835938,
+      "coverage_px": 32103,
+      "confidence": 0.42429644465446475,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.3845381438732147,
       "boundary_px": 7968,
-      "stability_score": 1.0,
+      "stability_score": 0.8968658447265625,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0006250047590583563
+      "processing_time_ms": 98.8128750177566
     },
     {
       "image_path": "data/water_v0/images/pool/pool_0009.jpg",
@@ -141,18 +141,18 @@
       "tags": [
         "synthetic"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7404060363769532,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.22167648375034332,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.00100000761449337
+      "processing_time_ms": 100.99579198868014
     },
     {
       "image_path": "data/water_v0/images/ocean/ocean_0001.jpg",
@@ -162,18 +162,18 @@
       "tags": [
         "synthetic"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7592010498046876,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.23231826722621918,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0015409896150231361
+      "processing_time_ms": 96.63920899038203
     },
     {
       "image_path": "data/water_v0/images/ocean/ocean_0003.jpg",
@@ -184,18 +184,18 @@
         "synthetic",
         "waves"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7592592239379884,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.20923379063606262,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0014159886632114649
+      "processing_time_ms": 96.74191701924428
     },
     {
       "image_path": "data/water_v0/images/ocean/ocean_0004.jpg",
@@ -206,18 +206,18 @@
         "synthetic",
         "calm"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7591648101806642,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.2205304503440857,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0007499766070395708
+      "processing_time_ms": 96.09054200700484
     },
     {
       "image_path": "data/water_v0/images/ocean/ocean_0005.jpg",
@@ -228,18 +228,18 @@
         "synthetic",
         "green"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7583255767822267,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.22233137488365173,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0008329807315021753
+      "processing_time_ms": 97.67004201421514
     },
     {
       "image_path": "data/water_v0/images/ocean/ocean_0007.jpg",
@@ -249,18 +249,18 @@
       "tags": [
         "synthetic"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7592363357543946,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.23428291082382202,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0006250047590583563
+      "processing_time_ms": 95.37345901480876
     },
     {
       "image_path": "data/water_v0/images/ocean/ocean_0009.jpg",
@@ -271,18 +271,18 @@
         "synthetic",
         "waves"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7593650817871095,
+      "source": "heuristic",
       "implementation": "unknown_v0",
       "edge_alignment_score": 0.22560575604438782,
       "boundary_px": 6108,
       "stability_score": 1.0,
       "is_false_positive": false,
       "is_false_trigger": false,
-      "processing_time_ms": 0.0009580107871443033
+      "processing_time_ms": 96.3636249944102
     },
     {
       "image_path": "data/water_v0/images/pool/neg_blue_wall_0001.jpg",
@@ -294,18 +294,18 @@
         "hard_negative",
         "blue_wall"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 0.9996719360351562,
+      "coverage_px": 262058,
+      "confidence": 0.5963703155517579,
+      "source": "heuristic",
       "implementation": "unknown_v0",
-      "edge_alignment_score": 0.28110674023628235,
-      "boundary_px": 6108,
-      "stability_score": 1.0,
-      "is_false_positive": false,
-      "is_false_trigger": false,
-      "processing_time_ms": 0.0009170034900307655
+      "edge_alignment_score": 0.29828810691833496,
+      "boundary_px": 6192,
+      "stability_score": 0.9996719360351562,
+      "is_false_positive": true,
+      "is_false_trigger": true,
+      "processing_time_ms": 99.01616600109264
     },
     {
       "image_path": "data/water_v0/images/ocean/neg_glass_building_0001.jpg",
@@ -317,18 +317,18 @@
         "hard_negative",
         "glass"
       ],
-      "detected": false,
-      "coverage": 0.0,
-      "coverage_px": 0,
-      "confidence": 0.0,
-      "source": "none",
+      "detected": true,
+      "coverage": 1.0,
+      "coverage_px": 262144,
+      "confidence": 0.7500000000000001,
+      "source": "heuristic",
       "implementation": "unknown_v0",
-      "edge_alignment_score": 0.10576293617486954,
+      "edge_alignment_score": 0.1370334029197693,
       "boundary_px": 6108,
       "stability_score": 1.0,
-      "is_false_positive": false,
-      "is_false_trigger": false,
-      "processing_time_ms": 0.0008749775588512421
+      "is_false_positive": true,
+      "is_false_trigger": true,
+      "processing_time_ms": 88.8832500204444
     }
   ]
 }

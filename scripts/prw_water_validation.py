@@ -463,6 +463,7 @@ def main():
 
     # Run validation
     config = MaterialsV3Config(
+        enabled=True,  # CRITICAL: Must enable Materials V3 for water detection to run
         water_detection_enabled=True,
         water_edge_refinement_enabled=True
     )

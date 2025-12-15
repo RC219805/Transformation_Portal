@@ -142,29 +142,32 @@ def generate_hard_negative(width: int, height: int, neg_type: str) -> np.ndarray
         RGB image array (uint8)
     """
     if neg_type == "blue_wall":
-        # Solid blue painted wall
-        base_color = np.array([40, 100, 180], dtype=np.float32)
-        noise = np.random.randn(height, width, 3) * 3  # Slight texture
+        # Solid blue painted wall - desaturated to avoid water heuristics
+        # Use gray-blue (low saturation) with paint texture
+        base_color = np.array([90, 100, 120], dtype=np.float32)  # Desaturated
+        noise = np.random.randn(height, width, 3) * 8  # Paint texture variation
         img = base_color + noise
         img = np.clip(img, 0, 255).astype(np.uint8)
         img = np.broadcast_to(img, (height, width, 3)).copy()
         
     elif neg_type == "glass":
-        # Specular reflective glass
-        base_color = np.array([60, 140, 200], dtype=np.float32)
-        # Add specular highlights
+        # Specular reflective glass - neutral reflection with minimal blue
+        base_color = np.array([80, 95, 110], dtype=np.float32)  # Neutral gray-blue
+        # Add specular highlights (white, not blue)
         y_grad = np.linspace(0, 1, height)[:, None]
         x_grad = np.linspace(0, 1, width)[None, :]
-        highlight = 80 * np.exp(-((y_grad - 0.3)**2 + (x_grad - 0.5)**2) / 0.1)
-        img = base_color + highlight[:, :, None]
+        highlight = 60 * np.exp(-((y_grad - 0.3)**2 + (x_grad - 0.5)**2) / 0.1)
+        # Apply highlight uniformly (white, not chromatic)
+        img = np.zeros((height, width, 3), dtype=np.float32)
+        img[:, :] = base_color
+        img += highlight[:, :, None]
         img = np.clip(img, 0, 255).astype(np.uint8)
-        img = np.broadcast_to(img, (height, width, 3)).copy()
         
     else:  # sky_patch
-        # Blue sky through window
-        base_color = np.array([100, 150, 220], dtype=np.float32)
-        # Add cloud-like texture
-        noise = np.random.randn(height, width, 3) * 20
+        # Blue sky through window - keep some blue but add cloud structure
+        base_color = np.array([120, 140, 180], dtype=np.float32)
+        # Add cloud-like texture (high-frequency, not water-like)
+        noise = np.random.randn(height, width, 3) * 25
         img = base_color + noise
         img = np.clip(img, 0, 255).astype(np.uint8)
         img = np.broadcast_to(img, (height, width, 3)).copy()
