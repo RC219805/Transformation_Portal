@@ -35,7 +35,7 @@ import time
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 from PIL import Image
@@ -75,7 +75,7 @@ class ValidationResult:
     confidence_raw: float  # pre-suppressor
     confidence_after_suppressors: float  # post-suppressor, pre-boost
     confidence_final: float  # post-boost, pre-injection gate
-    
+
     source: str
     implementation: str  # detector version
 
@@ -89,15 +89,15 @@ class ValidationResult:
     # False triggers
     is_false_positive: bool  # legacy alias for is_false_trigger
     is_false_trigger: bool  # should_detect=false but detected
-    
+
     # PR-W4: Two-stage gating telemetry
     saturation_boost_applied: bool
     candidate_stage_passed: bool  # Stage A
     injection_stage_passed: bool  # Stage B
-    
+
     # Performance
     processing_time_ms: float
-    
+
     # Phase A: Suppressor observability (optional fields with defaults)
     suppressors_applied: List[str] = field(default_factory=list)
     suppressor_telemetry: Optional[Dict] = None
@@ -121,11 +121,11 @@ class WaterValidationHarness:
     ) -> List[ValidationResult]:
         """Run validation on dataset using new schema."""
         results = []
-        
+
         # Check for holdout directory override (Phase B: holdout set support)
         holdout_dir = os.environ.get('WATER_HOLDOUT_DIR')
         is_holdout = ground_truth.get('holdout_version') is not None
-        
+
         if holdout_dir and is_holdout:
             # Use environment variable for holdout images
             root = Path(holdout_dir).resolve()
@@ -225,7 +225,7 @@ class WaterValidationHarness:
         detected = water_dict.get('present', False)
         is_false_trigger = (not should_detect and detected)
         is_fp = is_false_trigger  # legacy alias, same semantics
-        
+
         # PR-W4: Extract two-stage gating telemetry
         confidence_raw = water_dict.get('confidence_raw', water_dict.get('confidence', 0.0))
         confidence_after_suppressors = water_dict.get('confidence_after_suppressors', water_dict.get('confidence', 0.0))
@@ -233,18 +233,18 @@ class WaterValidationHarness:
         saturation_boost_applied = water_dict.get('saturation_boost_applied', False)
         candidate_stage_passed = water_dict.get('candidate_stage_passed', False)
         injection_stage_passed = water_dict.get('injection_stage_passed', False)
-        
+
         # Phase A: Extract suppressor telemetry
         suppressors_applied = water_dict.get('suppressors_applied', [])
         suppressor_telemetry = water_dict.get('suppressor_telemetry', None)
-        
+
         # Extract individual detector telemetry for easier querying
         glass_detector = None
         flat_surface_detector = None
         if suppressor_telemetry:
             glass_detector = suppressor_telemetry.get('glass_detector', None)
             flat_surface_detector = suppressor_telemetry.get('flat_surface_detector', None)
-        
+
         # PR-W4: Coverage metrics
         coverage = water_dict.get('coverage', 0.0)
         coverage_all = coverage  # Raw coverage (always present)
@@ -391,7 +391,7 @@ class WaterValidationHarness:
         # Coverage stats (only for detected water)
         pool_coverages = [r.coverage for r in pool_detected]
         ocean_coverages = [r.coverage for r in ocean_detected]
-        
+
         # PR-W4: Add coverage_all and coverage_detected variants
         pool_coverages_all = [r.coverage_all for r in pool_true]
         ocean_coverages_all = [r.coverage_all for r in ocean_true]
@@ -415,7 +415,7 @@ class WaterValidationHarness:
             "pool_median_coverage": float(np.median(pool_coverages)) if pool_coverages else 0.0,
             "ocean_avg_coverage": float(np.mean(ocean_coverages)) if ocean_coverages else 0.0,
             "ocean_median_coverage": float(np.median(ocean_coverages)) if ocean_coverages else 0.0,
-            
+
             # PR-W4: New coverage metrics
             "pool_avg_coverage_all": float(np.mean(pool_coverages_all)) if pool_coverages_all else 0.0,
             "pool_avg_coverage_detected": float(np.mean(pool_coverages_detected)) if pool_coverages_detected else 0.0,
@@ -425,14 +425,26 @@ class WaterValidationHarness:
             # Confidence
             "pool_avg_confidence": float(np.mean([r.confidence for r in pool_detected])) if pool_detected else 0.0,
             "ocean_avg_confidence": float(np.mean([r.confidence for r in ocean_detected])) if ocean_detected else 0.0,
-            
+
             # PR-W4: Three-stage confidence tracking
-            "pool_avg_confidence_raw": float(np.mean([r.confidence_raw for r in pool_detected])) if pool_detected else 0.0,
-            "pool_avg_confidence_after_suppressors": float(np.mean([r.confidence_after_suppressors for r in pool_detected])) if pool_detected else 0.0,
-            "pool_avg_confidence_final": float(np.mean([r.confidence_final for r in pool_detected])) if pool_detected else 0.0,
-            "ocean_avg_confidence_raw": float(np.mean([r.confidence_raw for r in ocean_detected])) if ocean_detected else 0.0,
-            "ocean_avg_confidence_after_suppressors": float(np.mean([r.confidence_after_suppressors for r in ocean_detected])) if ocean_detected else 0.0,
-            "ocean_avg_confidence_final": float(np.mean([r.confidence_final for r in ocean_detected])) if ocean_detected else 0.0,
+            "pool_avg_confidence_raw": (
+                float(np.mean([r.confidence_raw for r in pool_detected]))
+                if pool_detected else 0.0),
+            "pool_avg_confidence_after_suppressors": (
+                float(np.mean([r.confidence_after_suppressors for r in pool_detected]))
+                if pool_detected else 0.0),
+            "pool_avg_confidence_final": (
+                float(np.mean([r.confidence_final for r in pool_detected]))
+                if pool_detected else 0.0),
+            "ocean_avg_confidence_raw": (
+                float(np.mean([r.confidence_raw for r in ocean_detected]))
+                if ocean_detected else 0.0),
+            "ocean_avg_confidence_after_suppressors": (
+                float(np.mean([r.confidence_after_suppressors for r in ocean_detected]))
+                if ocean_detected else 0.0),
+            "ocean_avg_confidence_final": (
+                float(np.mean([r.confidence_final for r in ocean_detected]))
+                if ocean_detected else 0.0),
 
             # Edge alignment (primary metric)
             "pool_avg_edge_alignment": (float(np.mean([r.edge_alignment_score for r in pool_detected]))
@@ -457,10 +469,12 @@ class WaterValidationHarness:
         }
 
         # Self-check: ensure summary aggregates match per-image flags (prevent silent drift)
-        assert summary["false_positive_count"] == summary["false_trigger_count"], \
-            f"Summary inconsistency: false_positive_count={summary['false_positive_count']} != false_trigger_count={summary['false_trigger_count']}"
-        assert abs(summary["false_positive_rate"] - summary["false_trigger_rate"]) < 1e-9, \
-            f"Summary inconsistency: false_positive_rate={summary['false_positive_rate']} != false_trigger_rate={summary['false_trigger_rate']}"
+        assert summary["false_positive_count"] == summary["false_trigger_count"], (
+            f"Summary inconsistency: false_positive_count={summary['false_positive_count']} "
+            f"!= false_trigger_count={summary['false_trigger_count']}")
+        assert abs(summary["false_positive_rate"] - summary["false_trigger_rate"]) < 1e-9, (
+            f"Summary inconsistency: false_positive_rate={summary['false_positive_rate']} "
+            f"!= false_trigger_rate={summary['false_trigger_rate']}")
 
         report = {
             "summary": summary,
