@@ -32,9 +32,9 @@ import argparse
 import json
 import time
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from PIL import Image
@@ -93,9 +93,15 @@ class ValidationResult:
     saturation_boost_applied: bool
     candidate_stage_passed: bool  # Stage A
     injection_stage_passed: bool  # Stage B
-
+    
     # Performance
     processing_time_ms: float
+    
+    # Phase A: Suppressor observability (optional fields with defaults)
+    suppressors_applied: List[str] = field(default_factory=list)
+    suppressor_telemetry: Optional[Dict] = None
+    glass_detector: Optional[Dict] = None
+    flat_surface_detector: Optional[Dict] = None
 
 
 class WaterValidationHarness:
@@ -216,6 +222,17 @@ class WaterValidationHarness:
         candidate_stage_passed = water_dict.get('candidate_stage_passed', False)
         injection_stage_passed = water_dict.get('injection_stage_passed', False)
         
+        # Phase A: Extract suppressor telemetry
+        suppressors_applied = water_dict.get('suppressors_applied', [])
+        suppressor_telemetry = water_dict.get('suppressor_telemetry', None)
+        
+        # Extract individual detector telemetry for easier querying
+        glass_detector = None
+        flat_surface_detector = None
+        if suppressor_telemetry:
+            glass_detector = suppressor_telemetry.get('glass_detector', None)
+            flat_surface_detector = suppressor_telemetry.get('flat_surface_detector', None)
+        
         # PR-W4: Coverage metrics
         coverage = water_dict.get('coverage', 0.0)
         coverage_all = coverage  # Raw coverage (always present)
@@ -246,6 +263,10 @@ class WaterValidationHarness:
             saturation_boost_applied=saturation_boost_applied,
             candidate_stage_passed=candidate_stage_passed,
             injection_stage_passed=injection_stage_passed,
+            suppressors_applied=suppressors_applied,
+            suppressor_telemetry=suppressor_telemetry,
+            glass_detector=glass_detector,
+            flat_surface_detector=flat_surface_detector,
             processing_time_ms=elapsed_ms
         )
 

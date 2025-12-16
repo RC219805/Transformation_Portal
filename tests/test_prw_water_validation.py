@@ -60,7 +60,12 @@ def test_validation_result_dataclass():
         detected=True,  # Canonical detection flag from water_candidate.present
         coverage=0.25,
         coverage_px=1000,
+        coverage_all=0.25,  # PR-W4
+        coverage_detected=0.25,  # PR-W4
         confidence=0.75,
+        confidence_raw=0.80,  # PR-W4
+        confidence_after_suppressors=0.77,  # PR-W4
+        confidence_final=0.75,  # PR-W4
         source="heuristic",
         implementation="stub_v0",
         edge_alignment_score=0.65,
@@ -68,6 +73,9 @@ def test_validation_result_dataclass():
         stability_score=0.85,
         is_false_positive=False,
         is_false_trigger=False,
+        saturation_boost_applied=False,  # PR-W4
+        candidate_stage_passed=True,  # PR-W4
+        injection_stage_passed=True,  # PR-W4
         processing_time_ms=45.2
     )
 
@@ -217,7 +225,8 @@ def test_false_trigger_detection():
     try:
         # Validate as hard negative (should_detect=false)
         result = harness.validate_single(
-            temp_path, 
+            temp_path,
+            img_relpath="test/temp_pool.jpg",  # Added img_relpath
             label="pool",
             should_detect=False,
             difficulty="hard",
@@ -257,7 +266,8 @@ def test_validate_single_image():
 
     try:
         result = harness.validate_single(
-            temp_path, 
+            temp_path,
+            img_relpath="test/temp_pool.jpg",  # Added img_relpath
             label="pool",
             should_detect=True,
             difficulty="easy",
@@ -266,7 +276,7 @@ def test_validate_single_image():
 
         # Verify result structure
         assert isinstance(result, ValidationResult)
-        assert result.image_path == str(temp_path)
+        assert result.image_path == "test/temp_pool.jpg"  # Should match img_relpath
         assert result.scene_type == "pool"
         assert result.should_detect is True
         assert result.difficulty == "easy"
@@ -326,9 +336,15 @@ def test_validate_dataset():
                 }
             }
         }
+        
+        # Write ground truth to file
+        gt_path = temp_dir / "ground_truth.json"
+        import json
+        with open(gt_path, 'w') as f:
+            json.dump(ground_truth, f)
 
         # Validate dataset
-        results = harness.validate_dataset(ground_truth)
+        results = harness.validate_dataset(ground_truth, gt_path)
 
         # Verify results
         assert len(results) == 2
@@ -374,7 +390,15 @@ def test_report_generation():
             stability_score=0.85,
             is_false_positive=False,
             is_false_trigger=False,
-            processing_time_ms=42.0
+            processing_time_ms=42.0,
+        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+        confidence_raw=0.0,  # PR-W4
+        confidence_after_suppressors=0.0,  # PR-W4
+        confidence_final=0.0,  # PR-W4
+        saturation_boost_applied=False,  # PR-W4
+        candidate_stage_passed=False,  # PR-W4
+        injection_stage_passed=False  # PR-W4
         ),
         ValidationResult(
             image_path="ocean_001.jpg",
@@ -393,7 +417,15 @@ def test_report_generation():
             stability_score=0.80,
             is_false_positive=False,
             is_false_trigger=False,
-            processing_time_ms=45.0
+            processing_time_ms=45.0,
+        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+        confidence_raw=0.0,  # PR-W4
+        confidence_after_suppressors=0.0,  # PR-W4
+        confidence_final=0.0,  # PR-W4
+        saturation_boost_applied=False,  # PR-W4
+        candidate_stage_passed=False,  # PR-W4
+        injection_stage_passed=False  # PR-W4
         ),
         ValidationResult(
             image_path="neg_blue_wall_001.jpg",
@@ -412,7 +444,15 @@ def test_report_generation():
             stability_score=1.0,
             is_false_positive=False,
             is_false_trigger=False,
-            processing_time_ms=38.0
+            processing_time_ms=38.0,
+        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+        confidence_raw=0.0,  # PR-W4
+        confidence_after_suppressors=0.0,  # PR-W4
+        confidence_final=0.0,  # PR-W4
+        saturation_boost_applied=False,  # PR-W4
+        candidate_stage_passed=False,  # PR-W4
+        injection_stage_passed=False  # PR-W4
         )
     ]
 
@@ -509,7 +549,15 @@ def test_report_summary_statistics():
             stability_score=0.80,
             is_false_positive=False,
             is_false_trigger=False,
-            processing_time_ms=40.0
+            processing_time_ms=40.0,
+        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+        confidence_raw=0.0,  # PR-W4
+        confidence_after_suppressors=0.0,  # PR-W4
+        confidence_final=0.0,  # PR-W4
+        saturation_boost_applied=False,  # PR-W4
+        candidate_stage_passed=False,  # PR-W4
+        injection_stage_passed=False  # PR-W4
         ),
         ValidationResult(
             image_path="pool_002.jpg",
@@ -528,7 +576,15 @@ def test_report_summary_statistics():
             stability_score=0.90,
             is_false_positive=False,
             is_false_trigger=False,
-            processing_time_ms=42.0
+            processing_time_ms=42.0,
+        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+        confidence_raw=0.0,  # PR-W4
+        confidence_after_suppressors=0.0,  # PR-W4
+        confidence_final=0.0,  # PR-W4
+        saturation_boost_applied=False,  # PR-W4
+        candidate_stage_passed=False,  # PR-W4
+        injection_stage_passed=False  # PR-W4
         ),
         ValidationResult(
             image_path="neg_blue_wall_001.jpg",
@@ -547,7 +603,15 @@ def test_report_summary_statistics():
             stability_score=0.95,
             is_false_positive=True,  # Legacy alias for is_false_trigger
             is_false_trigger=True,  # Detected despite should_detect=false
-            processing_time_ms=38.0
+            processing_time_ms=38.0,
+        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+        confidence_raw=0.0,  # PR-W4
+        confidence_after_suppressors=0.0,  # PR-W4
+        confidence_final=0.0,  # PR-W4
+        saturation_boost_applied=False,  # PR-W4
+        candidate_stage_passed=False,  # PR-W4
+        injection_stage_passed=False  # PR-W4
         )
     ]
 
@@ -668,7 +732,8 @@ def test_edge_alignment_with_detector_enabled():
     
     try:
         result = harness.validate_single(
-            img_path, 
+            img_path,
+            img_relpath="test/temp_pool.jpg",  # Added img_relpath
             label="pool",
             should_detect=True,
             difficulty="easy",
@@ -687,3 +752,38 @@ def test_edge_alignment_with_detector_enabled():
         
     finally:
         img_path.unlink()  # Cleanup
+
+
+def test_suppressor_telemetry_export():
+    """Verify suppressor telemetry is exported in validation results (Phase A)."""
+    import json
+    from pathlib import Path
+    
+    # Load baseline with telemetry
+    baseline_path = Path("data/water_v0/baseline_ci_current_v1.json")
+    if not baseline_path.exists():
+        pytest.skip("Baseline not available")
+    
+    with open(baseline_path) as f:
+        baseline = json.load(f)
+    
+    # Check first result has telemetry fields
+    first_result = baseline["results"][0]
+    
+    required_fields = [
+        "suppressors_applied",
+        "suppressor_telemetry",
+        "glass_detector",
+        "flat_surface_detector",
+    ]
+    
+    for field in required_fields:
+        assert field in first_result, f"Missing telemetry field: {field}"
+    
+    # suppressors_applied should be a list
+    assert isinstance(first_result["suppressors_applied"], list)
+    
+    # suppressor_telemetry can be None or dict
+    assert first_result["suppressor_telemetry"] is None or isinstance(first_result["suppressor_telemetry"], dict)
+    
+    print("✅ All telemetry fields present in baseline")

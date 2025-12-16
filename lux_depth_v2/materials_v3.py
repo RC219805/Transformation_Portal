@@ -58,6 +58,9 @@ class WaterCandidateReport:
     saturation_boost_applied: bool = False  # True if saturation boost was applied
     candidate_stage_passed: bool = False  # Stage A: Candidate detection
     injection_stage_passed: bool = False  # Stage B: Injection decision
+    # Phase A: Suppressor observability
+    suppressors_applied: List[str] = field(default_factory=list)  # Which suppressors fired
+    suppressor_telemetry: Optional[Dict] = None  # Full suppressor telemetry from detector
     
     def to_dict(self) -> dict:
         """Convert to JSON-serializable dict (excludes mask field)."""
@@ -78,6 +81,9 @@ class WaterCandidateReport:
             "saturation_boost_applied": self.saturation_boost_applied,
             "candidate_stage_passed": self.candidate_stage_passed,
             "injection_stage_passed": self.injection_stage_passed,
+            # Phase A: Suppressor observability
+            "suppressors_applied": self.suppressors_applied,
+            "suppressor_telemetry": self.suppressor_telemetry,
         }
 
 
@@ -581,6 +587,13 @@ class MaterialsV3Engine:
         scene_context = self._infer_scene_context(canonical_materials)
         result = self.water_detector.detect(rgb01, depth01, scene_context)
         
+        # Phase A: Extract suppressor telemetry from detector result
+        suppressors_applied = []
+        suppressor_telemetry = None
+        if result.suppressor_telemetry:
+            suppressors_applied = result.suppressor_telemetry.get("suppressors_applied", [])
+            suppressor_telemetry = result.suppressor_telemetry
+        
         # PR-W4: Two-stage gating implementation
         # Stage 1: Extract raw confidence (before suppressors)
         confidence_raw = result.confidence
@@ -674,6 +687,9 @@ class MaterialsV3Engine:
                         saturation_boost_applied=saturation_boost_applied,
                         candidate_stage_passed=candidate_stage_passed,
                         injection_stage_passed=injection_stage_passed,
+                        # Phase A: Suppressor observability
+                        suppressors_applied=suppressors_applied,
+                        suppressor_telemetry=suppressor_telemetry,
                     )
         
         # No refinement applied, return heuristic result with two-stage telemetry
@@ -695,6 +711,9 @@ class MaterialsV3Engine:
             saturation_boost_applied=saturation_boost_applied,
             candidate_stage_passed=candidate_stage_passed,
             injection_stage_passed=injection_stage_passed,
+            # Phase A: Suppressor observability
+            suppressors_applied=suppressors_applied,
+            suppressor_telemetry=suppressor_telemetry,
         )
     
     def _should_inject_water_candidate(

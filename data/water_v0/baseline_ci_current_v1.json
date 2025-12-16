@@ -30,7 +30,7 @@
     "ocean_avg_stability": 1.0,
     "false_trigger_count": 0,
     "false_trigger_rate": 0.0,
-    "overall_avg_processing_time_ms": 124.0656101456677,
+    "overall_avg_processing_time_ms": 127.19772021227982,
     "false_positive_count": 0,
     "false_positive_rate": 0.0
   },
@@ -62,7 +62,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 129.71562499296851
+      "processing_time_ms": 134.4006249855738,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.740390396118164,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.06861969828605652,
+          "specular_fraction": 0.099700927734375,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.3497138496756963,
+          "grid_score": 0.3497138496756963,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.16173216329645174,
+          "vertical_aligned_fraction": 0.18798168637924456,
+          "total_strong_edges": 52420
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.4442342376708984,
+        "total_suppression": 0.2961561584472656
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.3497138496756963,
+        "grid_score": 0.3497138496756963,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.16173216329645174,
+        "vertical_aligned_fraction": 0.18798168637924456,
+        "total_strong_edges": 52420
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.06861969828605652,
+        "specular_fraction": 0.099700927734375,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "pool/pool_0003.jpg",
@@ -92,7 +138,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 135.79116700566374
+      "processing_time_ms": 138.39695797651075,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7416337966918946,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.08180350065231323,
+          "specular_fraction": 0.103302001953125,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.34649214859476063,
+          "grid_score": 0.34649214859476063,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.16422125126404763,
+          "vertical_aligned_fraction": 0.18227089733071303,
+          "total_strong_edges": 52411
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.44498027801513673,
+        "total_suppression": 0.2966535186767578
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.34649214859476063,
+        "grid_score": 0.34649214859476063,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.16422125126404763,
+        "vertical_aligned_fraction": 0.18227089733071303,
+        "total_strong_edges": 52411
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.08180350065231323,
+        "specular_fraction": 0.103302001953125,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "pool/pool_0005.jpg",
@@ -121,7 +213,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 126.52687498484738
+      "processing_time_ms": 131.97274997946806,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7403905868530274,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.06864257156848907,
+          "specular_fraction": 0.09976577758789062,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.34555962462806133,
+          "grid_score": 0.34555962462806133,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.16157396810864424,
+          "vertical_aligned_fraction": 0.18398565651941712,
+          "total_strong_edges": 52428
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.44423435211181644,
+        "total_suppression": 0.29615623474121094
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.34555962462806133,
+        "grid_score": 0.34555962462806133,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.16157396810864424,
+        "vertical_aligned_fraction": 0.18398565651941712,
+        "total_strong_edges": 52428
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.06864257156848907,
+        "specular_fraction": 0.09976577758789062,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "pool/pool_0007.jpg",
@@ -151,7 +289,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 124.10512499627657
+      "processing_time_ms": 125.61625000671484,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7400381088256837,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.049256742000579834,
+          "specular_fraction": 0.09960556030273438,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.3577880043537207,
+          "grid_score": 0.3577880043537207,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.15967461666252936,
+          "vertical_aligned_fraction": 0.19811338769119136,
+          "total_strong_edges": 52369
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.4440228652954102,
+        "total_suppression": 0.2960152435302735
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.3577880043537207,
+        "grid_score": 0.3577880043537207,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.15967461666252936,
+        "vertical_aligned_fraction": 0.19811338769119136,
+        "total_strong_edges": 52369
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.049256742000579834,
+        "specular_fraction": 0.09960556030273438,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "pool/pool_0008.jpg",
@@ -181,7 +365,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": false,
-      "processing_time_ms": 122.78499998501502
+      "processing_time_ms": 122.94812500476837,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.42429644465446475,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.007451700046658516,
+          "specular_fraction": 0.8282715011058157,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.48831047381546133,
+          "grid_score": 0.48831047381546133,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.13123441396508728,
+          "vertical_aligned_fraction": 0.35707605985037405,
+          "total_strong_edges": 6416
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.25457786679267885,
+        "total_suppression": 0.1697185778617859
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.48831047381546133,
+        "grid_score": 0.48831047381546133,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.13123441396508728,
+        "vertical_aligned_fraction": 0.35707605985037405,
+        "total_strong_edges": 6416
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.007451700046658516,
+        "specular_fraction": 0.8282715011058157,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "pool/pool_0009.jpg",
@@ -210,7 +440,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 125.19083300139755
+      "processing_time_ms": 133.14783398527652,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7404060363769532,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.0686432495713234,
+          "specular_fraction": 0.09970474243164062,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.3463739365963453,
+          "grid_score": 0.3463739365963453,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.15997787357418075,
+          "vertical_aligned_fraction": 0.18639606302216458,
+          "total_strong_edges": 52426
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.44424362182617194,
+        "total_suppression": 0.2961624145507813
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.3463739365963453,
+        "grid_score": 0.3463739365963453,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.15997787357418075,
+        "vertical_aligned_fraction": 0.18639606302216458,
+        "total_strong_edges": 52426
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.0686432495713234,
+        "specular_fraction": 0.09970474243164062,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "ocean/ocean_0001.jpg",
@@ -239,7 +515,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 126.52304201037623
+      "processing_time_ms": 129.22695800079964,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7592010498046876,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.04585761949419975,
+          "specular_fraction": 0.03680419921875,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.3335876552158239,
+          "grid_score": 0.3335876552158239,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.1548438781543861,
+          "vertical_aligned_fraction": 0.17874377706143782,
+          "total_strong_edges": 52427
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.45552062988281256,
+        "total_suppression": 0.30368041992187506
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.3335876552158239,
+        "grid_score": 0.3335876552158239,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.1548438781543861,
+        "vertical_aligned_fraction": 0.17874377706143782,
+        "total_strong_edges": 52427
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.04585761949419975,
+        "specular_fraction": 0.03680419921875,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "ocean/ocean_0003.jpg",
@@ -269,7 +591,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 125.85112501983531
+      "processing_time_ms": 129.85620900872163,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7592592239379884,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.04753400757908821,
+          "specular_fraction": 0.037036895751953125,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.3357816017398604,
+          "grid_score": 0.3357816017398604,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.18596665267656148,
+          "vertical_aligned_fraction": 0.14981494906329887,
+          "total_strong_edges": 52418
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.455555534362793,
+        "total_suppression": 0.3037036895751954
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.3357816017398604,
+        "grid_score": 0.3357816017398604,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.18596665267656148,
+        "vertical_aligned_fraction": 0.14981494906329887,
+        "total_strong_edges": 52418
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.04753400757908821,
+        "specular_fraction": 0.037036895751953125,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "ocean/ocean_0004.jpg",
@@ -299,7 +667,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 124.50629100203514
+      "processing_time_ms": 125.14583399752155,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7591648101806642,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.04585990309715271,
+          "specular_fraction": 0.03665924072265625,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.33790459478532875,
+          "grid_score": 0.33790459478532875,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.15939651719468234,
+          "vertical_aligned_fraction": 0.1785080775906464,
+          "total_strong_edges": 52429
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.4554988861083985,
+        "total_suppression": 0.30366592407226567
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.33790459478532875,
+        "grid_score": 0.33790459478532875,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.15939651719468234,
+        "vertical_aligned_fraction": 0.1785080775906464,
+        "total_strong_edges": 52429
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.04585990309715271,
+        "specular_fraction": 0.03665924072265625,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "ocean/ocean_0005.jpg",
@@ -329,7 +743,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 122.23241699393839
+      "processing_time_ms": 127.82045800122432,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7583255767822267,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.04602969065308571,
+          "specular_fraction": 0.03330230712890625,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.33632167245259986,
+          "grid_score": 0.33632167245259986,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.15515202380498225,
+          "vertical_aligned_fraction": 0.1811696486476176,
+          "total_strong_edges": 52426
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.454995346069336,
+        "total_suppression": 0.30333023071289067
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.33632167245259986,
+        "grid_score": 0.33632167245259986,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.15515202380498225,
+        "vertical_aligned_fraction": 0.1811696486476176,
+        "total_strong_edges": 52426
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.04602969065308571,
+        "specular_fraction": 0.03330230712890625,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "ocean/ocean_0007.jpg",
@@ -358,7 +818,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 123.94275001133792
+      "processing_time_ms": 125.51233300473541,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7592363357543946,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.04578950256109238,
+          "specular_fraction": 0.036945343017578125,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.33990232362928763,
+          "grid_score": 0.33990232362928763,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.1591247281468198,
+          "vertical_aligned_fraction": 0.18077759548246786,
+          "total_strong_edges": 52418
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.4555418014526368,
+        "total_suppression": 0.30369453430175786
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.33990232362928763,
+        "grid_score": 0.33990232362928763,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.1591247281468198,
+        "vertical_aligned_fraction": 0.18077759548246786,
+        "total_strong_edges": 52418
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.04578950256109238,
+        "specular_fraction": 0.036945343017578125,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "ocean/ocean_0009.jpg",
@@ -388,7 +894,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": true,
-      "processing_time_ms": 126.69750000350177
+      "processing_time_ms": 128.88608302455395,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7593650817871095,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.04746491461992264,
+          "specular_fraction": 0.0374603271484375,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.3381716225752923,
+          "grid_score": 0.3381716225752923,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.1863663239810029,
+          "vertical_aligned_fraction": 0.15180529859428943,
+          "total_strong_edges": 52429
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.4556190490722657,
+        "total_suppression": 0.3037460327148438
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.3381716225752923,
+        "grid_score": 0.3381716225752923,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.1863663239810029,
+        "vertical_aligned_fraction": 0.15180529859428943,
+        "total_strong_edges": 52429
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.04746491461992264,
+        "specular_fraction": 0.0374603271484375,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "pool/neg_blue_wall_0001.jpg",
@@ -419,7 +971,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": false,
-      "processing_time_ms": 116.06291701900773
+      "processing_time_ms": 120.84808299550787,
+      "suppressors_applied": [
+        "architectural_glass"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.5963703155517579,
+        "suppressors_applied": [
+          "architectural_glass"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.06945706158876419,
+          "specular_fraction": 0.0,
+          "is_flat_surface": false,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "glass_detector": {
+          "edge_alignment_score": 0.33120009169755094,
+          "grid_score": 0.33120009169755094,
+          "is_glass": true,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.1687999083024491,
+          "vertical_aligned_fraction": 0.16240018339510182,
+          "total_strong_edges": 52346
+        },
+        "glass_penalty": 0.6,
+        "final_confidence": 0.35782218933105475,
+        "total_suppression": 0.23854812622070315
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.33120009169755094,
+        "grid_score": 0.33120009169755094,
+        "is_glass": true,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.1687999083024491,
+        "vertical_aligned_fraction": 0.16240018339510182,
+        "total_strong_edges": 52346
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.06945706158876419,
+        "specular_fraction": 0.0,
+        "is_flat_surface": false,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     },
     {
       "image_path": "ocean/neg_glass_building_0001.jpg",
@@ -450,7 +1048,53 @@
       "saturation_boost_applied": false,
       "candidate_stage_passed": true,
       "injection_stage_passed": false,
-      "processing_time_ms": 106.98787501314655
+      "processing_time_ms": 106.98958300054073,
+      "suppressors_applied": [
+        "flat_surface"
+      ],
+      "suppressor_telemetry": {
+        "original_confidence": 0.7500000000000001,
+        "suppressors_applied": [
+          "flat_surface"
+        ],
+        "flat_surface_detector": {
+          "edge_energy": 0.0055091199465096,
+          "specular_fraction": 0.0,
+          "is_flat_surface": true,
+          "edge_threshold": 0.02,
+          "specular_threshold": 0.1
+        },
+        "flat_surface_penalty": 0.5,
+        "glass_detector": {
+          "edge_alignment_score": 0.11380688806888069,
+          "grid_score": 0.0,
+          "is_glass": false,
+          "alignment_threshold": 0.15,
+          "grid_threshold": 0.25,
+          "horizontal_aligned_fraction": 0.06577490774907749,
+          "vertical_aligned_fraction": 0.0480319803198032,
+          "total_strong_edges": 32520
+        },
+        "final_confidence": 0.37500000000000006,
+        "total_suppression": 0.37500000000000006
+      },
+      "glass_detector": {
+        "edge_alignment_score": 0.11380688806888069,
+        "grid_score": 0.0,
+        "is_glass": false,
+        "alignment_threshold": 0.15,
+        "grid_threshold": 0.25,
+        "horizontal_aligned_fraction": 0.06577490774907749,
+        "vertical_aligned_fraction": 0.0480319803198032,
+        "total_strong_edges": 32520
+      },
+      "flat_surface_detector": {
+        "edge_energy": 0.0055091199465096,
+        "specular_fraction": 0.0,
+        "is_flat_surface": true,
+        "edge_threshold": 0.02,
+        "specular_threshold": 0.1
+      }
     }
   ]
 }
