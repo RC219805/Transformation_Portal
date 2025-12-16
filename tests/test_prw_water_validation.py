@@ -359,6 +359,7 @@ def test_validate_dataset():
         # Cleanup
         pool_img.unlink(missing_ok=True)
         neg_img.unlink(missing_ok=True)
+        gt_path.unlink(missing_ok=True)
         pool_dir.rmdir()
         temp_dir.rmdir()
 
