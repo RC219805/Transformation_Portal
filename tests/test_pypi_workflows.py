@@ -155,8 +155,8 @@ class TestPyPIWorkflows:
             "Should use recent checkout action (v4, v5, or v6)"
         assert any(f'actions/setup-python@v{v}' in content for v in ['5', '6']), \
             "Should use recent setup-python action (v5 or v6)"
-        assert any(f'actions/upload-artifact@v{v}' in content for v in ['4', '5']), \
-            "Should use recent upload-artifact action (v4 or v5)"
+        assert any(f'actions/upload-artifact@v{v}' in content for v in ['4', '5', '6']), \
+            "Should use recent upload-artifact action (v4, v5, or v6)"
 
     def test_submit_pypi_has_package_verification(self, workflows_dir):
         """Test that submit-pypi.yml verifies package contents."""
