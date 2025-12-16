@@ -86,6 +86,11 @@ class WaterDetectionParams:
     glass_edge_alignment_threshold: float = 0.15  # High axis-alignment (0°/90°)
     glass_grid_score_threshold: float = 0.25  # Grid-like gradient pattern
     glass_penalty: float = 0.6  # Confidence *= 0.6
+    
+    # PR-W5: Multi-scale glass suppressor (opt-in, experimental)
+    glass_multiscale_enabled: bool = False  # Master gate (default OFF)
+    glass_multiscale_downsample_factor: int = 4  # 1/4 scale
+    glass_tile_persistence_threshold: float = 0.8  # <0.8 = high-freq tiles
 
 
 @dataclass
@@ -519,6 +524,7 @@ class WaterCandidateDetector:
         """Detect architectural glass patterns (grid-like, axis-aligned edges).
         
         Uses edge orientation analysis to identify rectilinear window/building patterns.
+        PR-W5: Adds optional multi-scale persistence check to reject high-frequency tiles.
         
         Args:
             rgb01: RGB image (HxWx3 float32)
@@ -534,6 +540,9 @@ class WaterCandidateDetector:
             return False, {
                 "edge_alignment_score": 0.0,
                 "grid_score": 0.0,
+                "grid_score_coarse": None,
+                "grid_persistence_ratio": None,
+                "tile_exempted": False,
                 "is_glass": False,
                 "reason": "scipy_unavailable",
             }
@@ -554,6 +563,9 @@ class WaterCandidateDetector:
             return False, {
                 "edge_alignment_score": 0.0,
                 "grid_score": 0.0,
+                "grid_score_coarse": None,
+                "grid_persistence_ratio": None,
+                "tile_exempted": False,
                 "is_glass": False,
                 "reason": "no_mask",
             }
@@ -568,6 +580,9 @@ class WaterCandidateDetector:
             return False, {
                 "edge_alignment_score": 0.0,
                 "grid_score": 0.0,
+                "grid_score_coarse": None,
+                "grid_persistence_ratio": None,
+                "tile_exempted": False,
                 "is_glass": False,
                 "reason": "no_edges_in_mask",
             }
@@ -579,6 +594,9 @@ class WaterCandidateDetector:
             return False, {
                 "edge_alignment_score": 0.0,
                 "grid_score": 0.0,
+                "grid_score_coarse": None,
+                "grid_persistence_ratio": None,
+                "tile_exempted": False,
                 "is_glass": False,
                 "reason": "insufficient_strong_edges",
             }
@@ -620,15 +638,39 @@ class WaterCandidateDetector:
         else:
             grid_score = 0.0
         
-        # Detection logic: high axis-alignment or grid pattern
-        is_glass = (
+        # PR-W5: Multi-scale grid check (opt-in)
+        grid_score_coarse = None
+        grid_persistence_ratio = None
+        tile_exempted = False
+        
+        if self.params.glass_multiscale_enabled and grid_score > 0.0:
+            grid_score_coarse = self._compute_grid_score_at_scale(
+                gray, mask_binary, downsample_factor=self.params.glass_multiscale_downsample_factor
+            )
+            
+            if grid_score_coarse is not None:
+                grid_persistence_ratio = grid_score_coarse / max(grid_score, 1e-6)
+                
+                # Tile exemption: high grid at full scale but low persistence at coarse scale
+                tile_exempted = (
+                    grid_score > self.params.glass_grid_score_threshold and
+                    grid_persistence_ratio < self.params.glass_tile_persistence_threshold
+                )
+        
+        # Detection logic: high axis-alignment or grid pattern, minus tile exemptions
+        is_glass_base = (
             alignment_score > self.params.glass_edge_alignment_threshold or
             grid_score > self.params.glass_grid_score_threshold
         )
         
+        is_glass = is_glass_base and not tile_exempted
+        
         metrics = {
             "edge_alignment_score": alignment_score,
             "grid_score": grid_score,
+            "grid_score_coarse": grid_score_coarse,
+            "grid_persistence_ratio": grid_persistence_ratio,
+            "tile_exempted": tile_exempted,
             "is_glass": is_glass,
             "alignment_threshold": float(self.params.glass_edge_alignment_threshold),
             "grid_threshold": float(self.params.glass_grid_score_threshold),
@@ -638,6 +680,90 @@ class WaterCandidateDetector:
         }
         
         return is_glass, metrics
+    
+    def _compute_grid_score_at_scale(
+        self,
+        gray: np.ndarray,
+        mask_binary: np.ndarray,
+        downsample_factor: int = 4,
+    ) -> Optional[float]:
+        """Compute grid score at coarse scale (PR-W5 multi-scale suppressor).
+        
+        Uses simple averaging-based downsampling (no PIL/SciPy dependency beyond SciPy for sobel).
+        
+        Args:
+            gray: Grayscale image (HxW float32)
+            mask_binary: Binary mask (HxW bool)
+            downsample_factor: Downsample factor (e.g., 4 = 1/4 scale)
+            
+        Returns:
+            Grid score at coarse scale, or None if downsampling fails
+        """
+        h, w = gray.shape
+        
+        # Calculate coarse dimensions
+        h_coarse = h // downsample_factor
+        w_coarse = w // downsample_factor
+        
+        if h_coarse < 32 or w_coarse < 32:
+            return None
+        
+        # Simple averaging-based downsample (no PIL dependency)
+        h_crop = h_coarse * downsample_factor
+        w_crop = w_coarse * downsample_factor
+        gray_crop = gray[:h_crop, :w_crop]
+        mask_crop = mask_binary[:h_crop, :w_crop]
+        
+        # Reshape and average
+        gray_coarse = gray_crop.reshape(h_coarse, downsample_factor, w_coarse, downsample_factor).mean(axis=(1, 3))
+        mask_coarse = mask_crop.reshape(h_coarse, downsample_factor, w_coarse, downsample_factor).mean(axis=(1, 3)) > 0.5
+        
+        # Compute gradients at coarse scale
+        grad_x_coarse = scipy_ndimage.sobel(gray_coarse, axis=1)
+        grad_y_coarse = scipy_ndimage.sobel(gray_coarse, axis=0)
+        edge_magnitude_coarse = np.sqrt(grad_x_coarse**2 + grad_y_coarse**2)
+        edge_orientation_coarse = np.abs(np.arctan2(grad_y_coarse, grad_x_coarse))
+        
+        # Apply mask
+        masked_edges_coarse = edge_magnitude_coarse.copy()
+        masked_edges_coarse[~mask_coarse] = 0
+        
+        # Threshold edges
+        mask_edge_values_coarse = masked_edges_coarse[mask_coarse]
+        if len(mask_edge_values_coarse) == 0 or np.max(mask_edge_values_coarse) == 0:
+            return 0.0
+        
+        edge_threshold_coarse = np.percentile(mask_edge_values_coarse, 80)
+        strong_edges_coarse = (masked_edges_coarse > edge_threshold_coarse) & mask_coarse
+        
+        if np.sum(strong_edges_coarse) < 10:
+            return 0.0
+        
+        # Compute alignment score at coarse scale
+        orientations_coarse = edge_orientation_coarse[strong_edges_coarse]
+        tolerance = 0.26
+        horizontal_aligned_coarse = np.sum((orientations_coarse < tolerance) | (orientations_coarse > (np.pi - tolerance)))
+        vertical_aligned_coarse = np.sum(np.abs(orientations_coarse - np.pi / 2) < tolerance)
+        total_strong_edges_coarse = len(orientations_coarse)
+        alignment_score_coarse = float((horizontal_aligned_coarse + vertical_aligned_coarse) / total_strong_edges_coarse)
+        
+        # Compute grid score at coarse scale
+        edge_coords_coarse = np.argwhere(strong_edges_coarse)
+        if len(edge_coords_coarse) > 20:
+            unique_rows_coarse = len(np.unique(edge_coords_coarse[:, 0]))
+            unique_cols_coarse = len(np.unique(edge_coords_coarse[:, 1]))
+            
+            row_density_coarse = unique_rows_coarse / h_coarse
+            col_density_coarse = unique_cols_coarse / w_coarse
+            
+            if alignment_score_coarse > 0.3:
+                grid_score_coarse = alignment_score_coarse * min(row_density_coarse + col_density_coarse, 1.0)
+            else:
+                grid_score_coarse = 0.0
+        else:
+            grid_score_coarse = 0.0
+        
+        return grid_score_coarse
     
     # Helper color conversion methods
     def _rgb_to_hsv(self, rgb01: np.ndarray) -> np.ndarray:
