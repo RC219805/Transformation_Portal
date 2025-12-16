@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def _get_default_device() -> torch.device:
     """
     Get the default device based on availability.
-    
+
     Returns:
         torch.device: The best available device (MPS > CUDA > CPU)
     """
@@ -82,7 +82,7 @@ class TensorProcessor:
             device: Target device (overrides config if provided)
         """
         self.config = config or TensorConfig()
-        
+
         # Determine device: explicit > config > auto-detect
         if device is not None:
             self.device = device
@@ -90,7 +90,7 @@ class TensorProcessor:
             self.device = torch.device(self.config.device)
         else:
             self.device = _get_default_device()
-            
+
         self._setup_precision()
         self._compile_cache = {}
 

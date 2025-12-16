@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 def _get_default_device() -> torch.device:
     """
     Get the default device based on availability.
-    
+
     Returns:
         torch.device: The best available device (MPS > CUDA > CPU)
     """
