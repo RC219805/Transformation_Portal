@@ -108,6 +108,11 @@ def test_full_validation_deterministic():
             }
         }
         
+        # Save ground truth to file (required for validate_dataset)
+        ground_truth_path = tmpdir / "ground_truth.json"
+        with open(ground_truth_path, 'w') as f:
+            json.dump(ground_truth, f, indent=2)
+        
         # Run validation twice with same seed
         config = MaterialsV3Config(
             water_detection_enabled=True,
@@ -116,10 +121,10 @@ def test_full_validation_deterministic():
         seed = 42
         
         harness1 = WaterValidationHarness(config, seed=seed)
-        results1 = harness1.validate_dataset(ground_truth)
+        results1 = harness1.validate_dataset(ground_truth, ground_truth_path)
         
         harness2 = WaterValidationHarness(config, seed=seed)
-        results2 = harness2.validate_dataset(ground_truth)
+        results2 = harness2.validate_dataset(ground_truth, ground_truth_path)
         
         # Compare stability scores
         assert len(results1) == len(results2) == 1
