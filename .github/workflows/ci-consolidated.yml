@@ -686,7 +686,7 @@ with open('outputs/water_validation_current.json', 'w') as f:
           
       - name: Comment Benchmark Results (PR)
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
