@@ -186,6 +186,29 @@ class TestSubstrateConfig:
         assert config.enable_profiling is False
         assert config.compile_mode == "reduce-overhead"
 
+    def test_device_auto_detection(self):
+        """Test that substrate auto-detects appropriate device when none specified."""
+        import torch
+        
+        # Create substrate without explicit device
+        substrate = ComputationalSubstrate()
+        
+        # Should detect available device (MPS > CUDA > CPU)
+        assert substrate.device is not None
+        assert substrate.device.type in ["mps", "cuda", "cpu"]
+        
+        # Device should be usable for tensor creation
+        test_tensor = torch.randn(10, 10, device=substrate.device)
+        assert test_tensor.device == substrate.device
+        
+        # If MPS is not available, should fall back to CUDA or CPU
+        if not torch.backends.mps.is_available():
+            assert substrate.device.type in ["cuda", "cpu"]
+        
+        # If CUDA is not available either, should be CPU
+        if not torch.backends.mps.is_available() and not torch.cuda.is_available():
+            assert substrate.device.type == "cpu"
+
 
 class TestIntegration:
     """Integration tests for full substrate."""
