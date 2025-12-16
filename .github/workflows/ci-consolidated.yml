@@ -427,7 +427,24 @@ jobs:
           ec=$?
           if [ $ec -ne 0 ]; then
             echo "::warning::Water harness failed (exit=$ec) - this is expected in warn-only mode"
-            echo "{\"error\": \"harness_failed\", \"exit_code\": $ec}" > outputs/water_validation_current.json
+            # Phase A.2: Structured error artifact with diagnostics
+            python3 -c "
+import json
+import time
+import platform
+import os
+
+error_artifact = {
+  'error': 'harness_failed',
+  'exit_code': $ec,
+  'timestamp': time.time(),
+  'python_version': platform.python_version(),
+  'platform': platform.system(),
+  'message': 'Harness execution failed - see workflow logs for details'
+}
+with open('outputs/water_validation_current.json', 'w') as f:
+  json.dump(error_artifact, f, indent=2)
+"
           else
             echo "✅ Generated validation report"
           fi
