@@ -1,0 +1,155 @@
+{
+  "holdout_version": "v1",
+  "description": "Private holdout set for water detection calibration (real-world negatives)",
+  "created": "2025-12-16",
+  "purpose": "Prevent overfitting to synthetic CI fixtures (2 negatives)",
+  "total_images": 15,
+  "acceptance_gates": {
+    "false_trigger_rate_threshold": 0.05,
+    "justification": "Real-world tolerance for rare false positives on architectural confusers"
+  },
+  "images": [
+    {
+      "filename": "glass_facade_001.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_001",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["architectural_glass", "real_world", "modern_facade"],
+      "difficulty": "hard",
+      "notes": "Modern office building with reflective glass façade - primary glass confuser"
+    },
+    {
+      "filename": "glass_facade_002.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_002",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["architectural_glass", "real_world", "curtain_wall"],
+      "difficulty": "hard",
+      "notes": "Glass curtain wall with sky reflections - blue tint confuser"
+    },
+    {
+      "filename": "glass_facade_003.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_003",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["architectural_glass", "real_world", "commercial"],
+      "difficulty": "hard",
+      "notes": "Commercial building with tinted glass panels - edge alignment challenge"
+    },
+    {
+      "filename": "blue_wall_painted_001.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_004",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["blue_painted", "real_world", "exterior"],
+      "difficulty": "medium",
+      "notes": "Flat blue painted exterior wall - saturation confuser"
+    },
+    {
+      "filename": "blue_wall_painted_002.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_005",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["blue_painted", "real_world", "interior"],
+      "difficulty": "medium",
+      "notes": "Interior blue wall with soft lighting - low-saturation challenge"
+    },
+    {
+      "filename": "reflective_stone_001.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_006",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["reflective_stone", "real_world", "polished_surface"],
+      "difficulty": "hard",
+      "notes": "Polished granite or marble surface - highlight confuser"
+    },
+    {
+      "filename": "reflective_concrete_001.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_007",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["reflective_concrete", "real_world", "wet_surface"],
+      "difficulty": "medium",
+      "notes": "Wet concrete pavement with reflections - transient water-like appearance"
+    },
+    {
+      "filename": "reflective_stone_002.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_008",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["reflective_stone", "real_world", "architectural"],
+      "difficulty": "medium",
+      "notes": "Polished stone floor in luxury interior - specular highlights"
+    },
+    {
+      "filename": "skylight_reflection_001.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_009",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["skylight", "real_world", "glass_roof"],
+      "difficulty": "hard",
+      "notes": "Glass skylight with sky reflection - blue hue, brightness confuser"
+    },
+    {
+      "filename": "skylight_reflection_002.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_010",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["skylight", "real_world", "interior_light"],
+      "difficulty": "medium",
+      "notes": "Interior skylight with diffused blue light - subtle color shift"
+    },
+    {
+      "filename": "pool_tiles_closeup_001.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_011",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["pool_tiles", "real_world", "grid_pattern", "no_water"],
+      "difficulty": "hard",
+      "notes": "Close-up of pool tiles with grid pattern but no water visible - grid alignment confuser"
+    },
+    {
+      "filename": "pool_tiles_closeup_002.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_012",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["pool_tiles", "real_world", "blue_ceramic", "no_water"],
+      "difficulty": "hard",
+      "notes": "Blue ceramic pool tiles without water - color + grid confuser"
+    },
+    {
+      "filename": "ocean_horizon_glare_001.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_013",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["ocean_glare", "real_world", "sun_reflection"],
+      "difficulty": "medium",
+      "notes": "Ocean horizon with intense sun glare - brightness saturation artifact (should NOT detect as this is real water but tests glare suppression)"
+    },
+    {
+      "filename": "ocean_horizon_glare_002.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_014",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["ocean_glare", "real_world", "specular_highlight"],
+      "difficulty": "medium",
+      "notes": "Ocean with bright specular highlights - overexposure confuser"
+    },
+    {
+      "filename": "concrete_blue_tint_001.jpg",
+      "sha256": "placeholder_sha256_will_be_filled_when_image_available_015",
+      "label": "negative",
+      "should_detect": false,
+      "tags": ["concrete", "real_world", "blue_tint", "shadow"],
+      "difficulty": "medium",
+      "notes": "Concrete surface with blue color cast from sky reflection or shadow - ambient confuser"
+    }
+  ],
+  "notes": [
+    "Images are NOT committed to git (large binaries, private dataset)",
+    "SHA256 hashes verify image integrity when images are available",
+    "Set WATER_HOLDOUT_DIR environment variable to local image directory",
+    "Holdout validation required before any baseline v2+ promotion",
+    "False trigger rate threshold: ≤5% (at most 1 trigger on 15-20 images)"
+  ]
+}

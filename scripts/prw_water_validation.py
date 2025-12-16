@@ -30,6 +30,7 @@ Usage:
 
 import argparse
 import json
+import os
 import time
 import zlib
 from dataclasses import dataclass, field
@@ -120,12 +121,23 @@ class WaterValidationHarness:
     ) -> List[ValidationResult]:
         """Run validation on dataset using new schema."""
         results = []
-        # Resolve root relative to ground_truth.json location (portable)
-        root_from_gt = ground_truth.get("root", "images")
-        if Path(root_from_gt).is_absolute():
-            root = Path(root_from_gt)
+        
+        # Check for holdout directory override (Phase B: holdout set support)
+        holdout_dir = os.environ.get('WATER_HOLDOUT_DIR')
+        is_holdout = ground_truth.get('holdout_version') is not None
+        
+        if holdout_dir and is_holdout:
+            # Use environment variable for holdout images
+            root = Path(holdout_dir).resolve()
+            print(f"🔒 Using holdout directory: {root}")
+            print(f"   Holdout version: {ground_truth.get('holdout_version')}")
         else:
-            root = (ground_truth_path.parent / root_from_gt).resolve()
+            # Standard path resolution relative to ground_truth.json
+            root_from_gt = ground_truth.get("root", "images")
+            if Path(root_from_gt).is_absolute():
+                root = Path(root_from_gt)
+            else:
+                root = (ground_truth_path.parent / root_from_gt).resolve()
 
         for img_relpath, img_info in ground_truth.get("images", {}).items():
             img_path = root / img_relpath
