@@ -279,7 +279,7 @@ scikit-image==0.25.2
     # via
     #   -c all.txt
     #   controlnet-aux
-scikit-learn==1.8.0
+scikit-learn==1.7.2
     # via
     #   -c all.txt
     #   sentence-transformers
