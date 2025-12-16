@@ -65,7 +65,7 @@ jobs:
           fi
       
       - name: Upload audit report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: steps.audit.outputs.has_vulns == 'true'
         with:
           name: audit-report
