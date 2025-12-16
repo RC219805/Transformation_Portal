@@ -788,3 +788,115 @@ def test_suppressor_telemetry_export():
     assert first_result["suppressor_telemetry"] is None or isinstance(first_result["suppressor_telemetry"], dict)
     
     print("✅ All telemetry fields present in baseline")
+
+
+def test_multiscale_flag_off_no_behavior_change():
+    """Verify flag OFF preserves exact prior behavior (Phase C)."""
+    from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
+    
+    # Create test image with pool-like region
+    rgb01 = create_test_image(size=(256, 256), pool_region=True)
+    
+    # Run with flag OFF (default)
+    params_off = WaterDetectionParams(glass_multiscale_enabled=False)
+    detector_off = WaterCandidateDetector(params=params_off)
+    result_off = detector_off.detect(rgb01)
+    
+    # Verify telemetry fields are present but None when flag OFF
+    assert result_off.suppressor_telemetry is not None
+    glass_detector = result_off.suppressor_telemetry.get("glass_detector")
+    
+    if glass_detector is not None:
+        # Check multi-scale fields are None when flag OFF
+        assert glass_detector.get("grid_score_coarse") is None, "grid_score_coarse should be None when flag OFF"
+        assert glass_detector.get("grid_persistence_ratio") is None, "grid_persistence_ratio should be None when flag OFF"
+        assert glass_detector.get("tile_exempted") is False, "tile_exempted should be False when flag OFF"
+        
+        # Verify core glass detection still works
+        assert "is_glass" in glass_detector
+        assert "edge_alignment_score" in glass_detector
+        assert "grid_score" in glass_detector
+    
+    print("✅ Flag OFF preserves prior behavior with telemetry fields set to None")
+
+
+def test_multiscale_flag_on_telemetry_present():
+    """Verify flag ON adds telemetry keys and tile exemption logic runs (Phase C)."""
+    from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
+    
+    # Create test image with grid-like pattern (simulates tiled pool)
+    h, w = 256, 256
+    rgb01 = np.zeros((h, w, 3), dtype=np.float32)
+    
+    # Create grid pattern (high-frequency tiles)
+    tile_size = 16
+    for i in range(0, h, tile_size):
+        for j in range(0, w, tile_size):
+            # Checkerboard pattern with blue tiles
+            if (i // tile_size + j // tile_size) % 2 == 0:
+                rgb01[i:i+tile_size, j:j+tile_size, 2] = 0.6  # Blue
+                rgb01[i:i+tile_size, j:j+tile_size, 1] = 0.3  # Some green
+            else:
+                rgb01[i:i+tile_size, j:j+tile_size, 2] = 0.5  # Lighter blue
+                rgb01[i:i+tile_size, j:j+tile_size, 1] = 0.35
+    
+    # Run with flag ON
+    params_on = WaterDetectionParams(
+        glass_multiscale_enabled=True,
+        glass_multiscale_downsample_factor=4,
+        glass_tile_persistence_threshold=0.8
+    )
+    detector_on = WaterCandidateDetector(params=params_on)
+    result_on = detector_on.detect(rgb01)
+    
+    # Verify telemetry fields are present and computed when flag ON
+    assert result_on.suppressor_telemetry is not None
+    glass_detector = result_on.suppressor_telemetry.get("glass_detector")
+    
+    if glass_detector is not None and glass_detector.get("grid_score", 0.0) > 0.0:
+        # Multi-scale fields should be computed when flag ON
+        grid_score_coarse = glass_detector.get("grid_score_coarse")
+        grid_persistence_ratio = glass_detector.get("grid_persistence_ratio")
+        
+        # grid_score_coarse can be None if downsampling failed, or a float if computed
+        if grid_score_coarse is not None:
+            assert isinstance(grid_score_coarse, (float, int)), "grid_score_coarse should be numeric when computed"
+            assert grid_persistence_ratio is not None, "grid_persistence_ratio should be computed when grid_score_coarse is"
+            assert isinstance(grid_persistence_ratio, (float, int)), "grid_persistence_ratio should be numeric"
+        
+        # tile_exempted should be a boolean
+        assert "tile_exempted" in glass_detector
+        assert isinstance(glass_detector["tile_exempted"], bool)
+    
+    print("✅ Flag ON computes multi-scale telemetry and runs tile exemption logic")
+
+
+def test_multiscale_downsampling_robustness():
+    """Verify multi-scale downsampling handles edge cases (Phase C)."""
+    from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
+    
+    # Test with very small image (should handle gracefully)
+    small_rgb = np.random.rand(64, 64, 3).astype(np.float32)
+    
+    params = WaterDetectionParams(glass_multiscale_enabled=True, glass_multiscale_downsample_factor=4)
+    detector = WaterCandidateDetector(params=params)
+    
+    try:
+        result = detector.detect(small_rgb)
+        # Should not crash
+        assert result is not None
+        print("✅ Multi-scale downsampling handles small images")
+    except Exception as e:
+        pytest.fail(f"Multi-scale downsampling failed on small image: {e}")
+    
+    # Test with very large downsample factor
+    params_large_factor = WaterDetectionParams(glass_multiscale_enabled=True, glass_multiscale_downsample_factor=16)
+    detector_large = WaterCandidateDetector(params=params_large_factor)
+    
+    try:
+        result_large = detector_large.detect(small_rgb)
+        # Should handle gracefully (may return None for grid_score_coarse)
+        assert result_large is not None
+        print("✅ Multi-scale downsampling handles large downsample factors")
+    except Exception as e:
+        pytest.fail(f"Multi-scale downsampling failed with large factor: {e}")

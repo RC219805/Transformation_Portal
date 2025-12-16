@@ -700,15 +700,17 @@ class WaterCandidateDetector:
             Grid score at coarse scale, or None if downsampling fails
         """
         h, w = gray.shape
-        h_coarse = max(h // downsample_factor, 32)
-        w_coarse = max(w // downsample_factor, 32)
+        
+        # Calculate coarse dimensions
+        h_coarse = h // downsample_factor
+        w_coarse = w // downsample_factor
         
         if h_coarse < 32 or w_coarse < 32:
             return None
         
         # Simple averaging-based downsample (no PIL dependency)
-        h_crop = (h // downsample_factor) * downsample_factor
-        w_crop = (w // downsample_factor) * downsample_factor
+        h_crop = h_coarse * downsample_factor
+        w_crop = w_coarse * downsample_factor
         gray_crop = gray[:h_crop, :w_crop]
         mask_crop = mask_binary[:h_crop, :w_crop]
         
