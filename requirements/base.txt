@@ -90,9 +90,10 @@ scikit-image==0.25.2
     # via
     #   -c all.txt
     #   -r base.in
-scikit-learn==1.8.0
+scikit-learn==1.7.2
     # via
     #   -c all.txt
+    #   -c constraints.txt
     #   -r base.in
 scipy==1.15.3
     # via

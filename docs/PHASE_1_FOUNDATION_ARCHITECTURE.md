@@ -679,6 +679,51 @@ Phase 1 establishes a **robust, optimized, and production-ready** computational 
 
 ---
 
+## Bug Fixes and Improvements
+
+### Fix: Device Mismatch (MPS vs CPU) - December 2025
+
+**Issue**: Test failures due to hardcoded MPS device defaults in `TensorProcessor` and `MemoryManager`.
+
+**Root Cause**: 
+- `TensorConfig.device` defaulted to `"mps"` (line 40 of `tensor_processor.py`)
+- `MemoryManager.__init__` defaulted to `torch.device("mps")` (line 155 of `memory_manager.py`)
+
+These hardcoded defaults broke on systems without MPS support (e.g., Linux CI environments), causing device mismatch errors when tensors were created on non-existent MPS devices.
+
+**Solution**:
+1. Added `_get_default_device()` helper function to both modules that intelligently detects available devices:
+   - Priority: MPS → CUDA → CPU
+   - Uses `torch.backends.mps.is_available()` and `torch.cuda.is_available()` for detection
+
+2. Updated `TensorConfig.device` default to `None` (auto-detect)
+
+3. Updated initialization logic to handle device selection:
+   - Explicit device parameter takes highest priority
+   - Config device setting takes second priority
+   - Auto-detection used when both are None
+
+**Impact**:
+- ✅ All 27 substrate tests pass on CPU-only environments
+- ✅ All 42 foundation tests pass (2 skipped as expected)
+- ✅ Maintains M4 Max optimizations when MPS is available
+- ✅ Gracefully falls back to CUDA/CPU when MPS unavailable
+- ✅ No breaking changes to existing API
+
+**Testing**:
+- Added `test_device_auto_detection()` to verify correct device selection
+- Verified TensorProcessor and MemoryManager work in isolation
+- Confirmed backward compatibility with explicit device specification
+
+**Files Modified**:
+- `src/transformation_portal/foundation/tensor_processor.py`
+- `src/transformation_portal/foundation/memory_manager.py`
+- `tests/foundation/test_substrate.py`
+
+**Related Issue**: RC219805/Transformation_Portal#567
+
+---
+
 ## References
 
 - [PyTorch MPS Backend Documentation](https://pytorch.org/docs/stable/notes/mps.html)
@@ -688,6 +733,6 @@ Phase 1 establishes a **robust, optimized, and production-ready** computational 
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-11-21
+**Document Version**: 1.1
+**Last Updated**: 2025-12-16
 **Status**: ✅ Completed

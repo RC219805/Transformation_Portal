@@ -24,10 +24,14 @@
 # Require >=3.1.0 to mitigate this vulnerability
 sentence-transformers>=3.1.0
 
-# Python 3.10 compatibility constraint
+# Python 3.10 compatibility constraints
 # networkx 3.5+ requires Python 3.11+
 # Constrain to 3.4.x for Python 3.10 compatibility
 networkx<3.5
+
+# scikit-learn 1.8.0+ requires Python 3.11+
+# Constrain to 1.7.x for Python 3.10 compatibility
+scikit-learn<1.8
 
 # Security Advisory: CVE-2024-27763
 # BasicSR <= 1.4.2 has a command injection vulnerability via SLURM_NODELIST.

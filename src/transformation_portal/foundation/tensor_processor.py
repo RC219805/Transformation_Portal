@@ -24,6 +24,21 @@ from torch import Tensor
 logger = logging.getLogger(__name__)
 
 
+def _get_default_device() -> torch.device:
+    """
+    Get the default device based on availability.
+
+    Returns:
+        torch.device: The best available device (MPS > CUDA > CPU)
+    """
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    elif torch.cuda.is_available():
+        return torch.device("cuda")
+    else:
+        return torch.device("cpu")
+
+
 class PrecisionMode(Enum):
     """Supported precision modes for tensor operations."""
     FP32 = "fp32"  # Full precision (32-bit float)
@@ -37,7 +52,7 @@ class PrecisionMode(Enum):
 class TensorConfig:
     """Configuration for tensor operations."""
     precision: PrecisionMode = PrecisionMode.FP16
-    device: Union[str, torch.device] = "mps"
+    device: Optional[Union[str, torch.device]] = None  # None = auto-detect best device
     enable_amp: bool = True  # Automatic Mixed Precision
     enable_grad_checkpointing: bool = False
     max_batch_size: int = 32
@@ -67,7 +82,15 @@ class TensorProcessor:
             device: Target device (overrides config if provided)
         """
         self.config = config or TensorConfig()
-        self.device = device or torch.device(self.config.device)
+
+        # Determine device: explicit > config > auto-detect
+        if device is not None:
+            self.device = device
+        elif self.config.device is not None:
+            self.device = torch.device(self.config.device)
+        else:
+            self.device = _get_default_device()
+
         self._setup_precision()
         self._compile_cache = {}
 
