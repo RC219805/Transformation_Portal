@@ -26,6 +26,21 @@ from torch import Tensor
 logger = logging.getLogger(__name__)
 
 
+def _get_default_device() -> torch.device:
+    """
+    Get the default device based on availability.
+    
+    Returns:
+        torch.device: The best available device (MPS > CUDA > CPU)
+    """
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    elif torch.cuda.is_available():
+        return torch.device("cuda")
+    else:
+        return torch.device("cpu")
+
+
 class AllocationStrategy(Enum):
     """Memory allocation strategies."""
     IMMEDIATE = "immediate"  # Allocate immediately, no pooling
@@ -152,7 +167,7 @@ class MemoryManager:
             device: Target device
         """
         self.config = config or MemoryConfig()
-        self.device = device or torch.device("mps")
+        self.device = device if device is not None else _get_default_device()
 
         # Memory pools for different allocation sizes
         self.pools: Dict[str, MemoryPool] = {}
