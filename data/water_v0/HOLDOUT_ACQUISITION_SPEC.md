@@ -19,43 +19,43 @@
 - ❌ Heavy HDR artifacts / AI-generated / stylized renders
 - ❌ Copyright violations (use own photos, licensed stock, or explicit permission)
 
-## 15-Image Breakdown (Orthogonal Coverage)
+## 13-Image Breakdown (Orthogonal Coverage)
 
-### Bucket A: True Architectural Glass Grids (6 images)
-**Tags**: `glass_grid`, `curtain_wall`, `facade`
+**Note**: Reduced from 15 to 13 images after removing ocean entries (real water violates negative-only purity)
 
-1. **glass_curtain_wall_001.jpg** - Office tower, dense repetitive grid
-2. **glass_curtain_wall_002.jpg** - Commercial building, vertical mullions
-3. **glass_curtain_wall_003.jpg** - High-rise, horizontal/vertical grid pattern
-4. **glass_residential_001.jpg** - Apartment facade with balcony glass
-5. **glass_residential_002.jpg** - Residential with window mullions
-6. **glass_greenhouse_001.jpg** - Greenhouse/conservatory glass structure
+### Bucket A: True Architectural Glass (3 images)
+**Tags**: `architectural_glass`, `facade`, `curtain_wall`, `skylight`
 
-**Difficulty**: Hard  
-**Why**: Primary glass suppressor target - tests grid detection logic
-
-### Bucket B: Reflection Traps (5 images)
-**Tags**: `reflection`, `sky_blue`, `specular`, `landscape_reflection`
-
-7. **glass_sky_reflection_001.jpg** - Strong sky reflection (blue gradient)
-8. **glass_sky_reflection_002.jpg** - Sky + clouds reflection (color/brightness)
-9. **glass_landscape_reflection_001.jpg** - Trees/greenery reflection (texture)
-10. **glass_landscape_reflection_002.jpg** - Building/urban reflection
-11. **glass_interior_reflection_001.jpg** - Interior glass with lights/reflections
+1. **glass_facade_001.jpg** - Modern office building with reflective glass façade
+2. **glass_facade_002.jpg** - Glass curtain wall with sky reflections (blue tint)
+3. **glass_facade_003.jpg** - Commercial building with tinted glass panels
 
 **Difficulty**: Hard  
-**Why**: Tests color/brightness heuristics against blue reflections
+**Why**: Primary glass suppressor target - tests grid detection and reflectivity
 
-### Bucket C: Grid-But-Not-Glass Confounders (4 images)
-**Tags**: `grid_pattern`, `non_glass`, `confounder`
+### Bucket B: Reflective/Painted Surfaces (5 images)
+**Tags**: `blue_painted`, `reflective_stone`, `reflective_concrete`, `skylight`
 
-12. **metal_fence_grid_001.jpg** - Metal fence or railing grid
-13. **solar_panels_001.jpg** - Solar panel array (grid pattern)
-14. **tiled_facade_001.jpg** - Patterned wall tiles (not water-related)
-15. **window_blinds_001.jpg** - Blinds/shutters pattern through window
+4. **blue_wall_painted_001.jpg** - Flat blue painted exterior wall
+5. **blue_wall_painted_002.jpg** - Interior blue wall with soft lighting
+6. **reflective_stone_001.jpg** - Polished granite/marble surface
+7. **reflective_concrete_001.jpg** - Wet concrete pavement with reflections
+8. **reflective_stone_002.jpg** - Polished stone floor in luxury interior
 
-**Difficulty**: Medium  
-**Why**: Catch over-broad grid heuristics that don't verify glass material
+**Difficulty**: Medium-Hard  
+**Why**: Tests color/brightness heuristics, specular highlights, transient water-like appearance
+
+### Bucket C: Grid/Tile Confounders (5 images)
+**Tags**: `skylight`, `pool_tiles`, `grid_pattern`, `no_water`, `concrete`
+
+9. **skylight_reflection_001.jpg** - Glass skylight with sky reflection
+10. **skylight_reflection_002.jpg** - Interior skylight with diffused blue light
+11. **pool_tiles_closeup_001.jpg** - Pool tiles with grid pattern, no water visible
+12. **pool_tiles_closeup_002.jpg** - Blue ceramic pool tiles without water
+13. **concrete_blue_tint_001.jpg** - Concrete surface with blue color cast
+
+**Difficulty**: Hard-Medium  
+**Why**: Tests grid alignment, blue hue confusers, and pool context without actual water
 
 ## Storage Structure
 
@@ -108,7 +108,7 @@ data/water_v0/images/
 
 ## Acquisition Checklist
 
-1. ✅ Collect 15 images matching bucket breakdown
+1. ✅ Collect 13 images matching bucket breakdown (A: 3, B: 5, C: 5)
 2. ✅ Place in `data/water_v0/images/` (create if doesn't exist)
 3. ✅ Generate SHA256 hashes: `sha256sum images/*.jpg > checksums.txt`
 4. ✅ Update `holdout_manifest.json` with actual filenames + hashes
@@ -118,18 +118,19 @@ data/water_v0/images/
 
 ## Acceptance Gates
 
-- **False Trigger Rate**: ≤5% (at most 1 false trigger on 15 images)
+- **Max False Triggers**: ≤1 (absolute cap, avoids percentage rounding on small datasets)
+  - Effective rate: 1/13 = 7.7% (acceptable for real-world architectural confusers)
 - **Telemetry Required**: For any false triggers, review `grid_score_coarse`, `grid_persistence_ratio`, `tile_exempted`
 - **Reproducibility**: SHA256 manifest ensures deterministic validation
 
 ## Phase C Completion Criteria
 
 Phase C is **COMPLETE** when:
-1. ✅ 15 real-world images acquired
+1. ✅ 13 real-world negative images acquired (no actual water present)
 2. ✅ Manifest updated with actual SHA256 hashes
 3. ✅ First holdout validation run completed
 4. ✅ Results archived with timestamp
-5. ✅ False trigger rate ≤5% (or documented justification for exceptions)
+5. ✅ False trigger count ≤1 (or documented justification for exceptions)
 
 **Only then** proceed to Phase D (threshold tuning, flag enablement).
 

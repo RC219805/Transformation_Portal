@@ -85,12 +85,13 @@ if command -v jq &> /dev/null; then
     echo ""
     echo -e "${YELLOW}Acceptance Gates Check:${NC}"
     
-    # Extract false trigger rate
-    FT_RATE=$(jq -r '.summary.false_trigger_rate' "$OUTPUT")
+    # Extract false trigger count
+    FT_COUNT=$(jq -r '.summary.false_trigger_count' "$OUTPUT")
     
-    # Check acceptance gates (≤5% = 0.05)
-    if (( $(echo "$FT_RATE > 0.05" | bc -l 2>/dev/null || echo "1") )); then
-        echo -e "${RED}⚠️  FAILED: Holdout FT rate ($FT_RATE) exceeds 5% threshold${NC}"
+    # Check acceptance gates (max 1 false trigger)
+    MAX_FT=1
+    if [ "$FT_COUNT" -gt "$MAX_FT" ]; then
+        echo -e "${RED}⚠️  FAILED: Holdout FT count ($FT_COUNT) exceeds maximum ($MAX_FT)${NC}"
         echo ""
         echo "False triggers detected:"
         jq -r '.results[] | select(.detected == true) | "  - \(.image_path): confidence=\(.confidence_final), tags=\(.tags | join(", "))"' "$OUTPUT"
@@ -100,11 +101,11 @@ if command -v jq &> /dev/null; then
         echo ""
         exit 1
     else
-        echo -e "${GREEN}✅ PASSED: Holdout FT rate ($FT_RATE) within acceptable range (≤5%)${NC}"
+        FT_RATE=$(jq -r '.summary.false_trigger_rate' "$OUTPUT")
+        echo -e "${GREEN}✅ PASSED: Holdout FT count ($FT_COUNT) within limit (max $MAX_FT, effective rate: $FT_RATE)${NC}"
     fi
     
-    # Check if any false triggers exist (require telemetry review)
-    FT_COUNT=$(jq -r '.summary.false_trigger_count' "$OUTPUT")
+    # Note if any false triggers exist (require telemetry review)
     if [ "$FT_COUNT" -gt 0 ]; then
         echo ""
         echo -e "${YELLOW}Note: $FT_COUNT false trigger(s) detected (within tolerance)${NC}"
