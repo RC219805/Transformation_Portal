@@ -54,6 +54,12 @@ class DepthConfig:
     # Validation
     validate_seams: bool = True
     seam_energy_threshold: float = 1.2  # Max boundary gradient ratio
+    
+    # Resolution policy (DA V2 conditional inference)
+    patch_size: int = 14  # DINOv2 ViT patch size
+    default_input_size: int = 518  # DA V2 default
+    small_image_threshold: int = 1024  # Trigger higher resolution
+    small_image_input_size: int = 1022  # 14×73 (high quality)
 
 
 class HighFidelityDepthEstimator:
@@ -74,6 +80,7 @@ class HighFidelityDepthEstimator:
         self.device = self._setup_device()
         self.model = None
         self.image_processor = None
+        self._last_inference_metadata = None  # Track preprocessing metadata
         logger.info(f"Initialized HighFidelityDepthEstimator on {self.device}")
     
     def _setup_device(self) -> str:
@@ -103,6 +110,200 @@ class HighFidelityDepthEstimator:
         logger.info(f"✓ Model variant: {self.config.model_name}")
         if "Large" not in self.config.model_name:
             logger.warning("⚠️  Using non-Large model - quality may be reduced")
+    
+    def _compute_target_size(
+        self, 
+        height: int, 
+        width: int, 
+        input_size: int
+    ) -> Tuple[int, int]:
+        """
+        Compute target size preserving aspect ratio, rounded to patch multiples.
+        
+        DA V2 scales shortest side to input_size, then rounds to patch multiples.
+        
+        Args:
+            height: Original image height
+            width: Original image width
+            input_size: Target size for shortest side
+            
+        Returns:
+            (target_height, target_width) both multiples of PATCH_SIZE
+        """
+        patch_size = self.config.patch_size
+        
+        # Scale shortest side to input_size (and round to patch multiple)
+        if height < width:
+            # Height is shorter - set it to input_size (rounded)
+            target_h = (input_size // patch_size) * patch_size
+            # Compute width preserving aspect ratio
+            scale = target_h / height
+            target_w = int(width * scale)
+            # Round width to patch multiple
+            target_w = (target_w // patch_size) * patch_size
+        else:
+            # Width is shorter - set it to input_size (rounded)
+            target_w = (input_size // patch_size) * patch_size
+            # Compute height preserving aspect ratio
+            scale = target_w / width
+            target_h = int(height * scale)
+            # Round height to patch multiple
+            target_h = (target_h // patch_size) * patch_size
+        
+        # Ensure minimum size (at least one patch)
+        target_h = max(target_h, patch_size)
+        target_w = max(target_w, patch_size)
+        
+        return target_h, target_w
+    
+    def _pad_to_patch_multiple(
+        self, 
+        image: np.ndarray
+    ) -> Tuple[np.ndarray, Tuple[int, int]]:
+        """
+        Pad image to patch-size multiples using reflect mode.
+        
+        Args:
+            image: Input image (H, W, C)
+            
+        Returns:
+            (padded_image, (pad_h, pad_w))
+        """
+        h, w = image.shape[:2]
+        patch_size = self.config.patch_size
+        
+        # Calculate padding needed
+        pad_h = (patch_size - (h % patch_size)) % patch_size
+        pad_w = (patch_size - (w % patch_size)) % patch_size
+        
+        if pad_h == 0 and pad_w == 0:
+            return image, (0, 0)
+        
+        # Apply reflect padding (consistent with tiling strategy)
+        padded = cv2.copyMakeBorder(
+            image, 0, pad_h, 0, pad_w,
+            borderType=cv2.BORDER_REFLECT_101
+        )
+        
+        logger.debug(f"Padded {h}×{w} → {padded.shape[0]}×{padded.shape[1]} "
+                    f"(patch multiple, {pad_h}×{pad_w} padding)")
+        
+        return padded, (pad_h, pad_w)
+    
+    def preprocess_for_inference(
+        self, 
+        image: np.ndarray,
+        force_input_size: Optional[int] = None
+    ) -> Tuple[np.ndarray, dict]:
+        """
+        Preprocess image for DA V2 inference with conditional resolution policy.
+        
+        Policy:
+        - If min(H, W) < SMALL_IMAGE_THRESHOLD: use high input_size (1022)
+        - Else: use default input_size (518)
+        - Always preserve aspect ratio
+        - Always pad to patch multiples
+        
+        Args:
+            image: Input RGB image (H, W, 3)
+            force_input_size: Override policy (for testing)
+            
+        Returns:
+            (preprocessed_image, metadata_dict)
+        """
+        original_h, original_w = image.shape[:2]
+        
+        # Determine input_size via policy
+        if force_input_size is not None:
+            input_size = force_input_size
+            policy = "forced"
+        elif min(original_h, original_w) < self.config.small_image_threshold:
+            input_size = self.config.small_image_input_size
+            policy = "small_image_boost"
+        else:
+            input_size = self.config.default_input_size
+            policy = "default"
+        
+        # Compute target size (aspect-preserving, patch-aligned)
+        target_h, target_w = self._compute_target_size(
+            original_h, original_w, input_size
+        )
+        
+        # Resize with OpenCV (consistent with DA V2 upstream)
+        resized = cv2.resize(
+            image, 
+            (target_w, target_h),
+            interpolation=cv2.INTER_LANCZOS4
+        )
+        
+        # Pad to exact patch multiples if needed
+        preprocessed, (pad_h, pad_w) = self._pad_to_patch_multiple(resized)
+        
+        # Metadata for reproducibility
+        metadata = {
+            'original_shape': (original_h, original_w),
+            'resized_shape': (target_h, target_w),
+            'preprocessed_shape': preprocessed.shape[:2],
+            'input_size': input_size,
+            'policy': policy,
+            'patch_size': self.config.patch_size,
+            'padding': (pad_h, pad_w),
+            'interpolation': 'INTER_LANCZOS4',
+            'aspect_ratio_preserved': True
+        }
+        
+        logger.info(
+            f"Preprocessing: {original_h}×{original_w} → "
+            f"{preprocessed.shape[0]}×{preprocessed.shape[1]} "
+            f"(input_size={input_size}, policy={policy})"
+        )
+        
+        return preprocessed, metadata
+    
+    def postprocess_depth(
+        self, 
+        depth: np.ndarray, 
+        metadata: dict
+    ) -> np.ndarray:
+        """
+        Restore depth map to original dimensions.
+        
+        Args:
+            depth: Depth map from inference (preprocessed size)
+            metadata: From preprocess_for_inference()
+            
+        Returns:
+            Depth map at original resolution
+        """
+        # Remove padding
+        pad_h, pad_w = metadata['padding']
+        if pad_h > 0 or pad_w > 0:
+            depth = depth[:depth.shape[0] - pad_h, :depth.shape[1] - pad_w]
+        
+        # Resize back to original (if different from resized shape)
+        resized_h, resized_w = metadata['resized_shape']
+        if depth.shape[0] != resized_h or depth.shape[1] != resized_w:
+            depth = cv2.resize(
+                depth, 
+                (resized_w, resized_h),
+                interpolation=cv2.INTER_LINEAR  # Depth is continuous
+            )
+        
+        # Final resize to original
+        original_h, original_w = metadata['original_shape']
+        if depth.shape[0] != original_h or depth.shape[1] != original_w:
+            depth = cv2.resize(
+                depth,
+                (original_w, original_h),
+                interpolation=cv2.INTER_LINEAR
+            )
+        
+        logger.debug(
+            f"Postprocessing: {metadata['preprocessed_shape']} → "
+            f"{original_h}×{original_w}"
+        )
+        
+        return depth
     
     def _pad_to_tile_geometry(self, image: np.ndarray) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
         """
@@ -230,23 +431,33 @@ class HighFidelityDepthEstimator:
         logger.info(f"Extracted {len(valid_tiles)} full-sized {tile_size}×{tile_size} tiles (overlap={overlap}, no slivers)")
         return valid_tiles
     
-    def _infer_tile_depth(self, tile_rgb: np.ndarray) -> np.ndarray:
+    def _infer_tile_depth(self, tile_rgb: np.ndarray, force_input_size: Optional[int] = None) -> np.ndarray:
         """
-        Infer depth for a single tile at NATIVE RESOLUTION.
+        Infer depth for a single tile with conditional resolution policy.
         
-        CRITICAL: Logs tensor shapes to verify no internal resize.
-        PRIORITY 1 FIX: Manual preprocessing to bypass processor resize.
+        Resolution Policy:
+        - Small tiles (< 1024px): use high input_size (1022) for better edge extraction
+        - Large tiles: use default input_size (518)
+        
+        Args:
+            tile_rgb: RGB tile (H, W, 3)
+            force_input_size: Override policy (for testing)
+            
+        Returns:
+            Depth map at tile resolution
         """
         from PIL import Image
         
-        # Convert to PIL
-        if tile_rgb.dtype == np.float32:
-            tile_pil = Image.fromarray((tile_rgb * 255).astype(np.uint8))
-        else:
-            tile_pil = Image.fromarray(tile_rgb)
+        # Apply conditional preprocessing policy
+        preprocessed, metadata = self.preprocess_for_inference(tile_rgb, force_input_size)
         
-        # PRIORITY 1 FIX: Try to disable resize, but model may still resize internally
-        # We'll handle this by accepting the model's behavior and resizing output back
+        # Convert to PIL
+        if preprocessed.dtype == np.float32:
+            tile_pil = Image.fromarray((preprocessed * 255).astype(np.uint8))
+        else:
+            tile_pil = Image.fromarray(preprocessed)
+        
+        # Process with image processor (may resize again, but we'll track it)
         try:
             inputs = self.image_processor(
                 images=tile_pil,
@@ -266,12 +477,9 @@ class HighFidelityDepthEstimator:
         
         # INSTRUMENTATION: Log input tensor shape
         H_in, W_in = inputs["pixel_values"].shape[-2:]
-        H_rgb, W_rgb = tile_rgb.shape[:2]
-        logger.info(f"🔍 Tile inference: RGB={H_rgb}×{W_rgb}, pixel_values={H_in}×{W_in}")
-        
-        # Verify no resize (but accept it if it happens - model may require specific sizes)
-        if H_in != H_rgb or W_in != W_rgb:
-            logger.warning(f"⚠️  Input resize: {H_rgb}×{W_rgb} → {H_in}×{W_in} (model may require this)")
+        logger.info(f"🔍 Tile inference: preprocessed={preprocessed.shape[0]}×{preprocessed.shape[1]}, "
+                   f"pixel_values={H_in}×{W_in}, policy={metadata['policy']}, "
+                   f"input_size={metadata['input_size']}")
         
         # Inference
         with torch.no_grad():
@@ -292,11 +500,14 @@ class HighFidelityDepthEstimator:
         # Convert to numpy
         depth = depth_tensor.squeeze().cpu().numpy()
         
-        # ALWAYS resize to match tile RGB size (accept model's internal behavior)
+        # Postprocess back to tile RGB size
+        depth = self.postprocess_depth(depth, metadata)
+        
+        # Ensure exact match to tile RGB size (final safety check)
         target_h, target_w = tile_rgb.shape[:2]
         if depth.shape != (target_h, target_w):
             depth = cv2.resize(depth, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
-            logger.debug(f"Resized depth output: {(H_out, W_out)} → {(target_h, target_w)}")
+            logger.debug(f"Final resize: {depth.shape} → {(target_h, target_w)}")
         
         # Normalize to [0, 1]
         d_min, d_max = depth.min(), depth.max()
@@ -739,7 +950,9 @@ class HighFidelityDepthEstimator:
         """
         Estimate high-fidelity depth using tiled inference with scale reconciliation.
         
-        CRITICAL FIX: Pad → Infer → Crop workflow eliminates sliver tiles.
+        Resolution Policy:
+        - Small images (< 1024px): Direct inference with high input_size (1022)
+        - Large images: Tiled inference with default input_size (518)
         
         Args:
             image: RGB image (uint8 or float32)
@@ -754,6 +967,66 @@ class HighFidelityDepthEstimator:
         h, w = image.shape[:2]
         logger.info(f"Starting high-fidelity depth inference on {h}×{w} image")
         
+        # RESOLUTION POLICY: Small images get direct inference with high input_size
+        if min(h, w) < self.config.small_image_threshold:
+            logger.info(f"Small image detected ({h}×{w}), using direct inference with high input_size")
+            
+            # Preprocess with high input_size
+            preprocessed, metadata = self.preprocess_for_inference(image)
+            
+            # Direct inference (no tiling)
+            from PIL import Image as PILImage
+            if preprocessed.dtype == np.float32:
+                image_pil = PILImage.fromarray((preprocessed * 255).astype(np.uint8))
+            else:
+                image_pil = PILImage.fromarray(preprocessed)
+            
+            try:
+                inputs = self.image_processor(
+                    images=image_pil,
+                    return_tensors="pt",
+                    do_resize=False,
+                    do_pad=False
+                )
+            except TypeError:
+                inputs = self.image_processor(images=image_pil, return_tensors="pt")
+            
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            
+            logger.info(f"🔍 Direct inference: preprocessed={preprocessed.shape[0]}×{preprocessed.shape[1]}, "
+                       f"policy={metadata['policy']}, input_size={metadata['input_size']}")
+            
+            # Inference
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+            
+            # Extract depth
+            if hasattr(outputs, 'predicted_depth'):
+                depth_tensor = outputs.predicted_depth
+            elif hasattr(outputs, 'depth'):
+                depth_tensor = outputs.depth
+            else:
+                depth_tensor = outputs[0]
+            
+            depth = depth_tensor.squeeze().cpu().numpy()
+            
+            # Postprocess back to original size
+            depth = self.postprocess_depth(depth, metadata)
+            
+            # Normalize to [0, 1]
+            d_min, d_max = depth.min(), depth.max()
+            if d_max > d_min:
+                depth = (depth - d_min) / (d_max - d_min)
+            else:
+                depth = np.zeros_like(depth)
+            
+            # Store metadata
+            self._last_inference_metadata = metadata
+            
+            logger.info(f"✓ Direct inference complete: {depth.shape}")
+            return depth
+        
+        # LARGE IMAGES: Use tiled inference
         # Step 0: Pad image to clean tiling geometry (BLOCKER A FIX)
         image_padded, crop_coords = self._pad_to_tile_geometry(image)
         h_pad, w_pad = image_padded.shape[:2]
@@ -804,6 +1077,20 @@ class HighFidelityDepthEstimator:
         
         # Step 6: Validate seams
         self._validate_seam_boundaries(depth_final)
+        
+        # Store metadata for validation/debugging (from first tile's preprocessing)
+        # Note: For tiled images, this represents the policy applied to tiles
+        if len(tiles) > 0:
+            tile_h, tile_w = tiles[0][0].shape[:2]
+            self._last_inference_metadata = {
+                'original_shape': (h, w),
+                'preprocessed_shape': (h_pad, w_pad),
+                'tile_size': self.config.tile_size,
+                'num_tiles': len(tiles),
+                'policy': 'small_image_boost' if min(tile_h, tile_w) < self.config.small_image_threshold else 'default',
+                'input_size': self.config.small_image_input_size if min(tile_h, tile_w) < self.config.small_image_threshold else self.config.default_input_size,
+                'aspect_ratio_preserved': True
+            }
         
         logger.info(f"✓ High-fidelity depth estimation complete: {depth_final.shape}")
         

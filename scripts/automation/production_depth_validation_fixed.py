@@ -166,6 +166,27 @@ def process_single_image(
             smooth_calibrations=smooth_calibrations
         )
         
+        # Capture inference metadata
+        if hasattr(estimator, '_last_inference_metadata'):
+            inference_metadata = estimator._last_inference_metadata
+            
+            # Save to metrics
+            result['inference_metadata'] = {
+                'original_shape': inference_metadata.get('original_shape'),
+                'preprocessed_shape': inference_metadata.get('preprocessed_shape'),
+                'input_size': inference_metadata.get('input_size'),
+                'policy': inference_metadata.get('policy'),
+                'aspect_ratio_preserved': inference_metadata.get('aspect_ratio_preserved'),
+                'num_tiles': inference_metadata.get('num_tiles', 1)
+            }
+            
+            logger.info(
+                f"  Inference: {inference_metadata.get('original_shape')} → "
+                f"{inference_metadata.get('preprocessed_shape')} "
+                f"(policy={inference_metadata.get('policy')}, "
+                f"input_size={inference_metadata.get('input_size')})"
+            )
+        
         # Save depth
         depth_path = output_dir / f"{rgb_path.stem}_depth.tiff"
         save_depth_16bit(depth, depth_path)
