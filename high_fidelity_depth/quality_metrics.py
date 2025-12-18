@@ -454,7 +454,7 @@ def compute_overshoot_penalty(depth: np.ndarray) -> float:
     """
     Compute overshoot penalty (Laplacian ringing).
     
-    FIXED: Calibrated scaling based on empirical float32 depth values.
+    PRIORITY 3 FIX: Calibrated scaling with detailed logging.
     Lower penalty = better (0.0 = perfect, 1.0 = severe ringing)
     
     Args:
@@ -470,11 +470,16 @@ def compute_overshoot_penalty(depth: np.ndarray) -> float:
     # Map empirical range [0, 0.1] → [0, 1]
     penalty_raw = np.percentile(laplacian_abs, 95)
     
+    # Additional diagnostics
+    mean_laplacian = laplacian_abs.mean()
+    max_laplacian = laplacian_abs.max()
+    
     # Calibrated scaling for float32 depth [0, 1]
     # 0.01 is typical for good depth, 0.1+ indicates severe ringing
     penalty = np.clip(penalty_raw * 10.0, 0.0, 1.0)
     
-    logger.debug(f"Overshoot: raw_p95={penalty_raw:.4f}, penalty={penalty:.3f}")
+    logger.info(f"Overshoot penalty: raw_p95={penalty_raw:.4f}, penalty={penalty:.3f}, "
+                f"mean={mean_laplacian:.4f}, max={max_laplacian:.4f}")
     
     return penalty
 
@@ -566,11 +571,55 @@ def validate_depth_quality(
     return metrics
 
 
+def create_edge_overlay(rgb: np.ndarray, depth: np.ndarray) -> np.ndarray:
+    """
+    Create edge visualization overlay.
+    
+    Shows:
+    - RGB-only edges: RED
+    - Depth-only edges: BLUE
+    - Overlap edges: GREEN
+    
+    Args:
+        rgb: RGB image uint8
+        depth: Depth map float32 [0, 1]
+        
+    Returns:
+        Overlay image uint8 RGB
+    """
+    # Detect edges
+    rgb_edges = detect_edges(rgb, mode='canny', threshold1=50, threshold2=150)
+    depth_edges = detect_edges(depth, mode='sobel', low_threshold=0.02, high_threshold=0.98)
+    
+    # Dilate slightly for visibility
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    rgb_edges_d = cv2.dilate(rgb_edges.astype(np.uint8), kernel, iterations=1).astype(bool)
+    depth_edges_d = cv2.dilate(depth_edges.astype(np.uint8), kernel, iterations=1).astype(bool)
+    
+    # Create overlay on RGB base
+    overlay = rgb.copy()
+    
+    # RGB-only edges: red
+    rgb_only = rgb_edges_d & ~depth_edges_d
+    overlay[rgb_only] = [255, 0, 0]
+    
+    # Depth-only edges: blue
+    depth_only = depth_edges_d & ~rgb_edges_d
+    overlay[depth_only] = [0, 0, 255]
+    
+    # Overlap edges: green
+    overlap = rgb_edges_d & depth_edges_d
+    overlay[overlap] = [0, 255, 0]
+    
+    return overlay
+
+
 def save_metrics_atomic(metrics: Dict, output_path: Path) -> None:
     """
-    Save metrics to JSON with atomic write + validation.
+    PRIORITY 6 FIX: Save metrics to JSON with atomic write + validation.
     
     This prevents truncated/corrupted JSON files.
+    Recursively converts all numpy types to native Python.
     
     Args:
         metrics: Metrics dictionary
@@ -579,18 +628,23 @@ def save_metrics_atomic(metrics: Dict, output_path: Path) -> None:
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Convert numpy types to native Python
-    metrics_clean = {}
-    for k, v in metrics.items():
-        if isinstance(v, dict):
-            metrics_clean[k] = {
-                kk: float(vv) if isinstance(vv, (np.floating, np.integer)) else vv
-                for kk, vv in v.items()
-            }
-        elif isinstance(v, (np.floating, np.integer)):
-            metrics_clean[k] = float(v)
+    def convert_value(obj):
+        """Recursively convert numpy types to native Python."""
+        if isinstance(obj, (np.integer, np.floating)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: convert_value(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [convert_value(item) for item in obj]
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
         else:
-            metrics_clean[k] = v
+            return obj
+    
+    # Convert all numpy types recursively
+    metrics_clean = convert_value(metrics)
     
     # Write to temp file
     temp_fd, temp_path = tempfile.mkstemp(

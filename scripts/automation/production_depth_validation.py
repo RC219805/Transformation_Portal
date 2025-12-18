@@ -154,18 +154,18 @@ def process_single_image(
         
         # Compile results (PRIORITY 1 FIX: separate execution/seam/quality outcomes)
         result.update({
-            "success": True,  # Execution succeeded without exception
+            "execution_status": "success",  # Execution succeeded without exception
+            "success": True,  # Deprecated, kept for backward compatibility
             "depth_path": str(depth_path),
             "overlay_path": str(overlay_path),
+            "heatmap_path": str(heatmap_path),
             "image_size": list(rgb.shape[:2]),
             "metrics": metrics.to_dict(),
-            "seam_validation": {
-                "passed": bool(seams_ok),
-                "boundary_ratio": float(seam_ratio)
-            },
-            "quality_score": float(metrics.quality_score()),
-            "passed_lenient": bool(metrics.passed(strict=False)),
-            "passed_strict": bool(metrics.passed(strict=True))
+            "seam_validation_passed": bool(seams_ok),
+            "seam_boundary_ratio": float(seam_ratio),
+            "quality_lenient": bool(metrics.passed(strict=False)),
+            "quality_strict": bool(metrics.passed(strict=True)),
+            "quality_score": float(metrics.quality_score())
         })
         
         logger.info(f"✓ SUCCESS: Quality score = {metrics.quality_score():.3f}")
@@ -312,14 +312,14 @@ def run_production_validation(
     
     # Aggregate report (PRIORITY 1 FIX: separate execution/seam/quality outcomes)
     total = len(results)
-    execution_succeeded = sum(1 for r in results if r.get('success', False))
+    execution_succeeded = sum(1 for r in results if r.get('execution_status') == 'success' or r.get('success', False))
     execution_failed = total - execution_succeeded
     
     # Quality pass rates (from successful executions only)
-    successful_results = [r for r in results if r.get('success', False)]
-    seam_passed = sum(1 for r in successful_results if r.get('seam_validation', {}).get('passed', False))
-    quality_passed_lenient = sum(1 for r in successful_results if r.get('passed_lenient', False))
-    quality_passed_strict = sum(1 for r in successful_results if r.get('passed_strict', False))
+    successful_results = [r for r in results if r.get('execution_status') == 'success' or r.get('success', False)]
+    seam_passed = sum(1 for r in successful_results if r.get('seam_validation_passed', False))
+    quality_passed_lenient = sum(1 for r in successful_results if r.get('quality_lenient', False))
+    quality_passed_strict = sum(1 for r in successful_results if r.get('quality_strict', False))
     
     # PRIORITY 5 FIX: Per-category reporting
     category_stats = {}
@@ -328,21 +328,29 @@ def run_production_validation(
         if cat_results:
             category_stats[category] = {
                 "total": len(cat_results),
-                "seam_passed": sum(1 for r in cat_results if r.get('seam_validation', {}).get('passed', False)),
-                "quality_passed_lenient": sum(1 for r in cat_results if r.get('passed_lenient', False)),
-                "quality_passed_strict": sum(1 for r in cat_results if r.get('passed_strict', False)),
+                "seam_passed": sum(1 for r in cat_results if r.get('seam_validation_passed', False)),
+                "quality_passed_lenient": sum(1 for r in cat_results if r.get('quality_lenient', False)),
+                "quality_passed_strict": sum(1 for r in cat_results if r.get('quality_strict', False)),
                 "avg_edge_f1": float(np.mean([r['metrics']['edge_f1'] for r in cat_results])),
-                "avg_seam_ratio": float(np.mean([r['seam_validation']['boundary_ratio'] for r in cat_results]))
+                "avg_seam_ratio": float(np.mean([r['seam_boundary_ratio'] for r in cat_results]))
             }
     
     logger.info("\n" + "="*70)
     logger.info("VALIDATION COMPLETE")
     logger.info("="*70)
-    logger.info(f"Total: {total}")
-    logger.info(f"Execution: {execution_succeeded}/{total} succeeded, {execution_failed}/{total} failed")
-    logger.info(f"Seam validation: {seam_passed}/{execution_succeeded} passed")
-    logger.info(f"Quality (lenient): {quality_passed_lenient}/{execution_succeeded} passed")
-    logger.info(f"Quality (strict): {quality_passed_strict}/{execution_succeeded} passed ⚠️ KEY METRIC")
+    logger.info(f"Total images: {total}")
+    logger.info(f"")
+    logger.info(f"EXECUTION STATUS:")
+    logger.info(f"  Succeeded: {execution_succeeded}/{total}")
+    logger.info(f"  Failed:    {execution_failed}/{total}")
+    logger.info(f"")
+    logger.info(f"SEAM VALIDATION (of {execution_succeeded} successful executions):")
+    logger.info(f"  Passed:    {seam_passed}/{execution_succeeded}")
+    logger.info(f"  Failed:    {execution_succeeded - seam_passed}/{execution_succeeded}")
+    logger.info(f"")
+    logger.info(f"QUALITY ASSESSMENT (of {execution_succeeded} successful executions):")
+    logger.info(f"  Lenient:   {quality_passed_lenient}/{execution_succeeded} passed")
+    logger.info(f"  Strict:    {quality_passed_strict}/{execution_succeeded} passed ⚠️ KEY METRIC")
     
     # PRIORITY 5 FIX: Category breakdown
     if category_stats:
@@ -356,17 +364,34 @@ def run_production_validation(
         for name in failed_images:
             logger.error(f"  - {name}")
     
-    # Compute aggregate metrics (PRIORITY 1 FIX: separate outcomes)
+    # Compute aggregate metrics (PRIORITY 1 FIX: separate outcomes with clear semantics)
     aggregate = {
         "total_images": total,
-        "execution_succeeded": execution_succeeded,
-        "execution_failed": execution_failed,
-        "seam_passed": seam_passed,
-        "quality_passed_lenient": quality_passed_lenient,
-        "quality_passed_strict": quality_passed_strict,
-        "complete": execution_failed == 0,  # CRITICAL: Only true if ALL executed
+        "execution": {
+            "succeeded": execution_succeeded,
+            "failed": execution_failed,
+            "success_rate": execution_succeeded / max(total, 1)
+        },
+        "seam_validation": {
+            "passed": seam_passed,
+            "failed": execution_succeeded - seam_passed,
+            "pass_rate": seam_passed / max(execution_succeeded, 1)
+        },
+        "quality": {
+            "lenient": {
+                "passed": quality_passed_lenient,
+                "failed": execution_succeeded - quality_passed_lenient,
+                "pass_rate": quality_passed_lenient / max(execution_succeeded, 1)
+            },
+            "strict": {
+                "passed": quality_passed_strict,
+                "failed": execution_succeeded - quality_passed_strict,
+                "pass_rate": quality_passed_strict / max(execution_succeeded, 1)
+            }
+        },
+        "overall_status": "COMPLETE" if execution_failed == 0 and seam_passed == execution_succeeded else "INCOMPLETE",
         "failed_images": failed_images,
-        "category_stats": category_stats,  # PRIORITY 5 FIX
+        "category_stats": category_stats,
         "config": {
             "tile_size": tile_size,
             "overlap": overlap,
@@ -379,7 +404,7 @@ def run_production_validation(
         # Aggregate quality metrics
         quality_scores = [r['quality_score'] for r in successful_results]
         edge_f1_scores = [r['metrics']['edge_f1'] for r in successful_results]
-        seam_ratios = [r['seam_validation']['boundary_ratio'] for r in successful_results]
+        seam_ratios = [r.get('seam_validation', {}).get('boundary_ratio', 0.0) for r in successful_results]
         
         aggregate["aggregate_metrics"] = {
             "quality_score": {
@@ -404,12 +429,15 @@ def run_production_validation(
     save_metrics_atomic(aggregate, report_path)
     logger.info(f"\nAggregate report saved: {report_path}")
     
-    # Exit with failure if incomplete
-    if not aggregate['complete']:
+    # Exit with failure if incomplete (PRIORITY 1: hard fail on execution OR seam failures)
+    if aggregate['overall_status'] != 'COMPLETE':
         logger.error("\n❌ VALIDATION INCOMPLETE - DO NOT DEPLOY")
+        logger.error(f"   Execution failures: {execution_failed}")
+        logger.error(f"   Seam failures: {execution_succeeded - seam_passed}")
         sys.exit(1)
     else:
-        logger.info("\n✅ VALIDATION COMPLETE - ALL IMAGES PASSED")
+        logger.info(f"\n✅ VALIDATION COMPLETE - ALL IMAGES EXECUTED AND PASSED SEAMS")
+        logger.info(f"   Quality (strict): {quality_passed_strict}/{execution_succeeded} passed")
     
     return aggregate
 
