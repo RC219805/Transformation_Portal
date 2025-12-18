@@ -104,6 +104,78 @@ class HighFidelityDepthEstimator:
         if "Large" not in self.config.model_name:
             logger.warning("⚠️  Using non-Large model - quality may be reduced")
     
+    def _pad_to_tile_geometry(self, image: np.ndarray) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
+        """
+        Pad image to clean tiling geometry using content-preserving reflection.
+        
+        BLOCKER A FIX: Eliminates sliver tiles with reflect padding.
+        
+        Args:
+            image: RGB image (H, W, 3)
+            
+        Returns:
+            (padded_image, crop_coords) where crop_coords = (top, bottom, left, right)
+        """
+        h, w = image.shape[:2]
+        tile_size = self.config.tile_size
+        overlap = self.config.overlap
+        stride = tile_size - overlap
+        
+        # Calculate padding needed for clean tiling
+        pad_h = ((h - tile_size + stride - 1) // stride) * stride + tile_size - h
+        pad_w = ((w - tile_size + stride - 1) // stride) * stride + tile_size - w
+        
+        # Ensure non-negative padding
+        pad_h = max(0, pad_h)
+        pad_w = max(0, pad_w)
+        
+        if pad_h <= 0 and pad_w <= 0:
+            # No padding needed
+            return image, (0, 0, 0, 0)
+        
+        # Symmetric padding with reflect mode (content-preserving)
+        # Use cv2.BORDER_REFLECT_101 to avoid edge duplication
+        top = 0
+        bottom = pad_h
+        left = 0
+        right = pad_w
+        
+        padded = cv2.copyMakeBorder(
+            image, top, bottom, left, right,
+            borderType=cv2.BORDER_REFLECT_101
+        )
+        
+        crop_coords = (top, bottom, left, right)
+        logger.info(f"Padded image from {h}×{w} to {padded.shape[0]}×{padded.shape[1]} (reflect mode, no slivers)")
+        
+        return padded, crop_coords
+    
+    def _crop_to_original(self, depth_map: np.ndarray, crop_coords: Tuple[int, int, int, int]) -> np.ndarray:
+        """
+        Remove padding after inference.
+        
+        Args:
+            depth_map: Depth map with padding
+            crop_coords: (top, bottom, left, right) padding amounts
+            
+        Returns:
+            Cropped depth map at original dimensions
+        """
+        top, bottom, left, right = crop_coords
+        h, w = depth_map.shape[:2]
+        
+        if bottom == 0 and right == 0:
+            # No cropping needed
+            return depth_map
+        
+        h_end = h - bottom if bottom > 0 else h
+        w_end = w - right if right > 0 else w
+        
+        cropped = depth_map[top:h_end, left:w_end]
+        logger.debug(f"Cropped depth map from {depth_map.shape} to {cropped.shape}")
+        
+        return cropped
+    
     def _extract_tiles(self, image: np.ndarray) -> List[Tuple[np.ndarray, int, int, int, int]]:
         """
         Extract overlapping tiles from image with REFLECTIVE PADDING at borders.
@@ -111,7 +183,7 @@ class HighFidelityDepthEstimator:
         BLOCKER A FIX: No sliver tiles - pad to full tile_size at borders.
         
         Returns:
-            List of (tile_rgb, y0, y1, x0, x1, pad_top, pad_left) tuples
+            List of (tile_rgb, y0, y1, x0, x1) tuples
         """
         h, w = image.shape[:2]
         tile_size = self.config.tile_size
@@ -121,22 +193,13 @@ class HighFidelityDepthEstimator:
         # Special case: image fits in single tile
         if h <= tile_size and w <= tile_size:
             logger.info(f"Image ({h}×{w}) fits in single tile, no tiling needed")
-            return [(image, 0, h, 0, w, 0, 0)]
+            return [(image, 0, h, 0, w)]
         
         tiles = []
         
-        # BLOCKER A FIX: Compute required padding to avoid sliver tiles
-        # Pad image ONCE with reflect mode to handle border tiles
-        pad_h = ((h - tile_size + stride - 1) // stride) * stride + tile_size - h
-        pad_w = ((w - tile_size + stride - 1) // stride) * stride + tile_size - w
-        
-        if pad_h > 0 or pad_w > 0:
-            image_padded = np.pad(image, ((0, pad_h), (0, pad_w), (0, 0)), mode='reflect')
-            logger.info(f"Padded image to {image_padded.shape[:2]} to eliminate sliver tiles")
-        else:
-            image_padded = image
-        
-        h_pad, w_pad = image_padded.shape[:2]
+        # Compute tiles from padded image (handled separately in estimate_depth)
+        # This method now extracts from already-padded image
+        h_pad, w_pad = image.shape[:2]
         
         for y in range(0, h_pad - tile_size + 1, stride):
             for x in range(0, w_pad - tile_size + 1, stride):
@@ -145,16 +208,27 @@ class HighFidelityDepthEstimator:
                 x1 = x0 + tile_size
                 
                 # Extract FULL-SIZED tile
-                tile = image_padded[y0:y1, x0:x1]
+                tile = image[y0:y1, x0:x1]
                 
-                # Track original image boundaries for cropping later
-                pad_top = 0 if y0 + tile_size <= h else (y0 + tile_size - h)
-                pad_left = 0 if x0 + tile_size <= w else (x0 + tile_size - w)
+                # Verify tile size (should always be tile_size × tile_size now)
+                if tile.shape[0] != tile_size or tile.shape[1] != tile_size:
+                    logger.warning(f"Unexpected tile size: {tile.shape}, expected {tile_size}×{tile_size}")
                 
-                tiles.append((tile, y0, min(y1, h), x0, min(x1, w), pad_top, pad_left))
+                # Store tile with coordinates relative to original (unpadded) image
+                tiles.append((tile, y0, y1, x0, x1))
         
-        logger.info(f"Extracted {len(tiles)} full-sized {tile_size}×{tile_size} tiles (overlap={overlap}, no slivers)")
-        return tiles
+        # Enforce minimum tile size (should never trigger with proper padding)
+        valid_tiles = []
+        min_size = 256
+        for tile, y0, y1, x0, x1 in tiles:
+            th, tw = tile.shape[:2]
+            if th >= min_size and tw >= min_size:
+                valid_tiles.append((tile, y0, y1, x0, x1))
+            else:
+                logger.warning(f"Sliver tile detected at ({y0},{x0}): {th}×{tw}, skipping")
+        
+        logger.info(f"Extracted {len(valid_tiles)} full-sized {tile_size}×{tile_size} tiles (overlap={overlap}, no slivers)")
+        return valid_tiles
     
     def _infer_tile_depth(self, tile_rgb: np.ndarray) -> np.ndarray:
         """
@@ -494,23 +568,38 @@ class HighFidelityDepthEstimator:
         # Blend tiles
         return self._blend_tiles(reconciled_tiles, output_shape)
     
-    def _make_blend_window(self, tile_size: int, overlap: int) -> np.ndarray:
-        """Create Hann/cosine blend window for tile fusion."""
-        window = np.ones((tile_size, tile_size), dtype=np.float32)
+    def _create_blend_weight(self, tile_size: int, overlap: int) -> np.ndarray:
+        """
+        Create 2D weight map with cosine falloff at edges for seamless blending.
         
-        if overlap > 0:
-            # Cosine ramp in overlap regions
-            ramp = np.linspace(0, 1, overlap)
-            if self.config.blend_window == "hann":
-                ramp = 0.5 * (1 - np.cos(np.pi * ramp))
+        CRITICAL FIX: Weighted overlap blending suppresses seams mathematically.
+        
+        Args:
+            tile_size: Tile dimension (e.g., 1024)
+            overlap: Overlap amount (e.g., 192)
             
-            # Apply ramps to edges
-            window[:overlap, :] *= ramp[:, None]  # Top
-            window[-overlap:, :] *= ramp[::-1, None]  # Bottom
-            window[:, :overlap] *= ramp[None, :]  # Left
-            window[:, -overlap:] *= ramp[::-1][None, :]  # Right
+        Returns:
+            2D weight map [0, 1] with cosine taper at edges
+        """
+        weight = np.ones((tile_size, tile_size), dtype=np.float32)
         
-        return window
+        if overlap <= 0:
+            return weight
+        
+        # Hann window taper: 0.5 * (1 - cos(π * t)) where t ∈ [0, 1]
+        # This provides smooth transition from 0→1 over overlap region
+        taper = np.linspace(0, 1, overlap)
+        taper = 0.5 * (1 - np.cos(np.pi * taper))  # Hann window: 0→1 transition
+        
+        # Apply tapers to all four edges
+        weight[:overlap, :] *= taper[:, None]          # Top edge: 0→1
+        weight[-overlap:, :] *= taper[::-1, None]      # Bottom edge: 1→0
+        weight[:, :overlap] *= taper[None, :]          # Left edge: 0→1
+        weight[:, -overlap:] *= taper[::-1][None, :]   # Right edge: 1→0
+        
+        logger.debug(f"Created blend weight: {tile_size}×{tile_size}, overlap={overlap}, taper=Hann")
+        
+        return weight
     
     def _blend_tiles(
         self,
@@ -518,33 +607,43 @@ class HighFidelityDepthEstimator:
         output_shape: Tuple[int, int]
     ) -> np.ndarray:
         """
-        Blend reconciled tiles using weighted average (STREAMING MODE - MEMORY SAFE).
+        Blend reconciled tiles using weighted overlap blending (STREAMING MODE - MEMORY SAFE).
         
-        CRITICAL FIX: Uses incremental accumulation instead of stacking all tiles.
-        This prevents OOM on 4K images with many tiles.
+        CRITICAL FIX: Cosine-weighted blending suppresses seams mathematically.
+        Uses incremental accumulation instead of stacking all tiles (prevents OOM).
+        
+        Args:
+            tile_depths: List of (depth_tile, y0, y1, x0, x1)
+            output_shape: (height, width) of final depth map
+            
+        Returns:
+            Blended depth map [0, 1]
         """
         h, w = output_shape
         
-        # ALWAYS use streaming weighted average (median mode disabled for production)
-        # Reason: Median requires stacking all tiles → OOM on large images
+        # Initialize accumulators
         depth_accum = np.zeros((h, w), dtype=np.float32)
         weight_accum = np.zeros((h, w), dtype=np.float32)
         
-        blend_window = self._make_blend_window(self.config.tile_size, self.config.overlap)
+        # Create blend weight (cosine taper at edges)
+        blend_weight = self._create_blend_weight(self.config.tile_size, self.config.overlap)
         
         for idx, (tile_depth, y0, y1, x0, x1) in enumerate(tile_depths):
             th, tw = tile_depth.shape
-            window = blend_window[:th, :tw]
+            
+            # Extract appropriate weight region
+            weight = blend_weight[:th, :tw]
             
             # Streaming accumulation (memory-safe)
-            depth_accum[y0:y1, x0:x1] += tile_depth * window
-            weight_accum[y0:y1, x0:x1] += window
+            depth_accum[y0:y1, x0:x1] += tile_depth * weight
+            weight_accum[y0:y1, x0:x1] += weight
             
             # Free tile immediately (help GC)
             del tile_depth
         
+        # Normalize by total weight
         depth_final = depth_accum / np.maximum(weight_accum, 1e-8)
-        logger.info(f"✓ Blended {len(tile_depths)} tiles using streaming weighted average (memory-safe)")
+        logger.info(f"✓ Blended {len(tile_depths)} tiles using cosine-weighted overlap (seam suppression)")
         
         return depth_final
     
@@ -640,6 +739,8 @@ class HighFidelityDepthEstimator:
         """
         Estimate high-fidelity depth using tiled inference with scale reconciliation.
         
+        CRITICAL FIX: Pad → Infer → Crop workflow eliminates sliver tiles.
+        
         Args:
             image: RGB image (uint8 or float32)
             use_global_anchor: Whether to compute global anchor for reconciliation
@@ -653,36 +754,36 @@ class HighFidelityDepthEstimator:
         h, w = image.shape[:2]
         logger.info(f"Starting high-fidelity depth inference on {h}×{w} image")
         
+        # Step 0: Pad image to clean tiling geometry (BLOCKER A FIX)
+        image_padded, crop_coords = self._pad_to_tile_geometry(image)
+        h_pad, w_pad = image_padded.shape[:2]
+        
         # Step 1: Global anchor (CRITICAL for scale reconciliation)
         global_anchor = None
         if use_global_anchor and self.config.reconcile_scales:
-            global_anchor = self._compute_global_anchor(image)
+            # Compute anchor from ORIGINAL image (not padded)
+            global_anchor_orig = self._compute_global_anchor(image)
+            # Pad anchor to match padded image
+            global_anchor, _ = self._pad_to_tile_geometry(
+                np.stack([global_anchor_orig, global_anchor_orig, global_anchor_orig], axis=-1)
+            )
+            global_anchor = global_anchor[:, :, 0]  # Extract single channel
+            logger.info(f"Global anchor padded to {global_anchor.shape}")
         
-        # Step 2: Extract tiles
-        tiles = self._extract_tiles(image)
+        # Step 2: Extract tiles from PADDED image
+        tiles = self._extract_tiles(image_padded)
         
         # Step 3: Infer depth for each tile
         logger.info(f"Inferring depth for {len(tiles)} tiles...")
         tile_depths = []
         
         for idx, tile_info in enumerate(tiles):
-            if len(tile_info) == 7:
-                tile_rgb, y0, y1, x0, x1, pad_top, pad_left = tile_info
-            else:
-                # Legacy format (5-tuple)
-                tile_rgb, y0, y1, x0, x1 = tile_info
-                pad_top, pad_left = 0, 0
+            tile_rgb, y0, y1, x0, x1 = tile_info
             
             logger.info(f"Processing tile {idx+1}/{len(tiles)} at ({y0}:{y1}, {x0}:{x1})")
             tile_depth = self._infer_tile_depth(tile_rgb)
             
-            # Crop padding if present (BLOCKER A FIX: remove reflect padding from depth output)
-            if pad_top > 0 or pad_left > 0:
-                tile_depth = tile_depth[:-pad_top if pad_top > 0 else None, 
-                                       :-pad_left if pad_left > 0 else None]
-                logger.debug(f"Cropped padding: top={pad_top}, left={pad_left}")
-            
-            # Verify output size matches expected region
+            # Verify tile size
             actual_h = y1 - y0
             actual_w = x1 - x0
             if tile_depth.shape != (actual_h, actual_w):
@@ -693,11 +794,15 @@ class HighFidelityDepthEstimator:
         
         # Step 4: Blend with scale reconciliation (PRIORITY 2 FIX: spatial smoothing)
         logger.info("Blending tiles with scale reconciliation...")
-        depth_final = self._blend_tiles_with_reconciliation(
-            tile_depths, (h, w), global_anchor, smooth_calibrations=smooth_calibrations
+        depth_padded = self._blend_tiles_with_reconciliation(
+            tile_depths, (h_pad, w_pad), global_anchor, smooth_calibrations=smooth_calibrations
         )
         
-        # Step 5: Validate seams
+        # Step 5: Crop back to original dimensions (BLOCKER A FIX)
+        depth_final = self._crop_to_original(depth_padded, crop_coords)
+        logger.info(f"Cropped depth from {depth_padded.shape} to {depth_final.shape} (original size)")
+        
+        # Step 6: Validate seams
         self._validate_seam_boundaries(depth_final)
         
         logger.info(f"✓ High-fidelity depth estimation complete: {depth_final.shape}")
