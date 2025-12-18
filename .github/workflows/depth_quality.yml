@@ -1,0 +1,38 @@
+name: Depth Quality Smoke Test
+
+on: 
+  push:
+    paths:
+      - 'high_fidelity_depth/**'
+      - 'scripts/automation/production_depth_validation_fixed.py'
+  pull_request:
+    paths:
+      - 'high_fidelity_depth/**'
+      - 'scripts/automation/production_depth_validation_fixed.py'
+
+jobs:
+  smoke_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest opencv-python-headless
+      
+      - name: Run resolution policy tests
+        run: python high_fidelity_depth/test_resolution_policy.py
+      
+      - name: Run structure edge tests
+        run: python high_fidelity_depth/test_structure_edges.py
+      
+      - name: Verify imports
+        run: |
+          python -c "from high_fidelity_depth.quality_metrics import extract_structure_edges, classify_scene_type, validate_depth_quality"
+          echo "✅ All imports successful"

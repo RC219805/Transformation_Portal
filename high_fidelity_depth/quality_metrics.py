@@ -55,6 +55,10 @@ class EdgeMetrics:
     rgb_edge_count: int
     depth_edge_count: int
     
+    # Structure-aware edge detection (NEW)
+    edge_type: str = 'raw'  # 'raw' or 'structure' (bilateral-filtered)
+    scene_type: str = 'unknown'  # 'texture_dominated' or 'structure_dominated'
+    
     def passed(self, strict: bool = False) -> bool:
         """
         Check if metrics meet quality thresholds.
@@ -125,6 +129,88 @@ class EdgeMetrics:
             f"  quality_score={self.quality_score():.3f}\n"
             f")"
         )
+
+
+def extract_structure_edges(
+    image: np.ndarray,
+    bilateral_d: int = 9,
+    bilateral_sigma_color: float = 75.0,
+    bilateral_sigma_space: float = 75.0,
+    canny_low: int = 50,
+    canny_high: int = 150
+) -> np.ndarray:
+    """
+    Extract structural edges with texture suppression via bilateral filtering.
+    
+    The bilateral filter removes texture/noise while preserving object boundaries.
+    This aligns edge detection with structural features (frames, boundaries)
+    rather than high-frequency texture (ripples, reflections).
+    
+    Args:
+        image: RGB image (H, W, 3) or grayscale (H, W)
+        bilateral_d: Diameter of pixel neighborhood (9-15 typical)
+        bilateral_sigma_color: Filter sigma in color space (higher = more smoothing)
+        bilateral_sigma_space: Filter sigma in coordinate space
+        canny_low: Canny low threshold
+        canny_high: Canny high threshold
+        
+    Returns:
+        Binary edge map (H, W) with structural edges only
+        
+    References:
+        - OpenCV bilateral filter: removes texture, preserves edges
+        - Used in portrait mode, depth estimation, HDR tone mapping
+    """
+    # Convert to grayscale if needed
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+    
+    # Apply bilateral filter to suppress texture
+    # Parameters tuned for architectural/real estate imagery:
+    # - d=9: moderate spatial extent (balance speed vs quality)
+    # - sigma_color=75: significant color smoothing (kills texture)
+    # - sigma_space=75: matches spatial extent
+    filtered = cv2.bilateralFilter(
+        gray, 
+        d=bilateral_d,
+        sigmaColor=bilateral_sigma_color,
+        sigmaSpace=bilateral_sigma_space
+    )
+    
+    # Extract edges from texture-suppressed image
+    edges = cv2.Canny(filtered, canny_low, canny_high)
+    
+    return edges
+
+
+def classify_scene_type(
+    rgb_edges_raw: np.ndarray,
+    rgb_edges_structure: np.ndarray,
+    texture_threshold: float = 3.0
+) -> str:
+    """
+    Classify scene as texture-dominated or structure-dominated.
+    
+    Args:
+        rgb_edges_raw: Edges from raw RGB (includes texture)
+        rgb_edges_structure: Edges from bilateral-filtered RGB (structure only)
+        texture_threshold: Ratio threshold for classification
+        
+    Returns:
+        'texture_dominated' or 'structure_dominated'
+    """
+    raw_count = np.count_nonzero(rgb_edges_raw)
+    structure_count = np.count_nonzero(rgb_edges_structure)
+    
+    # Avoid division by zero
+    if structure_count == 0:
+        return 'texture_dominated'
+    
+    ratio = raw_count / structure_count
+    
+    return 'texture_dominated' if ratio > texture_threshold else 'structure_dominated'
 
 
 def detect_edges(
@@ -489,7 +575,8 @@ def validate_depth_quality(
     depth: np.ndarray,
     dilation: int = 3,
     save_heatmap: bool = False,
-    heatmap_path: Optional[Path] = None
+    heatmap_path: Optional[Path] = None,
+    use_structure_edges: bool = True
 ) -> EdgeMetrics:
     """
     CANONICAL depth quality validation.
@@ -497,6 +584,7 @@ def validate_depth_quality(
     This is the SINGLE implementation used by all validation paths.
     PRIORITY 2 FIX: Use float depth directly for edge detection.
     PRIORITY 3 FIX: Add overshoot heatmap generation.
+    PRIORITY 8 FIX: Add structure-aware edge detection with texture suppression.
     
     Args:
         rgb: RGB image (uint8 or float32)
@@ -504,6 +592,7 @@ def validate_depth_quality(
         dilation: Dilation radius for edge overlap
         save_heatmap: Whether to generate and save overshoot heatmap (PRIORITY 3)
         heatmap_path: Path to save heatmap (if save_heatmap=True)
+        use_structure_edges: If True, use bilateral-filtered edges (suppress texture)
         
     Returns:
         EdgeMetrics with all quality scores
@@ -517,9 +606,23 @@ def validate_depth_quality(
     else:
         gray = (rgb * 255).astype(np.uint8) if rgb.dtype == np.float32 else rgb
     
+    # PRIORITY 8 FIX: Extract RGB edges with texture suppression
+    if use_structure_edges:
+        rgb_edges = extract_structure_edges(gray)
+        edge_type = 'structure'
+    else:
+        rgb_edges = detect_edges(gray)
+        edge_type = 'raw'
+    
     # PRIORITY 2 FIX: Detect edges on float depth directly
-    rgb_edges = detect_edges(gray)
     depth_edges = detect_edges(depth)  # Pass float32 directly
+    
+    # PRIORITY 8 FIX: Scene classification
+    if use_structure_edges:
+        rgb_edges_raw = detect_edges(gray)
+        scene_type = classify_scene_type(rgb_edges_raw, rgb_edges)
+    else:
+        scene_type = 'unknown'
     
     # Compute all metrics
     edge_f1 = compute_edge_f1(rgb_edges, depth_edges, tolerance=2)
@@ -563,7 +666,9 @@ def validate_depth_quality(
         halo_score=halo_score,
         overshoot_penalty=overshoot_penalty,
         rgb_edge_count=rgb_edge_count,
-        depth_edge_count=depth_edge_count
+        depth_edge_count=depth_edge_count,
+        edge_type=edge_type,
+        scene_type=scene_type
     )
     
     logger.info(f"Depth quality validation:\n{metrics}")

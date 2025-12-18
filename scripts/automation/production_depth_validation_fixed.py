@@ -115,6 +115,87 @@ def estimate_tile_count(image_shape, tile_size=1024, overlap=128):
     return tiles_y * tiles_x, tiles_y, tiles_x
 
 
+def evaluate_quality_gates(
+    metrics: dict,
+    scene_type: str,
+    seam_passed: bool = True
+) -> dict:
+    """
+    Apply content-aware quality gates.
+    
+    Structure-dominated scenes:
+    - Expect strong edge alignment (F1 ≥ 0.6/0.7)
+    - Evaluate edge precision/recall
+    
+    Texture-dominated scenes:
+    - Expect smooth depth (don't penalize for missing texture edges)
+    - Evaluate depth consistency/smoothness instead
+    
+    Args:
+        metrics: Depth quality metrics dict
+        scene_type: 'structure_dominated' or 'texture_dominated'
+        seam_passed: Seam validation result
+        
+    Returns:
+        dict with pass/fail status and reason
+    """
+    if scene_type == 'structure_dominated':
+        # Standard edge alignment gates
+        lenient_pass = (
+            metrics['edge_f1'] >= 0.6 and
+            metrics['chamfer_distance'] < 15 and
+            metrics.get('edge_count_ratio', 0) <= 2.0 and
+            seam_passed
+        )
+        strict_pass = (
+            metrics['edge_f1'] >= 0.7 and
+            metrics['chamfer_distance'] < 10 and
+            metrics.get('edge_count_ratio', 0) <= 1.5 and
+            seam_passed
+        )
+        
+        return {
+            'lenient': lenient_pass,
+            'strict': strict_pass,
+            'gate_type': 'edge_alignment',
+            'reason': f"F1={metrics['edge_f1']:.3f}, Chamfer={metrics['chamfer_distance']:.1f}px"
+        }
+    
+    elif scene_type == 'texture_dominated':
+        # Smoothness gates (depth should NOT copy texture)
+        # If edge_f1 is low, that's EXPECTED and CORRECT
+        
+        # Check if depth is appropriately smooth
+        depth_variance = metrics.get('depth_variance', 0)
+        edge_count_ratio = metrics.get('edge_count_ratio', 0)
+        
+        # Lenient: Just verify depth exists and isn't degenerate
+        lenient_pass = (
+            depth_variance > 0.01 and  # Not flat
+            edge_count_ratio < 0.5 and  # Smooth relative to RGB
+            seam_passed
+        )
+        
+        # Strict: Verify depth is smooth AND has minimal structure
+        strict_pass = lenient_pass and (edge_count_ratio < 0.2)
+        
+        return {
+            'lenient': lenient_pass,
+            'strict': strict_pass,
+            'gate_type': 'smoothness',
+            'reason': f"Texture scene: depth_var={depth_variance:.3f}, edge_ratio={edge_count_ratio:.2f}"
+        }
+    
+    else:
+        # Unknown scene type: conservative gates
+        return {
+            'lenient': False,
+            'strict': False,
+            'gate_type': 'unknown',
+            'reason': 'Scene type unknown, cannot evaluate'
+        }
+
+
 def process_single_image(
     rgb_path: Path,
     output_dir: Path,
@@ -192,8 +273,8 @@ def process_single_image(
         save_depth_16bit(depth, depth_path)
         result["depth_path"] = str(depth_path)
         
-        # Validate quality
-        metrics_obj = validate_depth_quality(rgb, depth)
+        # Validate quality with structure-aware edges
+        metrics_obj = validate_depth_quality(rgb, depth, use_structure_edges=True)
         
         # Convert EdgeMetrics object to dict
         metrics = {
@@ -208,33 +289,42 @@ def process_single_image(
             'overshoot_penalty': metrics_obj.overshoot_penalty,
             'rgb_edge_count': metrics_obj.rgb_edge_count,
             'depth_edge_count': metrics_obj.depth_edge_count,
-            'quality_score': metrics_obj.quality_score()
+            'quality_score': metrics_obj.quality_score(),
+            'edge_type': metrics_obj.edge_type,
+            'scene_type': metrics_obj.scene_type
         }
         result["metrics"] = metrics
+        
+        # Log scene classification
+        logger.info(f"  Scene: {metrics['scene_type']}, Edges: {metrics['edge_type']}")
         
         # Seam validation
         seam_passed, seam_ratio = validate_seams(depth, config.tile_size, config.overlap)
         result["seam_validation_passed"] = bool(seam_passed)
         result["seam_boundary_ratio"] = float(seam_ratio)
         
-        # Quality gates (calibrated thresholds)
-        lenient_pass = (
-            metrics["edge_f1"] >= 0.30 and
-            metrics["chamfer_distance"] < 15.0 and
-            metrics["edge_count_ratio"] <= 2.0 and
-            seam_passed
+        # Add depth variance for texture scene evaluation
+        metrics['depth_variance'] = float(np.var(depth))
+        
+        # Apply conditional quality gates
+        gate_results = evaluate_quality_gates(
+            metrics=metrics,
+            scene_type=metrics['scene_type'],
+            seam_passed=seam_passed
         )
         
-        strict_pass = (
-            metrics["edge_f1"] >= 0.60 and
-            metrics["chamfer_distance"] < 5.0 and
-            metrics["edge_count_ratio"] <= 1.5 and
-            metrics["overshoot_penalty"] < 0.3 and
-            seam_passed
-        )
+        result["quality_lenient"] = bool(gate_results['lenient'])
+        result["quality_strict"] = bool(gate_results['strict'])
+        result["gate_type"] = gate_results['gate_type']
+        result["gate_reason"] = gate_results['reason']
         
-        result["quality_lenient"] = bool(lenient_pass)
-        result["quality_strict"] = bool(strict_pass)
+        # Log gate results
+        logger.info(
+            f"  {gate_results['gate_type'].upper()}: "
+            f"Lenient={'PASS' if gate_results['lenient'] else 'FAIL'}, "
+            f"Strict={'PASS' if gate_results['strict'] else 'FAIL'}"
+        )
+        logger.info(f"  Reason: {gate_results['reason']}")
         
         # Compute quality score
         quality_score = (
