@@ -587,9 +587,15 @@ def create_edge_overlay(rgb: np.ndarray, depth: np.ndarray) -> np.ndarray:
     Returns:
         Overlay image uint8 RGB
     """
-    # Detect edges
-    rgb_edges = detect_edges(rgb, mode='canny', threshold1=50, threshold2=150)
-    depth_edges = detect_edges(depth, mode='sobel', low_threshold=0.02, high_threshold=0.98)
+    # Detect edges (using standard Canny parameters)
+    # Convert RGB to grayscale first
+    if len(rgb.shape) == 3:
+        rgb_gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    else:
+        rgb_gray = rgb
+    
+    rgb_edges = detect_edges(rgb_gray, threshold_low=50, threshold_high=150)
+    depth_edges = detect_edges(depth, threshold_low=0.02, threshold_high=0.98)
     
     # Dilate slightly for visibility
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
