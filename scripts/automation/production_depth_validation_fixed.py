@@ -295,8 +295,33 @@ def process_single_image(
         }
         result["metrics"] = metrics
         
-        # Log scene classification
+        # Log scene classification with V2 multi-factor details
         logger.info(f"  Scene: {metrics['scene_type']}, Edges: {metrics['edge_type']}")
+        
+        # Log classification factors from V2 classifier
+        if hasattr(metrics_obj, 'scene_metadata') and metrics_obj.scene_metadata:
+            meta = metrics_obj.scene_metadata
+            
+            logger.info(
+                f"  Classification factors: "
+                f"ratio={meta.get('ratio', 0):.2f}, "
+                f"depth_var={meta.get('depth_variance', 0):.4f}, "
+                f"edge_density={meta.get('edge_density', 0):.4f}"
+            )
+            
+            logger.info(
+                f"  Decision: {meta.get('decision', 'unknown')} → "
+                f"{metrics['scene_type']}"
+            )
+            
+            # Save detailed metadata to result
+            metrics['classification_factors'] = {
+                'ratio': meta.get('ratio'),
+                'depth_variance': meta.get('depth_variance'),
+                'edge_density': meta.get('edge_density'),
+                'decision_rule': meta.get('decision'),
+                'thresholds': meta.get('thresholds')
+            }
         
         # Seam validation
         seam_passed, seam_ratio = validate_seams(depth, config.tile_size, config.overlap)
