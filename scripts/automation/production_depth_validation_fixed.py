@@ -41,7 +41,9 @@ from high_fidelity_depth.quality_metrics import (
     validate_depth_quality,
     detect_edges,
     save_metrics_atomic,
-    create_edge_overlay
+    create_edge_overlay,
+    classify_scene_type_v2,
+    extract_structure_edges
 )
 
 logging.basicConfig(
@@ -64,6 +66,49 @@ def save_depth_16bit(depth: np.ndarray, path: Path):
     depth_u16 = (depth * 65535).astype(np.uint16)
     Image.fromarray(depth_u16, mode='I;16').save(path, compression='tiff_deflate')
     logger.info(f"Saved 16-bit depth: {path}")
+
+
+def validate_metrics_complete(metrics_dict: dict, image_name: str) -> None:
+    """
+    Fail fast if metrics are incomplete.
+    
+    Production validators MUST NOT write null placeholders.
+    """
+    from datetime import datetime
+    
+    required_fields = [
+        'scene_type',
+        'edge_f1',
+        'lenient_pass',
+        'strict_pass',
+        'classification_factors'
+    ]
+    
+    missing = [f for f in required_fields if metrics_dict.get(f) is None]
+    
+    if missing:
+        logger.error(
+            f"❌ FATAL: Incomplete metrics for {image_name}\n"
+            f"   Missing fields: {missing}\n"
+            f"   This indicates an integration failure.\n"
+            f"   Validator must fail fast, not write placeholder nulls."
+        )
+        raise ValueError(
+            f"Incomplete metrics for {image_name}: missing {missing}. "
+            "This is a P0 integration bug."
+        )
+    
+    # Validate types
+    if not isinstance(metrics_dict['scene_type'], str):
+        raise TypeError(f"scene_type must be str, got {type(metrics_dict['scene_type'])}")
+    
+    if not isinstance(metrics_dict['edge_f1'], (int, float)):
+        raise TypeError(f"edge_f1 must be numeric, got {type(metrics_dict['edge_f1'])}")
+    
+    if not isinstance(metrics_dict['lenient_pass'], bool):
+        raise TypeError(f"lenient_pass must be bool, got {type(metrics_dict['lenient_pass'])}")
+    
+    logger.debug(f"✓ Metrics validation passed for {image_name}")
 
 
 def validate_seams(
@@ -273,8 +318,40 @@ def process_single_image(
         save_depth_16bit(depth, depth_path)
         result["depth_path"] = str(depth_path)
         
-        # Validate quality with structure-aware edges
+        # 1. Extract edges (both raw and structure)
+        logger.info("Extracting edges for classification...")
+        if rgb.ndim == 3:
+            gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = rgb
+        
+        rgb_edges_raw = detect_edges(gray)
+        rgb_edges_structure = extract_structure_edges(gray)
+        
+        # 2. Classify scene using V2 multi-factor classifier
+        logger.info("Classifying scene type (V2 multi-factor)...")
+        scene_type, scene_metadata = classify_scene_type_v2(
+            rgb_edges_raw=rgb_edges_raw,
+            rgb_edges_structure=rgb_edges_structure,
+            depth_map=depth
+        )
+        
+        logger.info(
+            f"  Scene: {scene_type} (ratio={scene_metadata.get('ratio', 0):.2f}, "
+            f"depth_var={scene_metadata.get('depth_variance', 0):.4f}, "
+            f"decision={scene_metadata.get('decision', 'unknown')})"
+        )
+        
+        # 3. Validate depth quality with structure-aware edges
+        logger.info("Validating depth quality (structure-aware)...")
         metrics_obj = validate_depth_quality(rgb, depth, use_structure_edges=True)
+        
+        # 4. Verify scene_type was populated
+        if metrics_obj.scene_type is None:
+            raise ValueError(
+                "validate_depth_quality() returned None scene_type. "
+                "V2 classifier integration is broken."
+            )
         
         # Convert EdgeMetrics object to dict
         metrics = {
@@ -295,61 +372,59 @@ def process_single_image(
         }
         result["metrics"] = metrics
         
-        # Log scene classification with V2 multi-factor details
-        logger.info(f"  Scene: {metrics['scene_type']}, Edges: {metrics['edge_type']}")
-        
         # Log classification factors from V2 classifier
-        if hasattr(metrics_obj, 'scene_metadata') and metrics_obj.scene_metadata:
-            meta = metrics_obj.scene_metadata
-            
-            logger.info(
-                f"  Classification factors: "
-                f"ratio={meta.get('ratio', 0):.2f}, "
-                f"depth_var={meta.get('depth_variance', 0):.4f}, "
-                f"edge_density={meta.get('edge_density', 0):.4f}"
-            )
-            
-            logger.info(
-                f"  Decision: {meta.get('decision', 'unknown')} → "
-                f"{metrics['scene_type']}"
-            )
-            
-            # Save detailed metadata to result
-            metrics['classification_factors'] = {
-                'ratio': meta.get('ratio'),
-                'depth_variance': meta.get('depth_variance'),
-                'edge_density': meta.get('edge_density'),
-                'decision_rule': meta.get('decision'),
-                'thresholds': meta.get('thresholds')
-            }
+        logger.info(
+            f"  Classification factors: "
+            f"ratio={scene_metadata.get('ratio', 0):.2f}, "
+            f"depth_var={scene_metadata.get('depth_variance', 0):.4f}, "
+            f"edge_density={scene_metadata.get('edge_density', 0):.4f}"
+        )
+        
+        logger.info(
+            f"  Decision: {scene_metadata.get('decision', 'unknown')} → "
+            f"{scene_type}"
+        )
         
         # Seam validation
         seam_passed, seam_ratio = validate_seams(depth, config.tile_size, config.overlap)
         result["seam_validation_passed"] = bool(seam_passed)
         result["seam_boundary_ratio"] = float(seam_ratio)
         
-        # Add depth variance for texture scene evaluation
-        metrics['depth_variance'] = float(np.var(depth))
+        # 5. Apply conditional quality gates based on scene type
+        depth_var = float(np.var(depth))
         
-        # Apply conditional quality gates
-        gate_results = evaluate_quality_gates(
-            metrics=metrics,
-            scene_type=metrics['scene_type'],
-            seam_passed=seam_passed
-        )
+        if scene_type == 'texture_dominated':
+            # Texture scenes: use smoothness gates
+            edge_ratio = metrics['edge_count_ratio']
+            
+            lenient_pass = depth_var < 0.05 and edge_ratio < 15.0
+            strict_pass = depth_var < 0.03 and edge_ratio < 10.0
+            
+            gate_reason = f"Texture scene: depth_var={depth_var:.3f}, edge_ratio={edge_ratio:.2f}"
+            gate_type = 'smoothness'
+
+        elif scene_type == 'structure_dominated':
+            # Structure scenes: use edge alignment gates
+            lenient_pass = metrics['edge_f1'] >= 0.30 and metrics['chamfer_distance'] < 15.0
+            strict_pass = metrics['edge_f1'] >= 0.60 and metrics['chamfer_distance'] < 5.0
+            
+            gate_reason = f"Structure scene: edge_f1={metrics['edge_f1']:.3f}, chamfer={metrics['chamfer_distance']:.1f}px"
+            gate_type = 'edge_alignment'
+        else:
+            # Unknown scene type - should not happen
+            logger.warning(f"Unknown scene type: {scene_type}, using lenient structure gates")
+            lenient_pass = metrics['edge_f1'] >= 0.20
+            strict_pass = False
+            gate_reason = f"Unknown scene: edge_f1={metrics['edge_f1']:.3f}"
+            gate_type = 'unknown'
         
-        result["quality_lenient"] = bool(gate_results['lenient'])
-        result["quality_strict"] = bool(gate_results['strict'])
-        result["gate_type"] = gate_results['gate_type']
-        result["gate_reason"] = gate_results['reason']
+        logger.info(f"  Quality gates: lenient={'PASS' if lenient_pass else 'FAIL'}, strict={'PASS' if strict_pass else 'FAIL'}")
+        logger.info(f"  Reason: {gate_reason}")
         
-        # Log gate results
-        logger.info(
-            f"  {gate_results['gate_type'].upper()}: "
-            f"Lenient={'PASS' if gate_results['lenient'] else 'FAIL'}, "
-            f"Strict={'PASS' if gate_results['strict'] else 'FAIL'}"
-        )
-        logger.info(f"  Reason: {gate_results['reason']}")
+        result["quality_lenient"] = bool(lenient_pass)
+        result["quality_strict"] = bool(strict_pass)
+        result["gate_type"] = gate_type
+        result["gate_reason"] = gate_reason
         
         # Compute quality score
         quality_score = (
@@ -374,9 +449,45 @@ def process_single_image(
             Image.fromarray(heatmap).save(heatmap_path)
             result["heatmap_path"] = str(heatmap_path)
         
+        # 6. Build complete metrics dict with V2 classifier data
+        from datetime import datetime
+        
+        metrics_dict = {
+            # Core metrics
+            'edge_f1': float(metrics['edge_f1']),
+            'chamfer_px': float(metrics['chamfer_distance']),
+            'edge_count_ratio': float(metrics['edge_count_ratio']),
+            
+            # V2 classifier data
+            'scene_type': scene_type,
+            'classification_factors': {
+                'ratio': float(scene_metadata.get('ratio', 0)),
+                'depth_variance': float(scene_metadata.get('depth_variance', 0)),
+                'edge_density': float(scene_metadata.get('edge_density', 0)),
+                'decision_rule': scene_metadata.get('decision', 'unknown'),
+                'method': scene_metadata.get('method', 'unknown')
+            },
+            
+            # Quality gates
+            'lenient_pass': bool(lenient_pass),
+            'strict_pass': bool(strict_pass),
+            'gate_reason': gate_reason,
+            
+            # Metadata
+            'image': str(rgb_path.name),
+            'timestamp': datetime.now().isoformat(),
+        }
+        
+        # 7. VALIDATE BEFORE WRITING (fail fast)
+        validate_metrics_complete(metrics_dict, rgb_path.name)
+        
+        # 8. Save metrics atomically
+        metrics_path = output_dir / f"{rgb_path.stem}_metrics.json"
+        save_metrics_atomic(metrics_dict, metrics_path)
+        
         result["success"] = True
         result["execution_status"] = "success"
-        logger.info(f"✓ {rgb_path.name}: F1={metrics['edge_f1']:.3f}, seam_ratio={seam_ratio:.3f}, quality={quality_score:.3f}")
+        logger.info(f"✓ {rgb_path.name}: F1={metrics['edge_f1']:.3f}, scene={scene_type}, seam_ratio={seam_ratio:.3f}, quality={quality_score:.3f}")
         
     except Exception as e:
         result["success"] = False
@@ -391,7 +502,8 @@ def process_single_image(
 
 def main():
     parser = argparse.ArgumentParser(description="Production High-Fidelity Depth Validation")
-    parser.add_argument("--input-dir", type=Path, required=True, help="Input directory with RGB images (TIFF/JPG/PNG)")
+    parser.add_argument("--input-dir", "--image-dir", dest='input_dir', type=Path, required=True, 
+                        help="Input directory with RGB images (TIFF/JPG/PNG)")
     parser.add_argument("--output-dir", type=Path, required=True, help="Output directory")
     parser.add_argument("--tile-size", type=int, default=1024, help="Tile size (default: 1024)")
     parser.add_argument("--overlap", type=int, default=192, help="Tile overlap (default: 192 for texture-heavy)")
@@ -454,9 +566,7 @@ def main():
         if not result["success"]:
             failed_images.append(rgb_path.name)
         
-        # Save per-image metrics atomically
-        metrics_path = args.output_dir / f"{rgb_path.stem}_metrics.json"
-        save_metrics_atomic(result, metrics_path)
+        # Note: Metrics already saved in process_single_image() with validation
     
     # Generate summary report
     succeeded = sum(1 for r in results if r["success"])
