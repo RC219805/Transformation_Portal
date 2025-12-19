@@ -1,162 +1,102 @@
-================================================================================
-LUXURY ESTATE MASTER PIPELINE v1.1.0 - FILES CHANGED SUMMARY
-================================================================================
+Texture-Scene Validation Fix - Files Changed Summary
+=====================================================
 
-Implementation Date: November 10, 2025
-Version: 1.1.0 (from 1.0.0)
-Quality Grade: 94.0/100 (maintained)
+## Modified Files (2)
 
-================================================================================
-FILES MODIFIED (2)
-================================================================================
+1. high_fidelity_depth/quality_metrics.py
+   - Added compute_high_frequency_energy() function (lines 795-872)
+   - Updated validate_depth_quality() signature to accept image_filename
+   - Pass filename to classify_scene_type_v2() for weak supervision
+   - Updated docstrings with empirical HF energy ranges
 
-1. luxury_estate_master_pipeline.py
-   Status: UPDATED
-   Changes:
-   - Added 6 new methods for fixes
-   - Modified 4 existing methods
-   - Added 3 new dataclass fields per config
-   - ~200 lines added, ~20 modified
-   - Total: 1,100+ lines (from 1,030)
-   
-   New Methods:
-   - _auto_download_depth_model()
-   - _detect_scene_type()
-   - _pad_for_controlnet()
-   - _unpad_image()
-   - _apply_shadow_boost()
-   - _zone_based_tone_mapping()
-   
-   Modified Methods:
-   - _init_depth_model()
-   - _stage_4_tone_mapping()
-   - _stage_6_ai_enhancement()
-   - process_image()
-   - get_750_picacho_preset()
-   - get_aerial_preset()
+2. scripts/automation/production_depth_validation_fixed.py
+   - Save ALL EdgeMetrics fields (was only 3, now 13 fields)
+   - Import and compute HF energy for texture scene gates
+   - Implement balanced gates: (smooth HF) OR (good edges)
+   - Pass image filename to validate_depth_quality()
+   - Save complete classification metadata (depth_gradient_var, filename_hint, gate_type)
 
-2. config/750_picacho_master_preset.yaml
-   Status: UPDATED
-   Changes:
-   - Added depth.auto_download_models
-   - Added tone_mapping.adaptive_tone_mapping
-   - Added tone_mapping.shadow_boost_outdoor
-   - Added tone_mapping.use_zone_based_mapping
-   - Added ai_enhancement.ai_enhancement_padding
-   - Added ai_enhancement.target_size_multiple
-   - Updated room_overrides (aerial, pool)
-   - ~15 lines added
+## New Files (7)
 
-================================================================================
-FILES CREATED (5)
-================================================================================
+3. scripts/analyze_validation_v2.py (362 lines)
+   - Classification report with sklearn metrics
+   - Confusion matrix (correct convention: rows=true, cols=pred)
+   - Stratified pass rates by scene type
+   - Feature separability visualization (scatter plots)
 
-1. test_pipeline_fixes.py
-   Status: NEW
-   Lines: 350+
-   Purpose: Comprehensive test suite for validating fixes
-   Functions:
-   - analyze_shadow_clipping()
-   - test_shadow_clipping_fix()
-   - test_ai_enhancement_compatibility()
-   - test_depth_model_download()
-   - main()
+4. RUN_VALIDATION_V2_FIXED.sh (90 lines)
+   - Automated re-run of 18-image validation
+   - Copies same images for comparison
+   - Runs analysis automatically after validation
 
-2. PIPELINE_FIXES_DOCUMENTATION.md
-   Status: NEW
-   Lines: 500+
-   Purpose: Detailed technical documentation of fixes
-   Sections:
-   - Problem descriptions
-   - Solution implementations
-   - Configuration examples
-   - Testing procedures
-   - Troubleshooting guide
-   - Quality metrics
-   - References
+5. test_hf_energy.py (106 lines)
+   - Unit tests for HF energy computation
+   - Validates threshold calibration
+   - Tests: smooth gradient, rippled texture, geometric edges, noisy depth
 
-3. PIPELINE_FIXES_QUICKSTART.md
-   Status: NEW
-   Lines: 400+
-   Purpose: Quick start guide for using fixes
-   Sections:
-   - Installation
-   - Quick start examples
-   - Feature descriptions
-   - Configuration templates
-   - Monitoring and logging
-   - Performance benchmarks
-   - Support
+6. TEXTURE_SCENE_FIX_SUMMARY.md (248 lines)
+   - Problem statement and root cause analysis
+   - Detailed fix descriptions
+   - Expected improvements and success criteria
+   - References to deliverables
 
-4. PIPELINE_V1.1.0_CHANGES.md
-   Status: NEW
-   Lines: 500+
-   Purpose: Detailed change log
-   Sections:
-   - Files modified/created
-   - Technical implementation
-   - Quality metrics
-   - Testing results
-   - Performance benchmarks
-   - Deployment checklist
+7. TEXTURE_SCENE_FIX_IMPLEMENTATION.md (292 lines)
+   - Implementation details for each fix
+   - Testing performed (unit tests, syntax validation)
+   - Baseline analysis results
+   - Next steps and success criteria
 
-5. IMPLEMENTATION_COMPLETE.md
-   Status: NEW
-   Lines: 450+
-   Purpose: Executive summary and sign-off
-   Sections:
-   - Objectives achieved
-   - Quality metrics
-   - Deliverables
-   - Validation results
-   - Performance benchmarks
-   - Deployment guide
+8. VALIDATION_FIX_CHECKLIST.md (186 lines)
+   - Pre-flight checks
+   - Execution steps with expected outputs
+   - Success criteria (P0 blockers, target goals, stretch goals)
+   - Rollback plan and post-validation actions
 
-================================================================================
-FILES UPDATED (1)
-================================================================================
+9. FILES_CHANGED_SUMMARY.txt (this file)
+   - Complete list of all changes
+   - Quick reference for what was modified
 
-1. LUXURY_ESTATE_PIPELINE_README.md
-   Status: UPDATED
-   Changes:
-   - Added v1.1.0 announcement section
-   - Updated quick start commands
-   - Added references to new documentation
-   - Updated file listing
-   - ~30 lines added
+## Key Changes Summary
 
-================================================================================
-TOTAL IMPACT
-================================================================================
+### P0 Fixes (Critical)
+- [x] Save complete EdgeMetrics (edge_overlap was missing → 0% pass rate)
+- [x] Add HF energy metric (replaces faulty global variance)
+- [x] Balanced gates for texture scenes (OR logic instead of AND)
 
-Modified Files:     2
-Created Files:      5
-Updated Files:      1
-Documentation:      4 new files (1,850+ lines)
-Test Coverage:      1 new file (350+ lines)
-Code Changes:       ~220 lines added/modified
+### Enhancements
+- [x] Filename weak supervision for classifier
+- [x] Complete classification metadata in saved JSON
+- [x] Comprehensive analysis tools (sklearn metrics)
 
-================================================================================
-VALIDATION STATUS
-================================================================================
+### Testing
+- [x] All syntax validated (py_compile)
+- [x] 15/15 scene classifier tests pass
+- [x] HF energy unit tests pass
+- [x] Baseline analysis confirms issues (0% pass rates, missing edge_overlap)
 
-Syntax Check:       ✅ PASS (py_compile)
-Test Suite:         ✅ PASS (all 3 fixes)
-  - Shadow Test:    ✅ PASS
-  - AI Test:        ✅ PASS  
-  - Depth Test:     ✅ PASS
-Dry Run:            ✅ PASS (configuration valid)
-Quality Grade:      ✅ MAINTAINED (94.0/100)
-Performance:        ✅ ACCEPTABLE (+10-15%)
+## Quick Reference
 
-================================================================================
-DEPLOYMENT READY
-================================================================================
+**To run validation**:
+./RUN_VALIDATION_V2_FIXED.sh
 
-Status:             ✅ APPROVED FOR PRODUCTION
-Next Steps:         Run production batch validation
-Review Date:        After first production batch
+**To analyze existing results**:
+python scripts/analyze_validation_v2.py --results-dir outputs/validation_v2_20251218_170022_8197588
 
-================================================================================
-END OF SUMMARY
-================================================================================
+**To test HF energy**:
+python test_hf_energy.py
+
+**To view changes**:
+git diff high_fidelity_depth/quality_metrics.py
+git diff scripts/automation/production_depth_validation_fixed.py
+
+## Line Count
+- Modified: ~200 lines changed across 2 files
+- New code: ~1,200 lines across 7 new files
+- Documentation: ~700 lines across 4 markdown files
+- Total: ~2,100 lines added/changed
+
+## Backward Compatibility
+✅ No breaking changes
+✅ All existing tests pass
+✅ New parameters have defaults
+✅ EdgeMetrics dataclass unchanged

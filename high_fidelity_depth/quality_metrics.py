@@ -792,13 +792,74 @@ def compute_overshoot_penalty(depth: np.ndarray) -> float:
     return penalty
 
 
+def compute_high_frequency_energy(depth_map: np.ndarray, sigma: float = 15.0) -> float:
+    """
+    Compute high-frequency energy to detect texture-copied-to-depth artifacts.
+    
+    This metric separates two cases:
+    - Valid: Large near-to-far depth range (global variance high) but smooth gradients → low HF energy
+    - Artifact: Ripples/speckles copied from texture (global variance moderate) → high HF energy
+    
+    Method:
+    1. Compute low-frequency baseline: gaussian_blur(depth, sigma=large)
+    2. Extract high-frequency residual: depth - baseline
+    3. Measure variance of HF residual
+    
+    Args:
+        depth_map: Depth map (float32 [0, 1])
+        sigma: Gaussian blur sigma for low-frequency baseline (default: 15.0)
+               Larger sigma = more aggressive HF extraction
+        
+    Returns:
+        HF energy [0, 1+] (lower is better, <0.005 = smooth depth, >0.01 = texture artifacts)
+        
+    Examples:
+        - Ocean/pool with smooth depth gradient: HF energy ~ 0.00001-0.0002
+        - Ocean/pool with ripples copied to depth: HF energy ~ 0.0005-0.002
+        - Interior with geometric edges: HF energy ~ 0.0002-0.0008 (acceptable)
+        
+    References:
+        - Alternative to global variance for texture scene validation
+        - Replaces faulty "depth_var < 0.05" gate that penalized valid aerial/pool scenes
+    """
+    # Ensure float32
+    if depth_map.dtype != np.float32:
+        depth_map = depth_map.astype(np.float32)
+    
+    # Low-frequency baseline (smooth depth)
+    # Use BORDER_REFLECT_101 to avoid edge artifacts
+    ksize = int(6 * sigma + 1)
+    if ksize % 2 == 0:
+        ksize += 1
+    
+    depth_lowfreq = cv2.GaussianBlur(
+        depth_map,
+        (ksize, ksize),
+        sigmaX=sigma,
+        sigmaY=sigma,
+        borderType=cv2.BORDER_REFLECT_101
+    )
+    
+    # High-frequency residual (texture artifacts, ripples, speckles)
+    depth_highfreq = depth_map - depth_lowfreq
+    
+    # Variance of HF residual
+    hf_energy = float(np.var(depth_highfreq))
+    
+    logger.debug(f"HF energy: {hf_energy:.6f} (sigma={sigma:.1f}, "
+                 f"global_var={np.var(depth_map):.6f})")
+    
+    return hf_energy
+
+
 def validate_depth_quality(
     rgb: np.ndarray,
     depth: np.ndarray,
     dilation: int = 3,
     save_heatmap: bool = False,
     heatmap_path: Optional[Path] = None,
-    use_structure_edges: bool = True
+    use_structure_edges: bool = True,
+    image_filename: Optional[str] = None
 ) -> EdgeMetrics:
     """
     CANONICAL depth quality validation.
@@ -815,6 +876,7 @@ def validate_depth_quality(
         save_heatmap: Whether to generate and save overshoot heatmap (PRIORITY 3)
         heatmap_path: Path to save heatmap (if save_heatmap=True)
         use_structure_edges: If True, use bilateral-filtered edges (suppress texture)
+        image_filename: Optional filename for weak supervision in scene classification
         
     Returns:
         EdgeMetrics with all quality scores
@@ -846,7 +908,8 @@ def validate_depth_quality(
         scene_type, scene_metadata = classify_scene_type_v2(
             rgb_edges_raw=rgb_edges_raw,
             rgb_edges_structure=rgb_edges,
-            depth_map=depth
+            depth_map=depth,
+            image_filename=image_filename
         )
     else:
         scene_type = 'unknown'

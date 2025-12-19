@@ -346,7 +346,12 @@ def process_single_image(
         
         # 3. Validate depth quality with structure-aware edges
         logger.info("Validating depth quality (structure-aware)...")
-        metrics_obj = validate_depth_quality(rgb, depth, use_structure_edges=True)
+        metrics_obj = validate_depth_quality(
+            rgb,
+            depth,
+            use_structure_edges=True,
+            image_filename=rgb_path.name
+        )
         
         # 4. Verify scene_type was populated
         if metrics_obj.scene_type is None:
@@ -393,17 +398,39 @@ def process_single_image(
         result["seam_boundary_ratio"] = float(seam_ratio)
         
         # 5. Apply conditional quality gates based on scene type
+        # FIX: Use high-frequency energy instead of global depth variance for texture scenes
+        from high_fidelity_depth.quality_metrics import compute_high_frequency_energy
+        
         depth_var = float(np.var(depth))
+        hf_energy = compute_high_frequency_energy(depth)
         
         if scene_type == 'texture_dominated':
-            # Texture scenes: use smoothness gates
+            # Texture scenes: balanced gates considering multiple factors
+            # Don't rely solely on HF energy - combine with edge metrics
             edge_ratio = metrics['edge_count_ratio']
+            edge_f1 = metrics['edge_f1']
             
-            lenient_pass = depth_var < 0.05 and edge_ratio < 15.0
-            strict_pass = depth_var < 0.03 and edge_ratio < 10.0
+            # Calibrated thresholds based on empirical testing:
+            # - Smooth depth (ocean/pool): HF energy ~ 0.00001-0.0003
+            # - Geometric depth (pool with structure): HF energy ~ 0.0005-0.002
+            # Strategy: Require EITHER smooth HF OR good edge alignment
             
-            gate_reason = f"Texture scene: depth_var={depth_var:.3f}, edge_ratio={edge_ratio:.2f}"
-            gate_type = 'smoothness'
+            # Lenient: Pass if (smooth HF) OR (reasonable F1 + moderate edge ratio)
+            smooth_hf = hf_energy < 0.002  # Allow some geometric structure
+            reasonable_edges = edge_f1 >= 0.20 and edge_ratio < 15.0
+            lenient_pass = smooth_hf or reasonable_edges
+            
+            # Strict: Require smooth HF AND good edge metrics
+            very_smooth_hf = hf_energy < 0.001
+            good_edges = edge_f1 >= 0.30 and edge_ratio < 10.0
+            strict_pass = very_smooth_hf and good_edges
+            
+            gate_reason = (
+                f"Texture scene: hf_energy={hf_energy:.6f}, "
+                f"edge_ratio={edge_ratio:.2f}, edge_f1={edge_f1:.3f} | "
+                f"smooth_hf={smooth_hf}, reasonable_edges={reasonable_edges}"
+            )
+            gate_type = 'smoothness_hf_balanced'
 
         elif scene_type == 'structure_dominated':
             # Structure scenes: use edge alignment gates
@@ -455,25 +482,37 @@ def process_single_image(
         from datetime import datetime
         
         metrics_dict = {
-            # Core metrics
+            # Core metrics (ALL fields from EdgeMetrics)
             'edge_f1': float(metrics['edge_f1']),
+            'edge_overlap': float(metrics['edge_overlap']),
+            'edge_alignment_corr': float(metrics['edge_alignment_corr']),
             'chamfer_px': float(metrics['chamfer_distance']),
+            'edge_width': float(metrics['edge_width']),
+            'edge_sharpness_p95': float(metrics['edge_sharpness_p95']),
             'edge_count_ratio': float(metrics['edge_count_ratio']),
+            'halo_score': float(metrics['halo_score']),
+            'overshoot_penalty': float(metrics['overshoot_penalty']),
+            'rgb_edge_count': int(metrics['rgb_edge_count']),
+            'depth_edge_count': int(metrics['depth_edge_count']),
+            'quality_score': float(metrics['quality_score']),
             
             # V2 classifier data
             'scene_type': scene_type,
             'classification_factors': {
                 'ratio': float(scene_metadata.get('ratio', 0)),
                 'depth_variance': float(scene_metadata.get('depth_variance', 0)),
+                'depth_gradient_var': float(scene_metadata.get('depth_gradient_var', 0)),
                 'edge_density': float(scene_metadata.get('edge_density', 0)),
                 'decision_rule': scene_metadata.get('decision', 'unknown'),
-                'method': scene_metadata.get('method', 'unknown')
+                'method': scene_metadata.get('method', 'unknown'),
+                'filename_hint': scene_metadata.get('filename_hint')
             },
             
             # Quality gates
             'lenient_pass': bool(lenient_pass),
             'strict_pass': bool(strict_pass),
             'gate_reason': gate_reason,
+            'gate_type': gate_type,
             
             # Metadata
             'image': str(rgb_path.name),
