@@ -404,6 +404,11 @@ def process_single_image(
         depth_var = float(np.var(depth))
         hf_energy = compute_high_frequency_energy(depth)
         
+        # Initialize depth_range for all scenes (used in metadata)
+        p95 = float(np.percentile(depth, 95))
+        p05 = float(np.percentile(depth, 5))
+        depth_range = p95 - p05
+        
         if scene_type == 'texture_dominated':
             # Texture scenes: balanced gates considering multiple factors
             # Don't rely solely on HF energy - combine with edge metrics
@@ -415,20 +420,24 @@ def process_single_image(
             # - Geometric depth (pool with structure): HF energy ~ 0.0005-0.002
             # Strategy: Require EITHER smooth HF OR good edge alignment
             
-            # Lenient: Pass if (smooth HF) OR (reasonable F1 + moderate edge ratio)
+            # CRITICAL: Check depth is not flat (has global structure)
+            # depth_range already computed above (p95 - p05)
+            not_flat = depth_range > 0.05  # Normalized depth should vary
+            
+            # Lenient: Pass if (smooth HF AND not flat) OR (reasonable F1 + moderate edge ratio)
             smooth_hf = hf_energy < 0.002  # Allow some geometric structure
             reasonable_edges = edge_f1 >= 0.20 and edge_ratio < 15.0
-            lenient_pass = smooth_hf or reasonable_edges
+            lenient_pass = (smooth_hf and not_flat) or reasonable_edges
             
-            # Strict: Require smooth HF AND good edge metrics
+            # Strict: Require smooth HF AND not flat AND good edge metrics
             very_smooth_hf = hf_energy < 0.001
             good_edges = edge_f1 >= 0.30 and edge_ratio < 10.0
-            strict_pass = very_smooth_hf and good_edges
+            strict_pass = very_smooth_hf and not_flat and good_edges
             
             gate_reason = (
-                f"Texture scene: hf_energy={hf_energy:.6f}, "
+                f"Texture scene: hf_energy={hf_energy:.6f}, depth_range={depth_range:.3f}, "
                 f"edge_ratio={edge_ratio:.2f}, edge_f1={edge_f1:.3f} | "
-                f"smooth_hf={smooth_hf}, reasonable_edges={reasonable_edges}"
+                f"smooth_hf={smooth_hf}, not_flat={not_flat}, reasonable_edges={reasonable_edges}"
             )
             gate_type = 'smoothness_hf_balanced'
 
@@ -503,6 +512,8 @@ def process_single_image(
                 'depth_variance': float(scene_metadata.get('depth_variance', 0)),
                 'depth_gradient_var': float(scene_metadata.get('depth_gradient_var', 0)),
                 'edge_density': float(scene_metadata.get('edge_density', 0)),
+                'hf_energy': float(hf_energy) if scene_type == 'texture_dominated' else None,
+                'depth_range': float(depth_range) if scene_type == 'texture_dominated' else None,
                 'decision_rule': scene_metadata.get('decision', 'unknown'),
                 'method': scene_metadata.get('method', 'unknown'),
                 'filename_hint': scene_metadata.get('filename_hint')
