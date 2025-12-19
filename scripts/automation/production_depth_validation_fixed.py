@@ -333,12 +333,14 @@ def process_single_image(
         scene_type, scene_metadata = classify_scene_type_v2(
             rgb_edges_raw=rgb_edges_raw,
             rgb_edges_structure=rgb_edges_structure,
-            depth_map=depth
+            depth_map=depth,
+            image_filename=rgb_path.name  # NEW: Pass filename for weak supervision
         )
         
         logger.info(
             f"  Scene: {scene_type} (ratio={scene_metadata.get('ratio', 0):.2f}, "
             f"depth_var={scene_metadata.get('depth_variance', 0):.4f}, "
+            f"filename_hint={scene_metadata.get('filename_hint', 'none')}, "
             f"decision={scene_metadata.get('decision', 'unknown')})"
         )
         

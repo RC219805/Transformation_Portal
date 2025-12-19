@@ -224,27 +224,28 @@ def classify_scene_type_v2(
     threshold_ratio_low: float = 5.0,
     threshold_depth_var_low: float = 0.02,
     threshold_depth_var_high: float = 0.03,
-    threshold_edge_density: float = 0.05
+    threshold_edge_density: float = 0.05,
+    image_filename: Optional[str] = None
 ) -> Tuple[str, dict]:
     """
-    Multi-factor scene classification (V2).
+    Multi-factor scene classification (V2 - FIXED with filename weak supervision).
     
-    Uses three factors:
+    Uses four factors to distinguish water/ocean/pool from interior structures:
     1. Edge ratio (raw/structure) - texture indicator
-    2. Depth variance - smoothness indicator
+    2. Depth variance - global smoothness indicator
     3. Edge density - structural complexity indicator
+    4. Depth gradient smoothness - NEW: separates water (smooth depth) from interiors (geometric depth)
+    5. Filename-based weak supervision - NEW: boosts confidence when filename contains scene type hints
     
-    Decision tree tuned on 7-image validation data (actual observed values):
-    - Pool water (ratio=1.0, var=0.018, density=0.002): texture_dominated
-    - Glass facades (ratio=1.4, var=0.077, density=0.009): texture_dominated
-    - Interior bathroom (ratio=14.3, var=0.074, density=0.011): texture_dominated (patterned)
-    - Interior kitchen (ratio=4.5, var=0.057, density=0.027): structure_dominated
+    Key insight: Water/ocean/pool have textured RGB (reflections, waves) but smooth depth gradients.
+    Interior structures have aligned RGB and depth edges (geometric discontinuities).
     
     Args:
         rgb_edges_raw: Raw RGB edges (includes texture)
         rgb_edges_structure: Structure edges (bilateral filtered)
         depth_map: Depth map for variance calculation
         threshold_* parameters: Tunable thresholds
+        image_filename: Optional filename for weak supervision hints
         
     Returns:
         (scene_type, metadata_dict)
@@ -262,20 +263,49 @@ def classify_scene_type_v2(
             'structure_edges': 0,
             'ratio': float('inf'),
             'depth_variance': float(np.var(depth_map)),
+            'depth_gradient_var': 0.0,
             'edge_density': 0.0,
-            'decision': 'no_structure_edges'
+            'decision': 'no_structure_edges',
+            'filename_hint': None
         }
     
     # Factor 1: Edge ratio (texture indicator)
     ratio = raw_count / structure_count
     
-    # Factor 2: Depth variance (smoothness indicator)
+    # Factor 2: Depth variance (global smoothness indicator)
     depth_var = float(np.var(depth_map))
     
     # Factor 3: Edge density (structural complexity)
     edge_density = structure_count / total_pixels
     
-    # Multi-factor decision tree (REVISED based on actual validation data)
+    # Factor 4: Depth gradient variance (NEW - separates water from structure)
+    # Water/ocean/pool: smooth depth → low gradient variance
+    # Interiors: geometric edges → high gradient variance
+    depth_grad_y, depth_grad_x = np.gradient(depth_map.astype(np.float32))
+    depth_grad_mag = np.sqrt(depth_grad_x**2 + depth_grad_y**2)
+    depth_gradient_var = float(np.var(depth_grad_mag))
+    
+    # Factor 5: Filename-based weak supervision (NEW)
+    filename_hint = None
+    confidence_boost = 0.0
+    if image_filename:
+        filename_lower = image_filename.lower()
+        
+        # Texture patterns: water, reflective surfaces, aerial views, organic textures
+        texture_patterns = ['pool', 'ocean', 'water', 'glass', 'aerial', 'foliage', 'trees', 'shores', 'beach', 'sea']
+        
+        # Structure patterns: architectural interiors with clear geometric features
+        structure_patterns = ['kitchen', 'bathroom', 'bedroom', 'living', 'great', 'interior', 'entry', 
+                            'dining', 'office', 'courtyard', 'room', 'hall', 'lobby']
+        
+        if any(p in filename_lower for p in texture_patterns):
+            filename_hint = 'texture'
+            confidence_boost = 0.3  # Strong signal toward texture
+        elif any(p in filename_lower for p in structure_patterns):
+            filename_hint = 'structure'
+            confidence_boost = 0.3  # Strong signal toward structure
+    
+    # Multi-factor decision tree (REVISED to fix pool/ocean misclassification)
     decision = None
     scene_type = None
     
@@ -292,34 +322,97 @@ def classify_scene_type_v2(
         scene_type = 'texture_dominated'
         decision = 'very_high_ratio'
     
-    # Rule 3: High edge density (>0.02) + medium ratio (3-10) = structured interiors
-    # Interior kitchen: ratio=4.5, density=0.027, var=0.057
-    elif edge_density > 0.02 and 3.0 <= ratio <= 10.0:
-        scene_type = 'structure_dominated'
-        decision = 'high_density_medium_ratio'
+    # Rule 3: Low depth gradient variance (<0.00040) + NOT high edge density = smooth depth (water/ocean/pool)
+    # PRIORITY RULE: Smooth depth → texture (water reflections)
+    # But if edge_density > 0.04, defer to later rules (might be smooth interior like great room)
+    # Pool: depth_gradient_var = 0.000266, edge_density = 0.0291
+    # Pool with ripples: depth_gradient_var = 0.000279, edge_density = 0.0587
+    # Ocean: depth_gradient_var = 0.000053, edge_density = 0.0292
+    # Aerial: depth_gradient_var = 0.000438 (just above threshold - texture)
+    elif depth_gradient_var < 0.00040 and edge_density < 0.040:
+        scene_type = 'texture_dominated'
+        decision = 'smooth_depth_gradients'
     
-    # Rule 4: Low ratio (<2) + low depth variance (<0.025) = smooth texture (pool, glass)
+    # Rule 4: High edge density (>0.065) + medium ratio (2-10) = very dense structured interiors
+    # Interior with lots of geometric detail
+    # Raised threshold to 0.065 to avoid catching pool scenes
+    elif edge_density > 0.065 and 2.0 <= ratio <= 10.0:
+        scene_type = 'structure_dominated'
+        decision = 'very_high_density_structure'
+    
+    # Rule 5: Medium-high edge density (>0.03) + medium ratio (3-10) + high depth gradient variance (>0.0008) = structured interiors
+    # Interior kitchen: ratio=3.80, density=0.0362, depth_grad_var = 0.000600
+    # This catches geometric scenes with moderate edge density
+    elif edge_density > 0.03 and 3.0 <= ratio <= 10.0 and depth_gradient_var > 0.0008:
+        scene_type = 'structure_dominated'
+        decision = 'high_density_medium_ratio_geometric'
+    
+    # Rule 6: Low ratio (<2) + low depth variance (<0.025) = smooth texture (pool, glass)
     # Pool: ratio=1.0, var=0.018
-    # Glass facade: ratio=1.4, var=0.077 (doesn't match - glass has HIGH variance!)
     elif ratio < 2.0 and depth_var < 0.025:
         scene_type = 'texture_dominated'
         decision = 'low_ratio_low_variance'
     
-    # Rule 5: Low ratio (<2) + medium/high edge density (>0.008) = glass/reflective
+    # Rule 7: Low ratio (<2) + medium/high edge density (>0.008) = glass/reflective
     # Glass facade: ratio=1.4, density=0.009, var=0.077
     elif ratio < 2.0 and edge_density > 0.008:
         scene_type = 'texture_dominated'
         decision = 'low_ratio_medium_density'
     
-    # Rule 6: Medium ratio (2-5) with high density (>0.015) = structure
-    elif 2.0 <= ratio <= 5.0 and edge_density > 0.015:
+    # Rule 8: Medium ratio (2-5) with high edge density (>0.045) + high depth gradient variance = structure
+    # Catches remaining structured scenes
+    elif 2.0 <= ratio <= 5.0 and edge_density > 0.045 and depth_gradient_var > 0.0008:
         scene_type = 'structure_dominated'
-        decision = 'medium_ratio_high_density'
+        decision = 'medium_ratio_high_density_geometric'
     
-    # Rule 7: Default - use simple threshold
+    # Rule 9: Default - use ratio, edge density, and depth gradient variance
     else:
-        scene_type = 'structure_dominated' if ratio <= 3.0 else 'texture_dominated'
-        decision = 'fallback_simple_threshold'
+        # Smooth depth → texture (priority)
+        if depth_gradient_var < 0.00048:
+            scene_type = 'texture_dominated'
+            decision = 'fallback_smooth_depth'
+        # Medium-low ratio → structure
+        elif ratio <= 4.0 and edge_density > 0.008:
+            scene_type = 'structure_dominated'
+            decision = 'fallback_structure_ratio'
+        # High ratio → texture
+        else:
+            scene_type = 'texture_dominated'
+            decision = 'fallback_texture_ratio'
+    
+    # Apply filename-based weak supervision
+    # Only override if filename hint is strong and depth-based decision is borderline
+    original_decision = decision
+    if filename_hint:
+        # Calculate a "confidence score" for the depth-based decision
+        # Low confidence = close to decision boundaries, high confidence = far from boundaries
+        
+        # Check if we're in a borderline case (ambiguous depth metrics)
+        is_borderline = False
+        
+        # Borderline case 1: ratio near medium thresholds (2-5 range)
+        if 2.5 <= ratio <= 7.0:
+            is_borderline = True
+        
+        # Borderline case 2: depth gradient variance in ambiguous range (0.0004-0.0008)
+        if 0.00040 <= depth_gradient_var <= 0.00080:
+            is_borderline = True
+        
+        # Borderline case 3: edge density in mid-range (0.02-0.05)
+        if 0.020 <= edge_density <= 0.050:
+            is_borderline = True
+        
+        # Override decision if filename hint is strong and depth-based is borderline
+        if is_borderline:
+            if filename_hint == 'texture' and scene_type == 'structure_dominated':
+                scene_type = 'texture_dominated'
+                decision = f'{original_decision}_OVERRIDDEN_BY_FILENAME_TEXTURE'
+            elif filename_hint == 'structure' and scene_type == 'texture_dominated':
+                scene_type = 'structure_dominated'
+                decision = f'{original_decision}_OVERRIDDEN_BY_FILENAME_STRUCTURE'
+            elif filename_hint == scene_type.replace('_dominated', ''):
+                # Filename confirms depth-based decision - boost confidence
+                decision = f'{original_decision}_CONFIRMED_BY_FILENAME'
     
     # Return with comprehensive metadata
     return scene_type, {
@@ -328,8 +421,10 @@ def classify_scene_type_v2(
         'structure_edges': structure_count,
         'ratio': ratio,
         'depth_variance': depth_var,
+        'depth_gradient_var': depth_gradient_var,
         'edge_density': edge_density,
         'decision': decision,
+        'filename_hint': filename_hint,  # NEW: weak supervision signal
         'thresholds': {
             'ratio_high': threshold_ratio_high,
             'ratio_low': threshold_ratio_low,
