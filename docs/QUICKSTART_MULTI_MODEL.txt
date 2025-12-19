@@ -1,0 +1,108 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║              MULTI-MODEL DEPTH VALIDATION — QUICK START CARD                 ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─ STEP 1: PRE-FLIGHT CHECK ────────────────────────────────────────────────────┐
+│                                                                               │
+│  $ python scripts/preflight_model_comparison.py --mode quick                 │
+│                                                                               │
+│  Validates: dataset, dependencies, GPU/VRAM, HF models, disk space           │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ STEP 2: RUN VALIDATION ──────────────────────────────────────────────────────┐
+│                                                                               │
+│  Quick Mode (15-30 min):                                                     │
+│  $ ./scripts/run_model_comparison_suite.sh quick                             │
+│                                                                               │
+│  Full Mode (2-4 hours):                                                      │
+│  $ ./scripts/run_model_comparison_suite.sh full                              │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ STEP 3: VIEW RESULTS ────────────────────────────────────────────────────────┐
+│                                                                               │
+│  $ LATEST=$(ls -td outputs/model_comparison/run_* | head -1)                 │
+│  $ cat $LATEST/best_per_model.csv | column -t -s,                            │
+│  $ cat $LATEST/analysis/statistical_summary.csv | column -t -s,              │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ MODELS SUPPORTED ────────────────────────────────────────────────────────────┐
+│                                                                               │
+│  DA2_Large          — Relative depth, 12GB VRAM (baseline)                   │
+│  DA2_Metric_Indoor  — Absolute depth 0-20m, 12GB VRAM                        │
+│  DA2_Metric_Outdoor — Absolute depth 0-80m, 12GB VRAM                        │
+│  DA2_Giant          — Relative depth, 24GB VRAM (high capacity)              │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ INPUT SIZES (PATCH-ALIGNED FOR VIT/14) ─────────────────────────────────────┐
+│                                                                               │
+│  518  — Default (fastest)                                                    │
+│  768  — Balanced quality/speed                                               │
+│  896  — High quality                                                         │
+│  1022 — Maximum detail                                                       │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ STATISTICAL OUTPUTS ─────────────────────────────────────────────────────────┐
+│                                                                               │
+│  • Mean difference (Δ) vs baseline                                           │
+│  • p-value (significance at α=0.05)                                          │
+│  • Cohen's d effect size (0.2=small, 0.5=medium, 0.8=large)                  │
+│  • 95% confidence interval                                                   │
+│  • Stratified by scene type (texture vs structure)                           │
+│                                                                               │
+│  Example: [✓] edge_f1: Δ=0.082, p=0.001, d=0.45 (medium improvement)        │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ TROUBLESHOOTING ─────────────────────────────────────────────────────────────┐
+│                                                                               │
+│  Missing scipy/sklearn:                                                      │
+│  $ pip install scipy scikit-learn pandas                                     │
+│                                                                               │
+│  VRAM insufficient:                                                          │
+│  $ python scripts/run_multi_model_comparison.py \                            │
+│      --models DA2_Large --skip-vram-check                                    │
+│                                                                               │
+│  Dataset not found:                                                          │
+│  Ensure data/validation_quick/ or data/validation_full/ exists               │
+│  with images and labels.csv (filename,scene_type columns)                    │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ DOCUMENTATION ───────────────────────────────────────────────────────────────┐
+│                                                                               │
+│  Complete Guide: docs/guides/MULTI_MODEL_VALIDATION.md                       │
+│  Session Summary: docs/SESSION_COMPLETE_MULTI_MODEL_FRAMEWORK_20251218.md    │
+│  Quick Reference: scripts/README_MULTI_MODEL.md                              │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+┌─ OUTPUT STRUCTURE ────────────────────────────────────────────────────────────┐
+│                                                                               │
+│  outputs/model_comparison/run_TIMESTAMP_SHA/                                 │
+│  ├── model_DA2_Large/                                                        │
+│  │   ├── input_518/                                                          │
+│  │   │   ├── *_metrics.json                                                  │
+│  │   │   └── validation_report.json                                          │
+│  │   └── input_768/                                                          │
+│  ├── comparison_overall.csv       ← All results                              │
+│  ├── best_per_model.csv           ← Optimal configs                          │
+│  ├── model_comparison_summary.json ← Full data                               │
+│  └── analysis/                                                               │
+│      ├── statistical_comparison.json                                         │
+│      └── statistical_summary.csv  ← Significance tests                       │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  FRAMEWORK VERSION: 1.0                                                       ║
+║  COMMIT: 905002a                                                              ║
+║  DATE: 2025-12-18                                                             ║
+║  STATUS: ✅ PRODUCTION-READY                                                  ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
