@@ -24,6 +24,7 @@ import atexit
 import logging
 
 import numpy as np
+import cv2
 from PIL import Image
 import torch
 import torch.nn as nn
@@ -673,8 +674,8 @@ class DepthAnything3Wrapper:
                 "Install with: pip install depth-anything-3"
             )
         
-        # Validate inputs
-        image = self._prepare_images(image)
+        # Validate inputs and track original dimensions
+        image_prepared, original_sizes = self._prepare_images_with_sizes(image)
         
         # Validate GS requirements
         if infer_gs and self.model_name not in self.GS_CAPABLE_MODELS:
@@ -692,9 +693,9 @@ class DepthAnything3Wrapper:
             )
         
         # Call official API
-        logger.info(f"Running DA3 inference on {len(image)} images")
+        logger.info(f"Running DA3 inference on {len(image_prepared)} images")
         prediction = self.model.inference(
-            image=image,
+            image=image_prepared,
             extrinsics=extrinsics,
             intrinsics=intrinsics,
             align_to_input_ext_scale=align_to_input_ext_scale,
@@ -716,21 +717,147 @@ class DepthAnything3Wrapper:
             export_kwargs=export_kwargs or {}
         )
         
+        # Upsample depth maps to original resolutions
+        depth_upsampled = self._upsample_depth_to_native(
+            prediction.depth,
+            original_sizes
+        )
+        
+        # Upsample confidence maps if present
+        conf_upsampled = None
+        if hasattr(prediction, 'conf') and prediction.conf is not None:
+            conf_upsampled = self._upsample_depth_to_native(
+                prediction.conf,
+                original_sizes
+            )
+        
         # Wrap in our dataclass
         return DA3Prediction(
-            depth=prediction.depth,
-            conf=getattr(prediction, 'conf', None),
+            depth=depth_upsampled,
+            conf=conf_upsampled,
             extrinsics=getattr(prediction, 'extrinsics', None),
             intrinsics=getattr(prediction, 'intrinsics', None),
             processed_images=getattr(prediction, 'processed_images', None),
             aux=getattr(prediction, 'aux', None)
         )
     
+    def _prepare_images_with_sizes(
+        self,
+        images: List[Union[np.ndarray, Image.Image, str, Path]]
+    ) -> Tuple[List[Union[np.ndarray, Image.Image, str]], List[Tuple[int, int]]]:
+        """Convert Path objects and ImageInput to formats for API compatibility,
+        and track original image sizes.
+        
+        Returns:
+            Tuple of (prepared_images, original_sizes)
+            where original_sizes is a list of (height, width) tuples
+        """
+        # Import here to avoid circular dependency
+        from lux_depth_v3.input_manager import ImageInput
+        
+        prepared = []
+        sizes = []
+        
+        for img in images:
+            if isinstance(img, ImageInput):
+                # Handle ImageInput objects
+                if img.path is not None:
+                    # Load to get size
+                    pil_img = Image.open(img.path)
+                    sizes.append((pil_img.height, pil_img.width))
+                    prepared.append(str(img.path))
+                elif img.array is not None:
+                    h, w = img.array.shape[:2]
+                    sizes.append((h, w))
+                    prepared.append(img.array)
+                else:
+                    raise ValueError("ImageInput has neither path nor array")
+            elif isinstance(img, Path):
+                pil_img = Image.open(img)
+                sizes.append((pil_img.height, pil_img.width))
+                prepared.append(str(img))
+            elif isinstance(img, str):
+                pil_img = Image.open(img)
+                sizes.append((pil_img.height, pil_img.width))
+                prepared.append(img)
+            elif isinstance(img, Image.Image):
+                sizes.append((img.height, img.width))
+                prepared.append(img)
+            elif isinstance(img, np.ndarray):
+                h, w = img.shape[:2]
+                sizes.append((h, w))
+                prepared.append(img)
+            else:
+                raise ValueError(f"Unsupported image type: {type(img)}")
+        
+        return prepared, sizes
+    
+    def _upsample_depth_to_native(
+        self,
+        depth: np.ndarray,
+        original_sizes: List[Tuple[int, int]]
+    ) -> np.ndarray:
+        """Upsample depth maps to native resolution using bicubic interpolation.
+        
+        Args:
+            depth: Depth array, shape (N, H_low, W_low) or (H_low, W_low)
+            original_sizes: List of (height, width) tuples for each image
+        
+        Returns:
+            Upsampled depth array, shape (N, H_orig, W_orig) or (H_orig, W_orig)
+        """
+        import cv2
+        
+        # Handle single image case
+        is_batched = depth.ndim == 3
+        if not is_batched:
+            depth = depth[np.newaxis, ...]  # Add batch dimension
+        
+        if len(original_sizes) != depth.shape[0]:
+            raise ValueError(
+                f"Mismatch: {len(original_sizes)} original sizes but "
+                f"{depth.shape[0]} depth maps"
+            )
+        
+        upsampled = []
+        for i, (h_orig, w_orig) in enumerate(original_sizes):
+            depth_map = depth[i]  # (H_low, W_low)
+            h_low, w_low = depth_map.shape
+            
+            # Skip upsampling if already at native resolution
+            if (h_low, w_low) == (h_orig, w_orig):
+                upsampled.append(depth_map)
+                continue
+            
+            # Upsample using bicubic interpolation
+            depth_upsampled = cv2.resize(
+                depth_map,
+                (w_orig, h_orig),
+                interpolation=cv2.INTER_CUBIC
+            )
+            upsampled.append(depth_upsampled)
+            
+            logger.debug(
+                f"Upsampled depth {i}: {depth_map.shape} -> {depth_upsampled.shape}"
+            )
+        
+        # Stack back to array
+        result = np.stack(upsampled, axis=0)
+        
+        # Remove batch dimension if input was single image
+        if not is_batched:
+            result = result[0]
+        
+        return result
+    
     def _prepare_images(
         self,
         images: List[Union[np.ndarray, Image.Image, str, Path]]
     ) -> List[Union[np.ndarray, Image.Image, str]]:
-        """Convert Path objects and ImageInput to formats for API compatibility."""
+        """Convert Path objects and ImageInput to formats for API compatibility.
+        
+        DEPRECATED: Use _prepare_images_with_sizes() instead for proper upsampling.
+        """
         # Import here to avoid circular dependency
         from lux_depth_v3.input_manager import ImageInput
         
