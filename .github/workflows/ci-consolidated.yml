@@ -233,7 +233,7 @@ jobs:
       - name: Flake8 Critical Errors
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics \
-            --exclude=deprecated/,.venv/,__pycache__/,.rag_cache/
+            --exclude=deprecated/,.venv/,__pycache__/,.rag_cache/,depth_anything_3_official/
             
       - name: Pylint Analysis
         continue-on-error: true

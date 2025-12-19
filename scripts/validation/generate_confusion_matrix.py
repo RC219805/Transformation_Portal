@@ -78,7 +78,7 @@ def generate_confusion_matrix(
     return dict(confusion), correct, total
 
 
-def print_confusion_matrix(confusion: Dict, correct: int, total: int):
+def print_confusion_matrix(confusion: Dict, correct: int, total: int, metrics: Dict[str, dict]):
     """Pretty-print confusion matrix."""
     print("\n" + "="*80)
     print("SCENE CLASSIFICATION CONFUSION MATRIX")
@@ -91,7 +91,8 @@ def print_confusion_matrix(confusion: Dict, correct: int, total: int):
     ))
     
     # Print header
-    print(f"\n{'Actual \\ Predicted':<25}", end="")
+    header_label = "Actual \\ Predicted"
+    print(f"\n{header_label:<25}", end="")
     for label in all_labels:
         print(f"{label[:20]:>22}", end="")
     print()
@@ -211,7 +212,7 @@ def main():
     confusion, correct, total = generate_confusion_matrix(metrics, expected)
     
     # Print results
-    print_confusion_matrix(confusion, correct, total)
+    print_confusion_matrix(confusion, correct, total, metrics)
     print_quality_summary(metrics)
     
     # Print acceptance criteria
