@@ -1,269 +1,354 @@
-# Final Session Summary: Validation Integration & Full Baseline Run
-
-**Date**: 2025-12-18  
-**Total Duration**: ~3.5 hours  
-**Status**: ✅ P0 FIXED → Running Full 18-Image Validation
+# Full Validation Pipeline Execution - Session Complete
+## December 19, 2025 06:33 UTC
 
 ---
 
-## Session Achievements
+## 🎯 Executive Summary
 
-### 1. Fixed P0 Blocker (Critical) ✅
+**Status: PIPELINE COMPLETE ✅**
 
-**Problem**: Validation silently wrote null metrics (scene_type, edge_f1, all fields)  
-**Root Cause**: Script never called V2 classifier  
-**Solution**: Complete V2 integration + fail-fast validation
+The full validation pipeline executed successfully, completing all three strategic objectives:
+1. ✅ Balanced classifier evaluation
+2. ✅ Depth Anything V2 Large HF input-size sweep (4 operating points)
+3. ✅ Stratified threshold calibration
 
-**Files Changed**:
-- `scripts/automation/production_depth_validation_fixed.py` - V2 integration
-- `tests/integration/test_validation_script.py` - Regression prevention
-- `scripts/automation/run_expanded_validation.sh` - Null-check wrapper
+**Total Execution Time**: ~3 minutes (faster than estimated due to MPS acceleration + cached models)
 
-### 2. Process Hygiene Fixed ✅
-
-**Issues Identified**:
-- Force-add required for session docs (`.gitignore` too broad)
-- No post-validation null-check (regression risk)
-- CLI typo vulnerability (`--image-dir` vs `--input-dir`)
-
-**Solutions Applied**:
-- `.gitignore`: Allow `docs/SESSION_*.md`
-- Wrapper script: Post-check fails hard on nulls
-- (Patch prepared for CLI alias - apply after validation)
-
-### 3. Full 18-Image Validation (In Progress)
-
-**Dataset**: `data/validation_expanded/`
-- **Interiors**: 6 images (structure_dominated expected)
-- **Water/Pool**: 4 images (texture_dominated expected)
-- **Glass/Facades**: 3 images (texture_dominated expected)
-- **Aerials**: 3 images (mixed expected)
-- **Challenging**: 2 images (variable)
-
-**Configuration**:
-- Tile size: 1024×1024
-- Overlap: 192px
-- Inference: DA V2 Large, input_size=518
-- Depth precision: 16-bit TIFF
-
-**Progress** (as of 17:31):
-- ✅ 16/18 images complete
-- ⏳ 2 large aerial images in progress (48 tiles each)
-- Runtime: ~31 minutes so far
+**Critical Finding**: **Classifier is now the primary bottleneck** (58.8% balanced accuracy, 70% structure misclassification rate)
 
 ---
 
-## Key Findings (Partial Results - 16/18)
+## 📊 Key Results
 
-### Classifier Performance (V2 Multi-Factor)
-
-**Expected from Dataset Design**:
-- Structure-dominated: 6-8 images
-- Texture-dominated: 8-10 images
-- Mixed: 2-4 images
-
-**Actual** (will update when complete):
-- TBD after full run
-
-### Quality Gates (Lenient/Strict)
-
-**Smoke Test** (2 images):
-- Lenient: 0/2 (0%)
-- Strict: 0/2 (0%)
-
-**Partial Run** (13/18 earlier check):
-- Lenient: 2/13 (15.4%)
-- Strict: 0/13 (0%)
-
-**Analysis Pending**: Full confusion matrix + stratified pass rates
-
----
-
-## Process Improvements Delivered
-
-### 1. Fail-Fast Validation ✅
-
-**Before**: Silent null outputs, "green run" with unusable data  
-**After**: Script exits non-zero if any metrics missing
-
-**Implementation**:
-```python
-def validate_metrics_complete(metrics_dict, image_name):
-    if metrics_dict.get('scene_type') is None:
-        raise ValueError(f"Integration failure: scene_type is null for {image_name}")
-    # ... type checks for edge_f1, lenient_pass, strict_pass ...
-```
-
-### 2. Post-Validation Null Check ✅
-
-**Wrapper Script**: `scripts/automation/run_expanded_validation.sh`
-```bash
-# After validation completes
-for json in "$OUTPUT_DIR"/*_metrics.json; do
-  if grep -q '"scene_type": null' "$json"; then
-    echo "❌ FAIL: Null metrics detected (regression)"
-    exit 1
-  fi
-done
-```
-
-### 3. Integration Test ✅
-
-**File**: `tests/integration/test_validation_script.py`  
-**Purpose**: Catch "implemented but never called" regressions  
-**Coverage**:
-- Verifies V2 classifier invoked
-- Checks all required fields populated
-- Validates types (str, float, bool)
-
----
-
-## Next Session Actions (Ordered)
-
-### Immediate (When Validation Completes)
-
-1. **Generate Full Confusion Matrix**
-   ```bash
-   python scripts/validation/generate_confusion_matrix.py \
-     --output-dir outputs/validation_v2_20251218_170022_8197588 \
-     --expected-labels data/validation_expanded/README.md
-   ```
-
-2. **Analyze Classification Accuracy**
-   - Target: ≥90% (hard gate)
-   - Stratify by scene type (structure vs texture)
-   - Identify misclassifications
-
-3. **Decision Tree**:
-   - **If accuracy ≥90%**: Lock thresholds, calibrate quality gates, proceed to DA V2 input_size sweep
-   - **If accuracy <90%**: Tune classifier (ratio/variance/density thresholds), revalidate
-
-### Follow-On Work
-
-1. **Apply CLI Alias Patch** (low-risk, high-value)
-   - Accept both `--input-dir` and `--image-dir`
-   - Prevents operator typos
-
-2. **Dataset Governance** (if images stay in git)
-   - 330MB raw images currently committed
-   - Consider Git LFS for binaries
-   - Or move to external artifact storage
-
-3. **Pre-Commit CI Integration**
-   - Run `pre-commit run --all-files` in CI
-   - Make hooks a hard gate (stop `--no-verify` workflow)
-
----
-
-## Materials V3 Status: STILL NO-GO
-
-**Blocked Until**:
-- ✅ P0 fixed (DONE)
-- ✅ Smoke test passed (DONE)
-- [ ] Full 18-image validation complete
-- [ ] Classification accuracy ≥90%
-- [ ] Baseline quality gates calibrated
-
-**Estimated Unblock**: 1-2 hours after validation completes
-
-**Rationale**: Cannot A/B test MaterialsV3 while:
-1. Baseline classifier unproven at scale (N=18)
-2. Quality gates uncalibrated (0% strict pass)
-3. No confusion matrix to attribute changes
-
-**When Ready**: Shadow mode only (log-only, no behavior change)
-
----
-
-## Git State
+### 1. Classifier Performance (Balanced Metrics)
 
 ```
-Branch: main
-Ahead of origin: 16 commits
-Last commit: 1efb2f4 (fix: process hygiene)
-Working directory: Clean
-Pre-commit: ✅ PASSING
+Metric                    Structure    Texture      Overall
+────────────────────────────────────────────────────────────
+Precision                   75%          50%          62.5%
+Recall                      30%          87.5%        58.75%
+F1-Score                    43%          64%          53%
+Balanced Accuracy                                     58.8%
+────────────────────────────────────────────────────────────
+Support                     10           8            18
 ```
 
-**Commits This Session**:
-1. `697e37e` - P0 integration fix (V2 classifier + fail-fast)
-2. `8197588` - Session summary docs
-3. `1efb2f4` - Process hygiene (.gitignore + null-check wrapper)
+**Critical Issue Identified**:
+- 7/10 structure scenes misclassified as texture (70% error rate)
+- Texture recall is strong (88%), but structure recall collapsed to 30%
+- This confirms the earlier hypothesis: texture gates are working, structure routing is broken
+
+### 2. Input-Size Sweep Results
+
+**Depth Anything V2 Large HF** tested at 4 operating points on 25 structure-dominated images:
+
+| Input Size | Images Processed | Depth Maps Generated | Status | Output Directory |
+|------------|------------------|----------------------|--------|------------------|
+| 518 (default) | 25 | 25 | ✅ | sweep_input_518 |
+| 768 | 25 | 25 | ✅ | sweep_input_768 |
+| 896 | 25 | 25 | ✅ | sweep_input_896 |
+| 1022 (max) | 25 | 25 | ✅ | sweep_input_1022 |
+
+**Total Depth Maps Generated**: 100 (25 images × 4 sizes)
+
+**Device**: MPS (Apple Neural Engine)
+**Model**: depth-anything/Depth-Anything-V2-Large-hf (cached, no download timeout)
+
+### 3. Stratified Calibration
+
+Threshold recommendations generated by scene type:
+
+**Texture-Dominated Scenes** (predicted):
+- Edge F1: mean ~0.42, std ~0.28
+- Chamfer: mean ~55px, std ~96px
+- Lenient pass rate: ~84%
+
+**Structure-Dominated Scenes** (predicted):
+- Edge F1: mean ~0.36, std ~0.20
+- Chamfer: mean ~30px, std ~21px
+- Lenient pass rate: ~20%
+
+**By True Scene Type**:
+- See `stratified_true_class.csv` for ground-truth-stratified metrics
 
 ---
 
-## Technical Notes
+## 🚨 Critical Decision Point
 
-### Validation Runtime
+### The Classifier Must Be Fixed Before Any Other Work
 
-- **Small images** (~2-4MP): ~30-45 sec (15 tiles)
-- **Large images** (~40MP): ~4-5 min (48 tiles)
-- **18-image suite**: ~30-35 minutes total
+**Current State**:
+- Texture validation is healthy (87.5% recall, 84% lenient pass)
+- Structure validation is broken by misclassification, not depth quality
+- 70% of structure scenes are being routed to the wrong gate
 
-### Tiling Behavior Observed
+**Implication**:
+You cannot interpret the input-size sweep results until classification is reliable. If a structure scene is classified as texture, it will be judged on smoothness (wrong criterion) rather than edge fidelity.
 
-- Reflect padding working correctly (no sliver tiles)
-- Hann-weighted blending producing seamless stitching
-- Some "high seam energy" warnings (seam_ratio >1.2)
-  - Not failures, just edge cases where adjacent tiles differ
-  - Within acceptable range for production
+**Next Actions** (mandatory sequence):
 
-### Depth Model Behavior
+1. **Fix the multi-factor classifier** (P0 - blocks everything)
+   - Current: `ratio + depth_var + edge_density` with fixed thresholds
+   - Problem: 70% structure misclassification
+   - Solution options:
+     a. Tune thresholds via grid search on the 18-image labeled set
+     b. Add more factors (depth_gradient_energy, structure_edge_density percentiles)
+     c. Move to a learned classifier (MaterialsV3 or simple logistic regression)
 
-- DA V2 Large performing well on interiors
-- Ocean/water scenes classified correctly as texture_dominated
-- Edge F1 scores align with scene complexity
-  - Interiors: 0.4-0.6 (structure present)
-  - Water: 0.1-0.2 (correct - smooth depth)
+2. **Re-run the 18-image validation with fixed classifier** (validate fix)
+   - Target: ≥85% balanced accuracy
+   - If achieved, proceed to step 3
+
+3. **Analyze input-size sweep with correct routing** (unlock structure quality)
+   - Compare edge_f1, chamfer, strict pass rates across 518/768/896/1022
+   - Identify the optimal structure operating point (quality vs cost)
+
+4. **Only then: expand to 50-image validation** (freeze baseline)
 
 ---
 
-## Key Learnings
+## 📁 Artifacts Created
+
+### Timestamped Output Directory
+```
+outputs/full_validation_pipeline/run_20251219_063333/
+```
+
+### Files Generated
+
+**1. Master Execution Log**
+- `pipeline_summary.json` - Complete execution metadata, commands, logs, success flags
+
+**2. Classifier Analysis**
+- `classifier_report.json` - Balanced accuracy, per-class metrics, confusion matrix
+- `classification_metrics.csv` - Precision/recall/F1 per class (repo root)
+
+**3. Stratified Calibration**
+- `stratified_report.json` - Scene-type-specific metric distributions
+- `stratified_overall.csv` - Metrics by predicted scene type (repo root)
+- `stratified_true_class.csv` - Metrics by ground truth scene type (repo root)
+
+**4. Input-Size Sweep Depth Maps**
+- `sweep_input_518/` - 25 depth maps at default resolution
+- `sweep_input_768/` - 25 depth maps at mid resolution
+- `sweep_input_896/` - 25 depth maps at high resolution
+- `sweep_input_1022/` - 25 depth maps at maximum resolution (patch-aligned)
+
+**5. Session Documentation**
+- `VALIDATION_PIPELINE_EXECUTION_SUMMARY.md` - Detailed execution report
+- `docs/SESSION_COMPLETE_DEPTH_VALIDATION_20251218.md` - Prior session summary
+- `docs/FINAL_SESSION_SUMMARY.md` - Comprehensive handoff (this file)
+
+---
+
+## 🔬 Technical Details
+
+### Dataset Composition
+
+**Full Dataset**: 50 images (data/validation_full/)
+- Labeled in `labels.csv` with ground-truth scene types
+- Stratification: ~25 texture / ~25 structure (intended)
+- Sources: 750 Picacho, 800 Picacho, Montecito Shores properties
+
+**Structure Subset**: 25 images (data/structure_subset/)
+- Created specifically for input-size sweep
+- All structure-dominated interiors with strong geometry
+- Used to isolate depth model operating point effects
+
+### Validation Baseline Used
+- Directory: `outputs/validation_hf_fixed_20251218_211645_01fb79c/`
+- 18 images with complete metrics
+- HF-energy + not-flat texture gate
+- Commit: 01fb79c
+
+### Model Configuration
+- **Depth Model**: depth-anything/Depth-Anything-V2-Large-hf
+- **Device**: MPS (Apple Neural Engine)
+- **Inference**: Transformers pipeline (HuggingFace)
+- **Input Sizes Tested**: 518 (default), 768, 896, 1022 (patch-aligned)
+- **Patch Discipline**: 1022 = 14×73 (respects ViT/DINOv2 patch size 14)
+
+### Gate Logic (Current)
+
+**Texture-Dominated** (smoothness_hf_balanced):
+- Lenient: `(hf_energy < 0.002 AND depth_range > 0.05) OR (edge_f1 >= 0.20 AND edge_ratio < 15.0)`
+- Strict: `(hf_energy < 0.001 AND depth_range > 0.05) AND (edge_f1 >= 0.30 AND edge_ratio < 10.0)`
+
+**Structure-Dominated** (structure_edge_alignment):
+- Lenient: `edge_f1 >= 0.40 AND chamfer_px <= 50.0`
+- Strict: `edge_f1 >= 0.70 AND chamfer_px <= 10.0 AND edge_sharpness_width <= 3.0`
+
+**Classification** (multi-factor heuristic):
+- Factors: `raw_to_structure_ratio`, `depth_variance`, `edge_density`
+- Thresholds: ratio > 5.0 OR (depth_var > 0.05 AND edge_density < 0.01)
+- **Problem**: These thresholds were hand-tuned on 7 images and do not generalize
+
+---
+
+## 🎓 Lessons Learned
 
 ### What Worked
+1. **HF-energy texture gate** - Eliminated the "texture-impossible" failure mode
+2. **Not-flat safeguard** - Prevented degenerate smooth outputs from passing
+3. **MPS acceleration** - Depth Anything V2 Large runs efficiently on Apple Silicon
+4. **Versioned artifacts** - Timestamped outputs enable reproducibility
+5. **Stratified analysis** - Separated texture vs structure metrics correctly
 
-1. **Smoke tests saved time**: 2-image pre-flight caught integration gap before 18-image burn
-2. **Fail-fast philosophy**: "No silent failures" prevents wasted debugging cycles
-3. **Multi-factor classifier**: More robust than single-threshold heuristics
-4. **Contract tests**: Integration test caught the exact failure we just fixed
+### What Didn't Work
+1. **Multi-factor classifier** - 58.8% balanced accuracy is below the 85% target
+2. **Structure routing** - 70% misclassification rate makes structure gates untestable
+3. **Threshold guessing** - Hand-tuned values don't generalize beyond small datasets
 
-### What to Improve
-
-1. **Runtime optimization**: 48-tile large images slow (consider tile-size tuning)
-2. **Quality gates**: Need recalibration (0% strict pass not realistic for production)
-3. **Dataset size**: Git shouldn't hold 330MB raw images long-term
-
----
-
-## Handoff State
-
-**For Next Session**:
-1. Validation should be complete (`18/18 _metrics.json` files)
-2. Run confusion matrix generator
-3. Analyze classification accuracy
-4. Calibrate quality thresholds
-5. **Only then** consider MaterialsV3 shadow integration
-
-**Critical Files**:
-- `outputs/validation_v2_20251218_170022_8197588/` - Full validation results
-- `data/validation_expanded/README.md` - Expected scene type labels
-- `scripts/validation/generate_confusion_matrix.py` - Analysis tool
-- `validation_run.log` - Full execution log
-
-**Expected Artifacts**:
-- `confusion_matrix.json` - Classification accuracy breakdown
-- `validation_summary.json` - Aggregate metrics
-- `failure_analysis.md` - Top failures with overlays
+### What's Still Unknown
+1. **Optimal input size for structure quality** - Sweep data exists but can't be interpreted until classifier is fixed
+2. **Strict gate calibration** - Currently only 16.7% strict pass; may be too aggressive or may be correct
+3. **MaterialsV3 value-add** - Can't A/B test until baseline is stable
 
 ---
 
-## Status Summary
+## 🚦 Quality Gate Status
 
-**P0 Blocker**: ✅ RESOLVED  
-**Smoke Test**: ✅ PASSED  
-**Full Validation**: ⏳ IN PROGRESS (16/18 complete)  
-**Next Milestone**: Confusion matrix + classification accuracy ≥90%
+| Gate | Target | Current | Status | Blocker |
+|------|--------|---------|--------|---------|
+| Classifier Balanced Accuracy | ≥85% | 58.8% | ❌ FAIL | Structure misclassification |
+| Texture Lenient Pass | ≥70% | ~84% | ✅ PASS | - |
+| Structure Lenient Pass | ≥70% | ~20% | ❌ FAIL | Classifier routing |
+| Overall Lenient Pass | ≥70% | 77.8% | ✅ PASS | Dominated by texture scenes |
+| Strict Pass | ≥40% | 16.7% | ❌ FAIL | May be correct; needs analysis |
 
-**Session Rating**: ✅ SUCCESS  
-**Ready for Handoff**: YES (pending validation completion)
+**Overall Status**: **BLOCKED - Classifier must be fixed before quality gates can be meaningfully evaluated**
 
+---
+
+## 📋 Next Session Priorities (Ranked by ROI)
+
+### P0 - Critical Path (Must Do First)
+1. **Fix classifier to ≥85% balanced accuracy**
+   - Grid search over threshold combinations on labeled data
+   - Consider adding `structure_edge_density` as an additional factor
+   - If heuristics fail, move to learned classifier (logistic regression or MaterialsV3 shadow mode)
+
+2. **Re-validate 18-image set with fixed classifier**
+   - Confirm structure scenes route correctly
+   - Verify texture lenient pass rate remains stable
+   - Document per-class pass rates
+
+### P1 - Unlock Structure Quality (After Classifier Fix)
+3. **Analyze input-size sweep results**
+   - Compare edge_f1 and chamfer across 518/768/896/1022
+   - Identify optimal structure operating point
+   - Measure runtime/memory cost vs quality gain
+
+4. **Run 50-image full validation with fixed classifier + optimal input size**
+   - Freeze this as the production baseline
+   - Generate final calibration report
+
+### P2 - Advanced Features (Only After Baseline is Stable)
+5. **MaterialsV3 shadow-mode integration**
+   - Log classifications without changing gates
+   - A/B test on expanded dataset
+   - Promote to active only if >10% improvement in balanced accuracy
+
+6. **Strict gate recalibration**
+   - Determine if 16.7% is appropriate or too aggressive
+   - Consider scene-specific strict definitions (structure-only?)
+
+---
+
+## 🔧 Repository Hygiene
+
+### Files Staged for Commit
+```
+scripts/run_full_validation_pipeline.py
+scripts/evaluate_classifier_balanced.py
+scripts/run_input_size_sweep.py
+scripts/report_threshold_calibration.py
+classification_metrics.csv
+stratified_overall.csv
+stratified_true_class.csv
+data/structure_subset/ (25 images)
+VALIDATION_PIPELINE_EXECUTION_SUMMARY.md
+docs/FINAL_SESSION_SUMMARY.md (this file)
+```
+
+### Git Status
+- Clean working tree (except new artifacts)
+- No force-adds required
+- Pre-commit hooks functional
+
+### Recommended Commit Message
+```
+feat(validation): complete full validation pipeline with input-size sweep
+
+- Balanced classifier evaluation (58.8% accuracy - needs improvement)
+- DA V2 Large HF sweep at 4 input sizes (518/768/896/1022)
+- Stratified threshold calibration by scene type
+- 100 depth maps generated for structure subset
+- Identified P0 blocker: 70% structure misclassification rate
+
+Critical finding: Classifier must be fixed before quality gates are meaningful.
+See docs/FINAL_SESSION_SUMMARY.md for full analysis.
+```
+
+---
+
+## 🎯 Success Criteria for Next Session
+
+Before proceeding to any new features, achieve:
+
+1. ✅ Classifier balanced accuracy ≥85%
+2. ✅ Structure recall ≥80% (currently 30%)
+3. ✅ Texture recall remains ≥80% (currently 87.5%)
+4. ✅ Overall lenient pass ≥70% with correct routing
+5. ✅ 18-image validation clean (no classifier-driven failures)
+
+Once achieved, proceed to:
+- Input-size analysis
+- 50-image expansion
+- MaterialsV3 shadow mode
+
+---
+
+## 📚 Key References
+
+### Technical Documentation
+- Depth Anything V2: `--input-size` defaults to 518, increase for finer detail
+- DINOv2 ViT: patch size 14, inputs should be multiples of 14
+- Balanced accuracy: macro-average recall, correct metric for imbalanced data
+- COLA windows: Hann satisfies constant overlap-add at 1/2, 2/3, 3/4 overlap
+- OpenCV borders: BORDER_DEFAULT = BORDER_REFLECT_101
+
+### Critical Files
+- Classification logic: `high_fidelity_depth/quality_metrics.py` (classify_scene_type_v2)
+- Gate logic: `scripts/production_depth_validation_fixed.py`
+- Threshold config: Currently hardcoded; should move to YAML
+- Labels: `data/validation_full/labels.csv`
+
+---
+
+## 🏁 Final State
+
+**Session Objective**: Execute full validation pipeline and identify next critical path
+**Status**: ✅ COMPLETE
+
+**Outcome**: Pipeline executed successfully. **Classifier is now the primary blocker.**
+
+**Evidence**:
+- 100 depth maps generated across 4 input sizes
+- Balanced accuracy 58.8% (below 85% target)
+- 70% structure misclassification rate
+- Texture validation healthy (87.5% recall)
+
+**Strategic Recommendation**: 
+Do not pursue MaterialsV3, input-size optimization, or threshold tuning until the classifier achieves ≥85% balanced accuracy. All downstream work depends on correct scene routing.
+
+**Next Action**: Fix multi-factor classifier thresholds via grid search or move to learned classifier.
+
+---
+
+**Session End**: 2025-12-19 06:33 UTC
+**Duration**: ~30 minutes (pipeline execution + analysis)
+**Artifacts**: 112 files generated (depth maps, reports, CSVs, JSON logs)
+**Reproducibility**: Full command history and parameters in pipeline_summary.json
+
+✅ **Session safely wrapped and ready for handoff.**
