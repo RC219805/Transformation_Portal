@@ -29,12 +29,17 @@ jobs:
           pip install pytest opencv-python-headless
       
       - name: Run resolution policy tests
-        run: python high_fidelity_depth/test_resolution_policy.py
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${PWD}"
+          python high_fidelity_depth/test_resolution_policy.py
       
       - name: Run structure edge tests
-        run: python high_fidelity_depth/test_structure_edges.py
+        run: |
+          export PYTHONPATH="${PYTHONPATH}:${PWD}"
+          python high_fidelity_depth/test_structure_edges.py
       
       - name: Verify imports
         run: |
+          export PYTHONPATH="${PYTHONPATH}:${PWD}"
           python -c "from high_fidelity_depth.quality_metrics import extract_structure_edges, classify_scene_type, validate_depth_quality"
           echo "✅ All imports successful"

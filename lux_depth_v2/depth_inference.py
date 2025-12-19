@@ -21,9 +21,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from lux_depth_v2.global_anchor import GlobalAnchorConfig
+    from lux_depth_v2.edge_snapping import EdgeSnappingConfig
 
 try:
     import torch

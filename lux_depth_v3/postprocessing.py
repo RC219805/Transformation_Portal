@@ -5,6 +5,7 @@ Handles metric scaling, filtering, edge preservation, and multi-view fusion.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 import numpy as np
