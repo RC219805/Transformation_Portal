@@ -12,6 +12,8 @@ on:
 
 jobs:
   smoke_test:
+    permissions:
+      contents: read  # Minimum required for checkout
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
