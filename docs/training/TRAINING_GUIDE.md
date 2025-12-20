@@ -1,5 +1,42 @@
 # Depth Anything V2 Training Guide
 
+---
+
+## ⚠️ IMPORTANT: Advanced Feature Notice
+
+**This is an ADVANCED RESEARCH feature** - Not part of the default production workflow.
+
+### Before You Continue
+
+**Most users should NOT use this guide.** If you're here to process images, use the **Golden Path** instead:
+
+```bash
+pip install -e .
+lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
+```
+
+**See**: [docs/PHASE2_USER_GUIDE.md](../PHASE2_USER_GUIDE.md) for the recommended production workflow.
+
+### When to Use This Guide
+
+✅ You should use this training guide ONLY if:
+- You have a custom architectural dataset requiring model adaptation
+- You're conducting research on depth estimation algorithms  
+- You have GPU resources (8GB+ VRAM) and 2-3 hours for training
+- You understand neural network fine-tuning concepts
+
+❌ Do NOT use this if:
+- You just want to process renders → Use `lux-depth-v2` pre-trained models
+- You don't have a GPU → Training takes 12-18 hours on CPU
+- You're new to the toolkit → Start with the Golden Path
+- You need results today → Use existing models instead
+
+**Decision Guide**: [docs/DECISION_GUIDE.md](../DECISION_GUIDE.md)
+
+---
+
+## Training Guide Contents
+
 This guide explains how to fine-tune Depth Anything V2 on architectural imagery using the Transformation Portal training pipeline.
 
 ## Table of Contents
