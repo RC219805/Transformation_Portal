@@ -66,6 +66,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-segmentation-side", type=int, default=1024,
                    help="Max segmentation resolution for Materials v2 (default: 1024).")
 
+    # Edge Refinement (Golden Path Consolidation)
+    p.add_argument("--edge-refinement", action="store_true",
+                   help="Enable edge-aware refinement for architectural details (advanced feature).")
+    p.add_argument("--refinement-preset", type=str, default="balanced", 
+                   choices=["subtle", "balanced", "aggressive"],
+                   help="Edge refinement strength preset (default: balanced).")
+
     # Service mode (optional)
     p.add_argument("--service", action="store_true", help="Run as HTTP service (FastAPI).")
     p.add_argument("--host", type=str, default="0.0.0.0")

@@ -1,5 +1,27 @@
 # Copilot Instructions for Transformation Portal
 
+## 🌟 Golden Path: Primary Production Workflow
+
+**MOST IMPORTANT**: `lux_depth_v2` is the **primary production workflow** for image processing.
+
+```bash
+# Recommended for 95% of use cases
+pip install -e .
+lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
+```
+
+**Why lux_depth_v2?**
+- ✅ Security-hardened (CVE-2024-27763 mitigated)
+- ✅ Production-validated (127-400 images/hour, 1,348 tests passing)
+- ✅ Deployment-ready (Docker, Prometheus, health checks)
+- ✅ 16-bit precision maintained
+
+**Decision Guide**: [docs/DECISION_GUIDE.md](docs/DECISION_GUIDE.md)
+
+**Alternative workflows** (async pipeline, context-aware, training) are **advanced features** for specialized use cases. See [Advanced Workflows](#advanced-workflows) section below.
+
+---
+
 ## Project Overview
 
 **Transformation Portal** is an advanced, production-grade image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production. The repository combines cutting-edge AI capabilities with enterprise-level automation:
@@ -173,6 +195,35 @@ make lint
 - Support for batch processing with directory tree mirroring
 - Preset-based adjustments for exposure, contrast, saturation, clarity, glow
 - Progress tracking and batch statistics for large-scale operations
+
+## Advanced Workflows
+
+**IMPORTANT**: The following are **advanced features** for specialized use cases. For standard image processing, use `lux_depth_v2` (Golden Path).
+
+### Async/Streaming Pipeline Architecture
+- **Use when**: Processing 1000+ images, need 3-5x throughput improvement
+- **Don't use if**: <100 images (overhead not worth it)
+- **Location**: `src/transformation_portal/streaming/`
+- **Documentation**: [docs/pipeline/async_pipeline_architecture.md](docs/pipeline/async_pipeline_architecture.md)
+
+### Context-Aware Rendering
+- **Use when**: Need document-driven architectural intelligence, scene-aware processing
+- **Don't use if**: Standard preset-based processing is sufficient
+- **Location**: `src/transformation_portal/context_aware_rendering/`
+- **Documentation**: [docs/CONTEXT_SYSTEM_COMPLETE.md](docs/CONTEXT_SYSTEM_COMPLETE.md)
+
+### Video Processing (Separate Domain)
+- **Use when**: Processing video files (not images)
+- **Tool**: `luxury_video_master_grader.py`
+- **Features**: ProRes 422 HQ, HDR tone mapping, LUT grading, frame rate conformance
+- **Documentation**: See README section on video processing
+
+### Model Training Infrastructure (Research)
+- **Use when**: Custom dataset adaptation, research on depth/material models
+- **Don't use if**: Just want to process images (use pre-trained models instead)
+- **Location**: `src/training/`, `examples/training/`
+- **Documentation**: [docs/training/TRAINING_GUIDE.md](docs/training/TRAINING_GUIDE.md)
+- **Requirements**: GPU, 10GB+ disk, 2-3 hours training time
 
 ## Advanced Capabilities
 
