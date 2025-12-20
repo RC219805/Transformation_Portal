@@ -33,6 +33,8 @@ from lux_depth_v3.export import Exporter
 
 # Security configuration
 MAX_FILE_SIZE_MB = 50
+# Canonical allowlist pattern for filenames (letters, digits, dot, underscore, dash)
+SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_.-]+$')
 MAX_IMAGE_DIMENSION = 4096
 RATE_LIMIT_REQUESTS_PER_MINUTE = 60
 
@@ -82,6 +84,55 @@ output_dir: Path = Path("service_output")
 request_timestamps: List[float] = []
 
 
+def sanitize_and_validate_filepath(filename: str, base_dir: Path) -> Path:
+    """Sanitize and validate a user-provided filename for safe file access.
+    
+    This function implements defense-in-depth path traversal prevention:
+    1. Allowlist validation: Only alphanumeric, dots, dashes, underscores
+    2. Explicit dot-dot blocking
+    3. Path normalization
+    4. Containment verification
+    
+    Args:
+        filename: User-provided filename to validate
+        base_dir: Trusted base directory (must be absolute)
+        
+    Returns:
+        Validated absolute Path object within base_dir
+        
+    Raises:
+        ValueError: If filename is invalid or path escapes base_dir
+        
+    Security:
+        CWE-22 Path Traversal Prevention
+        OWASP A01:2021 Broken Access Control
+    """
+    # Layer 1: Allowlist validation (blocks "../", absolute paths, special chars)
+    if not filename or not SAFE_FILENAME_PATTERN.fullmatch(filename):
+        raise ValueError("Invalid filename")
+    
+    # Layer 2: Explicit dot-dot blocking
+    if filename in {".", ".."}:
+        raise ValueError("Invalid filename")
+    
+    # Ensure base_dir is resolved to absolute path for secure comparison
+    base_dir_resolved = base_dir.resolve(strict=False)
+    
+    # Layer 3: Safe path construction (no string interpolation)
+    candidate_path = base_dir_resolved / filename
+    
+    # Layer 4: Path normalization (resolves symlinks and ".." components)
+    normalized_path = candidate_path.resolve(strict=False)
+    
+    # Layer 5: Containment verification (ensures path stays within base_dir)
+    try:
+        normalized_path.relative_to(base_dir_resolved)
+    except ValueError:
+        raise ValueError("Invalid filename")
+    
+    return normalized_path
+
+
 def check_rate_limit(client_ip: str) -> bool:
     """Check if request is within rate limit.
 
@@ -112,8 +163,11 @@ def check_rate_limit(client_ip: str) -> bool:
 @app.on_event("startup")
 async def startup_event():
     """Initialize service on startup."""
-    global inference_engine
+    global inference_engine, output_dir
 
+    # Resolve output_dir to absolute path for security validation
+    output_dir = output_dir.resolve()
+    
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -279,27 +333,16 @@ async def download_depth(filename: str):
         - Ensures path stays within configured output directory
         - Only serves regular files (not directories or special files)
     """
-    # Security: Canonical allowlist pattern (CodeQL-recognized sanitizer)
-    SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_.-]+$')
-    
-    if not filename or not SAFE_FILENAME_PATTERN.fullmatch(filename):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    
-    if filename in {".", ".."}:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    
-    # Resolve base directory to canonical absolute path
-    output_dir_resolved = output_dir.resolve(strict=True)
-    
-    # Build and resolve candidate path with strict validation
     try:
-        safe_file_path = (output_dir_resolved / filename).resolve(strict=True)
-        # Verify containment using relative_to (canonical CodeQL pattern)
-        safe_file_path.relative_to(output_dir_resolved)
-    except (ValueError, OSError):
+        # Sanitize and validate filepath (defense-in-depth: allowlist, normalization, containment)
+        safe_file_path = sanitize_and_validate_filepath(filename, output_dir)
+    except ValueError:
+        # Avoid leaking internal validation details to clients
         raise HTTPException(status_code=400, detail="Invalid filename")
-    
-    # Verify it's a regular file
+    except OSError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    # Verify it's a regular file (not directory or special file)
     if not safe_file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
