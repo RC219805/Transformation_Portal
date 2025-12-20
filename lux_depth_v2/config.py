@@ -495,6 +495,11 @@ class PipelineConfig:
     
     # PHASE 2: Lighting Condition Detection (STUB)
     lighting: LightingConfig = field(default_factory=LightingConfig)
+    
+    # Edge Refinement (Infrastructure - Feature Freeze)
+    # Disabled by default, opt-in via --enable-edge-refinement flag
+    enable_edge_refinement: bool = False
+    refinement_preset: str = "balanced"  # subtle|balanced|aggressive
 
     def __post_init__(self) -> None:
         """
