@@ -9,6 +9,11 @@ Verifies that compute_high_frequency_energy() correctly separates:
 """
 
 import sys
+import pytest
+
+# Skip if cv2 not available (vision dependency)
+cv2 = pytest.importorskip("cv2")
+
 sys.path.insert(0, 'high_fidelity_depth')
 
 import numpy as np

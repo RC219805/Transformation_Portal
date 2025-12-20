@@ -19,6 +19,9 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 
+# Skip if torch not available (ML dependency)
+torch = pytest.importorskip("torch")
+
 from lux_depth_v3 import (
     DA3InferenceEngine,
     ModelVariant,

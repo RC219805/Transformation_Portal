@@ -8,6 +8,9 @@ import pytest
 import numpy as np
 from pathlib import Path
 
+# Skip if cv2 not available (vision dependency)
+cv2 = pytest.importorskip("cv2")
+
 from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
 from high_fidelity_depth.validation import validate_depth_quality, detect_edges, compute_edge_alignment
 from high_fidelity_depth.isolation_tests import run_isolation_tests

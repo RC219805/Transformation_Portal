@@ -6,6 +6,10 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 import json
+import pytest
+
+# Skip if torch not available (ML dependency)
+torch = pytest.importorskip("torch")
 
 sys.path.insert(0, str(Path(__file__).parent / "lux_depth_v3"))
 sys.path.insert(0, str(Path(__file__).parent / "high_fidelity_depth"))

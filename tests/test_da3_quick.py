@@ -12,6 +12,10 @@ Example:
 import os
 import sys
 from pathlib import Path
+import pytest
+
+# Skip if torch not available (ML dependency)
+torch = pytest.importorskip("torch")
 
 # Set OpenMP workaround before importing torch
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"

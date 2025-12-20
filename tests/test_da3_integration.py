@@ -6,6 +6,11 @@ Tests the user's example: estimate_depth("input_images/750_Picacho/Kitchen_2K_te
 import os
 import sys
 from pathlib import Path
+import pytest
+
+# Skip if torch not available (ML dependency)
+torch = pytest.importorskip("torch")
+pytest.importorskip("lux_depth_v3")
 
 # Fix OpenMP duplicate library issue on Mac
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
