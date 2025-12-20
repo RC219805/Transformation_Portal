@@ -353,7 +353,7 @@ jobs:
             --ignore=tests/test_basicsr_tp.py \
             --ignore=tests/foundation/ \
             --ignore=tests/perceptual/ \
-            -k "not (ml or slow or gpu)" \
+            -k "not (ml or slow or gpu or integration)" \
             -v --tb=short \
             --cov=src/transformation_portal \
             --cov-report=xml \

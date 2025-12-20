@@ -37,15 +37,32 @@ from PIL import Image
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
-from high_fidelity_depth.quality_metrics import (
-    validate_depth_quality,
-    detect_edges,
-    save_metrics_atomic,
-    create_edge_overlay,
-    classify_scene_type_v2,
-    extract_structure_edges
-)
+# Check for ML dependencies early
+try:
+    import torch
+    import transformers
+    HAS_ML_DEPS = True
+except ImportError:
+    HAS_ML_DEPS = False
+    # Will fail gracefully in main() with clear message
+
+try:
+    from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
+    from high_fidelity_depth.quality_metrics import (
+        validate_depth_quality,
+        detect_edges,
+        save_metrics_atomic,
+        create_edge_overlay,
+        classify_scene_type_v2,
+        extract_structure_edges
+    )
+except ImportError as e:
+    if not HAS_ML_DEPS:
+        # Expected - will handle in main()
+        pass
+    else:
+        # Unexpected import error
+        raise
 
 logging.basicConfig(
     level=logging.INFO,
@@ -565,6 +582,12 @@ def main():
     parser.add_argument("--device", type=str, default="auto", help="Device: auto | cuda | mps | cpu")
     
     args = parser.parse_args()
+    
+    # Check ML dependencies early
+    if not HAS_ML_DEPS:
+        logger.error("PyTorch and transformers required")
+        logger.error("Install with: pip install torch transformers")
+        return 1
     
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)

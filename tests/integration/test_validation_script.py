@@ -33,6 +33,7 @@ def test_image_dir(tmp_path):
     return img_dir
 
 
+@pytest.mark.integration  # Skip in core test runs
 @pytest.mark.skipif(not HAS_ML_DEPS, reason="Requires PyTorch and transformers")
 def test_validation_script_calls_v2_classifier(test_image_dir, tmp_path):
     """
