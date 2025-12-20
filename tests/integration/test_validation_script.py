@@ -10,6 +10,14 @@ import numpy as np
 import pytest
 from PIL import Image
 
+# Check for ML dependencies
+try:
+    import torch
+    import transformers
+    HAS_ML_DEPS = True
+except ImportError:
+    HAS_ML_DEPS = False
+
 
 @pytest.fixture
 def test_image_dir(tmp_path):
@@ -25,6 +33,7 @@ def test_image_dir(tmp_path):
     return img_dir
 
 
+@pytest.mark.skipif(not HAS_ML_DEPS, reason="Requires PyTorch and transformers")
 def test_validation_script_calls_v2_classifier(test_image_dir, tmp_path):
     """
     Integration test: validation script must call V2 classifier.
