@@ -141,7 +141,7 @@ class DepthProcessor:
             if depth_map.shape[:2] != image.shape[:2]:
                 from PIL import Image as PILImage
                 depth_pil = PILImage.fromarray((depth_map * 255).astype(np.uint8))
-                depth_pil = depth_pil.resize((image.shape[1], image.shape[0]), PILImage.LANCZOS)
+                depth_pil = depth_pil.resize((image.shape[1], image.shape[0]), PILImage.Resampling.LANCZOS)
                 depth_map = np.array(depth_pil).astype(np.float32) / 255.0
             
             logger.info(f"✓ Depth estimation complete: {depth_map.shape}")

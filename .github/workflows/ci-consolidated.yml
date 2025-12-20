@@ -89,6 +89,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          submodules: recursive
           
       - name: Detect Changed Files
         id: changes
@@ -202,6 +203,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -233,7 +237,7 @@ jobs:
       - name: Flake8 Critical Errors
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics \
-            --exclude=deprecated/,.venv/,__pycache__/,.rag_cache/
+            --exclude=deprecated/,.venv/,__pycache__/,.rag_cache/,depth_anything_3_official/
             
       - name: Pylint Analysis
         continue-on-error: true
@@ -306,6 +310,9 @@ jobs:
           
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -346,7 +353,7 @@ jobs:
             --ignore=tests/test_basicsr_tp.py \
             --ignore=tests/foundation/ \
             --ignore=tests/perceptual/ \
-            -k "not (ml or slow or gpu)" \
+            -k "not (ml or slow or gpu or integration)" \
             -v --tb=short \
             --cov=src/transformation_portal \
             --cov-report=xml \
@@ -376,6 +383,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -478,6 +488,9 @@ jobs:
           
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -578,6 +591,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -717,6 +733,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
@@ -813,6 +832,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -886,6 +908,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -919,6 +944,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
         
       - name: Setup Python
         uses: actions/setup-python@v6

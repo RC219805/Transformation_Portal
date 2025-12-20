@@ -1,0 +1,5 @@
+,edge_f1,edge_f1,edge_f1,edge_f1,edge_f1,chamfer_px,chamfer_px,chamfer_px,chamfer_px,lenient_pass,strict_pass
+,count,mean,std,min,max,mean,std,min,max,mean,mean
+scene_type_pred,,,,,,,,,,,
+structure_dominated,4,0.45,0.212,0.283,0.761,39.357,35.388,3.343,87.983,0.25,0.25
+texture_dominated,14,0.361,0.199,0.067,0.683,129.554,132.344,10.102,406.718,0.929,0.143

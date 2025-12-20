@@ -1,0 +1,40 @@
+# Stratified Validation Dataset (18 Images)
+# Format: Full path to image
+
+# === INTERIORS (Structure-Dominated) - 6 images ===
+# Expected: structure_dominated (edge_to_texture_ratio < 5, edge_density > 0.05)
+
+/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Kitchen.jpg
+/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_PrimaryBathroom.jpg
+/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_GreatRoom.jpg
+/Users/rc/Transformation_Portal/input_images/16_Seaview/Source_JPEGS/Montecito-Shores-12.jpg
+/Users/rc/Transformation_Portal/input_images/800_Picacho/High-Res_Stills/800-picacho-11.jpg
+/Users/rc/Transformation_Portal/input_images/800_Picacho/High-Res_Stills/800-picacho-6.jpg
+
+# === WATER/POOL (Texture-Dominated) - 4 images ===
+# Expected: texture_dominated (edge_to_texture_ratio > 10, depth_variance < 0.02)
+
+/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Pool.jpg
+/Users/rc/Transformation_Portal/input_images/16_Seaview/Source_JPEGS/Montecito-Shores-3.jpg
+/Users/rc/Transformation_Portal/input_images/16_Seaview/Source_JPEGS/Montecito-Shores-16.jpg
+/Users/rc/Transformation_Portal/input_images/800_Picacho/High-Res_Stills/800-picacho-38.jpg
+
+# === GLASS/FACADES (Texture-Dominated) - 3 images ===
+# Expected: texture_dominated (edge_to_texture_ratio 5-10, low depth variance)
+
+/Users/rc/Transformation_Portal/input_images/16_Seaview/Source_JPEGS/Montecito-Shores-7.jpg
+/Users/rc/Transformation_Portal/input_images/16_Seaview/Source_JPEGS/Montecito-Shores-10.jpg
+/Users/rc/Transformation_Portal/input_images/800_Picacho/High-Res_Stills/800-picacho-1.jpg
+
+# === AERIALS (Mixed) - 3 images ===
+# Expected: mixed classification (depends on foliage density, ocean vs terrain)
+
+/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_JPEGS/750Picacho_Aerial.jpg
+/Users/rc/Transformation_Portal/input_images/16_Seaview/Aerial_Stills/Montecito-shores-aerial-2.jpg
+/Users/rc/Transformation_Portal/input_images/16_Seaview/Aerial_Stills/Montecito-shores-aerial-4.jpg
+
+# === CHALLENGING CASES - 2 images ===
+# Expected: tests edge cases (portrait orientation, dense patterns, low contrast)
+
+/Users/rc/Transformation_Portal/input_images/16_Seaview/Source_JPEGS/Montecito-Shores-18.jpg
+/Users/rc/Transformation_Portal/input_images/800_Picacho/High-Res_Stills/800-picacho-28.jpg
