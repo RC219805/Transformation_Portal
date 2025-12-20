@@ -279,50 +279,33 @@ async def download_depth(filename: str):
         - Ensures path stays within configured output directory
         - Only serves regular files (not directories or special files)
     """
-    # Security: ALLOWLIST validation - CodeQL-recognized sanitizer pattern
-    # Restrict to safe filename pattern (alphanumeric + common separators)
-    # This is the canonical pattern for preventing path traversal attacks
-    SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+    # Security: Canonical allowlist pattern (CodeQL-recognized sanitizer)
+    SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_.-]+$')
     
-    if not filename or not SAFE_FILENAME_PATTERN.match(filename):
+    if not filename or not SAFE_FILENAME_PATTERN.fullmatch(filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Additional protection: reject special directory names
-    if filename in ('.', '..'):
+    if filename in {".", ".."}:
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Build safe path from trusted base directory
-    output_dir_resolved = output_dir.resolve()
+    # Resolve base directory to canonical absolute path
+    output_dir_resolved = output_dir.resolve(strict=True)
     
-    # Construct path using string concatenation (CodeQL sanitizer pattern)
-    # This breaks taint propagation while maintaining security via allowlist
-    safe_path_str = str(output_dir_resolved) + os.sep + filename
-    safe_file_path = Path(safe_path_str).resolve(strict=False)
-    
-    # Verify containment within output directory (defense in depth)
+    # Build and resolve candidate path with strict validation
     try:
-        # Use is_relative_to (Python 3.9+) or fallback to relative_to
-        if hasattr(Path, 'is_relative_to'):
-            if not safe_file_path.is_relative_to(output_dir_resolved):
-                raise HTTPException(status_code=400, detail="Invalid filename")
-        else:
-            # Fallback for Python 3.8
-            try:
-                safe_file_path.relative_to(output_dir_resolved)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid filename")
-    except (TypeError, OSError, RuntimeError):
+        safe_file_path = (output_dir_resolved / filename).resolve(strict=True)
+        # Verify containment using relative_to (canonical CodeQL pattern)
+        safe_file_path.relative_to(output_dir_resolved)
+    except (ValueError, OSError):
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Verify file exists and is regular file (not directory/device/symlink to outside)
-    if not safe_file_path.exists() or not safe_file_path.is_file():
+    # Verify it's a regular file
+    if not safe_file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Serve file - path is sanitized via allowlist + containment validation
-    # Use string path to break CodeQL taint propagation
     return FileResponse(
-        path=str(safe_file_path),
-        filename=filename,  # Sanitized input
+        path=safe_file_path,
+        filename=filename,
         media_type="application/octet-stream",
     )
 
