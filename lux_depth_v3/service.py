@@ -109,23 +109,26 @@ def sanitize_and_validate_filepath(filename: str, base_dir: Path) -> Path:
     """
     # Layer 1: Allowlist validation (blocks "../", absolute paths, special chars)
     if not filename or not SAFE_FILENAME_PATTERN.fullmatch(filename):
-        raise ValueError(f"Invalid filename format: {filename}")
+        raise ValueError("Invalid filename")
     
     # Layer 2: Explicit dot-dot blocking
     if filename in {".", ".."}:
-        raise ValueError("Filename cannot be '.' or '..'")
+        raise ValueError("Invalid filename")
+    
+    # Ensure base_dir is resolved to absolute path for secure comparison
+    base_dir_resolved = base_dir.resolve(strict=False)
     
     # Layer 3: Safe path construction (no string interpolation)
-    candidate_path = base_dir / filename
+    candidate_path = base_dir_resolved / filename
     
     # Layer 4: Path normalization (resolves symlinks and ".." components)
     normalized_path = candidate_path.resolve(strict=False)
     
     # Layer 5: Containment verification (ensures path stays within base_dir)
     try:
-        normalized_path.relative_to(base_dir)
-    except ValueError as e:
-        raise ValueError(f"Path escapes base directory: {filename}") from e
+        normalized_path.relative_to(base_dir_resolved)
+    except ValueError:
+        raise ValueError("Invalid filename")
     
     return normalized_path
 
@@ -333,9 +336,10 @@ async def download_depth(filename: str):
     try:
         # Sanitize and validate filepath (defense-in-depth: allowlist, normalization, containment)
         safe_file_path = sanitize_and_validate_filepath(filename, output_dir)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except OSError as e:
+    except ValueError:
+        # Avoid leaking internal validation details to clients
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    except OSError:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
     # Verify it's a regular file (not directory or special file)
