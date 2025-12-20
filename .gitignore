@@ -301,3 +301,9 @@ data/water_v0/holdout_images/checksums.txt
 !VALIDATION_QUICK_START.md
 !PRODUCTION_VALIDATION_QUICK_START.md
 !SESSION_END_SUMMARY_*.md
+
+# Edge Refinement Experiments (added 2025-12-20)
+experiments/edge_refinement/
+experiments/input_size_sweep/
+validation_edge_refinement/
+edge_refinement_results/
