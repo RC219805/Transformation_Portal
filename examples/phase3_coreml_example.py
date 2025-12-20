@@ -44,7 +44,7 @@ def example_1_export_model():
     )
     
     if coreml_path:
-        print(f"\n✓ Model exported successfully")
+        print("\n✓ Model exported successfully")
         print(f"  Path: {coreml_path}")
         print(f"  Size: {exporter._get_model_size(coreml_path):.1f} MB")
     else:
@@ -125,7 +125,7 @@ def example_3_depth_estimation():
         depth = estimator.estimate(image)
         elapsed = time.time() - start
         
-        print(f"\n✓ Depth estimation complete")
+        print("\n✓ Depth estimation complete")
         print(f"  Time: {elapsed*1000:.1f}ms")
         print(f"  Depth shape: {depth.shape}")
         print(f"  Depth range: [{depth.min():.3f}, {depth.max():.3f}]")
@@ -228,7 +228,7 @@ def example_5_batch_processing():
             Image.fromarray(depth_viz).save(output_path)
         
         elapsed = time.time() - start
-        print(f"\n\n✓ Batch processing complete")
+        print("\n\n✓ Batch processing complete")
         print(f"  Total time: {elapsed:.2f}s")
         print(f"  Time per image: {elapsed/len(image_paths)*1000:.1f}ms")
         print(f"  Throughput: {len(image_paths)/elapsed*3600:.0f} images/hour")

@@ -170,7 +170,7 @@ class TestUpscalingEngine:
         from PIL import Image
         h, w = original.shape[:2]
         orig_pil = Image.fromarray((original * 255).astype(np.uint8))
-        upscaled_pil = orig_pil.resize((w * 4, h * 4), Image.LANCZOS)
+        upscaled_pil = orig_pil.resize((w * 4, h * 4), Image.Resampling.LANCZOS)
         upscaled = np.array(upscaled_pil).astype(np.float32) / 255.0
         
         # Apply 1% brightness increase

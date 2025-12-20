@@ -1,0 +1,83 @@
+{
+  "validation_date": "2025-12-18",
+  "purpose": "Validate core claims before calling Phase 1 complete",
+  "critical_validations": [
+    {
+      "name": "No Internal Resize",
+      "status": "FAIL: Internal resizing detected",
+      "details": {
+        "test_image_size": [
+          2048,
+          2048
+        ],
+        "tile_tests": [
+          {
+            "tile_size": 512,
+            "preprocessed_shape": [
+              1,
+              3,
+              518,
+              518
+            ],
+            "output_depth_shape": [
+              512,
+              512
+            ],
+            "resize_detected": true,
+            "resize_factor": 1.01171875,
+            "verdict": "FAIL: Internal resize detected"
+          },
+          {
+            "tile_size": 1024,
+            "preprocessed_shape": [
+              1,
+              3,
+              518,
+              518
+            ],
+            "output_depth_shape": [
+              1024,
+              1024
+            ],
+            "resize_detected": true,
+            "resize_factor": 0.505859375,
+            "verdict": "FAIL: Internal resize detected"
+          },
+          {
+            "tile_size": 1536,
+            "preprocessed_shape": [
+              1,
+              3,
+              518,
+              518
+            ],
+            "output_depth_shape": [
+              1536,
+              1536
+            ],
+            "resize_detected": true,
+            "resize_factor": 0.3372395833333333,
+            "verdict": "FAIL: Internal resize detected"
+          }
+        ],
+        "overall_verdict": "FAIL: Internal resizing detected"
+      }
+    },
+    {
+      "name": "Global Consistency",
+      "status": "TODO: Implement tile blending consistency checks",
+      "details": {
+        "test_pattern_size": [
+          2048,
+          2048
+        ],
+        "validation_status": "TODO: Implement tile blending consistency checks",
+        "recommended_fixes": [
+          "Global anchor pass (low-res full frame)",
+          "High-frequency residual from tiles",
+          "Prevents global drift and plane warping"
+        ]
+      }
+    }
+  ]
+}

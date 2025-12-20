@@ -113,6 +113,7 @@ output_Cache_Test_*/
 *_TEMP.md
 *_WIP.md
 SESSION_*.md
+!docs/SESSION_*.md
 Analysis_Complete.md
 IMPLEMENTATION_COMPLETE.md
 *_SUMMARY.md
@@ -295,3 +296,8 @@ REPOSITORY_CONSISTENCY_*.md
 data/water_v0/holdout_images/*.jpg
 data/water_v0/holdout_images/*.png
 data/water_v0/holdout_images/checksums.txt
+# Session documentation exceptions (keep at root for handoff)
+!NEXT_SESSION_QUICK_START.md
+!VALIDATION_QUICK_START.md
+!PRODUCTION_VALIDATION_QUICK_START.md
+!SESSION_END_SUMMARY_*.md

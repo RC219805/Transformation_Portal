@@ -135,7 +135,7 @@ def example_3_signature_estate_showcase():
         print(f"File:   {result.file_size_mb:.1f} MB")
         
         if result.upscaling_metrics:
-            print(f"\nUpscaling:")
+            print("\nUpscaling:")
             print(f"  Model: {result.upscaling_metrics.model_name}")
             print(f"  Color Deviation: {result.upscaling_metrics.color_deviation:.4f}")
     else:
@@ -186,7 +186,7 @@ def example_4_fast_batch_preview():
             throughput = len(results) / (elapsed / 3600)
             
             print(f"\n{'='*70}")
-            print(f"Speed Test Results:")
+            print("Speed Test Results:")
             print(f"  Images:     {len(results)}")
             print(f"  Time:       {elapsed:.1f}s ({elapsed/60:.1f}min)")
             print(f"  Throughput: {throughput:.0f} images/hour")
@@ -366,7 +366,7 @@ def example_7_interior_exterior_comparison():
         pipeline = UnifiedLuxuryPipeline(config)
         result = pipeline.process_image(input_path)
         
-        print(f"\nResult:")
+        print("\nResult:")
         print(f"  Time: {result.processing_time:.1f}s")
         print(f"  Size: {result.final_size[0]}x{result.final_size[1]}")
         print(f"  File: {result.file_size_mb:.1f} MB")

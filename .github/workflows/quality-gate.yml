@@ -19,9 +19,25 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Free Disk Space
+        run: |
+          echo "Before cleanup:"
+          df -h
+          
+          # Remove unnecessary packages to prevent disk space exhaustion
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          
+          echo "After cleanup:"
+          df -h
+
       - name: Install quality tools
         run: |
-          pip install flake8 pylint autopep8
+          pip install --no-cache-dir flake8 pylint autopep8
 
       - name: Auto-fix formatting issues
         run: |
@@ -30,7 +46,7 @@ jobs:
 
       - name: Run flake8 (critical errors only)
         run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated/,src/transformation_portal/,.venv/,lux_depth_v2/__pycache__/
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated/,src/transformation_portal/,.venv/,lux_depth_v2/__pycache__/,depth_anything_3_official/
 
       - name: Run pylint (non-blocking)
         continue-on-error: true
@@ -43,7 +59,7 @@ jobs:
       
       - name: Test lux_depth_v2 Module Imports
         run: |
-          pip install torch torchvision
+          pip install --no-cache-dir torch torchvision
           python -c "from lux_depth_v2 import pipeline, config, upscaling, service; print('✅ lux_depth_v2 imports OK')" || echo "⚠️ lux_depth_v2 import check skipped"
 
       - name: Check markdown file count

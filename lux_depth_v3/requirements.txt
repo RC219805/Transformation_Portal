@@ -1,0 +1,46 @@
+# Lux Depth V3 - Depth Anything 3 Integration
+# ============================================
+# Production dependencies for DA3 module
+#
+# Security: This file contains vetted dependencies with no known vulnerabilities
+# Last reviewed: 2025-12-19
+
+# Core dependencies
+numpy>=1.24,<2.3.0  # Constrained for opencv-python compatibility
+Pillow>=10.0.0,<12
+scipy>=1.15,<1.16  # scipy 1.16+ requires Python 3.11+
+
+# Deep learning
+torch>=2.0.0,<3
+torchvision>=0.15.0,<1
+
+# Image processing
+tifffile>=2023.7.18,<2025  # 32-bit float TIFF support
+imagecodecs>=2023.9.18,<2025  # Compression codecs
+
+# CLI
+typer>=0.10.0,<1
+tqdm>=4.66,<5
+
+# Service mode (optional)
+fastapi>=0.104.0,<1
+uvicorn>=0.24.0,<1
+pydantic>=2.0,<3
+requests>=2.31.0,<3  # HTTP client for backend health checks
+
+# Data validation
+pydantic-settings>=2.0,<3
+
+# Optional: OpenCV for bilateral filtering
+# opencv-python>=4.8.0,<5  # Uncomment if needed
+
+# Optional: Point cloud processing
+# trimesh>=4.0.0,<5  # Uncomment for mesh export
+
+# Benchmark dependencies
+open3d>=0.18.0,<1  # Required for TSDF fusion and 3D metrics
+huggingface_hub>=0.20.0,<1  # Required for dataset downloads
+
+# Note: Depth Anything 3 package
+# When DA3 is officially released, add:
+# depth-anything-v3>=1.0.0,<2

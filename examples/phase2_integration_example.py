@@ -42,10 +42,10 @@ def process_luxury_image_phase2(
     if enable_profiling:
         profiler = PerformanceProfiler(session_id=f"phase2_{image_path.stem}")
     
-    print(f"\n{'='*70}")
-    print(f"Phase 2 Processing Pipeline")
-    print(f"{'='*70}\n")
-    print(f"Input: {image_path}")
+    print("\n" + "="*70)
+    print("Phase 2 Processing Pipeline")
+    print("="*70 + "\n")
+    print("Input:", image_path)
     
     # Load image
     if profiler:
@@ -132,13 +132,13 @@ def process_luxury_image_phase2(
             lut_processor = DepthAwareLUT(config)
             graded = lut_processor.apply(img_array, depth_map)
         
-        print(f"✓ Applied depth-aware LUT with atmospheric perspective")
+        print("✓ Applied depth-aware LUT with atmospheric perspective")
         
         # Save graded image
         graded_img = Image.fromarray((graded * 255).astype(np.uint8))
         graded_img.save(output_dir / f"{image_path.stem}_graded.png", quality=95)
     else:
-        print(f"⚠ LUT files not found, skipping depth-aware grading")
+        print("⚠ LUT files not found, skipping depth-aware grading")
         graded = img_array
     
     # Step 3: Multi-Exposure Fusion (if HDR input)
@@ -165,7 +165,7 @@ def process_luxury_image_phase2(
                 variant_img.save(variant_path, quality=95)
                 print(f"  • {variant.target.value:8s} (EV {variant.exposure_ev:+.1f}): {variant_path.name}")
     else:
-        print(f"Standard dynamic range input, saving single output")
+        print("Standard dynamic range input, saving single output")
         output_path = output_dir / f"{image_path.stem}_processed.png"
         output_img = Image.fromarray((graded * 255).astype(np.uint8))
         output_img.save(output_path, quality=95)
@@ -181,7 +181,7 @@ def process_luxury_image_phase2(
         profiler.save_report(report, output_dir / 'performance_report.json')
     
     print(f"\n{'='*70}")
-    print(f"Processing Complete!")
+    print("Processing Complete!")
     print(f"Results saved to: {output_dir}")
     print(f"{'='*70}\n")
 

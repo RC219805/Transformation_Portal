@@ -50,7 +50,7 @@ def example_single_upscale():
     if input_path.exists():
         upscaled, metrics = engine.upscale_image(input_path, output_path)
         
-        print(f"\n✓ Upscale complete:")
+        print("\n✓ Upscale complete:")
         print(f"  Input:  {metrics.input_size[0]}x{metrics.input_size[1]}")
         print(f"  Output: {metrics.output_size[0]}x{metrics.output_size[1]}")
         print(f"  Time:   {metrics.processing_time:.2f}s")
@@ -102,7 +102,7 @@ def example_batch_processing():
     avg_time = total_time / len(results) if results else 0
     avg_color_dev = np.mean([m.color_deviation for m in results.values()])
     
-    print(f"\n✓ Batch complete:")
+    print("\n✓ Batch complete:")
     print(f"  Images:     {len(results)}/{len(input_paths)}")
     print(f"  Total time: {total_time:.1f}s")
     print(f"  Avg time:   {avg_time:.2f}s per image")
@@ -151,7 +151,7 @@ def example_depth_integration():
             output_path = Path("output_images/exterior_view_ultimate.tif")
             pipeline.save_result(depth_result, output_path)
             
-            print(f"   ✓ Depth-aware processing complete")
+            print("   ✓ Depth-aware processing complete")
             print(f"   Final output: {output_path}")
         else:
             print(f"   ⚠️  Depth config not found: {depth_config}")

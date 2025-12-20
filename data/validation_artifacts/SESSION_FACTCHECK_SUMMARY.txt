@@ -1,0 +1,143 @@
+================================================================================
+VALIDATION SESSION: FACT-CHECKED REVIEW & NEXT STEPS
+Generated: 2025-12-19 06:14 UTC
+Commit: b2e32a8
+================================================================================
+
+EXECUTIVE SUMMARY
+-----------------
+The texture-dominated gate fix is VALIDATED and WORKING. Structure-dominated 
+performance is the confirmed bottleneck. The path forward is clear: complete
+50-image validation, validate classifier, then run input-size sweep on 
+structure scenes.
+
+CURRENT STATUS (Evidence-Based)
+--------------------------------
+✅ VALIDATED (18-image baseline):
+   - HF-energy + not-flat texture gate: 77.8% lenient pass
+   - Infrastructure: 100% seam validation, tiling reliable
+   - Texture scenes: 93% lenient (13/14), no longer adversarial
+
+⚠️  INCOMPLETE (50-image run):
+   - 46/50 images processed (92% execution rate)
+   - 84.8% lenient pass (but scene-biased: 38 texture / 8 structure)
+   - No consolidated validation_report.json
+   - 4 images failed (model download timeouts)
+
+❌ UNVALIDATED:
+   - Scene classifier accuracy (no confusion matrix / balanced accuracy)
+   - Structure performance at scale (only 8 scenes in partial run)
+   - Model dependency resilience
+
+WHAT THE NUMBERS MEAN
+---------------------
+18-Image Baseline (outputs/validation_hf_fixed_20251218_211645_01fb79c):
+  - Lenient: 14/18 = 77.8% ✅ (above 70% target)
+  - Strict: 3/18 = 16.7% (expected, structure-limited)
+  - Texture: 13/14 lenient (92.9%)
+  - Structure: 1/4 lenient (25%)
+  - Avg Edge F1: ~0.37 (indicates edge fidelity bottleneck)
+
+46-Image Partial (outputs/validation_full_50img_20251218_214935_2a2b25c):
+  - Lenient: 39/46 = 84.8%
+  - Strict: 7/46 = 15.2%
+  - Scene split: 38 texture / 8 structure (BIAS: intended 25/25)
+  - All lenient failures: structure-dominated scenes
+
+KEY INSIGHT: Texture path is healthy. Structure path is bottlenecked by 
+            edge fidelity (not tiling, not gates, not preprocessing).
+
+TECHNICAL CORRECTNESS
+---------------------
+✅ HF-energy approach is sound:
+   - Targets "texture copying" artifacts via high-frequency energy
+   - Uses percentile-based range (robust to outliers)
+   - Bilateral filtering preserves edges while suppressing texture
+   
+✅ Infrastructure is reliable:
+   - Tiling + Hann-weighted blending: mathematically correct
+   - Seam validation: 100% pass rate
+   - Border handling: BORDER_REFLECT_101 (OpenCV standard)
+
+✅ Diagnosis is correct:
+   - Texture scenes no longer punished for valid smoothness
+   - Structure scenes fail on edge alignment (edge_f1 ~0.35-0.40)
+   - This matches DA V2 operating point theory (input_size=518)
+
+WHAT'S NOT VALIDATED (Hard Truth)
+----------------------------------
+❌ "50-image validation completed" — FALSE (only 46/50)
+❌ "Scene classification validated" — FALSE (no metrics computed)
+❌ "Lenient gate achievement" — PREMATURE (scene distribution bias)
+❌ "Production-ready" — FALSE (strict 15%, structure unknown, fragility)
+
+IMMEDIATE NEXT STEPS (Priority Order)
+--------------------------------------
+Priority 1: Complete 50-Image Run
+  - Pre-cache DA V2 model weights
+  - Rerun 4 failed images (or full deterministic rerun)
+  - Generate consolidated validation_report.json
+  - Verify scene distribution matches intended 25/25
+
+Priority 2: Validate Classifier
+  - Generate confusion matrix (true vs predicted)
+  - Compute balanced accuracy (not raw accuracy)
+  - Decision gate: BA ≥85% proceed, <75% stop & fix
+
+Priority 3: Structure Input-Size Sweep (After P1 & P2)
+  - Extract structure subset (~15-20 images)
+  - Sweep: input_size 518 → 768 → 896 → 1022
+  - Track: edge_f1, chamfer, lenient/strict deltas
+  - Target: structure lenient ≥60%, edge_f1 ≥0.50
+
+Priority 4: Freeze Baseline
+  - Tag commit with validation config
+  - Archive immutable evidence
+  - Document gate thresholds in config (not just prose)
+
+WHAT NOT TO DO (Explicit)
+--------------------------
+❌ Do NOT integrate MaterialsV3 into active path (shadow mode only, later)
+❌ Do NOT recalibrate thresholds on partial/biased data
+❌ Do NOT claim "production-ready" or "validation complete"
+❌ Do NOT add more heuristic gates to structure scenes
+
+DOCUMENTATION ARTIFACTS
+------------------------
+Created (commit b2e32a8):
+  - docs/guides/VALIDATION_STATUS_FACTCHECK_20251219.md (12KB, detailed)
+  - docs/guides/IMMEDIATE_NEXT_STEPS.md (executable plan)
+  - scripts/quick_50img_analysis.py (partial run analyzer)
+
+BASELINE REFERENCES
+-------------------
+Validated:  outputs/validation_hf_fixed_20251218_211645_01fb79c (18 images)
+Partial:    outputs/validation_full_50img_20251218_214935_2a2b25c (46 images)
+Labels:     data/validation_full/labels.csv (50 images, 25/25 split)
+Config:     tile_size=1024, overlap=128, input_size=518, no-anchor
+
+DECISION GATES
+--------------
+✅ Texture gate fix: VALIDATED (ready for production on texture scenes)
+⚠️  Classifier: UNVALIDATED (must compute BA before proceeding)
+⚠️  Structure quality: BOTTLENECKED (needs input-size sweep)
+❌ Overall system: NOT PRODUCTION-READY (strict 15%, fragility)
+
+NEXT SESSION ENTRY POINT
+-------------------------
+Start: Priority 1, Step 1.1 (pre-cache DA V2 model)
+Then: Priority 2 (classifier validation with confusion matrix)
+Then: Priority 3 (structure input-size sweep, if BA ≥75%)
+
+Read: docs/guides/IMMEDIATE_NEXT_STEPS.md for detailed commands
+
+MATERIALS V3 STATUS
+-------------------
+DECISION: NO-GO for active integration
+RATIONALE: Baseline incomplete, classifier unvalidated
+ALLOWED: Shadow mode only, after P1-P3 complete, with A/B evidence
+
+================================================================================
+STATUS: Texture validated ✅ | Structure bottlenecked ⚠️ | Not production ❌
+NEXT: Complete 50-img → validate classifier → structure sweep
+================================================================================

@@ -362,7 +362,7 @@ class UpscalingEngine:
         from PIL import Image
         h, w = original.shape[:2]
         upscaled_pil = Image.fromarray((upscaled * 255).astype(np.uint8))
-        downsampled = np.array(upscaled_pil.resize((w, h), Image.LANCZOS)) / 255.0
+        downsampled = np.array(upscaled_pil.resize((w, h), Image.Resampling.LANCZOS)) / 255.0
         
         # Compute mean absolute difference
         deviation = np.mean(np.abs(original - downsampled))

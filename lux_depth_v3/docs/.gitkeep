@@ -1,0 +1,25 @@
+# Documentation Directory
+
+This directory contains comprehensive planning and technical documentation for the Lux Depth V3 integration.
+
+## Planning Documents
+
+### Feature Integration
+- **DA3_FEATURE_GAP_ANALYSIS.md** - Detailed analysis of missing features from official DA3 repo
+- **DA3_FEATURE_INTEGRATION_TRACKER.md** - Implementation roadmap and task tracking
+- **DA3_FEATURE_DECISION_MATRIX.md** - Quick reference decision framework
+
+### Technical Reference
+- **API_REFERENCE.md** - Complete API documentation
+- **CLI_INTEGRATION.md** - CLI wrapper implementation details
+- **BENCHMARK.md** - Evaluation metrics and dataset documentation
+- **REFERENCE_VIEW_SELECTION.md** - Reference view strategy documentation
+
+### Implementation History
+- **DA3_CLI_INTEGRATION_COMPLETE.md** - CLI integration completion summary
+
+## Document Status
+
+All documents are version-controlled and reviewed by the Transformation Portal Architect.
+
+Last Updated: December 19, 2025
