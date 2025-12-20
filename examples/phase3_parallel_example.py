@@ -184,7 +184,7 @@ def example_5_gpu_comparison():
     processor_cpu.process_batch(items, compute_task)
     cpu_time = time.time() - start
     
-    print(f"\nCPU Mode (4 workers):")
+    print("\nCPU Mode (4 workers):")
     print(f"  Time: {cpu_time:.2f}s")
     print(f"  Throughput: {processor_cpu.stats.throughput_per_hour:.1f} items/hr")
     

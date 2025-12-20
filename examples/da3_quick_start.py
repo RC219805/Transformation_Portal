@@ -154,7 +154,7 @@ def process_image(image_path: Path, output_dir: Path):
             convert_to_metric=True
         )
         
-        print(f"   ✅ Success!")
+        print("   ✅ Success!")
         print(f"   Depth shape: {result.depth.shape}")
         print(f"   Output: {output_dir}")
         

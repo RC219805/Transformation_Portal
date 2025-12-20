@@ -4,17 +4,23 @@ import pytest
 import numpy as np
 from pathlib import Path
 
-# Skip all tests in this module if lux_depth_v3 dependencies are missing
-pytest.importorskip("cv2", reason="OpenCV not installed")
-pytest.importorskip("torch", reason="PyTorch not installed")
+# Try to import dependencies - skip entire module if unavailable
+try:
+    import cv2  # noqa: F401
+    import torch  # noqa: F401
+    from lux_depth_v3.metric_depth import (
+        MetricDepthConverter,
+        MetricDepthResult,
+        convert_to_metric_depth,
+        depth_to_meters,
+        get_depth_statistics
+    )
+    DEPS_AVAILABLE = True
+except ImportError as e:
+    DEPS_AVAILABLE = False
+    SKIP_REASON = f"Dependencies not available: {e}"
 
-from lux_depth_v3.metric_depth import (
-    MetricDepthConverter,
-    MetricDepthResult,
-    convert_to_metric_depth,
-    depth_to_meters,
-    get_depth_statistics
-)
+pytestmark = pytest.mark.skipif(not DEPS_AVAILABLE, reason=getattr(globals(), 'SKIP_REASON', 'Dependencies not available'))
 
 
 class TestMetricDepthConverter:

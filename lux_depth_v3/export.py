@@ -196,7 +196,7 @@ class Exporter:
         
         # Note: This requires trimesh or similar library
         # For now, we'll create a placeholder
-        print(f"GLB export not yet implemented, saving PLY instead")
+        print("GLB export not yet implemented, saving PLY instead")
         return self._export_ply(result, filename_base)
     
     def _export_tiff(

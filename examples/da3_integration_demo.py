@@ -67,7 +67,7 @@ def example_2_advanced_processing():
     
     if result.success:
         print("\n✅ Processing complete!")
-        print(f"\n📂 Output files:")
+        print("\n📂 Output files:")
         print(f"   Directory: {result.output_dir}")
         print(f"   3D Model: {result.glb_path}")
         print(f"   Depth Vis: {result.depth_vis_dir}")
@@ -78,7 +78,7 @@ def example_2_advanced_processing():
         conf = result.confidence_array
         
         if depth is not None:
-            print(f"\n📊 Depth Statistics:")
+            print("\n📊 Depth Statistics:")
             print(f"   Shape: {depth.shape}")
             print(f"   Min: {depth.min():.3f}")
             print(f"   Max: {depth.max():.3f}")
@@ -86,7 +86,7 @@ def example_2_advanced_processing():
             print(f"   Std: {depth.std():.3f}")
         
         if conf is not None:
-            print(f"\n📊 Confidence Statistics:")
+            print("\n📊 Confidence Statistics:")
             print(f"   Mean confidence: {conf.mean():.3f}")
             print(f"   Min confidence: {conf.min():.3f}")
     else:
@@ -113,7 +113,7 @@ def example_3_batch_processing():
     if result.success:
         print("✅ Batch processing complete!")
         print(f"   Output: {result.output_dir}")
-        print(f"   Check depth_vis/ folder for visualizations")
+        print("   Check depth_vis/ folder for visualizations")
     else:
         print(f"❌ Failed: {result.stderr}")
     
@@ -154,9 +154,9 @@ def example_4_metric_conversion():
         print("✅ Depth conversion example:")
         print(f"   Original range: [{depth.min():.3f}, {depth.max():.3f}]")
         print(f"   Metric range: [{depth_meters.min():.3f}, {depth_meters.max():.3f}]")
-        print(f"\n   Note: For accurate metric depth, use model='metric-large'")
+        print("\n   Note: For accurate metric depth, use model='metric-large'")
     else:
-        print(f"❌ Failed to load depth array")
+        print("❌ Failed to load depth array")
     
     print()
 
@@ -223,7 +223,7 @@ def example_6_pipeline_integration():
             )
             
             if not depth_result.success:
-                print(f"   ❌ Depth estimation failed")
+                print("   ❌ Depth estimation failed")
                 return None
             
             # Step 2: Load depth for further processing
@@ -233,7 +233,7 @@ def example_6_pipeline_integration():
             foreground_mask = depth[0] < depth[0].mean()  # Simple threshold
             background_mask = ~foreground_mask
             
-            print(f"   ✅ Depth estimated")
+            print("   ✅ Depth estimated")
             print(f"      Foreground: {foreground_mask.sum()} pixels")
             print(f"      Background: {background_mask.sum()} pixels")
             print(f"      Saved to: {output_dir / 'depth'}")
@@ -254,7 +254,7 @@ def example_6_pipeline_integration():
     )
     
     if result:
-        print(f"\n✅ Pipeline processing complete!")
+        print("\n✅ Pipeline processing complete!")
     
     print()
 

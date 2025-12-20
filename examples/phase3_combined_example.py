@@ -104,7 +104,7 @@ def example_1_sequential_baseline():
     elapsed = time.time() - start_time
     throughput = len(image_paths) / elapsed * 3600
     
-    print(f"\n\n✓ Sequential processing complete")
+    print("\n\n✓ Sequential processing complete")
     print(f"  Total time: {elapsed:.2f}s")
     print(f"  Time per image: {elapsed/len(image_paths):.2f}s")
     print(f"  Throughput: {throughput:.0f} images/hour")

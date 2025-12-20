@@ -205,7 +205,7 @@ def example_integration_with_existing_pipeline():
     #     save_intermediate=False
     # )
 
-    # print(f"✓ Pipeline complete with hyper-reality final polish")
+    # print("✓ Pipeline complete with hyper-reality final polish")
     # print(f"✓ Final quality: {hyper_results['quality_score']}/100")
 
     print("  See source code for integration template")

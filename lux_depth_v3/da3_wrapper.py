@@ -924,7 +924,7 @@ class DepthAnything3(nn.Module):
             Loaded model
         """
         print(f"[DA3 Wrapper] Loading placeholder model: {model_name}")
-        print(f"[DA3 Wrapper] This is a placeholder - replace with official DA3 API")
+        print("[DA3 Wrapper] This is a placeholder - replace with official DA3 API")
         
         model = cls(model_name, device, dtype)
         
