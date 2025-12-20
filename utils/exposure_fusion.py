@@ -246,7 +246,7 @@ class ExposureFusion:
         new_h, new_w = h // 2, w // 2
         
         img_pil = PILImage.fromarray((image * 255).astype(np.uint8))
-        downsampled = img_pil.resize((new_w, new_h), PILImage.BILINEAR)
+        downsampled = img_pil.resize((new_w, new_h), PILImage.Resampling.BILINEAR)
         return np.array(downsampled).astype(np.float32) / 255.0
     
     def _upsample(self, image: np.ndarray, target_shape: Tuple[int, int]) -> np.ndarray:
@@ -256,7 +256,7 @@ class ExposureFusion:
         target_h, target_w = target_shape
         
         img_pil = PILImage.fromarray((image * 255).astype(np.uint8))
-        upsampled = img_pil.resize((target_w, target_h), PILImage.BILINEAR)
+        upsampled = img_pil.resize((target_w, target_h), PILImage.Resampling.BILINEAR)
         return np.array(upsampled).astype(np.float32) / 255.0
     
     def _compute_quality_weight(self, image: np.ndarray) -> np.ndarray:
