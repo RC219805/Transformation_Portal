@@ -4,6 +4,10 @@ import pytest
 import numpy as np
 from pathlib import Path
 
+# Skip all tests in this module if lux_depth_v3 dependencies are missing
+pytest.importorskip("cv2", reason="OpenCV not installed")
+pytest.importorskip("torch", reason="PyTorch not installed")
+
 from lux_depth_v3.metric_depth import (
     MetricDepthConverter,
     MetricDepthResult,

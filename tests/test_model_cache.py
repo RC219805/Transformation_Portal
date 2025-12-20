@@ -6,6 +6,10 @@ import json
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 
+# Skip all tests in this module if lux_depth_v3 dependencies are missing
+pytest.importorskip("cv2", reason="OpenCV not installed")
+pytest.importorskip("torch", reason="PyTorch not installed")
+
 from lux_depth_v3.model_cache import (
     ModelCacheInfo,
     CacheStrategy,
