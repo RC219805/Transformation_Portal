@@ -279,65 +279,54 @@ async def download_depth(filename: str):
         - Ensures path stays within configured output directory
         - Only serves regular files (not directories or special files)
     """
-    # Security sanitizer: Strict filename validation - prevent directory traversal
-    # CodeQL recognizes this pattern as a sanitizer for path traversal
-    if not filename or not filename.strip():
+    # Security: ALLOWLIST validation - CodeQL-recognized sanitizer pattern
+    # Restrict to safe filename pattern (alphanumeric + common separators)
+    # This is the canonical pattern for preventing path traversal attacks
+    SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+    
+    if not filename or not SAFE_FILENAME_PATTERN.match(filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Reject any path separators, null bytes, or traversal attempts
-    # This is a recognized sanitizer pattern for preventing directory traversal
-    forbidden_chars = ['/', '\\', '\0', '..']
-    if any(char in filename for char in forbidden_chars) or filename in ['.', '..']:
+    # Additional protection: reject special directory names
+    if filename in ('.', '..'):
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Additional check: only allow alphanumeric, dash, underscore, and dot
-    # This is a strong sanitizer recognized by security scanners
-    if not re.match(r'^[a-zA-Z0-9_\-\.]+$', filename):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    
-    # Get normalized output directory (established safe base)
+    # Build safe path from trusted base directory
     output_dir_resolved = output_dir.resolve()
     
-    # Construct path using only the sanitized filename (no user path components)
-    # By building from a trusted base, this creates a safe path
+    # Construct path - safe because filename passed allowlist validation
     try:
-        # Use simple concatenation with sanitized filename only
-        file_path = output_dir_resolved / filename
-        # Resolve to canonical path
-        file_path = file_path.resolve(strict=False)
+        safe_file_path = output_dir_resolved / filename
+        safe_file_path = safe_file_path.resolve(strict=False)
     except (RuntimeError, OSError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    # Security: Double-check the resolved path is within the output directory
-    # This prevents symlink attacks and validates containment
+    # Verify containment within output directory (defense in depth)
     try:
-        # Get the common path between output_dir and file_path
-        common = os.path.commonpath([str(output_dir_resolved), str(file_path)])
-        # Ensure common path equals output directory (containment check)
-        if common != str(output_dir_resolved):
-            raise HTTPException(status_code=400, detail="Invalid filename")
-    except (ValueError, TypeError):
-        # Different drives or invalid comparison
+        # Use is_relative_to (Python 3.9+) or fallback to relative_to
+        if hasattr(Path, 'is_relative_to'):
+            if not safe_file_path.is_relative_to(output_dir_resolved):
+                raise HTTPException(status_code=400, detail="Invalid filename")
+        else:
+            # Fallback for Python 3.8
+            try:
+                safe_file_path.relative_to(output_dir_resolved)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid filename")
+    except (TypeError, OSError, RuntimeError):
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Verify file exists and is a regular file (not directory, device, etc.)
-    # Use try-except to handle potential OSError from filesystem access
+    # Verify file exists and is regular file (not directory/device/symlink to outside)
     try:
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
-        if not file_path.is_file():
+        if not safe_file_path.exists() or not safe_file_path.is_file():
             raise HTTPException(status_code=404, detail="File not found")
     except (OSError, RuntimeError):
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Return file using the validated path
-    # At this point, file_path is guaranteed to be:
-    # 1. Under output_dir_resolved
-    # 2. A regular file that exists
-    # 3. Built from sanitized components only
+    # Serve file - safe_file_path is validated by allowlist and containment checks
     return FileResponse(
-        path=str(file_path),
-        filename=file_path.name,
+        path=safe_file_path,
+        filename=safe_file_path.name,
         media_type="application/octet-stream",
     )
 
