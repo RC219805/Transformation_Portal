@@ -272,49 +272,65 @@ async def download_depth(filename: str):
     Returns:
         File response
     """
-    # Security: Basic validation - reject empty or absolute paths
-    if not filename:
+    # Security: Strict filename validation - prevent directory traversal
+    if not filename or not filename.strip():
         raise HTTPException(status_code=400, detail="Invalid filename")
     
+    # Reject any path separators or traversal attempts
+    if any(char in filename for char in ['/', '\\', '\0']) or filename in ['.', '..']:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Reject absolute paths
     candidate = Path(filename)
     if candidate.is_absolute():
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Construct path under the configured output directory
+    # Get normalized output directory
     output_dir_resolved = output_dir.resolve()
+    
+    # Construct path under the configured output directory
     try:
         file_path = (output_dir_resolved / candidate).resolve(strict=False)
-    except (RuntimeError, OSError):
+    except (RuntimeError, OSError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
     # Security: Ensure the resolved path is within the output directory
-    # Use is_relative_to when available (Python 3.9+), otherwise manual check
-    is_within_output_dir = False
-    if hasattr(file_path, "is_relative_to"):
-        try:
+    # This check prevents path traversal attacks (CWE-22)
+    try:
+        # Python 3.9+ has is_relative_to
+        if hasattr(file_path, "is_relative_to"):
             is_within_output_dir = file_path.is_relative_to(output_dir_resolved)
-        except (ValueError, TypeError):
+        else:
+            # Fallback: manual parent traversal for Python <3.9
             is_within_output_dir = False
-    else:
-        # Fallback for Python <3.9: walk parents
-        current = file_path
-        while True:
-            if current == output_dir_resolved:
-                is_within_output_dir = True
-                break
-            if current.parent == current:  # Reached filesystem root
-                break
-            current = current.parent
+            current = file_path
+            while True:
+                if current == output_dir_resolved:
+                    is_within_output_dir = True
+                    break
+                parent = current.parent
+                if parent == current:  # Reached filesystem root
+                    break
+                current = parent
+    except (ValueError, TypeError):
+        is_within_output_dir = False
 
     if not is_within_output_dir:
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Verify file exists and is a regular file
-    if not file_path.exists() or not file_path.is_file():
+    # Only allow regular files (not directories, symlinks to outside dirs, etc.)
+    try:
+        is_safe_file = file_path.exists() and file_path.is_file()
+    except (OSError, RuntimeError):
+        is_safe_file = False
+    
+    if not is_safe_file:
         raise HTTPException(status_code=404, detail="File not found")
 
+    # Use the validated, resolved path for file response
+    safe_path = str(file_path)
     return FileResponse(
-        path=str(file_path),
+        path=safe_path,
         filename=file_path.name,
         media_type="application/octet-stream",
     )
