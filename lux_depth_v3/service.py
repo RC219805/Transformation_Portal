@@ -33,6 +33,8 @@ from lux_depth_v3.export import Exporter
 
 # Security configuration
 MAX_FILE_SIZE_MB = 50
+# Canonical allowlist pattern for filenames (letters, digits, dot, underscore, dash)
+SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_.-]+$')
 MAX_IMAGE_DIMENSION = 4096
 RATE_LIMIT_REQUESTS_PER_MINUTE = 60
 
@@ -279,26 +281,21 @@ async def download_depth(filename: str):
         - Ensures path stays within configured output directory
         - Only serves regular files (not directories or special files)
     """
-    # Security: Canonical allowlist pattern (CodeQL-recognized sanitizer)
-    SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_.-]+$')
-    
     if not filename or not SAFE_FILENAME_PATTERN.fullmatch(filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
-    
+
     if filename in {".", ".."}:
         raise HTTPException(status_code=400, detail="Invalid filename")
-    
-    # Resolve base directory to canonical absolute path
-    output_dir_resolved = output_dir.resolve(strict=True)
-    
-    # Build and resolve candidate path with strict validation
+
     try:
-        safe_file_path = (output_dir_resolved / filename).resolve(strict=True)
+        # Build candidate path and normalize without requiring existence
+        candidate_path = output_dir / filename
+        safe_file_path = candidate_path.resolve(strict=False)
         # Verify containment using relative_to (canonical CodeQL pattern)
-        safe_file_path.relative_to(output_dir_resolved)
+        safe_file_path.relative_to(output_dir)
     except (ValueError, OSError):
         raise HTTPException(status_code=400, detail="Invalid filename")
-    
+
     # Verify it's a regular file
     if not safe_file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
