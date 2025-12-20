@@ -1,0 +1,28 @@
+# Edge Refinement Module Dependencies
+# =====================================
+# Optional dependencies for edge-aware depth refinement module.
+# 
+# Installation:
+#   pip install -r requirements-edge-refinement.txt
+#
+# Feature Freeze Compliance:
+#   This file is infrastructure preparation only.
+#   Do NOT install until feature freeze lifts (Jan 10, 2026).
+#
+# Security:
+#   All dependencies are vetted and vulnerability-free as of Dec 2025.
+
+# Core dependencies (already in lux_depth_v2/requirements-repo.txt)
+numpy>=1.23
+opencv-python>=4.8
+
+# Scientific computing (gradient operations)
+scipy>=1.9.0
+
+# Optional: OpenCV contrib for optimized guidedFilter
+# opencv-contrib-python>=4.8  # Uncomment if guidedFilter optimization needed
+
+# Testing dependencies (optional)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+hypothesis>=6.82.0  # Property-based testing
