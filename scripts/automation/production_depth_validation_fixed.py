@@ -33,8 +33,9 @@ import cv2
 import numpy as np
 from PIL import Image
 
-# Add high_fidelity_depth to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
 from high_fidelity_depth.quality_metrics import (
