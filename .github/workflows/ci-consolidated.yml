@@ -89,6 +89,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          submodules: recursive
           
       - name: Detect Changed Files
         id: changes
@@ -202,6 +203,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -306,6 +309,8 @@ jobs:
           
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -376,6 +381,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -478,6 +485,8 @@ jobs:
           
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -578,6 +587,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -717,6 +728,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
@@ -813,6 +826,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -886,6 +901,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -919,6 +936,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          submodules: recursive
         
       - name: Setup Python
         uses: actions/setup-python@v6
