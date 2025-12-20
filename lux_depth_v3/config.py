@@ -521,6 +521,42 @@ class PreprocessingConfig:
 
 
 @dataclass
+class RefinementConfig:
+    """Edge-aware refinement configuration for depth maps.
+    
+    Research-backed post-processing techniques to improve edge fidelity
+    without sacrificing depth accuracy.
+    """
+    
+    # Enable refinement pipeline
+    enable_refinement: bool = False
+    
+    # Refinement stages (executed in order)
+    stages: List[str] = field(default_factory=lambda: ["guided", "bilateral", "edge"])
+    
+    # Bilateral filtering (edge-preserving smoothing)
+    enable_bilateral: bool = True
+    bilateral_d: int = 9  # Diameter of pixel neighborhood
+    bilateral_sigma_color: float = 75.0  # Filter sigma in depth value space
+    bilateral_sigma_space: float = 75.0  # Filter sigma in pixel space
+    
+    # Guided filter (RGB-guided edge preservation)
+    enable_guided: bool = True
+    guided_radius: int = 8  # Filter radius
+    guided_eps: float = 0.01  # Regularization (smaller = more edge-preserving)
+    
+    # Edge-guided enhancement
+    enable_edge: bool = True
+    edge_canny_low: float = 50.0  # Canny edge detection low threshold
+    edge_canny_high: float = 150.0  # Canny edge detection high threshold
+    edge_blend_sigma: float = 7.0  # Gaussian blur sigma for non-edge regions
+    
+    # Gradient consistency filtering
+    enable_gradient: bool = False
+    gradient_threshold: float = 0.1  # Gradient magnitude threshold for smoothing
+
+
+@dataclass
 class PostprocessingConfig:
     """Postprocessing configuration."""
     
@@ -539,6 +575,9 @@ class PostprocessingConfig:
     # Edge preservation
     preserve_edges: bool = True
     edge_threshold: float = 0.1
+    
+    # Edge-aware refinement (new)
+    refinement: RefinementConfig = field(default_factory=RefinementConfig)
     
     # Multi-view fusion
     fusion_mode: str = "weighted"  # "weighted", "median", "mean"

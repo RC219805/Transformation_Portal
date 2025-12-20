@@ -14,6 +14,7 @@ from scipy.ndimage import median_filter
 
 from lux_depth_v3.config import PostprocessingConfig
 from lux_depth_v3.inference import DepthResult
+from lux_depth_v3.edge_refinement import DepthRefiner
 
 
 class Postprocessor:
@@ -26,6 +27,9 @@ class Postprocessor:
             config: Postprocessing configuration
         """
         self.config = config
+        
+        # Initialize edge refinement module
+        self.refiner = DepthRefiner(config.refinement)
     
     def process(self, result: DepthResult) -> DepthResult:
         """Apply postprocessing to depth result.
@@ -62,9 +66,14 @@ class Postprocessor:
                 self.config.edge_threshold,
             )
         
+        # Edge-aware refinement (new)
+        if self.config.refinement.enable_refinement:
+            depth = self.refiner.refine(depth, result.original_image)
+        
         # Update result
         result.depth_map = depth
         result.metadata["postprocessing"] = self.config.__dict__
+        result.metadata["refinement"] = self.refiner.get_stats()
         
         return result
     
