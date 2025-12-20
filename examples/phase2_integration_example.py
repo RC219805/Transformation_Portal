@@ -42,10 +42,10 @@ def process_luxury_image_phase2(
     if enable_profiling:
         profiler = PerformanceProfiler(session_id=f"phase2_{image_path.stem}")
     
-    print(f"\n{'='*70}")
-    print(f"Phase 2 Processing Pipeline")
-    print(f"{'='*70}\n")
-    print(f"Input: {image_path}")
+    print("\n" + "="*70)
+    print("Phase 2 Processing Pipeline")
+    print("="*70 + "\n")
+    print("Input:", image_path)
     
     # Load image
     if profiler:
