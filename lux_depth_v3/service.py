@@ -114,8 +114,11 @@ def check_rate_limit(client_ip: str) -> bool:
 @app.on_event("startup")
 async def startup_event():
     """Initialize service on startup."""
-    global inference_engine
+    global inference_engine, output_dir
 
+    # Resolve output_dir to absolute path for security validation
+    output_dir = output_dir.resolve()
+    
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -289,8 +292,15 @@ async def download_depth(filename: str):
 
     try:
         # Build candidate path and normalize without requiring existence
-        candidate_path = output_dir / filename
-        safe_file_path = candidate_path.resolve(strict=False)
+        # CodeQL suppression: False positive - Defense in depth applied:
+        # 1. Filename sanitized by SAFE_FILENAME_PATTERN allowlist (line 287) - prevents "../" and absolute paths
+        # 2. output_dir resolved to absolute path in startup_event() (line 120) - ensures base is canonical
+        # 3. candidate_path built using safe Path concatenation - no string interpolation
+        # 4. resolve(strict=False) normalizes path - handles symlinks and ".." components
+        # 5. relative_to() verifies containment - raises ValueError if path escapes output_dir
+        # This pattern follows CodeQL's recommended approach for path traversal prevention.
+        candidate_path = output_dir / filename  # lgtm[py/path-injection]
+        safe_file_path = candidate_path.resolve(strict=False)  # lgtm[py/path-injection]
         # Verify containment using relative_to (canonical CodeQL pattern)
         safe_file_path.relative_to(output_dir)
     except (ValueError, OSError):
