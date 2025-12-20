@@ -1,0 +1,17 @@
+{
+  "bilateral_d": 9,
+  "bilateral_sigma_color": 75.0,
+  "bilateral_sigma_space": 75.0,
+  "guided_radius": 8,
+  "guided_eps": 0.01,
+  "edge_canny_low": 50,
+  "edge_canny_high": 150,
+  "edge_blur_sigma": 1.0,
+  "gradient_smooth_sigma": 1.5,
+  "gradient_threshold_percentile": 50.0,
+  "use_bilateral_first": true,
+  "use_gradient_alignment": true,
+  "use_edge_preservation": true,
+  "preserve_16bit": true,
+  "normalize_output": true
+}
