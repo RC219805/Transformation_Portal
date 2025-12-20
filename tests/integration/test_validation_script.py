@@ -19,6 +19,7 @@ except ImportError:
     HAS_ML_DEPS = False
 
 
+@pytest.mark.skipif(not HAS_ML_DEPS, reason="PyTorch and transformers required")
 @pytest.fixture
 def test_image_dir(tmp_path):
     """Create test images."""
@@ -35,6 +36,7 @@ def test_image_dir(tmp_path):
 
 @pytest.mark.integration  # Skip in core test runs
 @pytest.mark.skipif(not HAS_ML_DEPS, reason="Requires PyTorch and transformers")
+@pytest.mark.skipif(not HAS_ML_DEPS, reason="PyTorch and transformers required")
 def test_validation_script_calls_v2_classifier(test_image_dir, tmp_path):
     """
     Integration test: validation script must call V2 classifier.
