@@ -216,7 +216,7 @@ def validate_license_system(report: DA3ValidationReport):
         validator = LicenseValidator()
         info = validator.get_license_info(ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1)
         
-        if info['commercial_allowed'] == False:
+        if not info['commercial_allowed']:
             report.test_passed("License info (NC detection)")
         else:
             report.test_failed("License info", "Expected commercial=False for NC model")

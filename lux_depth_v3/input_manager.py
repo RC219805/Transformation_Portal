@@ -270,7 +270,7 @@ class InputManager:
                     raise ValueError(f"Image {i} has invalid dtype: {array.dtype}")
                 
             except Exception as e:
-                raise ValueError(f"Failed to validate image {i}: {e}")
+                raise ValueError(f"Failed to validate image {i}: {e}") from e
         
         return True
     
