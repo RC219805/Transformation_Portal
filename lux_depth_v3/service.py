@@ -272,6 +272,12 @@ async def download_depth(filename: str):
     Returns:
         File response
     """
+    import os
+    
+    # Security: Reject invalid filenames upfront (prevent directory traversal)
+    if not filename or any(sep in filename for sep in ("/", "\\", "..")):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
     file_path = output_dir / filename
 
     # Security: resolve and validate path (prevent directory traversal)
@@ -281,16 +287,23 @@ async def download_depth(filename: str):
         # In case of resolution errors, treat as invalid
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    # Ensure the resolved path stays within the output directory
-    if not resolved_path.is_relative_to(output_dir):
+    # Robust containment check (CodeQL-friendly)
+    output_dir_resolved = output_dir.resolve()
+    output_dir_str = str(output_dir_resolved)
+    resolved_str = str(resolved_path)
+    
+    # Check if resolved path is within output directory
+    if not (resolved_str == output_dir_str or 
+            resolved_str.startswith(output_dir_str + os.sep)):
         raise HTTPException(status_code=400, detail="Invalid filename")
-
-    if not resolved_path.exists():
+    
+    # Verify file exists and is a regular file
+    if not resolved_path.exists() or not resolved_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(
         path=resolved_path,
-        filename=filename,
+        filename=resolved_path.name,  # Use actual filename from path
         media_type="application/octet-stream",
     )
 
