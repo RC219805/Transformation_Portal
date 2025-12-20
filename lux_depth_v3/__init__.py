@@ -51,25 +51,44 @@ from lux_depth_v3.config import (
     Preset,
 )
 from lux_depth_v3.input_manager import InputManager, ImageInput
-from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.validation import DepthQualityMetrics
-from lux_depth_v3.da3_wrapper import (
-    DA3Backend,
-    DA3CLI,
-    check_da3_cli_available,
-)
-from lux_depth_v3.reference_view import (
-    RefViewStrategy,
-    RefViewSelectionResult,
-    ReferenceViewSelector,
-    select_reference_view,
-)
-from lux_depth_v3.da3_integration import (
-    DA3DepthEstimator,
-    DA3Result,
-    estimate_depth,
-    convert_to_metric_depth,
-)
+
+# Lazy imports for optional DA3 components (may require GPU/torch)
+try:
+    from lux_depth_v3.inference import DA3InferenceEngine
+    from lux_depth_v3.da3_wrapper import (
+        DA3Backend,
+        DA3CLI,
+        check_da3_cli_available,
+    )
+    from lux_depth_v3.reference_view import (
+        RefViewStrategy,
+        RefViewSelectionResult,
+        ReferenceViewSelector,
+        select_reference_view,
+    )
+    from lux_depth_v3.da3_integration import (
+        DA3DepthEstimator,
+        DA3Result,
+        estimate_depth,
+        convert_to_metric_depth,
+    )
+    _DA3_AVAILABLE = True
+except Exception:
+    # Graceful degradation when DA3 dependencies unavailable
+    DA3InferenceEngine = None
+    DA3Backend = None
+    DA3CLI = None
+    check_da3_cli_available = None
+    RefViewStrategy = None
+    RefViewSelectionResult = None
+    ReferenceViewSelector = None
+    select_reference_view = None
+    DA3DepthEstimator = None
+    DA3Result = None
+    estimate_depth = None
+    convert_to_metric_depth = None
+    _DA3_AVAILABLE = False
 
 __all__ = [
     "__version__",
