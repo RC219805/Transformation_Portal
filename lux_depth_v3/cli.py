@@ -18,12 +18,15 @@ from lux_depth_v3.config import (
     InferenceMode,
     Preset,
     ExportFormat,
+    PostprocessingConfig,
+    RefinementConfig,
 )
 from lux_depth_v3.input_manager import InputManager
 from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.postprocessing import Postprocessor
 from lux_depth_v3.validation import DepthValidator, ValidationReport
 from lux_depth_v3.export import Exporter
+from lux_depth_v3.edge_refinement import create_refinement_preset
 
 app = typer.Typer(
     name="lux-depth-v3",
@@ -117,6 +120,23 @@ def process(
         False,
         "--bilateral-filter",
         help="Apply bilateral filtering",
+    ),
+    
+    # Edge-aware refinement (new)
+    enable_refinement: bool = typer.Option(
+        False,
+        "--enable-refinement",
+        help="Enable edge-aware refinement post-processing",
+    ),
+    refinement_preset: str = typer.Option(
+        "balanced",
+        "--refinement-preset",
+        help="Refinement preset (balanced, aggressive, conservative, edge_focused)",
+    ),
+    refinement_stages: Optional[str] = typer.Option(
+        None,
+        "--refinement-stages",
+        help="Comma-separated refinement stages (guided,bilateral,edge,gradient)",
     ),
     
     # Metric depth conversion
@@ -232,6 +252,18 @@ def process(
     config.validation.enable_validation = validate
     config.validation.ground_truth_path = ground_truth_dir
     
+    # Configure edge-aware refinement
+    if enable_refinement:
+        # Use preset or create custom config
+        refinement_config = create_refinement_preset(refinement_preset)
+        
+        # Override stages if specified
+        if refinement_stages is not None:
+            stages = [s.strip() for s in refinement_stages.split(",")]
+            refinement_config.stages = stages
+        
+        config.postprocessing.refinement = refinement_config
+    
     if verbose:
         print("Configuration:")
         print(f"  Model: {config.model_variant.value}")
@@ -239,6 +271,8 @@ def process(
         print(f"  Device: {config.device.device}")
         print(f"  Precision: {config.device.precision}")
         print(f"  Output: {output_dir}")
+        if enable_refinement:
+            print(f"  Refinement: {refinement_preset} ({', '.join(config.postprocessing.refinement.stages)})")
     
     # Initialize pipeline components
     input_manager = InputManager(inference_mode=config.inference_mode)
