@@ -34,7 +34,7 @@ def test_depth_config():
     
     assert config.model_name == "depth-anything/Depth-Anything-V2-Large-hf"
     assert config.tile_size == 1024
-    assert config.overlap == 192  # Increased for texture-heavy scenes
+    assert config.overlap == 192  # Updated from 128 → 192 for texture-heavy scenes
     assert config.reconcile_scales == True
 
 
@@ -97,6 +97,7 @@ def test_validation_metrics():
     
     metrics = validate_depth_quality(img, depth, dilation=3)
     
+    # Use edge_alignment_corr (correlation metric) - edge_alignment was renamed
     assert 0.0 <= metrics.edge_alignment_corr <= 1.0
     assert 0.0 <= metrics.edge_overlap <= 1.0
     assert metrics.edge_width > 0

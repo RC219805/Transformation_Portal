@@ -31,8 +31,15 @@ def test_validation_script_calls_v2_classifier(test_image_dir, tmp_path):
     
     This test would have caught the P0 silent failure.
     """
+    import os
+    
     output_dir = tmp_path / "output"
     output_dir.mkdir()
+    
+    # Set PYTHONPATH to include project root
+    env = os.environ.copy()
+    project_root = Path(__file__).parent.parent.parent
+    env['PYTHONPATH'] = str(project_root)
     
     # Run validation script
     result = subprocess.run(
@@ -45,7 +52,9 @@ def test_validation_script_calls_v2_classifier(test_image_dir, tmp_path):
             "--overlap", "64"
         ],
         capture_output=True,
-        text=True
+        text=True,
+        env=env,
+        cwd=str(project_root)
     )
     
     # Must exit 0 (success)
