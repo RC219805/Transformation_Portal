@@ -84,6 +84,52 @@ output_dir: Path = Path("service_output")
 request_timestamps: List[float] = []
 
 
+def sanitize_and_validate_filepath(filename: str, base_dir: Path) -> Path:
+    """Sanitize and validate a user-provided filename for safe file access.
+    
+    This function implements defense-in-depth path traversal prevention:
+    1. Allowlist validation: Only alphanumeric, dots, dashes, underscores
+    2. Explicit dot-dot blocking
+    3. Path normalization
+    4. Containment verification
+    
+    Args:
+        filename: User-provided filename to validate
+        base_dir: Trusted base directory (must be absolute)
+        
+    Returns:
+        Validated absolute Path object within base_dir
+        
+    Raises:
+        ValueError: If filename is invalid or path escapes base_dir
+        
+    Security:
+        CWE-22 Path Traversal Prevention
+        OWASP A01:2021 Broken Access Control
+    """
+    # Layer 1: Allowlist validation (blocks "../", absolute paths, special chars)
+    if not filename or not SAFE_FILENAME_PATTERN.fullmatch(filename):
+        raise ValueError(f"Invalid filename format: {filename}")
+    
+    # Layer 2: Explicit dot-dot blocking
+    if filename in {".", ".."}:
+        raise ValueError("Filename cannot be '.' or '..'")
+    
+    # Layer 3: Safe path construction (no string interpolation)
+    candidate_path = base_dir / filename
+    
+    # Layer 4: Path normalization (resolves symlinks and ".." components)
+    normalized_path = candidate_path.resolve(strict=False)
+    
+    # Layer 5: Containment verification (ensures path stays within base_dir)
+    try:
+        normalized_path.relative_to(base_dir)
+    except ValueError as e:
+        raise ValueError(f"Path escapes base directory: {filename}") from e
+    
+    return normalized_path
+
+
 def check_rate_limit(client_ip: str) -> bool:
     """Check if request is within rate limit.
 
@@ -284,29 +330,15 @@ async def download_depth(filename: str):
         - Ensures path stays within configured output directory
         - Only serves regular files (not directories or special files)
     """
-    if not filename or not SAFE_FILENAME_PATTERN.fullmatch(filename):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    if filename in {".", ".."}:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
     try:
-        # Build candidate path and normalize without requiring existence
-        # CodeQL suppression: False positive - Defense in depth applied:
-        # 1. Filename sanitized by SAFE_FILENAME_PATTERN allowlist (line 287) - prevents "../" and absolute paths
-        # 2. output_dir resolved to absolute path in startup_event() (line 120) - ensures base is canonical
-        # 3. candidate_path built using safe Path concatenation - no string interpolation
-        # 4. resolve(strict=False) normalizes path - handles symlinks and ".." components
-        # 5. relative_to() verifies containment - raises ValueError if path escapes output_dir
-        # This pattern follows CodeQL's recommended approach for path traversal prevention.
-        candidate_path = output_dir / filename  # lgtm[py/path-injection]
-        safe_file_path = candidate_path.resolve(strict=False)  # lgtm[py/path-injection]
-        # Verify containment using relative_to (canonical CodeQL pattern)
-        safe_file_path.relative_to(output_dir)
-    except (ValueError, OSError):
+        # Sanitize and validate filepath (defense-in-depth: allowlist, normalization, containment)
+        safe_file_path = sanitize_and_validate_filepath(filename, output_dir)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except OSError as e:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    # Verify it's a regular file
+    # Verify it's a regular file (not directory or special file)
     if not safe_file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
