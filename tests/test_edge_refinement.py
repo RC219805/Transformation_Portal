@@ -6,11 +6,21 @@ Validates edge preservation, smoothing behavior, and metric improvements.
 import numpy as np
 import pytest
 
-from lux_depth_v3.edge_refinement import (
-    DepthRefiner,
-    create_refinement_preset,
-)
-from lux_depth_v3.config import RefinementConfig
+# Mark all tests in this module as requiring ML dependencies
+pytestmark = pytest.mark.ml
+
+try:
+    from lux_depth_v3.edge_refinement import (
+        DepthRefiner,
+        create_refinement_preset,
+    )
+    from lux_depth_v3.config import RefinementConfig
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+    DepthRefiner = None
+    create_refinement_preset = None
+    RefinementConfig = None
 
 
 @pytest.fixture
