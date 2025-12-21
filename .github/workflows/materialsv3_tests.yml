@@ -118,7 +118,6 @@ jobs:
     - name: Verify Exception Handling in Pipeline
       run: |
         python -c "
-        from lux_depth_v2.pipeline import DepthPipeline
         from pathlib import Path
         
         # Verify MaterialsV3 exception handling is present
