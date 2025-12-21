@@ -246,11 +246,11 @@ class UpscalingEngine:
         """Load Real-ESRGAN model."""
         try:
             from basicsr_tp.archs.rrdbnet_arch import RRDBNet
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
                 "Real-ESRGAN requires basicsr_tp. "
                 "Ensure basicsr_tp/archs/rrdbnet_arch.py is available."
-            )
+            ) from exc
         
         # Standard 4x model
         if model_type == UpscalingModel.REALESRGAN_4X:
@@ -291,12 +291,12 @@ class UpscalingEngine:
         try:
             # Try loading from local implementation first
             from utils.swinir_arch import SwinIR
-        except ImportError:
+        except ImportError as exc:
             logger.error("SwinIR architecture not found in utils/")
             raise ImportError(
                 "SwinIR requires swinir_arch.py. "
                 "Download from: https://github.com/JingyunLiang/SwinIR"
-            )
+            ) from exc
         
         # SwinIR Real-world 4x configuration
         if model_type == UpscalingModel.SWINIR_REAL_4X:
