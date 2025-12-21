@@ -108,6 +108,9 @@ jobs:
               - 'lux_depth_v2/lighting_detector.py'
               - 'tests/test_phase2_*.py'
               - 'bench/bench_phase2.py'
+            materials_v3:
+              - 'lux_depth_v2/materials_v3*.py'
+              - 'tests/test_materials_v3_*.py'
             tests:
               - 'tests/**'
             docs:
@@ -819,6 +822,86 @@ jobs:
           fi
 
   # ===========================================================================
+  # Stage 4.6: Materials V3 Tests (Conditional ML Integration)
+  # ===========================================================================
+  test-materials-v3:
+    name: Materials V3 Tests (Python ${{ matrix.python-version }})
+    needs: [setup, lint, test-core]
+    if: |
+      always() && 
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      needs.test-core.result == 'success' &&
+      (contains(needs.setup.outputs.changed-files, 'lux_depth_v2/materials_v3') || 
+       contains(needs.setup.outputs.changed-files, 'tests/test_materials_v3') || 
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJson(needs.setup.outputs.python-matrix) }}
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          
+      - name: Install Materials V3 Dependencies
+        run: |
+          pip install --upgrade pip wheel
+          
+          # PyTorch CPU (required for Materials V3)
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          
+          # Transformer stack (SegFormer, CLIP)
+          pip install transformers accelerate safetensors
+          
+          # Core dependencies
+          pip install -c requirements/constraints.txt -r requirements-ci.txt
+          pip install -c requirements/constraints.txt -e .
+          
+          # Test dependencies
+          pip install pytest pytest-cov pytest-asyncio
+          
+      - name: Verify PyTorch Availability
+        run: |
+          python -c "
+          import torch
+          print(f'✅ PyTorch {torch.__version__} available')
+          print(f'Device: {torch.device(\"cpu\")}')
+          "
+          
+      - name: Run Materials V3 Core Tests
+        run: |
+          # Run all Materials V3 tests EXCEPT stress tests (separate workflow)
+          pytest tests/test_materials_v3_*.py \
+            -v --tb=short \
+            -k "not stress_1000 and not nightly" \
+            --maxfail=5
+            
+      - name: Run Materials V3 Edge Case Tests
+        run: |
+          pytest tests/test_materials_v3_edge_cases.py \
+            -v --tb=short \
+            --maxfail=3
+            
+      - name: Upload Materials V3 Test Results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: materials-v3-test-results-py${{ matrix.python-version }}
+          path: |
+            test-results/
+            .pytest_cache/
+          retention-days: 7
+
+  # ===========================================================================
   # Stage 5: RAG System Validation
   # ===========================================================================
   rag-validation:
@@ -972,7 +1055,7 @@ jobs:
   # ===========================================================================
   summary:
     name: Pipeline Summary
-    needs: [setup, lint, test-core, test-ml, benchmark-phase2, test-lux-depth-v2, rag-validation, build, manifest]
+    needs: [setup, lint, test-core, test-ml, benchmark-phase2, test-lux-depth-v2, test-materials-v3, rag-validation, build, manifest]
     if: always()
     runs-on: ubuntu-24.04
     
@@ -989,6 +1072,7 @@ jobs:
           echo "| ML Tests | ${{ needs.test-ml.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 2 Benchmark | ${{ needs.benchmark-phase2.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Lux Depth V2 Tests | ${{ needs.test-lux-depth-v2.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Materials V3 Tests | ${{ needs.test-materials-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| RAG Validation | ${{ needs.rag-validation.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Manifest | ${{ needs.manifest.result }} |" >> $GITHUB_STEP_SUMMARY
