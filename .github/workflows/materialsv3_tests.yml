@@ -36,6 +36,7 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install transformers accelerate safetensors pillow
     
     - name: Run MaterialsV3 Edge Case Tests
       run: |
@@ -72,6 +73,7 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install transformers accelerate safetensors pillow
     
     - name: Run MaterialsV3 Stress Tests
       run: |
@@ -107,6 +109,7 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install transformers accelerate safetensors pillow
     
     - name: Run MaterialsV3 Safety Tests
       run: |
