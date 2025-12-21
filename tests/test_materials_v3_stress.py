@@ -60,15 +60,20 @@ class TestMaterialsV3Stress:
         out_dir.mkdir(exist_ok=True)
         return out_dir
     
-    def test_1000_iteration_stability(self, sample_image, output_dir):
-        """MaterialsV3 should be stable over 1000+ iterations."""
+    @pytest.fixture
+    def ci_safe_config(self, tmp_path):
+        """Create CI-safe config with heuristic backend."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
-            output_dir=output_dir,
-            write_outputs=False  # Disable file writes to speed up test
+            output_dir=tmp_path / "ci_output",
+            write_outputs=False
         )
-        
-        pipeline = LuxPipelineV2(config)
+        config.segmentation.backend = "heuristic"
+        return config
+    
+    def test_1000_iteration_stability(self, sample_image, ci_safe_config, output_dir):
+        """MaterialsV3 should be stable over 1000+ iterations."""
+        pipeline = LuxPipelineV2(ci_safe_config)
         
         # Track results
         results = []
@@ -83,10 +88,7 @@ class TestMaterialsV3Stress:
         
         for i in range(1000):
             try:
-                result = pipeline.process_one(
-                    sample_image, 
-                    output_dir=output_dir / f"iter_{i}"
-                )
+                result = pipeline.process_one(sample_image)
                 results.append(result)
                 
                 # Check for fallback
@@ -130,7 +132,7 @@ class TestMaterialsV3Stress:
             f"Unexpected fallbacks: {fallback_count}/1000 ({fallback_count/10:.1f}%)\n" + \
             f"Errors: {errors[:5]}"
     
-    def test_batch_processing_100_images(self, tmp_path, output_dir):
+    def test_batch_processing_100_images(self, tmp_path, ci_safe_config, output_dir):
         """MaterialsV3 should handle batch processing without crashes."""
         # Generate 100 synthetic images with varying characteristics
         image_paths = []
@@ -157,13 +159,7 @@ class TestMaterialsV3Stress:
             img.save(img_path, quality=90)
             image_paths.append(img_path)
         
-        config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
-            output_dir=output_dir,
-            write_outputs=False  # Speed up test
-        )
-        
-        pipeline = LuxPipelineV2(config)
+        pipeline = LuxPipelineV2(ci_safe_config)
         
         # Process batch
         results = []
@@ -243,11 +239,13 @@ class TestMaterialsV3Stress:
             """Worker function for multiprocessing."""
             img_path, output_dir, worker_id = args
             
+            # Create CI-safe config in worker process
             config = PipelineConfig(
                 preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
                 output_dir=output_dir,
                 write_outputs=False
             )
+            config.segmentation.backend = "heuristic"
             
             pipeline = LuxPipelineV2(config)
             
@@ -304,15 +302,9 @@ class TestMaterialsV3Stress:
         assert len(fallbacks) == 0, \
             f"Concurrent execution had unexpected fallbacks: {fallbacks}"
     
-    def test_memory_stability_over_iterations(self, sample_image, output_dir):
+    def test_memory_stability_over_iterations(self, sample_image, ci_safe_config):
         """MaterialsV3 should not leak memory over multiple iterations."""
-        config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
-            output_dir=output_dir,
-            write_outputs=False
-        )
-        
-        pipeline = LuxPipelineV2(config)
+        pipeline = LuxPipelineV2(ci_safe_config)
         
         # Measure memory usage
         try:
@@ -359,7 +351,7 @@ class TestMaterialsV3Stress:
         except ImportError:
             pytest.skip("psutil not available for memory profiling")
     
-    def test_gpu_memory_exhaustion_fallback(self, tmp_path, output_dir):
+    def test_gpu_memory_exhaustion_fallback(self, tmp_path, ci_safe_config):
         """MaterialsV3 should fallback gracefully if GPU OOM occurs."""
         # Create a very large image that might trigger GPU OOM
         large_img_path = tmp_path / "gpu_stress_image.jpg"
@@ -367,13 +359,9 @@ class TestMaterialsV3Stress:
         large_img = Image.new('RGB', (4096, 4096), color=(128, 128, 128))
         large_img.save(large_img_path, quality=95)
         
-        config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
-            output_dir=output_dir,
-            max_megapixels=50  # Allow large image
-        )
+        ci_safe_config.max_megapixels = 50  # Allow large image
         
-        pipeline = LuxPipelineV2(config)
+        pipeline = LuxPipelineV2(ci_safe_config)
         
         # Mock GPU to simulate OOM
         def mock_gpu_oom(*args, **kwargs):
@@ -399,15 +387,9 @@ class TestMaterialsV3Stress:
             error_msg = str(e).lower()
             assert 'fallback' in error_msg or 'materials_v3' not in error_msg
     
-    def test_result_consistency_across_iterations(self, sample_image, output_dir):
+    def test_result_consistency_across_iterations(self, sample_image, ci_safe_config):
         """MaterialsV3 should produce consistent results for same input."""
-        config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
-            output_dir=output_dir,
-            write_outputs=False
-        )
-        
-        pipeline = LuxPipelineV2(config)
+        pipeline = LuxPipelineV2(ci_safe_config)
         
         # Process same image 10 times
         results = []
@@ -440,25 +422,35 @@ class TestMaterialsV3Stress:
 class TestMaterialsV3StressScenarios:
     """Additional stress scenarios."""
     
-    def test_rapid_pipeline_creation_destruction(self, tmp_path):
+    @pytest.fixture
+    def ci_safe_config(self, tmp_path):
+        """Create CI-safe config with heuristic backend."""
+        config = PipelineConfig(
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=tmp_path / "ci_output",
+            write_outputs=False
+        )
+        config.segmentation.backend = "heuristic"
+        return config
+    
+    def test_rapid_pipeline_creation_destruction(self, tmp_path, ci_safe_config):
         """Rapidly creating/destroying pipelines should not leak resources."""
         sample_image = tmp_path / "sample.jpg"
         img = Image.new('RGB', (256, 256), color=(128, 128, 128))
         img.save(sample_image, quality=95)
-        
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
         
         print(f"\n{'='*60}")
         print(f"Rapid pipeline creation/destruction test (50 cycles)...")
         print(f"{'='*60}")
         
         for i in range(50):
+            # Create new config for each cycle to test resource cleanup
             config = PipelineConfig(
                 preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
-                output_dir=output_dir,
+                output_dir=tmp_path / "output",
                 write_outputs=False
             )
+            config.segmentation.backend = "heuristic"
             
             pipeline = LuxPipelineV2(config)
             

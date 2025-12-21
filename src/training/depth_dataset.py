@@ -527,7 +527,7 @@ def create_data_loaders(
             )
         except FileNotFoundError:
             logger.warning(
-                "Validation directory not found, using 10%% of training data"
+                "Validation directory not found, using 10%s of training data", "%"
             )
             val_size = int(len(train_dataset) * 0.1)
             train_size = len(train_dataset) - val_size
