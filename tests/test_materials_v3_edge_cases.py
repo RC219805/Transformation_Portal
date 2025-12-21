@@ -77,10 +77,9 @@ class TestMaterialsV3EdgeCases:
         
         NOTE: This fixture requires PyTorch. Tests using it will be skipped if PyTorch is unavailable.
         """
-        pytest.importorskip("torch", reason="PyTorch required for V2 pipeline")
-        
-        from lux_depth_v2.pipeline import LuxPipelineV2
-        from lux_depth_v2.config import PipelineConfig, Preset
+        # Skip the entire fixture if PyTorch is not available
+        if not TORCH_AVAILABLE:
+            pytest.skip("PyTorch required for V2 pipeline")
         
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
