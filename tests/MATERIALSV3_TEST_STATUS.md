@@ -12,13 +12,41 @@
 
 **Pass Rate**: 100% (20/20 executed tests)
 
+**Note**: All MaterialsV3 edge case tests require PyTorch. If PyTorch is not installed, all tests in `TestMaterialsV3EdgeCases` and `TestMaterialsV3EdgeCasesMetadata` will be skipped. This ensures CI can run in environments without ML dependencies while preserving full test coverage in environments where PyTorch is available.
+
+## Recent Fix (December 21, 2025)
+
+**Issue**: MaterialsV3 edge case tests were failing in CI with `RuntimeError: PyTorch is required for V2 GPU pipeline` despite having `@pytest.mark.skipif` decorators.
+
+**Root Cause**: Test fixtures (`ci_safe_config`) were initializing `LuxPipelineV2` which calls `torch_ops.require_torch()` BEFORE pytest could evaluate the skip condition.
+
+**Solution**: Added `pytest.skip()` calls inside the `ci_safe_config` fixtures to ensure tests skip gracefully when PyTorch is unavailable. This follows pytest best practices for conditional test execution.
+
+**Files Modified**: 
+- `tests/test_materials_v3_edge_cases.py` - Added fixture-level skip checks (lines 75, 415)
+
+**Verification**:
+- ✅ Tests PASS when PyTorch is available (local dev, MaterialsV3 workflow)
+- ✅ Tests SKIP when PyTorch is unavailable (main CI pipeline)
+- ✅ Zero test failures in CI
+
 ---
 
 ## Skipped Tests
 
+### PyTorch Dependency Skip
+
+**Status**: CONDITIONAL SKIP  
+**Reason**: All MaterialsV3 edge case tests require PyTorch for `LuxPipelineV2`  
+**Impact**: Tests skip gracefully in CI environments without PyTorch, pass in environments with PyTorch  
+**Implementation**: `@pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch is required for LuxPipelineV2")`  
+**Code Location**: `tests/test_materials_v3_edge_cases.py:42-45, 394-397`
+
+**Decision**: All tests in `TestMaterialsV3EdgeCases` and `TestMaterialsV3EdgeCasesMetadata` are marked to skip when PyTorch is unavailable. This follows the repository's existing pattern for handling optional ML dependencies (see `test_depth_anything_v2_onnx.py`).
+
 ### `test_missing_depth_map_continues` - Edge Case Test
 
-**Status**: SKIPPED  
+**Status**: CONDITIONAL SKIP (within PyTorch-available tests)  
 **Reason**: No depth adapter available in test configuration - requires depth processing pipeline to be enabled  
 **Impact**: Low - test validates graceful handling when depth maps are unavailable, which is already covered by other fallback tests  
 **Resolution**: 
