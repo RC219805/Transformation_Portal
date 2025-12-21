@@ -1,0 +1,948 @@
+{
+  "status": "ok",
+  "image": "validation_images/test_interior_01.jpg",
+  "stage_times_sec": {
+    "io/read_input": 0.004778500006068498,
+    "io/read_depth": 0.0004426250234246254,
+    "material/segmentation": 0.12616520799929276,
+    "material/materials_v2": 1.6931030830019154,
+    "material/materials_v3": 0.30962566699599847,
+    "grade/master": 0.008937457983847708,
+    "export_master": 0.025121707993093878,
+    "export_preview": 0.003250833018682897,
+    "material/cleanup": 0.020385417039506137,
+    "upscale/base": 0.0006644170498475432,
+    "upscale/realesrgan": 0.0004537919885478914,
+    "export_upscaled": 0.5588727500289679,
+    "export_marketing": 1.147186917020008
+  },
+  "export_autotune": {
+    "enabled": false
+  },
+  "depth": null,
+  "zone_weights": "uniform_no_depth",
+  "material_mods": "material_segmentation",
+  "materials_v2_enabled": true,
+  "materials_v2_metadata": {
+    "confidence_avg": 0.14143793284893036,
+    "confidence_min": 0.0,
+    "confidence_max": 0.9942238926887512,
+    "high_confidence_pct": 0.21459261576334634,
+    "low_confidence_pct": 0.7854073842366537,
+    "coverage_ratio": 0.18109766642252603,
+    "material_counts": {
+      "glass": 452,
+      "wood": 0,
+      "metal": 0,
+      "stone": 220474,
+      "sky": 633600,
+      "foliage": 0
+    },
+    "is_high_quality": false,
+    "original_size": [
+      768,
+      1024
+    ],
+    "segmentation_size": [
+      768,
+      1024
+    ],
+    "upsampled": false
+  },
+  "materials_v3_enabled": true,
+  "materials_v3_metadata": {
+    "enabled": true,
+    "taxonomy": "base",
+    "refinement_strategy": "canary",
+    "per_class_stats": {
+      "glass": {
+        "coverage": 0.00054168701171875,
+        "mean_confidence": 0.004905194975435734,
+        "edge_confidence": 0.39948147535324097,
+        "should_refine": true,
+        "refinement_priority": 10,
+        "threshold": 0.4
+      },
+      "wood": {
+        "coverage": 0.0,
+        "mean_confidence": 3.703885886352509e-05,
+        "edge_confidence": 0.0,
+        "should_refine": false,
+        "refinement_priority": 4,
+        "threshold": 0.65
+      },
+      "metal": {
+        "coverage": 0.0,
+        "mean_confidence": 0.0,
+        "edge_confidence": 0.0,
+        "should_refine": false,
+        "refinement_priority": 6,
+        "threshold": 0.6
+      },
+      "stone": {
+        "coverage": 0.16935221354166666,
+        "mean_confidence": 0.3103506863117218,
+        "edge_confidence": 0.651801586151123,
+        "should_refine": false,
+        "refinement_priority": 3,
+        "threshold": 0.65
+      },
+      "sky": {
+        "coverage": 0.44752756754557294,
+        "mean_confidence": 0.6056409478187561,
+        "edge_confidence": 0.7279820442199707,
+        "should_refine": false,
+        "refinement_priority": 0,
+        "threshold": 0.7
+      },
+      "foliage": {
+        "coverage": 0.0,
+        "mean_confidence": 0.0,
+        "edge_confidence": 0.0,
+        "should_refine": true,
+        "refinement_priority": 8,
+        "threshold": 0.45
+      }
+    },
+    "canonical_materials": [
+      "glass",
+      "wood",
+      "metal",
+      "stone",
+      "sky",
+      "foliage"
+    ],
+    "class_presence_audit": {
+      "emitted_classes": [
+        "foliage",
+        "glass",
+        "metal",
+        "sky",
+        "stone",
+        "wood"
+      ],
+      "emitted_count": 6,
+      "canonical_classes": [
+        "foliage",
+        "glass",
+        "metal",
+        "sky",
+        "stone",
+        "wood"
+      ],
+      "canonical_count": 6,
+      "requested_targets": [
+        "glass",
+        "water",
+        "foliage"
+      ],
+      "target_status": {
+        "glass": {
+          "present": true,
+          "canonical_name": "glass",
+          "coverage_pixels": 0,
+          "reason": "zero_coverage"
+        },
+        "water": {
+          "present": false,
+          "canonical_name": "water",
+          "coverage_pixels": 0,
+          "reason": "not_emitted_by_segmenter",
+          "possible_raw_names": []
+        },
+        "foliage": {
+          "present": true,
+          "canonical_name": "foliage",
+          "coverage_pixels": 0,
+          "reason": "zero_coverage"
+        }
+      },
+      "water": {
+        "raw_present": false,
+        "raw_coverage": 0.0,
+        "candidate_present": false,
+        "candidate_coverage": 0.0,
+        "candidate_source": "none"
+      }
+    },
+    "water_candidate": {
+      "present": false,
+      "coverage": 0.0,
+      "coverage_px": 0,
+      "confidence": 0.0,
+      "source": "none",
+      "reason": "water_detection_disabled",
+      "edge_refined": false,
+      "edge_refinement_boundary_px": 0,
+      "edge_refinement_applied": false,
+      "confidence_raw": 0.0,
+      "confidence_after_suppressors": 0.0,
+      "confidence_final": 0.0,
+      "saturation_boost_applied": false,
+      "candidate_stage_passed": false,
+      "injection_stage_passed": false,
+      "suppressors_applied": [],
+      "suppressor_telemetry": null
+    }
+  },
+  "materials_v3_response_plan": {
+    "version": "v3.1",
+    "enabled": true,
+    "taxonomy": "base",
+    "strategy": "canary",
+    "scene": {
+      "intent": "client",
+      "quality_tier": "max"
+    },
+    "per_class": {
+      "glass": {
+        "present": true,
+        "coverage": 0.0,
+        "coverage_px": 0,
+        "mean_conf": 0.0,
+        "edge_conf": 0.0,
+        "core_conf": 0.0,
+        "edge_pixels": 0,
+        "core_pixels": 0,
+        "strengths": {
+          "core": 0.0,
+          "edge": 0.0
+        },
+        "core_strength": 0.0,
+        "edge_strength": 0.0,
+        "refinement": {
+          "eligible": false,
+          "should_refine_edges": false,
+          "reason": "below_coverage_threshold",
+          "strategy": "canary"
+        },
+        "pixel_ops": {
+          "eligible": false,
+          "should_apply": false,
+          "reason": "below_coverage_threshold",
+          "recommended_ops": []
+        },
+        "edge_signals": {
+          "boundary_pixels": 0,
+          "edge_alignment": 0.0,
+          "notes": [
+            "boundary_too_small"
+          ]
+        },
+        "should_refine": false,
+        "refine_reason": "below_coverage_threshold",
+        "skip_reason": "below_coverage_threshold"
+      },
+      "wood": {
+        "present": true,
+        "coverage": 0.0,
+        "coverage_px": 0,
+        "mean_conf": 0.0,
+        "edge_conf": 0.0,
+        "core_conf": 0.0,
+        "edge_pixels": 0,
+        "core_pixels": 0,
+        "strengths": {
+          "core": 0.0,
+          "edge": 0.0
+        },
+        "core_strength": 0.0,
+        "edge_strength": 0.0,
+        "refinement": {
+          "eligible": false,
+          "should_refine_edges": false,
+          "reason": "below_coverage_threshold",
+          "strategy": "canary"
+        },
+        "pixel_ops": {
+          "eligible": false,
+          "should_apply": false,
+          "reason": "no_implementation",
+          "recommended_ops": [
+            "microcontrast"
+          ]
+        },
+        "edge_signals": {
+          "boundary_pixels": 0,
+          "edge_alignment": 0.0,
+          "notes": [
+            "boundary_too_small"
+          ]
+        },
+        "should_refine": false,
+        "refine_reason": "below_coverage_threshold",
+        "skip_reason": "below_coverage_threshold"
+      },
+      "metal": {
+        "present": true,
+        "coverage": 0.0,
+        "coverage_px": 0,
+        "mean_conf": 0.0,
+        "edge_conf": 0.0,
+        "core_conf": 0.0,
+        "edge_pixels": 0,
+        "core_pixels": 0,
+        "strengths": {
+          "core": 0.0,
+          "edge": 0.0
+        },
+        "core_strength": 0.0,
+        "edge_strength": 0.0,
+        "refinement": {
+          "eligible": false,
+          "should_refine_edges": false,
+          "reason": "below_coverage_threshold",
+          "strategy": "canary"
+        },
+        "pixel_ops": {
+          "eligible": false,
+          "should_apply": false,
+          "reason": "no_implementation",
+          "recommended_ops": [
+            "microcontrast",
+            "highlight_boost"
+          ]
+        },
+        "edge_signals": {
+          "boundary_pixels": 0,
+          "edge_alignment": 0.0,
+          "notes": [
+            "boundary_too_small"
+          ]
+        },
+        "should_refine": false,
+        "refine_reason": "below_coverage_threshold",
+        "skip_reason": "below_coverage_threshold"
+      },
+      "stone": {
+        "present": true,
+        "coverage": 0.2803916931152344,
+        "coverage_px": 220509,
+        "mean_conf": 0.6849421858787537,
+        "edge_conf": 0.5292955636978149,
+        "core_conf": 0.6981822848320007,
+        "edge_pixels": 17287,
+        "core_pixels": 203222,
+        "strengths": {
+          "core": 1.0,
+          "edge": 0.8
+        },
+        "core_strength": 1.0,
+        "edge_strength": 0.8,
+        "refinement": {
+          "eligible": false,
+          "should_refine_edges": false,
+          "reason": "not_in_canary_set",
+          "strategy": "canary"
+        },
+        "pixel_ops": {
+          "eligible": false,
+          "should_apply": false,
+          "reason": "no_implementation",
+          "recommended_ops": [
+            "microcontrast"
+          ]
+        },
+        "edge_signals": {
+          "boundary_pixels": 17287,
+          "edge_alignment": 0.00630167406052351,
+          "notes": []
+        },
+        "should_refine": false,
+        "refine_reason": "not_in_canary_set",
+        "skip_reason": "not_in_canary_set"
+      },
+      "sky": {
+        "present": true,
+        "coverage": 0.6433232625325521,
+        "coverage_px": 505930,
+        "mean_conf": 0.795349657535553,
+        "edge_conf": 0.6199527978897095,
+        "core_conf": 0.8062129616737366,
+        "edge_pixels": 29508,
+        "core_pixels": 476422,
+        "strengths": {
+          "core": 1.0,
+          "edge": 0.8
+        },
+        "core_strength": 1.0,
+        "edge_strength": 0.8,
+        "refinement": {
+          "eligible": false,
+          "should_refine_edges": false,
+          "reason": "not_in_canary_set",
+          "strategy": "canary"
+        },
+        "pixel_ops": {
+          "eligible": false,
+          "should_apply": false,
+          "reason": "no_implementation",
+          "recommended_ops": []
+        },
+        "edge_signals": {
+          "boundary_pixels": 29508,
+          "edge_alignment": 0.0028044632636010647,
+          "notes": []
+        },
+        "should_refine": false,
+        "refine_reason": "not_in_canary_set",
+        "skip_reason": "not_in_canary_set"
+      },
+      "foliage": {
+        "present": true,
+        "coverage": 0.0,
+        "coverage_px": 0,
+        "mean_conf": 0.0,
+        "edge_conf": 0.0,
+        "core_conf": 0.0,
+        "edge_pixels": 0,
+        "core_pixels": 0,
+        "strengths": {
+          "core": 0.0,
+          "edge": 0.0
+        },
+        "core_strength": 0.0,
+        "edge_strength": 0.0,
+        "refinement": {
+          "eligible": false,
+          "should_refine_edges": false,
+          "reason": "below_coverage_threshold",
+          "strategy": "canary"
+        },
+        "pixel_ops": {
+          "eligible": false,
+          "should_apply": false,
+          "reason": "no_implementation",
+          "recommended_ops": [
+            "color_pop",
+            "edge_clarity"
+          ]
+        },
+        "edge_signals": {
+          "boundary_pixels": 0,
+          "edge_alignment": 0.0,
+          "notes": [
+            "boundary_too_small"
+          ]
+        },
+        "should_refine": false,
+        "refine_reason": "below_coverage_threshold",
+        "skip_reason": "below_coverage_threshold"
+      }
+    },
+    "summary": {
+      "present_classes": [
+        "glass",
+        "wood",
+        "metal",
+        "stone",
+        "sky",
+        "foliage"
+      ],
+      "eligible_for_pixel_ops": [],
+      "eligible_for_refinement": [],
+      "pixel_ops_reasons": {
+        "below_coverage_threshold": 1,
+        "no_implementation": 5
+      },
+      "refinement_reasons": {
+        "below_coverage_threshold": 4,
+        "not_in_canary_set": 2
+      }
+    },
+    "notes": [
+      "PR-4C: separated refinement + pixel ops decisions, added edge signals"
+    ]
+  },
+  "materials_v3_pixel_ops": {
+    "enabled": true,
+    "applied_to": [],
+    "applied": false,
+    "reason": "below_coverage_threshold",
+    "forced": false,
+    "stone": {
+      "enabled": true,
+      "applied": true,
+      "applied_to": [
+        "stone"
+      ],
+      "forced": true,
+      "reason": "force_stone_pixel_ops",
+      "stone_stats": {
+        "applied": true,
+        "coverage_px": 220509,
+        "core_px": 207317,
+        "edge_px": 13192,
+        "core_delta_max": 0.023356914520263672,
+        "edge_delta_max": 0.011324197053909302,
+        "edge_delta_p95": 0.004691010713577268,
+        "mean_delta": 0.0011276643490418792,
+        "halo_risk": "NONE",
+        "clamp_count": 0,
+        "edge_clamp_count": 0
+      }
+    }
+  },
+  "upscaler": "realesrgan",
+  "ai_color_diff": 0.0002546188188716769,
+  "ai_luma_diff": 0.0002304049994563684,
+  "timing_s": 4.101,
+  "config": {
+    "input_dir": null,
+    "depth_dir": null,
+    "output_dir": "phase2_task1_outputs/stone_validate",
+    "preset": "interior_luxury_apex_quality_materials_v3_stone_validate",
+    "upscale": 4,
+    "upscaler_backend": "realesrgan",
+    "model_path": null,
+    "model_sha256": null,
+    "tile": 1024,
+    "tile_pad": 32,
+    "half": false,
+    "device": "auto",
+    "precision": "fp32",
+    "cudnn_benchmark": true,
+    "save_master": true,
+    "save_upscaled": true,
+    "save_marketing_png": true,
+    "save_preview_jpg": true,
+    "preview_scale": 0.25,
+    "marketing_png_compression": 0,
+    "skip_existing": true,
+    "overwrite": false,
+    "write_outputs": true,
+    "timing_sync_device": false,
+    "warn_float_gb": 6.0,
+    "strict_depth": false,
+    "fg_q": 0.35,
+    "bg_q": 0.65,
+    "transition": 0.08,
+    "mask_soften_sigma": 4.0,
+    "detail_sigma": 1.2,
+    "detail_strength": 0.75,
+    "detail_clip": 0.075,
+    "detail_fg": 1.0,
+    "detail_mid": 0.7,
+    "detail_bg": 0.25,
+    "clarity_sigma": 2.2,
+    "clarity_clip": 0.05,
+    "clarity_fg": 0.2,
+    "clarity_mid": 0.12,
+    "clarity_bg": 0.06,
+    "sharpen_sigma": 0.9,
+    "sharpen_thresh": 0.004,
+    "sharpen_fg": 0.09,
+    "sharpen_mid": 0.06,
+    "sharpen_bg": 0.035,
+    "temp_fg": 0.013,
+    "temp_mid": 0.006,
+    "temp_bg": 0.0,
+    "sat_fg": 1.045,
+    "sat_mid": 1.03,
+    "sat_bg": 1.01,
+    "exp_fg": 1.01,
+    "exp_mid": 1.0,
+    "exp_bg": 0.995,
+    "con_fg": 1.035,
+    "con_mid": 1.03,
+    "con_bg": 1.02,
+    "soft_clip_knee": 0.92,
+    "enable_material": true,
+    "material_strength": 0.9,
+    "surfaces": [
+      "wood",
+      "metal",
+      "glass",
+      "stone",
+      "sky",
+      "foliage"
+    ],
+    "validate_ai": true,
+    "ai_color_warn": 0.06,
+    "ai_color_fail": 0.12,
+    "ai_luma_warn": 0.06,
+    "ai_luma_fail": 0.12,
+    "post_tile": 2048,
+    "post_overlap": 128,
+    "segmentation": {
+      "backend": "segformer",
+      "backend_v3": "segformer",
+      "use_efficientsam_for_edges": false,
+      "fusion_mode": "none",
+      "fusion_min_iou": 0.3,
+      "fusion_core_thresh": 0.7,
+      "fusion_edge_low": 0.2,
+      "fusion_edge_high": 0.7,
+      "fusion_alpha_edge": 0.7,
+      "fusion_alpha_core": 0.3,
+      "onnx_model_path": null,
+      "onnx_labels_path": null,
+      "segformer_model": "nvidia/segformer-b5-finetuned-ade-640-640",
+      "segformer_revision": null,
+      "sam_checkpoint": null,
+      "efficientSAM_model": null,
+      "efficientSAM_variant": "s",
+      "efficientSAM_prompt_strategy": "grid",
+      "input_long_side": 2048,
+      "soften_sigma_px": 2.0,
+      "min_confidence": 0.15,
+      "allow_downloads": true
+    },
+    "service": {
+      "enabled": false,
+      "host": "0.0.0.0",
+      "port": 8088,
+      "workers": 1,
+      "max_concurrency": 1
+    },
+    "orchestrator": {
+      "enabled": true,
+      "max_workers": 1,
+      "memory_budget_gb": null,
+      "checkpoint_dir": ".checkpoints",
+      "max_retries": 3,
+      "pre_flight_check": true,
+      "mps_memory_threshold_gb": 55.0,
+      "disk_space_threshold_gb": 10.0,
+      "retry_backoff_base": 2.0,
+      "retry_max_delay_s": 300.0
+    },
+    "phase2": null,
+    "materials_v2": {
+      "enabled": true,
+      "confidence": {
+        "confidence_threshold": 0.3,
+        "material_thresholds": {
+          "wood": 0.5,
+          "metal": 0.5,
+          "glass": 0.4,
+          "fabric": 0.45,
+          "stone": 0.5,
+          "ceramic": 0.45,
+          "water": 0.35,
+          "polished": 0.4
+        },
+        "blend_range": 0.1,
+        "blend_mode": "soft",
+        "fallback_strength": 0.2
+      },
+      "segmentation": {
+        "max_segmentation_side": 2048,
+        "min_segmentation_side": 512,
+        "upsample_mode": "bicubic",
+        "edge_feather_radius": 3,
+        "edge_feather_sigma": 1.0,
+        "require_high_quality": true,
+        "quality_threshold": 0.55
+      },
+      "cache_dir": null,
+      "cache_enabled": false,
+      "backend": "segformer",
+      "clip_enabled": false,
+      "clip_model": "ViT-B/32",
+      "clip_hybrid_fusion": false,
+      "clip_fusion_alpha": 0.5,
+      "use_expanded_taxonomy": false,
+      "material_classes": [
+        "wood",
+        "metal",
+        "glass",
+        "water",
+        "fabric",
+        "stone",
+        "ceramic",
+        "polished"
+      ]
+    },
+    "materials_v3": {
+      "enabled": true,
+      "taxonomy": "base",
+      "expanded": {
+        "enabled": false,
+        "semantic_classes": [
+          "sky",
+          "building",
+          "wall",
+          "floor",
+          "ceiling",
+          "window",
+          "door",
+          "furniture",
+          "vegetation",
+          "water",
+          "ground",
+          "road",
+          "sidewalk"
+        ],
+        "material_classes": [
+          "wood_grain",
+          "wood_smooth",
+          "stone_paver",
+          "stone_wall",
+          "stone_counter",
+          "metal_brushed",
+          "metal_polished",
+          "glass_clear",
+          "glass_frosted",
+          "water_surface",
+          "water_volume",
+          "fabric_matte",
+          "fabric_glossy",
+          "stucco",
+          "painted_plaster",
+          "ceramic_tile",
+          "ceramic_glazed"
+        ],
+        "semantic_to_material_map": {
+          "window": [
+            "glass_clear",
+            "glass_frosted",
+            "metal_brushed"
+          ],
+          "floor": [
+            "wood_grain",
+            "stone_paver",
+            "ceramic_tile"
+          ],
+          "wall": [
+            "stucco",
+            "painted_plaster",
+            "wood_smooth"
+          ],
+          "water": [
+            "water_surface",
+            "water_volume"
+          ]
+        }
+      },
+      "confidence": {
+        "base_threshold": 0.5,
+        "refined_threshold": 0.45,
+        "edge_threshold": 0.3,
+        "material_thresholds": {
+          "wood": 0.65,
+          "metal": 0.6,
+          "glass": 0.4,
+          "water": 0.35,
+          "stone": 0.65,
+          "fabric": 0.55,
+          "foliage": 0.45,
+          "polished": 0.45
+        },
+        "use_edge_confidence": true,
+        "edge_band_width": 0.2,
+        "min_coverage": 0.01,
+        "max_coverage": 0.95
+      },
+      "edge_gating": {
+        "enabled": true,
+        "core_threshold": 0.7,
+        "edge_low": 0.2,
+        "edge_high": 0.7,
+        "core_strength": 1.0,
+        "edge_strength": 0.8,
+        "edge_method": "confidence_gradient"
+      },
+      "refine_edges": "canary",
+      "prompt_gen": {
+        "num_fg_points": 4,
+        "fg_confidence_threshold": 0.6,
+        "fg_top_percentile": 10.0,
+        "num_bg_points": 2,
+        "bg_boundary_band": 10,
+        "min_mask_pixels": 500,
+        "max_roi_side": 4096,
+        "enforce_spacing": true,
+        "min_spacing_pixels": 50
+      },
+      "max_megapixels": 30.0,
+      "max_dimension": 6000,
+      "cache_dir": null,
+      "cache_enabled": false,
+      "backend": "segformer",
+      "lighting_aware": false,
+      "apply_pixel_ops": true,
+      "glass_response_enabled": false,
+      "force_glass_pixel_ops": false,
+      "stone_response_enabled": true,
+      "force_stone_pixel_ops": true,
+      "water_detection_enabled": false,
+      "water_candidate_threshold": 0.25,
+      "water_candidate_confidence_threshold": 0.4,
+      "water_min_coverage": 0.05,
+      "water_saturation_boost_enabled": true,
+      "water_saturation_boost_amount": 0.15,
+      "water_saturation_boost_threshold": 0.2,
+      "water_edge_refinement_enabled": false,
+      "water_edge_refinement_min_confidence": 0.5,
+      "water_edge_refinement_min_boundary_px": 100
+    },
+    "material_properties": {
+      "wood": {
+        "matte_gloss": 0.3,
+        "specular_intensity": 0.4,
+        "roughness": 0.6,
+        "albedo": 0.5,
+        "enhancement_strength": 1.0,
+        "highlight_response": 0.8,
+        "shadow_response": 1.1,
+        "midtone_response": 1.0,
+        "metalness": 0.0,
+        "subsurface_scattering": 0.0
+      },
+      "metal": {
+        "matte_gloss": 0.9,
+        "specular_intensity": 0.95,
+        "roughness": 0.2,
+        "albedo": 0.7,
+        "enhancement_strength": 1.0,
+        "highlight_response": 1.3,
+        "shadow_response": 0.8,
+        "midtone_response": 0.9,
+        "metalness": 1.0,
+        "subsurface_scattering": 0.0
+      },
+      "glass": {
+        "matte_gloss": 1.0,
+        "specular_intensity": 0.85,
+        "roughness": 0.05,
+        "albedo": 0.8,
+        "enhancement_strength": 0.8,
+        "highlight_response": 1.4,
+        "shadow_response": 0.6,
+        "midtone_response": 0.9,
+        "metalness": 0.0,
+        "subsurface_scattering": 0.1
+      },
+      "stone": {
+        "matte_gloss": 0.2,
+        "specular_intensity": 0.3,
+        "roughness": 0.8,
+        "albedo": 0.4,
+        "enhancement_strength": 1.0,
+        "highlight_response": 0.7,
+        "shadow_response": 1.2,
+        "midtone_response": 1.0,
+        "metalness": 0.0,
+        "subsurface_scattering": 0.0
+      },
+      "fabric": {
+        "matte_gloss": 0.1,
+        "specular_intensity": 0.2,
+        "roughness": 0.9,
+        "albedo": 0.5,
+        "enhancement_strength": 0.9,
+        "highlight_response": 0.6,
+        "shadow_response": 1.1,
+        "midtone_response": 1.0,
+        "metalness": 0.0,
+        "subsurface_scattering": 0.15
+      }
+    },
+    "depth_zones": {
+      "mode": "auto",
+      "fg_percentile": 0.35,
+      "bg_percentile": 0.65,
+      "close_range_m": 2.0,
+      "mid_range_m": 10.0,
+      "far_range_m": 20.0,
+      "infinity_m": 1000.0,
+      "auto_select_threshold": 0.7,
+      "prefer_metric_outdoor": true,
+      "prefer_percentile_interior": true,
+      "scene_type": "interior",
+      "transition_blend_range": 0.08
+    },
+    "lighting": {
+      "enabled": false,
+      "use_sky_mask": true,
+      "analyze_depth": true,
+      "adapt_tone_mapping": true,
+      "adapt_color_grading": true,
+      "adaptation_strength": 0.7,
+      "golden_hour_warmth_threshold": 0.5,
+      "dawn_twilight_coolness_threshold": -0.3,
+      "color_temp_adjustments": {
+        "dawn": -500.0,
+        "golden_hour": 800.0,
+        "twilight": -400.0,
+        "midday": 0.0,
+        "overcast": -200.0
+      }
+    },
+    "enable_edge_refinement": false,
+    "refinement_preset": "balanced"
+  },
+  "write_outputs": true,
+  "marketing_export": {
+    "encoder": "png",
+    "compression_level": 0,
+    "width": 4096,
+    "height": 3072,
+    "bytes_written": 37812304,
+    "write_time_s": 1.147,
+    "cpu_percent_delta": 4.4
+  },
+  "stage_times": {
+    "io/read_input": 0.004778500006068498,
+    "io/read_depth": 0.0004426250234246254,
+    "material/segmentation": 0.12616520799929276,
+    "material/materials_v2": 1.6931030830019154,
+    "material/materials_v3": 0.30962566699599847,
+    "grade/master": 0.008937457983847708,
+    "export_master": 0.025121707993093878,
+    "export_preview": 0.003250833018682897,
+    "material/cleanup": 0.020385417039506137,
+    "upscale/base": 0.0006644170498475432,
+    "upscale/realesrgan": 0.0004537919885478914,
+    "export_upscaled": 0.5588727500289679,
+    "export_marketing": 1.147186917020008
+  },
+  "timing_stages_s": {
+    "io/read_input": 0.004778500006068498,
+    "io/read_depth": 0.0004426250234246254,
+    "material/segmentation": 0.12616520799929276,
+    "material/materials_v2": 1.6931030830019154,
+    "material/materials_v3": 0.30962566699599847,
+    "grade/master": 0.008937457983847708,
+    "export_master": 0.025121707993093878,
+    "export_preview": 0.003250833018682897,
+    "material/cleanup": 0.020385417039506137,
+    "upscale/base": 0.0006644170498475432,
+    "upscale/realesrgan": 0.0004537919885478914,
+    "export_upscaled": 0.5588727500289679,
+    "export_marketing": 1.147186917020008
+  },
+  "timing": {
+    "total_s": 4.101,
+    "stages_s": {
+      "io/read_input": 0.004778500006068498,
+      "io/read_depth": 0.0004426250234246254,
+      "material/segmentation": 0.12616520799929276,
+      "material/materials_v2": 1.6931030830019154,
+      "material/materials_v3": 0.30962566699599847,
+      "grade/master": 0.008937457983847708,
+      "export_master": 0.025121707993093878,
+      "export_preview": 0.003250833018682897,
+      "material/cleanup": 0.020385417039506137,
+      "upscale/base": 0.0006644170498475432,
+      "upscale/realesrgan": 0.0004537919885478914,
+      "export_upscaled": 0.5588727500289679,
+      "export_marketing": 1.147186917020008
+    }
+  },
+  "reproducibility": {
+    "git_commit": "fce6f738407b401ef434d7c5396fba04ea962ca9",
+    "device": "mps",
+    "gpu_name": "Apple Silicon (MPS)",
+    "python_version": "3.11.14",
+    "torch_version": "2.9.1",
+    "upscaler_backend": "realesrgan",
+    "post_tile": 2048,
+    "post_overlap": 128,
+    "upscale_tile": 1024,
+    "upscale_tile_pad": 32,
+    "timestamp": "2025-12-21 06:43:47 UTC",
+    "preset": "interior_luxury_apex_quality_materials_v3_stone_validate"
+  }
+}
