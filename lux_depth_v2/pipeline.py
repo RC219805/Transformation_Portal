@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -187,8 +188,13 @@ class LuxPipelineV2:
                 self.mask_cache_manager = None
 
         # Materials v3 integration (opt-in, disabled by default)
+        # KILLSWITCH: Respect DISABLE_MATERIALS_V3 environment variable
         self.materials_v3_engine = None
-        if MATERIALS_V3_AVAILABLE and cfg.materials_v3 and cfg.materials_v3.enabled:
+        disable_materials_v3 = os.getenv('DISABLE_MATERIALS_V3', '').lower() in ('1', 'true', 'yes')
+        
+        if disable_materials_v3:
+            self.logger.info("Materials V3 disabled via DISABLE_MATERIALS_V3 environment variable")
+        elif MATERIALS_V3_AVAILABLE and cfg.materials_v3 and cfg.materials_v3.enabled:
             try:
                 self.materials_v3_engine = MaterialsV3Engine(
                     config=cfg.materials_v3
