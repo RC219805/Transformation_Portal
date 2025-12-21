@@ -566,7 +566,7 @@ class DepthAnything3Wrapper:
     def inference(
         self,
         # Input parameters
-        image: List[Union[np.ndarray, Image.Image, str, Path]],
+        image: Optional[List[Union[np.ndarray, Image.Image, str, Path]]] = None,
         extrinsics: Optional[np.ndarray] = None,
         intrinsics: Optional[np.ndarray] = None,
         
@@ -588,7 +588,7 @@ class DepthAnything3Wrapper:
         # Export parameters
         export_dir: Optional[Union[str, Path]] = None,
         export_format: str = "mini_npz",
-        export_feat_layers: List[int] = [],
+        export_feat_layers: Optional[List[int]] = None,
         
         # GLB export parameters
         conf_thresh_percentile: float = 40.0,

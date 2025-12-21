@@ -35,10 +35,15 @@ disable=
     C0413,                # wrong-import-position (needed for conditional imports after sys.path)
     C1803,                # use-implicit-booleaness-not-comparison (explicit is clearer)
     W0404,                # reimported (sometimes needed for conditional imports)
-    W0201                 # attribute-defined-outside-init (plugin initialization pattern)
+    W0201,                # attribute-defined-outside-init (plugin initialization pattern)
+    E1121,                # too-many-function-args (numpy reshape false positives)
+    E1101                 # no-member (PyTorch dynamic attributes)
 
 [FORMAT]
 max-line-length=127
 
 [TYPECHECK]
 ignored-modules=realesrgan,diffusers,controlnet_aux,torch,tifffile,cv2
+# E1101: PyTorch dynamic attributes (model.to(), model.load_state_dict())
+# E1121: NumPy reshape false positives
+generated-members=torch.*,numpy.*

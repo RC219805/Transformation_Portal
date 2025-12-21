@@ -273,7 +273,7 @@ async def estimate_depth(
         raise HTTPException(
             status_code=400,
             detail=f"Failed to load image: {str(e)}",
-        )
+        ) from e
 
     # Create input
     img_input = ImageInput(array=image_array)
@@ -306,7 +306,7 @@ async def estimate_depth(
         raise HTTPException(
             status_code=500,
             detail=f"Inference failed: {str(e)}",
-        )
+        ) from e
 
     processing_time = (time.perf_counter() - start_time) * 1000  # ms
 
@@ -341,11 +341,11 @@ async def download_depth(filename: str):
     try:
         # Sanitize and validate filepath (defense-in-depth: allowlist, normalization, containment)
         safe_file_path = sanitize_and_validate_filepath(filename, output_dir)
-    except ValueError:
+    except ValueError as exc:
         # Avoid leaking internal validation details to clients
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    except OSError:
-        raise HTTPException(status_code=400, detail="Invalid filename")
+        raise HTTPException(status_code=400, detail="Invalid filename") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail="Invalid filename") from exc
 
     # Verify it's a regular file (not directory or special file)
     if not safe_file_path.is_file():
