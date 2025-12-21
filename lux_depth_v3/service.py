@@ -128,18 +128,14 @@ def sanitize_and_validate_filepath(filename: str, base_dir: Path) -> Path:
     base_dir_resolved = base_dir.resolve(strict=False)
     
     # Layer 3: Safe path construction using validated filename
-    # The Path / operator is safe here because:
+    # At this point, candidate_path is safe because:
     # 1. base_dir_resolved is trusted (from global config)
-    # 2. filename is strictly validated to contain no path separators or traversal sequences
-    #    (no '/', '\', '..', absolute paths possible due to regex allowlist)
-    # 3. Therefore, base_dir_resolved / filename cannot escape base_dir_resolved
-    candidate_path = base_dir_resolved / filename
+    # 2. filename is strictly validated to contain no path separators or traversal
+    #    sequences, so base_dir_resolved / filename cannot escape base_dir_resolved.
     
-    # Return the validated path directly.
-    # No resolution or containment check needed because the strict filename validation
-    # guarantees that candidate_path is within base_dir_resolved.
-    # This also makes the sanitization barrier clearer to static analysis tools like CodeQL.
-    return candidate_path
+    # Returning candidate_path directly also makes the sanitization barrier clearer
+    # to static analysis tools such as CodeQL.
+    return base_dir_resolved / filename
 
 
 def check_rate_limit(client_ip: str) -> bool:

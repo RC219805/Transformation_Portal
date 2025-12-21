@@ -1,5 +1,30 @@
 # Contributing
 
+## Feature Freeze Period ❄️
+
+**Active**: December 20, 2025 - January 10, 2026  
+**Reason**: Golden Path consolidation and validation
+
+### What's Allowed During Freeze
+
+✅ **ALLOWED**:
+- Bug fixes (correctness issues)
+- Security fixes
+- Documentation improvements
+- Test improvements
+- Performance optimizations (no behavior changes)
+
+🚫 **BLOCKED**:
+- New features
+- Breaking changes
+- Refactoring (non-critical)
+- Experimental pipelines
+
+📋 **PROCESS**: All changes require feature freeze check via issue template  
+📚 **Policy**: See [docs/FEATURE_FREEZE_POLICY.md](docs/FEATURE_FREEZE_POLICY.md)
+
+---
+
 ## Development principles
 - Keep changes **additive** unless a breaking change is explicitly approved.
 - Prefer **small PRs** with clear scope.

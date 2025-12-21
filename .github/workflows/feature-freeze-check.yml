@@ -1,0 +1,84 @@
+# Feature Freeze CI Enforcement
+
+name: Feature Freeze Check
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled]
+
+jobs:
+  freeze-enforcement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if freeze period is active
+        id: freeze_check
+        run: |
+          FREEZE_START="2025-12-20"
+          FREEZE_END="2026-01-10"
+          TODAY=$(date +%Y-%m-%d)
+          
+          if [[ "$TODAY" > "$FREEZE_START" && "$TODAY" < "$FREEZE_END" ]]; then
+            echo "freeze_active=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Feature freeze active: $FREEZE_START to $FREEZE_END"
+          else
+            echo "freeze_active=false" >> $GITHUB_OUTPUT
+            echo "✅ Feature freeze not active"
+          fi
+      
+      - name: Require freeze-approved label
+        if: steps.freeze_check.outputs.freeze_active == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const hasApproval = labels.some(label => label.name === 'freeze-approved');
+            
+            if (!hasApproval) {
+              core.setFailed(
+                '❌ Feature freeze active (Dec 20, 2025 - Jan 10, 2026)\n\n' +
+                'This PR requires the "freeze-approved" label.\n\n' +
+                'Allowed changes:\n' +
+                '  ✅ Bug fixes (correctness issues)\n' +
+                '  ✅ Security fixes\n' +
+                '  ✅ Documentation improvements\n' +
+                '  ✅ Test improvements\n' +
+                '  ✅ Performance optimizations (no behavior change)\n\n' +
+                'Blocked changes:\n' +
+                '  🚫 New features\n' +
+                '  🚫 Breaking changes\n' +
+                '  🚫 Refactoring (non-critical)\n\n' +
+                'See: docs/FEATURE_FREEZE_POLICY.md\n' +
+                'Template: .github/ISSUE_TEMPLATE/feature_freeze_check.md'
+              );
+            } else {
+              console.log('✅ PR has freeze-approved label');
+            }
+      
+      - name: Post freeze reminder comment (first time)
+        if: steps.freeze_check.outputs.freeze_active == 'true' && github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '## ❄️ Feature Freeze Active\n\n' +
+                    '**Period**: December 20, 2025 - January 10, 2026\n\n' +
+                    'This PR was opened during the feature freeze period.\n\n' +
+                    '### Review Checklist\n' +
+                    '- [ ] Change is minimal and surgical\n' +
+                    '- [ ] No Golden Path workflow disruption\n' +
+                    '- [ ] Falls under allowed categories (bug fix, security, docs, tests)\n' +
+                    '- [ ] Tests pass\n' +
+                    '- [ ] Documentation updated (if applicable)\n\n' +
+                    '### Next Steps\n' +
+                    '1. Review [Feature Freeze Policy](../docs/FEATURE_FREEZE_POLICY.md)\n' +
+                    '2. Use [freeze check template](../.github/ISSUE_TEMPLATE/feature_freeze_check.md)\n' +
+                    '3. Request "freeze-approved" label if change is allowed\n\n' +
+                    'If this is a new feature or non-urgent improvement, consider deferring to Week 3 (after Jan 10).'
+            });
