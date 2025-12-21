@@ -307,3 +307,4 @@ experiments/edge_refinement/
 experiments/input_size_sweep/
 validation_edge_refinement/
 edge_refinement_results/
+*_marketing.png
