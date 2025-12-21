@@ -73,7 +73,13 @@ class TestMaterialsV3EdgeCases:
     
     @pytest.fixture
     def ci_safe_config(self, output_dir):
-        """Create a CI-safe pipeline config (uses heuristic backend to avoid transformers dependency)."""
+        """Create a CI-safe pipeline config (uses heuristic backend to avoid transformers dependency).
+        
+        NOTE: This fixture requires PyTorch. Tests using it will be skipped if PyTorch is unavailable.
+        """
+        if not TORCH_AVAILABLE:
+            pytest.skip("PyTorch is required for LuxPipelineV2")
+        
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
             output_dir=output_dir,
@@ -410,7 +416,13 @@ class TestMaterialsV3EdgeCasesMetadata:
     
     @pytest.fixture
     def ci_safe_config(self, tmp_path):
-        """Create a CI-safe pipeline config (uses heuristic backend to avoid transformers dependency)."""
+        """Create a CI-safe pipeline config (uses heuristic backend to avoid transformers dependency).
+        
+        NOTE: This fixture requires PyTorch. Tests using it will be skipped if PyTorch is unavailable.
+        """
+        if not TORCH_AVAILABLE:
+            pytest.skip("PyTorch is required for LuxPipelineV2")
+        
         output_dir = tmp_path / "output"
         output_dir.mkdir(exist_ok=True)
         config = PipelineConfig(
