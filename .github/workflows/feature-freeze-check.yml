@@ -5,9 +5,16 @@ on:
   pull_request:
     types: [opened, synchronize, labeled, unlabeled]
 
+permissions:
+  pull-requests: write
+  issues: write
+
 jobs:
   freeze-enforcement:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
     steps:
       - name: Check if freeze period is active
         id: freeze_check
