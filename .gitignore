@@ -95,10 +95,16 @@ output_*/
 test_output/
 test_artifacts/
 
-# Phase 2 test outputs
+# Phase 2 test outputs (exclude ephemeral outputs)
 output_Materials_V2_*/
 output_Phase2_*/
 output_Cache_Test_*/
+
+# BUT KEEP Phase 2 MaterialsV3 validation deliverables
+!phase2_task*_outputs/
+phase2_task*_outputs/**/*.tif
+phase2_task*_outputs/**/*.tiff
+phase2_task*_outputs/**/*_marketing.png
 
 # Cache directories
 .mask_cache/
@@ -252,6 +258,12 @@ input_images/800_Picacho/
 validation_v1_baseline_pack/
 validation_v1_baseline_pack.zip
 
+# BUT KEEP Phase 2 regression baselines (production deliverables)
+!regression_baselines/
+regression_baselines/**/*.tif
+regression_baselines/**/*.tiff
+regression_baselines/**/*_marketing.png
+
 # One-off processing scripts (use archive/ for permanent scripts)
 process_*_max_quality.py
 test_lux_depth_*.py
@@ -308,3 +320,6 @@ experiments/input_size_sweep/
 validation_edge_refinement/
 edge_refinement_results/
 *_marketing.png
+# Exclude large upscaled TIFFs from Phase 2 outputs
+phase2_task*_outputs/**/*upscaled16.tif
+regression_baselines/**/*upscaled16.tif
