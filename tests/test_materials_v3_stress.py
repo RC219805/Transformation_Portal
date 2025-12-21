@@ -27,11 +27,28 @@ import gc
 import os
 from unittest.mock import patch
 
-from lux_depth_v2.pipeline import LuxPipelineV2
-from lux_depth_v2.config import PipelineConfig, Preset
+# Check if PyTorch is available BEFORE importing pipeline
+try:
+    import torch  # noqa: F401
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+# Conditional imports
+if TORCH_AVAILABLE:
+    from lux_depth_v2.pipeline import LuxPipelineV2
+    from lux_depth_v2.config import PipelineConfig, Preset
+else:
+    LuxPipelineV2 = None
+    PipelineConfig = None
+    Preset = None
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch is required for LuxPipelineV2"
+)
 class TestMaterialsV3Stress:
     """Stress and stability tests for MaterialsV3."""
     

@@ -26,12 +26,33 @@ import os
 import tempfile
 from unittest.mock import patch, MagicMock
 
-from lux_depth_v2.pipeline import LuxPipelineV2
-from lux_depth_v2.config import PipelineConfig, Preset
-from lux_depth_v2.materials_v3 import MaterialsV3Engine, MaterialsV3Config
-from lux_depth_v2 import torch_ops
+# Check if PyTorch is available BEFORE importing pipeline
+try:
+    import torch  # noqa: F401
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+# Conditional imports - only import if PyTorch is available
+if TORCH_AVAILABLE:
+    from lux_depth_v2.pipeline import LuxPipelineV2
+    from lux_depth_v2.config import PipelineConfig, Preset
+    from lux_depth_v2.materials_v3 import MaterialsV3Engine, MaterialsV3Config
+    from lux_depth_v2 import torch_ops
+else:
+    # Create dummy classes for type checking when PyTorch is not available
+    LuxPipelineV2 = None
+    PipelineConfig = None
+    Preset = None
+    MaterialsV3Engine = None
+    MaterialsV3Config = None
+    torch_ops = None
 
 
+@pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch is required for LuxPipelineV2"
+)
 class TestMaterialsV3EdgeCases:
     """Edge case and error handling tests for MaterialsV3."""
     
@@ -380,6 +401,10 @@ class TestMaterialsV3EdgeCases:
                     assert 'pixel ops' not in error_msg or 'fallback' in error_msg
 
 
+@pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch is required for LuxPipelineV2"
+)
 class TestMaterialsV3EdgeCasesMetadata:
     """Test metadata structure on edge cases."""
     
