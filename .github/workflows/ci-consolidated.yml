@@ -83,6 +83,7 @@ jobs:
       run-core-tests: ${{ steps.analyze.outputs.run_core }}
       run-lint: ${{ steps.analyze.outputs.run_lint }}
       cache-key: ${{ steps.cache-key.outputs.key }}
+      materials_v3_any_changed: ${{ steps.changes.outputs.materials_v3_any_changed }}
       
     steps:
       - name: Checkout
@@ -831,8 +832,7 @@ jobs:
       always() && 
       (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
       needs.test-core.result == 'success' &&
-      (contains(needs.setup.outputs.changed-files, 'lux_depth_v2/materials_v3') || 
-       contains(needs.setup.outputs.changed-files, 'tests/test_materials_v3') || 
+      (needs.setup.outputs.materials_v3_any_changed == 'true' || 
        github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     strategy:
@@ -882,14 +882,8 @@ jobs:
           # Run all Materials V3 tests EXCEPT stress tests (separate workflow)
           pytest tests/test_materials_v3_*.py \
             -v --tb=short \
-            -k "not stress_1000 and not nightly" \
+            -k "not test_1000_iteration_stability and not nightly" \
             --maxfail=5
-            
-      - name: Run Materials V3 Edge Case Tests
-        run: |
-          pytest tests/test_materials_v3_edge_cases.py \
-            -v --tb=short \
-            --maxfail=3
             
       - name: Upload Materials V3 Test Results
         if: always()
