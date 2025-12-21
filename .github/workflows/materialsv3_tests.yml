@@ -24,6 +24,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -61,6 +63,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
@@ -97,6 +101,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     
     - name: Set up Python 3.11
       uses: actions/setup-python@v4

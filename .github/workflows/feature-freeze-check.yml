@@ -6,6 +6,7 @@ on:
     types: [opened, synchronize, labeled, unlabeled]
 
 permissions:
+  contents: read
   pull-requests: write
   issues: write
 
@@ -13,6 +14,7 @@ jobs:
   freeze-enforcement:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
       issues: write
     steps:
