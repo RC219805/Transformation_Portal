@@ -48,6 +48,12 @@ else:
     MaterialsV3Config = None
     torch_ops = None
 
+# Module-level skip - applies to ALL tests in this module
+pytestmark = pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="MaterialsV3 edge case tests require PyTorch"
+)
+
 
 @pytest.mark.skipif(
     not TORCH_AVAILABLE,
@@ -73,14 +79,7 @@ class TestMaterialsV3EdgeCases:
     
     @pytest.fixture
     def ci_safe_config(self, output_dir):
-        """Create a CI-safe pipeline config (uses heuristic backend to avoid transformers dependency).
-        
-        NOTE: This fixture requires PyTorch. Tests using it will be skipped if PyTorch is unavailable.
-        """
-        # Skip the entire fixture if PyTorch is not available
-        if not TORCH_AVAILABLE:
-            pytest.skip("PyTorch required for V2 pipeline")
-        
+        """Create a CI-safe pipeline config (uses heuristic backend to avoid transformers dependency)."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
             output_dir=output_dir,
