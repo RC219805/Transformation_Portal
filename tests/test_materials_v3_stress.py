@@ -27,12 +27,8 @@ import gc
 import os
 from unittest.mock import patch
 
-# Check if PyTorch is available BEFORE importing pipeline
-try:
-    import torch  # noqa: F401
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
+# Import PyTorch availability from the canonical source
+from lux_depth_v2.torch_ops import TORCH_AVAILABLE
 
 # Conditional imports
 if TORCH_AVAILABLE:
