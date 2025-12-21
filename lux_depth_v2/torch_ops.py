@@ -15,9 +15,11 @@ except Exception:  # pragma: no cover
 try:
     import torch
     import torch.nn.functional as F
+    TORCH_AVAILABLE = True
 except Exception as e:  # pragma: no cover
     torch = None  # type: ignore
     F = None  # type: ignore
+    TORCH_AVAILABLE = False
 
 # Platform Core integration for enhanced device detection
 try:
