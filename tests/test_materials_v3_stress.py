@@ -43,8 +43,15 @@ else:
     PipelineConfig = None
     Preset = None
 
+# Module-level skip - stress tests are excluded from CI
+pytestmark = pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="Stress tests excluded from CI; run locally or in performance pipeline"
+)
+
 
 @pytest.mark.slow
+@pytest.mark.stress
 @pytest.mark.skipif(
     not TORCH_AVAILABLE,
     reason="PyTorch is required for LuxPipelineV2"
