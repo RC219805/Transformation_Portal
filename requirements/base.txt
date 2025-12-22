@@ -8,10 +8,22 @@ annotated-types==0.7.0
     # via
     #   -c all.txt
     #   pydantic
+certifi==2025.11.12
+    # via
+    #   -c all.txt
+    #   requests
+charset-normalizer==3.4.4
+    # via
+    #   -c all.txt
+    #   requests
 click==8.3.1
     # via
     #   -c all.txt
     #   typer
+idna==3.11
+    # via
+    #   -c all.txt
+    #   requests
 imagecodecs==2024.12.30
     # via
     #   -c all.txt
@@ -82,6 +94,10 @@ pyyaml==6.0.3
     # via
     #   -c all.txt
     #   -r base.in
+requests==2.32.5
+    # via
+    #   -c all.txt
+    #   -r base.in
 rich==14.2.0
     # via
     #   -c all.txt
@@ -118,7 +134,7 @@ tqdm==4.67.1
     # via
     #   -c all.txt
     #   -r base.in
-typer==0.20.0
+typer==0.20.1
     # via
     #   -c all.txt
     #   -r base.in
@@ -133,3 +149,7 @@ typing-inspection==0.4.2
     # via
     #   -c all.txt
     #   pydantic
+urllib3==2.6.2
+    # via
+    #   -c all.txt
+    #   requests
