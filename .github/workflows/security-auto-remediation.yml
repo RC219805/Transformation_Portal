@@ -92,7 +92,7 @@ jobs:
       
       - name: Download audit report
         if: needs.detect-vulnerabilities.outputs.has_vulns == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: audit-report
       
