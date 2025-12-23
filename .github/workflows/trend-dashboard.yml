@@ -423,7 +423,7 @@ jobs:
     
     steps:
       - name: Download Report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: trend-dashboard-${{ github.run_number }}
           
