@@ -1,0 +1,23 @@
+{
+  "run_id": "depth_gamma_delta2",
+  "sweep_type": "single_parameter",
+  "category": "depth",
+  "parameter": "gamma",
+  "delta_id": "delta-2",
+  "commit": "0779a57",
+  "timestamp": "2025-12-22T01:18:32.543493",
+  "parameters": {
+    "depth_percentile_clip_low": 0.5,
+    "depth_percentile_clip_high": 99.5,
+    "depth_gamma": 0.9,
+    "edge_filter_radius": 5,
+    "edge_filter_sigma_color": 75,
+    "edge_filter_sigma_space": 75,
+    "banding_suppression": 0.005,
+    "materials_confidence_curve": "linear",
+    "materials_edge_weight": 1.0,
+    "materials_low_confidence_suppress": null,
+    "local_contrast_gain": 2.0,
+    "saturation_protection": 1.0
+  }
+}

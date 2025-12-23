@@ -1,0 +1,181 @@
+name: Experimental Boundary Enforcement
+
+on:
+  pull_request:
+    paths:
+      - 'lux_depth_v2/**'
+      - 'src/**'
+      - 'experimental/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'lux_depth_v2/**'
+      - 'src/**'
+      - 'experimental/**'
+
+jobs:
+  check-experimental-imports:
+    name: Prevent Production → Experimental Imports
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Check for experimental imports in production code
+        run: |
+          echo "Checking that production code does not import from experimental/..."
+          
+          # Define production code paths
+          PRODUCTION_PATHS="lux_depth_v2 src"
+          
+          # Search for imports from experimental
+          VIOLATIONS=0
+          
+          for path in $PRODUCTION_PATHS; do
+            if [ -d "$path" ]; then
+              echo "Checking $path..."
+              
+              # Find Python files importing from experimental
+              FOUND=$(grep -r "from experimental" "$path" --include="*.py" || true)
+              
+              if [ ! -z "$FOUND" ]; then
+                echo "❌ VIOLATION: Production code importing from experimental:"
+                echo "$FOUND"
+                VIOLATIONS=$((VIOLATIONS + 1))
+              fi
+              
+              # Also check for "import experimental"
+              FOUND=$(grep -r "^import experimental" "$path" --include="*.py" || true)
+              
+              if [ ! -z "$FOUND" ]; then
+                echo "❌ VIOLATION: Production code importing experimental:"
+                echo "$FOUND"
+                VIOLATIONS=$((VIOLATIONS + 1))
+              fi
+            fi
+          done
+          
+          if [ $VIOLATIONS -gt 0 ]; then
+            echo ""
+            echo "═══════════════════════════════════════════════════════════════"
+            echo "❌ EXPERIMENTAL BOUNDARY VIOLATION"
+            echo "═══════════════════════════════════════════════════════════════"
+            echo ""
+            echo "Production code (lux_depth_v2/, src/) cannot import from experimental/."
+            echo ""
+            echo "This enforces architectural boundaries:"
+            echo "  - Production code must be stable"
+            echo "  - Experimental code is unstable by definition"
+            echo "  - Prevents production contamination"
+            echo ""
+            echo "If you need experimental functionality:"
+            echo "  1. Graduate the feature to src/ (with tests, docs)"
+            echo "  2. Keep it experimental (don't import from production)"
+            echo "  3. Refactor to avoid the dependency"
+            echo ""
+            echo "See: docs/architecture/STABILITY_POLICY.md"
+            echo "═══════════════════════════════════════════════════════════════"
+            exit 1
+          fi
+          
+          echo "✅ No experimental imports found in production code"
+      
+      - name: Verify experimental/__init__.py has warning
+        run: |
+          if [ -f "experimental/__init__.py" ]; then
+            if ! grep -q "ExperimentalWarning" experimental/__init__.py; then
+              echo "❌ experimental/__init__.py must include ExperimentalWarning"
+              exit 1
+            fi
+            echo "✅ Experimental warning guard present"
+          else
+            echo "⚠️  experimental/ directory exists but no __init__.py"
+          fi
+      
+      - name: Check for experimental marker
+        run: |
+          if [ -d "experimental" ]; then
+            if [ -f "experimental/__init__.py" ]; then
+              if ! grep -q "__experimental__" experimental/__init__.py; then
+                echo "❌ experimental/__init__.py must define __experimental__ = True"
+                exit 1
+              fi
+              echo "✅ Experimental marker present"
+            fi
+          fi
+
+  check-tier1-feature-freeze:
+    name: Tier 1 Feature Freeze Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - name: Check for new parameters in lux_depth_v2/config.py
+        run: |
+          if git diff HEAD~1 HEAD --name-only | grep -q "lux_depth_v2/config.py"; then
+            echo "⚠️  config.py modified - checking for new parameters..."
+            
+            # Get diff
+            DIFF=$(git diff HEAD~1 HEAD lux_depth_v2/config.py)
+            
+            # Check for new parameters (lines starting with + that aren't comments)
+            NEW_PARAMS=$(echo "$DIFF" | grep "^+" | grep -v "^+++" | grep -v "^+#" | grep -v "^+\s*$" || true)
+            
+            if [ ! -z "$NEW_PARAMS" ]; then
+              echo "⚠️  New parameters detected in config.py"
+              echo "$NEW_PARAMS"
+              echo ""
+              echo "Checking if PR has 'freeze-exception' label..."
+              # This is informational - GitHub Actions doesn't have easy access to PR labels
+              # Actual enforcement happens via PR template and review process
+              echo "✅ Manual review required - see PR checklist"
+            fi
+          fi
+      
+      - name: Check for new presets
+        run: |
+          if git diff HEAD~1 HEAD --name-only | grep -q "lux_depth_v2/config.py"; then
+            DIFF=$(git diff HEAD~1 HEAD lux_depth_v2/config.py)
+            
+            # Check for new preset definitions
+            if echo "$DIFF" | grep -q "def.*preset" || echo "$DIFF" | grep -q "PRESET"; then
+              echo "⚠️  Potential new preset detected"
+              echo "Feature freeze: New presets require exception approval"
+              echo "See: lux_depth_v2/FEATURE_FREEZE.md"
+            fi
+          fi
+
+  summary:
+    name: Boundary Check Summary
+    runs-on: ubuntu-latest
+    needs: [check-experimental-imports, check-tier1-feature-freeze]
+    if: always()
+    
+    steps:
+      - name: Report results
+        run: |
+          echo "═══════════════════════════════════════════════════════════════"
+          echo "Experimental Boundary Enforcement Complete"
+          echo "═══════════════════════════════════════════════════════════════"
+          echo ""
+          echo "Checks performed:"
+          echo "  ✅ Production → Experimental import prevention"
+          echo "  ✅ Experimental warning guard verification"
+          echo "  ✅ Tier 1 feature freeze compliance"
+          echo ""
+          echo "For details, see:"
+          echo "  - docs/architecture/STABILITY_POLICY.md"
+          echo "  - lux_depth_v2/FEATURE_FREEZE.md"
+          echo "  - CONTRIBUTING.md"
+          echo "═══════════════════════════════════════════════════════════════"

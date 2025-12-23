@@ -1,27 +1,47 @@
 # Contributing
 
-## Feature Freeze Period ❄️
+## Core Stability Policy 🎯
 
-**Active**: December 20, 2025 - January 10, 2026  
-**Reason**: Golden Path consolidation and validation
+### lux_depth_v2 Feature Freeze
 
-### What's Allowed During Freeze
+**Status**: ❄️ **ACTIVE** (December 23, 2025 - March 1, 2026)  
+**Scope**: `lux_depth_v2/` module only  
+**Reason**: Golden Path consolidation and production stability
+
+#### What's Allowed
 
 ✅ **ALLOWED**:
-- Bug fixes (correctness issues)
-- Security fixes
-- Documentation improvements
-- Test improvements
+- Security fixes (CVE remediation, vulnerability patches)
+- Bug fixes (correctness, crashes, memory leaks)
 - Performance optimizations (no behavior changes)
+- Documentation improvements
+- Test coverage enhancements
 
 🚫 **BLOCKED**:
-- New features
+- New features (presets, parameters, processing stages)
+- Behavior changes (modified defaults, altered pipeline)
+- Experimental integrations
 - Breaking changes
-- Refactoring (non-critical)
-- Experimental pipelines
 
-📋 **PROCESS**: All changes require feature freeze check via issue template  
-📚 **Policy**: See [docs/FEATURE_FREEZE_POLICY.md](docs/FEATURE_FREEZE_POLICY.md)
+#### Exception Process
+
+For **critical production needs** that violate the freeze:
+
+1. Open GitHub issue with `freeze-exception` label
+2. Provide justification (business impact, risk assessment, rollback plan)
+3. Require Architect review and approval
+4. Document decision in issue
+
+**Approval criteria**: Security vulnerability (CVSS ≥7.0), production blocker, data loss risk, regulatory compliance.
+
+📚 **Full Policy**: [lux_depth_v2/FEATURE_FREEZE.md](lux_depth_v2/FEATURE_FREEZE.md)  
+📊 **Stability Metrics**: [docs/architecture/STABILITY_POLICY.md](docs/architecture/STABILITY_POLICY.md)
+
+---
+
+### Repository-Wide Guidelines
+
+While **lux_depth_v2** is frozen, other modules follow standard development practices:
 
 ---
 
