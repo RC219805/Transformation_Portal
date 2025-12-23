@@ -33,6 +33,11 @@ networkx<3.5
 # Constrain to 1.7.x for Python 3.10 compatibility
 scikit-learn<1.8
 
+# Security Advisory: CVE-2025-68480
+# marshmallow <4.1.2 has DoS vulnerability in Schema.load(many=True)
+# Require >=4.1.2 to mitigate this vulnerability
+marshmallow>=4.1.2
+
 # Security Advisory: CVE-2024-27763
 # BasicSR <= 1.4.2 has a command injection vulnerability via SLURM_NODELIST.
 # This constraint uses an impossible version specifier to exclude basicsr from being resolved.
