@@ -218,6 +218,14 @@ docker exec lux-depth-v2-service python -c "import basicsr"
 
 ---
 
+## 📚 Reference Material
+
+**Everything below this point is reference documentation for advanced users, contributors, and researchers.**
+
+**New users and production deployers should stop here.** You have everything you need to deploy and use the system effectively.
+
+---
+
 ## 🧪 Testing & Quality
 
 **Test Coverage**:
