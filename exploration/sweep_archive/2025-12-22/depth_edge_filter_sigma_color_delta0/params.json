@@ -1,0 +1,24 @@
+{
+  "run_id": "depth_edge_filter_sigma_color_delta0",
+  "sweep_type": "single_parameter",
+  "category": "depth",
+  "parameter": "edge_filter_sigma_color",
+  "delta_id": "baseline",
+  "commit": "0779a57",
+  "timestamp": "2025-12-22T01:18:32.623989",
+  "parameters": {
+    "depth_percentile_clip_low": 0.5,
+    "depth_percentile_clip_high": 99.5,
+    "depth_gamma": 1.0,
+    "edge_filter_radius": 5,
+    "edge_filter_sigma_color": 75,
+    "edge_filter_sigma_space": 75,
+    "banding_suppression": 0.005,
+    "materials_confidence_curve": "linear",
+    "materials_edge_weight": 1.0,
+    "materials_low_confidence_suppress": null,
+    "local_contrast_gain": 2.0,
+    "saturation_protection": 1.0,
+    "depth_edge_filter_sigma_color": 75
+  }
+}

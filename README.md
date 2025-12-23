@@ -5,122 +5,66 @@
 
 # Transformation Portal
 
-Professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production.
+**Production-grade image processing service for architectural visualization and luxury real estate rendering.**
 
 ---
 
-## 🌟 Golden Path: Production Image Processing
+## ⚡ Quick Start (2 Minutes)
 
-> **PRIMARY WORKFLOW**: `lux_depth_v2` - Security-hardened, production-validated, deployment-ready  
-> **For advanced workflows and experimental features**, see [Alternative Pipelines](#-advanced-workflows) below.
-
-### Quick Start (3 Commands)
+**New user?** → [**QUICKSTART.md**](QUICKSTART.md) ← **Start here**
 
 ```bash
-# 1. Install
+# Install and process images
 pip install -e .
-
-# 2. Process images
 lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
-
-# 3. Deploy service (optional)
-docker-compose up -d lux-depth-v2-service
 ```
 
-### Why lux_depth_v2?
-
-✅ **Security Hardened** - CVE-2024-27763 mitigated, 5-layer defense-in-depth  
-✅ **Production Validated** - 127-400 images/hour throughput, 1,348 tests passing  
-✅ **Deployment Ready** - Docker stack, Prometheus metrics, health checks  
-✅ **16-bit Precision** - Archival-grade quality maintained  
-✅ **GPU Accelerated** - 3-5x faster with CUDA support
-
-### Decision Guide
-
-**"I need to process architectural renders"** → `lux-depth-v2 --preset interior_luxury`  
-**"I need a web API for batch processing"** → `docker-compose up -d lux-depth-v2-service`  
-**"I need custom material enhancement"** → See [Advanced Workflows](#-advanced-workflows)  
-**"I want to train neural networks"** → See [Advanced: Model Training](#-advanced-model-training)
-
-**Complete decision tree**: [docs/DECISION_GUIDE.md](docs/DECISION_GUIDE.md)
-
-### Key Resources
-
-📖 **[Phase 2 User Guide](docs/PHASE2_USER_GUIDE.md)** - Complete walkthrough  
-⚡ **[Quick Reference Card](docs/QUICK_REFERENCE_PHASE2.md)** - One-page cheat sheet  
-📊 **[Quality Tiers Guide](docs/QUALITY_TIERS.md)** - Preset selection  
-🔒 **[Security Guide](lux_depth_v2/SECURITY.md)** - Security best practices
+**That's it.** Security-hardened, production-validated, 127-400 images/hour.
 
 ---
 
-## 🎉 Phase 3 Complete - Full Pipeline Deployment (December 5, 2025)
+## 🎯 The Golden Path
 
-**Unified Luxury Pipeline** - Production-ready with complete 6-stage processing
+**`lux_depth_v2`** is the primary workflow for 95% of use cases:
 
-**[📋 View Phase 3 Deployment Summary](PHASE3_DEPLOYMENT_SUMMARY.md)**
+✅ **Security Hardened** - CVE-2024-27763 mitigated, input validation  
+✅ **Production Validated** - 1,348 tests passing, 127-400 img/hr throughput  
+✅ **Deployment Ready** - Docker stack, Prometheus, health checks  
+✅ **Feature Frozen** - Predictable, stable, no breaking changes  
+✅ **16-bit Precision** - Archival-grade quality maintained
 
-**✅ ALL PHASES COMPLETE:**
-- ✅ **Phase 1**: Upscaling (SwinIR + Real-ESRGAN) - 15 tests
-- ✅ **Phase 2**: Depth Processing + Material Response - 21 tests  
-- ✅ **Phase 3**: LUT Color Grading System - 23 tests
-- ✅ **59 total tests passing** - 100% pass rate
-- ✅ **127-400 images/hour** - Production-validated throughput
-- ✅ **16-bit precision** - Archival-grade quality maintained
+### When to Use the Golden Path
 
-**Complete Pipeline (All 6 Stages Functional):**
-1. ✅ Loading & Validation
-2. ✅ AI Upscaling (4x) - SwinIR/Real-ESRGAN
-3. ✅ Depth-Aware Processing - Depth Anything V2
-4. ✅ Material Response - 8 surface types
-5. ✅ Professional Color Grading - Film emulation + Location LUTs
-6. ✅ Export - 16-bit TIFF with metadata
+**Use `lux_depth_v2` if**:
+- You're processing architectural renders or images
+- You need reliable, predictable behavior
+- You want security-hardened processing
+- You're deploying to production
 
-**Phase Documentation:**
-- 📘 [Phase 1: Upscaling](UPSCALING_REFINEMENT_COMPLETE.md)
-- 📗 [Phase 2: Depth + Material](PHASE2_FINAL_SUMMARY.md)
-- 📙 [Phase 3: LUT System](PHASE3_DEPLOYMENT_SUMMARY.md)
+**Key Resources**:
+- 📖 [**QUICKSTART.md**](QUICKSTART.md) - Get started in 2 minutes
+- 📘 [Phase 2 User Guide](docs/PHASE2_USER_GUIDE.md) - Complete walkthrough
+- ⚡ [Quick Reference Card](docs/QUICK_REFERENCE_PHASE2.md) - CLI cheat sheet
+- 🔒 [Security Guide](lux_depth_v2/SECURITY.md) - Best practices
 
 ---
 
-## 🚀 NEW: Phase 2 Production Deployment (December 8, 2025)
+## 🔀 Advanced Workflows
 
-**Lux Depth V2 - Production-Ready Service Stack**
+**Only use these if the Golden Path doesn't meet your needs.**
 
-**Status**: ✅ **PRODUCTION READY** with security hardening and monitoring
+| Workflow | Use When | Documentation |
+|----------|----------|---------------|
+| **Async Pipeline** | 1000+ images, need 3-5x throughput | [docs/advanced/ASYNC_PIPELINE.md](docs/advanced/ASYNC_PIPELINE.md) |
+| **Context-Aware** | Document-driven intelligence | [docs/advanced/CONTEXT_AWARE_RENDERING.md](docs/advanced/CONTEXT_AWARE_RENDERING.md) |
+| **Material Response** | Custom material enhancement | [docs/advanced/MATERIAL_RESPONSE.md](docs/advanced/MATERIAL_RESPONSE.md) |
+| **Video Processing** | Processing video files (not images) | [docs/advanced/VIDEO_PROCESSING.md](docs/advanced/VIDEO_PROCESSING.md) |
 
-### What's New in Phase 2 Deployment
+**Research/Experimental**: [docs/research/](docs/research/) (⚠️ NOT production-ready)
 
-#### 🔒 Security Hardening
-- **CVE-2024-27763 Mitigation** - Eliminated vulnerable basicsr package
-- **Input Validation** - Path traversal and symlink attack protection
-- **Rate Limiting** - 10-100 req/min per IP (configurable)
-- **API Authentication** - Optional API key authentication
-- **Non-root Containers** - All services run as unprivileged users
-- **Automated Security Scanning** - Daily vulnerability checks in CI/CD
+---
 
-#### 🐳 Docker Production Stack
-- **Multi-stage builds** - Optimized images (base, CPU, GPU, Apple Silicon)
-- **Health checks** - Automatic service recovery and monitoring
-- **Resource limits** - Memory and CPU constraints for stability
-- **Volume management** - Persistent storage for input/output/config
-- **Network isolation** - Dedicated bridge network for services
-- **Logging** - Structured JSON logs with rotation
-
-#### 📊 Observability & Monitoring
-- **Prometheus metrics** - Request rate, latency, errors, queue depth
-- **Grafana dashboards** - Pre-configured service and resource monitoring
-- **Health endpoints** - `/health` for readiness and liveness probes
-- **Structured logging** - JSON format for log aggregation
-- **Performance metrics** - GPU memory usage, throughput tracking
-
-#### ⚡ Performance Features
-- **GPU acceleration** - CUDA support for 3-5x faster processing
-- **Batch processing** - 127-400 images/hour throughput
-- **Material segmentation** - ONNX, SegFormer, heuristic backends
-- **16-bit precision** - End-to-end high-quality pipeline
-- **Async processing** - Non-blocking API endpoints
-
-### Quick Start - Production Deployment
+## 🐳 Production Deployment
 
 ```bash
 # 1. Clone and configure
@@ -224,136 +168,117 @@ docker exec lux-depth-v2-service python -c "import basicsr"
 
 ---
 
-## 📋 Comprehensive Status Report (December 2025)
+## 📚 Documentation
 
-A detailed review of the codebase structure, infrastructure, capabilities, and performance is now available:
+**Production Use**:
+- [QUICKSTART.md](QUICKSTART.md) - Get started in 2 minutes
+- [docs/PHASE2_USER_GUIDE.md](docs/PHASE2_USER_GUIDE.md) - Complete user guide
+- [docs/QUICK_REFERENCE_PHASE2.md](docs/QUICK_REFERENCE_PHASE2.md) - CLI reference
+- [lux_depth_v2/SECURITY.md](lux_depth_v2/SECURITY.md) - Security best practices
+- [deployment/](deployment/) - Docker deployment guides
 
-**[📊 View Comprehensive Codebase Update](docs/COMPREHENSIVE_CODEBASE_UPDATE_2025.md)**
+**Advanced Users**:
+- [docs/advanced/](docs/advanced/) - Advanced workflows (async, context-aware, material, video)
+- [docs/architecture/](docs/architecture/) - System architecture
 
-**Key Highlights:**
-- ✅ **1,348 tests passing** (0 critical linting errors)
-- ⚡ **3-5x throughput improvement** via async pipeline architecture  
-- 📉 **92% smaller repository** (180MB → 15MB)
-- 🔒 **Security hardened** (CVE-2024-27763 mitigation)
-- 🧠 **RAG Knowledge Engine** activated (Phase 2)
+**Researchers**:
+- [docs/research/](docs/research/) - Experimental features (⚠️ NOT production-ready)
 
----
-
-## 🔬 Advanced Workflows
-
-For specialized use cases beyond the Golden Path (lux_depth_v2).
-
-### Async/Streaming Pipeline Architecture
-
-High-performance async processing infrastructure for 3-5x throughput improvement on batch workloads.
-
-**Components**:
-- ⚡ **AsyncPipeline**: Stage orchestration with queue-based execution and backpressure handling
-- 🔄 **BackpressureQueue**: Flow control with high/low water marks for memory efficiency
-- 👷 **WorkerPool**: Separate CPU/IO thread pools with GPU device affinity (CUDA/MPS)
-- 📸 **StreamingImageLoader**: Memory-efficient prefetch loading for large batches
-- 🎯 **Concrete Stages**: ImageLoad, ImageSave, DepthEstimation, MaterialResponse, ColorGrading, Resize, Denoise
-
-### Performance Targets
-- Sequential processing (100 4K images): ~6.9 hours
-- With async pipeline: ~1.5-2 hours (3-5x faster)
-- Memory footprint reduced 50% via streaming I/O
-
-See: `src/transformation_portal/streaming/` for implementation details.
+**Development**:
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
+- [tests/](tests/) - Test suite (1,348 tests)
+- [.github/workflows/](.github/workflows/) - CI/CD pipelines
 
 ---
 
-## 🎯 Phase 1 Strategic Enhancements (December 2024)
+## 🏗️ Architecture
 
-**Version 1.0.0** - Comprehensive workflow optimizations
+**Core System**: `lux_depth_v2/` (feature-frozen production module)
 
-### New Capabilities
-- **🔍 Batch Comparison Tool** - PSNR/SSIM metrics, visual difference analysis
-- **📊 HDR Visualization** - Before/after histograms, dynamic range charts
-- **⏱️ Time Prediction** - Intelligent estimation with historical learning
-- **✅ QA Validation** - Pre-flight checks with go/no-go decisions
-- **🎨 Adaptive Tone Mapping** - Scene-aware parameter selection (low/mid/high-key)
-- **🎭 Alpha Compositing** - Multiple background modes and variants
-- **📄 Enhanced Reports** - Client summaries and technical appendices
+**6-Stage Pipeline**:
+1. Loading & Validation
+2. AI Upscaling (SwinIR/Real-ESRGAN) - 4x resolution
+3. Depth Processing (Depth Anything V2) - Architectural depth awareness
+4. Material Response - 8 surface types (wood, metal, glass, fabric, stone, concrete, leather, water)
+5. Color Grading - Film emulation + location LUTs
+6. Export - 16-bit TIFF with metadata preservation
 
-### Quick Start
+**Performance**:
+- Throughput: 127-400 images/hour (batch)
+- Latency: 2-5 seconds/image (service mode)
+- GPU Acceleration: 3-5x faster with CUDA
+- Memory: < 4GB per image (16-bit TIFF)
+
+**Security**:
+- CVE-2024-27763 mitigated (no vulnerable packages)
+- Input validation (path traversal protection)
+- Rate limiting (10-100 req/min)
+- Non-root containers
+- Automated security scanning (CI/CD)
+
+---
+
+## 📚 Reference Material
+
+**Everything below this point is reference documentation for advanced users, contributors, and researchers.**
+
+**New users and production deployers should stop here.** You have everything you need to deploy and use the system effectively.
+
+---
+
+# Appendix A — Historical & Reference Documentation
+
+## 🧪 Testing & Quality
+
+**Test Coverage**:
+- 1,348 tests passing (100% pass rate)
+- Unit, integration, and performance tests
+- Python 3.10, 3.11, 3.12 tested
+- CPU and GPU configurations validated
+
+**Run Tests**:
 ```bash
-# Validate inputs before processing
-python tools/qa_validator.py input_images/*.tif --output qa_report.md
+# Fast tests (development)
+make test-fast
 
-# Process with intelligent enhancements
-python process_750_picacho_32bit_hdr_enhanced.py
+# Full test suite
+make test-full
 
-# Compare outputs
-python tools/comparison_tool.py --dir1 baseline/ --dir2 enhanced/ --output comparisons/
+# Linting
+make lint
 
-# Analyze HDR processing
-python tools/hdr_visualizer.py --before hdr.tif --after tone_mapped.tif --name Kitchen
+# Security audit
+make security-audit
 ```
 
-**Documentation:** See `docs/PHASE1_ENHANCEMENTS.md` and `PHASE1_IMPLEMENTATION_SUMMARY.md`
+---
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**Core Stability Policy**:
+- `lux_depth_v2/` is **feature-frozen** (security/bugs/performance only)
+- Advanced features follow standard development practices
+- Experimental features in `docs/research/` have minimal governance
 
 ---
 
-## 🧠 Context-Aware Rendering (November 2025)
+## 📜 License
 
-Revolutionary Context-Aware Rendering System that extracts architectural intelligence from construction documents (floor plans, elevations, specifications) and uses this knowledge to inform every processing decision.
-
-### What's New
-- 🏗️ Architectural Context Extraction - Reads PDFs to extract room types, dimensions, materials, and design style
-- 🧠 Intelligent Strategy Derivation - Automatically optimizes processing for each specific space
-- 🎯 Room-Specific Processing - Kitchen, bedroom, bathroom, living, outdoor areas each get tailored treatment
-- 📐 Dimension-Aware - Depth processing respects actual room proportions
-- 🎨 Style-Consistent - Color grading aligns with architectural design language
-- 📄 Document Provenance - Direct connection between construction docs and final renders
-
-See: [Context-Aware Rendering Guide](docs/CONTEXT_AWARE_RENDERING.md) | [Quick Start](#quick-start) | [Implementation Summary](docs/CONTEXT_AWARE_RENDERING.md#implementation-summary)
+Attribution-based license. See repository for details.
 
 ---
 
-## 🎉 Recent Update: Repository Refactored (October 2025)
+## 🆘 Support
 
-The repository has been significantly reorganized for better performance and maintainability:
-- 92% smaller repository size (180MB → 15MB)
-- 60% faster imports with lazy loading
-- Clear modular structure with organized packages
-- Comprehensive documentation in `docs/` directory
+**Issues**: Open GitHub issue with error logs  
+**Security**: See [SECURITY.md](SECURITY.md)  
+**Questions**: Check [docs/](docs/) first, then open discussion
 
-See `docs/REFACTORING_SUMMARY.md` for details.
+---
 
-## 🗂️ Automated Repository Organization
-
-The repository now includes an automated file organization system to maintain a clean, structured directory hierarchy:
-
-- Automatic file organization with `.auto-organize.sh`
-- Pre-commit hooks to prevent misplaced files
-- Clear directory structure for docs, scripts, assets, and data
-
-See `docs/migrated/REPO_ORGANIZATION.md` for complete documentation.
-
-Quick Start:
-```bash
-# Install organization system
-./scripts/setup/auto-organize-install.sh
-
-# Organize repository (dry-run first)
-./.auto-organize.sh --dry-run
-./.auto-organize.sh
-```
-
-## Overview
-
-Transformation Portal is a comprehensive suite of AI-powered tools and pipelines designed for high-end architectural rendering, real estate photography, and video post-production. It combines cutting-edge machine learning models, professional color grading techniques, and proprietary Material Response technology to transform raw renders and photographs into polished marketing visuals.
-
-### 🤖 Custom AI Agent Available (Enhanced v2.0) 🚀
-
-A specialized Transformation Portal Specialist GitHub Copilot agent is available to assist with development. **NEW in v2.0**: Enhanced with 8 advanced capabilities including multi-modal analysis, proactive automation, deep debugging, performance optimization, CI/CD intelligence, and quality assurance.
-
-**Use it in Copilot Chat**: `@transformation-portal-specialist [your request]`
-
-**New Capabilities**:
-- 🖼️ Multi-modal artifact analysis (image/video quality assessment)
-- 🤖 Proactive workflow automation (suggests next steps)
+*Built with discipline. Operated with confidence.*
 - 🔍 Deep debugging with root cause analysis
 - ⚡ Automated performance optimization (2-5x improvements)
 - 🔄 Smart CI/CD (60% faster test feedback)
