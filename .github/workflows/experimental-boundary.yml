@@ -1,5 +1,8 @@
 name: Experimental Boundary Enforcement
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
