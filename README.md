@@ -226,6 +226,8 @@ docker exec lux-depth-v2-service python -c "import basicsr"
 
 ---
 
+# Appendix A — Historical & Reference Documentation
+
 ## 🧪 Testing & Quality
 
 **Test Coverage**:
