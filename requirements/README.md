@@ -82,14 +82,21 @@ pip install -e .
 
 1. Edit the appropriate `.in` file (e.g., `base.in`, `ml.in`, `dev.in`, or `ci.in`)
 2. Add your dependency with a version constraint (e.g., `requests>=2.28,<3`)
-3. Recompile all requirements:
+3. **CRITICAL**: Ensure you're using Python 3.10 for compilation:
+   ```bash
+   python --version  # Must show Python 3.10.x
+   # If not, switch to Python 3.10:
+   # pyenv local 3.10.15  # or equivalent
+   ```
+4. Recompile all requirements:
+   ```bash
+   cd requirements/
+   make check-python  # Verify Python version
+   make compile
+   ```
+5. Commit both the `.in` and `.txt` files
 
-```bash
-cd requirements/
-make compile
-```
-
-4. Commit both the `.in` and `.txt` files
+⚠️ **Why Python 3.10?** Requirements must be compiled with the **minimum supported Python version** (3.10) to ensure compatibility across all Python versions (3.10, 3.11, 3.12). See `COMPILATION_NOTES.md` for detailed explanation.
 
 #### Updating Dependencies
 
@@ -97,8 +104,24 @@ To update all dependencies to their latest allowed versions:
 
 ```bash
 cd requirements/
+# First, verify Python version
+make check-python  # Must be Python 3.10
+# Then update
 make update
 ```
+
+⚠️ **CRITICAL**: Always use Python 3.10 when updating dependencies. Using a newer Python version (3.11, 3.12) will create incompatible requirements for Python 3.10 users.
+
+**Verification Steps**:
+1. Check headers in .txt files: `head -n 5 *.txt | grep Python`
+   - Should show: "Python 3.10"
+   - Should NOT show: "Python 3.11" or "Python 3.12"
+2. Test on all Python versions:
+   ```bash
+   python3.10 -m pip install -r all.txt  # Must work
+   python3.11 -m pip install -r all.txt  # Must work
+   python3.12 -m pip install -r all.txt  # Must work
+   ```
 
 This will respect the version constraints in the `.in` files but find the newest versions within those constraints.
 
