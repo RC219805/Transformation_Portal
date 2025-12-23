@@ -189,3 +189,13 @@ Track during freeze period:
 ---
 
 **Remember**: Feature freeze is not about saying "no" forever—it's about saying "not right now" while we validate what we've built.
+
+
+## Governance Consolidation Merge
+
+**Date:** 2025-12-23
+**Tag:** v2.0.0-governed-readme
+**PR:** #588 - security/fix-marshmallow-cve-2025-68480
+
+Feature freeze enforcement is now active on main branch.
+
