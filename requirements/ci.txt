@@ -149,7 +149,7 @@ markupsafe==3.0.3
     # via
     #   -c all.txt
     #   jinja2
-marshmallow==4.1.1
+marshmallow==4.1.2
     # via
     #   -c all.txt
     #   safety
