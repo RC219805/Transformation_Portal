@@ -1,5 +1,14 @@
 # Lux Depth Pipeline V2 (Production-Oriented)
 
+## ❄️ **FEATURE FREEZE NOTICE**
+
+**This module is feature-frozen.** Only security fixes, bug fixes, and performance improvements are accepted.
+
+📚 **See [FEATURE_FREEZE.md](FEATURE_FREEZE.md) for policy details and exception process.**
+
+---
+
+
 ## �� New to Phase 2?
 
 **Start here for user-friendly guides:**
