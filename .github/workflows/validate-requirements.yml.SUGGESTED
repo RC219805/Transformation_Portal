@@ -145,11 +145,13 @@ jobs:
           echo "✓ basicsr correctly excluded (CVE-2024-27763)"
           
           # CVE-2024-73169: sentence-transformers <3.1.0
-          ST_VERSION=$(grep "sentence-transformers==" requirements/*.txt | head -1 | cut -d'=' -f3)
+          RAW_ST_VERSION=$(grep "sentence-transformers==" requirements/*.txt | head -1 | cut -d'=' -f3)
+          # Sanitize version string: keep only numeric and dot characters before any suffix
+          ST_VERSION=$(printf '%s\n' "$RAW_ST_VERSION" | sed -E 's/[^0-9.].*$//')
           if [ -n "$ST_VERSION" ]; then
             # Simple version check (major.minor)
-            MAJOR=$(echo $ST_VERSION | cut -d'.' -f1)
-            MINOR=$(echo $ST_VERSION | cut -d'.' -f2)
+            MAJOR=$(printf '%s\n' "$ST_VERSION" | cut -d'.' -f1)
+            MINOR=$(printf '%s\n' "$ST_VERSION" | cut -d'.' -f2)
             if [ "$MAJOR" -lt 3 ] || ([ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 1 ]); then
               echo "❌ ERROR: sentence-transformers version $ST_VERSION < 3.1.0"
               echo "Vulnerable to CVE-2024-73169 (arbitrary code execution)"
@@ -174,9 +176,11 @@ jobs:
           echo "Checking Python 3.10 compatibility constraints..."
           
           # networkx <3.5 for Python 3.10
-          NETWORKX_VERSION=$(grep "networkx==" requirements/all.txt | cut -d'=' -f3)
-          NETWORKX_MAJOR=$(echo $NETWORKX_VERSION | cut -d'.' -f1)
-          NETWORKX_MINOR=$(echo $NETWORKX_VERSION | cut -d'.' -f2)
+          # Sanitize and parse networkx version
+          RAW_NETWORKX_VERSION=$(grep "networkx==" requirements/all.txt | cut -d'=' -f3)
+          NETWORKX_VERSION=$(printf '%s\n' "$RAW_NETWORKX_VERSION" | sed -E 's/[^0-9.].*$//')
+          NETWORKX_MAJOR=$(printf '%s\n' "$NETWORKX_VERSION" | cut -d'.' -f1)
+          NETWORKX_MINOR=$(printf '%s\n' "$NETWORKX_VERSION" | cut -d'.' -f2)
           if [ "$NETWORKX_MAJOR" -gt 3 ] || ([ "$NETWORKX_MAJOR" -eq 3 ] && [ "$NETWORKX_MINOR" -ge 5 ]); then
             echo "❌ ERROR: networkx $NETWORKX_VERSION >= 3.5 (incompatible with Python 3.10)"
             exit 1
@@ -184,9 +188,11 @@ jobs:
           echo "✓ networkx $NETWORKX_VERSION < 3.5 (Python 3.10 compatible)"
           
           # scikit-learn <1.8 for Python 3.10
-          SKLEARN_VERSION=$(grep "scikit-learn==" requirements/all.txt | cut -d'=' -f3)
-          SKLEARN_MAJOR=$(echo $SKLEARN_VERSION | cut -d'.' -f1)
-          SKLEARN_MINOR=$(echo $SKLEARN_VERSION | cut -d'.' -f2)
+          # Sanitize and parse scikit-learn version
+          RAW_SKLEARN_VERSION=$(grep "scikit-learn==" requirements/all.txt | cut -d'=' -f3)
+          SKLEARN_VERSION=$(printf '%s\n' "$RAW_SKLEARN_VERSION" | sed -E 's/[^0-9.].*$//')
+          SKLEARN_MAJOR=$(printf '%s\n' "$SKLEARN_VERSION" | cut -d'.' -f1)
+          SKLEARN_MINOR=$(printf '%s\n' "$SKLEARN_VERSION" | cut -d'.' -f2)
           if [ "$SKLEARN_MAJOR" -gt 1 ] || ([ "$SKLEARN_MAJOR" -eq 1 ] && [ "$SKLEARN_MINOR" -ge 8 ]); then
             echo "❌ ERROR: scikit-learn $SKLEARN_VERSION >= 1.8 (incompatible with Python 3.10)"
             exit 1
