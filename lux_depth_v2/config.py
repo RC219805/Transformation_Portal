@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional, Tuple, TYPE_CHECKING
+import hashlib
+import json
 
 # Platform Core integration for unified configuration
 try:
@@ -25,6 +27,11 @@ if TYPE_CHECKING:
 
 class Preset(str, Enum):
     """Curated looks (conservative defaults; tuned for photorealism)."""
+
+    # Sprint hardening presets
+    CI_BASELINE = "ci_baseline"
+    PRODUCTION_STANDARD = "production_standard"
+    PRODUCTION_ULTRA = "production_ultra"
 
     PHOTO_REALISTIC = "photo_realistic"
     INTERIOR_LUXURY = "interior_luxury"
@@ -57,6 +64,14 @@ class FusionMode(str, Enum):
     UNION = "union"
     INTERSECTION = "intersection"
     CONFIDENCE_WEIGHTED = "confidence_weighted"
+
+
+class DepthMode(str, Enum):
+    """Depth requirement modes for pipeline contract."""
+    
+    REQUIRED = "required"      # Depth MUST be provided or generated (fail if impossible)
+    AUTO = "auto"              # Auto-generate if missing (production default)
+    OPTIONAL = "optional"      # Proceed without depth if missing (CI baseline only)
 
 
 @dataclass
@@ -164,6 +179,29 @@ class MaterialPropertySchema:
             metalness=0.0,
             subsurface_scattering=0.15
         )
+
+
+@dataclass
+class DepthConfig:
+    """Depth pipeline configuration for contract enforcement.
+    
+    Hardening Sprint Week 1: Depth Contract
+    - Prevents silent quality degradation when depth is missing
+    - Enables auto-generation with tiling for production
+    """
+    
+    mode: DepthMode = DepthMode.AUTO
+    
+    # Auto-generation parameters (when mode=AUTO and depth missing)
+    auto_tile_size: int = 1024
+    auto_overlap: int = 128
+    auto_model: str = "depth-anything/Depth-Anything-V2-Large-hf"
+    auto_use_global_anchor: bool = True
+    auto_use_edge_snapping: bool = True
+    
+    # Cache settings
+    enable_cache: bool = True
+    cache_dir: str = ".cache/depth"
 
 
 @dataclass
@@ -500,6 +538,9 @@ class PipelineConfig:
     # Disabled by default, opt-in via --enable-edge-refinement flag
     enable_edge_refinement: bool = False
     refinement_preset: str = "balanced"  # subtle|balanced|aggressive
+    
+    # Depth Contract (Hardening Sprint Week 1)
+    depth: DepthConfig = field(default_factory=DepthConfig)
 
     def __post_init__(self) -> None:
         """
@@ -511,6 +552,22 @@ class PipelineConfig:
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""
         p = self.preset
+        
+        # CI_BASELINE preset (special case - OPTIONAL depth)
+        # This is the ONLY preset that allows processing without depth
+        if str(p).lower() == "ci_baseline":
+            self.depth.mode = DepthMode.OPTIONAL
+            self.material_strength = 0.60
+            self.temp_fg, self.temp_mid, self.temp_bg = 0.004, 0.002, -0.002
+            self.sat_fg, self.sat_mid, self.sat_bg = 1.010, 1.005, 1.000
+            self.con_fg, self.con_mid, self.con_bg = 1.015, 1.010, 1.005
+            self.detail_strength = 0.55
+            self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.14, 0.08, 0.03
+            self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.06, 0.04, 0.02
+            self.post_tile = 2048
+            self.post_overlap = 64
+            self.validate_ai = True
+            return
 
         if p == Preset.PHOTO_REALISTIC:
             self.material_strength = 0.70
@@ -522,6 +579,7 @@ class PipelineConfig:
             self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.08, 0.05, 0.03
 
         elif p == Preset.INTERIOR_LUXURY:
+            self.depth.mode = DepthMode.AUTO  # Auto-generate if missing
             self.material_strength = 0.90
             self.temp_fg, self.temp_mid, self.temp_bg = 0.013, 0.006, 0.000
             self.sat_fg, self.sat_mid, self.sat_bg = 1.045, 1.030, 1.010
@@ -591,6 +649,8 @@ class PipelineConfig:
             # Quality Gain: 37-58% improvement over max_quality
             # Use Cases: Archival outputs, flagship portfolio, print materials
             # ═══════════════════════════════════════════════════════════════
+            
+            self.depth.mode = DepthMode.REQUIRED  # APEX always requires depth
             
             # Base grading (same as interior_luxury)
             self.material_strength = 0.90
@@ -703,6 +763,7 @@ class PipelineConfig:
         elif p == Preset.EXTERIOR_POOL_APEX_QUALITY:
             # APEX quality for exterior pool/twilight scenes
             # Optimized for: water, sky, vegetation, stucco, stone
+            self.depth.mode = DepthMode.REQUIRED  # APEX always requires depth
             self.material_strength = 0.95
             self.temp_fg, self.temp_mid, self.temp_bg = 0.005, 0.000, -0.008
             self.sat_fg, self.sat_mid, self.sat_bg = 1.065, 1.040, 1.020
@@ -998,9 +1059,70 @@ class PipelineConfig:
             # Force pixel ops application for validation only
             self.materials_v3.force_stone_pixel_ops = True
 
+        # Add PRODUCTION_STANDARD preset (AUTO depth mode)
+        if str(p).lower() == "production_standard":
+            self.depth.mode = DepthMode.AUTO
+            self.material_strength = 0.85
+            self.temp_fg, self.temp_mid, self.temp_bg = 0.010, 0.004, -0.001
+            self.sat_fg, self.sat_mid, self.sat_bg = 1.040, 1.025, 1.010
+            self.con_fg, self.con_mid, self.con_bg = 1.030, 1.025, 1.015
+            self.detail_strength = 0.68
+            self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.19, 0.11, 0.055
+            self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.085, 0.055, 0.033
+            self.post_tile = 2048
+            self.post_overlap = 64
+            self.validate_ai = True
+        
+        # Add PRODUCTION_ULTRA preset (REQUIRED depth mode)
+        if str(p).lower() == "production_ultra":
+            self.depth.mode = DepthMode.REQUIRED
+            self.material_strength = 0.95
+            self.temp_fg, self.temp_mid, self.temp_bg = 0.014, 0.007, 0.001
+            self.sat_fg, self.sat_mid, self.sat_bg = 1.050, 1.035, 1.015
+            self.con_fg, self.con_mid, self.con_bg = 1.040, 1.035, 1.025
+            self.detail_strength = 0.75
+            self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.22, 0.14, 0.07
+            self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.10, 0.07, 0.04
+            self.post_tile = 2048
+            self.post_overlap = 128
+            self.validate_ai = True
+            self.precision = "fp32"
+            self.half = False
+        
         # clamp some sanity
         self.upscale = 4 if int(self.upscale) not in (2, 4) else int(self.upscale)
         self.material_strength = float(max(0.0, min(1.25, self.material_strength)))
+    
+    def _cfg_fingerprint(self) -> str:
+        """Generate config fingerprint for cache invalidation (Week 2: Materials Hardening).
+        
+        Includes parameters that affect processing output quality:
+        - Material segmentation config
+        - Depth zone config
+        - Core grading parameters
+        - Materials V2/V3 config
+        
+        Excludes I/O paths and performance-only settings.
+        """
+        cfg_dict = {
+            "preset": str(self.preset.value),
+            "material_strength": self.material_strength,
+            "temp": (self.temp_fg, self.temp_mid, self.temp_bg),
+            "sat": (self.sat_fg, self.sat_mid, self.sat_bg),
+            "exp": (self.exp_fg, self.exp_mid, self.exp_bg),
+            "con": (self.con_fg, self.con_mid, self.con_bg),
+            "detail_strength": self.detail_strength,
+            "clarity": (self.clarity_fg, self.clarity_mid, self.clarity_bg),
+            "sharpen": (self.sharpen_fg, self.sharpen_mid, self.sharpen_bg),
+            "segmentation_backend": self.segmentation.backend,
+            "segmentation_long_side": self.segmentation.input_long_side,
+            "segmentation_min_confidence": self.segmentation.min_confidence,
+            "depth_zones_mode": self.depth_zones.mode,
+            "materials_v2_enabled": self.materials_v2.enabled if self.materials_v2 else False,
+            "materials_v3_enabled": self.materials_v3.enabled if self.materials_v3 else False,
+        }
+        cfg_json = json.dumps(cfg_dict, sort_keys=True)
+        return hashlib.sha256(cfg_json.encode()).hexdigest()[:16]
     
     # --- Platform Core Integration ---
     
