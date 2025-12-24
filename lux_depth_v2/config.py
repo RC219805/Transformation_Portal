@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 class Preset(str, Enum):
     """Curated looks (conservative defaults; tuned for photorealism)."""
 
+    CI_BASELINE = "ci_baseline"
+
     PHOTO_REALISTIC = "photo_realistic"
     INTERIOR_LUXURY = "interior_luxury"
     INTERIOR_LUXURY_MAX_QUALITY = "interior_luxury_max_quality"
@@ -40,6 +42,31 @@ class Preset(str, Enum):
     EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM = "exterior_pool_apex_quality_efficientsam"  # Canary V3
     ARCHITECTURAL = "architectural"
     ARCHIVAL_QUALITY = "archival_quality"
+
+
+class DepthMode(str, Enum):
+    """Depth map handling strategy."""
+    REQUIRED = "required"   # Fail if missing
+    AUTO = "auto"           # Generate if missing
+    OPTIONAL = "optional"   # Allow uniform fallback (CI baseline only)
+
+
+@dataclass
+class DepthConfig:
+    """Depth contract + auto-depth configuration."""
+    mode: DepthMode = DepthMode.AUTO
+    model_name: str = "depth-anything/Depth-Anything-V2-Large-hf"
+    tile_size: int = 1024
+    overlap: int = 128
+    fusion_mode: str = "median"  # weighted|median|confidence (see depth_inference)
+    use_global_anchor: bool = True
+    use_edge_snapping: bool = True
+
+    cache_enabled: bool = True
+    cache_dir: str = ".cache/depth"
+
+    # Advisory proxy derived from edge-alignment; not a probabilistic confidence
+    min_confidence_proxy: float = 0.70
 
 
 class SegmentationBackend(str, Enum):
@@ -408,6 +435,9 @@ class PipelineConfig:
     # OFF by default because it introduces synchronization overhead.
     timing_sync_device: bool = False
 
+    # Depth contract (PR#1 hardening)
+    depth: DepthConfig = field(default_factory=DepthConfig)
+
     # Safety
     warn_float_gb: float = 6.0
     strict_depth: bool = False
@@ -511,6 +541,21 @@ class PipelineConfig:
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""
         p = self.preset
+        # Depth contract defaults (PR#1 hardening)
+        # - CI_BASELINE: allow missing depth (uniform weights)
+        # - APEX presets: require depth (fail fast)
+        # - All other production presets: AUTO depth generation + cache
+        if p == Preset.CI_BASELINE:
+            self.depth.mode = DepthMode.OPTIONAL
+            self.strict_depth = False
+            return
+
+        if "APEX_QUALITY" in p.name:
+            self.depth.mode = DepthMode.REQUIRED
+            self.strict_depth = True
+        else:
+            self.depth.mode = DepthMode.AUTO
+            self.strict_depth = False
 
         if p == Preset.PHOTO_REALISTIC:
             self.material_strength = 0.70

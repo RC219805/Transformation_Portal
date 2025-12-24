@@ -796,6 +796,7 @@ def create_tiled_estimator(
     overlap: int = 128,
     fusion_mode: str = "median",
     device: str = "auto",
+    model_name: str = "depth-anything/Depth-Anything-V2-Large-hf",
     use_global_anchor: bool = True,
     use_edge_snapping: bool = True
 ) -> TiledDepthEstimator:
@@ -807,6 +808,7 @@ def create_tiled_estimator(
         overlap: Overlap between tiles (128-256 recommended)
         fusion_mode: Tile blending mode (median | weighted)
         device: Device for inference (auto | cuda | mps | cpu)
+        model_name: Hugging Face model ID for depth estimation
         use_global_anchor: Enable global context preservation
         use_edge_snapping: Enable edge sharpening
         
@@ -821,6 +823,7 @@ def create_tiled_estimator(
         overlap=overlap,
         fusion_mode=fusion_mode,
         device=device,
+        model_name=model_name,
         bypass_image_processor=True,  # CRITICAL: Always bypass 518px resize
         use_global_anchor=use_global_anchor,
         global_anchor_config=GlobalAnchorConfig() if use_global_anchor else None,

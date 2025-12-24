@@ -14,11 +14,12 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .config import PipelineConfig
+from .config import PipelineConfig, DepthMode
 from .logging_utils import setup_logging
 from . import io_utils
 from . import torch_ops
 from . import weights as weights_mod
+from .depth_cache_manager import DepthCacheManager
 from . import upscaling
 from .material_segmentation import create_material_segmenter
 from . import material_profiles
@@ -151,6 +152,43 @@ class LuxPipelineV2:
         torch_ops.configure_torch(cfg.cudnn_benchmark)
 
         self.autocast = (str(cfg.precision).lower() == "fp16" and self.device.type == "cuda")
+
+        # ---------------------------------------------------------------------
+        # PR#1 hardening: depth contract + AUTO depth + cache
+        # ---------------------------------------------------------------------
+        dcfg = getattr(cfg, "depth", None)
+        self._depth_estimator = None
+        self._depth_params_fingerprint = None
+        self.depth_cache_manager = None
+
+        if dcfg is not None and dcfg.mode in (DepthMode.AUTO, DepthMode.REQUIRED):
+            try:
+                from .depth_inference import create_tiled_estimator
+                fp_raw = f"{dcfg.model_name}|{dcfg.tile_size}|{dcfg.overlap}|{dcfg.fusion_mode}|{dcfg.use_global_anchor}|{dcfg.use_edge_snapping}"
+                self._depth_params_fingerprint = hashlib.sha256(fp_raw.encode("utf-8")).hexdigest()[:16]
+                self._depth_estimator = create_tiled_estimator(
+                    tile_size=dcfg.tile_size,
+                    overlap=dcfg.overlap,
+                    fusion_mode=dcfg.fusion_mode,
+                    device=str(self.device),
+                    model_name=dcfg.model_name,
+                    use_global_anchor=dcfg.use_global_anchor,
+                    use_edge_snapping=dcfg.use_edge_snapping,
+                )
+                self.logger.info(
+                    f"Depth estimator configured (lazy): model={dcfg.model_name} tile={dcfg.tile_size} overlap={dcfg.overlap} fusion={dcfg.fusion_mode}"
+                )
+            except Exception as e:
+                self.logger.exception(f"Depth estimator init failed: {e}")
+                if dcfg.mode == DepthMode.REQUIRED:
+                    raise
+
+        if dcfg is not None and dcfg.mode == DepthMode.AUTO and dcfg.cache_enabled:
+            try:
+                self.depth_cache_manager = DepthCacheManager(Path(dcfg.cache_dir), logger=self.logger)
+                self.logger.info(f"Depth cache enabled: {dcfg.cache_dir}")
+            except Exception as e:
+                self.logger.warning(f"Depth cache init failed: {e}")
 
         # Backends
         self.upscaler = upscaling.create_upscaler(cfg, self.device)
@@ -493,13 +531,104 @@ class LuxPipelineV2:
         with self._stage(report, "io/read_depth"):
             if depth_path is None:
                 depth_path = _find_depth(cfg.depth_dir, stem)
+
             depth01 = None
+            depth_source = None
+            cache_key = None
+            cache_hit = False
+            confidence_proxy = None
+            t0 = time.perf_counter()
+
             if depth_path and Path(depth_path).exists():
                 depth01 = io_utils.read_depth_u16(Path(depth_path))
+                depth_source = "provided"
             else:
+                dcfg = getattr(cfg, "depth", None)
+
+                # Back-compat: strict_depth implies REQUIRED
+                mode = dcfg.mode if dcfg is not None else (DepthMode.REQUIRED if cfg.strict_depth else DepthMode.AUTO)
                 if cfg.strict_depth:
-                    raise FileNotFoundError(f"Depth missing for {img_path.name} (strict_depth=True)")
-                self.logger.warning(f"Depth missing for {img_path.name}; using uniform weights")
+                    mode = DepthMode.REQUIRED
+
+                if mode == DepthMode.REQUIRED:
+                    raise FileNotFoundError(
+                        f"Depth missing for {img_path.name} (depth.mode=REQUIRED). "
+                        f"Provide a depth map or switch to an AUTO-depth preset."
+                    )
+
+                if mode == DepthMode.OPTIONAL:
+                    depth_source = "uniform_fallback"
+                    self.logger.warning(
+                        f"Depth missing for {img_path.name}; using uniform weights (depth.mode=OPTIONAL)"
+                    )
+
+                elif mode == DepthMode.AUTO:
+                    if self._depth_estimator is None:
+                        raise RuntimeError("Depth AUTO requested but depth estimator is unavailable.")
+
+                    # Cache-first (deterministic, fast fingerprint; avoids full-file reads)
+                    if self.depth_cache_manager is not None and self._depth_params_fingerprint is not None:
+                        cache_key = self.depth_cache_manager.compute_cache_key(
+                            img_path=Path(img_path),
+                            model_name=dcfg.model_name if dcfg is not None else "unknown",
+                            params_fingerprint=self._depth_params_fingerprint,
+                        )
+                        cached = self.depth_cache_manager.load(cache_key) if self.depth_cache_manager.is_cached(cache_key) else None
+                        if cached is not None:
+                            depth01 = cached["depth"]
+                            confidence_proxy = cached.get("confidence_proxy")
+                            depth_source = "cache"
+                            cache_hit = True
+
+                    if depth01 is None:
+                        self.logger.info(
+                            f"Generating depth for {img_path.name} (model={dcfg.model_name if dcfg is not None else 'unknown'})"
+                        )
+                        with self._stage(report, "depth/estimate_tiled"):
+                            depth01 = self._depth_estimator.estimate_depth(rgb01)
+
+                        depth_source = "generated"
+
+                        # Advisory proxy from edge-alignment (scaled to [0,1])
+                        try:
+                            corr = float(self._depth_estimator.compute_edge_alignment(rgb01, depth01))
+                            confidence_proxy = max(0.0, min(1.0, (corr + 1.0) * 0.5))
+                        except Exception:
+                            confidence_proxy = None
+
+                        if (
+                            confidence_proxy is not None
+                            and dcfg is not None
+                            and confidence_proxy < float(dcfg.min_confidence_proxy)
+                        ):
+                            self.logger.warning(
+                                f"Depth confidence proxy low: {confidence_proxy:.3f} < {float(dcfg.min_confidence_proxy):.3f}"
+                            )
+
+                        # Save cache
+                        if self.depth_cache_manager is not None and cache_key is not None:
+                            meta = {
+                                "model_name": dcfg.model_name if dcfg is not None else None,
+                                "tile_size": dcfg.tile_size if dcfg is not None else None,
+                                "overlap": dcfg.overlap if dcfg is not None else None,
+                                "fusion_mode": dcfg.fusion_mode if dcfg is not None else None,
+                                "use_global_anchor": dcfg.use_global_anchor if dcfg is not None else None,
+                                "use_edge_snapping": dcfg.use_edge_snapping if dcfg is not None else None,
+                                "confidence_proxy": float(confidence_proxy) if confidence_proxy is not None else None,
+                                "generated_at": time.time(),
+                            }
+                            self.depth_cache_manager.save(cache_key, depth01, meta, float(confidence_proxy or 0.0))
+
+            # Report depth provenance (depth-only PR#1)
+            report["depth_info"] = {
+                "mode": getattr(getattr(cfg, "depth", None), "mode", None).value if getattr(cfg, "depth", None) else None,
+                "source": depth_source,
+                "path": str(depth_path) if depth_path else None,
+                "cache": {"enabled": bool(self.depth_cache_manager), "hit": cache_hit, "key": cache_key},
+                "confidence_proxy": float(confidence_proxy) if confidence_proxy is not None else None,
+                "runtime_s": float(time.perf_counter() - t0),
+            }
+            report["zone_weights"] = "depth_aware" if depth01 is not None else "uniform"
 
             zone_masks = _find_zone_masks(cfg.depth_dir, stem)
             w = weights_mod.weights_from_assets(H, W, self.device, depth01, zone_masks, cfg)
