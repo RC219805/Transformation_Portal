@@ -11,25 +11,76 @@ to all DA3 features including Gaussian Splatting, pose estimation, and feature e
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Any, List, Union, Tuple
-from pathlib import Path
-from dataclasses import dataclass
-import subprocess
-import shutil
-import json
-import time
-import requests
-import signal
 import atexit
+import json
 import logging
+import shlex
+import shutil
+import signal
+import subprocess
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-import numpy as np
 import cv2
-from PIL import Image
+import numpy as np
+import requests
 import torch
 import torch.nn as nn
+from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+class DA3Error(RuntimeError):
+    """Base exception for DA3 wrapper errors."""
+
+
+class DA3NotInstalledError(DA3Error):
+    """Raised when the DA3 CLI is not available on PATH."""
+
+
+class DA3TimeoutError(DA3Error):
+    """Raised when DA3 inference exceeds the allowed timeout."""
+
+
+class DA3CommandError(DA3Error):
+    """Raised when a DA3 CLI invocation fails."""
+
+
+def _tail(text: str, max_chars: int = 4000) -> str:
+    """Return the last max_chars of text for error messages."""
+    if text is None:
+        return ""
+    text = str(text)
+    return text if len(text) <= max_chars else text[-max_chars:]
+
+
+def _run_subprocess(
+    cmd: List[str],
+    *,
+    timeout_s: Optional[int] = None,
+    capture_output: bool = True,
+) -> subprocess.CompletedProcess:
+    """Run a subprocess command with consistent logging, timeout and output capture."""
+    logger.debug("Running: %s", shlex.join(cmd))
+    start = time.perf_counter()
+    try:
+        cp = subprocess.run(
+            cmd,
+            capture_output=capture_output,
+            text=True,
+            timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired as e:
+        elapsed = time.perf_counter() - start
+        raise DA3TimeoutError(
+            f"Command timed out after {timeout_s}s (elapsed={elapsed:.2f}s): {shlex.join(cmd)}"
+        ) from e
+    setattr(cp, "_tp_elapsed_s", time.perf_counter() - start)
+    return cp
 
 
 def check_da3_cli_available() -> bool:
@@ -70,54 +121,62 @@ class DA3Prediction:
 
 class DA3Backend:
     """Manages DA3 backend service lifecycle.
-    
+
     The backend service keeps the model loaded in GPU memory, providing
     10-20x speedup for batch processing by avoiding model reload overhead.
     """
-    
+
     def __init__(
         self,
         model_dir: str,
         device: str = "cuda",
         port: int = 8008,
         host: str = "127.0.0.1",
+        log_path: Optional[Union[str, Path]] = None,
     ):
         """Initialize backend manager.
-        
+
         Args:
             model_dir: Path to DA3 model directory
             device: Device to use (cuda, mps, cpu)
             port: Port for backend service
             host: Host address for backend
+            log_path: Optional path to log file for backend output (avoids PIPE backpressure)
         """
         self.model_dir = model_dir
         self.device = device
         self.port = port
         self.host = host
+        self.log_path: Optional[Path] = Path(log_path).expanduser().resolve() if log_path else None
+        self._log_fh = None
         self._process: Optional[subprocess.Popen] = None
-        
+
         # Register cleanup on exit
         atexit.register(self.stop)
-    
+
     def start(self, timeout: int = 30) -> None:
         """Start backend service if not running.
-        
+
         Args:
             timeout: Seconds to wait for service to start
-            
+
         Raises:
+            DA3NotInstalledError: If DA3 CLI is not available
             RuntimeError: If backend fails to start
         """
         if self.is_running():
-            print(f"Backend already running at {self.get_url()}")
+            logger.info("DA3 backend already running at %s", self.get_url())
             return
-        
+
+        if not Path(self.model_dir).exists():
+            raise FileNotFoundError(f"Model directory not found: {self.model_dir}")
+
         if not check_da3_cli_available():
-            raise RuntimeError(
+            raise DA3NotInstalledError(
                 "DA3 CLI not found. Install from: "
                 "https://github.com/DepthAnything/Depth-Anything-V3"
             )
-        
+
         # Start backend process
         cmd = [
             "da3", "backend",
@@ -126,31 +185,40 @@ class DA3Backend:
             "--port", str(self.port),
             "--host", self.host,
         ]
-        
-        print(f"Starting DA3 backend: {' '.join(cmd)}")
+
+        logger.info("Starting DA3 backend: %s", shlex.join(cmd))
+
+        # Deadlock-safe backend launch: avoid PIPE backpressure
+        stdout_target = subprocess.DEVNULL
+        stderr_target = subprocess.DEVNULL
+        if self.log_path is not None:
+            self.log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._log_fh = open(self.log_path, "a", encoding="utf-8")
+            stdout_target = self._log_fh
+            stderr_target = subprocess.STDOUT
+
         self._process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+            stdout=stdout_target,
+            stderr=stderr_target,
         )
-        
+
         # Wait for service to be ready
         start_time = time.time()
         while time.time() - start_time < timeout:
             if self.is_running():
-                print(f"Backend started at {self.get_url()}")
+                logger.info("DA3 backend started at %s", self.get_url())
                 return
             time.sleep(0.5)
-        
+
         # Timeout - kill process and raise
         self.stop()
         raise RuntimeError(f"Backend failed to start within {timeout}s")
-    
+
     def stop(self) -> None:
         """Stop backend service."""
         if self._process is not None:
-            print("Stopping DA3 backend...")
+            logger.info("Stopping DA3 backend...")
             try:
                 self._process.send_signal(signal.SIGTERM)
                 self._process.wait(timeout=5)
@@ -158,8 +226,13 @@ class DA3Backend:
                 self._process.kill()
                 self._process.wait()
             self._process = None
-            print("Backend stopped")
-    
+            if self._log_fh is not None:
+                try:
+                    self._log_fh.close()
+                finally:
+                    self._log_fh = None
+            logger.info("DA3 backend stopped")
+
     def is_running(self) -> bool:
         """Check if backend is running and healthy."""
         try:
@@ -167,7 +240,7 @@ class DA3Backend:
             return response.status_code == 200
         except (requests.RequestException, ConnectionError):
             return False
-    
+
     def get_url(self) -> str:
         """Get backend URL."""
         return f"http://{self.host}:{self.port}"
@@ -175,41 +248,44 @@ class DA3Backend:
 
 class DA3CLI:
     """Official DA3 CLI wrapper.
-    
+
     Provides Python interface to the da3 command-line tool with support
     for backend service acceleration.
     """
-    
+
     def __init__(self, backend: Optional[DA3Backend] = None):
         """Initialize CLI wrapper.
-        
+
         Args:
             backend: Optional backend service for acceleration
+
+        Raises:
+            DA3NotInstalledError: If DA3 CLI is not available
         """
         if not check_da3_cli_available():
-            raise RuntimeError(
+            raise DA3NotInstalledError(
                 "DA3 CLI not found. Install from: "
                 "https://github.com/DepthAnything/Depth-Anything-V3"
             )
-        
+
         self.backend = backend
-    
+
     def _build_base_cmd(self, subcommand: str, **kwargs) -> List[str]:
         """Build base command with common options.
-        
+
         Args:
             subcommand: DA3 subcommand (auto, image, images, video, colmap)
             **kwargs: Additional CLI arguments
-            
+
         Returns:
             Command list
         """
         cmd = ["da3", subcommand]
-        
+
         # Add backend URL if backend is provided
         if self.backend is not None:
             cmd.extend(["--use-backend", self.backend.get_url()])
-        
+
         # Add common options from kwargs
         for key, value in kwargs.items():
             if value is not None:
@@ -220,59 +296,66 @@ class DA3CLI:
                         cmd.append(flag)
                 else:
                     cmd.extend([flag, str(value)])
-        
+
         return cmd
-    
-    def _run_command(self, cmd: List[str], capture_output: bool = True) -> Dict[str, Any]:
+
+    def _run_command(
+        self,
+        cmd: List[str],
+        capture_output: bool = True,
+        timeout_s: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """Run CLI command and parse output.
-        
+
         Args:
             cmd: Command list
             capture_output: Whether to capture stdout/stderr
-            
+            timeout_s: Optional timeout in seconds
+
         Returns:
             Result dictionary with output paths and metadata
-            
+
         Raises:
-            RuntimeError: If command fails
+            DA3CommandError: If command fails
+            DA3TimeoutError: If command times out
         """
-        print(f"Running: {' '.join(cmd)}")
-        
-        result = subprocess.run(
-            cmd,
-            capture_output=capture_output,
-            text=True,
-        )
-        
+        result = _run_subprocess(cmd, timeout_s=timeout_s, capture_output=capture_output)
+        runtime_s = getattr(result, "_tp_elapsed_s", None)
+
         if result.returncode != 0:
-            raise RuntimeError(
-                f"DA3 CLI command failed:\n"
-                f"Command: {' '.join(cmd)}\n"
-                f"Error: {result.stderr}"
+            raise DA3CommandError(
+                f"DA3 CLI command failed (returncode={result.returncode}).\n"
+                f"Command: {shlex.join(cmd)}\n"
+                f"stderr (tail):\n{_tail(result.stderr)}"
             )
-        
+
         # Parse output - DA3 CLI typically outputs JSON or file paths
         return {
             "stdout": result.stdout,
             "stderr": result.stderr,
             "returncode": result.returncode,
+            "runtime_s": runtime_s,
+            "command": cmd,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         }
-    
+
     def process_auto(
         self,
         input_path: Path,
         export_dir: Path,
         export_format: str = "mini_npz",
+        timeout_s: Optional[int] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Auto-detect input type and process.
-        
+
         Args:
             input_path: Input file or directory
             export_dir: Output directory
             export_format: Export format (mini_npz, glb, etc.)
+            timeout_s: Optional timeout in seconds
             **kwargs: Additional CLI arguments
-            
+
         Returns:
             Processing result
         """
@@ -283,23 +366,25 @@ class DA3CLI:
             export_format=export_format,
             **kwargs
         )
-        return self._run_command(cmd)
-    
+        return self._run_command(cmd, timeout_s=timeout_s)
+
     def process_image(
         self,
         image_path: Path,
         export_dir: Path,
         export_format: str = "mini_npz",
+        timeout_s: Optional[int] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Process single image.
-        
+
         Args:
             image_path: Input image path
             export_dir: Output directory
             export_format: Export format
+            timeout_s: Optional timeout in seconds
             **kwargs: Additional CLI arguments
-            
+
         Returns:
             Processing result
         """
@@ -310,25 +395,27 @@ class DA3CLI:
             export_format=export_format,
             **kwargs
         )
-        return self._run_command(cmd)
-    
+        return self._run_command(cmd, timeout_s=timeout_s)
+
     def process_images(
         self,
         images_dir: Path,
         export_dir: Path,
         export_format: str = "mini_npz",
         pattern: str = "*.jpg",
+        timeout_s: Optional[int] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Process image directory.
-        
+
         Args:
             images_dir: Input directory
             export_dir: Output directory
             export_format: Export format
             pattern: File pattern
+            timeout_s: Optional timeout in seconds
             **kwargs: Additional CLI arguments
-            
+
         Returns:
             Processing result
         """
@@ -340,25 +427,27 @@ class DA3CLI:
             pattern=pattern,
             **kwargs
         )
-        return self._run_command(cmd)
-    
+        return self._run_command(cmd, timeout_s=timeout_s)
+
     def process_video(
         self,
         video_path: Path,
         export_dir: Path,
         fps: float = 1.0,
         export_format: str = "mini_npz",
+        timeout_s: Optional[int] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Process video with frame extraction.
-        
+
         Args:
             video_path: Input video path
             export_dir: Output directory
             fps: Frame extraction rate
             export_format: Export format
+            timeout_s: Optional timeout in seconds
             **kwargs: Additional CLI arguments
-            
+
         Returns:
             Processing result
         """
@@ -370,23 +459,25 @@ class DA3CLI:
             export_format=export_format,
             **kwargs
         )
-        return self._run_command(cmd)
-    
+        return self._run_command(cmd, timeout_s=timeout_s)
+
     def process_colmap(
         self,
         colmap_dir: Path,
         export_dir: Path,
         export_format: str = "mini_npz-glb",
+        timeout_s: Optional[int] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Process COLMAP dataset.
-        
+
         Args:
             colmap_dir: COLMAP dataset directory
             export_dir: Output directory
             export_format: Export format (supports hyphen-separated combinations)
+            timeout_s: Optional timeout in seconds
             **kwargs: Additional CLI arguments
-            
+
         Returns:
             Processing result
         """
@@ -397,7 +488,7 @@ class DA3CLI:
             export_format=export_format,
             **kwargs
         )
-        return self._run_command(cmd)
+        return self._run_command(cmd, timeout_s=timeout_s)
 
 
 class DepthAnything3Wrapper:
@@ -919,18 +1010,18 @@ class DepthAnything3(nn.Module):
             device: Device to load model on
             dtype: Model precision
             cache_dir: Cache directory for model weights
-        
+
         Returns:
             Loaded model
         """
-        print(f"[DA3 Wrapper] Loading placeholder model: {model_name}")
-        print("[DA3 Wrapper] This is a placeholder - replace with official DA3 API")
-        
+        logger.warning("Loading placeholder DA3 model: %s", model_name)
+        logger.warning("DA3 placeholder active - install official API for production use")
+
         model = cls(model_name, device, dtype)
-        
+
         # In production, this would download and load pretrained weights
         # For now, we initialize with random weights
-        
+
         return model
     
     def inference(

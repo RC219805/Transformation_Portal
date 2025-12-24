@@ -3,6 +3,9 @@
 Full pipeline example for Lux Depth V3.
 
 Demonstrates complete workflow from input to export with validation.
+
+NOTE: This module is an executable example script.
+Keep it under an examples/ directory in production deployments.
 """
 
 from pathlib import Path
