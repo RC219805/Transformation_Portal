@@ -24,10 +24,10 @@ import os
 # Import PyTorch availability from canonical source
 from lux_depth_v2.torch_ops import TORCH_AVAILABLE
 
-# Skip all tests in CI if HF_DATASETS_OFFLINE is set (network-dependent model downloads)
+# Skip all tests in CI unless explicitly allowed (network-dependent model downloads)
 IN_CI = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
-HF_OFFLINE = os.getenv("HF_DATASETS_OFFLINE") == "1"
-SKIP_IN_CI = IN_CI  # Always skip in CI due to HuggingFace model download restrictions
+ALLOW_NETWORK_TESTS = os.getenv("RUN_NETWORK_TESTS") == "1"
+SKIP_IN_CI = IN_CI and not ALLOW_NETWORK_TESTS
 
 # Conditional imports
 if TORCH_AVAILABLE:
@@ -38,11 +38,18 @@ else:
     PipelineConfig = None
     Preset = None
 
-# Module-level skip
-pytestmark = pytest.mark.skipif(
-    not TORCH_AVAILABLE,
-    reason="MaterialsV3 E2E tests require PyTorch"
-)
+# Module-level skip - skip in CI unless explicitly allowed
+pytestmark = [
+    pytest.mark.skipif(
+        not TORCH_AVAILABLE,
+        reason="MaterialsV3 E2E tests require PyTorch"
+    ),
+    pytest.mark.skipif(
+        SKIP_IN_CI,
+        reason="Requires HuggingFace model downloads (SegFormer image processor/model) which are blocked in CI. "
+               "Run locally or set RUN_NETWORK_TESTS=1."
+    )
+]
 
 
 @pytest.fixture
@@ -84,7 +91,6 @@ def output_dir(tmp_path):
     return out_dir
 
 
-@pytest.mark.skipif(SKIP_IN_CI, reason="Requires HuggingFace model downloads (blocked in CI)")
 class TestMaterialsV3GlassPreset:
     """Test glass surface processing (PR-4B)."""
     
@@ -149,7 +155,6 @@ class TestMaterialsV3GlassPreset:
                 assert 'applied_to' in pixel_ops
 
 
-@pytest.mark.skipif(SKIP_IN_CI, reason="Requires HuggingFace model downloads (blocked in CI)")
 class TestMaterialsV3StonePreset:
     """Test stone surface processing (PR-4D)."""
     
