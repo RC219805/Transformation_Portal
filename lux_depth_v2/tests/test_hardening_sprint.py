@@ -15,7 +15,6 @@ Week 2: Materials Hardening
 """
 
 import pytest
-from pathlib import Path
 from lux_depth_v2.config import (
     PipelineConfig,
     Preset,
@@ -162,19 +161,10 @@ class TestDepthProvenance:
     """Test depth provenance tracking in reports."""
     
     def test_depth_provenance_fields_exist(self):
-        """Test expected depth provenance fields."""
-        # This would require a full pipeline run, so we just document the contract
-        expected_fields = [
-            "depth_provenance",
-            "depth_provided",
-            "depth_source",
-            "depth_model",
-            "depth_confidence_proxy",
-            "depth_cache_key",
-            "depth_runtime_ms",
-        ]
-        # In actual pipeline report, these fields should exist
-        assert True, "Provenance fields documented"
+        """Test expected depth provenance fields are documented."""
+        # Contract: These fields MUST exist in pipeline reports when depth is used.
+        # Actual validation happens in integration tests (requires full pipeline run).
+        pytest.skip("Contract documentation only; validated in integration tests")
 
 
 class TestMaterialsPrecedence:
@@ -182,9 +172,9 @@ class TestMaterialsPrecedence:
     
     def test_materials_precedence_field_exists(self):
         """Test materials_precedence field is tracked in reports."""
-        # This would require a full pipeline run
-        # Expected values: ["materials_v2"], ["materials_v3_using_v2_masks"], etc.
-        assert True, "Precedence tracking documented"
+        # Contract: materials_precedence MUST exist when V2/V3 enabled.
+        # Actual validation happens in integration tests.
+        pytest.skip("Contract documentation only; validated in integration tests")
 
 
 class TestImmutableInput:
@@ -192,10 +182,9 @@ class TestImmutableInput:
     
     def test_input_work_separation_documented(self):
         """Test that pipeline separates immutable input from mutable work copy."""
-        # In pipeline.py, we should see:
-        # rgb01_input = rgb01  # Immutable reference
-        # rgb01_work = np.copy(rgb01)  # Mutable copy for V3 pixel ops
-        assert True, "Input/work separation documented"
+        # Contract: pipeline.py MUST separate rgb01_input (immutable) from rgb01_work (mutable).
+        # Actual validation happens in integration tests.
+        pytest.skip("Contract documentation only; validated in integration tests")
 
 
 if __name__ == "__main__":
