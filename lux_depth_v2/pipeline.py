@@ -573,7 +573,7 @@ class LuxPipelineV2:
                             model_name=dcfg.model_name if dcfg is not None else "unknown",
                             params_fingerprint=self._depth_params_fingerprint,
                         )
-                        cached = self.depth_cache_manager.load(cache_key) if self.depth_cache_manager.is_cached(cache_key) else None
+                        cached = self.depth_cache_manager.load(cache_key)
                         if cached is not None:
                             depth01 = cached["depth"]
                             confidence_proxy = cached.get("confidence_proxy")
@@ -620,8 +620,9 @@ class LuxPipelineV2:
                             self.depth_cache_manager.save(cache_key, depth01, meta, float(confidence_proxy or 0.0))
 
             # Report depth provenance (depth-only PR#1)
+            depth_cfg = getattr(cfg, "depth", None)
             report["depth_info"] = {
-                "mode": getattr(getattr(cfg, "depth", None), "mode", None).value if getattr(cfg, "depth", None) else None,
+                "mode": depth_cfg.mode.value if depth_cfg else None,
                 "source": depth_source,
                 "path": str(depth_path) if depth_path else None,
                 "cache": {"enabled": bool(self.depth_cache_manager), "hit": cache_hit, "key": cache_key},
