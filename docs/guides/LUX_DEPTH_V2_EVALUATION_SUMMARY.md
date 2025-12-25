@@ -25,7 +25,7 @@
 | Integration | 100% | A+ |
 | **Production Readiness** | **85%** | **B+** |
 
-**Overall**: **A- (85%)** - Ready with critical fix
+**Overall**: **B+ (85%)** - Ready with critical fix
 
 ---
 
@@ -231,8 +231,8 @@ pip uninstall basicsr realesrgan gfpgan -y
 **Quick References**:
 - Security: `lux_depth_v2/SECURITY.md`
 - Performance: `lux_depth_v2/PERFORMANCE_VALIDATION.md`
-- Status: `lux_depth_v2/STATUS_QUICK_SUMMARY.md`
-- Roadmap: `lux_depth_v2/ROADMAP_SUMMARY.md`
+- Full evaluation: `docs/guides/LUX_DEPTH_V2_EVALUATION.md`
+- Action items: `docs/guides/LUX_DEPTH_V2_ACTION_ITEMS.md`
 
 ---
 

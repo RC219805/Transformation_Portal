@@ -298,11 +298,11 @@ pip uninstall basicsr realesrgan gfpgan -y
 - ✅ `lux_depth_v2/PHASE1_COMPLETE.md` - Security hardening report
 - ✅ `lux_depth_v2/PHASE2_COMPLETE.md` - Integration report
 - ✅ `lux_depth_v2/PHASE3_COMPLETE.md` - CI/CD integration report
-- ✅ `lux_depth_v2/EXECUTIVE_SUMMARY.md` - Production readiness assessment
-- ✅ `lux_depth_v2/STATUS_QUICK_SUMMARY.md` - Materials/depth status
+- ✅ `docs/guides/LUX_DEPTH_V2_EVALUATION_SUMMARY.md` - Production readiness assessment
+- ✅ `docs/guides/LUX_DEPTH_V2_EVALUATION.md` - Complete evaluation (this document)
 - ✅ `lux_depth_v2/PERFORMANCE_VALIDATION.md` - Benchmark results
 - ✅ `lux_depth_v2/FEATURE_FREEZE.md` - Feature freeze policy
-- ✅ `lux_depth_v2/ROADMAP_SUMMARY.md` - Integration roadmap
+- ✅ `docs/guides/LUX_DEPTH_V2_ACTION_ITEMS.md` - Implementation roadmap
 
 **Integration Guides**:
 - ✅ `docs/LUX_DEPTH_V2_INTEGRATION_PLAN.md`
@@ -633,11 +633,11 @@ The **lux_depth_v2 pipeline** is a **mature, well-engineered production system**
 - Technical implementation: Review Sprint PR when submitted
 - Security concerns: See `lux_depth_v2/SECURITY.md`
 - Performance validation: See `lux_depth_v2/PERFORMANCE_VALIDATION.md`
-- Production readiness: See `lux_depth_v2/EXECUTIVE_SUMMARY.md`
+- Production readiness: See `docs/guides/LUX_DEPTH_V2_EVALUATION_SUMMARY.md`
 
 **Key Documentation**:
-- Quick status: `lux_depth_v2/STATUS_QUICK_SUMMARY.md`
-- Integration roadmap: `lux_depth_v2/ROADMAP_SUMMARY.md`
+- Full evaluation: `docs/guides/LUX_DEPTH_V2_EVALUATION.md` (this document)
+- Action items: `docs/guides/LUX_DEPTH_V2_ACTION_ITEMS.md`
 - Feature freeze: `lux_depth_v2/FEATURE_FREEZE.md`
 - Phase reports: `lux_depth_v2/PHASE[1-3]_COMPLETE.md`
 

@@ -23,7 +23,7 @@ upscaler_backend: str = "torch"  # Safe default, CVE-free
 
 **Verification**:
 ```bash
-cd /Users/rc/Transformation_Portal/lux_depth_v2
+cd "$(git rev-parse --show-toplevel)/lux_depth_v2"
 grep -n "upscaler_backend.*=" config.py
 # Should show: upscaler_backend: str = "torch"
 ```
@@ -45,7 +45,7 @@ Refs: CVE-2024-27763, SECURITY.md line 14-43
 
 **Command**:
 ```bash
-cd /Users/rc/Transformation_Portal
+cd "$(git rev-parse --show-toplevel)"
 pip uninstall basicsr realesrgan gfpgan -y
 ```
 
@@ -104,7 +104,7 @@ pip show realesrgan
 
 **Timeline**: 1 week (Dec 25 - Jan 1)  
 **Risk**: Low (additive changes, backward-compatible)  
-**Approver**: Production Engineering Lead
+**Approver**: Repo Maintainer (RC219805)
 ```
 
 ---
@@ -113,7 +113,7 @@ pip show realesrgan
 
 **Commands**:
 ```bash
-cd /Users/rc/Transformation_Portal
+cd "$(git rev-parse --show-toplevel)"
 
 # Stage changes
 git add lux_depth_v2/config.py
