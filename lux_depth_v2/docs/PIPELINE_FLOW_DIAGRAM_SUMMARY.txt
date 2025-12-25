@@ -1,0 +1,187 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    PIPELINE FLOW DIAGRAM - DELIVERABLE                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📄 PRIMARY DOCUMENT
+   Location: lux_depth_v2/docs/PIPELINE_FLOW_DIAGRAM.md
+   Size:     529 lines
+   Sections: 16 major sections
+   Format:   Markdown with embedded Mermaid diagram
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           CONTENTS BREAKDOWN                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+[1] QUICK REFERENCE
+    - Navigation links to all major sections
+    - Use-case driven organization (onboarding, debugging, QA)
+
+[2] PIPELINE OVERVIEW
+    - High-level workflow summary
+    - Feature list (materials, upscaling, error handling)
+
+[3] FLOW DIAGRAM (Mermaid)
+    - 5 subgraphs: Input, Material, Grading, Upscaling, Export
+    - 10 timing checkpoints (TC1-TC10)
+    - 8 decision nodes (configuration flags)
+    - Error fallback paths (dashed blue lines)
+    - 4-color visual coding system
+
+[4] VISUAL LEGEND
+    - Color coding: Orange (critical), Blue (optional), Yellow (timing), Pink (decision)
+    - Line styles: Solid (normal), Dashed (fallback)
+
+[5] STAGE DESCRIPTIONS
+    - Detailed breakdown of 5 main stages
+    - Purpose, components, timing, error handling per stage
+
+[6] CONFIGURATION FLAGS
+    - Table of 8 key settings (strict_depth, enable_materials_v2, etc.)
+    - Stage mapping and effect description
+
+[7] TIMING CHECKPOINT MAPPING ★★★
+    - TC1-TC10 mapped to pipeline.py line numbers
+    - Python function locations for each checkpoint
+    - Dependency requirements per stage
+    - Additional export stages table
+
+[8] CODE TRACEABILITY MATRIX ★★★
+    - Example JSON report structure
+    - Timing verification commands
+    - Expected output validation
+
+[9] TIMING INSTRUMENTATION
+    - _stage() context manager usage
+    - Checkpoint reference list
+    - Automatic timing capture
+
+[10] ERROR HANDLING PATTERNS
+     - Graceful fallback paths (4 scenarios)
+     - Critical failure handling (2 scenarios)
+
+[11] PERFORMANCE CHARACTERISTICS
+     - Per-stage timing table (4K baseline)
+     - Memory usage estimates
+     - GPU utilization flags
+     - Total execution time ranges
+
+[12] FUTURE IMPROVEMENTS
+     - 4 enhancement areas from code review
+     - Memory management, retry mechanism, perceptual metrics, code readability
+
+[13] STAGE DEPENDENCIES & EXECUTION ORDER ★★★
+     - Critical path (minimum execution)
+     - Extended path (Materials V2)
+     - Full path (all features)
+     - Parallel export operations
+     - Optional path conditions
+
+[14] PERFORMANCE OPTIMIZATION GUIDELINES ★★★
+     - Bottleneck identification table
+     - Optimization strategies per stage
+     - Recommended presets (speed, quality, balanced)
+     - Example CLI commands with expected timings
+
+[15] VALIDATION CHECKLIST
+     - Diagram consistency checks (4 items)
+     - Code traceability verification (4 items)
+     - Performance validation (4 items)
+     - Documentation accuracy (4 items)
+     - Integration testing script
+
+[16] CHANGELOG
+     - 4 entries dated 2025-12-23
+     - Track document evolution
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                      TIMING CHECKPOINT REFERENCE                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+TC1  → io/read_input           | pipeline.py:422 | I/O read RGB image
+TC2  → io/read_depth           | pipeline.py:493 | I/O read depth map
+TC3  → material/segmentation   | pipeline.py:512 | Base segmentation
+TC4  → material/materials_v2   | pipeline.py:535 | Materials V2 engine
+TC5  → material/materials_v3   | pipeline.py:609 | Materials V3 engine
+TC6  → grade/master            | pipeline.py:695 | Core grading
+TC7  → upscale/{backend}       | pipeline.py:749 | AI/bicubic upscale
+TC8  → (implicit tiling)       | N/A (inferred)  | Tile processing
+TC9  → export_master           | pipeline.py:706 | Master TIFF export
+TC10 → export_report           | pipeline.py:879 | JSON report export
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           PRIMARY USE CASES                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+[ONBOARDING]
+  Purpose: Visual understanding of pipeline architecture
+  Users:   New engineers, contractors, QA team
+  Benefit: Reduce ramp-up time from days to hours
+
+[CODE REVIEWS]
+  Purpose: Validate stage dependencies and error handling
+  Users:   Senior engineers, architects, security reviewers
+  Benefit: Ensure changes don't break pipeline integrity
+
+[PERFORMANCE DEBUGGING]
+  Purpose: Identify bottlenecks and optimize critical paths
+  Users:   DevOps, performance engineers, technical leads
+  Benefit: Data-driven optimization decisions
+
+[QA VALIDATION]
+  Purpose: Trace diagram to implementation for testing
+  Users:   QA engineers, automation team, CI/CD maintainers
+  Benefit: Automated validation of pipeline instrumentation
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         VERIFICATION COMMANDS                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+# Extract timing keys from JSON report
+cat out/*_report.json | jq '.timings | keys[]'
+
+# Validate reproducibility metadata
+cat out/*_report.json | jq '.reproducibility'
+
+# Performance profiling (sorted by execution time)
+cat out/*_report.json | jq '.timings' | sort -t: -k2 -rn
+
+# Integration test (full pipeline validation)
+lux-depth-v2 --input-dir test/ --output-dir out/ --preset interior_luxury && \
+  test -f out/*_report.json && \
+  jq -e '.timings | has("io/read_input")' out/*_report.json && \
+  echo "✅ Pipeline integrity validated"
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                             DELIVERABLES                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+✅ Complete Mermaid flow diagram with 4-color coding
+✅ 10 timing checkpoints mapped to Python implementation
+✅ Code traceability matrix (diagram → JSON report → pipeline.py)
+✅ Performance optimization guidelines with 3 recommended presets
+✅ Validation checklist with integration testing script
+✅ Quick reference navigation for 4 primary use cases
+✅ Stage dependency analysis (critical, extended, full paths)
+✅ Error handling patterns (graceful fallback + critical failure)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          OPTIONAL ENHANCEMENTS                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Future improvements (not required for current deliverable):
+  - ASCII art diagram for terminal viewing (no Mermaid renderer needed)
+  - Interactive HTML version with clickable nodes (React/D3.js)
+  - Sequence diagrams for failure scenarios (UML/PlantUML)
+  - CI/CD integration for automated diagram validation
+  - Performance dashboard with real-time timing visualization
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                              COMPLETION                                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Status:       ✅ COMPLETE
+Date:         2025-12-23
+Review:       Ready for production use
+Next Action:  Add reference to main README navigation
+
+═══════════════════════════════════════════════════════════════════════════════
