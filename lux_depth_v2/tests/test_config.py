@@ -98,13 +98,13 @@ class TestPipelineConfig:
         assert cfg.save_master is True
         assert cfg.save_upscaled is True
         assert cfg.enable_material is True
-        assert cfg.material_strength == 0.70  # PHOTO_REALISTIC preset value
+        assert cfg.material_strength == 0.75  # PHOTO_REALISTIC preset value
 
     def test_preset_application_photo_realistic(self):
         """Test applying photo_realistic preset."""
         cfg = PipelineConfig(preset=Preset.PHOTO_REALISTIC)
         cfg.apply_preset()
-        assert cfg.material_strength == 0.70
+        assert cfg.material_strength == 0.75
         assert cfg.temp_fg == 0.010
         assert cfg.sat_fg == 1.030
         assert cfg.detail_strength == 0.65

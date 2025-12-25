@@ -570,7 +570,7 @@ class PipelineConfig:
             return
 
         if p == Preset.PHOTO_REALISTIC:
-            self.material_strength = 0.70
+            self.material_strength = 0.75
             self.temp_fg, self.temp_mid, self.temp_bg = 0.010, 0.003, -0.002
             self.sat_fg, self.sat_mid, self.sat_bg = 1.030, 1.015, 1.000
             self.con_fg, self.con_mid, self.con_bg = 1.025, 1.015, 1.010
