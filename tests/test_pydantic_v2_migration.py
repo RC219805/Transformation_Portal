@@ -46,13 +46,16 @@ def test_no_pydantic_deprecation_warnings():
 
 def test_config_dict_features():
     """Test that ConfigDict features work correctly."""
+    from pydantic import ValidationError
+    
     # Test arbitrary_types_allowed
     config = ConfigSchema()
     assert config is not None
     
-    # Test validate_assignment
-    config.device.device = "cpu"
-    assert config.device.device == "cpu"
+    # Test validate_assignment - assign whole nested object to ConfigSchema
+    config = ConfigSchema(device={"device": "cpu"})
+    config.device = {"device": "cuda"}  # assignment into ConfigSchema triggers validation
+    assert config.device.device == "cuda"
     
     # Test extra="allow"
     config.custom_field = "custom_value"
@@ -80,6 +83,8 @@ def test_config_serialization_with_v2():
 
 def test_config_validation_with_v2():
     """Test that validation still works with V2."""
+    from pydantic import ValidationError
+    
     # Valid config should work
     config = ConfigSchema(
         device={"device": "cpu", "precision": "fp32"},
@@ -88,8 +93,8 @@ def test_config_validation_with_v2():
     assert config.device.device == "cpu"
     assert config.performance.batch_size == 2
     
-    # Invalid config should raise errors
-    with pytest.raises(Exception):
+    # Invalid config should raise ValidationError (not generic Exception)
+    with pytest.raises(ValidationError):
         ConfigSchema(device={"memory_fraction": 1.5})
 
 
