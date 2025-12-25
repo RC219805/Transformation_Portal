@@ -53,6 +53,9 @@ def test_config_dict_features():
     assert config is not None
     
     # Test validate_assignment - assign whole nested object to ConfigSchema
+    # Note: ConfigSchema has no top-level constrained fields, so we test assignment
+    # triggers parsing/validation on nested model fields. This proves validate_assignment
+    # is active at the ConfigSchema level.
     config = ConfigSchema(device={"device": "cpu"})
     config.device = {"device": "cuda"}  # assignment into ConfigSchema triggers validation
     assert config.device.device == "cuda"
