@@ -558,9 +558,12 @@ class PipelineConfig:
         - Presets containing "APEX": REQUIRED (fail fast without depth)
         - All others: AUTO (generate depth if missing)
         """
-        if preset == Preset.CI_BASELINE:
+        # Handle both Preset enum and string values
+        preset_value = preset.value if isinstance(preset, Preset) else str(preset)
+        
+        if preset == Preset.CI_BASELINE or preset_value == "ci_baseline":
             return DepthMode.OPTIONAL
-        elif "APEX" in preset.value.upper():
+        elif "APEX" in preset_value.upper():
             return DepthMode.REQUIRED
         else:
             return DepthMode.AUTO
