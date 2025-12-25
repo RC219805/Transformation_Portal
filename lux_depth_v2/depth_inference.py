@@ -325,15 +325,20 @@ class TiledDepthEstimator:
         
         tiles = []
         
-        # Calculate tile grid
-        y_starts = list(range(0, h - overlap, stride))
-        x_starts = list(range(0, w - overlap, stride))
-        
-        # Ensure we cover the entire image
-        if y_starts[-1] + tile_size < h:
-            y_starts.append(h - tile_size)
-        if x_starts[-1] + tile_size < w:
-            x_starts.append(w - tile_size)
+        # If image is smaller than one tile, treat as a single tile
+        if h <= tile_size or w <= tile_size:
+            x_starts = [0]
+            y_starts = [0]
+        else:
+            # Calculate tile grid
+            y_starts = list(range(0, h - overlap, stride))
+            x_starts = list(range(0, w - overlap, stride))
+            
+            # Ensure we cover the entire image
+            if y_starts[-1] + tile_size < h:
+                y_starts.append(h - tile_size)
+            if x_starts[-1] + tile_size < w:
+                x_starts.append(w - tile_size)
         
         for y in y_starts:
             for x in x_starts:
