@@ -414,7 +414,7 @@ class PipelineConfig:
 
     # Upscaling
     upscale: int = 4  # 2 or 4
-    upscaler_backend: str = "realesrgan"  # realesrgan|onnx|none
+    upscaler_backend: str = "torch"  # torch|onnx|none (default: torch for security)
     model_path: Optional[Path] = None     # .pth or .onnx depending on backend
     model_sha256: Optional[str] = None
     tile: int = 512
