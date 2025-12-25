@@ -508,6 +508,12 @@ class LuxPipelineV2:
                     "cache_key": None,
                     "runtime_ms": None,
                 }
+            # REQUIRED mode: fail fast if depth missing
+            elif cfg.depth.mode == DepthMode.REQUIRED or cfg.strict_depth:
+                raise FileNotFoundError(
+                    f"Depth required but missing for {img_path.name} "
+                    f"(DepthMode.REQUIRED or strict_depth=True)"
+                )
             # Auto-generate if missing and mode=AUTO
             elif cfg.depth.mode == DepthMode.AUTO:
                 self.logger.info(f"Depth missing for {img_path.name}, auto-generating (mode=AUTO)...")
