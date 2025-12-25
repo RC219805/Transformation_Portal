@@ -42,7 +42,10 @@ jobs:
     
     - name: Run MaterialsV3 Edge Case Tests
       run: |
-        pytest tests/test_materials_v3_edge_cases.py -v --tb=short
+        mkdir -p test-results
+        pytest tests/test_materials_v3_edge_cases.py \
+          -v --tb=short \
+          --junitxml=test-results/junit-edge-cases-${{ matrix.python-version }}.xml
       continue-on-error: false
     
     - name: Upload test results
@@ -50,9 +53,8 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: edge-case-test-results-${{ matrix.python-version }}
-        path: |
-          test-results/
-          .pytest_cache/
+        path: test-results/
+        if-no-files-found: warn
 
   stress-tests:
     name: MaterialsV3 Stress Tests (Nightly)
@@ -81,7 +83,10 @@ jobs:
     
     - name: Run MaterialsV3 Stress Tests
       run: |
-        pytest tests/test_materials_v3_stress.py -v --tb=short --slow
+        mkdir -p test-results
+        pytest tests/test_materials_v3_stress.py \
+          -v --tb=short --slow \
+          --junitxml=test-results/junit-stress-tests.xml
       timeout-minutes: 45
     
     - name: Upload stress test results
@@ -89,9 +94,8 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: stress-test-results
-        path: |
-          test-results/
-          .pytest_cache/
+        path: test-results/
+        if-no-files-found: warn
 
   verification:
     name: Phase 1 Safety Verification
