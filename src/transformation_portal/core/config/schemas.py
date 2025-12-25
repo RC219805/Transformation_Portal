@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Any, Dict
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DeviceType(str, Enum):
@@ -240,11 +240,11 @@ class ConfigSchema(BaseModel):
         description="Pipeline-specific configuration extensions"
     )
 
-    class Config:
-        """Pydantic config."""
-        arbitrary_types_allowed = True
-        validate_assignment = True
-        extra = "allow"
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        extra="allow"
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
