@@ -203,7 +203,21 @@ All PRs during freeze period must answer:
 - [ ] Does this modify README structure? (If yes → aligns with Golden Path consolidation?)
 
 ### CI/CD
-No automated enforcement (relies on code review).
+The Feature Freeze Check workflow (`.github/workflows/feature-freeze-check.yml`) enforces freeze policy with intelligent auto-exemptions:
+
+**Auto-Exempted** (no label required):
+- PRs touching only test/CI configuration files:
+  - `pytest.ini` (root or subdirectories)
+  - `pyproject.toml` (pytest configuration)
+  - `.github/workflows/*`
+  - `.coveragerc`, `tox.ini`
+  - `.pre-commit-config.yaml`
+
+**Requires `freeze-approved` label**:
+- All other changes during freeze period
+- Mixed changes (test config + production code)
+
+**Bypass mechanism**: Add `freeze-approved` label for legitimate changes that don't auto-exempt.
 
 ### Architect Review
 Transformation Portal Architect has final authority on exception requests.
