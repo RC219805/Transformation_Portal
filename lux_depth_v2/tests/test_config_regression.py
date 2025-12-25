@@ -87,8 +87,11 @@ class TestFeatureFreezeCompliance:
         Freeze period: Dec 20, 2025 - Jan 10, 2026
         Only bug fixes and validation allowed.
         """
-        # Known presets as of Dec 20, 2025
+        # Known presets as of Dec 25, 2025 (added CI/production presets for depth contract)
         expected_presets = {
+            "ci_baseline",
+            "production_standard",
+            "production_ultra",
             "photo_realistic",
             "interior_luxury",
             "interior_luxury_max_quality",
