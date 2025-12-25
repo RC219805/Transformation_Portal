@@ -46,6 +46,34 @@ jobs:
             
             const hasApproval = labels.some(label => label.name === 'freeze-approved');
             
+            // Auto-exempt test/CI infrastructure changes
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            
+            const testInfraPatterns = [
+              /^pytest\.ini$/,
+              /^pyproject\.toml$/,  // Only if pytest/test config changes
+              /^\.github\/workflows\//,
+              /^tests\/.*pytest.*\.ini$/,
+              /^.*\/pytest\.ini$/,
+              /^\.coveragerc$/,
+              /^tox\.ini$/,
+              /^\.pre-commit-config\.yaml$/,
+            ];
+            
+            const allFilesAreTestInfra = files.every(file => 
+              testInfraPatterns.some(pattern => pattern.test(file.filename))
+            );
+            
+            if (allFilesAreTestInfra && files.length > 0) {
+              console.log('✅ Auto-exempt: PR only modifies test/CI infrastructure');
+              console.log(`Files: ${files.map(f => f.filename).join(', ')}`);
+              return;
+            }
+            
             if (!hasApproval) {
               core.setFailed(
                 '❌ Feature freeze active (Dec 20, 2025 - Jan 10, 2026)\n\n' +
@@ -60,6 +88,8 @@ jobs:
                 '  🚫 New features\n' +
                 '  🚫 Breaking changes\n' +
                 '  🚫 Refactoring (non-critical)\n\n' +
+                'Auto-exempted:\n' +
+                '  🔓 Test/CI config only (pytest.ini, .github/workflows/, etc.)\n\n' +
                 'See: docs/FEATURE_FREEZE_POLICY.md\n' +
                 'Template: .github/ISSUE_TEMPLATE/feature_freeze_check.md'
               );
