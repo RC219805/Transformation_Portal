@@ -145,8 +145,8 @@ def main():
         # Processing
         device="auto",
         upscale=4,
-        upscaler_backend="realesrgan",  # Or "none" for testing
-        model_path=Path("models/RealESRGAN_x4plus.pth") if Path("models/RealESRGAN_x4plus.pth").exists() else None,
+        upscaler_backend="torch",  # Secure default (CVE-2024-27763 mitigation)
+        # Note: "realesrgan" still accepted for backward compatibility but deprecated
         
         # Material enhancement
         enable_material=True,

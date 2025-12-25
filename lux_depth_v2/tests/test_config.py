@@ -92,7 +92,7 @@ class TestPipelineConfig:
         cfg = PipelineConfig()
         assert cfg.preset == Preset.PHOTO_REALISTIC
         assert cfg.upscale == 4
-        assert cfg.upscaler_backend == "realesrgan"
+        assert cfg.upscaler_backend == "torch"  # Secure default (CVE-2024-27763 mitigation)
         assert cfg.device == "auto"
         assert cfg.precision == "fp16"
         assert cfg.save_master is True
