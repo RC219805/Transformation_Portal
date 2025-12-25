@@ -637,11 +637,6 @@ class LuxPipelineV2:
                         "path": None,
                         "model": cfg.depth.auto_model,
                     }
-            # Fail if REQUIRED but missing
-            elif cfg.depth.mode == DepthMode.REQUIRED:
-                raise FileNotFoundError(
-                    f"Depth REQUIRED for {img_path.name} but missing (mode=REQUIRED, preset={cfg.preset.value})"
-                )
             # OPTIONAL mode: proceed without depth
             else:
                 self.logger.warning(f"Depth missing for {img_path.name}; using uniform weights (mode=OPTIONAL)")
