@@ -549,14 +549,34 @@ class PipelineConfig:
         """
         self.apply_preset()
 
+    def _get_depth_mode_for_preset(self, preset: Preset) -> DepthMode:
+        """
+        Rule-based depth mode assignment to avoid scattered conditionals.
+        
+        Rules:
+        - CI_BASELINE: OPTIONAL (allows testing without depth)
+        - Presets containing "APEX": REQUIRED (fail fast without depth)
+        - All others: AUTO (generate depth if missing)
+        """
+        # Handle both Preset enum and string values
+        preset_value = preset.value if isinstance(preset, Preset) else str(preset)
+        
+        if preset == Preset.CI_BASELINE or preset_value == "ci_baseline":
+            return DepthMode.OPTIONAL
+        elif "APEX" in preset_value.upper():
+            return DepthMode.REQUIRED
+        else:
+            return DepthMode.AUTO
+
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""
         p = self.preset
         
-        # CI_BASELINE preset (special case - OPTIONAL depth)
-        # This is the ONLY preset that allows processing without depth
+        # Apply rule-based depth mode assignment first
+        self.depth.mode = self._get_depth_mode_for_preset(p)
+        
+        # CI_BASELINE preset
         if str(p).lower() == "ci_baseline":
-            self.depth.mode = DepthMode.OPTIONAL
             self.material_strength = 0.60
             self.temp_fg, self.temp_mid, self.temp_bg = 0.004, 0.002, -0.002
             self.sat_fg, self.sat_mid, self.sat_bg = 1.010, 1.005, 1.000
@@ -579,7 +599,6 @@ class PipelineConfig:
             self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.08, 0.05, 0.03
 
         elif p == Preset.INTERIOR_LUXURY:
-            self.depth.mode = DepthMode.AUTO  # Auto-generate if missing
             self.material_strength = 0.90
             self.temp_fg, self.temp_mid, self.temp_bg = 0.013, 0.006, 0.000
             self.sat_fg, self.sat_mid, self.sat_bg = 1.045, 1.030, 1.010
@@ -649,8 +668,6 @@ class PipelineConfig:
             # Quality Gain: 37-58% improvement over max_quality
             # Use Cases: Archival outputs, flagship portfolio, print materials
             # ═══════════════════════════════════════════════════════════════
-            
-            self.depth.mode = DepthMode.REQUIRED  # APEX always requires depth
             
             # Base grading (same as interior_luxury)
             self.material_strength = 0.90
@@ -763,7 +780,6 @@ class PipelineConfig:
         elif p == Preset.EXTERIOR_POOL_APEX_QUALITY:
             # APEX quality for exterior pool/twilight scenes
             # Optimized for: water, sky, vegetation, stucco, stone
-            self.depth.mode = DepthMode.REQUIRED  # APEX always requires depth
             self.material_strength = 0.95
             self.temp_fg, self.temp_mid, self.temp_bg = 0.005, 0.000, -0.008
             self.sat_fg, self.sat_mid, self.sat_bg = 1.065, 1.040, 1.020
@@ -1059,9 +1075,8 @@ class PipelineConfig:
             # Force pixel ops application for validation only
             self.materials_v3.force_stone_pixel_ops = True
 
-        # Add PRODUCTION_STANDARD preset (AUTO depth mode)
+        # Add PRODUCTION_STANDARD preset
         if str(p).lower() == "production_standard":
-            self.depth.mode = DepthMode.AUTO
             self.material_strength = 0.85
             self.temp_fg, self.temp_mid, self.temp_bg = 0.010, 0.004, -0.001
             self.sat_fg, self.sat_mid, self.sat_bg = 1.040, 1.025, 1.010
@@ -1073,9 +1088,8 @@ class PipelineConfig:
             self.post_overlap = 64
             self.validate_ai = True
         
-        # Add PRODUCTION_ULTRA preset (REQUIRED depth mode)
+        # Add PRODUCTION_ULTRA preset
         if str(p).lower() == "production_ultra":
-            self.depth.mode = DepthMode.REQUIRED
             self.material_strength = 0.95
             self.temp_fg, self.temp_mid, self.temp_bg = 0.014, 0.007, 0.001
             self.sat_fg, self.sat_mid, self.sat_bg = 1.050, 1.035, 1.015

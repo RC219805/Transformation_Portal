@@ -74,12 +74,12 @@ class TestDepthContract:
         cfg.apply_preset()
         assert cfg.depth.mode == DepthMode.AUTO
     
-    def test_production_ultra_uses_required_depth(self):
-        """Test PRODUCTION_ULTRA preset uses DepthMode.REQUIRED."""
+    def test_production_ultra_uses_auto_depth(self):
+        """Test PRODUCTION_ULTRA preset uses DepthMode.AUTO (production default)."""
         cfg = PipelineConfig()
         cfg.preset = "production_ultra"
         cfg.apply_preset()
-        assert cfg.depth.mode == DepthMode.REQUIRED
+        assert cfg.depth.mode == DepthMode.AUTO
     
     def test_interior_luxury_uses_auto_depth(self):
         """Test INTERIOR_LUXURY preset uses DepthMode.AUTO."""

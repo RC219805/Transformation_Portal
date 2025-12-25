@@ -92,7 +92,9 @@ class TestPipelineProcessOne:
         
         assert result["status"] == "ok"
         assert result["zone_weights"] == "depth_percentiles"
-        assert result["depth"] == str(sample_depth_file)
+        # Commit 3: depth is now a dict with provenance
+        assert result["depth"]["source"] == "file"
+        assert result["depth"]["path"] == str(sample_depth_file)
 
     def test_process_one_skip_existing(self, temp_dir, sample_image_file, mock_config):
         """Test skip_existing functionality."""
