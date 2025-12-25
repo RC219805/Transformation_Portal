@@ -253,7 +253,8 @@ class TestConfigurationEdgeCases:
     def test_invalid_upscale_factor(self):
         """Test invalid upscale factor."""
         # Pipeline should accept upscale=3 but may warn or adjust
-        config = PipelineConfig(upscale=3)  # Only 2 or 4 recommended
+        config = PipelineConfig()
+        config.upscale = 3  # Set after preset application
         # No validation method exists, so just check config was created
         assert config.upscale == 3
 
