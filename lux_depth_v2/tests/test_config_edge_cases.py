@@ -48,6 +48,7 @@ class TestConfigBasics:
 
     def test_upscaler_backends(self):
         """Test upscaler backend configuration."""
+        # Backward compatibility: realesrgan still accepted (deprecated)
         config = PipelineConfig(upscaler_backend="realesrgan")
         assert config.upscaler_backend == "realesrgan"
         
@@ -56,6 +57,10 @@ class TestConfigBasics:
         
         config = PipelineConfig(upscaler_backend="none")
         assert config.upscaler_backend == "none"
+        
+        # Secure default
+        config = PipelineConfig(upscaler_backend="torch")
+        assert config.upscaler_backend == "torch"
 
     def test_output_flags(self):
         """Test output configuration flags."""
