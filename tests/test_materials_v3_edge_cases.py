@@ -76,11 +76,20 @@ class TestMaterialsV3EdgeCases:
     @pytest.fixture
     def ci_safe_config(self, output_dir):
         """Create a CI-safe pipeline config (uses heuristic backend to avoid transformers dependency)."""
+        # Use CI_BASELINE preset which allows depth.mode=OPTIONAL
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            preset=Preset.CI_BASELINE,
             output_dir=output_dir,
             write_outputs=False  # Speed up tests
         )
+        # Apply preset first
+        config.apply_preset()
+        # Enable materials for testing (CI_BASELINE disables it)
+        config.enable_material = True
+        if config.materials_v2 is not None:
+            config.materials_v2.enabled = True
+        if config.materials_v3 is not None:
+            config.materials_v3.enabled = True
         # Override segmentation backend to use heuristic (no external dependencies)
         config.segmentation.backend = "heuristic"
         return config

@@ -19,9 +19,15 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 import tempfile
+import os
 
 # Import PyTorch availability from canonical source
 from lux_depth_v2.torch_ops import TORCH_AVAILABLE
+
+# Skip all tests in CI unless explicitly allowed (network-dependent model downloads)
+IN_CI = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+ALLOW_NETWORK_TESTS = os.getenv("RUN_NETWORK_TESTS") == "1"
+SKIP_IN_CI = IN_CI and not ALLOW_NETWORK_TESTS
 
 # Conditional imports
 if TORCH_AVAILABLE:
@@ -32,11 +38,18 @@ else:
     PipelineConfig = None
     Preset = None
 
-# Module-level skip
-pytestmark = pytest.mark.skipif(
-    not TORCH_AVAILABLE,
-    reason="MaterialsV3 E2E tests require PyTorch"
-)
+# Module-level skip - skip in CI unless explicitly allowed
+pytestmark = [
+    pytest.mark.skipif(
+        not TORCH_AVAILABLE,
+        reason="MaterialsV3 E2E tests require PyTorch"
+    ),
+    pytest.mark.skipif(
+        SKIP_IN_CI,
+        reason="Requires HuggingFace model downloads (SegFormer image processor/model) which are blocked in CI. "
+               "Run locally or set RUN_NETWORK_TESTS=1."
+    )
+]
 
 
 @pytest.fixture

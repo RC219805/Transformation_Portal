@@ -323,3 +323,6 @@ edge_refinement_results/
 # Exclude large upscaled TIFFs from Phase 2 outputs
 phase2_task*_outputs/**/*upscaled16.tif
 regression_baselines/**/*upscaled16.tif
+
+# Sprint planning archives
+lux_depth_v2/docs/archive_sprint_planning/
