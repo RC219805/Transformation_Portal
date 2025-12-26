@@ -127,16 +127,50 @@ def test_blend_mask_creation():
     mask_tl = upscaler._create_positional_blend_mask(
         shape, overlap, fade_top=False, fade_bottom=True, fade_left=False, fade_right=True
     )
-    assert mask_tl[:, :, 0, 0].item() == 1.0  # Top-left corner should be 1.0
-    assert mask_tl[:, :, 0, -1].mean() < 1.0  # Right edge should be faded
-    assert mask_tl[:, :, -1, 0].mean() < 1.0  # Bottom edge should be faded
+    assert mask_tl[0, 0, 0, 0].item() == 1.0  # Top-left corner should be 1.0
+    assert mask_tl[0, 0, 0, :].mean().item() < 1.0  # Top row fades toward right
+    assert mask_tl[0, 0, :, 0].mean().item() < 1.0  # Left col fades toward bottom
     
     # Interior tile: all edges faded
     mask_interior = upscaler._create_positional_blend_mask(
         shape, overlap, fade_top=True, fade_bottom=True, fade_left=True, fade_right=True
     )
-    assert mask_interior[:, :, 0, 0].item() < 0.1  # Top-left corner should be faded
-    assert mask_interior[:, :, 128, 128].item() == 1.0  # Center should be 1.0
+    assert mask_interior[0, 0, 0, 0].item() < 0.1  # Top-left corner should be faded
+    assert mask_interior[0, 0, 128, 128].item() == 1.0  # Center should be 1.0
+
+
+def test_phase2_config_integration():
+    """Test that TorchUpscaler reads from Phase2Config correctly."""
+    from lux_depth_v2.upscaling import TorchUpscaler
+    from lux_depth_v2.config import PipelineConfig, Phase2Config, Preset
+    
+    # Test 1: APEX preset creates Phase2Config with correct tiling params
+    cfg_apex = PipelineConfig(preset=Preset.INTERIOR_LUXURY_APEX_QUALITY)
+    device = torch.device("cpu")
+    upscaler_apex = TorchUpscaler(cfg_apex, device)
+    
+    assert upscaler_apex.tile_size == 2048, "APEX should enable 2048 tile size"
+    assert upscaler_apex.tile_overlap == 128, "APEX should use 128px overlap"
+    
+    # Test 2: Phase2Config with tile_based_upscaling=False disables tiling
+    cfg_phase2_disabled = PipelineConfig(preset=Preset.PHOTO_REALISTIC)
+    cfg_phase2_disabled.phase2 = Phase2Config()
+    cfg_phase2_disabled.phase2.tile_based_upscaling = False
+    upscaler_disabled = TorchUpscaler(cfg_phase2_disabled, device)
+    
+    assert upscaler_disabled.tile_size == 0, "tile_based_upscaling=False should disable tiling"
+    
+    # Test 3: Legacy fallback (no Phase2Config)
+    from types import SimpleNamespace
+    cfg_legacy = SimpleNamespace(
+        upscale=2,
+        upscale_tile_size=1024,
+        upscale_tile_overlap=64
+    )
+    upscaler_legacy = TorchUpscaler(cfg_legacy, device)
+    
+    assert upscaler_legacy.tile_size == 1024, "Legacy attribute should work"
+    assert upscaler_legacy.tile_overlap == 64, "Legacy overlap should work"
 
 
 if __name__ == "__main__":
