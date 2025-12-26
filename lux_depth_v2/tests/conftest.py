@@ -130,8 +130,37 @@ def mock_config():
     )
 
 
+def pytest_addoption(parser):
+    """Add custom command-line options (idempotent to avoid duplicate registration)."""
+    try:
+        parser.addoption(
+            "--slow",
+            action="store_true",
+            default=False,
+            help="Run tests marked as slow (stress tests, long-running operations)",
+        )
+    except ValueError:
+        # Option already registered (happens when both root and lux_depth_v2 conftests are loaded)
+        pass
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "gpu: mark test as requiring GPU")
     config.addinivalue_line("markers", "integration: mark test as integration test")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip slow tests unless --slow flag is provided."""
+    # Use getattr to safely check for --slow option (may not be registered in all pytest roots)
+    run_slow = getattr(config.option, "slow", False)
+    if run_slow:
+        # --slow flag provided: run all tests including slow ones
+        return
+    
+    # Skip slow tests by default
+    skip_slow = pytest.mark.skip(reason="need --slow option to run")
+    for item in items:
+        if item.get_closest_marker("slow"):
+            item.add_marker(skip_slow)
