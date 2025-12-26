@@ -56,8 +56,14 @@ class TorchUpscaler(Upscaler):
         except Exception as e:
             raise RuntimeError("torchvision is required for torch upscaling") from e
         self.TF = TF
-        self.tile_size = getattr(cfg, "upscale_tile_size", 0)
-        self.tile_overlap = getattr(cfg, "upscale_tile_overlap", 64)
+        
+        # Read from Phase2Config if available, else fallback to legacy direct attributes
+        if hasattr(cfg, 'phase2') and cfg.phase2 is not None:
+            self.tile_size = cfg.phase2.upscale_tile_size if cfg.phase2.tile_based_upscaling else 0
+            self.tile_overlap = cfg.phase2.upscale_overlap
+        else:
+            self.tile_size = getattr(cfg, "upscale_tile_size", 0)
+            self.tile_overlap = getattr(cfg, "upscale_tile_overlap", 64)
         
     def upscale(self, rgb: "torch_ops.torch.Tensor") -> "torch_ops.torch.Tensor":
         """High-quality bicubic upscaling with optional tiling for memory efficiency."""
