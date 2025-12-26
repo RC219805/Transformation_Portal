@@ -549,6 +549,12 @@ class PipelineConfig:
         """
         self.apply_preset()
 
+    def _ensure_phase2(self) -> Phase2Config:
+        """Ensure Phase2Config exists; create if missing."""
+        if self.phase2 is None:
+            self.phase2 = Phase2Config()
+        return self.phase2
+
     def _get_depth_mode_for_preset(self, preset: Preset) -> DepthMode:
         """
         Rule-based depth mode assignment to avoid scattered conditionals.
@@ -694,8 +700,12 @@ class PipelineConfig:
             # APEX: Upscaling Quality
             self.tile = 1024  # +100% tile size for better quality
             self.tile_pad = 32  # +100% padding for edge quality
-            self.upscale_tile_size = 2048  # Memory-efficient tiling for large images
-            self.upscale_tile_overlap = 128  # Generous overlap for seamless blending
+            
+            # APEX: Phase2 upscaling tiling (write to actual config, not phantom attributes)
+            ph2 = self._ensure_phase2()
+            ph2.tile_based_upscaling = True
+            ph2.upscale_tile_size = 2048  # Memory-efficient tiling for large images
+            ph2.upscale_overlap = 128  # Generous overlap for seamless blending
             
             # APEX: Export Quality
             self.marketing_png_compression = 0  # Lossless PNG
@@ -1113,6 +1123,7 @@ class PipelineConfig:
         Includes parameters that affect processing output quality:
         - Material segmentation config
         - Depth zone config
+        - Depth contract config (mode, model, tiling)
         - Core grading parameters
         - Materials V2/V3 config
         
@@ -1134,6 +1145,13 @@ class PipelineConfig:
             "depth_zones_mode": self.depth_zones.mode,
             "materials_v2_enabled": self.materials_v2.enabled if self.materials_v2 else False,
             "materials_v3_enabled": self.materials_v3.enabled if self.materials_v3 else False,
+            # Depth contract parameters (cache invalidation fix)
+            "strict_depth": self.strict_depth,
+            "depth_mode": self.depth.mode.value,
+            "depth_auto_model": self.depth.auto_model,
+            "depth_auto_tile_size": self.depth.auto_tile_size,
+            "depth_auto_overlap": self.depth.auto_overlap,
+            "depth_cache_enabled": self.depth.enable_cache,
         }
         cfg_json = json.dumps(cfg_dict, sort_keys=True)
         return hashlib.sha256(cfg_json.encode()).hexdigest()[:16]

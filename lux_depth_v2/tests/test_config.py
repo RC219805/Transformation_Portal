@@ -212,3 +212,40 @@ class TestPipelineConfig:
         assert "wood" in cfg.surfaces
         assert "metal" in cfg.surfaces
         assert "glass" in cfg.surfaces
+
+
+class TestApexPresetConfiguration:
+    """Test APEX preset correctness (audit fixes)."""
+
+    def test_apex_sets_phase2_upscale_tiling(self):
+        """APEX preset writes to Phase2Config, not phantom attributes."""
+        cfg = PipelineConfig(preset=Preset.INTERIOR_LUXURY_APEX_QUALITY)
+        assert cfg.phase2 is not None, "APEX should create Phase2Config"
+        assert cfg.phase2.tile_based_upscaling is True
+        assert cfg.phase2.upscale_tile_size == 2048
+        assert cfg.phase2.upscale_overlap == 128
+
+    def test_cfg_fingerprint_includes_depth_auto_model(self):
+        """Fingerprint changes when depth model changes (cache invalidation)."""
+        cfg1 = PipelineConfig(preset=Preset.PRODUCTION_STANDARD)
+        f1 = cfg1._cfg_fingerprint()
+        cfg1.depth.auto_model = "some/other-model"
+        f2 = cfg1._cfg_fingerprint()
+        assert f1 != f2, "Fingerprint must change when depth model changes"
+
+    def test_cfg_fingerprint_includes_depth_tiling(self):
+        """Fingerprint changes when depth tiling changes (cache invalidation)."""
+        cfg1 = PipelineConfig(preset=Preset.PRODUCTION_STANDARD)
+        f1 = cfg1._cfg_fingerprint()
+        cfg1.depth.auto_tile_size = 2048
+        cfg1.depth.auto_overlap = 256
+        f2 = cfg1._cfg_fingerprint()
+        assert f1 != f2, "Fingerprint must change when depth tiling changes"
+
+    def test_cfg_fingerprint_includes_strict_depth(self):
+        """Fingerprint changes when strict_depth changes (cache invalidation)."""
+        cfg1 = PipelineConfig(preset=Preset.PRODUCTION_STANDARD)
+        f1 = cfg1._cfg_fingerprint()
+        cfg1.strict_depth = True
+        f2 = cfg1._cfg_fingerprint()
+        assert f1 != f2, "Fingerprint must change when strict_depth changes"
