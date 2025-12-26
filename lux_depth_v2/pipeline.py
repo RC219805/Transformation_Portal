@@ -569,6 +569,7 @@ class LuxPipelineV2:
                             device=str(self.device),
                             use_global_anchor=cfg.depth.auto_use_global_anchor,
                             use_edge_snapping=cfg.depth.auto_use_edge_snapping,
+                            model_name=cfg.depth.auto_model,
                         )
                         
                         # Estimate depth
@@ -617,7 +618,8 @@ class LuxPipelineV2:
                 
                 except ImportError as e:
                     self.logger.error(f"Depth auto-generation failed (missing dependencies): {e}")
-                    if cfg.strict_depth:
+                    strict = cfg.strict_depth or (cfg.depth.mode == DepthMode.REQUIRED)
+                    if strict:
                         raise
                     depth01 = None
                     depth_provenance = {
@@ -628,7 +630,8 @@ class LuxPipelineV2:
                     }
                 except Exception as e:
                     self.logger.error(f"Depth auto-generation failed: {e}")
-                    if cfg.strict_depth:
+                    strict = cfg.strict_depth or (cfg.depth.mode == DepthMode.REQUIRED)
+                    if strict:
                         raise
                     depth01 = None
                     depth_provenance = {

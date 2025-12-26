@@ -404,8 +404,14 @@ class TiledDepthEstimator:
             # Model may output slightly smaller spatial dimensions (e.g., 1016 from 1024 input)
             target_h, target_w = tile_rgb.shape[:2]
             if depth.shape != (target_h, target_w):
-                import cv2
-                depth = cv2.resize(depth, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+                try:
+                    import cv2
+                    depth = cv2.resize(depth, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+                except ImportError:
+                    from PIL import Image
+                    depth_pil = Image.fromarray((depth * 255).astype(np.uint8))
+                    depth_pil = depth_pil.resize((target_w, target_h), Image.Resampling.BILINEAR)
+                    depth = np.array(depth_pil).astype(np.float32) / 255.0
                 logger.info(f"⚠️  Resized tile depth: {depth_tensor.shape[-2:]} → {depth.shape}")
             
         else:
@@ -771,7 +777,11 @@ class TiledDepthEstimator:
         
         This is the correct quality metric (not edge gradient magnitude).
         """
-        import cv2
+        try:
+            import cv2
+        except ImportError:
+            logger.warning("cv2 not installed; skipping edge alignment metric")
+            return float("nan")
         
         # RGB edges (Canny)
         if rgb.dtype == np.float32:
@@ -802,7 +812,8 @@ def create_tiled_estimator(
     fusion_mode: str = "median",
     device: str = "auto",
     use_global_anchor: bool = True,
-    use_edge_snapping: bool = True
+    use_edge_snapping: bool = True,
+    model_name: str = "depth-anything/Depth-Anything-V2-Large-hf",
 ) -> TiledDepthEstimator:
     """
     Convenience factory for tiled depth estimator with all enhancements enabled.
@@ -814,6 +825,7 @@ def create_tiled_estimator(
         device: Device for inference (auto | cuda | mps | cpu)
         use_global_anchor: Enable global context preservation
         use_edge_snapping: Enable edge sharpening
+        model_name: HuggingFace model ID for depth estimation
         
     Returns:
         Configured TiledDepthEstimator
@@ -826,6 +838,7 @@ def create_tiled_estimator(
         overlap=overlap,
         fusion_mode=fusion_mode,
         device=device,
+        model_name=model_name,
         bypass_image_processor=True,  # CRITICAL: Always bypass 518px resize
         use_global_anchor=use_global_anchor,
         global_anchor_config=GlobalAnchorConfig() if use_global_anchor else None,
