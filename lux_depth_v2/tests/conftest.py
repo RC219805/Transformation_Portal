@@ -135,3 +135,16 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "gpu: mark test as requiring GPU")
     config.addinivalue_line("markers", "integration: mark test as integration test")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip slow tests unless --slow flag is provided."""
+    if config.getoption("--slow"):
+        # --slow flag provided: run all tests including slow ones
+        return
+    
+    # Skip slow tests by default
+    skip_slow = pytest.mark.skip(reason="need --slow option to run")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip_slow)
