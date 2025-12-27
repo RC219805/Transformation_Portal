@@ -8,6 +8,12 @@ on:
   schedule:
     # Run stress tests nightly at 2 AM UTC
     - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Run full stress (1000 iters / 100 images)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -61,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: github.event_name == 'schedule' || contains(github.event.head_commit.message, '[run-stress]')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[run-stress]')
     
     steps:
     - uses: actions/checkout@v6
@@ -82,6 +88,8 @@ jobs:
         pip install transformers accelerate safetensors pillow
     
     - name: Run MaterialsV3 Stress Tests
+      env:
+        MATERIALSV3_STRESS_FULL: ${{ (github.event_name == 'schedule' || inputs.full == true) && '1' || '0' }}
       run: |
         mkdir -p test-results
         pytest tests/test_materials_v3_stress.py \
