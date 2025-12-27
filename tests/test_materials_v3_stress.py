@@ -19,7 +19,6 @@ Success Criteria:
 
 import pytest
 import numpy as np
-from pathlib import Path
 from PIL import Image
 import multiprocessing
 import time
@@ -175,8 +174,11 @@ class TestMaterialsV3Stress:
         """
         Validate MaterialsV3 stability over iterations.
         
-        CI mode: 50 iterations (smoke test, ~30s)
-        Full mode: 1000 iterations (stress test, ~10min)
+
+        Note:
+        - These stress tests are skipped on PR CI by module-level pytestmark.
+        - They run on nightly/manual workflows (or locally).
+        - Iterations are gated below via environment flags.
         
         Success Criteria:
         - Zero crashes (each iteration completes)
@@ -235,9 +237,13 @@ class TestMaterialsV3Stress:
         assert len(results) == iterations, f"Expected {iterations} results, got {len(results)}"
         
         # Verify no fallbacks (synthetic image should always succeed)
+        pct = (fallback_count / iterations * 100.0) if iterations else 0.0
         print(f"\n{'='*60}")
-        print(f"1000-iteration test completed in {elapsed_total:.1f}s ({avg_rate:.1f} iter/sec)")
-        print(f"Fallbacks: {fallback_count}/1000 ({fallback_count/10:.1f}%)")
+        print(
+            f"{iterations}-iteration test completed in {elapsed_total:.1f}s "
+            f"({avg_rate:.1f} iter/sec)"
+        )
+        print(f"Fallbacks: {fallback_count}/{iterations} ({pct:.1f}%)")
         print(f"{'='*60}\n")
         
         if fallback_count > 0:
@@ -248,16 +254,20 @@ class TestMaterialsV3Stress:
                 print(f"  ... and {len(errors) - 10} more")
         
         # Success criteria: 0% fallback rate for synthetic images
-        assert fallback_count == 0, \
-            f"Unexpected fallbacks: {fallback_count}/1000 ({fallback_count/10:.1f}%)\n" + \
+        assert fallback_count == 0, (
+            f"Unexpected fallbacks: {fallback_count}/{iterations} ({pct:.1f}%)\n"
             f"Errors: {errors[:5]}"
+        )
     
     def test_batch_processing_100_images(self, tmp_path, ci_safe_config, output_dir):
         """
         Process images in batch and verify MaterialsV3 stability.
         
         Nightly: 100 images (stress test, ~10min)
-        Local/PR: 20 images (smoke test, ~2min)
+        Local: 100 images by default (unless MATERIALSV3_STRESS_FULL is used to force)
+        
+        Note: PR CI is skipped by module-level pytestmark; "PR smoke" is not executed
+        unless you explicitly run it elsewhere.
         """
         # Tier gating: Full stress on nightly/manual, smoke on PR CI, full on local
         in_ci = os.getenv("CI") == "true"
@@ -335,8 +345,9 @@ class TestMaterialsV3Stress:
         assert len(results) == batch_size, f"Expected {batch_size} results, got {len(results)}"
         
         print(f"\n{'='*60}")
+        pct = (fallback_count / batch_size * 100.0) if batch_size else 0.0
         print(f"Batch processing completed in {elapsed_total:.1f}s ({avg_rate:.1f} img/sec)")
-        print(f"Fallbacks: {fallback_count}/100 ({fallback_count}%)")
+        print(f"Fallbacks: {fallback_count}/{batch_size} ({pct:.1f}%)")
         print(f"{'='*60}\n")
         
         if errors:
@@ -347,9 +358,11 @@ class TestMaterialsV3Stress:
                 print(f"  ... and {len(errors) - 10} more")
         
         # Allow up to 5% fallback rate (for edge cases in random generation)
-        assert fallback_count <= 5, \
-            f"Too many fallbacks: {fallback_count}/100 (>{5}%)\n" + \
+        max_fallbacks = max(1, int(batch_size * 0.05))  # scale 5% to batch size
+        assert fallback_count <= max_fallbacks, (
+            f"Too many fallbacks: {fallback_count}/{batch_size} (> {max_fallbacks})\n"
             f"Errors: {errors[:5]}"
+        )
     
     @pytest.mark.slow
     def test_concurrent_pipeline_execution(self, tmp_path):
