@@ -144,9 +144,11 @@ class TestMaterialsV3Stress:
         - Zero fallbacks for valid synthetic images
         - Memory stable (no accumulation)
         """
-        # Nightly stress: 1000 iterations, Local/PR smoke: 50
-        is_nightly = os.getenv("GITHUB_EVENT_NAME") == "schedule"
-        iterations = 1000 if is_nightly else 50
+        # Tier gating: Full stress on nightly/manual, smoke on PR CI, full on local
+        in_ci = os.getenv("CI") == "true"
+        is_nightly = os.getenv("GITHUB_EVENT_NAME") in ("schedule", "workflow_dispatch")
+        full_stress = is_nightly or (os.getenv("MATERIALSV3_STRESS_FULL") == "1")
+        iterations = 1000 if (not in_ci or full_stress) else 50
         
         pipeline = LuxPipelineV2(ci_safe_config)
         
@@ -215,9 +217,11 @@ class TestMaterialsV3Stress:
         Nightly: 100 images (stress test, ~10min)
         Local/PR: 20 images (smoke test, ~2min)
         """
-        # Nightly stress: 100 images, Local/PR smoke: 20
-        is_nightly = os.getenv("GITHUB_EVENT_NAME") == "schedule"
-        batch_size = 100 if is_nightly else 20
+        # Tier gating: Full stress on nightly/manual, smoke on PR CI, full on local
+        in_ci = os.getenv("CI") == "true"
+        is_nightly = os.getenv("GITHUB_EVENT_NAME") in ("schedule", "workflow_dispatch")
+        full_stress = is_nightly or (os.getenv("MATERIALSV3_STRESS_FULL") == "1")
+        batch_size = 100 if (not in_ci or full_stress) else 20
         
         # Generate synthetic images with varying characteristics
         image_paths = []
