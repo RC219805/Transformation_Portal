@@ -466,7 +466,11 @@ class TestMaterialsV3Stress:
         
         pipeline = LuxPipelineV2(ci_safe_config)
         
-        # Mock GPU to simulate OOM
+        # Simulate GPU OOM in MaterialsV3 processing
+        engine = getattr(pipeline, "materials_v3_engine", None)
+        if engine is None or not hasattr(engine, "process"):
+            pytest.skip("MaterialsV3 engine not available for OOM test")
+        
         def mock_gpu_oom(*args, **kwargs):
             raise RuntimeError("CUDA out of memory")
         
@@ -475,14 +479,12 @@ class TestMaterialsV3Stress:
             # First, try normal processing
             result = pipeline.process_one(large_img_path)
             # If succeeds, GPU has enough memory - simulate OOM
-            engine = getattr(pipeline, "materials_v3_engine", None)
-            if engine is not None:
-                with patch.object(engine, 'process', side_effect=mock_gpu_oom):
-                    result_oom = pipeline.process_one(large_img_path)
-                    # Should fallback gracefully
-                    m3 = _materials_v3_meta(result_oom)
-                    assert m3.get('fallback', False) or ('error' in m3), \
-                        "Expected fallback or error on GPU OOM"
+            with patch.object(engine, 'process', side_effect=mock_gpu_oom):
+                result_oom = pipeline.process_one(large_img_path)
+                # Should fallback gracefully
+                m3 = _materials_v3_meta(result_oom)
+                assert m3.get('fallback', False) or ('error' in m3), \
+                    "Expected fallback or error on GPU OOM"
         except RuntimeError as e:
             # If real OOM occurs, should be handled gracefully
             assert 'out of memory' in str(e).lower() or 'fallback' in str(e).lower()
