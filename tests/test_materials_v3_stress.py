@@ -185,10 +185,11 @@ class TestMaterialsV3Stress:
         - Zero fallbacks for valid synthetic images
         - Memory stable (no accumulation)
         """
-        # Tier gating: Full stress on nightly/manual, smoke on PR CI, full on local
+        # Tier gating: Full stress on schedule, smoke on workflow_dispatch unless explicitly requested
         in_ci = os.getenv("CI") == "true"
-        is_nightly = os.getenv("GITHUB_EVENT_NAME") in ("schedule", "workflow_dispatch")
-        full_stress = is_nightly or (os.getenv("MATERIALSV3_STRESS_FULL") == "1")
+        event_name = os.getenv("GITHUB_EVENT_NAME") or ""
+        is_schedule = event_name == "schedule"
+        full_stress = (os.getenv("MATERIALSV3_STRESS_FULL") == "1") or is_schedule
         iterations = 1000 if (not in_ci or full_stress) else 50
         
         pipeline = LuxPipelineV2(ci_safe_config)
@@ -269,10 +270,11 @@ class TestMaterialsV3Stress:
         Note: PR CI is skipped by module-level pytestmark; "PR smoke" is not executed
         unless you explicitly run it elsewhere.
         """
-        # Tier gating: Full stress on nightly/manual, smoke on PR CI, full on local
+        # Tier gating: Full stress on schedule, smoke on workflow_dispatch unless explicitly requested
         in_ci = os.getenv("CI") == "true"
-        is_nightly = os.getenv("GITHUB_EVENT_NAME") in ("schedule", "workflow_dispatch")
-        full_stress = is_nightly or (os.getenv("MATERIALSV3_STRESS_FULL") == "1")
+        event_name = os.getenv("GITHUB_EVENT_NAME") or ""
+        is_schedule = event_name == "schedule"
+        full_stress = (os.getenv("MATERIALSV3_STRESS_FULL") == "1") or is_schedule
         batch_size = 100 if (not in_ci or full_stress) else 20
         
         # Generate synthetic images with varying characteristics
@@ -475,37 +477,34 @@ class TestMaterialsV3Stress:
         large_img = Image.new('RGB', (4096, 4096), color=(128, 128, 128))
         large_img.save(large_img_path, quality=95)
         
-        ci_safe_config.max_megapixels = 50  # Allow large image
+        # Allow large image through MaterialsV3 megapixel gate (if enforced)
+        if getattr(ci_safe_config, "materials_v3", None) is not None:
+            ci_safe_config.materials_v3.max_megapixels = 50.0
         
         pipeline = LuxPipelineV2(ci_safe_config)
         
         def mock_gpu_oom(*args, **kwargs):
             raise RuntimeError("CUDA out of memory")
         
-        # Try processing (may trigger OOM or succeed)
-        try:
-            # First, try normal processing (may initialize engine lazily)
-            result = pipeline.process_one(large_img_path)
-            
-            # Check if engine is available after first run
-            engine = getattr(pipeline, "materials_v3_engine", None)
-            if engine is None or not hasattr(engine, "process"):
-                pytest.skip("MaterialsV3 engine not available for OOM test")
-            
-            # Simulate GPU OOM
-            with patch.object(engine, 'process', side_effect=mock_gpu_oom):
+        # Prime lazy init
+        _ = pipeline.process_one(large_img_path)
+
+        # Check if engine is available after first run
+        engine = getattr(pipeline, "materials_v3_engine", None)
+        if engine is None or not hasattr(engine, "process"):
+            pytest.skip("MaterialsV3 engine not available for OOM test")
+
+        # Simulate GPU OOM and REQUIRE graceful fallback (no exception escape)
+        with patch.object(engine, "process", side_effect=mock_gpu_oom):
+            try:
                 result_oom = pipeline.process_one(large_img_path)
-                # Should fallback gracefully
-                m3 = _materials_v3_meta(result_oom)
-                assert m3.get('fallback', False) or ('error' in m3), \
-                    "Expected fallback or error on GPU OOM"
-        except RuntimeError as e:
-            # If real OOM occurs, should be handled gracefully
-            assert 'out of memory' in str(e).lower() or 'fallback' in str(e).lower()
-        except Exception as e:
-            # Other exceptions are acceptable if gracefully handled
-            error_msg = str(e).lower()
-            assert 'fallback' in error_msg or 'materials_v3' not in error_msg
+            except Exception as e:
+                pytest.fail(f"Expected graceful fallback on OOM; exception escaped: {e}")
+
+        m3 = _materials_v3_meta(result_oom)
+        assert m3, "MaterialsV3 metadata missing; cannot verify fallback contract"
+        assert m3.get("fallback", False) or m3.get("error"), \
+            "Expected fallback=True or error populated on simulated GPU OOM"
     
     def test_result_consistency_across_iterations(self, sample_image, ci_safe_config):
         """MaterialsV3 should produce consistent results for same input."""
