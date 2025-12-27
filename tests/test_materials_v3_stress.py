@@ -539,6 +539,10 @@ class TestMaterialsV3Stress:
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch is required for LuxPipelineV2"
+)
 class TestMaterialsV3StressScenarios:
     """Additional stress scenarios."""
     
