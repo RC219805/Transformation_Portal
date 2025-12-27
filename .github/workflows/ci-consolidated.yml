@@ -879,20 +879,23 @@ jobs:
           
       - name: Run Materials V3 Core Tests
         run: |
-          # Run all Materials V3 tests EXCEPT stress tests (separate workflow)
+          mkdir -p test-results
+          # Ensure artifact upload never warns about missing files
+          : > test-results/junit-materials-v3-py${{ matrix.python-version }}.xml
+
           pytest tests/test_materials_v3_*.py \
             -v --tb=short \
             -k "not test_1000_iteration_stability and not nightly" \
-            --maxfail=5
+            --maxfail=5 \
+            --junitxml=test-results/junit-materials-v3-py${{ matrix.python-version }}.xml
             
       - name: Upload Materials V3 Test Results
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: materials-v3-test-results-py${{ matrix.python-version }}
-          path: |
-            test-results/
-            .pytest_cache/
+          path: test-results/
+          if-no-files-found: warn
           retention-days: 7
 
   # ===========================================================================
