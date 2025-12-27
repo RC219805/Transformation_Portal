@@ -107,9 +107,6 @@ class TestDepthContractGuardrails:
         )
         config.depth.auto_model = custom_model  # Override default
         
-        # Capture create_tiled_estimator call
-        from lux_depth_v2.depth_inference import create_tiled_estimator
-        original_factory = create_tiled_estimator
         captured_kwargs = {}
         
         def spy_factory(**kwargs):
@@ -122,6 +119,9 @@ class TestDepthContractGuardrails:
         with patch('lux_depth_v2.depth_inference.create_tiled_estimator', side_effect=spy_factory):
             pipeline = LuxPipelineV2(config)
             result = pipeline.process_one(sample_image_file, depth_path=None)
+        
+        # Verify pipeline completed successfully
+        assert result["status"] == "ok", f"process_one failed: {result}"
         
         # Verify model_name was passed to factory
         assert "model_name" in captured_kwargs, "model_name not passed to create_tiled_estimator"
