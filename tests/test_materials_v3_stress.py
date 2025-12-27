@@ -40,6 +40,23 @@ else:
     Preset = None
     DepthMode = None
 
+
+def _materials_v3_meta(result: object) -> dict:
+    """
+    Returns MaterialsV3 metadata dict from the pipeline result, supporting both:
+      - top-level: result["materials_v3_metadata"]
+      - nested:    result["metadata"]["materials_v3"]
+    """
+    if not isinstance(result, dict):
+        return {}
+    if isinstance(result.get("materials_v3_metadata"), dict):
+        return result["materials_v3_metadata"]
+    md = result.get("metadata")
+    if isinstance(md, dict) and isinstance(md.get("materials_v3"), dict):
+        return md["materials_v3"]
+    return {}
+
+
 # Module-level skip - stress tests excluded from PR CI, enabled on nightly/manual runs
 pytestmark = pytest.mark.skipif(
     os.getenv("CI") == "true"
@@ -71,10 +88,11 @@ def _process_image_worker(args):
     
     try:
         result = pipeline.process_one(img_path)
+        m3 = _materials_v3_meta(result)
         return {
             'worker_id': worker_id,
             'success': True,
-            'fallback': bool(result.get('metadata', {}).get('materials_v3', {}).get('fallback', False))
+            'fallback': bool(m3.get('fallback', False))
         }
     except Exception as e:
         return {
@@ -169,10 +187,10 @@ class TestMaterialsV3Stress:
                 results.append(result)
                 
                 # Check for fallback
-                if isinstance(result, dict) and 'materials_v3' in result.get('metadata', {}):
-                    if result.get('metadata', {}).get('materials_v3', {}).get('fallback', False):
-                        fallback_count += 1
-                        errors.append(f"Iteration {i}: {result.get('metadata', {}).get('materials_v3', {}).get('error', 'Unknown')}")
+                m3 = _materials_v3_meta(result)
+                if m3.get('fallback', False):
+                    fallback_count += 1
+                    errors.append(f"Iteration {i}: {m3.get('error', 'Unknown')}")
                 
                 # Progress reporting
                 report_interval = max(10, iterations // 10)  # Report ~10 times
@@ -267,10 +285,10 @@ class TestMaterialsV3Stress:
                 results.append(result)
                 
                 # Track fallbacks
-                if isinstance(result, dict) and 'materials_v3' in result.get('metadata', {}):
-                    if result.get('metadata', {}).get('materials_v3', {}).get('fallback', False):
-                        fallback_count += 1
-                        errors.append(f"Image {i}: {result.get('metadata', {}).get('materials_v3', {}).get('error', 'Unknown')}")
+                m3 = _materials_v3_meta(result)
+                if m3.get('fallback', False):
+                    fallback_count += 1
+                    errors.append(f"Image {i}: {m3.get('error', 'Unknown')}")
                 
                 # Progress reporting
                 if (i + 1) % 20 == 0:
