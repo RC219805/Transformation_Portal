@@ -298,7 +298,7 @@ class TestMaterialsV3Stress:
         errors = []
         
         print(f"\n{'='*60}")
-        print(f"Processing 100 images with MaterialsV3...")
+        print(f"Processing {batch_size} images with MaterialsV3...")
         print(f"{'='*60}")
         
         start_time = time.time()
@@ -321,7 +321,7 @@ class TestMaterialsV3Stress:
                 if (i + 1) % 20 == 0:
                     elapsed = time.time() - start_time
                     rate = (i + 1) / elapsed
-                    print(f"Progress: {i+1}/100 images ({rate:.1f} img/sec, {fallback_count} fallbacks)")
+                    print(f"Progress: {i+1}/{batch_size} images ({rate:.1f} img/sec, {fallback_count} fallbacks)")
                     
             except Exception as e:
                 errors.append(f"Image {i}: {str(e)}")
@@ -466,19 +466,20 @@ class TestMaterialsV3Stress:
         
         pipeline = LuxPipelineV2(ci_safe_config)
         
-        # Simulate GPU OOM in MaterialsV3 processing
-        engine = getattr(pipeline, "materials_v3_engine", None)
-        if engine is None or not hasattr(engine, "process"):
-            pytest.skip("MaterialsV3 engine not available for OOM test")
-        
         def mock_gpu_oom(*args, **kwargs):
             raise RuntimeError("CUDA out of memory")
         
         # Try processing (may trigger OOM or succeed)
         try:
-            # First, try normal processing
+            # First, try normal processing (may initialize engine lazily)
             result = pipeline.process_one(large_img_path)
-            # If succeeds, GPU has enough memory - simulate OOM
+            
+            # Check if engine is available after first run
+            engine = getattr(pipeline, "materials_v3_engine", None)
+            if engine is None or not hasattr(engine, "process"):
+                pytest.skip("MaterialsV3 engine not available for OOM test")
+            
+            # Simulate GPU OOM
             with patch.object(engine, 'process', side_effect=mock_gpu_oom):
                 result_oom = pipeline.process_one(large_img_path)
                 # Should fallback gracefully
