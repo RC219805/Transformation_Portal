@@ -125,16 +125,13 @@ class TestMaterialsV3Stress:
     def sample_image(self, tmp_path):
         """Create a valid synthetic sample image."""
         img_path = tmp_path / "sample_image.jpg"
-        # Create diverse synthetic image with gradients
-        img_array = np.zeros((512, 512, 3), dtype=np.uint8)
-        # Add gradients and patterns
-        for i in range(512):
-            for j in range(512):
-                img_array[i, j] = [
-                    int(128 + 64 * np.sin(i / 50)),
-                    int(128 + 64 * np.cos(j / 50)),
-                    int(128 + 32 * np.sin((i + j) / 70))
-                ]
+        # Vectorized gradients/patterns (avoid Python nested loops)
+        ii, jj = np.indices((512, 512), dtype=np.float32)
+        r = 128.0 + 64.0 * np.sin(ii / 50.0)
+        g = 128.0 + 64.0 * np.cos(jj / 50.0)
+        b = 128.0 + 32.0 * np.sin((ii + jj) / 70.0)
+        img_array = np.stack([r, g, b], axis=-1)
+        img_array = np.clip(img_array, 0, 255).astype(np.uint8)
         img = Image.fromarray(img_array, 'RGB')
         img.save(img_path, quality=95)
         return img_path
@@ -185,7 +182,10 @@ class TestMaterialsV3Stress:
         - Zero fallbacks for valid synthetic images
         - Memory stable (no accumulation)
         """
-        # Tier gating: Full stress on schedule, smoke on workflow_dispatch unless explicitly requested
+        # Tier gating:
+        # - schedule: full stress
+        # - workflow_dispatch: full if MATERIALSV3_STRESS_FULL=1 (set by workflow input), else smoke
+        # - local (no CI): full by default
         in_ci = os.getenv("CI") == "true"
         event_name = os.getenv("GITHUB_EVENT_NAME") or ""
         is_schedule = event_name == "schedule"
@@ -270,7 +270,10 @@ class TestMaterialsV3Stress:
         Note: PR CI is skipped by module-level pytestmark; "PR smoke" is not executed
         unless you explicitly run it elsewhere.
         """
-        # Tier gating: Full stress on schedule, smoke on workflow_dispatch unless explicitly requested
+        # Tier gating:
+        # - schedule: full stress
+        # - workflow_dispatch: full if MATERIALSV3_STRESS_FULL=1 (set by workflow input), else smoke
+        # - local (no CI): full by default
         in_ci = os.getenv("CI") == "true"
         event_name = os.getenv("GITHUB_EVENT_NAME") or ""
         is_schedule = event_name == "schedule"
@@ -289,14 +292,13 @@ class TestMaterialsV3Stress:
             # Vary image characteristics
             size = 256 + (i % 5) * 64  # 256, 320, 384, 448, 512
             
-            # Create diverse images
-            img_array = np.random.randint(0, 255, (size, size, 3), dtype=np.uint8)
-            # Add some structure (gradients, patterns)
-            for y in range(size):
-                for x in range(size):
-                    img_array[y, x, 0] = int(128 + 64 * np.sin((x + i) / 30))
-                    img_array[y, x, 1] = int(128 + 64 * np.cos((y + i) / 30))
-                    img_array[y, x, 2] = int(128 + 32 * np.sin((x + y + i) / 40))
+            # Vectorized structured gradients/patterns (avoid Python nested loops)
+            yy, xx = np.indices((size, size), dtype=np.float32)
+            r = 128.0 + 64.0 * np.sin((xx + float(i)) / 30.0)
+            g = 128.0 + 64.0 * np.cos((yy + float(i)) / 30.0)
+            b = 128.0 + 32.0 * np.sin((xx + yy + float(i)) / 40.0)
+            img_array = np.stack([r, g, b], axis=-1)
+            img_array = np.clip(img_array, 0, 255).astype(np.uint8)
             
             img = Image.fromarray(img_array, 'RGB')
             img.save(img_path, quality=90)
