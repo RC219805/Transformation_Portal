@@ -59,7 +59,7 @@ def _process_image_worker(args):
     
     # Create CI-safe config in worker process
     config = PipelineConfig(
-        preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+        preset=Preset.PRODUCTION_STANDARD,
         output_dir=output_dir,
         write_outputs=False
     )
@@ -122,7 +122,7 @@ class TestMaterialsV3Stress:
     def ci_safe_config(self, tmp_path):
         """Create CI-safe config with heuristic backend and AUTO depth mode."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            preset=Preset.PRODUCTION_STANDARD,
             output_dir=tmp_path / "ci_output",
             write_outputs=False
         )
@@ -478,7 +478,7 @@ class TestMaterialsV3StressScenarios:
     def ci_safe_config(self, tmp_path):
         """Create CI-safe config with heuristic backend and AUTO depth mode."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            preset=Preset.PRODUCTION_STANDARD,
             output_dir=tmp_path / "ci_output",
             write_outputs=False
         )
@@ -501,7 +501,7 @@ class TestMaterialsV3StressScenarios:
         for i in range(50):
             # Create new config for each cycle to test resource cleanup
             config = PipelineConfig(
-                preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+                preset=Preset.PRODUCTION_STANDARD,
                 output_dir=tmp_path / "output",
                 write_outputs=False
             )
