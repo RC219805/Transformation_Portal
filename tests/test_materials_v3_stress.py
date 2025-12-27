@@ -43,14 +43,16 @@ else:
 
 def _materials_v3_meta(result: object) -> dict:
     """
-    Returns MaterialsV3 metadata dict from the pipeline result, supporting both:
-      - top-level: result["materials_v3_metadata"]
-      - nested:    result["metadata"]["materials_v3"]
+    Returns MaterialsV3 metadata dict from the pipeline result.
+    Current contract: result["materials_v3_metadata"] (top-level key).
+    Fallback: result["metadata"]["materials_v3"] (backward compat, unlikely).
     """
     if not isinstance(result, dict):
         return {}
+    # Preferred: current pipeline contract (top-level)
     if isinstance(result.get("materials_v3_metadata"), dict):
         return result["materials_v3_metadata"]
+    # Fallback: nested (for backward compatibility if schema ever changes)
     md = result.get("metadata")
     if isinstance(md, dict) and isinstance(md.get("materials_v3"), dict):
         return md["materials_v3"]
@@ -138,7 +140,7 @@ class TestMaterialsV3Stress:
     
     @pytest.fixture
     def ci_safe_config(self, tmp_path):
-        """Create CI-safe config with heuristic backend and AUTO depth mode."""
+        """Create CI-safe config with heuristic backend and AUTO depth mode."""        
         config = PipelineConfig(
             preset=Preset.PRODUCTION_STANDARD,
             output_dir=tmp_path / "ci_output",
@@ -148,6 +150,16 @@ class TestMaterialsV3Stress:
         # Stress tests should not fail on missing depth - use AUTO mode
         config.depth.mode = DepthMode.AUTO
         config.strict_depth = False
+        # CRITICAL: Explicitly enable MaterialsV3 (PRODUCTION_STANDARD doesn't set it)
+        # Import MaterialsV3Config to enable
+        from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+        config.materials_v3 = MaterialsV3Config(
+            enabled=True,
+            taxonomy=MaterialTaxonomy.BASE,
+            refine_edges=RefinementStrategy.CANARY,
+            apply_pixel_ops=True,
+            max_megapixels=30.0
+        )
         return config
     
     def test_1000_iteration_stability(self, sample_image, ci_safe_config, output_dir):
@@ -188,6 +200,9 @@ class TestMaterialsV3Stress:
                 
                 # Check for fallback
                 m3 = _materials_v3_meta(result)
+                # Assert MaterialsV3 actually ran (critical for stress validity)
+                if i == 0:
+                    assert m3, f"MaterialsV3 metadata missing on first iteration; verify PRODUCTION_STANDARD enables MaterialsV3"
                 if m3.get('fallback', False):
                     fallback_count += 1
                     errors.append(f"Iteration {i}: {m3.get('error', 'Unknown')}")
@@ -286,6 +301,9 @@ class TestMaterialsV3Stress:
                 
                 # Track fallbacks
                 m3 = _materials_v3_meta(result)
+                # Assert MaterialsV3 actually ran (critical for stress validity)
+                if i == 0:
+                    assert m3, f"MaterialsV3 metadata missing on first image; verify PRODUCTION_STANDARD enables MaterialsV3"
                 if m3.get('fallback', False):
                     fallback_count += 1
                     errors.append(f"Image {i}: {m3.get('error', 'Unknown')}")
@@ -510,6 +528,15 @@ class TestMaterialsV3StressScenarios:
         # Stress tests should not fail on missing depth - use AUTO mode
         config.depth.mode = DepthMode.AUTO
         config.strict_depth = False
+        # CRITICAL: Explicitly enable MaterialsV3 (PRODUCTION_STANDARD doesn't set it)
+        from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+        config.materials_v3 = MaterialsV3Config(
+            enabled=True,
+            taxonomy=MaterialTaxonomy.BASE,
+            refine_edges=RefinementStrategy.CANARY,
+            apply_pixel_ops=True,
+            max_megapixels=30.0
+        )
         return config
     
     def test_rapid_pipeline_creation_destruction(self, tmp_path, ci_safe_config):
