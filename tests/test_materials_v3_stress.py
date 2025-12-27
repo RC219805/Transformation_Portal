@@ -75,6 +75,7 @@ def _process_image_worker(args):
     # Import here to avoid issues in workers
     from lux_depth_v2.pipeline import LuxPipelineV2
     from lux_depth_v2.config import PipelineConfig, Preset, DepthMode
+    from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
     
     # Create CI-safe config in worker process
     config = PipelineConfig(
@@ -85,6 +86,14 @@ def _process_image_worker(args):
     config.segmentation.backend = "heuristic"
     config.depth.mode = DepthMode.AUTO
     config.strict_depth = False
+    # CRITICAL: Explicitly enable MaterialsV3 (PRODUCTION_STANDARD doesn't set it)
+    config.materials_v3 = MaterialsV3Config(
+        enabled=True,
+        taxonomy=MaterialTaxonomy.BASE,
+        refine_edges=RefinementStrategy.CANARY,
+        apply_pixel_ops=True,
+        max_megapixels=30.0
+    )
     
     pipeline = LuxPipelineV2(config)
     
@@ -557,6 +566,17 @@ class TestMaterialsV3StressScenarios:
                 write_outputs=False
             )
             config.segmentation.backend = "heuristic"
+            config.depth.mode = DepthMode.AUTO
+            config.strict_depth = False
+            # CRITICAL: Explicitly enable MaterialsV3 (PRODUCTION_STANDARD doesn't set it)
+            from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+            config.materials_v3 = MaterialsV3Config(
+                enabled=True,
+                taxonomy=MaterialTaxonomy.BASE,
+                refine_edges=RefinementStrategy.CANARY,
+                apply_pixel_ops=True,
+                max_megapixels=30.0
+            )
             
             pipeline = LuxPipelineV2(config)
             
