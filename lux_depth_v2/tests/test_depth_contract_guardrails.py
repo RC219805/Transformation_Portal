@@ -95,3 +95,72 @@ class TestDepthContractGuardrails:
         # Must raise even though mode is AUTO
         with pytest.raises(FileNotFoundError, match="strict_depth=True"):
             pipeline.process_one(sample_image_file, depth_path=None)
+    
+    def test_auto_model_is_plumbed_to_estimator(self, temp_dir, sample_image_file):
+        """Regression test: cfg.depth.auto_model must reach TiledDepthEstimator."""
+        custom_model = "depth-anything/Depth-Anything-V2-Small-hf"
+        config = PipelineConfig(
+            preset=Preset.PRODUCTION_STANDARD,
+            input_dir=temp_dir,
+            output_dir=temp_dir,
+            write_outputs=False,
+        )
+        config.depth.auto_model = custom_model  # Override default
+        
+        captured_kwargs = {}
+        
+        def spy_factory(**kwargs):
+            captured_kwargs.update(kwargs)
+            mock_estimator = Mock()
+            mock_estimator.estimate_depth.return_value = np.random.rand(64, 64).astype(np.float32)
+            mock_estimator.compute_edge_alignment.return_value = 0.80
+            return mock_estimator
+        
+        with patch('lux_depth_v2.depth_inference.create_tiled_estimator', side_effect=spy_factory):
+            pipeline = LuxPipelineV2(config)
+            result = pipeline.process_one(sample_image_file, depth_path=None)
+        
+        # Verify pipeline completed successfully
+        assert result["status"] == "ok", f"process_one failed: {result}"
+        
+        # Verify model_name was passed to factory
+        assert "model_name" in captured_kwargs, "model_name not passed to create_tiled_estimator"
+        assert captured_kwargs["model_name"] == custom_model, \
+            f"Expected {custom_model}, got {captured_kwargs['model_name']}"
+    
+    def test_auto_mode_importerror_does_not_raise_when_not_strict(self, temp_dir, sample_image_file):
+        """AUTO mode: if depth auto-generation fails and strict_depth=False, pipeline continues with depth=None."""
+        config = PipelineConfig(
+            preset=Preset.PRODUCTION_STANDARD,  # DepthMode.AUTO
+            input_dir=temp_dir,
+            output_dir=temp_dir,
+        )
+        assert config.depth.mode == DepthMode.AUTO
+        config.strict_depth = False
+        
+        def mock_factory_failure(**kwargs):
+            raise ImportError("transformers not installed")
+        
+        with patch('lux_depth_v2.depth_inference.create_tiled_estimator', side_effect=mock_factory_failure):
+            pipeline = LuxPipelineV2(config)
+            result = pipeline.process_one(sample_image_file, depth_path=None)
+        
+        assert result["status"] == "ok"
+        assert result["depth"]["source"] == "error"
+        assert "ImportError" in result["depth"]["error"]
+    
+    def test_auto_mode_missing_depth_fails_fast_when_strict_depth_true(self, temp_dir, sample_image_file):
+        """AUTO mode: if strict_depth=True, depth must be provided (fail-fast before auto-generation)."""
+        config = PipelineConfig(
+            preset=Preset.PRODUCTION_STANDARD,  # DepthMode.AUTO
+            input_dir=temp_dir,
+            output_dir=temp_dir,
+        )
+        assert config.depth.mode == DepthMode.AUTO
+        config.strict_depth = True
+        
+        pipeline = LuxPipelineV2(config)
+        
+        # strict_depth=True forces fail-fast at depth resolution (before auto-generation attempt)
+        with pytest.raises(FileNotFoundError, match="Depth required but missing.*strict_depth=True"):
+            pipeline.process_one(sample_image_file, depth_path=None)
