@@ -475,13 +475,14 @@ class TestMaterialsV3Stress:
             # First, try normal processing
             result = pipeline.process_one(large_img_path)
             # If succeeds, GPU has enough memory - simulate OOM
-            if pipeline.materials_v3_engine is not None:
-                with patch.object(pipeline.materials_v3_engine, 'process', side_effect=mock_gpu_oom):
+            engine = getattr(pipeline, "materials_v3_engine", None)
+            if engine is not None:
+                with patch.object(engine, 'process', side_effect=mock_gpu_oom):
                     result_oom = pipeline.process_one(large_img_path)
                     # Should fallback gracefully
-                    if hasattr(result_oom, 'metadata') and 'materials_v3' in result_oom.metadata:
-                        assert result_oom.metadata['materials_v3'].get('fallback', False) or \
-                               'error' in result_oom.metadata['materials_v3']
+                    m3 = _materials_v3_meta(result_oom)
+                    assert m3.get('fallback', False) or ('error' in m3), \
+                        "Expected fallback or error on GPU OOM"
         except RuntimeError as e:
             # If real OOM occurs, should be handled gracefully
             assert 'out of memory' in str(e).lower() or 'fallback' in str(e).lower()
@@ -503,8 +504,7 @@ class TestMaterialsV3Stress:
         # Verify all succeeded (no fallbacks)
         fallbacks = [
             i for i, r in enumerate(results)
-            if hasattr(r, 'metadata') and 
-               r.metadata.get('materials_v3', {}).get('fallback', False)
+            if _materials_v3_meta(r).get('fallback', False)
         ]
         
         assert len(fallbacks) == 0, \
@@ -513,7 +513,7 @@ class TestMaterialsV3Stress:
         # Check if results have materials_v3 metadata
         has_metadata = [
             i for i, r in enumerate(results)
-            if hasattr(r, 'metadata') and 'materials_v3' in r.metadata
+            if bool(_materials_v3_meta(r))
         ]
         
         # Either all have metadata or none (consistent behavior)
