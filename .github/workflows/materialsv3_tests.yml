@@ -47,11 +47,18 @@ jobs:
         pip install transformers accelerate safetensors pillow
     
     - name: Run MaterialsV3 Edge Case Tests
+      shell: bash
       run: |
+        set -euo pipefail
         mkdir -p test-results
+        JUNIT="test-results/junit-edge-cases-${{ matrix.python-version }}.xml"
+        : > "$JUNIT"  # guarantee artifact exists even if pytest fails early
+
         pytest tests/test_materials_v3_edge_cases.py \
-          -v --tb=short \
-          --junitxml=test-results/junit-edge-cases-${{ matrix.python-version }}.xml
+          -v --tb=short -ra \
+          --durations=20 \
+          -o junit_family=xunit2 \
+          --junitxml="$JUNIT"
       continue-on-error: false
     
     - name: Upload test results
@@ -90,11 +97,18 @@ jobs:
     - name: Run MaterialsV3 Stress Tests
       env:
         MATERIALSV3_STRESS_FULL: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full)) && '1' || '0' }}
+      shell: bash
       run: |
+        set -euo pipefail
         mkdir -p test-results
+        JUNIT="test-results/junit-stress-tests.xml"
+        : > "$JUNIT"  # guarantee artifact exists even if pytest fails early
+
         pytest tests/test_materials_v3_stress.py \
-          -v --tb=short --slow \
-          --junitxml=test-results/junit-stress-tests.xml
+          -v --tb=short --slow -ra \
+          --durations=20 \
+          -o junit_family=xunit2 \
+          --junitxml="$JUNIT"
       timeout-minutes: 45
     
     - name: Upload stress test results
@@ -130,8 +144,26 @@ jobs:
         pip install transformers accelerate safetensors pillow
     
     - name: Run MaterialsV3 Safety Tests
+      shell: bash
       run: |
-        pytest tests/test_materials_v3_edge_cases.py -v --tb=short
+        set -euo pipefail
+        mkdir -p test-results
+        JUNIT="test-results/junit-verification.xml"
+        : > "$JUNIT"  # guarantee artifact exists even if pytest fails early
+        
+        pytest tests/test_materials_v3_edge_cases.py \
+          -v --tb=short -ra \
+          --durations=20 \
+          -o junit_family=xunit2 \
+          --junitxml="$JUNIT"
+    
+    - name: Upload verification results
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: verification-test-results
+        path: test-results/
+        if-no-files-found: warn
     
     - name: Verify Exception Handling in Pipeline
       run: |
