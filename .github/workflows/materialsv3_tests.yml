@@ -68,6 +68,7 @@ jobs:
         name: edge-case-test-results-${{ matrix.python-version }}
         path: test-results/
         if-no-files-found: warn
+        retention-days: 7
 
   stress-tests:
     name: MaterialsV3 Stress Tests (Nightly)
@@ -96,7 +97,7 @@ jobs:
     
     - name: Run MaterialsV3 Stress Tests
       env:
-        MATERIALSV3_STRESS_FULL: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full)) && '1' || '0' }}
+        MATERIALSV3_STRESS_FULL: ${{ (github.event_name == 'schedule' || github.event.inputs.full == 'true') && '1' || '0' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -118,6 +119,7 @@ jobs:
         name: stress-test-results
         path: test-results/
         if-no-files-found: warn
+        retention-days: 7
 
   verification:
     name: Phase 1 Safety Verification
@@ -164,6 +166,7 @@ jobs:
         name: verification-test-results
         path: test-results/
         if-no-files-found: warn
+        retention-days: 7
     
     - name: Verify Exception Handling in Pipeline
       run: |
