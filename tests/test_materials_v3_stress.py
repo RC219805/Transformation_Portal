@@ -39,10 +39,11 @@ else:
     PipelineConfig = None
     Preset = None
 
-# Module-level skip - stress tests are excluded from CI
+# Module-level skip - stress tests excluded from PR CI, enabled on nightly/manual runs
 pytestmark = pytest.mark.skipif(
-    os.getenv("CI") == "true",
-    reason="Stress tests excluded from CI; run locally or in performance pipeline"
+    os.getenv("CI") == "true"
+    and os.getenv("GITHUB_EVENT_NAME") not in ("schedule", "workflow_dispatch"),
+    reason="Stress tests excluded from PR CI; enabled on schedule/manual runs",
 )
 
 
@@ -92,7 +93,20 @@ class TestMaterialsV3Stress:
         return config
     
     def test_1000_iteration_stability(self, sample_image, ci_safe_config, output_dir):
-        """MaterialsV3 should be stable over 1000+ iterations."""
+        """
+        Validate MaterialsV3 stability over iterations.
+        
+        CI mode: 50 iterations (smoke test, ~30s)
+        Full mode: 1000 iterations (stress test, ~10min)
+        
+        Success Criteria:
+        - Zero crashes (each iteration completes)
+        - Zero fallbacks for valid synthetic images
+        - Memory stable (no accumulation)
+        """
+        # CI smoke test: 50 iterations, Full stress: 1000
+        iterations = 50 if os.getenv("CI") == "true" else 1000
+        
         pipeline = LuxPipelineV2(ci_safe_config)
         
         # Track results
@@ -101,12 +115,12 @@ class TestMaterialsV3Stress:
         errors = []
         
         print(f"\n{'='*60}")
-        print(f"Starting 1000-iteration stability test...")
+        print(f"Starting {iterations}-iteration stability test (CI={os.getenv('CI')})...")
         print(f"{'='*60}")
         
         start_time = time.time()
         
-        for i in range(1000):
+        for i in range(iterations):
             try:
                 result = pipeline.process_one(sample_image)
                 results.append(result)
@@ -117,11 +131,12 @@ class TestMaterialsV3Stress:
                         fallback_count += 1
                         errors.append(f"Iteration {i}: {result['materials_v3'].get('error', 'Unknown')}")
                 
-                # Progress reporting every 100 iterations
-                if (i + 1) % 100 == 0:
+                # Progress reporting
+                report_interval = max(10, iterations // 10)  # Report ~10 times
+                if (i + 1) % report_interval == 0:
                     elapsed = time.time() - start_time
                     rate = (i + 1) / elapsed
-                    print(f"Progress: {i+1}/1000 iterations ({rate:.1f} iter/sec, {fallback_count} fallbacks)")
+                    print(f"Progress: {i+1}/{iterations} iterations ({rate:.1f} iter/sec, {fallback_count} fallbacks)")
                     
             except Exception as e:
                 errors.append(f"Iteration {i}: {str(e)}")
@@ -129,10 +144,10 @@ class TestMaterialsV3Stress:
                 pytest.fail(f"Iteration {i} crashed: {e}")
         
         elapsed_total = time.time() - start_time
-        avg_rate = 1000 / elapsed_total
+        avg_rate = iterations / elapsed_total
         
         # Verify all iterations completed
-        assert len(results) == 1000, f"Expected 1000 results, got {len(results)}"
+        assert len(results) == iterations, f"Expected {iterations} results, got {len(results)}"
         
         # Verify no fallbacks (synthetic image should always succeed)
         print(f"\n{'='*60}")
@@ -153,15 +168,23 @@ class TestMaterialsV3Stress:
             f"Errors: {errors[:5]}"
     
     def test_batch_processing_100_images(self, tmp_path, ci_safe_config, output_dir):
-        """MaterialsV3 should handle batch processing without crashes."""
-        # Generate 100 synthetic images with varying characteristics
+        """
+        Process images in batch and verify MaterialsV3 stability.
+        
+        CI mode: 20 images (smoke test, ~2min)
+        Full mode: 100 images (stress test, ~10min)
+        """
+        # CI smoke test: 20 images, Full stress: 100
+        batch_size = 20 if os.getenv("CI") == "true" else 100
+        
+        # Generate synthetic images with varying characteristics
         image_paths = []
         
         print(f"\n{'='*60}")
-        print(f"Generating 100 synthetic images...")
+        print(f"Generating {batch_size} synthetic images...")
         print(f"{'='*60}")
         
-        for i in range(100):
+        for i in range(batch_size):
             img_path = tmp_path / f"batch_image_{i:03d}.jpg"
             # Vary image characteristics
             size = 256 + (i % 5) * 64  # 256, 320, 384, 448, 512
