@@ -33,11 +33,12 @@ from lux_depth_v2.torch_ops import TORCH_AVAILABLE
 # Conditional imports
 if TORCH_AVAILABLE:
     from lux_depth_v2.pipeline import LuxPipelineV2
-    from lux_depth_v2.config import PipelineConfig, Preset
+    from lux_depth_v2.config import PipelineConfig, Preset, DepthMode
 else:
     LuxPipelineV2 = None
     PipelineConfig = None
     Preset = None
+    DepthMode = None
 
 # Module-level skip - stress tests excluded from PR CI, enabled on nightly/manual runs
 pytestmark = pytest.mark.skipif(
@@ -45,6 +46,42 @@ pytestmark = pytest.mark.skipif(
     and os.getenv("GITHUB_EVENT_NAME") not in ("schedule", "workflow_dispatch"),
     reason="Stress tests excluded from PR CI; enabled on schedule/manual runs",
 )
+
+
+# Module-level worker function for multiprocessing (must be picklable)
+def _process_image_worker(args):
+    """Worker function for concurrent pipeline execution test."""
+    img_path, output_dir, worker_id = args
+    
+    # Import here to avoid issues in workers
+    from lux_depth_v2.pipeline import LuxPipelineV2
+    from lux_depth_v2.config import PipelineConfig, Preset, DepthMode
+    
+    # Create CI-safe config in worker process
+    config = PipelineConfig(
+        preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+        output_dir=output_dir,
+        write_outputs=False
+    )
+    config.segmentation.backend = "heuristic"
+    config.depth.mode = DepthMode.AUTO
+    config.strict_depth = False
+    
+    pipeline = LuxPipelineV2(config)
+    
+    try:
+        result = pipeline.process_one(img_path)
+        return {
+            'worker_id': worker_id,
+            'success': True,
+            'fallback': result.get('materials_v3', {}).get('fallback', False) if isinstance(result, dict) else False
+        }
+    except Exception as e:
+        return {
+            'worker_id': worker_id,
+            'success': False,
+            'error': str(e)
+        }
 
 
 @pytest.mark.slow
@@ -83,13 +120,16 @@ class TestMaterialsV3Stress:
     
     @pytest.fixture
     def ci_safe_config(self, tmp_path):
-        """Create CI-safe config with heuristic backend."""
+        """Create CI-safe config with heuristic backend and AUTO depth mode."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
             output_dir=tmp_path / "ci_output",
             write_outputs=False
         )
         config.segmentation.backend = "heuristic"
+        # Stress tests should not fail on missing depth - use AUTO mode
+        config.depth.mode = DepthMode.AUTO
+        config.strict_depth = False
         return config
     
     def test_1000_iteration_stability(self, sample_image, ci_safe_config, output_dir):
@@ -217,10 +257,7 @@ class TestMaterialsV3Stress:
         
         for i, img_path in enumerate(image_paths):
             try:
-                result = pipeline.process_one(
-                    img_path, 
-                    output_dir=output_dir / f"batch_{i}"
-                )
+                result = pipeline.process_one(img_path)
                 results.append(result)
                 
                 # Track fallbacks
@@ -278,34 +315,6 @@ class TestMaterialsV3Stress:
         for d in output_dirs:
             d.mkdir(exist_ok=True)
         
-        def process_image(args):
-            """Worker function for multiprocessing."""
-            img_path, output_dir, worker_id = args
-            
-            # Create CI-safe config in worker process
-            config = PipelineConfig(
-                preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
-                output_dir=output_dir,
-                write_outputs=False
-            )
-            config.segmentation.backend = "heuristic"
-            
-            pipeline = LuxPipelineV2(config)
-            
-            try:
-                result = pipeline.process_one(img_path)
-                return {
-                    'worker_id': worker_id,
-                    'success': True,
-                    'fallback': result.get('materials_v3', {}).get('fallback', False) if isinstance(result, dict) else False
-                }
-            except Exception as e:
-                return {
-                    'worker_id': worker_id,
-                    'success': False,
-                    'error': str(e)
-                }
-        
         # Run 4 pipelines concurrently
         print(f"\n{'='*60}")
         print(f"Running 4 concurrent pipelines...")
@@ -315,7 +324,7 @@ class TestMaterialsV3Stress:
         
         with multiprocessing.Pool(processes=4) as pool:
             args = [(images[i], output_dirs[i], i) for i in range(4)]
-            results = pool.map(process_image, args)
+            results = pool.map(_process_image_worker, args)
         
         elapsed = time.time() - start_time
         
@@ -467,13 +476,16 @@ class TestMaterialsV3StressScenarios:
     
     @pytest.fixture
     def ci_safe_config(self, tmp_path):
-        """Create CI-safe config with heuristic backend."""
+        """Create CI-safe config with heuristic backend and AUTO depth mode."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
             output_dir=tmp_path / "ci_output",
             write_outputs=False
         )
         config.segmentation.backend = "heuristic"
+        # Stress tests should not fail on missing depth - use AUTO mode
+        config.depth.mode = DepthMode.AUTO
+        config.strict_depth = False
         return config
     
     def test_rapid_pipeline_creation_destruction(self, tmp_path, ci_safe_config):
