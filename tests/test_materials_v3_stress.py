@@ -74,7 +74,7 @@ def _process_image_worker(args):
         return {
             'worker_id': worker_id,
             'success': True,
-            'fallback': result.get('materials_v3', {}).get('fallback', False) if isinstance(result, dict) else False
+            'fallback': bool(result.get('metadata', {}).get('materials_v3', {}).get('fallback', False))
         }
     except Exception as e:
         return {
@@ -144,8 +144,9 @@ class TestMaterialsV3Stress:
         - Zero fallbacks for valid synthetic images
         - Memory stable (no accumulation)
         """
-        # CI smoke test: 50 iterations, Full stress: 1000
-        iterations = 50 if os.getenv("CI") == "true" else 1000
+        # Nightly stress: 1000 iterations, Local/PR smoke: 50
+        is_nightly = os.getenv("GITHUB_EVENT_NAME") == "schedule"
+        iterations = 1000 if is_nightly else 50
         
         pipeline = LuxPipelineV2(ci_safe_config)
         
@@ -211,11 +212,12 @@ class TestMaterialsV3Stress:
         """
         Process images in batch and verify MaterialsV3 stability.
         
-        CI mode: 20 images (smoke test, ~2min)
-        Full mode: 100 images (stress test, ~10min)
+        Nightly: 100 images (stress test, ~10min)
+        Local/PR: 20 images (smoke test, ~2min)
         """
-        # CI smoke test: 20 images, Full stress: 100
-        batch_size = 20 if os.getenv("CI") == "true" else 100
+        # Nightly stress: 100 images, Local/PR smoke: 20
+        is_nightly = os.getenv("GITHUB_EVENT_NAME") == "schedule"
+        batch_size = 100 if is_nightly else 20
         
         # Generate synthetic images with varying characteristics
         image_paths = []
@@ -278,10 +280,10 @@ class TestMaterialsV3Stress:
                 pytest.fail(f"Batch image {i} crashed: {e}")
         
         elapsed_total = time.time() - start_time
-        avg_rate = 100 / elapsed_total
+        avg_rate = batch_size / elapsed_total
         
         # Verify all processed
-        assert len(results) == 100, f"Expected 100 results, got {len(results)}"
+        assert len(results) == batch_size, f"Expected {batch_size} results, got {len(results)}"
         
         print(f"\n{'='*60}")
         print(f"Batch processing completed in {elapsed_total:.1f}s ({avg_rate:.1f} img/sec)")
