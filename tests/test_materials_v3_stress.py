@@ -166,10 +166,10 @@ class TestMaterialsV3Stress:
                 results.append(result)
                 
                 # Check for fallback
-                if isinstance(result, dict) and 'materials_v3' in result.metadata:
-                    if result['materials_v3'].get('fallback', False):
+                if isinstance(result, dict) and 'materials_v3' in result.get('metadata', {}):
+                    if result.get('metadata', {}).get('materials_v3', {}).get('fallback', False):
                         fallback_count += 1
-                        errors.append(f"Iteration {i}: {result['materials_v3'].get('error', 'Unknown')}")
+                        errors.append(f"Iteration {i}: {result.get('metadata', {}).get('materials_v3', {}).get('error', 'Unknown')}")
                 
                 # Progress reporting
                 report_interval = max(10, iterations // 10)  # Report ~10 times
@@ -261,10 +261,10 @@ class TestMaterialsV3Stress:
                 results.append(result)
                 
                 # Track fallbacks
-                if isinstance(result, dict) and 'materials_v3' in result.metadata:
-                    if result['materials_v3'].get('fallback', False):
+                if isinstance(result, dict) and 'materials_v3' in result.get('metadata', {}):
+                    if result.get('metadata', {}).get('materials_v3', {}).get('fallback', False):
                         fallback_count += 1
-                        errors.append(f"Image {i}: {result['materials_v3'].get('error', 'Unknown')}")
+                        errors.append(f"Image {i}: {result.get('metadata', {}).get('materials_v3', {}).get('error', 'Unknown')}")
                 
                 # Progress reporting
                 if (i + 1) % 20 == 0:
