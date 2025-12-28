@@ -35,20 +35,20 @@ def validate_standard_quality(
     max_regression_pct: float
 ) -> Tuple[bool, List[str]]:
     """Validate standard quality throughput.
-    
+
     Args:
         current: Current benchmark results
         baseline: Baseline thresholds
         max_regression_pct: Maximum allowed regression percentage
-        
+
     Returns:
         (passed, warnings) tuple
     """
     passed = True
     warnings = []
-    
+
     baseline_config = baseline["baselines"]["standard_quality_cpu"]
-    
+
     # Extract metrics from current results
     # Current format: direct metrics dict or pytest-benchmark format
     if "images_per_hour" in current:
@@ -58,7 +58,7 @@ def validate_standard_quality(
         # Fallback for different formats
         warnings.append("⚠️  Could not parse throughput from current results")
         return False, warnings
-    
+
     # Check throughput
     min_throughput = baseline_config["min_images_per_hour"]
     if throughput < min_throughput:
@@ -72,7 +72,7 @@ def validate_standard_quality(
             f"✅ Throughput {throughput:.1f} images/hour meets baseline "
             f"({min_throughput} images/hour)"
         )
-    
+
     # Check memory
     max_memory = baseline_config["max_memory_mb"]
     if memory_mb > max_memory:
@@ -84,7 +84,7 @@ def validate_standard_quality(
         warnings.append(
             f"✅ Memory {memory_mb:.1f}MB within baseline ({max_memory}MB)"
         )
-    
+
     return passed, warnings
 
 
@@ -95,22 +95,22 @@ def validate_max_quality(
     has_gpu: bool = False
 ) -> Tuple[bool, List[str]]:
     """Validate max quality throughput.
-    
+
     Args:
         current: Current benchmark results
         baseline: Baseline thresholds
         max_regression_pct: Maximum allowed regression percentage
         has_gpu: Whether GPU is available
-        
+
     Returns:
         (passed, warnings) tuple
     """
     passed = True
     warnings = []
-    
+
     baseline_key = "max_quality_gpu" if has_gpu else "max_quality_cpu"
     baseline_config = baseline["baselines"][baseline_key]
-    
+
     # Extract metrics
     if "images_per_hour" in current:
         throughput = current["images_per_hour"]
@@ -118,7 +118,7 @@ def validate_max_quality(
     else:
         warnings.append("⚠️  Could not parse throughput from current results")
         return False, warnings
-    
+
     # Check throughput
     min_throughput = baseline_config["min_images_per_hour"]
     if throughput < min_throughput:
@@ -132,7 +132,7 @@ def validate_max_quality(
             f"✅ Throughput {throughput:.1f} images/hour meets baseline "
             f"({min_throughput} images/hour, {'GPU' if has_gpu else 'CPU'} mode)"
         )
-    
+
     # Check memory
     max_memory = baseline_config["max_memory_mb"]
     if memory_mb > max_memory:
@@ -144,7 +144,7 @@ def validate_max_quality(
         warnings.append(
             f"✅ Memory {memory_mb:.1f}MB within baseline ({max_memory}MB)"
         )
-    
+
     return passed, warnings
 
 
@@ -153,18 +153,18 @@ def compare_against_production_targets(
     baseline: Dict[str, Any]
 ) -> List[str]:
     """Compare against production targets (informational only).
-    
+
     Returns list of informational messages.
     """
     messages = []
-    
+
     targets = baseline.get("production_targets", {})
     if not targets:
         return messages
-    
+
     if "images_per_hour" in current:
         throughput = current["images_per_hour"]
-        
+
         # Compare to CPU target
         cpu_target = targets.get("cpu_standard", {}).get("target_images_per_hour", 127)
         if throughput >= cpu_target:
@@ -177,7 +177,7 @@ def compare_against_production_targets(
                 f"ℹ️  {pct_of_target:.1f}% of CPU production target "
                 f"({throughput:.1f}/{cpu_target} images/hour)"
             )
-        
+
         # Compare to GPU target (aspirational)
         gpu_target = targets.get("gpu_max", {}).get("target_images_per_hour", 400)
         if throughput >= gpu_target:
@@ -190,7 +190,7 @@ def compare_against_production_targets(
                 f"ℹ️  {pct_of_target:.1f}% of GPU production target "
                 f"({throughput:.1f}/{gpu_target} images/hour)"
             )
-    
+
     return messages
 
 
@@ -227,9 +227,9 @@ def main():
         action="store_true",
         help="Validate for GPU configuration"
     )
-    
+
     args = parser.parse_args()
-    
+
     # Load files
     try:
         baseline = load_json(args.baseline)
@@ -240,7 +240,7 @@ def main():
     except json.JSONDecodeError as e:
         print(f"❌ Invalid JSON: {e}")
         sys.exit(1)
-    
+
     print("=" * 80)
     print("🔍 Throughput Validation Report")
     print("=" * 80)
@@ -250,7 +250,7 @@ def main():
     print(f"Mode:     {'GPU' if args.gpu else 'CPU'}")
     print(f"Max Regression: {args.max_regression}%")
     print("=" * 80)
-    
+
     # Validate based on quality level
     if args.quality == "standard":
         passed, warnings = validate_standard_quality(
@@ -260,19 +260,19 @@ def main():
         passed, warnings = validate_max_quality(
             current, baseline, args.max_regression, args.gpu
         )
-    
+
     # Print validation results
     print("\n📊 Validation Results:")
     for warning in warnings:
         print(f"  {warning}")
-    
+
     # Print production target comparison (informational)
     prod_messages = compare_against_production_targets(current, baseline)
     if prod_messages:
         print("\n🎯 Production Target Comparison:")
         for msg in prod_messages:
             print(f"  {msg}")
-    
+
     # Exit with appropriate code
     print("\n" + "=" * 80)
     if passed:
