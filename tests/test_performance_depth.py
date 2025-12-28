@@ -24,15 +24,14 @@ try:
 except ImportError:
     HAS_PIL = False
 
-# Check for pytest-benchmark
-try:
-    import pytest_benchmark  # noqa: F401
-    HAS_BENCHMARK = True
-except ImportError:
-    HAS_BENCHMARK = False
-
 # Skip all tests if PIL not available
 pytestmark = pytest.mark.skipif(not HAS_PIL, reason="PIL not available")
+
+# Pillow version compatibility: Image.Resampling.* only exists in Pillow 10+
+# Fallback to Image.* constants for older versions
+_RESAMPLING = getattr(Image, "Resampling", Image)
+LANCZOS = getattr(_RESAMPLING, "LANCZOS", getattr(Image, "LANCZOS", 1))
+BILINEAR = getattr(_RESAMPLING, "BILINEAR", getattr(Image, "BILINEAR", 2))
 
 
 @pytest.fixture
@@ -41,10 +40,10 @@ def benchmark_fallback(request):
     
     Returns a simple callable that executes the function once.
     """
-    if HAS_BENCHMARK:
-        # Use real benchmark fixture if available
+    try:
+        # Try to get the real benchmark fixture if pytest-benchmark is installed
         return request.getfixturevalue('benchmark')
-    else:
+    except Exception:
         # Fallback: just execute once
         def fake_benchmark(func, *args, **kwargs):
             return func(*args, **kwargs)
@@ -77,9 +76,10 @@ class TestDepthProcessingPerformance:
         img_path = tmp_path / "test_image.png"
         synthetic_image.save(img_path)
         
-        # Benchmark loading
+        # Benchmark loading (with proper file handle closing)
         def load_image():
-            return Image.open(img_path)
+            with Image.open(img_path) as im:
+                return im.copy()  # Force load and close file handle
         
         result = benchmark_fallback(load_image)
         assert result is not None
@@ -91,7 +91,7 @@ class TestDepthProcessingPerformance:
         target_size = (384, 384)
         
         def resize_image():
-            return synthetic_image.resize(target_size, Image.Resampling.LANCZOS)
+            return synthetic_image.resize(target_size, LANCZOS)
         
         result = benchmark_fallback(resize_image)
         assert result.size == target_size
@@ -128,7 +128,7 @@ class TestDepthProcessingPerformance:
             arr = np.array(synthetic_image_hd)
             normalized = arr.astype(np.float32) / 255.0
             resized = Image.fromarray((normalized * 255).astype(np.uint8)).resize(
-                (512, 512), Image.Resampling.LANCZOS
+                (512, 512), LANCZOS
             )
             return np.array(resized)
         
@@ -191,11 +191,7 @@ class TestUpscalingPerformance:
         target_size = (1024, 1024)
         
         def upscale_lanczos():
-            return synthetic_image.resize(target_size, Image.Resampling.LANCZOS)
+            return synthetic_image.resize(target_size, LANCZOS)
         
         result = benchmark_fallback(upscale_lanczos)
         assert result.size == target_size
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "--benchmark-only"])
