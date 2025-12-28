@@ -136,7 +136,10 @@ def measure_batch_throughput(
     Args:
         images: List of image paths to process
         config: Pipeline configuration
+        tmp_path: Temporary directory root for unique output dirs
+        batch_tag: Unique tag used to isolate output dir per run
         warmup: Number of warmup iterations
+        metrics_out: Optional path to write metrics JSON (direct dict format)
 
     Returns:
         Dict with throughput metrics:
@@ -144,7 +147,7 @@ def measure_batch_throughput(
         - seconds_per_image: Average time per image
         - total_time_s: Total processing time
         - num_images: Number of images processed
-        - rss_final_mb: Peak memory usage (if available)
+        - rss_final_mb: Peak RSS memory observed during run (MB)
     """
     import psutil
     import os
@@ -202,8 +205,6 @@ def measure_batch_throughput(
     
     # Write metrics JSON if requested
     if metrics_out:
-        from pathlib import Path
-        import json
         metrics_path = Path(metrics_out)
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         metrics_path.write_text(json.dumps(metrics, indent=2))
@@ -290,6 +291,8 @@ class TestThroughputPerformance:
         metrics = measure_batch_throughput(
             images=synthetic_test_images,
             config=pipeline_config_max,
+            tmp_path=tmp_path,
+            batch_tag="max_quality",
             warmup=1
         )
 
