@@ -1,0 +1,44 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2025-12-28T04:00:00Z",
+  "description": "Baseline throughput metrics for Lux Depth V2 pipeline validation",
+  "hardware": {
+    "reference_platform": "GitHub Actions ubuntu-24.04 (2-core CPU)",
+    "note": "Baseline represents conservative minimum acceptable performance"
+  },
+  "baselines": {
+    "standard_quality_cpu": {
+      "min_images_per_hour": 50,
+      "max_seconds_per_image": 72,
+      "max_memory_mb": 2000,
+      "description": "Standard quality preset on CPU (conservative CI baseline)"
+    },
+    "max_quality_cpu": {
+      "min_images_per_hour": 30,
+      "max_seconds_per_image": 120,
+      "max_memory_mb": 3000,
+      "description": "Max quality preset on CPU (conservative CI baseline)"
+    },
+    "max_quality_gpu": {
+      "min_images_per_hour": 100,
+      "max_seconds_per_image": 36,
+      "max_memory_mb": 3000,
+      "description": "Max quality preset on GPU (conservative baseline, production target is 400/hr)"
+    }
+  },
+  "production_targets": {
+    "cpu_standard": {
+      "target_images_per_hour": 127,
+      "description": "Documented production claim (CPU, standard quality)"
+    },
+    "gpu_max": {
+      "target_images_per_hour": 400,
+      "description": "Documented production claim (GPU, max quality)"
+    }
+  },
+  "regression_thresholds": {
+    "max_throughput_degradation_percent": 20,
+    "max_memory_increase_percent": 15,
+    "description": "Maximum allowed regression before CI fails"
+  }
+}
