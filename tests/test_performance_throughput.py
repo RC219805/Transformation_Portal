@@ -117,7 +117,7 @@ def measure_batch_throughput(
     initial_memory = process.memory_info().rss / 1024 / 1024  # MB
 
     # Initialize pipeline
-    pipeline = LuxPipelineV2(config=config)
+    pipeline = LuxPipelineV2(cfg=config)
 
     # Warmup (if specified)
     if warmup > 0 and len(images) > 0:
