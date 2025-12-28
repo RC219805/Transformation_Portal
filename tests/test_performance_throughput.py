@@ -69,9 +69,10 @@ def pipeline_config_standard():
         pytest.skip("lux_depth_v2 not available")
 
     config = PipelineConfig()
-    config.apply_preset(Preset.PHOTO_REALISTIC)
+    config.preset = Preset.PHOTO_REALISTIC
+    config.apply_preset()
     config.device = "cpu"  # Force CPU for reproducibility
-    config.upscale_factor = 2  # Faster for testing
+    config.upscale = 2  # Faster for testing
     return config
 
 
@@ -82,9 +83,10 @@ def pipeline_config_max():
         pytest.skip("lux_depth_v2 not available")
 
     config = PipelineConfig()
-    config.apply_preset(Preset.INTERIOR_LUXURY_MAX_QUALITY)
+    config.preset = Preset.INTERIOR_LUXURY_MAX_QUALITY
+    config.apply_preset()
     config.device = "auto"  # Use GPU if available
-    config.upscale_factor = 4
+    config.upscale = 4
     return config
 
 
