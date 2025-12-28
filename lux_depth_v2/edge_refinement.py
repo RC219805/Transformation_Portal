@@ -421,15 +421,28 @@ def enhance_edges_with_guidance(
     else:
         depth_float = depth_map
     
+    # Compute gradient-based edge mask to prevent flat-region variance amplification
+    # Only apply sharpening where real structure exists (gradient magnitude > threshold)
+    gx = np.abs(np.diff(depth_float, axis=1, prepend=depth_float[:, :1]))
+    gy = np.abs(np.diff(depth_float, axis=0, prepend=depth_float[:1, :]))
+    gradient_mag = np.maximum(gx, gy)
+    
+    # Soft gradient mask: 0 in flat regions, 1 at strong edges
+    gradient_threshold = 0.02  # Tuned to preserve flats while enhancing edges
+    gradient_mask = np.clip(
+        (gradient_mag - gradient_threshold) / max(gradient_threshold, 1e-6),
+        0.0,
+        1.0
+    ).astype(np.float32)
+    
     # Apply unsharp masking for sharpening
     blurred = cv2.GaussianBlur(depth_float, (0, 0), sigmaX=1.0)
     sharpened = cv2.addWeighted(depth_float, 1.0 + strength, blurred, -strength, 0)
     
-    # Blend sharpened and original using edge mask
-    enhanced = (
-        depth_float * (1.0 - edge_mask) +
-        sharpened * edge_mask
-    )
+    # Blend using gradient mask (not binary edge mask)
+    # Flat regions (gradient_mask ≈ 0) remain unchanged
+    # Edges (gradient_mask ≈ 1) get full enhancement
+    enhanced = depth_float + gradient_mask * (sharpened - depth_float)
     
     # Clip to valid range
     enhanced = np.clip(enhanced, 0.0, 1.0)

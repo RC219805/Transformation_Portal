@@ -472,6 +472,121 @@ jobs:
           retention-days: 30
 
   # ===========================================================================
+  # Stage 3.5: Throughput Validation (P0-2 from Performance Assessment)
+  # ===========================================================================
+  test-throughput:
+    name: Throughput Validation
+    needs: [setup, test-core]
+    if: |
+      always() && 
+      needs.test-core.result == 'success' &&
+      (github.event_name == 'pull_request' || github.event_name == 'push')
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
+          
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install hypothesis pytest pytest-benchmark psutil
+          pip install numpy opencv-python tifffile
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -c requirements/constraints.txt -e .
+          
+      - name: Run Throughput Benchmark
+        run: |
+          mkdir -p bench/results
+          # Run throughput tests - MUST succeed (no || true masking)
+          pytest tests/test_performance_throughput.py \
+            -k "throughput and standard_quality" \
+            
+          
+          # Verify metrics file was written
+          if [ ! -f bench/results/throughput_metrics.json ]; then
+            echo "❌ ERROR: No throughput metrics file found"
+            echo "   Test should have written bench/results/throughput_metrics.json"
+            exit 1
+          fi
+          
+          echo "✅ Throughput metrics written successfully"
+          echo ""
+          echo "📊 Throughput Results:"
+          cat bench/results/throughput_metrics.json
+          echo ""
+          echo "   Baseline comparison will be enabled in next iteration"
+          
+      - name: Validate Against Baseline
+        run: |
+          # Validation script must exist and metrics file must exist
+          if [ ! -f bench/results/throughput_metrics.json ]; then
+            echo "❌ ERROR: No throughput metrics file found"
+            echo "   Tests did not produce valid output"
+            exit 1
+          fi
+          
+          # Run validation - failures should fail the job
+          python scripts/validate_throughput.py \
+            --baseline bench/baselines/throughput_baseline.json \
+            --current bench/results/throughput_metrics.json \
+            --quality standard \
+            --max-regression 20
+          
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            let comment = '## 📊 Throughput Validation Results\n\n';
+            
+            try {
+              if (fs.existsSync('bench/results/throughput_metrics.json')) {
+                const metrics = JSON.parse(fs.readFileSync('bench/results/throughput_metrics.json', 'utf8'));
+                comment += '**Standard Quality (CPU)**\n\n';
+                comment += `- **Throughput:** ${metrics.images_per_hour?.toFixed(1) || 'N/A'} images/hour\n`;
+                comment += `- **Memory Peak:** ${metrics.memory_peak_mb?.toFixed(1) || 'N/A'} MB\n`;
+                comment += `- **Baseline:** 50 images/hour minimum\n\n`;
+                
+                if (metrics.images_per_hour >= 50) {
+                  comment += '✅ **Status:** Meets baseline requirements\n\n';
+                } else {
+                  comment += '⚠️ **Status:** Below baseline (may need optimization)\n\n';
+                }
+                
+                comment += '_Target: 127 images/hour (CPU production claim)_\n';
+              } else {
+                comment += '⚠️ Throughput metrics not available\n';
+              }
+            } catch (error) {
+              comment += `⚠️ Error reading metrics: ${error.message}\n`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+            
+      - name: Upload Throughput Results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: throughput-validation-results
+          path: bench/results/throughput_*.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ===========================================================================
   # Stage 4: ML Tests (Requires PyTorch)
   # ===========================================================================
   test-ml:
