@@ -586,6 +586,62 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  test-performance-budgets:
+    name: Performance Budget Validation
+    needs: [setup, test-core]
+    if: |
+      always() && 
+      needs.test-core.result == 'success' &&
+      (github.event_name == 'pull_request' || github.event_name == 'push')
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
+          
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip wheel
+          pip install pytest pytest-benchmark pyyaml pillow numpy hypothesis
+          # Verify pytest-benchmark plugin loaded
+          python -c "import pytest_benchmark; print('✓ pytest-benchmark loaded')"
+          pytest --help | grep -q benchmark || { echo "ERROR: pytest-benchmark not registered"; exit 1; }
+          
+      - name: Run Performance Benchmarks
+        run: |
+          mkdir -p bench/results
+          # Run pytest-benchmark tests for per-operation performance
+          pytest tests/test_performance_depth.py \
+            -m performance \
+            --benchmark-json=bench/results/benchmark-perf.json \
+            -q
+          
+      - name: Validate Against Budgets
+        run: |
+          # Validate benchmark results against performance budgets
+          # Note: Baseline regression check disabled - CI runner variance too high
+          # Budget thresholds (2-10s) are loose enough to catch real breakage
+          python scripts/validate_performance_budgets.py \
+            --budgets bench/config/performance_budgets.yaml \
+            --bench-json bench/results/benchmark-perf.json \
+            --metric median
+          
+      - name: Upload Benchmark Results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: performance-benchmark-results
+          path: bench/results/benchmark-perf.json
+          if-no-files-found: warn
+          retention-days: 30
+
   # ===========================================================================
   # Stage 4: ML Tests (Requires PyTorch)
   # ===========================================================================
