@@ -158,6 +158,7 @@ def measure_batch_throughput(
 class TestThroughputPerformance:
     """Throughput benchmark tests for production validation."""
 
+    @pytest.mark.ml
     @pytest.mark.performance
     @pytest.mark.throughput
     @pytest.mark.skipif(not LUX_DEPTH_AVAILABLE, reason="lux_depth_v2 not available")
@@ -210,6 +211,7 @@ class TestThroughputPerformance:
         print("  Seconds/image: {:.2f}".format(metrics['seconds_per_image']))
         print("  Memory peak: {:.1f}MB".format(metrics['memory_peak_mb']))
 
+    @pytest.mark.ml
     @pytest.mark.performance
     @pytest.mark.throughput
     @pytest.mark.slow
@@ -270,6 +272,7 @@ class TestThroughputPerformance:
         print("  Seconds/image: {:.2f}".format(metrics['seconds_per_image']))
         print("  Memory peak: {:.1f}MB".format(metrics['memory_peak_mb']))
 
+    @pytest.mark.ml
     @pytest.mark.performance
     @pytest.mark.throughput
     @pytest.mark.skipif(not LUX_DEPTH_AVAILABLE, reason="lux_depth_v2 not available")
