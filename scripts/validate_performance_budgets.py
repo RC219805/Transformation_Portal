@@ -105,6 +105,7 @@ def main() -> int:
     settings = budgets_doc.get("settings", {})
     max_reg_pct = float(settings.get("max_regression_percent", 0))
     max_reg = max_reg_pct / 100.0 if max_reg_pct else None
+    fail_on_unmatched = settings.get("fail_on_unmatched_patterns", True)  # default strict
 
     budget_groups = budgets_doc.get("budgets", {})
     bench_map = budgets_doc.get("benchmark_map", {})
@@ -134,9 +135,11 @@ def main() -> int:
         # Match benchmarks to this group
         matched = match_names(all_names, patterns)
         if not matched:
-            violations.append(
-                (group, "-", "-", f"No benchmarks matched patterns {patterns}")
-            )
+            msg = f"No benchmarks matched patterns {patterns}"
+            if fail_on_unmatched:
+                violations.append((group, "-", "-", msg))
+            else:
+                warnings.append(f"⚠️  [{group}] {msg} (fail_on_unmatched_patterns=false)")
             continue
 
         # Validate each matched benchmark

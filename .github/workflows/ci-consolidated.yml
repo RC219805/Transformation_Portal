@@ -626,8 +626,10 @@ jobs:
       - name: Validate Against Budgets
         run: |
           # Validate benchmark results against performance budgets
-          # Note: Baseline regression check disabled - CI runner variance too high
-          # Budget thresholds (2-10s) are loose enough to catch real breakage
+          # Enforcement mode: THRESHOLDS-ONLY (no regression detection)
+          # - Budget violations block CI (exit code 2)
+          # - Baseline regression check NOT used (CI runner variance too high)
+          # - Unmapped budgets = warnings (fail_on_unmatched_patterns: false)
           python scripts/validate_performance_budgets.py \
             --budgets bench/config/performance_budgets.yaml \
             --bench-json bench/results/benchmark-perf.json \
