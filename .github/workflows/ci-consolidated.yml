@@ -609,7 +609,10 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install --upgrade pip wheel
-          pip install pytest pytest-benchmark pyyaml pillow numpy
+          pip install pytest pytest-benchmark pyyaml pillow numpy hypothesis
+          # Verify pytest-benchmark plugin loaded
+          python -c "import pytest_benchmark; print('✓ pytest-benchmark loaded')"
+          pytest --help | grep -q benchmark || { echo "ERROR: pytest-benchmark not registered"; exit 1; }
           
       - name: Run Performance Benchmarks
         run: |
