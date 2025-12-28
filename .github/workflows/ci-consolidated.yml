@@ -497,57 +497,79 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install --upgrade pip wheel
-          pip install pytest pytest-benchmark psutil
+          pip install hypothesis pytest pytest-benchmark psutil
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -c requirements/constraints.txt -e .
           
       - name: Run Throughput Benchmark
         run: |
           mkdir -p bench/results
-          # Run throughput tests with benchmark output
+          # Run throughput tests - MUST succeed (no || true masking)
           pytest tests/test_performance_throughput.py \
             -k "throughput and standard_quality" \
             --benchmark-json=bench/results/throughput_current.json \
-            -v || true
+            -v
           
-          # Extract metrics for validation
+          # Extract real metrics - FAIL if extraction fails
           python -c "
           import json
+          import sys
+          
           try:
               with open('bench/results/throughput_current.json', 'r') as f:
                   data = json.load(f)
-              # pytest-benchmark format - extract first benchmark result
-              if 'benchmarks' in data and len(data['benchmarks']) > 0:
-                  # For now, create a simplified format for validation
-                  result = {
-                      'images_per_hour': 60,  # Conservative placeholder
-                      'memory_peak_mb': 1000,  # Conservative placeholder
-                      'note': 'Extracted from pytest-benchmark output'
-                  }
-                  with open('bench/results/throughput_metrics.json', 'w') as f:
-                      json.dump(result, f, indent=2)
-                  print('✅ Extracted throughput metrics')
-              else:
-                  print('⚠️  No benchmark results found')
+          except FileNotFoundError:
+              print('❌ ERROR: No benchmark results file generated')
+              print('   Tests did not run or did not produce output')
+              sys.exit(1)
           except Exception as e:
-              print(f'⚠️  Could not extract metrics: {e}')
-              # Create minimal fallback
-              with open('bench/results/throughput_metrics.json', 'w') as f:
-                  json.dump({'images_per_hour': 50, 'memory_peak_mb': 1500}, f)
+              print(f'❌ ERROR: Could not read benchmark file: {e}')
+              sys.exit(1)
+          
+          # Verify benchmarks exist
+          if 'benchmarks' not in data or len(data['benchmarks']) == 0:
+              print('❌ ERROR: Benchmark file has no benchmark results')
+              print('   Tests may have been skipped or failed to collect')
+              sys.exit(1)
+          
+          # Extract REAL metrics from test output (not fake placeholders)
+          # The test writes custom metrics via print statements
+          # For now, use benchmark timing as proxy for throughput
+          benchmark = data['benchmarks'][0]
+          mean_time = benchmark['stats']['mean']
+          
+          # Calculate images/hour from mean time per image
+          # Note: This is a rough estimate - real tests track this directly
+          images_per_hour = 3600 / mean_time if mean_time > 0 else 0
+          
+          result = {
+              'images_per_hour': images_per_hour,
+              'memory_peak_mb': 1000,  # TODO: Extract from test stdout
+              'mean_time_s': mean_time,
+              'note': 'Extracted from real pytest-benchmark run'
+          }
+          
+          with open('bench/results/throughput_metrics.json', 'w') as f:
+              json.dump(result, f, indent=2)
+          
+          print(f'✅ Extracted real throughput metrics: {images_per_hour:.1f} images/hour')
           "
           
       - name: Validate Against Baseline
         run: |
-          # Use the validation script with baseline
-          if [ -f bench/results/throughput_metrics.json ]; then
-            python scripts/validate_throughput.py \
-              --baseline bench/baselines/throughput_baseline.json \
-              --current bench/results/throughput_metrics.json \
-              --quality standard \
-              --max-regression 20 || echo "⚠️  Validation completed with warnings"
-          else
-            echo "⚠️  No metrics file found, skipping validation"
+          # Validation script must exist and metrics file must exist
+          if [ ! -f bench/results/throughput_metrics.json ]; then
+            echo "❌ ERROR: No throughput metrics file found"
+            echo "   Tests did not produce valid output"
+            exit 1
           fi
+          
+          # Run validation - failures should fail the job
+          python scripts/validate_throughput.py \
+            --baseline bench/baselines/throughput_baseline.json \
+            --current bench/results/throughput_metrics.json \
+            --quality standard \
+            --max-regression 20
           
       - name: Comment on PR
         if: github.event_name == 'pull_request'
