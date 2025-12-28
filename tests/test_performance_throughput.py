@@ -67,7 +67,13 @@ def synthetic_test_images(tmp_path) -> List[Path]:
 
 @pytest.fixture
 def pipeline_config_standard():
-    """Standard quality pipeline configuration (CPU-optimized)."""
+    """Standard quality pipeline configuration (CPU-optimized).
+    
+    Note: Disables material segmentation for CI offline mode.
+    CI sets TRANSFORMERS_OFFLINE=1 and HF_HUB_OFFLINE=1, preventing
+    SegFormer model downloads. This is intentional - throughput validation
+    focuses on core pipeline performance, not optional HF model inference.
+    """
     if not LUX_DEPTH_AVAILABLE:
         pytest.skip("lux_depth_v2 not available")
 
@@ -76,12 +82,20 @@ def pipeline_config_standard():
     config.apply_preset()
     config.device = "cpu"  # Force CPU for reproducibility
     config.upscale = 2  # Faster for testing
+    
+    # Disable material segmentation for CI (requires HF downloads)
+    config.segmentation.backend = "none"
+    
     return config
 
 
 @pytest.fixture
 def pipeline_config_max():
-    """Max quality pipeline configuration (GPU-optimized if available)."""
+    """Max quality pipeline configuration (GPU-optimized if available).
+    
+    Note: Disables material segmentation for CI offline mode.
+    See pipeline_config_standard for rationale.
+    """
     if not LUX_DEPTH_AVAILABLE:
         pytest.skip("lux_depth_v2 not available")
 
@@ -90,6 +104,10 @@ def pipeline_config_max():
     config.apply_preset()
     config.device = "auto"  # Use GPU if available
     config.upscale = 4
+    
+    # Disable material segmentation for CI (requires HF downloads)
+    config.segmentation.backend = "none"
+    
     return config
 
 
