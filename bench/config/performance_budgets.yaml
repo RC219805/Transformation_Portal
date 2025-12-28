@@ -11,6 +11,10 @@ settings:
   max_regression_percent: 20
   # Maximum allowed memory increase percentage
   max_memory_increase_percent: 15
+  # Whether to fail validation if benchmark patterns don't match any tests
+  # false = warn only (prevents future budget additions from breaking CI)
+  # true = fail hard (strict enforcement)
+  fail_on_unmatched_patterns: false
 
 # Benchmark to budget group mapping
 # Maps pytest-benchmark test names to budget groups for validation
