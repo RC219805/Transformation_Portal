@@ -315,7 +315,7 @@ class TestThroughputPerformance:
     @pytest.mark.performance
     @pytest.mark.throughput
     @pytest.mark.skipif(not LUX_DEPTH_AVAILABLE, reason="lux_depth_v2 not available")
-    def test_throughput_scaling(self, synthetic_test_images, pipeline_config_standard):
+    def test_throughput_scaling(self, synthetic_test_images, pipeline_config_standard, tmp_path):
         """Verify throughput scales linearly with batch size.
 
         Ensures no memory leaks or performance degradation in batch processing.
