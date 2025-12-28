@@ -10,7 +10,7 @@ import time
 import warnings
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -1065,6 +1065,22 @@ class LuxPipelineV2:
         report["depth"] = depth_provenance
         
         return report
+
+    def process_image(self, image_path: Union[str, Path], **kwargs: Any) -> Dict[str, object]:
+        """
+        Backwards-compatible entrypoint for performance/throughput harnesses.
+        
+        Routes to process_one() which is the canonical single-image entrypoint.
+        This alias prevents API drift from breaking perf tests.
+        
+        Args:
+            image_path: Path to input image (str or Path)
+            **kwargs: Additional arguments passed to process_one()
+        
+        Returns:
+            Processing report dict from process_one()
+        """
+        return self.process_one(Path(image_path), **kwargs)
 
     def process_directory(self) -> List[Dict[str, object]]:
         cfg = self.cfg
