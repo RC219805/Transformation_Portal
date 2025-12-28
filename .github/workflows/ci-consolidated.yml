@@ -508,12 +508,20 @@ jobs:
           # Run throughput tests - MUST succeed (no || true masking)
           pytest tests/test_performance_throughput.py \
             -k "throughput and standard_quality" \
-            --benchmark-json=bench/results/throughput_current.json \
-            -v
+            
           
-          # Test passed = real pipeline executed successfully
-          # Metrics are measured but baseline comparison deferred to next PR
-          echo "✅ Throughput validation: Pipeline executed 10 images successfully"
+          # Verify metrics file was written
+          if [ ! -f bench/results/throughput_metrics.json ]; then
+            echo "❌ ERROR: No throughput metrics file found"
+            echo "   Test should have written bench/results/throughput_metrics.json"
+            exit 1
+          fi
+          
+          echo "✅ Throughput metrics written successfully"
+          echo ""
+          echo "📊 Throughput Results:"
+          cat bench/results/throughput_metrics.json
+          echo ""
           echo "   Baseline comparison will be enabled in next iteration"
           
       - name: Validate Against Baseline

@@ -128,7 +128,8 @@ def measure_batch_throughput(
     config: PipelineConfig,
     tmp_path: Path,
     batch_tag: str = "default",
-    warmup: int = 0
+    warmup: int = 0,
+    metrics_out: Optional[str] = None
 ) -> Dict[str, Any]:
     """Measure batch processing throughput.
 
@@ -183,13 +184,27 @@ def measure_batch_throughput(
     seconds_per_image = total_time / num_images if num_images > 0 else 0
     images_per_hour = (3600 / seconds_per_image) if seconds_per_image > 0 else 0
 
-    return {
-        "images_per_hour": images_per_hour,
+    metrics = {
+        "processed_images": num_images,
+        "elapsed_seconds": total_time,
         "seconds_per_image": seconds_per_image,
-        "total_time_s": total_time,
-        "num_images": num_images,
-        "memory_peak_mb": peak_memory - initial_memory,
+        "images_per_hour": images_per_hour,
+        "rss_delta_mb": peak_memory - initial_memory,
+        "rss_final_mb": peak_memory,
+        "mode": "cpu",
+        "quality": batch_tag,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+    
+    # Write metrics JSON if requested
+    if metrics_out:
+        from pathlib import Path
+        import json
+        metrics_path = Path(metrics_out)
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(json.dumps(metrics, indent=2))
+    
+    return metrics
 
 
 class TestThroughputPerformance:
@@ -216,7 +231,8 @@ class TestThroughputPerformance:
             config=pipeline_config_standard,
             tmp_path=tmp_path,
             batch_tag="standard_quality",
-            warmup=1
+            warmup=1,
+            metrics_out="bench/results/throughput_metrics.json"
         )
 
         # Save results for baseline comparison
@@ -225,7 +241,7 @@ class TestThroughputPerformance:
             json.dump(metrics, f, indent=2)
 
         # Assertions
-        assert metrics["num_images"] == 10, "Should process 10 images"
+        assert metrics["processed_images"] == 10, "Should process 10 images"
         assert metrics["images_per_hour"] > 0, "Should have positive throughput"
 
         # Performance target: > 100 images/hour
@@ -279,7 +295,7 @@ class TestThroughputPerformance:
             json.dump(metrics, f, indent=2)
 
         # Assertions
-        assert metrics["num_images"] == 10, "Should process 10 images"
+        assert metrics["processed_images"] == 10, "Should process 10 images"
         assert metrics["images_per_hour"] > 0, "Should have positive throughput"
 
         # Adaptive threshold based on available hardware
