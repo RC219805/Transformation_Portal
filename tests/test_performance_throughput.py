@@ -89,6 +89,10 @@ def pipeline_config_standard(tmp_path):
     # Set output_dir for process_image (required by process_one)
     config.output_dir = str(tmp_path / "output")
     
+    # Force re-processing for consistent throughput measurement
+    # (prevents skip_existing from inflating numbers on second run)
+    config.skip_existing = False
+    
     return config
 
 
@@ -114,13 +118,18 @@ def pipeline_config_max(tmp_path):
     # Set output_dir for process_image (required by process_one)
     config.output_dir = str(tmp_path / "output")
     
+    # Force re-processing for consistent throughput measurement
+    # (prevents skip_existing from inflating numbers on second run)
+    config.skip_existing = False
+    
     return config
 
 
 def measure_batch_throughput(
     images: List[Path],
     config: PipelineConfig,
-    warmup: int = 0
+    warmup: int = 0,
+    output_suffix: str = ""
 ) -> Dict[str, Any]:
     """Measure batch processing throughput.
 
@@ -143,6 +152,12 @@ def measure_batch_throughput(
     process = psutil.Process(os.getpid())
     initial_memory = process.memory_info().rss / 1024 / 1024  # MB
 
+    # Use unique output dir per batch to prevent skip_existing issues
+    if output_suffix:
+        from pathlib import Path
+        base_dir = Path(config.output_dir)
+        config.output_dir = str(base_dir.parent / f"{base_dir.name}{output_suffix}")
+    
     # Initialize pipeline
     pipeline = LuxPipelineV2(cfg=config)
 
@@ -314,7 +329,8 @@ class TestThroughputPerformance:
             metrics = measure_batch_throughput(
                 images=images,
                 config=pipeline_config_standard,
-                warmup=0
+                warmup=0,
+                output_suffix=f"_bs{batch_size}"  # Unique dir per batch size
             )
             throughputs.append(metrics["images_per_hour"])
 
