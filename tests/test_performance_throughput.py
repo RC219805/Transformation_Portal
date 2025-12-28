@@ -159,6 +159,10 @@ def measure_batch_throughput(
     
     # Initialize pipeline
     pipeline = LuxPipelineV2(cfg=config)
+    
+    # CRITICAL: Set depth mode AFTER pipeline init
+    # Pipeline.__init__ calls apply_preset() which would override our setting
+    pipeline.cfg.depth.mode = DepthMode.OPTIONAL
 
     # Warmup (if specified)
     if warmup > 0 and len(images) > 0:
