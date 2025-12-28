@@ -66,7 +66,7 @@ def synthetic_test_images(tmp_path) -> List[Path]:
 
 
 @pytest.fixture
-def pipeline_config_standard():
+def pipeline_config_standard(tmp_path):
     """Standard quality pipeline configuration (CPU-optimized).
     
     Note: Disables material segmentation for CI offline mode.
@@ -86,11 +86,14 @@ def pipeline_config_standard():
     # Disable material segmentation for CI (requires HF downloads)
     config.segmentation.backend = "none"
     
+    # Set output_dir for process_image (required by process_one)
+    config.output_dir = str(tmp_path / "output")
+    
     return config
 
 
 @pytest.fixture
-def pipeline_config_max():
+def pipeline_config_max(tmp_path):
     """Max quality pipeline configuration (GPU-optimized if available).
     
     Note: Disables material segmentation for CI offline mode.
@@ -107,6 +110,9 @@ def pipeline_config_max():
     
     # Disable material segmentation for CI (requires HF downloads)
     config.segmentation.backend = "none"
+    
+    # Set output_dir for process_image (required by process_one)
+    config.output_dir = str(tmp_path / "output")
     
     return config
 
