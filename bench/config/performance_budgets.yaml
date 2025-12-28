@@ -12,6 +12,15 @@ settings:
   # Maximum allowed memory increase percentage
   max_memory_increase_percent: 15
 
+# Benchmark to budget group mapping
+# Maps pytest-benchmark test names to budget groups for validation
+benchmark_map:
+  upscaling_2x:
+    - "*/test_performance_depth.py::TestUpscalingPerformance::test_*_upscale_2x_performance"
+  # Note: Other test operations (loading, resize, numpy ops) are unit-level micro-benchmarks
+  # that don't map to production pipeline budgets. They're useful for regression detection
+  # but not budget validation. Add explicit budget groups when real inference benchmarks exist.
+
 # Per-operation performance budgets
 budgets:
   # Depth estimation operation
