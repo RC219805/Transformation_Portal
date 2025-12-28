@@ -17,15 +17,9 @@ CI usage (performance-monitor.yml):
 import numpy as np
 import pytest
 
-# Conditional imports for optional dependencies
-try:
-    from PIL import Image
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
-
-# Skip all tests if PIL not available
-pytestmark = pytest.mark.skipif(not HAS_PIL, reason="PIL not available")
+# Skip module if Pillow not available (prevents errors in core test matrix)
+PIL = pytest.importorskip("PIL", reason="Pillow not installed in this environment")
+from PIL import Image
 
 # Pillow version compatibility: Image.Resampling.* only exists in Pillow 10+
 # Fallback to Image.* constants for older versions
