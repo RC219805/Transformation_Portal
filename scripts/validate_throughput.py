@@ -53,7 +53,7 @@ def validate_standard_quality(
     # Current format: direct metrics dict or pytest-benchmark format
     if "images_per_hour" in current:
         throughput = current["images_per_hour"]
-        memory_mb = current.get("memory_peak_mb", 0)
+        memory_mb = current.get("rss_final_mb", current.get("memory_peak_mb", 0))
     else:
         # Fallback for different formats
         warnings.append("⚠️  Could not parse throughput from current results")
@@ -114,7 +114,7 @@ def validate_max_quality(
     # Extract metrics
     if "images_per_hour" in current:
         throughput = current["images_per_hour"]
-        memory_mb = current.get("memory_peak_mb", 0)
+        memory_mb = current.get("rss_final_mb", current.get("memory_peak_mb", 0))
     else:
         warnings.append("⚠️  Could not parse throughput from current results")
         return False, warnings

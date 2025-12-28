@@ -553,7 +553,7 @@ jobs:
                 const metrics = JSON.parse(fs.readFileSync('bench/results/throughput_metrics.json', 'utf8'));
                 comment += '**Standard Quality (CPU)**\n\n';
                 comment += `- **Throughput:** ${metrics.images_per_hour?.toFixed(1) || 'N/A'} images/hour\n`;
-                comment += `- **Memory Peak:** ${metrics.memory_peak_mb?.toFixed(1) || 'N/A'} MB\n`;
+                comment += `- **Memory Peak:** ${(metrics.rss_final_mb ?? metrics.memory_peak_mb)?.toFixed(1) || 'N/A'} MB\n`;
                 comment += `- **Baseline:** 50 images/hour minimum\n\n`;
                 
                 if (metrics.images_per_hour >= 50) {

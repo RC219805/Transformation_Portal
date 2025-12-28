@@ -430,7 +430,7 @@ def enhance_edges_with_guidance(
     # Soft gradient mask: 0 in flat regions, 1 at strong edges
     gradient_threshold = 0.02  # Tuned to preserve flats while enhancing edges
     gradient_mask = np.clip(
-        (gradient_mag - gradient_threshold) / max(gradient_threshold, 1e-6),
+        (gradient_mag - gradient_threshold) / gradient_threshold,
         0.0,
         1.0
     ).astype(np.float32)
