@@ -37,7 +37,7 @@ torch = pytest.importorskip("torch", reason="PyTorch not installed")
 
 # Conditionally import lux_depth_v2 (may not be available in all test environments)
 try:
-    from lux_depth_v2.config import PipelineConfig, Preset
+    from lux_depth_v2.config import PipelineConfig, Preset, DepthMode
     from lux_depth_v2.pipeline import LuxPipelineV2
     LUX_DEPTH_AVAILABLE = True
 except ImportError:
@@ -83,15 +83,14 @@ def pipeline_config_standard(tmp_path):
     config.device = "cpu"  # Force CPU for reproducibility
     config.upscale = 2  # Faster for testing
     
-    # Disable material segmentation for CI (requires HF downloads)
-    config.segmentation.backend = "none"
+    # CI offline-safe configuration (no HF downloads)
+    config.segmentation.backend = "none"  # No SegFormer downloads
+    config.depth.mode = DepthMode.OPTIONAL  # No Depth-Anything downloads
     
-    # Set output_dir for process_image (required by process_one)
+    # Output configuration - unique per test
     config.output_dir = str(tmp_path / "output")
-    
-    # Force re-processing for consistent throughput measurement
-    # (prevents skip_existing from inflating numbers on second run)
-    config.skip_existing = False
+    config.skip_existing = False  # Force equal work per run
+    config.overwrite = True  # Allow re-processing
     
     return config
 
@@ -112,15 +111,14 @@ def pipeline_config_max(tmp_path):
     config.device = "auto"  # Use GPU if available
     config.upscale = 4
     
-    # Disable material segmentation for CI (requires HF downloads)
-    config.segmentation.backend = "none"
+    # CI offline-safe configuration (no HF downloads)
+    config.segmentation.backend = "none"  # No SegFormer downloads
+    config.depth.mode = DepthMode.OPTIONAL  # No Depth-Anything downloads
     
-    # Set output_dir for process_image (required by process_one)
+    # Output configuration - unique per test
     config.output_dir = str(tmp_path / "output")
-    
-    # Force re-processing for consistent throughput measurement
-    # (prevents skip_existing from inflating numbers on second run)
-    config.skip_existing = False
+    config.skip_existing = False  # Force equal work per run
+    config.overwrite = True  # Allow re-processing
     
     return config
 
@@ -128,8 +126,9 @@ def pipeline_config_max(tmp_path):
 def measure_batch_throughput(
     images: List[Path],
     config: PipelineConfig,
-    warmup: int = 0,
-    output_suffix: str = ""
+    tmp_path: Path,
+    batch_tag: str = "default",
+    warmup: int = 0
 ) -> Dict[str, Any]:
     """Measure batch processing throughput.
 
@@ -152,11 +151,10 @@ def measure_batch_throughput(
     process = psutil.Process(os.getpid())
     initial_memory = process.memory_info().rss / 1024 / 1024  # MB
 
-    # Use unique output dir per batch to prevent skip_existing issues
-    if output_suffix:
-        from pathlib import Path
-        base_dir = Path(config.output_dir)
-        config.output_dir = str(base_dir.parent / f"{base_dir.name}{output_suffix}")
+    # Enforce unique output dir per batch (critical for consistent measurement)
+    config.output_dir = str(tmp_path / f"out_{batch_tag}")
+    config.skip_existing = False
+    config.overwrite = True
     
     # Initialize pipeline
     pipeline = LuxPipelineV2(cfg=config)
@@ -216,6 +214,8 @@ class TestThroughputPerformance:
         metrics = measure_batch_throughput(
             images=synthetic_test_images,
             config=pipeline_config_standard,
+            tmp_path=tmp_path,
+            batch_tag="standard_quality",
             warmup=1
         )
 
@@ -329,8 +329,9 @@ class TestThroughputPerformance:
             metrics = measure_batch_throughput(
                 images=images,
                 config=pipeline_config_standard,
-                warmup=0,
-                output_suffix=f"_bs{batch_size}"  # Unique dir per batch size
+                tmp_path=tmp_path,
+                batch_tag=f"bs{batch_size}",  # Unique dir per batch size
+                warmup=0
             )
             throughputs.append(metrics["images_per_hour"])
 
