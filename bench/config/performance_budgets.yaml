@@ -1,0 +1,125 @@
+# Performance Budgets Configuration
+# Defines per-operation performance targets and limits for CI validation
+# Based on P0-3 recommendation from Performance Readiness Assessment
+
+version: "1.0.0"
+description: "Performance budgets for Transformation Portal image processing pipeline"
+
+# Global settings
+settings:
+  # Maximum allowed regression percentage before CI fails
+  max_regression_percent: 20
+  # Maximum allowed memory increase percentage
+  max_memory_increase_percent: 15
+
+# Per-operation performance budgets
+budgets:
+  # Depth estimation operation
+  depth_estimation:
+    max_latency_s: 2.0
+    max_memory_mb: 1500
+    description: "Depth Anything V2 inference on 1920x1080 image"
+    
+  # Material segmentation operation
+  material_segmentation:
+    max_latency_s: 1.0
+    max_memory_mb: 800
+    description: "Material detection (ONNX/SegFormer/Heuristic backend)"
+    
+  # 4x upscaling operation
+  upscaling_4x:
+    max_latency_s: 10.0
+    max_memory_mb: 2000
+    description: "4x upscaling with torch backend"
+    
+  # 2x upscaling operation (faster)
+  upscaling_2x:
+    max_latency_s: 5.0
+    max_memory_mb: 1500
+    description: "2x upscaling with torch backend"
+    
+  # End-to-end pipeline throughput
+  end_to_end_pipeline:
+    # Throughput targets (images/hour)
+    min_throughput_images_per_hour_cpu: 50    # Conservative CI baseline
+    min_throughput_images_per_hour_gpu: 100   # Conservative GPU baseline
+    target_throughput_images_per_hour_cpu: 127  # Production claim
+    target_throughput_images_per_hour_gpu: 400  # Production claim
+    
+    # Latency targets (seconds)
+    max_latency_p50_s: 20.0   # Median latency
+    max_latency_p95_s: 30.0   # 95th percentile
+    max_latency_p99_s: 45.0   # 99th percentile
+    
+    # Memory constraints
+    max_memory_per_image_mb: 2000  # Standard quality
+    max_memory_per_image_mb_max_quality: 3000  # Max quality
+    
+    description: "Full pipeline from input to output (all presets)"
+
+# Hardware-specific targets
+hardware_profiles:
+  github_actions_cpu:
+    platform: "GitHub Actions ubuntu-24.04 (2-core CPU)"
+    min_throughput_images_per_hour: 50
+    description: "Conservative baseline for CI environment"
+    
+  apple_silicon_m1:
+    platform: "Apple M1/M2/M3 with CoreML acceleration"
+    min_throughput_images_per_hour: 150
+    description: "Expected performance with Apple Neural Engine"
+    
+  nvidia_gpu_consumer:
+    platform: "NVIDIA RTX 3060+ or equivalent"
+    min_throughput_images_per_hour: 300
+    description: "Expected performance with CUDA acceleration"
+
+# Quality tier budgets
+quality_tiers:
+  standard:
+    max_latency_s: 30
+    max_memory_mb: 2000
+    min_throughput_images_per_hour: 100
+    description: "Standard quality preset (balanced speed/quality)"
+    
+  max:
+    max_latency_s: 45
+    max_memory_mb: 3000
+    min_throughput_images_per_hour: 60
+    description: "Max quality preset (higher quality, slower)"
+    
+  apex:
+    max_latency_s: 60
+    max_memory_mb: 4000
+    min_throughput_images_per_hour: 40
+    description: "APEX quality preset (maximum quality, slowest)"
+
+# Pipeline initialization budgets
+initialization:
+  pipeline_init:
+    max_time_s: 2.0
+    description: "Time to initialize LuxPipelineV2"
+    
+  model_loading:
+    max_time_s: 3.0
+    description: "Time to load ML models (depth, CLIP, etc.)"
+    
+  clip_classification:
+    max_time_s: 0.5
+    description: "CLIP scene classification for auto-preset"
+
+# Memory leak detection thresholds
+memory_stability:
+  max_memory_growth_per_image_mb: 10
+  batch_size_for_leak_detection: 100
+  description: "Memory should not grow > 10MB per image over 100 images"
+
+# Notes for implementation
+implementation_notes: |
+  These budgets should be enforced in CI via:
+  1. pytest fixtures that validate operation timings
+  2. scripts/validate_throughput.py for end-to-end validation
+  3. Memory profiling in test-throughput job
+  4. Automated regression detection against baselines
+  
+  See .github/workflows/PERFORMANCE_READINESS_ASSESSMENT.md for context.
