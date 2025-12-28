@@ -32,6 +32,9 @@ import pytest
 PIL = pytest.importorskip("PIL", reason="Pillow not installed")
 from PIL import Image  # noqa: E402
 
+# Skip module if torch not available (required by lux_depth_v2 pipeline)
+torch = pytest.importorskip("torch", reason="PyTorch not installed")
+
 # Conditionally import lux_depth_v2 (may not be available in all test environments)
 try:
     from lux_depth_v2.config import PipelineConfig, Preset
@@ -240,7 +243,6 @@ class TestThroughputPerformance:
 
         # Adaptive threshold based on available hardware
         # GPU: expect high throughput, CPU: expect lower but acceptable throughput
-        import torch
         has_gpu = torch.cuda.is_available() or (
             hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
         )
