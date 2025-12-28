@@ -144,7 +144,7 @@ def measure_batch_throughput(
         - seconds_per_image: Average time per image
         - total_time_s: Total processing time
         - num_images: Number of images processed
-        - memory_peak_mb: Peak memory usage (if available)
+        - rss_final_mb: Peak memory usage (if available)
     """
     import psutil
     import os
@@ -259,8 +259,8 @@ class TestThroughputPerformance:
 
         # Memory constraint: < 2GB
         max_memory_mb = 2000
-        assert metrics["memory_peak_mb"] < max_memory_mb, (
-            f"Peak memory {metrics['memory_peak_mb']:.1f}MB "
+        assert metrics["rss_final_mb"] < max_memory_mb, (
+            f"Peak memory {metrics['rss_final_mb']:.1f}MB "
             f"exceeds limit {max_memory_mb}MB"
         )
 
@@ -268,7 +268,7 @@ class TestThroughputPerformance:
         print("\n📊 Standard Quality Throughput:")
         print("  Images/hour: {:.1f}".format(metrics['images_per_hour']))
         print("  Seconds/image: {:.2f}".format(metrics['seconds_per_image']))
-        print("  Memory peak: {:.1f}MB".format(metrics['memory_peak_mb']))
+        print("  Memory peak: {:.1f}MB".format(metrics['rss_final_mb']))
 
     @pytest.mark.ml
     @pytest.mark.performance
@@ -320,8 +320,8 @@ class TestThroughputPerformance:
 
         # Memory constraint: < 3GB for max quality
         max_memory_mb = 3000
-        assert metrics["memory_peak_mb"] < max_memory_mb, (
-            f"Peak memory {metrics['memory_peak_mb']:.1f}MB "
+        assert metrics["rss_final_mb"] < max_memory_mb, (
+            f"Peak memory {metrics['rss_final_mb']:.1f}MB "
             f"exceeds limit {max_memory_mb}MB"
         )
 
@@ -329,7 +329,7 @@ class TestThroughputPerformance:
         print("\n📊 Max Quality Throughput ({}):".format('GPU' if has_gpu else 'CPU'))
         print("  Images/hour: {:.1f}".format(metrics['images_per_hour']))
         print("  Seconds/image: {:.2f}".format(metrics['seconds_per_image']))
-        print("  Memory peak: {:.1f}MB".format(metrics['memory_peak_mb']))
+        print("  Memory peak: {:.1f}MB".format(metrics['rss_final_mb']))
 
     @pytest.mark.ml
     @pytest.mark.performance
