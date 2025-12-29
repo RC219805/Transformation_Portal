@@ -18,6 +18,7 @@ import fnmatch
 import json
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 try:
     import yaml
@@ -25,9 +26,11 @@ except ImportError as e:
     print(f"ERROR: Missing PyYAML ({e}). Install with: pip install pyyaml", file=sys.stderr)
     raise SystemExit(2)
 
-def die(msg: str, code: int = 2) -> "NoReturn":
+
+def die(msg: str, code: int = 2) -> NoReturn:
     print(f"ERROR: {msg}", file=sys.stderr)
     raise SystemExit(code)
+
 
 def load_yaml(p: Path) -> dict:
     """Load YAML configuration file."""
@@ -59,7 +62,7 @@ def load_json(p: Path) -> dict:
 
 def bench_index(bench_json: dict) -> dict:
     """Build index of benchmarks by name.
-    
+
     pytest-benchmark JSON structure:
     {"benchmarks": [{"name": ..., "fullname": ..., "stats": {...}}, ...]}
     """
