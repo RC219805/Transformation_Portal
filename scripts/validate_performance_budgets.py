@@ -20,14 +20,19 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+# Exit codes
+EXIT_OK = 0
+EXIT_VIOLATIONS = 1
+EXIT_ERROR = 2
+
 try:
     import yaml
 except ImportError as e:
     print(f"ERROR: Missing PyYAML ({e}). Install with: pip install pyyaml", file=sys.stderr)
-    raise SystemExit(2)
+    raise SystemExit(EXIT_ERROR)
 
 
-def die(msg: str, code: int = 2) -> NoReturn:
+def die(msg: str, code: int = EXIT_ERROR) -> NoReturn:
     print(f"ERROR: {msg}", file=sys.stderr)
     raise SystemExit(code)
 
@@ -66,10 +71,22 @@ def bench_index(bench_json: dict) -> dict:
     pytest-benchmark JSON structure:
     {"benchmarks": [{"name": ..., "fullname": ..., "stats": {...}}, ...]}
     """
+    benchmarks = bench_json.get("benchmarks", [])
+    if not isinstance(benchmarks, list):
+        die(f"Expected 'benchmarks' to be a list, got {type(benchmarks).__name__}")
+
     idx = {}
-    for b in bench_json.get("benchmarks", []):
+    for i, b in enumerate(benchmarks):
+        if not isinstance(b, dict):
+            print(f"WARNING: Skipping non-dict benchmark entry at index {i}", file=sys.stderr)
+            continue
         # Use fullname for matching (includes module::class::test)
         key = b.get("fullname", b.get("name"))
+        if not key:
+            print(f"WARNING: Skipping benchmark at index {i} (no name/fullname)", file=sys.stderr)
+            continue
+        if key in idx:
+            print(f"WARNING: Duplicate benchmark key '{key}' (overwriting)", file=sys.stderr)
         idx[key] = b
     return idx
 
@@ -87,10 +104,10 @@ def get_latency_s(b: dict, metric: str) -> float:
 
 
 def match_names(all_names: list[str], patterns: list[str]) -> list[str]:
-    """Match benchmark names against glob patterns."""
+    """Match benchmark names against glob patterns (case-sensitive)."""
     matched = []
     for pat in patterns:
-        matched.extend([n for n in all_names if fnmatch.fnmatch(n, pat)])
+        matched.extend([n for n in all_names if fnmatch.fnmatchcase(n, pat)])
     # de-dupe preserve order
     seen = set()
     out = []
@@ -122,12 +139,21 @@ def main() -> int:
 
     # Load configuration and results
     budgets_doc = load_yaml(Path(args.budgets))
+    if budgets_doc is None or not isinstance(budgets_doc, dict):
+        die(f"YAML root must be a mapping (dict), got {type(budgets_doc).__name__}")
+
     bench_doc = load_json(Path(args.bench_json))
+    if not isinstance(bench_doc, dict):
+        die(f"Benchmark JSON root must be a dict, got {type(bench_doc).__name__}")
+
     bench_by_name = bench_index(bench_doc)
     all_names = list(bench_by_name.keys())
 
     # Extract settings
     settings = budgets_doc.get("settings", {})
+    if not isinstance(settings, dict):
+        die(f"'settings' must be a dict, got {type(settings).__name__}")
+
     raw_max_reg = settings.get("max_regression_percent", None)
     # Note: max_regression_percent <= 0 disables baseline regression checks
     if raw_max_reg is None:
@@ -139,7 +165,12 @@ def main() -> int:
     fail_on_unmatched = bool(settings.get("fail_on_unmatched_patterns", False))  # default tolerant
 
     budget_groups = budgets_doc.get("budgets", {})
+    if not isinstance(budget_groups, dict):
+        die(f"'budgets' must be a dict, got {type(budget_groups).__name__}")
+
     bench_map = budgets_doc.get("benchmark_map", {})
+    if not isinstance(bench_map, dict):
+        die(f"'benchmark_map' must be a dict, got {type(bench_map).__name__}")
 
     # Load baseline if provided
     baseline_by_name = None
@@ -162,6 +193,12 @@ def main() -> int:
         if not patterns:
             warnings.append(f"⚠️  No benchmark_map entry for '{group}' (skipping).")
             continue
+
+        # Normalize patterns: string → [string]
+        if isinstance(patterns, str):
+            patterns = [patterns]
+        if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+            die(f"benchmark_map['{group}'] must be a string or list of strings, got {patterns!r}")
 
         # Match benchmarks to this group
         matched = match_names(all_names, patterns)
@@ -223,10 +260,10 @@ def main() -> int:
         for group, name, val, why in violations:
             print(f"  [{group}] {name}")
             print(f"    {val} -> {why}")
-        return 1
+        return EXIT_VIOLATIONS
 
     print("✅ OK: Performance budgets satisfied.")
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":
