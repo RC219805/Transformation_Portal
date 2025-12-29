@@ -56,6 +56,8 @@ jobs:
       - name: Update dependencies
         env:
           PIP_NO_CACHE_DIR: "1"  # Disable pip caching to save disk space
+          PIP_INDEX_URL: "https://download.pytorch.org/whl/cpu"  # Force CPU-only PyTorch
+          PIP_EXTRA_INDEX_URL: "https://pypi.org/simple"  # Fallback to PyPI for non-torch packages
         run: |
           # Use the new layered requirements system
           if [ -d "requirements" ]; then
