@@ -10,7 +10,8 @@ Usage:
 
 Exit codes:
     0 - All budgets satisfied
-    2 - Budget violations detected (CI should fail)
+    1 - Budget violations detected (CI should fail)
+    2 - Configuration / usage / input error (missing deps, unreadable/malformed files)
 """
 import argparse
 import fnmatch
@@ -21,18 +22,39 @@ from pathlib import Path
 try:
     import yaml
 except ImportError as e:
-    print("ERROR: Missing PyYAML. Install with: pip install pyyaml", file=sys.stderr)
-    raise
+    print(f"ERROR: Missing PyYAML ({e}). Install with: pip install pyyaml", file=sys.stderr)
+    raise SystemExit(2)
 
+def die(msg: str, code: int = 2) -> "NoReturn":
+    print(f"ERROR: {msg}", file=sys.stderr)
+    raise SystemExit(code)
 
 def load_yaml(p: Path) -> dict:
     """Load YAML configuration file."""
-    return yaml.safe_load(p.read_text())
+    try:
+        return yaml.safe_load(p.read_text())
+    except FileNotFoundError:
+        die(f"YAML config file not found: {p}")
+    except PermissionError:
+        die(f"Permission denied reading YAML config file: {p}")
+    except OSError as e:
+        die(f"Failed to read YAML config file {p}: {e}")
+    except yaml.YAMLError as e:
+        die(f"Failed to parse YAML config file {p}: {e}")
 
 
 def load_json(p: Path) -> dict:
     """Load JSON benchmark results."""
-    return json.loads(p.read_text())
+    try:
+        return json.loads(p.read_text())
+    except FileNotFoundError:
+        die(f"JSON file not found: {p}")
+    except PermissionError:
+        die(f"Permission denied reading JSON file: {p}")
+    except OSError as e:
+        die(f"Failed to read JSON file {p}: {e}")
+    except json.JSONDecodeError as e:
+        die(f"Failed to parse JSON file {p}: {e}")
 
 
 def bench_index(bench_json: dict) -> dict:
@@ -103,8 +125,13 @@ def main() -> int:
 
     # Extract settings
     settings = budgets_doc.get("settings", {})
-    max_reg_pct = float(settings.get("max_regression_percent", 0))
-    max_reg = max_reg_pct / 100.0 if max_reg_pct else None
+    raw_max_reg = settings.get("max_regression_percent", None)
+    if raw_max_reg is None:
+        max_reg_pct = 0.0
+        max_reg = None
+    else:
+        max_reg_pct = float(raw_max_reg)
+        max_reg = (max_reg_pct / 100.0) if max_reg_pct > 0 else None
     fail_on_unmatched = bool(settings.get("fail_on_unmatched_patterns", False))  # default tolerant
 
     budget_groups = budgets_doc.get("budgets", {})
@@ -145,7 +172,10 @@ def main() -> int:
         # Validate each matched benchmark
         for name in matched:
             b = bench_by_name[name]
-            t = get_latency_s(b, args.metric)
+            try:
+                t = get_latency_s(b, args.metric)
+            except Exception as e:
+                die(f"Invalid benchmark stats for '{name}' (metric={args.metric}): {e}")
 
             # Check budget threshold
             if t > float(max_latency):
@@ -156,8 +186,15 @@ def main() -> int:
             # Check regression vs baseline (if provided)
             if baseline_by_name and max_reg is not None:
                 if name in baseline_by_name:
-                    t0 = get_latency_s(baseline_by_name[name], args.metric)
-                    if t0 > 0 and t > t0 * (1 + max_reg):
+                    try:
+                        t0 = get_latency_s(baseline_by_name[name], args.metric)
+                    except Exception as e:
+                        warnings.append(f"⚠️  Baseline benchmark '{name}' has invalid stats: {e} (no regression check).")
+                        continue
+                    if t0 <= 0:
+                        warnings.append(f"⚠️  Baseline metric is 0 for '{name}' (no regression check).")
+                        continue
+                    if t > t0 * (1 + max_reg):
                         regression_pct = (t / t0 - 1) * 100
                         violations.append(
                             (
@@ -182,7 +219,7 @@ def main() -> int:
         for group, name, val, why in violations:
             print(f"  [{group}] {name}")
             print(f"    {val} -> {why}")
-        return 2
+        return 1
 
     print("✅ OK: Performance budgets satisfied.")
     return 0
