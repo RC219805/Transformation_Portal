@@ -76,7 +76,8 @@ jobs:
         run: |
           python -m pip install -U safety==3.7.0
           # Use Safety 3.x scan (replaces deprecated check)
-          # Scans requirements/ directory as defined in .safety-policy.yml
+          # Scans requirements/all.txt as defined in .safety-policy.yml
+          # Report-only scan: does not block PR merges (|| true)
           safety scan --output json > safety-report.json || true
 
       - name: Create Pull Request
