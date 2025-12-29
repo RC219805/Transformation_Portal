@@ -35,7 +35,7 @@ except ImportError as e:
     )
     raise SystemExit(EXIT_ERROR)
 
-def die(msg: str, code: int = 2) -> NoReturn:
+def die(msg: str, code: int = EXIT_ERROR) -> NoReturn:
     print(f"ERROR: {msg}", file=sys.stderr)
     raise SystemExit(code)
 
@@ -137,10 +137,13 @@ def get_latency_s(b: dict, metric: str) -> float:
 
 
 def match_names(all_names: list[str], patterns: list[str]) -> list[str]:
-    """Match benchmark names against glob patterns."""
+    """Match benchmark names against glob patterns.
+    
+    Uses fnmatchcase for case-sensitive, platform-deterministic matching
+    (no OS-specific case-folding surprises).
+    """
     matched: list[str] = []
     for pat in patterns:
-        # fnmatchcase is deterministic across platforms (no OS case-folding surprises).
         matched.extend([n for n in all_names if fnmatch.fnmatchcase(n, pat)])
 
     # De-dupe while preserving order.
