@@ -257,7 +257,7 @@ def main() -> int:
                         warnings.append(f"⚠️  Baseline benchmark '{name}' has invalid stats: {e} (no regression check).")
                         continue
                     if t0 <= 0:
-                        warnings.append(f"⚠️  Baseline metric is 0 for '{name}' (no regression check).")
+                        warnings.append(f"⚠️  Baseline metric is non-positive for '{name}' (no regression check).")
                         continue
                     if t > t0 * (1 + max_reg):
                         regression_pct = (t / t0 - 1) * 100
