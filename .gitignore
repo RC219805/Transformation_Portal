@@ -326,3 +326,6 @@ regression_baselines/**/*upscaled16.tif
 
 # Sprint planning archives
 lux_depth_v2/docs/archive_sprint_planning/
+
+# Safety scan reports (uploaded as workflow artifacts)
+safety-report.json
