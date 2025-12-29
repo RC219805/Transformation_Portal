@@ -1,0 +1,23 @@
+# Safety 3.x Policy Configuration
+# Scans requirements/all.txt (canonical lockfile) for security vulnerabilities
+# See: https://docs.safetycli.com/safety-docs/configuration
+
+version: "3.0"
+
+scanning-settings:
+  max-depth: 3
+  exclude:
+    - "**"   # exclude everything by default
+  include-files:
+    - path: "requirements/all.txt"
+      file-type: "requirements.txt"
+
+report:
+  dependency-vulnerabilities:
+    enabled: true
+
+fail-scan-with-exit-code:
+  dependency-vulnerabilities:
+    enabled: true
+    fail-on-any-of:
+      cvss-severity: [critical, high]

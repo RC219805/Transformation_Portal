@@ -74,9 +74,10 @@ jobs:
 
       - name: Check for vulnerabilities
         run: |
-          pip install safety
-          # Check all requirement files for vulnerabilities
-          safety check -r requirements/all.txt --json > safety-report.json || true
+          python -m pip install -U safety==3.7.0
+          # Use Safety 3.x scan (replaces deprecated check)
+          # Scans requirements/ directory as defined in .safety-policy.yml
+          safety scan --output json > safety-report.json || true
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v8
