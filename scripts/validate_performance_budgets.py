@@ -19,7 +19,7 @@ import fnmatch
 import json
 import sys
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 
 EXIT_OK = 0
 EXIT_VIOLATIONS = 1
@@ -39,7 +39,7 @@ def die(msg: str, code: int = EXIT_ERROR) -> NoReturn:
     print(f"ERROR: {msg}", file=sys.stderr)
     raise SystemExit(code)
 
-def load_yaml(p: Path) -> dict:
+def load_yaml(p: Path) -> dict | None:
     """Load YAML configuration file."""
     try:
         return yaml.safe_load(p.read_text())
@@ -53,7 +53,7 @@ def load_yaml(p: Path) -> dict:
         die(f"Failed to parse YAML config file {p}: {e}")
 
 
-def load_json(p: Path) -> dict:
+def load_json(p: Path) -> Any:
     """Load JSON benchmark results."""
     try:
         return json.loads(p.read_text())
@@ -100,8 +100,6 @@ def bench_index(bench_json: dict) -> dict:
     idx: dict[str, dict] = {}
     dropped = 0
     benches = bench_json.get("benchmarks", [])
-    if benches is None:
-        benches = []
     if not isinstance(benches, list):
         die(
             "pytest-benchmark JSON must contain 'benchmarks' as a list.",
@@ -181,7 +179,7 @@ def main() -> int:
 
     # Load configuration and results
     budgets_doc_raw = load_yaml(Path(args.budgets))
-    budgets_doc = _as_mapping(budgets_doc_raw or {}, "top-level YAML document")
+    budgets_doc = _as_mapping(budgets_doc_raw, "top-level YAML document")
     bench_doc_raw = load_json(Path(args.bench_json))
     if not isinstance(bench_doc_raw, dict):
         die(
