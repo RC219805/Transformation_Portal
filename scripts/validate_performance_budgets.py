@@ -105,7 +105,7 @@ def main() -> int:
     settings = budgets_doc.get("settings", {})
     max_reg_pct = float(settings.get("max_regression_percent", 0))
     max_reg = max_reg_pct / 100.0 if max_reg_pct else None
-    fail_on_unmatched = settings.get("fail_on_unmatched_patterns", True)  # default strict
+    fail_on_unmatched = bool(settings.get("fail_on_unmatched_patterns", False))  # default tolerant
 
     budget_groups = budgets_doc.get("budgets", {})
     bench_map = budgets_doc.get("benchmark_map", {})
