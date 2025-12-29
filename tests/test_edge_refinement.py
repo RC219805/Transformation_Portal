@@ -343,9 +343,10 @@ class TestEdgePreservation:
         For stricter variance reduction guarantees, use center-crop metrics to exclude
         edge effects (see Issue #595 for future enhancement).
         """
-        # Create noisy flat depth
+        # Create noisy flat depth with deterministic seed
+        rng = np.random.default_rng(42)  # Fixed seed for reproducibility
         depth = np.ones((100, 100), dtype=np.float32) * 0.5
-        noise = np.random.normal(0, 0.05, depth.shape).astype(np.float32)
+        noise = rng.normal(0, 0.05, depth.shape).astype(np.float32)
         noisy_depth = np.clip(depth + noise, 0.0, 1.0)
         
         # Create uniform RGB (no edges)
@@ -361,9 +362,10 @@ class TestEdgePreservation:
         refined = refiner.refine(noisy_depth, rgb)
         
         # Variance should not significantly increase (≤ 10% allowed)
+        # Compute in float64 to reduce BLAS/dtype sensitivity
         # Allows for platform differences and filter edge effects
-        original_var = np.var(noisy_depth)
-        refined_var = np.var(refined)
+        original_var = np.var(noisy_depth.astype(np.float64))
+        refined_var = np.var(refined.astype(np.float64))
         
         assert refined_var <= original_var * 1.10, (
             f"Variance should not significantly increase (<= 10% allowed), got "
