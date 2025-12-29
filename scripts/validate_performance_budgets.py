@@ -129,6 +129,7 @@ def main() -> int:
     # Extract settings
     settings = budgets_doc.get("settings", {})
     raw_max_reg = settings.get("max_regression_percent", None)
+    # Note: max_regression_percent <= 0 disables baseline regression checks
     if raw_max_reg is None:
         max_reg_pct = 0.0
         max_reg = None
@@ -177,7 +178,7 @@ def main() -> int:
             b = bench_by_name[name]
             try:
                 t = get_latency_s(b, args.metric)
-            except Exception as e:
+            except (KeyError, TypeError, ValueError) as e:
                 die(f"Invalid benchmark stats for '{name}' (metric={args.metric}): {e}")
 
             # Check budget threshold
@@ -191,7 +192,7 @@ def main() -> int:
                 if name in baseline_by_name:
                     try:
                         t0 = get_latency_s(baseline_by_name[name], args.metric)
-                    except Exception as e:
+                    except (KeyError, TypeError, ValueError) as e:
                         warnings.append(f"⚠️  Baseline benchmark '{name}' has invalid stats: {e} (no regression check).")
                         continue
                     if t0 <= 0:
