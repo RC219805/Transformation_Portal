@@ -31,8 +31,8 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         "account": "",
         "local_database_path": null,
         "safety_version": "3.7.0",
-        "timestamp": "2025-12-15 19:33:49",
-        "packages_found": 147,
+        "timestamp": "2025-12-29 21:57:10",
+        "packages_found": 152,
         "vulnerabilities_found": 0,
         "vulnerabilities_ignored": 0,
         "remediations_recommended": 0,
@@ -50,13 +50,13 @@ We highly encourage switching to the new `scan` command which is easier to use, 
             "os_type": "Linux",
             "os_release": "6.11.0-1018-azure",
             "os_description": "Linux-6.11.0-1018-azure-x86_64-with-glibc2.39",
-            "python_version": "3.12.12",
+            "python_version": "3.10.15",
             "safety_command": "check"
         },
         "git": {
             "branch": "main",
             "tag": "",
-            "commit": "045890d76842e163d6bf0ef4a0e7cb7f6280babf",
+            "commit": "36640864841b850d4d121bf2ac59141970b5894a",
             "dirty": "True",
             "origin": "https://github.com/RC219805/Transformation_Portal"
         },
@@ -167,6 +167,51 @@ We highly encourage switching to the new `scan` command which is easier to use, 
                     "marker": null,
                     "name": "autopep8",
                     "specifier": "==2.3.2",
+                    "url": null,
+                    "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
+                }
+            ]
+        },
+        "backports-asyncio-runner": {
+            "name": "backports-asyncio-runner",
+            "version": "1.2.0",
+            "requirements": [
+                {
+                    "raw": "backports-asyncio-runner==1.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "backports-asyncio-runner",
+                    "specifier": "==1.2.0",
+                    "url": null,
+                    "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
+                }
+            ]
+        },
+        "backports-datetime-fromisoformat": {
+            "name": "backports-datetime-fromisoformat",
+            "version": "2.0.3",
+            "requirements": [
+                {
+                    "raw": "backports-datetime-fromisoformat==2.0.3",
+                    "extras": [],
+                    "marker": null,
+                    "name": "backports-datetime-fromisoformat",
+                    "specifier": "==2.0.3",
+                    "url": null,
+                    "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
+                }
+            ]
+        },
+        "backports-tarfile": {
+            "name": "backports-tarfile",
+            "version": "1.2.0",
+            "requirements": [
+                {
+                    "raw": "backports-tarfile==1.2.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "backports-tarfile",
+                    "specifier": "==1.2.0",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -369,16 +414,16 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "coverage": {
             "name": "coverage",
-            "version": "7.13.0",
+            "version": "7.13.1",
             "requirements": [
                 {
-                    "raw": "coverage[toml]==7.13.0",
+                    "raw": "coverage[toml]==7.13.1",
                     "extras": [
                         "toml"
                     ],
                     "marker": null,
                     "name": "coverage",
-                    "specifier": "==7.13.0",
+                    "specifier": "==7.13.1",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -446,14 +491,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "docutils": {
             "name": "docutils",
-            "version": "0.22.3",
+            "version": "0.22.4",
             "requirements": [
                 {
-                    "raw": "docutils==0.22.3",
+                    "raw": "docutils==0.22.4",
                     "extras": [],
                     "marker": null,
                     "name": "docutils",
-                    "specifier": "==0.22.3",
+                    "specifier": "==0.22.4",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -489,16 +534,31 @@ We highly encourage switching to the new `scan` command which is easier to use, 
                 }
             ]
         },
-        "filelock": {
-            "name": "filelock",
-            "version": "3.20.0",
+        "exceptiongroup": {
+            "name": "exceptiongroup",
+            "version": "1.3.1",
             "requirements": [
                 {
-                    "raw": "filelock==3.20.0",
+                    "raw": "exceptiongroup==1.3.1",
+                    "extras": [],
+                    "marker": null,
+                    "name": "exceptiongroup",
+                    "specifier": "==1.3.1",
+                    "url": null,
+                    "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
+                }
+            ]
+        },
+        "filelock": {
+            "name": "filelock",
+            "version": "3.20.1",
+            "requirements": [
+                {
+                    "raw": "filelock==3.20.1",
                     "extras": [],
                     "marker": null,
                     "name": "filelock",
-                    "specifier": "==3.20.0",
+                    "specifier": "==3.20.1",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -611,14 +671,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "hypothesis": {
             "name": "hypothesis",
-            "version": "6.148.7",
+            "version": "6.148.8",
             "requirements": [
                 {
-                    "raw": "hypothesis==6.148.7",
+                    "raw": "hypothesis==6.148.8",
                     "extras": [],
                     "marker": null,
                     "name": "hypothesis",
-                    "specifier": "==6.148.7",
+                    "specifier": "==6.148.8",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -686,14 +746,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "importlib-metadata": {
             "name": "importlib-metadata",
-            "version": "8.7.0",
+            "version": "8.7.1",
             "requirements": [
                 {
-                    "raw": "importlib-metadata==8.7.0",
+                    "raw": "importlib-metadata==8.7.1",
                     "extras": [],
                     "marker": null,
                     "name": "importlib-metadata",
-                    "specifier": "==8.7.0",
+                    "specifier": "==8.7.1",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -746,14 +806,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "jaraco-context": {
             "name": "jaraco-context",
-            "version": "6.0.1",
+            "version": "6.0.2",
             "requirements": [
                 {
-                    "raw": "jaraco-context==6.0.1",
+                    "raw": "jaraco-context==6.0.2",
                     "extras": [],
                     "marker": null,
                     "name": "jaraco-context",
-                    "specifier": "==6.0.1",
+                    "specifier": "==6.0.2",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -761,14 +821,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "jaraco-functools": {
             "name": "jaraco-functools",
-            "version": "4.3.0",
+            "version": "4.4.0",
             "requirements": [
                 {
-                    "raw": "jaraco-functools==4.3.0",
+                    "raw": "jaraco-functools==4.4.0",
                     "extras": [],
                     "marker": null,
                     "name": "jaraco-functools",
-                    "specifier": "==4.3.0",
+                    "specifier": "==4.4.0",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -866,14 +926,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "librt": {
             "name": "librt",
-            "version": "0.7.4",
+            "version": "0.7.5",
             "requirements": [
                 {
-                    "raw": "librt==0.7.4",
+                    "raw": "librt==0.7.5",
                     "extras": [],
                     "marker": null,
                     "name": "librt",
-                    "specifier": "==0.7.4",
+                    "specifier": "==0.7.5",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -911,14 +971,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "marshmallow": {
             "name": "marshmallow",
-            "version": "4.1.1",
+            "version": "4.1.2",
             "requirements": [
                 {
-                    "raw": "marshmallow==4.1.1",
+                    "raw": "marshmallow==4.1.2",
                     "extras": [],
                     "marker": null,
                     "name": "marshmallow",
-                    "specifier": "==4.1.1",
+                    "specifier": "==4.1.2",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -1421,14 +1481,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "psutil": {
             "name": "psutil",
-            "version": "7.1.3",
+            "version": "7.2.1",
             "requirements": [
                 {
-                    "raw": "psutil==7.1.3",
+                    "raw": "psutil==7.2.1",
                     "extras": [],
                     "marker": null,
                     "name": "psutil",
-                    "specifier": "==7.1.3",
+                    "specifier": "==7.2.1",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -1556,14 +1616,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "pypdf": {
             "name": "pypdf",
-            "version": "6.4.2",
+            "version": "6.5.0",
             "requirements": [
                 {
-                    "raw": "pypdf==6.4.2",
+                    "raw": "pypdf==6.5.0",
                     "extras": [],
                     "marker": null,
                     "name": "pypdf",
-                    "specifier": "==6.4.2",
+                    "specifier": "==6.5.0",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -1766,14 +1826,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "ruamel-yaml": {
             "name": "ruamel-yaml",
-            "version": "0.18.16",
+            "version": "0.18.17",
             "requirements": [
                 {
-                    "raw": "ruamel-yaml==0.18.16",
+                    "raw": "ruamel-yaml==0.18.17",
                     "extras": [],
                     "marker": null,
                     "name": "ruamel-yaml",
-                    "specifier": "==0.18.16",
+                    "specifier": "==0.18.17",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -1856,14 +1916,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "scikit-learn": {
             "name": "scikit-learn",
-            "version": "1.8.0",
+            "version": "1.7.2",
             "requirements": [
                 {
-                    "raw": "scikit-learn==1.8.0",
+                    "raw": "scikit-learn==1.7.2",
                     "extras": [],
                     "marker": null,
                     "name": "scikit-learn",
-                    "specifier": "==1.8.0",
+                    "specifier": "==1.7.2",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
@@ -2049,6 +2109,21 @@ We highly encourage switching to the new `scan` command which is easier to use, 
                 }
             ]
         },
+        "tomli": {
+            "name": "tomli",
+            "version": "2.3.0",
+            "requirements": [
+                {
+                    "raw": "tomli==2.3.0",
+                    "extras": [],
+                    "marker": null,
+                    "name": "tomli",
+                    "specifier": "==2.3.0",
+                    "url": null,
+                    "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
+                }
+            ]
+        },
         "tomlkit": {
             "name": "tomlkit",
             "version": "0.13.3",
@@ -2171,14 +2246,14 @@ We highly encourage switching to the new `scan` command which is easier to use, 
         },
         "typer": {
             "name": "typer",
-            "version": "0.20.0",
+            "version": "0.21.0",
             "requirements": [
                 {
-                    "raw": "typer==0.20.0",
+                    "raw": "typer==0.21.0",
                     "extras": [],
                     "marker": null,
                     "name": "typer",
-                    "specifier": "==0.20.0",
+                    "specifier": "==0.21.0",
                     "url": null,
                     "found": "/home/runner/work/Transformation_Portal/Transformation_Portal/requirements/all.txt"
                 }
