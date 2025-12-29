@@ -106,6 +106,8 @@ def bench_index(bench_json: dict) -> dict:
 def get_latency_s(b: dict, metric: str) -> float:
     """Extract latency in seconds from benchmark stats (rejects NaN/inf)."""
     stats = b.get("stats", {})
+    if not isinstance(stats, dict):
+        raise TypeError("benchmark 'stats' must be a mapping")
     if metric not in stats:
         # fallback: mean if median missing, etc.
         for k in ("median", "mean", "min", "max"):
@@ -241,9 +243,10 @@ def main() -> int:
 
             # Check budget threshold
             if t > max_latency_f:
-                violations.append(
-                    (group, name, f"{t:.6f}s", f"exceeds max_latency_s={max_latency_f}s")
-                )
+                msg = f"exceeds max_latency_s={max_latency_f}s"
+                if max_latency != max_latency_f:
+                    msg += f" (configured: {max_latency!r})"
+                violations.append((group, name, f"{t:.6f}s", msg))
 
             # Check regression vs baseline (if provided)
             if baseline_by_name and max_reg is not None:
