@@ -16,6 +16,7 @@ Exit codes:
 import argparse
 import fnmatch
 import json
+import math
 import sys
 from pathlib import Path
 from typing import NoReturn
@@ -35,6 +36,17 @@ except ImportError as e:
 def die(msg: str, code: int = EXIT_ERROR) -> NoReturn:
     print(f"ERROR: {msg}", file=sys.stderr)
     raise SystemExit(code)
+
+
+def _to_finite_float(x: object, ctx: str) -> float:
+    """Convert value to finite float, rejecting NaN/inf."""
+    try:
+        v = float(x)
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"{ctx} must be numeric, got {x!r}") from e
+    if not math.isfinite(v):
+        raise ValueError(f"{ctx} must be finite, got {v!r}")
+    return v
 
 
 def load_yaml(p: Path) -> dict:
@@ -92,15 +104,15 @@ def bench_index(bench_json: dict) -> dict:
 
 
 def get_latency_s(b: dict, metric: str) -> float:
-    """Extract latency in seconds from benchmark stats."""
+    """Extract latency in seconds from benchmark stats (rejects NaN/inf)."""
     stats = b.get("stats", {})
     if metric not in stats:
         # fallback: mean if median missing, etc.
         for k in ("median", "mean", "min", "max"):
             if k in stats:
-                return float(stats[k])
+                return _to_finite_float(stats[k], f"benchmark stats[{k}]")
         raise KeyError(f"No stats metric found in benchmark: {b.get('name')}")
-    return float(stats[metric])
+    return _to_finite_float(stats[metric], f"benchmark stats[{metric}]")
 
 
 def match_names(all_names: list[str], patterns: list[str]) -> list[str]:
@@ -149,6 +161,9 @@ def main() -> int:
     bench_by_name = bench_index(bench_doc)
     all_names = list(bench_by_name.keys())
 
+    if not all_names:
+        die("No benchmarks found in pytest-benchmark JSON output.", EXIT_ERROR)
+
     # Extract settings
     settings = budgets_doc.get("settings", {})
     if not isinstance(settings, dict):
@@ -160,7 +175,7 @@ def main() -> int:
         max_reg_pct = 0.0
         max_reg = None
     else:
-        max_reg_pct = float(raw_max_reg)
+        max_reg_pct = _to_finite_float(raw_max_reg, "max_regression_percent")
         max_reg = (max_reg_pct / 100.0) if max_reg_pct > 0 else None
     fail_on_unmatched = bool(settings.get("fail_on_unmatched_patterns", False))  # default tolerant
 
@@ -176,6 +191,8 @@ def main() -> int:
     baseline_by_name = None
     if args.baseline_json:
         base_doc = load_json(Path(args.baseline_json))
+        if not isinstance(base_doc, dict):
+            die(f"Baseline benchmark JSON root must be a dict, got {type(base_doc).__name__}")
         baseline_by_name = bench_index(base_doc)
 
     violations = []
@@ -183,10 +200,14 @@ def main() -> int:
 
     # Validate each budget group
     for group, cfg in budget_groups.items():
+        if not isinstance(cfg, dict):
+            die(f"Budget entry [{group}] must be a dict, got {type(cfg).__name__}")
         # Only validate groups that have max_latency_s (skip throughput section etc.)
         max_latency = cfg.get("max_latency_s", None)
         if max_latency is None:
             continue
+
+        max_latency_f = _to_finite_float(max_latency, f"[{group}] max_latency_s")
 
         # Get benchmark patterns for this group
         patterns = bench_map.get(group)
@@ -219,9 +240,9 @@ def main() -> int:
                 die(f"Invalid benchmark stats for '{name}' (metric={args.metric}): {e}")
 
             # Check budget threshold
-            if t > float(max_latency):
+            if t > max_latency_f:
                 violations.append(
-                    (group, name, f"{t:.6f}s", f"exceeds max_latency_s={max_latency}s")
+                    (group, name, f"{t:.6f}s", f"exceeds max_latency_s={max_latency_f}s")
                 )
 
             # Check regression vs baseline (if provided)
@@ -252,7 +273,7 @@ def main() -> int:
 
     # Print warnings
     for w in warnings:
-        print(w)
+        print(w, file=sys.stderr)
 
     # Report violations
     if violations:
