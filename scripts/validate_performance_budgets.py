@@ -177,7 +177,10 @@ def main() -> int:
         max_reg_pct = 0.0
         max_reg = None
     else:
-        max_reg_pct = _to_finite_float(raw_max_reg, "max_regression_percent")
+        try:
+            max_reg_pct = _to_finite_float(raw_max_reg, "max_regression_percent")
+        except ValueError as e:
+            die(str(e), EXIT_ERROR)
         max_reg = (max_reg_pct / 100.0) if max_reg_pct > 0 else None
     fail_on_unmatched = bool(settings.get("fail_on_unmatched_patterns", False))  # default tolerant
 
@@ -209,7 +212,10 @@ def main() -> int:
         if max_latency is None:
             continue
 
-        max_latency_f = _to_finite_float(max_latency, f"[{group}] max_latency_s")
+        try:
+            max_latency_f = _to_finite_float(max_latency, f"[{group}] max_latency_s")
+        except ValueError as e:
+            die(str(e), EXIT_ERROR)
 
         # Get benchmark patterns for this group
         patterns = bench_map.get(group)
