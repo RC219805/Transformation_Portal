@@ -200,9 +200,9 @@ The `constraints.txt` file is used to exclude packages with known security vulne
 
 - **ML dependencies**: Due to disk space constraints, `ml.txt` may need to be regenerated in environments with more resources. The CI environment should have sufficient space for PyTorch and related packages.
 
-- **GPU vs CPU**: The current `ml.txt` uses CPU-only PyTorch for compatibility. For GPU environments, torch should be installed from the CUDA index before installing other ML dependencies.
+- **GPU vs CPU**: On Linux, CUDA-enabled torch should be installed via the appropriate PyTorch index before installing other ML deps. On macOS, torch installs the macOS wheel (no CUDA).
 
-- **Python version**: All requirements are compiled with Python 3.12 but should work with Python 3.10+ as specified in `pyproject.toml`.
+- **Python version**: Requirements are compiled with the minimum supported Python (3.10.x) to ensure the lockfiles remain valid for Python 3.10+. CI verifies compatibility across Python 3.10–3.12.
 
 ## 🆘 Troubleshooting
 
