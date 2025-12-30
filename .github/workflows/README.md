@@ -9,8 +9,8 @@ This directory contains GitHub Actions workflows for CI/CD, quality assurance, a
 The repository includes multiple CI/CD and automation workflows to ensure code quality, security, and productivity.
 
 ### 1. `ci-consolidated.yml` ⭐ (Primary CI/CD)
-**Purpose:** Unified CI/CD pipeline with intelligent job orchestration.  
-**Triggers:** `push` to `main`/`develop`, `pull_request` to `main`, manual dispatch.  
+**Purpose:** Unified CI/CD pipeline with intelligent job orchestration.
+**Triggers:** `push` to `main`/`develop`, `pull_request` to `main`, manual dispatch.
 **Features:**
 - **40-60% faster** than previous fragmented workflows
 - Intelligent change detection for targeted test runs
@@ -52,10 +52,10 @@ gh workflow run ci-consolidated.yml -f run_benchmark_regression=true
 **Note:** This workflow replaces the deprecated `build.yml` and `python-app.yml`.
 
 ### 2. `submit-pypi.yml`
-**Purpose:** Package building and distribution to PyPI and Test PyPI.  
+**Purpose:** Package building and distribution to PyPI and Test PyPI.
 **Triggers:**
 - Version tags (e.g., `v0.1.0`) for production PyPI.
-- Manual workflow dispatch for Test PyPI uploads.  
+- Manual workflow dispatch for Test PyPI uploads.
 
 **Features:**
 - Builds both wheel and source distributions.
@@ -72,8 +72,8 @@ gh workflow run ci-consolidated.yml -f run_benchmark_regression=true
 - Requires `PYPI_API_TOKEN` and `TEST_PYPI_API_TOKEN` in repository secrets
 
 ### 3. `quality-gate.yml`
-**Purpose:** Pre-commit quality checks and auto-formatting.  
-**Triggers:** `push` and `pull_request` on `main`.  
+**Purpose:** Pre-commit quality checks and auto-formatting.
+**Triggers:** `push` and `pull_request` on `main`.
 **Features:**
 - Auto-fixes formatting issues with `autopep8`
 - Runs flake8 for critical errors
@@ -81,20 +81,20 @@ gh workflow run ci-consolidated.yml -f run_benchmark_regression=true
 - Enforces markdown file count limits in root directory
 
 ### 4. `codeql.yml`
-**Purpose:** Security scanning using GitHub CodeQL.  
+**Purpose:** Security scanning using GitHub CodeQL.
 **Features:**
-- Automated analysis for security vulnerabilities.  
-- Runs on pushes to main and pull requests.  
+- Automated analysis for security vulnerabilities.
+- Runs on pushes to main and pull requests.
 
 ### 5. `summary.yml` (AI Issue and PR Review Summarization)
-**Purpose:** Automatically generates a summary of newly opened GitHub issues, pull requests, and pull request reviews.  
+**Purpose:** Automatically generates a summary of newly opened GitHub issues, pull requests, and pull request reviews.
 **Status:** Fully functional with OpenAI API integration.
 
 **Features:**
-- Triggered on `issues.opened`, `issues.edited`, `pull_request`, `pull_request_review`, and `issue_comment`.  
-- Uses OpenAI `gpt-4o-mini` model to summarize issue/PR/review content.  
-- Posts the summary as a comment on the issue or pull request.  
-- Includes graceful fallback if API call fails.  
+- Triggered on `issues.opened`, `issues.edited`, `pull_request`, `pull_request_review`, and `issue_comment`.
+- Uses OpenAI `gpt-4o-mini` model to summarize issue/PR/review content.
+- Posts the summary as a comment on the issue or pull request.
+- Includes graceful fallback if API call fails.
 - Requires `OPENAI_API_KEY` in repository secrets.
 
 ### 6. Additional Workflows
@@ -140,11 +140,11 @@ This configuration ensures that Copilot agents can access necessary external res
 
 Unit tests are provided for:
 
-- `_kmeans` – clustering reproducibility.  
-- `_cluster_stats` – cluster statistics correctness.  
-- `assign_materials` – assignment logic.  
-- `_soft_mask` – Gaussian blending of masks.  
-- `enhance_aerial` – end-to-end test using small sample images.  
+- `_kmeans` – clustering reproducibility.
+- `_cluster_stats` – cluster statistics correctness.
+- `assign_materials` – assignment logic.
+- `_soft_mask` – Gaussian blending of masks.
+- `enhance_aerial` – end-to-end test using small sample images.
 
 Run tests locally:
 

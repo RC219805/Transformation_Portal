@@ -28,7 +28,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 from PIL import Image
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 
 def get_device() -> torch.device:
@@ -45,11 +45,12 @@ device = get_device()
 
 class QualityDomain(Enum):
     """Quality measurement domains"""
-    PERCEPTUAL = "perceptual"           # LPIPS-based similarity
-    NATURALNESS = "naturalness"          # No-reference quality
-    MATERIAL_FIDELITY = "material"       # Material-specific accuracy
-    STRUCTURAL = "structural"            # SSIM-based structure
-    COMPOSITE = "composite"              # Weighted combination
+
+    PERCEPTUAL = "perceptual"  # LPIPS-based similarity
+    NATURALNESS = "naturalness"  # No-reference quality
+    MATERIAL_FIDELITY = "material"  # Material-specific accuracy
+    STRUCTURAL = "structural"  # SSIM-based structure
+    COMPOSITE = "composite"  # Weighted combination
 
 
 @dataclass
@@ -57,26 +58,28 @@ class QualityTargets:
     """Target thresholds for UHNW luxury real estate visualization"""
 
     # Perceptual targets (lower LPIPS = better, inverted to percentile)
-    perceptual_percentile_target: float = 95.0    # 95th percentile
+    perceptual_percentile_target: float = 95.0  # 95th percentile
 
     # Material fidelity targets
-    material_fidelity_target: float = 0.98        # 98% fidelity
+    material_fidelity_target: float = 0.98  # 98% fidelity
 
     # Per-material thresholds (SSIM-based)
-    material_thresholds: Dict[str, float] = field(default_factory=lambda: {
-        'quartzite': 0.96,
-        'oak': 0.95,
-        'metal': 0.97,
-        'glass': 0.94,
-        'stucco': 0.95,
-        'water': 0.92,
-        'vegetation': 0.90,
-        'sky': 0.88
-    })
+    material_thresholds: Dict[str, float] = field(
+        default_factory=lambda: {
+            "quartzite": 0.96,
+            "oak": 0.95,
+            "metal": 0.97,
+            "glass": 0.94,
+            "stucco": 0.95,
+            "water": 0.92,
+            "vegetation": 0.90,
+            "sky": 0.88,
+        }
+    )
 
     # Naturalness thresholds
-    niqe_target: float = 3.5              # Lower is better, typical good: 2-4
-    brisque_target: float = 25.0          # Lower is better, typical good: 20-40
+    niqe_target: float = 3.5  # Lower is better, typical good: 2-4
+    brisque_target: float = 25.0  # Lower is better, typical good: 20-40
 
     # Structural thresholds
     ssim_target: float = 0.92
@@ -88,21 +91,21 @@ class QualityReport:
     """Comprehensive quality assessment report"""
 
     # Overall scores
-    composite_score: float = 0.0          # 0-100+ scale (can exceed 100)
-    percentile_rank: float = 0.0          # Against benchmark dataset
+    composite_score: float = 0.0  # 0-100+ scale (can exceed 100)
+    percentile_rank: float = 0.0  # Against benchmark dataset
 
     # Perceptual metrics
-    lpips_score: float = 0.0              # Lower is better (0-1)
+    lpips_score: float = 0.0  # Lower is better (0-1)
     lpips_percentile: float = 0.0
 
     # No-reference metrics
-    niqe_score: float = 0.0               # Lower is better
-    brisque_score: float = 0.0            # Lower is better
-    naturalness_score: float = 0.0        # Normalized 0-100
+    niqe_score: float = 0.0  # Lower is better
+    brisque_score: float = 0.0  # Lower is better
+    naturalness_score: float = 0.0  # Normalized 0-100
 
     # Structural metrics
-    ssim_score: float = 0.0               # 0-1, higher is better
-    ms_ssim_score: float = 0.0            # 0-1, higher is better
+    ssim_score: float = 0.0  # 0-1, higher is better
+    ms_ssim_score: float = 0.0  # 0-1, higher is better
 
     # Material-specific fidelity
     material_fidelity: Dict[str, float] = field(default_factory=dict)
@@ -119,29 +122,23 @@ class QualityReport:
     def to_dict(self) -> Dict[str, Any]:
         """Convert report to dictionary"""
         return {
-            'composite_score': round(self.composite_score, 2),
-            'percentile_rank': round(self.percentile_rank, 1),
-            'lpips': {
-                'score': round(self.lpips_score, 4),
-                'percentile': round(self.lpips_percentile, 1)
+            "composite_score": round(self.composite_score, 2),
+            "percentile_rank": round(self.percentile_rank, 1),
+            "lpips": {"score": round(self.lpips_score, 4), "percentile": round(self.lpips_percentile, 1)},
+            "naturalness": {
+                "niqe": round(self.niqe_score, 2),
+                "brisque": round(self.brisque_score, 2),
+                "normalized": round(self.naturalness_score, 1),
             },
-            'naturalness': {
-                'niqe': round(self.niqe_score, 2),
-                'brisque': round(self.brisque_score, 2),
-                'normalized': round(self.naturalness_score, 1)
+            "structural": {"ssim": round(self.ssim_score, 4), "ms_ssim": round(self.ms_ssim_score, 4)},
+            "material_fidelity": {k: round(v, 3) for k, v in self.material_fidelity.items()},
+            "overall_material_fidelity": round(self.overall_material_fidelity, 3),
+            "targets_met": self.targets_met,
+            "diagnostics": {
+                "device": self.device,
+                "processing_time_ms": round(self.processing_time_ms, 1),
+                "warnings": self.warnings,
             },
-            'structural': {
-                'ssim': round(self.ssim_score, 4),
-                'ms_ssim': round(self.ms_ssim_score, 4)
-            },
-            'material_fidelity': {k: round(v, 3) for k, v in self.material_fidelity.items()},
-            'overall_material_fidelity': round(self.overall_material_fidelity, 3),
-            'targets_met': self.targets_met,
-            'diagnostics': {
-                'device': self.device,
-                'processing_time_ms': round(self.processing_time_ms, 1),
-                'warnings': self.warnings
-            }
         }
 
 
@@ -159,29 +156,33 @@ class VGGPerceptualNetwork(nn.Module):
 
         try:
             from torchvision.models import vgg16, VGG16_Weights
+
             vgg = vgg16(weights=VGG16_Weights.IMAGENET1K_V1).features
         except (ImportError, TypeError):
             from torchvision.models import vgg16
+
             vgg = vgg16(pretrained=True).features
 
         # Extract feature blocks
-        self.slice1 = nn.Sequential(*list(vgg.children())[:4])   # relu1_2
+        self.slice1 = nn.Sequential(*list(vgg.children())[:4])  # relu1_2
         self.slice2 = nn.Sequential(*list(vgg.children())[4:9])  # relu2_2
         self.slice3 = nn.Sequential(*list(vgg.children())[9:16])  # relu3_3
         self.slice4 = nn.Sequential(*list(vgg.children())[16:23])  # relu4_3
         self.slice5 = nn.Sequential(*list(vgg.children())[23:30])  # relu5_3
 
         # Learned LPIPS-style weights (approximated from LPIPS paper)
-        self.register_buffer('weights', torch.tensor([0.0448, 0.2856, 0.3001, 0.2363, 0.1333]))
+        self.register_buffer("weights", torch.tensor([0.0448, 0.2856, 0.3001, 0.2363, 0.1333]))
 
         # Channel reduction for spatial comparison
-        self.channel_weights = nn.ModuleList([
-            nn.Conv2d(64, 1, 1, bias=False),
-            nn.Conv2d(128, 1, 1, bias=False),
-            nn.Conv2d(256, 1, 1, bias=False),
-            nn.Conv2d(512, 1, 1, bias=False),
-            nn.Conv2d(512, 1, 1, bias=False),
-        ])
+        self.channel_weights = nn.ModuleList(
+            [
+                nn.Conv2d(64, 1, 1, bias=False),
+                nn.Conv2d(128, 1, 1, bias=False),
+                nn.Conv2d(256, 1, 1, bias=False),
+                nn.Conv2d(512, 1, 1, bias=False),
+                nn.Conv2d(512, 1, 1, bias=False),
+            ]
+        )
 
         # Initialize channel weights uniformly
         for cw in self.channel_weights:
@@ -192,8 +193,8 @@ class VGGPerceptualNetwork(nn.Module):
                 param.requires_grad = False
 
         # ImageNet normalization
-        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+        self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
         """Extract multi-scale features"""
@@ -241,7 +242,7 @@ class MaterialSegmenter(nn.Module):
     Uses a simple encoder-decoder architecture optimized for inference speed.
     """
 
-    MATERIAL_CLASSES = ['quartzite', 'oak', 'metal', 'glass', 'stucco', 'water', 'vegetation', 'sky']
+    MATERIAL_CLASSES = ["quartzite", "oak", "metal", "glass", "stucco", "water", "vegetation", "sky"]
 
     def __init__(self):
         super().__init__()
@@ -269,16 +270,21 @@ class MaterialSegmenter(nn.Module):
         )
 
         # Color-based material heuristics for untrained inference
-        self.register_buffer('material_colors', torch.tensor([
-            [0.85, 0.80, 0.75],  # quartzite (warm gray)
-            [0.55, 0.40, 0.25],  # oak (brown)
-            [0.50, 0.50, 0.55],  # metal (cool gray)
-            [0.70, 0.80, 0.90],  # glass (blue-tinted)
-            [0.92, 0.90, 0.85],  # stucco (warm white)
-            [0.30, 0.50, 0.70],  # water (blue)
-            [0.25, 0.45, 0.20],  # vegetation (green)
-            [0.60, 0.75, 0.95],  # sky (light blue)
-        ]).T)  # Shape: [3, 8]
+        self.register_buffer(
+            "material_colors",
+            torch.tensor(
+                [
+                    [0.85, 0.80, 0.75],  # quartzite (warm gray)
+                    [0.55, 0.40, 0.25],  # oak (brown)
+                    [0.50, 0.50, 0.55],  # metal (cool gray)
+                    [0.70, 0.80, 0.90],  # glass (blue-tinted)
+                    [0.92, 0.90, 0.85],  # stucco (warm white)
+                    [0.30, 0.50, 0.70],  # water (blue)
+                    [0.25, 0.45, 0.20],  # vegetation (green)
+                    [0.60, 0.75, 0.95],  # sky (light blue)
+                ]
+            ).T,
+        )  # Shape: [3, 8]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Segment image into material classes"""
@@ -307,7 +313,7 @@ class MaterialSegmenter(nn.Module):
         masks = {}
 
         for i, name in enumerate(self.MATERIAL_CLASSES):
-            mask = (probs[:, i:i + 1] > threshold).float()
+            mask = (probs[:, i : i + 1] > threshold).float()
             if mask.sum() > 0:
                 masks[name] = mask
 
@@ -391,8 +397,8 @@ class NoReferenceQualityEstimator(nn.Module):
         padding = kernel_size // 2
 
         local_mean = F.avg_pool2d(gray, kernel_size, stride=1, padding=padding)
-        local_sq_mean = F.avg_pool2d(gray ** 2, kernel_size, stride=1, padding=padding)
-        local_var = local_sq_mean - local_mean ** 2
+        local_sq_mean = F.avg_pool2d(gray**2, kernel_size, stride=1, padding=padding)
+        local_var = local_sq_mean - local_mean**2
         local_std = torch.sqrt(torch.clamp(local_var, min=1e-6))
 
         # MSCN (Mean Subtracted Contrast Normalized) coefficients
@@ -400,10 +406,10 @@ class NoReferenceQualityEstimator(nn.Module):
 
         # Compute statistics
         return {
-            'mscn_mean': mscn.mean().item(),
-            'mscn_var': mscn.var().item(),
-            'local_contrast_mean': local_std.mean().item(),
-            'local_contrast_var': local_std.var().item(),
+            "mscn_mean": mscn.mean().item(),
+            "mscn_var": mscn.var().item(),
+            "local_contrast_mean": local_std.mean().item(),
+            "local_contrast_var": local_std.var().item(),
         }
 
 
@@ -416,10 +422,7 @@ class PerceptualQualityAssessor:
     """
 
     def __init__(
-        self,
-        targets: Optional[QualityTargets] = None,
-        benchmark_path: Optional[str] = None,
-        use_lpips_package: bool = True
+        self, targets: Optional[QualityTargets] = None, benchmark_path: Optional[str] = None, use_lpips_package: bool = True
     ):
         """
         Initialize quality assessor
@@ -446,7 +449,8 @@ class PerceptualQualityAssessor:
         if use_lpips_package:
             try:
                 import lpips
-                self.lpips_fn = lpips.LPIPS(net='vgg').to(device)
+
+                self.lpips_fn = lpips.LPIPS(net="vgg").to(device)
                 self.lpips_fn.eval()
                 print("✓ Using official LPIPS package")
             except ImportError:
@@ -466,51 +470,53 @@ class PerceptualQualityAssessor:
         self.nr_estimator.eval()
 
         # Image transform
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-        ])
+        self.transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+            ]
+        )
 
     def _load_benchmark_stats(self) -> Optional[Dict]:
         """Load benchmark statistics for percentile ranking"""
         if self.benchmark_path is None:
             # Default statistics from luxury real estate imagery analysis
             return {
-                'lpips_percentiles': {
-                    'p5': 0.02,
-                    'p10': 0.035,
-                    'p25': 0.06,
-                    'p50': 0.10,
-                    'p75': 0.15,
-                    'p90': 0.22,
-                    'p95': 0.28,
-                    'p99': 0.40
+                "lpips_percentiles": {
+                    "p5": 0.02,
+                    "p10": 0.035,
+                    "p25": 0.06,
+                    "p50": 0.10,
+                    "p75": 0.15,
+                    "p90": 0.22,
+                    "p95": 0.28,
+                    "p99": 0.40,
                 },
-                'niqe_percentiles': {
-                    'p5': 2.0,
-                    'p10': 2.5,
-                    'p25': 3.0,
-                    'p50': 3.8,
-                    'p75': 4.5,
-                    'p90': 5.5,
-                    'p95': 6.5,
-                    'p99': 8.0
+                "niqe_percentiles": {
+                    "p5": 2.0,
+                    "p10": 2.5,
+                    "p25": 3.0,
+                    "p50": 3.8,
+                    "p75": 4.5,
+                    "p90": 5.5,
+                    "p95": 6.5,
+                    "p99": 8.0,
                 },
-                'ssim_percentiles': {
-                    'p5': 0.75,
-                    'p10': 0.80,
-                    'p25': 0.85,
-                    'p50': 0.90,
-                    'p75': 0.93,
-                    'p90': 0.95,
-                    'p95': 0.97,
-                    'p99': 0.99
-                }
+                "ssim_percentiles": {
+                    "p5": 0.75,
+                    "p10": 0.80,
+                    "p25": 0.85,
+                    "p50": 0.90,
+                    "p75": 0.93,
+                    "p90": 0.95,
+                    "p95": 0.97,
+                    "p99": 0.99,
+                },
             }
 
         # Load from file
         benchmark_file = Path(self.benchmark_path) / "benchmark_stats.json"
         if benchmark_file.exists():
-            with open(benchmark_file, 'r') as f:
+            with open(benchmark_file, "r") as f:
                 return json.load(f)
 
         return None
@@ -519,7 +525,7 @@ class PerceptualQualityAssessor:
         self,
         enhanced: Union[str, Image.Image, torch.Tensor],
         reference: Optional[Union[str, Image.Image, torch.Tensor]] = None,
-        compute_material_fidelity: bool = True
+        compute_material_fidelity: bool = True,
     ) -> QualityReport:
         """
         Perform comprehensive quality assessment
@@ -533,6 +539,7 @@ class PerceptualQualityAssessor:
             QualityReport with all metrics and target achievement status
         """
         import time
+
         start_time = time.time()
 
         report = QualityReport()
@@ -547,9 +554,7 @@ class PerceptualQualityAssessor:
             # 1. LPIPS (if reference available)
             if reference_tensor is not None:
                 report.lpips_score = self._compute_lpips(enhanced_tensor, reference_tensor)
-                report.lpips_percentile = self._score_to_percentile(
-                    report.lpips_score, 'lpips', lower_is_better=True
-                )
+                report.lpips_percentile = self._score_to_percentile(report.lpips_score, "lpips", lower_is_better=True)
 
             # 2. No-reference quality
             niqe, brisque = self.nr_estimator(enhanced_tensor)
@@ -564,9 +569,7 @@ class PerceptualQualityAssessor:
 
             # 4. Material-specific fidelity
             if compute_material_fidelity and reference_tensor is not None:
-                report.material_fidelity = self._compute_material_fidelity(
-                    enhanced_tensor, reference_tensor
-                )
+                report.material_fidelity = self._compute_material_fidelity(enhanced_tensor, reference_tensor)
                 if report.material_fidelity:
                     report.overall_material_fidelity = np.mean(list(report.material_fidelity.values()))
 
@@ -594,7 +597,7 @@ class PerceptualQualityAssessor:
             return img.to(device)
 
         if isinstance(img, str):
-            img = Image.open(img).convert('RGB')
+            img = Image.open(img).convert("RGB")
 
         tensor = self.transform(img).unsqueeze(0).to(device)
         return tensor
@@ -603,7 +606,7 @@ class PerceptualQualityAssessor:
         """Compute LPIPS perceptual distance"""
         # Resize if needed (LPIPS expects similar spatial sizes)
         if x.shape[-2:] != y.shape[-2:]:
-            y = F.interpolate(y, size=x.shape[-2:], mode='bilinear', align_corners=False)
+            y = F.interpolate(y, size=x.shape[-2:], mode="bilinear", align_corners=False)
 
         if self.lpips_fn is not None:
             # Use official LPIPS
@@ -618,15 +621,15 @@ class PerceptualQualityAssessor:
         """Compute Structural Similarity Index"""
         # Ensure same size
         if x.shape != y.shape:
-            y = F.interpolate(y, size=x.shape[-2:], mode='bilinear', align_corners=False)
+            y = F.interpolate(y, size=x.shape[-2:], mode="bilinear", align_corners=False)
 
-        c1 = 0.01 ** 2
-        c2 = 0.03 ** 2
+        c1 = 0.01**2
+        c2 = 0.03**2
 
         # Create Gaussian window
         sigma = 1.5
         coords = torch.arange(window_size, dtype=torch.float32, device=device) - window_size // 2
-        g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
+        g = torch.exp(-(coords**2) / (2 * sigma**2))
         g = g / g.sum()
         window = g.unsqueeze(0) * g.unsqueeze(1)
         window = window.unsqueeze(0).unsqueeze(0).repeat(3, 1, 1, 1)
@@ -635,16 +638,15 @@ class PerceptualQualityAssessor:
         mu_x = F.conv2d(x, window, padding=window_size // 2, groups=3)
         mu_y = F.conv2d(y, window, padding=window_size // 2, groups=3)
 
-        mu_x_sq = mu_x ** 2
-        mu_y_sq = mu_y ** 2
+        mu_x_sq = mu_x**2
+        mu_y_sq = mu_y**2
         mu_xy = mu_x * mu_y
 
-        sigma_x_sq = F.conv2d(x ** 2, window, padding=window_size // 2, groups=3) - mu_x_sq
-        sigma_y_sq = F.conv2d(y ** 2, window, padding=window_size // 2, groups=3) - mu_y_sq
+        sigma_x_sq = F.conv2d(x**2, window, padding=window_size // 2, groups=3) - mu_x_sq
+        sigma_y_sq = F.conv2d(y**2, window, padding=window_size // 2, groups=3) - mu_y_sq
         sigma_xy = F.conv2d(x * y, window, padding=window_size // 2, groups=3) - mu_xy
 
-        ssim_map = ((2 * mu_xy + c1) * (2 * sigma_xy + c2)) / \
-                   ((mu_x_sq + mu_y_sq + c1) * (sigma_x_sq + sigma_y_sq + c2))
+        ssim_map = ((2 * mu_xy + c1) * (2 * sigma_xy + c2)) / ((mu_x_sq + mu_y_sq + c1) * (sigma_x_sq + sigma_y_sq + c2))
 
         return ssim_map.mean().item()
 
@@ -666,11 +668,7 @@ class PerceptualQualityAssessor:
 
         return ms_ssim
 
-    def _compute_material_fidelity(
-        self,
-        enhanced: torch.Tensor,
-        reference: torch.Tensor
-    ) -> Dict[str, float]:
+    def _compute_material_fidelity(self, enhanced: torch.Tensor, reference: torch.Tensor) -> Dict[str, float]:
         """Compute per-material fidelity scores"""
         fidelity = {}
 
@@ -710,7 +708,7 @@ class PerceptualQualityAssessor:
         if self.benchmark_stats is None:
             return 50.0
 
-        percentiles_key = f'{metric}_percentiles'
+        percentiles_key = f"{metric}_percentiles"
         if percentiles_key not in self.benchmark_stats:
             return 50.0
 
@@ -718,7 +716,7 @@ class PerceptualQualityAssessor:
 
         # Interpolate percentile
         p_values = [5, 10, 25, 50, 75, 90, 95, 99]
-        p_scores = [percentiles[f'p{p}'] for p in p_values]
+        p_scores = [percentiles[f"p{p}"] for p in p_values]
 
         if lower_is_better:
             # Invert: lower score = higher percentile
@@ -787,11 +785,11 @@ class PerceptualQualityAssessor:
             rankings.append(report.lpips_percentile)
 
         if report.ssim_score > 0:
-            ssim_pct = self._score_to_percentile(report.ssim_score, 'ssim', lower_is_better=False)
+            ssim_pct = self._score_to_percentile(report.ssim_score, "ssim", lower_is_better=False)
             rankings.append(ssim_pct)
 
         if report.niqe_score > 0:
-            niqe_pct = self._score_to_percentile(report.niqe_score, 'niqe', lower_is_better=True)
+            niqe_pct = self._score_to_percentile(report.niqe_score, "niqe", lower_is_better=True)
             rankings.append(niqe_pct)
 
         if not rankings:
@@ -805,30 +803,26 @@ class PerceptualQualityAssessor:
         targets_met = {}
 
         # Perceptual percentile target
-        targets_met['perceptual_95th'] = report.lpips_percentile >= self.targets.perceptual_percentile_target
+        targets_met["perceptual_95th"] = report.lpips_percentile >= self.targets.perceptual_percentile_target
 
         # Material fidelity target
-        targets_met['material_98pct'] = report.overall_material_fidelity >= self.targets.material_fidelity_target
+        targets_met["material_98pct"] = report.overall_material_fidelity >= self.targets.material_fidelity_target
 
         # SSIM target
-        targets_met['ssim'] = report.ssim_score >= self.targets.ssim_target
+        targets_met["ssim"] = report.ssim_score >= self.targets.ssim_target
 
         # NIQE target
-        targets_met['niqe'] = report.niqe_score <= self.targets.niqe_target
+        targets_met["niqe"] = report.niqe_score <= self.targets.niqe_target
 
         # Per-material targets
         for material, threshold in self.targets.material_thresholds.items():
             if material in report.material_fidelity:
-                targets_met[f'material_{material}'] = report.material_fidelity[material] >= threshold
+                targets_met[f"material_{material}"] = report.material_fidelity[material] >= threshold
 
         return targets_met
 
 
-def assess_quality(
-    enhanced_path: str,
-    reference_path: Optional[str] = None,
-    verbose: bool = True
-) -> QualityReport:
+def assess_quality(enhanced_path: str, reference_path: Optional[str] = None, verbose: bool = True) -> QualityReport:
     """
     Convenience function for quality assessment
 
@@ -844,9 +838,9 @@ def assess_quality(
     report = assessor.assess(enhanced_path, reference_path)
 
     if verbose:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("PERCEPTUAL QUALITY ASSESSMENT")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         print(f"Composite Score: {report.composite_score:.1f}/100")
         print(f"Percentile Rank: {report.percentile_rank:.1f}%")
@@ -895,6 +889,6 @@ if __name__ == "__main__":
     report = assess_quality(args.enhanced, args.reference, verbose=not args.quiet)
 
     if args.output:
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(report.to_dict(), f, indent=2)
         print(f"\nReport saved: {args.output}")

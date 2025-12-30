@@ -19,18 +19,15 @@ import tifffile
 from tqdm import tqdm
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def load_image(path: Path) -> np.ndarray:
     """Load JPEG as float32 [0-1] range."""
     img = Image.open(path)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
+    if img.mode != "RGB":
+        img = img.convert("RGB")
     return np.array(img).astype(np.float32) / 255.0
 
 
@@ -41,12 +38,7 @@ def save_16bit_tiff(array: np.ndarray, path: Path):
     # Convert to 16-bit
     array_16bit = (array * 65535).astype(np.uint16)
     # Save with LZW compression
-    tifffile.imwrite(
-        path,
-        array_16bit,
-        compression='lzw',
-        photometric='rgb'
-    )
+    tifffile.imwrite(path, array_16bit, compression="lzw", photometric="rgb")
     logger.info(f"Saved 16-bit TIFF: {path.name}")
 
 
@@ -54,6 +46,7 @@ def apply_agx_tonemap(img: np.ndarray, intensity: float = 1.0) -> np.ndarray:
     """Apply AGX filmic tonemapping."""
     try:
         from tonemapper_agx_filmic import apply_agx_base_contrast
+
         return apply_agx_base_contrast(img, intensity)
     except ImportError:
         logger.warning("AGX tonemapper not available, using simple curve")
@@ -76,11 +69,7 @@ def enhance_clarity(img: np.ndarray, strength: float = 0.3) -> np.ndarray:
     return np.clip(enhanced, 0, 1)
 
 
-def process_single_image(
-    input_path: Path,
-    output_dir: Path,
-    preset: str = "luxury_estate"
-) -> dict:
+def process_single_image(input_path: Path, output_dir: Path, preset: str = "luxury_estate") -> dict:
     """
     Process a single image through the complete pipeline.
 
@@ -98,11 +87,7 @@ def process_single_image(
     img = load_image(input_path)
     h, w = img.shape[:2]
 
-    stats = {
-        'input': input_path.name,
-        'resolution': f"{w}x{h}",
-        'preset': preset
-    }
+    stats = {"input": input_path.name, "resolution": f"{w}x{h}", "preset": preset}
 
     # Base adjustments
     if preset == "luxury_estate":
@@ -110,11 +95,11 @@ def process_single_image(
         img = np.clip(img * 1.05, 0, 1)
 
         # Enhance saturation slightly
-        hsv = Image.fromarray((img * 255).astype(np.uint8)).convert('HSV')
+        hsv = Image.fromarray((img * 255).astype(np.uint8)).convert("HSV")
         h_arr, s_arr, v_arr = np.array(hsv).transpose(2, 0, 1).astype(np.float32)
         s_arr = np.clip(s_arr * 1.08, 0, 255)
         hsv_enhanced = np.stack([h_arr, s_arr, v_arr], axis=2).astype(np.uint8)
-        img = np.array(Image.fromarray(hsv_enhanced, mode='HSV').convert('RGB')).astype(np.float32) / 255.0
+        img = np.array(Image.fromarray(hsv_enhanced, mode="HSV").convert("RGB")).astype(np.float32) / 255.0
 
     # Apply clarity enhancement
     logger.info("Applying clarity enhancement...")
@@ -133,20 +118,20 @@ def process_single_image(
     # 16-bit TIFF (master)
     tiff_path = output_dir / f"{base_name}_master.ti"
     save_16bit_tiff(img, tiff_path)
-    stats['tiff'] = str(tiff_path)
+    stats["tiff"] = str(tiff_path)
 
     # JPEG (delivery)
     jpeg_path = output_dir / f"{base_name}_final.jpg"
     img_8bit = (np.clip(img, 0, 1) * 255).astype(np.uint8)
     Image.fromarray(img_8bit).save(jpeg_path, quality=95, optimize=True)
     logger.info(f"Saved JPEG: {jpeg_path.name}")
-    stats['jpeg'] = str(jpeg_path)
+    stats["jpeg"] = str(jpeg_path)
 
     # PNG (web)
     png_path = output_dir / f"{base_name}_web.png"
     Image.fromarray(img_8bit).save(png_path, optimize=True)
     logger.info(f"Saved PNG: {png_path.name}")
-    stats['png'] = str(png_path)
+    stats["png"] = str(png_path)
 
     return stats
 
@@ -182,15 +167,12 @@ def main():
     all_stats = []
     for jpeg_file in tqdm(jpeg_files, desc="Processing images"):
         try:
-            stats = process_single_image(
-                jpeg_file,
-                output_dir,
-                preset="luxury_estate"
-            )
+            stats = process_single_image(jpeg_file, output_dir, preset="luxury_estate")
             all_stats.append(stats)
         except Exception as e:
             logger.error(f"Failed to process {jpeg_file.name}: {e}")
             import traceback
+
             traceback.print_exc()
 
     # Summary

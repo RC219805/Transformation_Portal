@@ -15,6 +15,7 @@ import warnings
 
 class ExperimentalWarning(UserWarning):
     """Warning for experimental feature usage."""
+
     pass
 
 
@@ -37,7 +38,7 @@ warnings.warn(
     "For production use, see: https://github.com/RC219805/Transformation_Portal/blob/main/QUICKSTART.md\n"
     "═══════════════════════════════════════════════════════════════\n",
     category=ExperimentalWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 # Export marker for CI detection

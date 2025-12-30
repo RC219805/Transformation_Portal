@@ -60,20 +60,20 @@ if image.dtype == np.float32 or image.dtype == np.float64:
     grad_x = cv2.Sobel(image, cv2.CV_32F, 1, 0, ksize=3)
     grad_y = cv2.Sobel(image, cv2.CV_32F, 0, 1, ksize=3)
     grad_mag = np.sqrt(grad_x**2 + grad_y**2)
-    
+
     # Adaptive thresholding (60th and 85th percentile)
     thresh_low = np.percentile(valid_grads, 60)
     thresh_high = np.percentile(valid_grads, 85)
-    
+
     # Non-maximum suppression + hysteresis
     strong_edges = (grad_mag > thresh_high).astype(np.uint8) * 255
     weak_edges = ((grad_mag > thresh_low) & (grad_mag <= thresh_high)).astype(np.uint8) * 255
-    
+
     # Connect weak to strong edges
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     strong_dilated = cv2.dilate(strong_edges, kernel, iterations=1)
     connected_weak = cv2.bitwise_and(weak_edges, strong_dilated)
-    
+
     edges = cv2.bitwise_or(strong_edges, connected_weak)
 ```
 
@@ -100,20 +100,20 @@ from scipy import stats
 if self.config.reconcile_method == "robust":
     # Theil-Sen regression with outlier rejection
     slope, intercept, lower_slope, upper_slope = stats.theilslopes(ref_pixels, tile_pixels)
-    
+
     # Check fit quality using correlation
     r_value = np.corrcoef(tile_pixels, ref_pixels)[0, 1]
-    
+
     # Reject if fit is too poor
     if abs(r_value) < 0.7:
         logger.warning(f"Poor fit r={r_value:.3f}, using percentile fallback")
         # Fallback to percentile-based fit
         tile_p25, tile_p75 = np.percentile(tile_pixels, [25, 75])
         ref_p25, ref_p75 = np.percentile(ref_pixels, [25, 75])
-        
+
         tile_iqr = max(tile_p75 - tile_p25, 1e-6)
         ref_iqr = ref_p75 - ref_p25
-        
+
         a = ref_iqr / tile_iqr
         b = ref_p25 - a * tile_p25
     else:
@@ -146,22 +146,22 @@ b = np.clip(b, -0.3, 0.3)  # Was -0.5-0.5, now -0.3-0.3
 def estimate_with_global_anchor(self, image: np.ndarray) -> np.ndarray:
     # Pass 1: Global anchor at low-res
     global_depth = self._compute_global_anchor(image)
-    
+
     # Pass 2: Tiled high-res
     tiled_depth = self.estimate_depth(image, use_global_anchor=True)
-    
+
     # Align tiled to global (Theil-Sen regression)
     tiled_aligned = self._align_to_global(tiled_depth, global_depth)
-    
+
     # Extract high-frequency detail
     sigma = min(h, w) / 100
     tiled_lf = cv2.GaussianBlur(tiled_aligned, (0, 0), sigma)
     tiled_hf = tiled_aligned - tiled_lf
-    
+
     # Fuse: global structure + tiled detail (conservative weight)
     final = global_depth + 0.4 * tiled_hf
     final = np.clip(final, 0.0, 1.0)
-    
+
     return final
 ```
 
@@ -192,22 +192,22 @@ def edge_snap_refinement(
     # Detect edges
     rgb_edges = detect_edges(rgb_gray)
     depth_edges = detect_edges(depth)
-    
+
     # AND-gate: sharpen only where both exist
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilation, dilation))
     rgb_dilated = cv2.dilate(rgb_edges, kernel)
     depth_dilated = cv2.dilate(depth_edges, kernel)
-    
+
     snap_mask = (rgb_dilated > 0) & (depth_dilated > 0)
-    
+
     # Unsharp mask
     blurred = cv2.GaussianBlur(depth, (0, 0), 1.0)
     sharp = depth + (depth - blurred) * strength
     sharp = np.clip(sharp, 0.0, 1.0)
-    
+
     # Blend only where mask is active
     result = np.where(snap_mask, sharp, depth)
-    
+
     return result
 ```
 
@@ -236,8 +236,8 @@ Based on fixes, updated isolation test thresholds:
 # Edge count ratio ≤ 2.0 (no artifact explosion)
 
 passed = (
-    metrics.edge_f1 >= 0.30 and 
-    metrics.edge_overlap >= 0.40 and 
+    metrics.edge_f1 >= 0.30 and
+    metrics.edge_overlap >= 0.40 and
     metrics.edge_count_ratio <= 2.0 and
     metrics.chamfer_distance < 15.0
 )

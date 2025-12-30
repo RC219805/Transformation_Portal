@@ -1,7 +1,7 @@
 # Quality System Integrity Fix - Complete
 
-**Date**: December 17, 2025  
-**Status**: ✅ JSON truncation fixed, metrics now coherent  
+**Date**: December 17, 2025
+**Status**: ✅ JSON truncation fixed, metrics now coherent
 **Remaining Issue**: Edge F1 score indicates depth edges are poorly aligned with RGB boundaries
 
 ---
@@ -9,8 +9,8 @@
 ## 1. Critical Fixes Implemented
 
 ### A) Atomic JSON Serialization ✅
-**Problem**: `isolation_test_results.json` was truncated (unreadable)  
-**Root Cause**: Non-atomic writes + numpy type serialization failures  
+**Problem**: `isolation_test_results.json` was truncated (unreadable)
+**Root Cause**: Non-atomic writes + numpy type serialization failures
 **Fix**: Implemented `save_metrics_atomic()` in `quality_metrics.py`
 
 ```python
@@ -32,8 +32,8 @@ $ python -m json.tool outputs/high_fidelity_validation_fixed/isolation_test_resu
 ---
 
 ### B) Unified Metric Implementation ✅
-**Problem**: Different code paths used different metric definitions  
-**Root Cause**: Multiple implementations in `validation.py` vs isolation tests  
+**Problem**: Different code paths used different metric definitions
+**Root Cause**: Multiple implementations in `validation.py` vs isolation tests
 **Fix**: Created canonical `quality_metrics.py` as SINGLE SOURCE OF TRUTH
 
 **Key Changes**:
@@ -44,8 +44,8 @@ $ python -m json.tool outputs/high_fidelity_validation_fixed/isolation_test_resu
 ---
 
 ### C) Shift-Tolerant Edge Alignment (F1 Score) ✅
-**Problem**: Correlation metric was misleading (class imbalance sensitive)  
-**Root Cause**: Binary edge correlation collapses with sparse edges  
+**Problem**: Correlation metric was misleading (class imbalance sensitive)
+**Root Cause**: Binary edge correlation collapses with sparse edges
 **Fix**: Replaced primary metric with **edge F1 score (2px tolerance)**
 
 ```python
@@ -64,8 +64,8 @@ edge_f1 = F1_score(rgb_edges, depth_edges, tolerance=2px)  # Shift-tolerant
 ---
 
 ### D) Calibrated Quality Thresholds ✅
-**Problem**: Target thresholds were miscalibrated (e.g., correlation ≥0.5)  
-**Root Cause**: Thresholds set without empirical baseline data  
+**Problem**: Target thresholds were miscalibrated (e.g., correlation ≥0.5)
+**Root Cause**: Thresholds set without empirical baseline data
 **Fix**: Calibrated thresholds based on actual measurements
 
 **New Calibrated Thresholds**:
@@ -266,7 +266,7 @@ depth_final = blend(depth, depth_sharp, mask=snap_mask)
 ---
 
 ### Priority 4: Increase Global Anchor Resolution
-**Current**: 576×768 (19% of 3000×4000)  
+**Current**: 576×768 (19% of 3000×4000)
 **Target**: 1536×2048 (51% of full resolution)
 
 **Benefit**:

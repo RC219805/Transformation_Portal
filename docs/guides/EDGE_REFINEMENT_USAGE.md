@@ -1,6 +1,6 @@
 # Edge-Aware Depth Refinement - Usage Guide
 
-**Status**: Infrastructure module (feature freeze until Jan 10, 2026)  
+**Status**: Infrastructure module (feature freeze until Jan 10, 2026)
 **ADR**: [ADR-001-edge-refinement-module.md](../architecture/edge_refinement/ADR-001-edge-refinement-module.md)
 
 ## Overview
@@ -8,7 +8,7 @@
 The edge refinement module provides edge-aware post-processing for depth maps to improve structural quality in architectural rendering pipelines. It implements 5 core refinement techniques:
 
 1. **Bilateral Filtering** - Edge-preserving smoothing
-2. **Guided Filter** - RGB-guided edge-aware smoothing  
+2. **Guided Filter** - RGB-guided edge-aware smoothing
 3. **Edge-Guided Enhancement** - Targeted structural detail enhancement
 4. **Gradient Consistency Filtering** - Smooth away from edges, sharp at boundaries
 5. **Segment-Aware Refinement** - Reduce cross-segment smoothing
@@ -41,8 +41,8 @@ rgb = load_rgb_image("render.jpg")          # HxWx3 uint8
 
 # Apply edge-aware refinement with balanced preset
 refined_depth = refine_depth_edge_aware(
-    depth, 
-    rgb, 
+    depth,
+    rgb,
     preset=RefinementPreset.BALANCED
 )
 
@@ -60,17 +60,17 @@ config = EdgeRefinementConfig(
     enable_bilateral=True,
     bilateral_sigma_color=75.0,
     bilateral_sigma_space=75.0,
-    
+
     enable_guided=True,
     guided_radius=8,
     guided_eps=0.01,
-    
+
     enable_edge_enhancement=True,
     edge_enhancement_strength=0.3,
-    
+
     enable_gradient_smoothing=True,
     gradient_weight=0.5,
-    
+
     structure_weight=0.5
 )
 
@@ -250,21 +250,21 @@ class EdgeRefinementConfig:
     bilateral_d: int = 9
     bilateral_sigma_color: float = 75.0
     bilateral_sigma_space: float = 75.0
-    
+
     # Guided filter
     enable_guided: bool = True
     guided_radius: int = 8
     guided_eps: float = 0.01
-    
+
     # Edge enhancement
     enable_edge_enhancement: bool = True
     edge_enhancement_strength: float = 0.3
     edge_detection_threshold: float = 40.0
-    
+
     # Gradient smoothing
     enable_gradient_smoothing: bool = True
     gradient_weight: float = 0.5
-    
+
     # Global settings
     structure_weight: float = 0.5
     max_image_dim: int = 4096  # Resource exhaustion prevention
@@ -292,10 +292,10 @@ config = EdgeRefinementConfig(
     enable_bilateral=True,
     bilateral_sigma_color=50.0,
     bilateral_sigma_space=50.0,
-    
+
     enable_guided=True,
     guided_radius=8,
-    
+
     enable_edge_enhancement=False,  # Disable sharpening
     enable_gradient_smoothing=True,
     gradient_weight=0.4
@@ -311,18 +311,18 @@ refined = pipeline.refine(noisy_depth, rgb_image)
 # Configure for maximum structural detail preservation
 config = EdgeRefinementConfig(
     enable_bilateral=False,  # Skip smoothing
-    
+
     enable_guided=True,
     guided_radius=12,
     guided_eps=0.005,  # Stronger edge preservation
-    
+
     enable_edge_enhancement=True,
     edge_enhancement_strength=0.5,  # Strong sharpening
     edge_detection_threshold=30.0,
-    
+
     enable_gradient_smoothing=True,
     gradient_weight=0.7,  # High edge preservation
-    
+
     structure_weight=0.7
 )
 
@@ -337,8 +337,8 @@ from lux_depth_v2.edge_refinement import refine_depth_edge_aware, segment_aware_
 
 # Step 1: Global edge-aware refinement
 refined = refine_depth_edge_aware(
-    depth, 
-    rgb, 
+    depth,
+    rgb,
     preset=RefinementPreset.BALANCED
 )
 
@@ -445,7 +445,7 @@ pip install opencv-contrib-python>=4.8
 
 **Symptom**: Architectural edges are too smooth after refinement
 
-**Solution**: 
+**Solution**:
 1. Reduce `bilateral_sigma_color` (e.g., 50.0 → 30.0)
 2. Decrease `guided_eps` for stronger edge preservation (e.g., 0.01 → 0.005)
 3. Increase `structure_weight` (e.g., 0.5 → 0.7)

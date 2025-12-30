@@ -1,6 +1,6 @@
 # Utils Directory - Processing Utilities
 
-**Status:** ✅ Production Ready  
+**Status:** ✅ Production Ready
 **Version:** 1.0.0
 
 Core utilities for image processing pipelines.

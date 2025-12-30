@@ -1,7 +1,7 @@
 # Marketing Export M0+M1.1 Implementation Checklist
 
-**Target**: PR1 - Instrumentation + PNG Compression Tuning  
-**Estimated Effort**: 2-3 days  
+**Target**: PR1 - Instrumentation + PNG Compression Tuning
+**Estimated Effort**: 2-3 days
 **Expected Impact**: ~20-30s savings (hypothesis, to be validated)
 
 ---
@@ -45,17 +45,17 @@ grep -r "marketing.*PIL" src/ lux_depth_v2/
 def write_marketing(self, img: np.ndarray, stem: str) -> Path:
     import time
     import psutil
-    
+
     start_time = time.time()
     cpu_start = psutil.cpu_percent(interval=None)
-    
+
     # Existing write logic here
     path = self._write_marketing_png(img, stem, compression_level)
-    
+
     elapsed = time.time() - start_time
     cpu_end = psutil.cpu_percent(interval=None)
     file_size = path.stat().st_size if path.exists() else 0
-    
+
     # Store metadata for report
     self._last_marketing_metadata = {
         "encoder": "png",
@@ -66,7 +66,7 @@ def write_marketing(self, img: np.ndarray, stem: str) -> Path:
         "write_time_s": elapsed,
         "cpu_percent_delta": cpu_end - cpu_start,
     }
-    
+
     return path
 ```
 
@@ -95,11 +95,11 @@ from typing import Literal
 @dataclass
 class MarketingExportConfig:
     """Marketing export configuration (M1 encoding strategy)."""
-    
+
     # PNG settings
     format: Literal["png"] = "png"  # WebP/JPEG in M1.2
     png_compression_level: int = 6  # 1-9, default 6
-    
+
     # Future: WebP/JPEG (M1.2)
     # webp_quality: int = 90
     # jpeg_quality: int = 95
@@ -110,7 +110,7 @@ class MarketingExportConfig:
 @dataclass
 class ExportConfig:
     # ... existing fields ...
-    
+
     # Marketing export settings
     marketing: MarketingExportConfig = field(default_factory=MarketingExportConfig)
 ```
@@ -168,10 +168,10 @@ from typing import List, Dict, Any
 
 def analyze_marketing(reports: List[Dict[str, Any]]) -> None:
     """Analyze marketing export metrics with median-based comparison."""
-    
+
     # Group by encoder and compression level
     by_setting = {}  # {(encoder, level): [times]}
-    
+
     for report in reports:
         mkt = report.get("marketing_export", {})
         encoder = mkt.get("encoder", "unknown")
@@ -179,36 +179,36 @@ def analyze_marketing(reports: List[Dict[str, Any]]) -> None:
         time = mkt.get("write_time_s", 0)
         size = mkt.get("bytes_written", 0)
         cpu = mkt.get("cpu_percent_delta", 0)
-        
+
         key = (encoder, level)
         if key not in by_setting:
             by_setting[key] = {"times": [], "sizes": [], "cpus": []}
-        
+
         by_setting[key]["times"].append(time)
         by_setting[key]["sizes"].append(size)
         by_setting[key]["cpus"].append(cpu)
-    
+
     # Print median-based comparison
     print("=" * 80)
     print("MARKETING EXPORT ANALYSIS (Median-Based)")
     print("=" * 80)
     print()
-    
+
     for (encoder, level), data in sorted(by_setting.items()):
         times = data["times"]
         sizes = data["sizes"]
         cpus = data["cpus"]
-        
+
         if not times:
             continue
-        
+
         median_time = statistics.median(times)
         median_size = statistics.median(sizes)
         median_cpu = statistics.median(cpus)
-        
+
         p75_time = statistics.quantiles(times, n=4)[2] if len(times) >= 4 else median_time
         p95_time = statistics.quantiles(times, n=20)[18] if len(times) >= 20 else median_time
-        
+
         print(f"{encoder} level {level}:")
         print(f"  Time (median): {median_time:.1f}s  [p75: {p75_time:.1f}s, p95: {p95_time:.1f}s]")
         print(f"  Size (median): {median_size / 1024 / 1024:.1f} MB")
@@ -220,13 +220,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("output_dirs", nargs="+", type=Path)
     args = parser.parse_args()
-    
+
     reports = []
     for output_dir in args.output_dirs:
         for report_path in output_dir.glob("**/*_report.json"):
             with open(report_path) as f:
                 reports.append(json.load(f))
-    
+
     analyze_marketing(reports)
 ```
 
@@ -384,12 +384,12 @@ def test_marketing_metadata_captured(tmp_path):
     """Verify marketing metadata is captured in reports."""
     cfg = ExportConfig(output_dir=tmp_path)
     manager = ExportManager(cfg)
-    
+
     img = np.random.rand(100, 100, 3).astype(np.float32)
     path = manager.write_marketing(img, "test")
-    
+
     metadata = manager.get_marketing_metadata()
-    
+
     assert metadata["encoder"] == "png"
     assert metadata["compression_level"] == 6  # default
     assert metadata["bytes_written"] > 0
@@ -398,7 +398,7 @@ def test_marketing_metadata_captured(tmp_path):
 def test_png_compression_levels(tmp_path):
     """Verify different compression levels produce different sizes."""
     img = np.random.rand(1000, 1000, 3).astype(np.float32)
-    
+
     sizes = {}
     for level in [1, 6, 9]:
         cfg = ExportConfig(
@@ -408,7 +408,7 @@ def test_png_compression_levels(tmp_path):
         manager = ExportManager(cfg)
         path = manager.write_marketing(img, f"test_level{level}")
         sizes[level] = path.stat().st_size
-    
+
     # Level 1 should be larger than 6, which should be larger than 9
     assert sizes[1] > sizes[6] > sizes[9]
 ```
@@ -475,5 +475,5 @@ def test_png_compression_levels(tmp_path):
 
 ---
 
-**Status**: ✅ **READY TO IMPLEMENT**  
+**Status**: ✅ **READY TO IMPLEMENT**
 **Next Action**: Start with Step 1 (centralize marketing write path)

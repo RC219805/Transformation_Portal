@@ -1,7 +1,7 @@
 # Validation Dataset Manifest
 
-**Purpose**: Ensure validation dataset integrity over time  
-**Created**: December 21, 2025  
+**Purpose**: Ensure validation dataset integrity over time
+**Created**: December 21, 2025
 **Status**: LOCKED during Week 2-3 validation
 
 ---
@@ -169,5 +169,5 @@ validation_results/
 
 ---
 
-**Status**: Locked for Week 2-3 validation  
+**Status**: Locked for Week 2-3 validation
 **Next Review**: After validation completion (Dec 27, 2025)

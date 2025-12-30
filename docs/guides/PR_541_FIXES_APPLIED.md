@@ -1,5 +1,5 @@
 # PR #541 CI/CD Fixes Applied
-**Date**: 2025-12-09 17:15 UTC  
+**Date**: 2025-12-09 17:15 UTC
 **Commit**: 3f78a98
 
 ## Summary
@@ -15,7 +15,7 @@ Applied fixes to resolve 2 critical CI/CD failures blocking PR #541 merge.
   ```python
   # Before
   from typing import Sequence, Optional
-  
+
   # After
   from typing import Sequence
   ```
@@ -24,7 +24,7 @@ Applied fixes to resolve 2 critical CI/CD failures blocking PR #541 merge.
   ```python
   # Before
   result = core_validator.validate_file(p, strict=True)
-  
+
   # After
   core_validator.validate_file(p, strict=True)
   ```

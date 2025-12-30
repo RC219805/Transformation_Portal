@@ -68,11 +68,12 @@ def _as_f32_L(im: Image.Image) -> np.ndarray:
 
 
 def _srgb_to_linear(x: np.ndarray) -> np.ndarray:
-    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055)**2.4)
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
 
 
 def _linear_to_srgb(x: np.ndarray) -> np.ndarray:
     return np.where(x <= 0.0031308, 12.92 * x, 1.055 * np.power(x, 1 / 2.4) - 0.055)
+
 
 # ------------- math helpers -------------
 
@@ -96,7 +97,7 @@ def _sample_env(env: Optional[np.ndarray], dir3: np.ndarray) -> np.ndarray:
     x, y, z = dir3[..., 0], dir3[..., 1], dir3[..., 2]
     theta = np.arctan2(x, z)
     phi = np.arccos(np.clip(y, -1, 1))
-    u = (theta / (2 * np.pi) + 0.5)
+    u = theta / (2 * np.pi) + 0.5
     v = phi / np.pi
     H, W, _ = env.shape
     uu = np.clip((u * W).astype(np.int32), 0, W - 1)
@@ -140,27 +141,48 @@ def _bilinear(img: np.ndarray, uvx: np.ndarray, uvy: np.ndarray) -> np.ndarray:
     if img.ndim == 3:
         wx = wx[..., None]
         wy = wy[..., None]
-    return (c00 * (1 - wx) * (1 - wy) + c10 * wx * (1 - wy) + c01 * (1 - wx) * wy + c11 * wx * wy)
+    return c00 * (1 - wx) * (1 - wy) + c10 * wx * (1 - wy) + c01 * (1 - wx) * wy + c11 * wx * wy
+
 
 # ------------- core PBR -------------
 
 
 def apply_pbr_overlays(
     image: Union[str, Path, Image.Image, np.ndarray],
-    *, albedo: Optional[Union[str, Path]] = None, variant_map: Optional[Union[str, Path]] = None, variant_mix: float = 0.0,
-    normal: Optional[Union[str, Path]] = None, roughness: Optional[Union[str, Path]] = None, roughness_is_gloss: bool = False,
-    metallic_map: Optional[Union[str, Path]] = None, metallic: float = 0.0,
-    ao: Optional[Union[str, Path]] = None, mask: Optional[Union[str, Path]] = None, env_map: Optional[Union[str, Path]] = None,
-    albedo_blend: float = 1.0, height_strength: float = 0.3, reflection_strength: float = 0.25,
-    gloss_power_min: float = 1.5, gloss_power_max: float = 6.0, fresnel_power: float = 3.0,
-    ao_strength: float = 1.0, normal_strength: float = 1.0,
+    *,
+    albedo: Optional[Union[str, Path]] = None,
+    variant_map: Optional[Union[str, Path]] = None,
+    variant_mix: float = 0.0,
+    normal: Optional[Union[str, Path]] = None,
+    roughness: Optional[Union[str, Path]] = None,
+    roughness_is_gloss: bool = False,
+    metallic_map: Optional[Union[str, Path]] = None,
+    metallic: float = 0.0,
+    ao: Optional[Union[str, Path]] = None,
+    mask: Optional[Union[str, Path]] = None,
+    env_map: Optional[Union[str, Path]] = None,
+    albedo_blend: float = 1.0,
+    height_strength: float = 0.3,
+    reflection_strength: float = 0.25,
+    gloss_power_min: float = 1.5,
+    gloss_power_max: float = 6.0,
+    fresnel_power: float = 3.0,
+    ao_strength: float = 1.0,
+    normal_strength: float = 1.0,
     lights: Optional[List[Tuple[np.ndarray, np.ndarray, float]]] = None,
-    pom_scale: float = 0.02, pom_steps: int = 1, view_dir_xy: Tuple[float, float] = (0.0, 0.0),
-    proc_scale: float = 1.0, enable_displacement: bool = True,
-    exposure: float = 0.0, contrast: float = 1.0, saturation: float = 1.0, clamp_low: float = 0.0, clamp_high: float = 1.0,
-    out_mode: str = "RGB", quality: str = "preview"
+    pom_scale: float = 0.02,
+    pom_steps: int = 1,
+    view_dir_xy: Tuple[float, float] = (0.0, 0.0),
+    proc_scale: float = 1.0,
+    enable_displacement: bool = True,
+    exposure: float = 0.0,
+    contrast: float = 1.0,
+    saturation: float = 1.0,
+    clamp_low: float = 0.0,
+    clamp_high: float = 1.0,
+    out_mode: str = "RGB",
+    quality: str = "preview",
 ) -> Image.Image:
-
     if isinstance(image, (str, Path)):
         pil_in = _open_rgb(image)
     elif isinstance(image, Image.Image):
@@ -193,8 +215,13 @@ def apply_pbr_overlays(
         mask_np = _as_f32_L(m)
 
     # Start from input (linear)
-    base = np.asarray(Image.fromarray((np.clip(base_hi, 0, 1) * 255).astype(np.uint8)
-                                      ).resize((w, h), Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32) / 255.0
+    base = (
+        np.asarray(
+            Image.fromarray((np.clip(base_hi, 0, 1) * 255).astype(np.uint8)).resize((w, h), Image.Resampling.BICUBIC),
+            dtype=np.uint8,
+        ).astype(np.float32)
+        / 255.0
+    )
 
     # Albedo
     if albedo is not None:
@@ -234,7 +261,7 @@ def apply_pbr_overlays(
         n_im = _resize(n_im, (w, h))
         n_np = _as_f32_rgb(n_im)  # assumed normal map in tangent space
         # Convert normal map (0..1)->(-1..1)
-        n_ts = (n_np * 2.0 - 1.0)
+        n_ts = n_np * 2.0 - 1.0
         n_ts = _normalize(n_ts)
     else:
         n_ts = np.dstack([np.zeros_like(base[..., 0]), np.zeros_like(base[..., 0]), np.ones_like(base[..., 0])])
@@ -265,7 +292,7 @@ def apply_pbr_overlays(
         ao_im = _open_rgb(ao)
         ao_im = _resize(ao_im, (w, h))
         ao_np = _as_f32_rgb(ao_im).mean(axis=-1)
-        base = np.clip(base * (ao_np[..., None]**float(np.clip(ao_strength, 0, 4))), 0.0, 1.0)
+        base = np.clip(base * (ao_np[..., None] ** float(np.clip(ao_strength, 0, 4))), 0.0, 1.0)
 
     # Height-based shading (Sobel from height if available)
     if height is not None and height_strength > 1e-6:
@@ -293,10 +320,10 @@ def apply_pbr_overlays(
         ndoth = np.clip(np.sum(N * half_vec, axis=-1), 0.0, 1.0)
         # perceptual roughness -> shininess
         shin = 2.0 * (1.0 - rough)
-        spec = (ndoth[..., None] ** (1.0 + 32.0 * shin[..., None]))
+        spec = ndoth[..., None] ** (1.0 + 32.0 * shin[..., None])
         # Fresnel
         F0 = 0.04 * (1.0 - metal)[..., None] + base * metal[..., None]  # dielectrics vs metals
-        spec_rgb = F0 + (1.0 - F0) * (1.0 - ndoth[..., None])**5
+        spec_rgb = F0 + (1.0 - F0) * (1.0 - ndoth[..., None]) ** 5
         spec_acc += spec * spec_rgb * I
 
     # Env reflection (uses N.z as proxy)
@@ -321,33 +348,32 @@ def apply_pbr_overlays(
 
     # Upscale + detail restore
     if scale < 1.0:
-        up_img = Image.fromarray((shaded * 255).astype(np.uint8)).resize(
-            (W, H), Image.Resampling.BICUBIC
-        )
+        up_img = Image.fromarray((shaded * 255).astype(np.uint8)).resize((W, H), Image.Resampling.BICUBIC)
         up = np.asarray(up_img, dtype=np.uint8).astype(np.float32) / 255.0
-        base_hi_resized = Image.fromarray(
-            (base_hi * 255).astype(np.uint8)
-        ).resize((W, H), Image.Resampling.BICUBIC)
-        hf = np.clip(
-            base_hi - np.asarray(base_hi_resized, dtype=np.uint8).astype(np.float32) / 255.0,
-            -1, 1
-        )
+        base_hi_resized = Image.fromarray((base_hi * 255).astype(np.uint8)).resize((W, H), Image.Resampling.BICUBIC)
+        hf = np.clip(base_hi - np.asarray(base_hi_resized, dtype=np.uint8).astype(np.float32) / 255.0, -1, 1)
         shaded = np.clip(up + 0.12 * hf, 0.0, 1.0)
     else:
-        shaded = np.asarray(Image.fromarray((shaded * 255).astype(np.uint8)).resize((W, H),
-                            Image.Resampling.BICUBIC), dtype=np.uint8).astype(np.float32) / 255.0
+        shaded = (
+            np.asarray(
+                Image.fromarray((shaded * 255).astype(np.uint8)).resize((W, H), Image.Resampling.BICUBIC), dtype=np.uint8
+            ).astype(np.float32)
+            / 255.0
+        )
 
     # Finishing
     # exposure/clamp
     if exposure != 0.0 or clamp_low > 0 or clamp_high < 1:
+
         def _lut_u8(exposure, lo, hi):
-            x = (np.arange(256, dtype=np.float32) / 255.0)
+            x = np.arange(256, dtype=np.float32) / 255.0
             if exposure != 0.0:
-                x *= 2.0**float(exposure)
+                x *= 2.0 ** float(exposure)
             lo, hi = float(np.clip(lo, 0, 1)), float(np.clip(hi, 0, 1))
             hi = max(hi, lo)
             x = np.zeros_like(x) if hi == lo else (x - lo) / max(1e-6, hi - lo)
             return (np.clip(x, 0, 1) * 255.0 + 0.5).astype(np.uint8)
+
         lut = _lut_u8(exposure, clamp_low, clamp_high)
         arr8 = (np.clip(shaded, 0, 1) * 255.0 + 0.5).astype(np.uint8)
         shaded = _as_f32_rgb(Image.fromarray(lut[arr8]))
@@ -358,6 +384,7 @@ def apply_pbr_overlays(
         if saturation != 1:
             out = ImageEnhance.Color(out).enhance(float(saturation))
     return out.convert(out_mode)
+
 
 # ---------------- CLI ----------------
 
@@ -405,15 +432,33 @@ def main():
     if args.cmd == "materialize":
         vx, vy = [float(x.strip()) for x in args.view_dir.split(",")]
         out = apply_pbr_overlays(
-            args.input, albedo=args.albedo, variant_map=args.variant_map, variant_mix=args.variant_mix,
-            normal=args.normal, roughness=args.roughness, roughness_is_gloss=args.roughness_is_gloss,
-            metallic_map=args.metallic_map, metallic=args.metallic, ao=args.ao, mask=args.mask, env_map=args.env_map,
-            albedo_blend=args.albedo_blend, height_strength=args.height_strength, reflection_strength=args.reflection_strength,
-            pom_scale=args.pom_scale, pom_steps=args.pom_steps, view_dir_xy=(vx, vy), proc_scale=args.proc_scale,
+            args.input,
+            albedo=args.albedo,
+            variant_map=args.variant_map,
+            variant_mix=args.variant_mix,
+            normal=args.normal,
+            roughness=args.roughness,
+            roughness_is_gloss=args.roughness_is_gloss,
+            metallic_map=args.metallic_map,
+            metallic=args.metallic,
+            ao=args.ao,
+            mask=args.mask,
+            env_map=args.env_map,
+            albedo_blend=args.albedo_blend,
+            height_strength=args.height_strength,
+            reflection_strength=args.reflection_strength,
+            pom_scale=args.pom_scale,
+            pom_steps=args.pom_steps,
+            view_dir_xy=(vx, vy),
+            proc_scale=args.proc_scale,
             enable_displacement=args.enable_displacement,
-            exposure=args.exposure, contrast=args.contrast, saturation=args.saturation,
-            clamp_low=args.clamp_low, clamp_high=args.clamp_high,
-            out_mode=args.out_mode, quality=args.quality
+            exposure=args.exposure,
+            contrast=args.contrast,
+            saturation=args.saturation,
+            clamp_low=args.clamp_low,
+            clamp_high=args.clamp_high,
+            out_mode=args.out_mode,
+            quality=args.quality,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         out.save(args.output)

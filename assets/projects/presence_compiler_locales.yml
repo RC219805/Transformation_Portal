@@ -9,7 +9,7 @@ profiles:
       lean_forward_cm: 3
     expression_prompts:
       - "Say a silent 'yes' as the plan clicks."
-      - "Think through the first three steps." 
+      - "Think through the first three steps."
       - "Breathe out softly, eyes stay with me."
   JP_JA:
     description: "Japan leadership context favoring modest warmth"

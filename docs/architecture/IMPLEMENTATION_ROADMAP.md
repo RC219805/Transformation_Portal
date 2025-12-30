@@ -1,8 +1,8 @@
 # Performance Optimization Design
 ## Transformation Portal Architecture Enhancement - Part 2
 
-**Document Version:** 1.0  
-**Date:** 2025-12-08  
+**Document Version:** 1.0
+**Date:** 2025-12-08
 **Companion To:** STABILITY_EFFICIENCY_ARCHITECTURE.md
 
 ---
@@ -28,18 +28,18 @@ import psutil
 @dataclass
 class TilingStrategy:
     """Adaptive tiling based on available resources."""
-    
+
     # Base tile sizes (px)
     tile_small: int = 512
     tile_medium: int = 1024
     tile_large: int = 2048
     tile_xlarge: int = 4096
-    
+
     # Memory thresholds (GB available)
     threshold_large: float = 20.0
     threshold_medium: float = 10.0
     threshold_small: float = 5.0
-    
+
     # Overlap for blending
     overlap_percent: float = 0.25
 
@@ -51,24 +51,24 @@ def select_tile_size(
 ) -> Tuple[int, int]:
     """
     Select optimal tile size based on image dimensions and available memory.
-    
+
     Strategy:
     - Small images (<12MP): No tiling, process full image
     - Medium images (12-24MP): 2048px tiles if memory available
     - Large images (24-48MP): 1024px tiles, more conservative
     - XLarge images (>48MP): 512px tiles, maximum safety
-    
+
     Returns: (tile_size, overlap_px)
     """
     megapixels = (image_width * image_height) / 1e6
-    
+
     strategy = TilingStrategy()
-    
+
     # Estimate memory requirement per megapixel
     # Empirical: ~1.25GB per MP for MPS, ~0.8GB per MP for CUDA
     memory_per_mp = 1.25 if device == "mps" else 0.8
     required_memory = megapixels * memory_per_mp
-    
+
     # Determine tile size based on available memory
     if available_memory_gb >= strategy.threshold_large and megapixels <= 24:
         # Plenty of memory, use large tiles
@@ -82,15 +82,15 @@ def select_tile_size(
     else:
         # Critical memory, smallest tiles
         tile_size = strategy.tile_small // 2  # 256px
-    
+
     # For very large images, force smaller tiles regardless of memory
     if megapixels > 48:
         tile_size = min(tile_size, strategy.tile_small)
     elif megapixels > 35:
         tile_size = min(tile_size, strategy.tile_medium)
-    
+
     overlap_px = int(tile_size * strategy.overlap_percent)
-    
+
     return tile_size, overlap_px
 
 
@@ -102,23 +102,23 @@ def calculate_memory_budget(
 ) -> dict:
     """
     Calculate memory budget for processing pipeline.
-    
+
     Returns breakdown of memory requirements for each stage.
     """
     megapixels = (image_width * image_height) / 1e6
-    
+
     # Memory calculations (in GB)
     input_memory = megapixels * 3 * (bit_depth / 8) / 1e9
-    
+
     # Processing buffers (8x for intermediate operations)
     processing_memory = input_memory * 8
-    
+
     # Upscale memory (output is upscale_factor^2 larger)
     upscale_output = input_memory * (upscale_factor ** 2)
-    
+
     # Peak memory (processing + upscale simultaneously)
     peak_memory = processing_memory + upscale_output
-    
+
     return {
         "input_gb": input_memory,
         "processing_gb": processing_memory,
@@ -144,13 +144,13 @@ def process_large_image_progressive(
 ) -> dict:
     """
     Progressive processing strategy for large images (>35MP).
-    
+
     Strategy:
     1. Detect image too large for MPS
     2. Grade at original resolution on MPS (fast, fits in memory)
     3. Upscale in two stages: 2x on CPU, then 2x on CPU
     4. Write output incrementally (tile by tile)
-    
+
     Benefits:
     - No OOM failures
     - Predictable memory usage
@@ -159,10 +159,10 @@ def process_large_image_progressive(
     """
     # Load and grade at original resolution
     rgb01, info = io_utils.read_rgb_any(img_path)
-    
+
     # Grade on MPS (lightweight, fits in memory)
     graded = grade_on_mps(rgb01, config)
-    
+
     # First upscale: 2x on CPU
     upscaled_2x = upscale_cpu_tiled(
         graded,
@@ -170,7 +170,7 @@ def process_large_image_progressive(
         tile_size=512,
         overlap=128,
     )
-    
+
     # Second upscale: 2x on CPU
     upscaled_4x = upscale_cpu_tiled(
         upscaled_2x,
@@ -178,7 +178,7 @@ def process_large_image_progressive(
         tile_size=512,
         overlap=128,
     )
-    
+
     return upscaled_4x
 ```
 
@@ -192,9 +192,9 @@ def process_large_image_progressive(
 def cleanup_between_images():
     """
     Comprehensive memory cleanup between images.
-    
+
     Prevents memory accumulation that leads to crashes after 4-5 images.
     """
     import gc
-    
+
     # Python garbage collection

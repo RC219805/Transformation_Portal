@@ -29,7 +29,7 @@ def requires_real_torch():
     """
     torch = pytest.importorskip("torch")
     # Check if torch has essential attributes - stubs typically don't have these
-    required_attrs = ('nn', 'Tensor', 'device')
+    required_attrs = ("nn", "Tensor", "device")
     for attr in required_attrs:
         if not hasattr(torch, attr):
             pytest.skip(f"torch is a stub module without {attr} support")
@@ -43,20 +43,23 @@ class TestBasicSRTPImports:
         """Test importing RRDBNet from basicsr_tp.archs."""
         requires_real_torch()
         from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F811
+
         assert RRDBNet is not None
 
     def test_import_from_package_level(self):
         """Test importing RRDBNet from package level."""
         requires_real_torch()
         from basicsr_tp import RRDBNet  # noqa: F811
+
         assert RRDBNet is not None
 
     def test_package_version(self):
         """Test package has correct version."""
         import basicsr_tp  # noqa: F811
-        assert hasattr(basicsr_tp, '__version__')
-        assert 'tp' in basicsr_tp.__version__  # TP patch version
-        assert '1.4.2' in basicsr_tp.__version__  # Based on BasicSR 1.4.2
+
+        assert hasattr(basicsr_tp, "__version__")
+        assert "tp" in basicsr_tp.__version__  # TP patch version
+        assert "1.4.2" in basicsr_tp.__version__  # Based on BasicSR 1.4.2
 
 
 class TestRRDBNetArchitecture:
@@ -67,12 +70,14 @@ class TestRRDBNetArchitecture:
         """Create a basic RRDBNet model for testing."""
         requires_real_torch()
         from basicsr_tp import RRDBNet  # noqa: F811
+
         return RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32)
 
     def test_model_instantiation(self, model):
         """Test that RRDBNet can be instantiated."""
         assert model is not None
         from torch import nn
+
         assert isinstance(model, nn.Module)
 
     def test_model_parameters(self, model):
@@ -86,6 +91,7 @@ class TestRRDBNetArchitecture:
     def test_forward_pass(self, model):
         """Test forward pass with dummy input."""
         import torch
+
         # Create dummy input: batch_size=1, channels=3, height=64, width=64
         x = torch.randn(1, 3, 64, 64)
 
@@ -100,8 +106,8 @@ class TestRRDBNetArchitecture:
         import torch
 
         test_sizes = [
-            (32, 32),    # Small
-            (64, 64),    # Medium
+            (32, 32),  # Small
+            (64, 64),  # Medium
             (128, 128),  # Large
         ]
 
@@ -119,7 +125,8 @@ class TestSecurityValidation:
     def test_no_dist_util_module(self):
         """Ensure dist_util.py (vulnerable file) is not present."""
         import basicsr_tp  # noqa: F811
-        assert not hasattr(basicsr_tp, 'utils')
+
+        assert not hasattr(basicsr_tp, "utils")
 
         # Try to import dist_util - should fail
         with pytest.raises(ImportError):
@@ -133,10 +140,10 @@ class TestSecurityValidation:
         # Search all Python files for actual executable SLURM code
         for py_file in basicsr_tp_dir.rglob("*.py"):
             # Skip __init__.py which contains security documentation
-            if py_file.name == '__init__.py':
+            if py_file.name == "__init__.py":
                 continue
 
-            with open(py_file, 'r', encoding='utf-8') as f:
+            with open(py_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
                 # Check for actual vulnerable code patterns (not in comments/docstrings)
@@ -153,29 +160,27 @@ class TestSecurityValidation:
                         continue
 
                     # Skip comments and docstrings
-                    if in_docstring or stripped.startswith('#'):
+                    if in_docstring or stripped.startswith("#"):
                         continue
 
                     # Check for actual vulnerable code patterns in executable lines
                     # (comments and docstrings already filtered above)
                     forbidden_patterns = [
-                        'scontrol show hostname',       # The actual vulnerable command
-                        'subprocess.getoutput',         # Shell execution method
-                        'os.environ[\'SLURM',           # Accessing SLURM environment (single quotes)
-                        'os.environ["SLURM',            # Accessing SLURM environment (double quotes)
-                        'os.environ.get(\'SLURM',       # Accessing SLURM environment via .get() (single quotes)
-                        'os.environ.get("SLURM',        # Accessing SLURM environment via .get() (double quotes)
-                        'SLURM_NODELIST',               # Direct reference to the vulnerable env var
-                        'def init_dist',                # Distributed init function
-                        'def _init_dist_slurm',         # SLURM-specific init
+                        "scontrol show hostname",  # The actual vulnerable command
+                        "subprocess.getoutput",  # Shell execution method
+                        "os.environ['SLURM",  # Accessing SLURM environment (single quotes)
+                        'os.environ["SLURM',  # Accessing SLURM environment (double quotes)
+                        "os.environ.get('SLURM",  # Accessing SLURM environment via .get() (single quotes)
+                        'os.environ.get("SLURM',  # Accessing SLURM environment via .get() (double quotes)
+                        "SLURM_NODELIST",  # Direct reference to the vulnerable env var
+                        "def init_dist",  # Distributed init function
+                        "def _init_dist_slurm",  # SLURM-specific init
                     ]
 
                     for pattern in forbidden_patterns:
                         if pattern in line:
                             pytest.fail(
-                                f"Found vulnerable SLURM code in {py_file}:{i}\n"
-                                f"  Pattern: {pattern}\n"
-                                f"  Line: {line.strip()}"
+                                f"Found vulnerable SLURM code in {py_file}:{i}\n  Pattern: {pattern}\n  Line: {line.strip()}"
                             )
 
     def test_no_subprocess_calls(self):
@@ -184,16 +189,15 @@ class TestSecurityValidation:
 
         for py_file in basicsr_tp_dir.rglob("*.py"):
             # Skip __init__.py which contains security documentation
-            if py_file.name == '__init__.py':
+            if py_file.name == "__init__.py":
                 continue
 
-            with open(py_file, 'r', encoding='utf-8') as f:
+            with open(py_file, "r", encoding="utf-8") as f:
                 content = f.read()
                 # Check for subprocess imports/calls in actual code (not documentation)
-                forbidden = ['subprocess.', 'import subprocess', 'from subprocess']
+                forbidden = ["subprocess.", "import subprocess", "from subprocess"]
                 for pattern in forbidden:
-                    assert pattern not in content, \
-                        f"Found subprocess usage in {py_file} - potential security risk"
+                    assert pattern not in content, f"Found subprocess usage in {py_file} - potential security risk"
 
 
 class TestAPICompatibility:
@@ -209,17 +213,14 @@ class TestAPICompatibility:
         params = list(sig.parameters.keys())
 
         # Expected parameters from original BasicSR
-        expected = ['self', 'num_in_ch', 'num_out_ch', 'scale', 'num_feat', 'num_block', 'num_grow_ch']
+        expected = ["self", "num_in_ch", "num_out_ch", "scale", "num_feat", "num_block", "num_grow_ch"]
         assert params == expected
 
     def test_helper_functions_exist(self):
         """Test that required helper functions are available."""
         requires_real_torch()
-        from basicsr_tp.archs.rrdbnet_arch import (
-            default_init_weights,
-            make_layer,
-            pixel_unshuffle
-        )
+        from basicsr_tp.archs.rrdbnet_arch import default_init_weights, make_layer, pixel_unshuffle
+
         assert callable(default_init_weights)
         assert callable(make_layer)
         assert callable(pixel_unshuffle)
@@ -228,6 +229,7 @@ class TestAPICompatibility:
         """Test that ResidualDenseBlock and RRDB classes exist."""
         requires_real_torch()
         from basicsr_tp.archs.rrdbnet_arch import ResidualDenseBlock, RRDB
+
         assert ResidualDenseBlock is not None
         assert RRDB is not None
 
@@ -240,10 +242,11 @@ class TestDocumentation:
         requires_real_torch()
         # Use 'from ... import' to avoid linter warning about mixing import patterns
         from basicsr_tp.archs import rrdbnet_arch  # noqa: F811
+
         docstring = rrdbnet_arch.__doc__
         assert docstring is not None
-        assert 'CVE-2024-27763' in docstring
-        assert 'security' in docstring.lower()
+        assert "CVE-2024-27763" in docstring
+        assert "security" in docstring.lower()
 
     def test_readme_exists(self):
         """Test that README with security info exists."""
@@ -251,16 +254,17 @@ class TestDocumentation:
         assert readme.exists()
 
         content = readme.read_text()
-        assert 'CVE-2024-27763' in content
-        assert 'Security' in content
-        assert 'SLURM' in content
+        assert "CVE-2024-27763" in content
+        assert "Security" in content
+        assert "SLURM" in content
 
     def test_package_init_has_metadata(self):
         """Test that package __init__ has version and license."""
         import basicsr_tp  # noqa: F811
-        assert hasattr(basicsr_tp, '__version__')
-        assert hasattr(basicsr_tp, '__license__')
-        assert basicsr_tp.__license__ == 'Apache-2.0'
+
+        assert hasattr(basicsr_tp, "__version__")
+        assert hasattr(basicsr_tp, "__license__")
+        assert basicsr_tp.__license__ == "Apache-2.0"
 
 
 class TestRealESRGANIntegration:
@@ -287,10 +291,10 @@ class TestRealESRGANIntegration:
             tile=0,
             tile_pad=10,
             pre_pad=0,
-            half=False
+            half=False,
         )
         assert upsampler is not None
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

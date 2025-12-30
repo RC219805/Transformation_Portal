@@ -20,22 +20,22 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ComplexityScore:
     """Image complexity metrics."""
-    
+
     gradient_energy: float  # Sobel gradient magnitude (normalized)
-    edge_density: float     # Proportion of edge pixels
-    megapixels: float       # Image size in megapixels
-    complexity_class: str   # "low" | "medium" | "high"
-    
+    edge_density: float  # Proportion of edge pixels
+    megapixels: float  # Image size in megapixels
+    complexity_class: str  # "low" | "medium" | "high"
+
     @property
     def is_high_complexity(self) -> bool:
         """Check if image is high complexity (benefits from APEX)."""
         return self.complexity_class == "high"
-    
+
     @property
     def is_medium_complexity(self) -> bool:
         """Check if image is medium complexity."""
         return self.complexity_class == "medium"
-    
+
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""
         return {
@@ -56,7 +56,7 @@ def compute_complexity(
 ) -> ComplexityScore:
     """
     Compute image complexity score.
-    
+
     Parameters
     ----------
     image : np.ndarray
@@ -69,7 +69,7 @@ def compute_complexity(
         Threshold for high edge density classification (default: 0.20).
     megapixel_threshold : float
         Threshold for large image classification (default: 20.0 MP).
-        
+
     Returns
     -------
     ComplexityScore
@@ -77,19 +77,19 @@ def compute_complexity(
     """
     if image.ndim != 3 or image.shape[2] != 3:
         raise ValueError(f"Expected HxWx3 RGB image, got shape {image.shape}")
-    
+
     H, W, _ = image.shape
     megapixels = (H * W) / 1e6
-    
+
     # Downsample for fast gradient computation
     img_small = _downsample_for_analysis(image, max_size=downsample_size)
-    
+
     # Compute gradient energy
     gradient_energy = _compute_gradient_energy(img_small)
-    
+
     # Compute edge density
     edge_density = _compute_edge_density(img_small, threshold=0.1)
-    
+
     # Classify complexity
     complexity_class = _classify_complexity(
         gradient_energy=gradient_energy,
@@ -99,7 +99,7 @@ def compute_complexity(
         edge_thresh=edge_density_threshold,
         mp_thresh=megapixel_threshold,
     )
-    
+
     return ComplexityScore(
         gradient_energy=gradient_energy,
         edge_density=edge_density,
@@ -114,17 +114,17 @@ def _downsample_for_analysis(
 ) -> np.ndarray:
     """
     Downsample image to max_size on longest side for fast analysis.
-    
+
     Returns HxWx3 float32 in [0,1].
     """
     H, W, _ = image.shape
-    
+
     if max(H, W) <= max_size:
         # Already small enough
         if image.dtype == np.uint8:
             return image.astype(np.float32) / 255.0
         return image.astype(np.float32, copy=False)
-    
+
     # Compute new dimensions
     if H > W:
         new_h = max_size
@@ -132,29 +132,29 @@ def _downsample_for_analysis(
     else:
         new_w = max_size
         new_h = int(H * (max_size / W))
-    
+
     # Use PIL for clean resize
     if image.dtype == np.uint8:
         pil_img = Image.fromarray(image)
     else:
         img_u8 = np.clip(image * 255, 0, 255).astype(np.uint8)
         pil_img = Image.fromarray(img_u8)
-    
+
     pil_small = pil_img.resize((new_w, new_h), resample=Image.Resampling.BILINEAR)
     img_small = np.array(pil_small, dtype=np.float32) / 255.0
-    
+
     return img_small
 
 
 def _compute_gradient_energy(image: np.ndarray) -> float:
     """
     Compute normalized gradient energy using Sobel.
-    
+
     Parameters
     ----------
     image : np.ndarray
         HxWx3 float32 in [0,1].
-        
+
     Returns
     -------
     float
@@ -162,17 +162,17 @@ def _compute_gradient_energy(image: np.ndarray) -> float:
     """
     # Convert to grayscale
     gray = np.mean(image, axis=2).astype(np.float32)
-    
+
     # Sobel gradients (no scipy dependency)
     gx = _sobel_x(gray)
     gy = _sobel_y(gray)
-    
+
     # Gradient magnitude
     grad_mag = np.sqrt(gx**2 + gy**2)
-    
+
     # Normalize by theoretical max (sqrt(2) for unit range)
     energy = float(np.mean(grad_mag) / np.sqrt(2.0))
-    
+
     return np.clip(energy, 0.0, 1.0)
 
 
@@ -182,14 +182,14 @@ def _compute_edge_density(
 ) -> float:
     """
     Compute proportion of edge pixels.
-    
+
     Parameters
     ----------
     image : np.ndarray
         HxWx3 float32 in [0,1].
     threshold : float
         Gradient magnitude threshold for edge classification.
-        
+
     Returns
     -------
     float
@@ -199,10 +199,10 @@ def _compute_edge_density(
     gx = _sobel_x(gray)
     gy = _sobel_y(gray)
     grad_mag = np.sqrt(gx**2 + gy**2)
-    
+
     edge_mask = grad_mag > threshold
     density = float(np.mean(edge_mask))
-    
+
     return np.clip(density, 0.0, 1.0)
 
 
@@ -221,12 +221,13 @@ def _sobel_y(gray: np.ndarray) -> np.ndarray:
 def _convolve2d_simple(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     """
     Simple 2D convolution (valid mode, no padding).
-    
+
     Good enough for gradient computation on downsampled images.
     """
     from scipy.ndimage import convolve
+
     # Use scipy if available (safe since we're only using it for optional complexity scoring)
-    return convolve(image, kernel, mode='constant', cval=0.0)
+    return convolve(image, kernel, mode="constant", cval=0.0)
 
 
 def _classify_complexity(
@@ -239,7 +240,7 @@ def _classify_complexity(
 ) -> str:
     """
     Classify complexity as low/medium/high.
-    
+
     High complexity criteria (any two trigger APEX recommendation):
       - High gradient energy (lots of detail/texture)
       - High edge density (complex boundaries)
@@ -248,9 +249,9 @@ def _classify_complexity(
     high_gradient = gradient_energy >= grad_thresh
     high_edges = edge_density >= edge_thresh
     large_image = megapixels >= mp_thresh
-    
+
     triggers = sum([high_gradient, high_edges, large_image])
-    
+
     if triggers >= 2:
         return "high"
     elif triggers == 1:

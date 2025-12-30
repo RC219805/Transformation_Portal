@@ -1,8 +1,8 @@
 # Production Deployment Acceptance Criteria
 ## High-Fidelity Depth Pipeline - Go/No-Go Decision Sheet
 
-**Date**: December 17, 2025  
-**Version**: 1.0  
+**Date**: December 17, 2025
+**Version**: 1.0
 **Configuration**: production (tile_size=1024, overlap=128, global_anchor=OFF)
 
 ---
@@ -24,9 +24,9 @@
 | **Memory** | Peak <16GB | ✅ PASS | Estimated ~8-12GB |
 | **No Catastrophic Failures** | Zero images with visible grid seams | 🟡 PENDING | Seam validation implemented |
 
-**PILOT DECISION**: ⏳ PENDING FULL DATASET RUN  
-**Blocker**: Execute `production_validation_suite.py` on all 6 images  
-**ETA**: 30-45 minutes processing time  
+**PILOT DECISION**: ⏳ PENDING FULL DATASET RUN
+**Blocker**: Execute `production_validation_suite.py` on all 6 images
+**ETA**: 30-45 minutes processing time
 
 ---
 
@@ -42,8 +42,8 @@
 | **Failure Rate** | <5% fallback to baseline | ⏸️ BLOCKED | Requires full run |
 | **Quality Regression** | No image worse than baseline | ⏸️ BLOCKED | Requires A/B |
 
-**PRODUCTION DECISION**: ⏸️ BLOCKED ON PILOT  
-**Blockers**: 
+**PRODUCTION DECISION**: ⏸️ BLOCKED ON PILOT
+**Blockers**:
 1. Complete full dataset validation
 2. Run Materials V3 A/B (100 scenes)
 3. Validate throughput at scale
@@ -169,8 +169,8 @@ seam_energy_worst      ≤ 1.5    # Worst single boundary
 
 ### Phase 1: Pilot (Week 1)
 
-**Scope**: 50 representative scenes from 750_Picacho  
-**Goal**: Validate pass rate ≥80%  
+**Scope**: 50 representative scenes from 750_Picacho
+**Goal**: Validate pass rate ≥80%
 
 **Tasks**:
 1. ✅ Run production_validation_suite.py on 50 scenes
@@ -190,8 +190,8 @@ seam_energy_worst      ≤ 1.5    # Worst single boundary
 
 ### Phase 2: Materials V3 Integration (Week 2-3)
 
-**Scope**: 100 scenes A/B test (baseline vs depth-enhanced)  
-**Goal**: Measurable improvement in Materials V3 output  
+**Scope**: 100 scenes A/B test (baseline vs depth-enhanced)
+**Goal**: Measurable improvement in Materials V3 output
 
 **Tasks**:
 1. ✅ Run Materials V3 with baseline depth (control)
@@ -212,8 +212,8 @@ seam_energy_worst      ≤ 1.5    # Worst single boundary
 
 ### Phase 3: Full Production (Week 4+)
 
-**Scope**: Complete 750_Picacho dataset + ongoing production  
-**Goal**: ≥95% pass rate, sustainable throughput  
+**Scope**: Complete 750_Picacho dataset + ongoing production
+**Goal**: ≥95% pass rate, sustainable throughput
 
 **Tasks**:
 1. ✅ Roll out to full dataset
@@ -330,24 +330,24 @@ python production_validation_suite.py \
 
 ## ✅ Sign-Off
 
-**Validation Infrastructure**: ✅ COMPLETE  
-**Infrastructure Reviewed By**: _[Technical Lead]_  
-**Date**: December 17, 2025  
+**Validation Infrastructure**: ✅ COMPLETE
+**Infrastructure Reviewed By**: _[Technical Lead]_
+**Date**: December 17, 2025
 
-**Full Dataset Validation**: 🟡 IN PROGRESS  
-**Validated By**: _[Pending execution]_  
-**Date**: _[TBD]_  
+**Full Dataset Validation**: 🟡 IN PROGRESS
+**Validated By**: _[Pending execution]_
+**Date**: _[TBD]_
 
-**Pilot Approval**: ⏳ PENDING  
-**Approved By**: _[Pending validation results]_  
-**Date**: _[TBD]_  
+**Pilot Approval**: ⏳ PENDING
+**Approved By**: _[Pending validation results]_
+**Date**: _[TBD]_
 
-**Production Approval**: ⏸️ BLOCKED  
-**Approved By**: _[Pending pilot + Materials V3 A/B]_  
-**Date**: _[TBD]_  
+**Production Approval**: ⏸️ BLOCKED
+**Approved By**: _[Pending pilot + Materials V3 A/B]_
+**Date**: _[TBD]_
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 17, 2025  
-**Next Review**: After full dataset validation run  
+**Document Version**: 1.0
+**Last Updated**: December 17, 2025
+**Next Review**: After full dataset validation run

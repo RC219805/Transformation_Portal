@@ -26,35 +26,30 @@ from typing import List, Tuple
 # Mapping of old imports to new imports
 IMPORT_MAPPINGS = {
     # Processors
-    'from material_response import': 'from transformation_portal.processors.material_response.core import',
-    'import material_response': 'from transformation_portal.processors import material_response',
-    'from material_response_optimizer import': 'from transformation_portal.processors.material_response.optimizer import',
-    'from luxury_video_master_grader import': 'from transformation_portal.processors.luxury_video_master_grader import',
-
+    "from material_response import": "from transformation_portal.processors.material_response.core import",
+    "import material_response": "from transformation_portal.processors import material_response",
+    "from material_response_optimizer import": "from transformation_portal.processors.material_response.optimizer import",
+    "from luxury_video_master_grader import": "from transformation_portal.processors.luxury_video_master_grader import",
     # Pipelines
-    'from lux_render_pipeline import': 'from transformation_portal.pipelines.lux_render_pipeline import',
-    'from depth_tools import': 'from transformation_portal.pipelines.depth_tools import',
-    'from dreaming_pipeline import': 'from transformation_portal.pipelines.dreaming_pipeline import',
-
+    "from lux_render_pipeline import": "from transformation_portal.pipelines.lux_render_pipeline import",
+    "from depth_tools import": "from transformation_portal.pipelines.depth_tools import",
+    "from dreaming_pipeline import": "from transformation_portal.pipelines.dreaming_pipeline import",
     # Enhancers
-    'from enhance_aerial import': 'from transformation_portal.enhancers.enhance_aerial import',
-    'from enhance_pool_aerial import': 'from transformation_portal.enhancers.enhance_pool_aerial import',
-    'from board_material_aerial_enhancer import': 'from transformation_portal.enhancers.board_material_aerial_enhancer import',
-    'from update_enhance_aerial import': 'from transformation_portal.enhancers.update_enhance_aerial import',
-
+    "from enhance_aerial import": "from transformation_portal.enhancers.enhance_aerial import",
+    "from enhance_pool_aerial import": "from transformation_portal.enhancers.enhance_pool_aerial import",
+    "from board_material_aerial_enhancer import": "from transformation_portal.enhancers.board_material_aerial_enhancer import",
+    "from update_enhance_aerial import": "from transformation_portal.enhancers.update_enhance_aerial import",
     # Analyzers
-    'from decision_decay_dashboard import': 'from transformation_portal.analyzers.decision_decay_dashboard import',
-    'from codebase_philosophy_auditor import': 'from transformation_portal.analyzers.codebase_philosophy_auditor import',
-    'from parse_workflows import': 'from transformation_portal.analyzers.parse_workflows import',
-
+    "from decision_decay_dashboard import": "from transformation_portal.analyzers.decision_decay_dashboard import",
+    "from codebase_philosophy_auditor import": "from transformation_portal.analyzers.codebase_philosophy_auditor import",
+    "from parse_workflows import": "from transformation_portal.analyzers.parse_workflows import",
     # Rendering
-    'from coastal_estate_render import': 'from transformation_portal.rendering.coastal_estate_render import',
-    'from golden_hour_courtyard_workflow import': 'from transformation_portal.rendering.golden_hour_courtyard_workflow import',
-    'from process_renderings_750 import': 'from transformation_portal.rendering.process_renderings_750 import',
-
+    "from coastal_estate_render import": "from transformation_portal.rendering.coastal_estate_render import",
+    "from golden_hour_courtyard_workflow import": "from transformation_portal.rendering.golden_hour_courtyard_workflow import",
+    "from process_renderings_750 import": "from transformation_portal.rendering.process_renderings_750 import",
     # Utils
-    'from color_science import': 'from transformation_portal.utils.color_science import',
-    'from helpers import': 'from transformation_portal.utils.helpers import',
+    "from color_science import": "from transformation_portal.utils.color_science import",
+    "from helpers import": "from transformation_portal.utils.helpers import",
 }
 
 
@@ -139,18 +134,9 @@ def main():
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Migrate import statements to new Transformation Portal structure"
-    )
-    parser.add_argument(
-        "path",
-        help="File or directory to process"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show changes without applying them"
-    )
+    parser = argparse.ArgumentParser(description="Migrate import statements to new Transformation Portal structure")
+    parser.add_argument("path", help="File or directory to process")
+    parser.add_argument("--dry-run", action="store_true", help="Show changes without applying them")
 
     args = parser.parse_args()
     path = Path(args.path)

@@ -19,7 +19,7 @@ def compute_sha256(array):
 def compare_tiffs(source_path, baseline_path):
     """
     Compare source and baseline TIFFs at pixel level.
-    
+
     Returns:
         dict: Comprehensive comparison results
     """
@@ -27,17 +27,17 @@ def compare_tiffs(source_path, baseline_path):
     print("PIXEL-LEVEL VALIDATION: RAW Baseline vs Source")
     print("=" * 80)
     print()
-    
+
     # Load TIFFs
     print(f"Loading source: {source_path}")
     source = imread(source_path)
     print(f"  Shape: {source.shape}, dtype: {source.dtype}")
-    
+
     print(f"Loading baseline: {baseline_path}")
     baseline = imread(baseline_path)
     print(f"  Shape: {baseline.shape}, dtype: {baseline.dtype}")
     print()
-    
+
     # Geometry check
     print("1. GEOMETRY CHECK")
     print("-" * 80)
@@ -46,51 +46,51 @@ def compare_tiffs(source_path, baseline_path):
     print(f"  Baseline shape: {baseline.shape}")
     print(f"  Match: {'✅ YES' if geometry_match else '❌ NO'}")
     print()
-    
+
     if not geometry_match:
         print("❌ GEOMETRY MISMATCH - baseline is invalid")
         return {"status": "FAILED", "reason": "geometry_mismatch"}
-    
+
     # Pixel-perfect comparison
     print("2. PIXEL-PERFECT COMPARISON")
     print("-" * 80)
     pixel_match = np.array_equal(source, baseline)
     print(f"  Arrays identical: {'✅ YES' if pixel_match else '❌ NO'}")
-    
+
     if pixel_match:
         print("  ✅ PIXEL-PERFECT MATCH - baseline is valid")
         print()
         return {"status": "PASSED", "pixel_perfect": True}
-    
+
     # Detailed difference analysis
     print("  ⚠️  Pixels differ - analyzing...")
     print()
-    
+
     diff = np.abs(source.astype(np.float32) - baseline.astype(np.float32))
     max_diff = diff.max()
     mean_diff = diff.mean()
     nonzero_diff = np.count_nonzero(diff)
     total_pixels = diff.size
-    
+
     print("3. DIFFERENCE ANALYSIS")
     print("-" * 80)
     print(f"  Max difference:  {max_diff}")
     print(f"  Mean difference: {mean_diff:.6f}")
-    print(f"  Different pixels: {nonzero_diff:,} / {total_pixels:,} ({100*nonzero_diff/total_pixels:.4f}%)")
+    print(f"  Different pixels: {nonzero_diff:,} / {total_pixels:,} ({100 * nonzero_diff / total_pixels:.4f}%)")
     print()
-    
+
     # Sample pixel comparison
     print("4. SAMPLE PIXEL VALUES (5 locations)")
     print("-" * 80)
     h, w = source.shape[:2]
     coords = [
         (0, 0, "Top-left"),
-        (h//2, w//2, "Center"),
-        (h-1, w-1, "Bottom-right"),
-        (h//4, w//4, "Quarter"),
-        (3*h//4, 3*w//4, "Three-quarter"),
+        (h // 2, w // 2, "Center"),
+        (h - 1, w - 1, "Bottom-right"),
+        (h // 4, w // 4, "Quarter"),
+        (3 * h // 4, 3 * w // 4, "Three-quarter"),
     ]
-    
+
     for y, x, label in coords:
         src_val = source[y, x]
         base_val = baseline[y, x]
@@ -98,7 +98,7 @@ def compare_tiffs(source_path, baseline_path):
         print(f"  [{y:4d}, {x:4d}] {label:15s}: ", end="")
         print(f"Source={src_val} Baseline={base_val} {'✅' if match else '❌'}")
     print()
-    
+
     # Hash comparison
     print("5. SHA256 HASH COMPARISON")
     print("-" * 80)
@@ -109,12 +109,12 @@ def compare_tiffs(source_path, baseline_path):
     print(f"  Baseline hash: {baseline_hash[:16]}...")
     print(f"  Match: {'✅ YES' if hash_match else '❌ NO'}")
     print()
-    
+
     # Channel statistics
     print("6. CHANNEL STATISTICS")
     print("-" * 80)
     if source.ndim == 3 and source.shape[2] >= 3:
-        for ch, name in enumerate(['Red', 'Green', 'Blue'][:source.shape[2]]):
+        for ch, name in enumerate(["Red", "Green", "Blue"][: source.shape[2]]):
             src_mean = source[:, :, ch].mean()
             base_mean = baseline[:, :, ch].mean()
             src_std = source[:, :, ch].std()
@@ -122,12 +122,12 @@ def compare_tiffs(source_path, baseline_path):
             print(f"  {name:6s}: Source mean={src_mean:8.2f} std={src_std:8.2f}")
             print(f"         Baseline mean={base_mean:8.2f} std={base_std:8.2f}")
             print()
-    
+
     # Final verdict
     print("=" * 80)
     print("VERDICT")
     print("=" * 80)
-    
+
     if pixel_match or (max_diff == 0):
         print("✅ BASELINE VALID: Pixel-perfect match")
         status = "PASSED"
@@ -137,9 +137,9 @@ def compare_tiffs(source_path, baseline_path):
     else:
         print("❌ BASELINE INVALID: Significant pixel differences detected")
         status = "FAILED"
-    
+
     print()
-    
+
     return {
         "status": status,
         "pixel_perfect": pixel_match,
@@ -154,17 +154,17 @@ def compare_tiffs(source_path, baseline_path):
 def main():
     source_path = Path("projects/750_picacho_lane/Final_Production_UltraQuality/750Picacho_Kitchen_UltraQuality.tif")
     baseline_path = Path("forensics/raw_baseline/750Picacho_Kitchen_UltraQuality_master16.tif")
-    
+
     if not source_path.exists():
         print(f"❌ Source file not found: {source_path}")
         return 1
-    
+
     if not baseline_path.exists():
         print(f"❌ Baseline file not found: {baseline_path}")
         return 1
-    
+
     result = compare_tiffs(source_path, baseline_path)
-    
+
     if result["status"] == "PASSED":
         print("✅ RAW BASELINE VALIDATION: PASSED")
         print("   Baseline is pixel-perfect and can be used as canonical reference.")

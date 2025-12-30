@@ -1,7 +1,7 @@
 # TIFF Degradation Issue - Root Cause & Solution
 
-**Date:** November 8, 2025  
-**Issue:** Master TIFF files saved as 8-bit instead of 16-bit, causing quality degradation  
+**Date:** November 8, 2025
+**Issue:** Master TIFF files saved as 8-bit instead of 16-bit, causing quality degradation
 **Status:** ✅ FIXED (All critical pipelines updated)
 
 ## Root Cause Analysis
@@ -166,7 +166,7 @@ $ python3 fix_tiff_saving.py output_premium_fixed/*_MASTER.tiff
 dtype: uint8  # ❌ BROKEN
 bits_per_sample: 8
 
-$ python3 fix_tiff_saving.py output_maximum_quality/*_MASTER.tiff  
+$ python3 fix_tiff_saving.py output_maximum_quality/*_MASTER.tiff
 dtype: uint16  # ✅ FIXED
 bits_per_sample: 16
 ```

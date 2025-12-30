@@ -151,12 +151,12 @@ else:
   "ground_truth_label": "pool",
   "difficulty": "easy",
   "tags": [],
-  
+
   "detector_present": true,
   "detector_coverage": 0.85,
   "detector_coverage_px": 55296,
   "detector_confidence": 0.72,
-  
+
   "is_detected": true,
   "edge_alignment_score": 0.68,
   "boundary_px": 1024,
@@ -173,19 +173,19 @@ else:
     "total_images": 40,
     "pool_images": 20,
     "ocean_images": 20,
-    
+
     "pool_recall": 0.90,
     "pool_avg_coverage": 0.78,
     "pool_avg_confidence": 0.68,
     "pool_avg_edge_alignment": 0.62,
     "pool_avg_stability": 0.80,
-    
+
     "ocean_recall": 0.85,
     "ocean_avg_coverage": 0.65,
     "ocean_avg_confidence": 0.58,
     "ocean_avg_edge_alignment": 0.55,
     "ocean_avg_stability": 0.75,
-    
+
     "overall_avg_processing_time_ms": 32.1
   },
   "results": [...]
@@ -235,21 +235,21 @@ for tag, paths in sorted(pool_failures_by_tag.items(), key=lambda x: -len(x[1]))
 def validate_single(self, img_path: Path, expected_label: str, difficulty: str, tags: list) -> ValidationResult:
     """Validate single image."""
     # ... existing code ...
-    
+
     # Compute is_detected (both pool and ocean are "water")
     is_detected = water_dict.get('present', False)
-    
+
     return ValidationResult(
         image_path=str(img_path),
         ground_truth_label=expected_label,
         difficulty=difficulty,
         tags=tags,
-        
+
         detector_present=is_detected,
         detector_coverage=water_dict.get('coverage', 0.0),
         detector_coverage_px=water_dict.get('coverage_px', 0),
         detector_confidence=water_dict.get('confidence', 0.0),
-        
+
         is_detected=is_detected,  # TP if present, FN if not
         edge_alignment_score=edge_score,
         boundary_px=boundary_px,
@@ -261,36 +261,36 @@ def generate_report(self, results: List[ValidationResult], output_path: Path):
     """Generate JSON validation report."""
     pool_results = [r for r in results if r.ground_truth_label == "pool"]
     ocean_results = [r for r in results if r.ground_truth_label == "ocean"]
-    
+
     summary = {
         "dataset_version": "v0",
         "total_images": len(results),
         "pool_images": len(pool_results),
         "ocean_images": len(ocean_results),
-        
+
         # Pool metrics
         "pool_recall": sum(r.is_detected for r in pool_results) / len(pool_results) if pool_results else 0.0,
         "pool_avg_coverage": np.mean([r.detector_coverage for r in pool_results if r.is_detected]) if any(r.is_detected for r in pool_results) else 0.0,
         "pool_avg_confidence": np.mean([r.detector_confidence for r in pool_results if r.is_detected]) if any(r.is_detected for r in pool_results) else 0.0,
         "pool_avg_edge_alignment": np.mean([r.edge_alignment_score for r in pool_results if r.is_detected]) if any(r.is_detected for r in pool_results) else 0.0,
         "pool_avg_stability": np.mean([r.stability_score for r in pool_results]) if pool_results else 0.0,
-        
+
         # Ocean metrics
         "ocean_recall": sum(r.is_detected for r in ocean_results) / len(ocean_results) if ocean_results else 0.0,
         "ocean_avg_coverage": np.mean([r.detector_coverage for r in ocean_results if r.is_detected]) if any(r.is_detected for r in ocean_results) else 0.0,
         "ocean_avg_confidence": np.mean([r.detector_confidence for r in ocean_results if r.is_detected]) if any(r.is_detected for r in ocean_results) else 0.0,
         "ocean_avg_edge_alignment": np.mean([r.edge_alignment_score for r in ocean_results if r.is_detected]) if any(r.is_detected for r in ocean_results) else 0.0,
         "ocean_avg_stability": np.mean([r.stability_score for r in ocean_results]) if ocean_results else 0.0,
-        
+
         # Overall
         "overall_avg_processing_time_ms": np.mean([r.processing_time_ms for r in results]),
     }
-    
+
     report = {
         "summary": summary,
         "results": [vars(r) for r in results]
     }
-    
+
     with open(output_path, 'w') as f:
         json.dump(report, f, indent=2)
 ```
@@ -314,7 +314,7 @@ def generate_report(self, results: List[ValidationResult], output_path: Path):
     "pool/pool_0008.jpg": {"label": "pool", "difficulty": "easy", "notes": "Resort pool, clear", "tags": []},
     "pool/pool_0009.jpg": {"label": "pool", "difficulty": "medium", "notes": "Indoor pool", "tags": ["indoor"]},
     "pool/pool_0010.jpg": {"label": "pool", "difficulty": "easy", "notes": "Lap pool, overhead view", "tags": []},
-    
+
     "ocean/ocean_0001.jpg": {"label": "ocean", "difficulty": "easy", "notes": "Calm ocean, sunny", "tags": []},
     "ocean/ocean_0002.jpg": {"label": "ocean", "difficulty": "medium", "notes": "Overcast, desaturated", "tags": ["overcast"]},
     "ocean/ocean_0003.jpg": {"label": "ocean", "difficulty": "hard", "notes": "Gray water, low saturation", "tags": ["gray"]},
@@ -344,7 +344,7 @@ def generate_report(self, results: List[ValidationResult], output_path: Path):
     "pool/pool_0007.jpg": {"label": "pool", "difficulty": "hard", "notes": "Infinity edge", "tags": ["infinity-edge"]},
     "pool/pool_0008.jpg": {"label": "pool", "difficulty": "easy", "notes": "Resort pool", "tags": []},
     "pool/pool_0009.jpg": {"label": "pool", "difficulty": "medium", "notes": "Indoor", "tags": ["indoor"]},
-    
+
     "ocean/ocean_0001.jpg": {"label": "ocean", "difficulty": "easy", "notes": "Calm ocean", "tags": []},
     "ocean/ocean_0003.jpg": {"label": "ocean", "difficulty": "hard", "notes": "Gray water", "tags": ["gray"]},
     "ocean/ocean_0004.jpg": {"label": "ocean", "difficulty": "hard", "notes": "Choppy waves", "tags": ["waves"]},

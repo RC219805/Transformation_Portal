@@ -28,10 +28,10 @@ This runs a minimal training demo (3 epochs, 50 pairs) to validate the infrastru
 ## 📁 Available Scripts
 
 ### 1. `train_with_750picacho.sh`
-**Purpose:** Train on real architectural project data  
-**Dataset:** 750 Picacho Lane BIM data (530+ pairs)  
-**Duration:** ~2.5-3.5 hours on M4 Max  
-**Quality:** 103-107/100 target  
+**Purpose:** Train on real architectural project data
+**Dataset:** 750 Picacho Lane BIM data (530+ pairs)
+**Duration:** ~2.5-3.5 hours on M4 Max
+**Quality:** 103-107/100 target
 
 **Usage:**
 ```bash
@@ -51,10 +51,10 @@ Options:
 ```
 
 ### 2. `quickstart_training.sh`
-**Purpose:** Train on synthetic data  
-**Dataset:** Generated synthetic pairs (1000 default)  
-**Duration:** ~2-3 hours on M4 Max  
-**Quality:** 100-103/100 target  
+**Purpose:** Train on synthetic data
+**Dataset:** Generated synthetic pairs (1000 default)
+**Duration:** ~2-3 hours on M4 Max
+**Quality:** 100-103/100 target
 
 **Usage:**
 ```bash
@@ -74,10 +74,10 @@ Options:
 ```
 
 ### 3. `quick_train_demo.py`
-**Purpose:** Validate training infrastructure  
-**Dataset:** 50 synthetic pairs  
-**Duration:** ~5-10 minutes  
-**Quality:** Demo only (not for production)  
+**Purpose:** Validate training infrastructure
+**Dataset:** 50 synthetic pairs
+**Duration:** ~5-10 minutes
+**Quality:** Demo only (not for production)
 
 **Usage:**
 ```bash
@@ -237,6 +237,6 @@ Need help? Check:
 
 ---
 
-**Last Updated:** 2025-11-19  
-**Status:** All scripts validated and working  
+**Last Updated:** 2025-11-19
+**Status:** All scripts validated and working
 **Recommendation:** Use `train_with_750picacho.sh` for best results

@@ -1,6 +1,6 @@
 # 🎉 Lux Depth V3 - Deployment Complete
 
-**Date:** December 19, 2025  
+**Date:** December 19, 2025
 **Status:** ✅ **PRODUCTION READY**
 
 ---
@@ -11,10 +11,10 @@ The `lux-depth-v3` package has been successfully installed and is ready for use!
 
 ### Installed Components
 
-✅ **CLI Tool:** `lux-depth-v3` command available  
-✅ **10 Commands:** All features accessible via CLI  
-✅ **Package Manager:** Model caching system operational  
-✅ **Dependencies:** All required packages installed  
+✅ **CLI Tool:** `lux-depth-v3` command available
+✅ **10 Commands:** All features accessible via CLI
+✅ **Package Manager:** Model caching system operational
+✅ **Dependencies:** All required packages installed
 
 ### Installation Location
 
@@ -223,8 +223,8 @@ lux-depth-v3 process --input-dir images/ --output-dir output/
 
 ### Storage Requirements
 
-**Minimum:** 10GB (essential set)  
-**Recommended:** 15GB (production set)  
+**Minimum:** 10GB (essential set)
+**Recommended:** 15GB (production set)
 **Full:** 20GB (all models)
 
 **Cache Location:** `~/.cache/huggingface/hub`
@@ -283,6 +283,6 @@ lux-depth-v3 cache-download --set essential
 
 ---
 
-**Deployment Date:** December 19, 2025  
-**Version:** 0.1.0  
+**Deployment Date:** December 19, 2025
+**Version:** 0.1.0
 **License:** Apache 2.0 (package), Mixed (models)

@@ -2,6 +2,7 @@
 """
 Process 750 Picacho Lane source JPEGs through the luxury pipeline
 """
+
 from transformation_portal.pipelines.lux_render_pipeline import LuxRenderPipeline
 import sys
 from pathlib import Path
@@ -12,14 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 
 # Scene definitions with their source files
-SCENES = [
-    "Aerial",
-    "GreatRoom",
-    "Kitchen",
-    "Pool",
-    "PrimaryBathroom",
-    "PrimaryBedroom"
-]
+SCENES = ["Aerial", "GreatRoom", "Kitchen", "Pool", "PrimaryBathroom", "PrimaryBedroom"]
 
 
 def process_750_picacho():
@@ -39,19 +33,14 @@ def process_750_picacho():
     print(f"Timestamp: {timestamp}\n")
 
     # Initialize pipeline
-    pipeline = LuxRenderPipeline(
-        use_depth_estimation=True,
-        use_advanced_grading=True,
-        output_format="jpg",
-        quality=98
-    )
+    pipeline = LuxRenderPipeline(use_depth_estimation=True, use_advanced_grading=True, output_format="jpg", quality=98)
 
     results = {}
 
     for i, scene in enumerate(SCENES, 1):
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Processing {i}/{len(SCENES)}: {scene}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         # Build paths
         source_file = source_dir / f"750Picacho_{scene}.jpg"
@@ -68,10 +57,7 @@ def process_750_picacho():
             print(f"📤 Output: {output_file.name}")
             print("⚙️  Processing...")
 
-            result = pipeline.process_image(
-                input_path=str(source_file),
-                output_path=str(output_file)
-            )
+            result = pipeline.process_image(input_path=str(source_file), output_path=str(output_file))
 
             if result and output_file.exists():
                 size_mb = output_file.stat().st_size / (1024 * 1024)
@@ -86,9 +72,9 @@ def process_750_picacho():
             results[scene] = f"ERROR: {str(e)}"
 
     # Summary
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("PROCESSING SUMMARY")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     success_count = sum(1 for v in results.values() if v == "SUCCESS")
     total_count = len(SCENES)
@@ -97,10 +83,10 @@ def process_750_picacho():
         icon = "✅" if status == "SUCCESS" else "❌"
         print(f"{icon} {scene:20s} {status}")
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Completed: {success_count}/{total_count} scenes processed successfully")
     print(f"Output location: {output_dir}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     return success_count == total_count
 

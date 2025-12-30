@@ -23,14 +23,16 @@ from PIL import Image
 
 class DepthZone(Enum):
     """Depth zones for LUT application."""
+
     FOREGROUND = "foreground"  # Closest to camera
-    MIDGROUND = "midground"    # Middle distance
+    MIDGROUND = "midground"  # Middle distance
     BACKGROUND = "background"  # Farthest from camera
 
 
 @dataclass
 class ZoneLUTConfig:
     """LUT configuration for a specific depth zone."""
+
     zone: DepthZone
     lut_path: Path
     strength: float = 1.0  # 0.0 to 1.0
@@ -41,6 +43,7 @@ class ZoneLUTConfig:
 @dataclass
 class DepthAwareLUTConfig:
     """Complete depth-aware LUT configuration."""
+
     zone_configs: Dict[DepthZone, ZoneLUTConfig]
     atmospheric_strength: float = 0.0  # 0.0 to 1.0
     depth_falloff: float = 2.0  # Exponential falloff for zone blending
@@ -61,7 +64,7 @@ class LUTReader:
         Returns:
             (lut_array, size) - 3D LUT array and grid size
         """
-        with open(lut_path, 'r') as f:
+        with open(lut_path, "r") as f:
             lines = f.readlines()
 
         # Parse header
@@ -71,9 +74,9 @@ class LUTReader:
         for line in lines:
             line = line.strip()
 
-            if line.startswith('LUT_3D_SIZE'):
+            if line.startswith("LUT_3D_SIZE"):
                 size = int(line.split()[-1])
-            elif line and not line.startswith('#') and not line.startswith('TITLE') and not line.startswith('DOMAIN'):
+            elif line and not line.startswith("#") and not line.startswith("TITLE") and not line.startswith("DOMAIN"):
                 # Data line
                 try:
                     values = [float(v) for v in line.split()]
@@ -187,11 +190,7 @@ class DepthAwareLUT:
             else:
                 print(f"⚠ Warning: LUT not found: {zone_config.lut_path}")
 
-    def apply(
-        self,
-        image: np.ndarray,
-        depth_map: np.ndarray
-    ) -> np.ndarray:
+    def apply(self, image: np.ndarray, depth_map: np.ndarray) -> np.ndarray:
         """
         Apply depth-aware LUT to image.
 
@@ -218,9 +217,7 @@ class DepthAwareLUT:
             zone_config = self.config.zone_configs[zone]
 
             # Apply LUT
-            lut_applied = self.lut_reader.apply_lut(
-                image, self.luts[zone], self.lut_sizes[zone]
-            )
+            lut_applied = self.lut_reader.apply_lut(image, self.luts[zone], self.lut_sizes[zone])
 
             # Blend with original based on strength
             lut_applied = image * (1 - zone_config.strength) + lut_applied * zone_config.strength
@@ -340,11 +337,7 @@ class DepthAwareLUT:
         # Convert back to RGB
         return self._hsv_to_rgb(hsv)
 
-    def _apply_atmospheric_perspective(
-        self,
-        image: np.ndarray,
-        depth_map: np.ndarray
-    ) -> np.ndarray:
+    def _apply_atmospheric_perspective(self, image: np.ndarray, depth_map: np.ndarray) -> np.ndarray:
         """
         Apply atmospheric haze effect based on depth.
 
@@ -479,47 +472,44 @@ def main():
     """CLI for depth-aware LUT application."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Depth-Aware LUT Application"
-    )
-    parser.add_argument('input', type=Path, help='Input image path')
-    parser.add_argument('--output', type=Path, required=True, help='Output image path')
-    parser.add_argument('--depth-map', type=Path, help='Pre-computed depth map (optional)')
+    parser = argparse.ArgumentParser(description="Depth-Aware LUT Application")
+    parser.add_argument("input", type=Path, help="Input image path")
+    parser.add_argument("--output", type=Path, required=True, help="Output image path")
+    parser.add_argument("--depth-map", type=Path, help="Pre-computed depth map (optional)")
 
     # Zone LUT configurations
-    parser.add_argument('--fg-lut', type=Path, help='Foreground LUT path')
-    parser.add_argument('--fg-strength', type=float, default=0.8, help='Foreground LUT strength')
-    parser.add_argument('--fg-temp', type=int, default=0, help='Foreground color temp shift (K)')
+    parser.add_argument("--fg-lut", type=Path, help="Foreground LUT path")
+    parser.add_argument("--fg-strength", type=float, default=0.8, help="Foreground LUT strength")
+    parser.add_argument("--fg-temp", type=int, default=0, help="Foreground color temp shift (K)")
 
-    parser.add_argument('--mg-lut', type=Path, help='Midground LUT path')
-    parser.add_argument('--mg-strength', type=float, default=0.7, help='Midground LUT strength')
-    parser.add_argument('--mg-temp', type=int, default=0, help='Midground color temp shift (K)')
+    parser.add_argument("--mg-lut", type=Path, help="Midground LUT path")
+    parser.add_argument("--mg-strength", type=float, default=0.7, help="Midground LUT strength")
+    parser.add_argument("--mg-temp", type=int, default=0, help="Midground color temp shift (K)")
 
-    parser.add_argument('--bg-lut', type=Path, help='Background LUT path')
-    parser.add_argument('--bg-strength', type=float, default=0.6, help='Background LUT strength')
-    parser.add_argument('--bg-temp', type=int, default=200,
-                        help='Background color temp shift (K, default: +200 for atmospheric warmth)')
+    parser.add_argument("--bg-lut", type=Path, help="Background LUT path")
+    parser.add_argument("--bg-strength", type=float, default=0.6, help="Background LUT strength")
+    parser.add_argument(
+        "--bg-temp", type=int, default=200, help="Background color temp shift (K, default: +200 for atmospheric warmth)"
+    )
 
-    parser.add_argument('--atmospheric', type=float, default=0.3,
-                        help='Atmospheric perspective strength (0-1)')
-    parser.add_argument('--depth-falloff', type=float, default=2.0,
-                        help='Depth zone falloff exponent')
+    parser.add_argument("--atmospheric", type=float, default=0.3, help="Atmospheric perspective strength (0-1)")
+    parser.add_argument("--depth-falloff", type=float, default=2.0, help="Depth zone falloff exponent")
 
     args = parser.parse_args()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Depth-Aware LUT Application")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Load image
     print(f"📷 Loading image: {args.input}")
-    img = Image.open(args.input).convert('RGB')
+    img = Image.open(args.input).convert("RGB")
     img_array = np.array(img).astype(np.float32) / 255.0
 
     # Load or create depth map
     if args.depth_map:
         print(f"📊 Loading depth map: {args.depth_map}")
-        depth = np.array(Image.open(args.depth_map).convert('L')).astype(np.float32) / 255.0
+        depth = np.array(Image.open(args.depth_map).convert("L")).astype(np.float32) / 255.0
     else:
         print(f"📊 Creating depth map...")
         depth = create_depth_map(args.input)
@@ -527,6 +517,7 @@ def main():
     # Resize depth to match image if needed
     if depth.shape[:2] != img_array.shape[:2]:
         from PIL import Image as PILImage
+
         depth_img = PILImage.fromarray((depth * 255).astype(np.uint8))
         depth_img = depth_img.resize((img_array.shape[1], img_array.shape[0]), PILImage.BILINEAR)
         depth = np.array(depth_img).astype(np.float32) / 255.0
@@ -536,26 +527,17 @@ def main():
 
     if args.fg_lut:
         zone_configs[DepthZone.FOREGROUND] = ZoneLUTConfig(
-            zone=DepthZone.FOREGROUND,
-            lut_path=args.fg_lut,
-            strength=args.fg_strength,
-            color_temp_shift=args.fg_temp
+            zone=DepthZone.FOREGROUND, lut_path=args.fg_lut, strength=args.fg_strength, color_temp_shift=args.fg_temp
         )
 
     if args.mg_lut:
         zone_configs[DepthZone.MIDGROUND] = ZoneLUTConfig(
-            zone=DepthZone.MIDGROUND,
-            lut_path=args.mg_lut,
-            strength=args.mg_strength,
-            color_temp_shift=args.mg_temp
+            zone=DepthZone.MIDGROUND, lut_path=args.mg_lut, strength=args.mg_strength, color_temp_shift=args.mg_temp
         )
 
     if args.bg_lut:
         zone_configs[DepthZone.BACKGROUND] = ZoneLUTConfig(
-            zone=DepthZone.BACKGROUND,
-            lut_path=args.bg_lut,
-            strength=args.bg_strength,
-            color_temp_shift=args.bg_temp
+            zone=DepthZone.BACKGROUND, lut_path=args.bg_lut, strength=args.bg_strength, color_temp_shift=args.bg_temp
         )
 
     if not zone_configs:
@@ -564,9 +546,7 @@ def main():
 
     # Create configuration
     config = DepthAwareLUTConfig(
-        zone_configs=zone_configs,
-        atmospheric_strength=args.atmospheric,
-        depth_falloff=args.depth_falloff
+        zone_configs=zone_configs, atmospheric_strength=args.atmospheric, depth_falloff=args.depth_falloff
     )
 
     # Apply depth-aware LUT
@@ -581,10 +561,10 @@ def main():
 
     print(f"✓ Saved result: {args.output}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Processing complete!")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

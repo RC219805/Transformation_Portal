@@ -61,7 +61,7 @@ def _compute_edge_alignment(
 ) -> float:
     """
     Primary metric: edge alignment vs image gradients.
-    
+
     High score = mask boundaries align with image edges.
     """
     if mask is None:
@@ -97,23 +97,23 @@ stability = self._compute_stability(rgb01, depth)
 def _compute_stability(self, rgb01: np.ndarray, depth: np.ndarray) -> float:
     """
     Stability across minor perturbations (resize/compress jitter).
-    
+
     High score = consistent detection under perturbations.
     """
     # Baseline detection
     baseline_report = self.engine.process(...)
     baseline_coverage = baseline_report.get('materials_v3', {}).get('water_candidate', {}).get('coverage', 0.0)
-    
+
     # Perturbation 1: slight resize (95%)
     resized_report = self.engine.process(...)
-    
+
     # Perturbation 2: JPEG compression simulation (noise)
     noisy_report = self.engine.process(...)
-    
+
     # Compute coverage variance
     coverages = [baseline_coverage, resized_coverage, noisy_coverage]
     std = np.std(coverages)
-    
+
     # Low variance = high stability
     stability = 1.0 - min(std * 5, 1.0)
     return float(stability)
@@ -180,37 +180,37 @@ def generate_report(
     pool_results = [r for r in results if r.scene_type == "pool"]
     ocean_results = [r for r in results if r.scene_type == "ocean"]
     non_water_results = [r for r in results if r.scene_type == "non_water"]
-    
+
     summary = {
         "total_images": len(results),
         "pool_scenes": len(pool_results),
         "ocean_scenes": len(ocean_results),
         "non_water_scenes": len(non_water_results),
-        
+
         # Coverage stats
         "pool_avg_coverage": ...,
         "ocean_avg_coverage": ...,
-        
+
         # Edge alignment (primary metric)
         "pool_avg_edge_alignment": ...,
         "ocean_avg_edge_alignment": ...,
-        
+
         # Stability
         "overall_avg_stability": ...,
-        
+
         # False positives
         "false_positive_count": ...,
         "false_positive_rate": ...,
-        
+
         # Performance
         "avg_processing_time_ms": ...,
     }
-    
+
     report = {
         "summary": summary,
         "results": [vars(r) for r in results]
     }
-    
+
     with open(output_path, 'w') as f:
         json.dump(report, f, indent=2)
 ```
@@ -284,7 +284,7 @@ class ValidationResult:
 
 **Blocker**: No access to water mask from MaterialsV3Engine
 
-**Impact**: 
+**Impact**:
 - Cannot validate boundary quality (the primary thing to validate)
 - Report shows edge_alignment_score: 0.0 for all images
 - Target threshold (≥0.6) cannot be tested
@@ -348,7 +348,7 @@ Implement mask availability mechanism:
 @dataclass
 class MaterialsV3Config:
     water_validation_emit_mask: bool = False
-    
+
 # In _detect_water_candidate():
 if self.config.water_validation_emit_mask and detector_result.mask is not None:
     import base64

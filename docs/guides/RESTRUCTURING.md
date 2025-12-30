@@ -155,7 +155,7 @@ If you have code that imports from the old structure, update as follows:
 ```python
 # Depth pipeline
 from depth_pipeline import ArchitecturalDepthPipeline
-# → 
+# →
 from transformation_portal.depth import ArchitecturalDepthPipeline
 
 # Material response

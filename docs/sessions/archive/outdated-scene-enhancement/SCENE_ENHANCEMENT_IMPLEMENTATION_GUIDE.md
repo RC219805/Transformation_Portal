@@ -1,16 +1,16 @@
 # Scene Enhancement Quick Reference
 
-**For:** Implementation Team  
-**Phase 1 Tasks:** 3 actionable items, 9-14 hours total  
-**Expected Impact:** 40-60% quality improvement  
+**For:** Implementation Team
+**Phase 1 Tasks:** 3 actionable items, 9-14 hours total
+**Expected Impact:** 40-60% quality improvement
 **Priority:** P0 - Critical
 
 ---
 
 ## Task 1: Activate SegFormer-B5 Backend
 
-**Effort:** 2-4 hours  
-**Impact:** Confidence 9.9% → 42% (3-5x improvement)  
+**Effort:** 2-4 hours
+**Impact:** Confidence 9.9% → 42% (3-5x improvement)
 **Risk:** LOW
 
 ### Changes Required
@@ -80,8 +80,8 @@ cat output_pool_segformer_validation/*_report.json | \
 
 ## Task 2: Material Property Schema
 
-**Effort:** 4-6 hours  
-**Impact:** Material response accuracy +30-40%  
+**Effort:** 4-6 hours
+**Impact:** Material response accuracy +30-40%
 **Risk:** LOW
 
 ### Implementation
@@ -95,24 +95,24 @@ from typing import Tuple, Dict, Optional
 @dataclass
 class MaterialProperties:
     """Physics-based material properties for enhanced response."""
-    
+
     # Surface characteristics
     roughness: float = 0.5           # 0=mirror, 1=diffuse
     specular: float = 0.1            # Highlight intensity
     metallic: float = 0.0            # 0=dielectric, 1=conductor
     albedo: Tuple[float, float, float] = (0.5, 0.5, 0.5)  # Base color RGB
-    
+
     # Optical properties
     transmission: float = 0.0        # Transparency
     ior: float = 1.5                # Index of refraction
     anisotropy: float = 0.0         # Directional reflections
-    
+
     # Enhancement guidance
     clarity_boost: float = 1.0      # Multiplier for clarity
     saturation_mult: float = 1.0    # Saturation adjustment
     exposure_bias: float = 0.0      # Exposure offset
     contrast_mult: float = 1.0      # Contrast multiplier
-    
+
     # Material response strength (per-material override)
     response_strength: float = 1.0  # 0=disabled, 1=full
 
@@ -127,7 +127,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=0.98,
         response_strength=0.85,
     ),
-    
+
     "concrete": MaterialProperties(
         roughness=0.75,
         specular=0.15,
@@ -135,7 +135,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         clarity_boost=0.9,
         response_strength=0.9,
     ),
-    
+
     # Water features
     "pool_tile_mosaic": MaterialProperties(
         roughness=0.15,
@@ -145,7 +145,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=1.15,
         response_strength=1.2,
     ),
-    
+
     "pool_water_surface": MaterialProperties(
         roughness=0.05,
         specular=0.9,
@@ -155,7 +155,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=1.08,
         response_strength=1.1,
     ),
-    
+
     # Vegetation
     "vegetation_trees": MaterialProperties(
         roughness=0.7,
@@ -164,7 +164,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=1.08,
         response_strength=1.0,
     ),
-    
+
     "vegetation_shrubs": MaterialProperties(
         roughness=0.75,
         albedo=(0.18, 0.48, 0.20),
@@ -172,7 +172,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=1.05,
         response_strength=0.95,
     ),
-    
+
     # Existing materials (refined)
     "wood": MaterialProperties(
         roughness=0.6,
@@ -183,7 +183,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=1.05,
         response_strength=1.0,
     ),
-    
+
     "metal": MaterialProperties(
         roughness=0.2,
         specular=0.8,
@@ -192,7 +192,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=0.95,
         response_strength=1.15,
     ),
-    
+
     "glass": MaterialProperties(
         roughness=0.1,
         specular=0.85,
@@ -202,7 +202,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=1.0,
         response_strength=1.05,
     ),
-    
+
     "stone": MaterialProperties(
         roughness=0.65,
         specular=0.2,
@@ -211,7 +211,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         saturation_mult=1.02,
         response_strength=0.9,
     ),
-    
+
     "sky": MaterialProperties(
         roughness=0.0,
         specular=0.0,
@@ -220,7 +220,7 @@ MATERIAL_PROPERTIES: Dict[str, MaterialProperties] = {
         exposure_bias=-0.02,
         response_strength=0.5,
     ),
-    
+
     "foliage": MaterialProperties(  # Alias for vegetation_trees
         roughness=0.7,
         albedo=(0.15, 0.45, 0.18),
@@ -250,25 +250,25 @@ def apply_material_response(
     zone_masks: Optional[Dict[str, torch.Tensor]] = None,
 ) -> MaterialMods:
     """Apply material-specific enhancements."""
-    
+
     # ... existing code ...
-    
+
     # NEW: Use material properties
     from .material_properties import get_material_properties
-    
+
     for mat_name, mask in masks.items():
         props = get_material_properties(mat_name)
-        
+
         # Apply property-guided adjustments
         # Scale strength by material-specific response_strength
         effective_strength = cfg.material_strength * props.response_strength
-        
+
         # Clarity: boosted by material clarity_boost
         clarity_mult += mask * (props.clarity_boost - 1.0) * effective_strength
-        
+
         # Saturation: adjusted by material saturation_mult
         sat_mult += mask * (props.saturation_mult - 1.0) * effective_strength
-        
+
         # ... etc
 ```
 
@@ -301,8 +301,8 @@ lux-depth-v2 \
 
 ## Task 3: Hybrid Depth Zones
 
-**Effort:** 3-4 hours  
-**Impact:** Depth-aware processing accuracy +20-30%  
+**Effort:** 3-4 hours
+**Impact:** Depth-aware processing accuracy +20-30%
 **Risk:** LOW
 
 ### Implementation
@@ -314,25 +314,25 @@ lux-depth-v2 \
 ```python
 def _detect_scene_type(rgb: torch.Tensor, depth: np.ndarray) -> str:
     """Detect if scene is interior or exterior based on heuristics."""
-    
+
     # Heuristic 1: Sky presence (top 20% of image, blue+bright)
     h, w = rgb.shape[2], rgb.shape[3]
     top_region = rgb[:, :, 0:int(h*0.2), :]
-    
+
     r = top_region[:, 0]
     g = top_region[:, 1]
     b = top_region[:, 2]
     luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    
+
     # Sky signature: blue-dominant + bright
     is_blue = (b > r + 0.08) & (b > g + 0.05)
     is_bright = luma > 0.3
     sky_pct = (is_blue & is_bright).float().mean().item()
-    
+
     # Heuristic 2: Depth range
     depth_range = depth.max() - depth.min()
     depth_90th_percentile = np.percentile(depth, 90)
-    
+
     # Exterior: large depth range, sky present
     if sky_pct > 0.15 or depth_90th_percentile > 0.7:
         return "exterior"
@@ -345,47 +345,47 @@ def _compute_zone_masks_hybrid(
     rgb: Optional[torch.Tensor] = None
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute depth zones with scene-aware strategy.
-    
+
     Args:
         depth: Normalized depth map [0, 1]
         cfg: Pipeline config with fg_q, bg_q
         rgb: Optional RGB image for scene detection
-    
+
     Returns:
         (foreground, midground, background) masks
     """
-    
+
     scene_type = "interior"
     if rgb is not None:
         scene_type = _detect_scene_type(rgb, depth)
-    
+
     if scene_type == "exterior":
         # Metric-based zones for outdoor scenes
         # Assumes depth is normalized [0, 1] where 1=far
-        
+
         # Foreground: 0-2m (assuming max depth ~50m → 0.04 normalized)
         fg_threshold = 0.04
         fg_mask = depth < fg_threshold
-        
+
         # Background: >10m (0.20 normalized)
         bg_threshold = 0.20
         bg_mask = depth > bg_threshold
-        
+
         # Midground: 2-10m
         mid_mask = ~(fg_mask | bg_mask)
-        
+
     else:
         # Percentile-based for interior (compressed depth range)
         fg_percentile = cfg.fg_q * 100  # e.g., 35
         bg_percentile = cfg.bg_q * 100  # e.g., 65
-        
+
         fg_threshold = np.percentile(depth, fg_percentile)
         bg_threshold = np.percentile(depth, bg_percentile)
-        
+
         fg_mask = depth < fg_threshold
         bg_mask = depth > bg_threshold
         mid_mask = ~(fg_mask | bg_mask)
-    
+
     return fg_mask, mid_mask, bg_mask
 ```
 
@@ -399,7 +399,7 @@ def _compute_zone_masks(
     rgb: Optional[torch.Tensor] = None  # NEW parameter
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute zone masks from depth."""
-    
+
     if manual_masks:
         # Use manual masks if provided
         return (
@@ -407,7 +407,7 @@ def _compute_zone_masks(
             manual_masks.get("midground", np.zeros_like(depth, dtype=bool)),
             manual_masks.get("background", np.zeros_like(depth, dtype=bool)),
         )
-    
+
     # Use hybrid method (scene-aware)
     return _compute_zone_masks_hybrid(depth, cfg, rgb)
 ```
@@ -587,8 +587,8 @@ make test-fast
 
 ## Support
 
-**Questions:** Tag @transformation-portal-architect  
-**Issues:** Open GitHub issue with label `phase1-enhancement`  
+**Questions:** Tag @transformation-portal-architect
+**Issues:** Open GitHub issue with label `phase1-enhancement`
 **Documentation:** See `docs/architecture/SCENE_DESCRIPTION_ENHANCEMENT_ROADMAP.md`
 
 **Estimated Timeline:**

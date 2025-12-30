@@ -1,8 +1,8 @@
 # Transformation Portal - Main Branch Health Check Report
 
-**Date**: 2025-11-08  
-**Branch**: main (commit: 72fd5c8)  
-**Repository**: /Users/rc/Transformation_Portal  
+**Date**: 2025-11-08
+**Branch**: main (commit: 72fd5c8)
+**Repository**: /Users/rc/Transformation_Portal
 **Overall Status**: ⚠️ **WARNING** (Functional but with issues)
 
 ---
@@ -407,7 +407,7 @@ After applying fixes, verify:
 
 ---
 
-**Report Generated:** 2025-11-08  
-**Repository State:** Commit 72fd5c8 on main branch  
-**Test Pass Rate:** 99.8% (450/451)  
+**Report Generated:** 2025-11-08
+**Repository State:** Commit 72fd5c8 on main branch
+**Test Pass Rate:** 99.8% (450/451)
 **Overall Health:** ⚠️ Warning (functional but needs fixes)

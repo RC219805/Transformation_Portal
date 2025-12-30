@@ -56,7 +56,7 @@ base_dir / filename  # CANNOT escape base_dir
 
 **After (18 lines, simpler):**
 - Allowlist validation
-- Dot-dot blocking  
+- Dot-dot blocking
 - Path construction
 - Direct return (no extra checks needed)
 
@@ -69,16 +69,16 @@ base_dir / filename  # CANNOT escape base_dir
 
 ## Implementation
 
-**Commit:** `ff14dc4`  
-**Date:** December 20, 2025, 20:35 UTC  
-**File:** `lux_depth_v3/service.py`  
+**Commit:** `ff14dc4`
+**Date:** December 20, 2025, 20:35 UTC
+**File:** `lux_depth_v3/service.py`
 **Changes:** -26 lines, +18 lines
 
 ## Testing
 
-✅ Python syntax validation passed  
-✅ All attack vectors still blocked  
-✅ Legitimate filenames still work  
+✅ Python syntax validation passed
+✅ All attack vectors still blocked
+✅ Legitimate filenames still work
 ✅ CodeQL scan re-running (expected to pass)
 
 ## Next Steps

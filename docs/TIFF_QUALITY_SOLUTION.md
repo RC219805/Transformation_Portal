@@ -189,6 +189,6 @@ The TIFF quality issue is now fixed. All new TIFF files will be properly 16-bit 
 
 ---
 
-**Last Updated**: 2025-11-08  
-**Fix Applied**: ultimate_quality_pipeline.py  
+**Last Updated**: 2025-11-08
+**Fix Applied**: ultimate_quality_pipeline.py
 **Verified**: tifffile v2024.12.12 installed and working

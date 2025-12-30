@@ -12,13 +12,7 @@ pytest.importorskip("PIL.Image")
 
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = (
-    ROOT
-    / "assets"
-    / "brand"
-    / "lantern_logo"
-    / "lantern_pixel_guard.py"
-)
+SCRIPT = ROOT / "assets" / "brand" / "lantern_logo" / "lantern_pixel_guard.py"
 
 
 def _write_png(path: Path, pixels: list[list[tuple[int, int, int, int]]]) -> None:

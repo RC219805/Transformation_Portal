@@ -291,11 +291,11 @@ while not orch.task_queue.empty():
         if orch.task_queue.empty():
             break
         # Orchestrator will process tasks
-    
+
     # Check progress
     progress = orch.get_progress()
     print(f"Progress: {progress['completed']}/{progress['total_tasks']}")
-    
+
     # Optional: pause for resource monitoring
     time.sleep(1)
 ```
@@ -517,22 +517,22 @@ python3 -m lux_depth_v2.cli \
 
 ## FAQ
 
-**Q: Does orchestrator make processing faster?**  
+**Q: Does orchestrator make processing faster?**
 A: No (Phase 1 is sequential). It makes processing **more reliable** by isolating failures. Phase 2 will add parallel processing for speed.
 
-**Q: Can I run multiple orchestrators simultaneously?**  
+**Q: Can I run multiple orchestrators simultaneously?**
 A: Not recommended - they may compete for GPU. Use one orchestrator with higher `max_workers` instead (Phase 2).
 
-**Q: What happens if I kill the main process?**  
+**Q: What happens if I kill the main process?**
 A: Worker processes become orphaned and may continue running. Use graceful shutdown (CTRL+C) instead.
 
-**Q: Can I pause and resume orchestrator?**  
+**Q: Can I pause and resume orchestrator?**
 A: Not directly, but you can:
 1. CTRL+C to stop gracefully
 2. Checkpoints are saved
 3. Restart with same command to resume
 
-**Q: Does orchestrator work with service mode?**  
+**Q: Does orchestrator work with service mode?**
 A: Orchestrator is for batch (CLI) mode. Service mode has its own concurrency handling.
 
 ---

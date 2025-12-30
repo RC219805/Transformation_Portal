@@ -79,13 +79,7 @@ def test_organization_script_dry_run():
     repo_root = Path(__file__).parent.parent
     script = repo_root / ".auto-organize.sh"
 
-    result = subprocess.run(
-        [str(script), "--dry-run"],
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        check=False
-    )
+    result = subprocess.run([str(script), "--dry-run"], cwd=str(repo_root), capture_output=True, text=True, check=False)
 
     assert result.returncode == 0, f"Organization script failed: {result.stderr}"
     assert "DRY RUN" in result.stdout, "Dry run mode not detected"

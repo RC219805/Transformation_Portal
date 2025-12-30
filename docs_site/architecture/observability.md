@@ -11,4 +11,3 @@ Observability has two tracks:
 - Prometheus scrape config
 - Grafana dashboards
 - Alert rules + runbooks
-

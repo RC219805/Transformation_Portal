@@ -1,8 +1,8 @@
 # 750 Picacho Luxury Estate - 32-bit TIFF Analysis Report
 
-**Project**: 750 Picacho Signature Estate Processing  
-**Analysis Date**: December 4, 2025  
-**Analyst**: Transformation Portal Specialist  
+**Project**: 750 Picacho Signature Estate Processing
+**Analysis Date**: December 4, 2025
+**Analyst**: Transformation Portal Specialist
 **File Location**: `/Users/rc/Transformation_Portal/input_images/750_Picacho/32-bit_LightRoom_sRGB_TIFFs`
 
 ---
@@ -21,7 +21,7 @@ Analyzed **5 high-resolution 32-bit floating-point TIFF files** (5.96 GB total) 
 | 4 | V2_750Picacho_PrimaryBathroom_Signature.tif | 2176.79 MB | 15925×11944 | 190.2 MP | 🚿 Bathroom |
 | 5 | V2_750Picacho_PrimaryBedroom_Signature.tif | 1098.67 MB | 12000×8000 | 96.0 MP | 🛏️ Bedroom |
 
-**Total Storage**: 6,099 MB (5.96 GB)  
+**Total Storage**: 6,099 MB (5.96 GB)
 **Note**: Only 5 files found (prompt mentioned 6)
 
 ---
@@ -150,10 +150,10 @@ Metadata: Minimal (no EXIF camera data, Lightroom-stripped)
 def reinhard_local_tonemap(img, white_point=1.5):
     # Calculate luminance
     lum = 0.2126*R + 0.7152*G + 0.0722*B
-    
+
     # Tone map with white point
     mapped = lum * (1 + lum/white_point²) / (1 + lum)
-    
+
     # Apply to RGB channels
     scale = mapped / lum
     return img * scale
@@ -260,7 +260,7 @@ python luxury_tiff_batch_processor.py \
 | Material Response | 6-12 GB | +3 GB (processed) |
 | Final exports | 4-8 GB | +4 GB (TIFF+JPEG) |
 
-**Total Project Storage**: ~17 GB (all stages retained)  
+**Total Project Storage**: ~17 GB (all stages retained)
 **Recommended RAM**: 32GB+ (process Bathroom individually)
 
 ### Processing Time (M4 Max, 64GB RAM)
@@ -292,7 +292,7 @@ python luxury_tiff_batch_processor.py \
 
 ### Workflow Position
 
-**Previous**: Camera RAW → 16-bit TIFF → Transformation Portal  
+**Previous**: Camera RAW → 16-bit TIFF → Transformation Portal
 **Current**: Camera RAW → Lightroom Signature Grade → 32-bit TIFF → Tone Mapping → Transformation Portal
 
 **Implication**: These are **further along** in post-production. Color grading is finalized. Processing should enhance technical quality while preserving artistic intent.
@@ -424,6 +424,6 @@ This batch of **5 high-resolution 32-bit floating-point TIFFs** represents **fin
 
 ---
 
-**Report Generated**: December 4, 2025  
-**Transformation Portal Specialist**  
+**Report Generated**: December 4, 2025
+**Transformation Portal Specialist**
 **Next Steps**: Test conversion → Client approval → Batch processing

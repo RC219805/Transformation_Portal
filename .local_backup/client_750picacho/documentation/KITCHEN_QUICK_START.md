@@ -2,10 +2,10 @@
 
 ## 🎯 TL;DR - What You Need to Know
 
-**Image:** 750Picacho_Kitchen.tiff (137MB, 4K interior rendering)  
-**Issue:** Low saturation (14%), warm color cast, needs material enhancement  
-**Solution:** Conservative enhancement (99.5% fidelity, 5-8 seconds)  
-**Approach:** Based on successful aerial processing strategy  
+**Image:** 750Picacho_Kitchen.tiff (137MB, 4K interior rendering)
+**Issue:** Low saturation (14%), warm color cast, needs material enhancement
+**Solution:** Conservative enhancement (99.5% fidelity, 5-8 seconds)
+**Approach:** Based on successful aerial processing strategy
 
 ---
 
@@ -20,8 +20,8 @@ python conservative_enhance_kitchen.py
 - `processed_images/Conservative/750Picacho_Kitchen_Conservative_4K.png` (web)
 - `processed_images/Conservative/750Picacho_Kitchen_Conservative_4K.tiff` (print)
 
-**Time:** 5-8 seconds  
-**Quality:** 99.5% fidelity with natural enhancement  
+**Time:** 5-8 seconds
+**Quality:** 99.5% fidelity with natural enhancement
 
 ---
 
@@ -135,8 +135,8 @@ python material_response.py \
   --surfaces wood,stone,metal,glass \
   --strength 0.7
 ```
-Time: 10-15 seconds  
-Benefit: Physics-based material enhancement  
+Time: 10-15 seconds
+Benefit: Physics-based material enhancement
 
 **Option 3: Depth-Aware**
 ```bash
@@ -144,8 +144,8 @@ python -m depth_pipeline.pipeline \
   --input input_images/750Picacho_Kitchen.tiff \
   --config config/interior_preset.yaml
 ```
-Time: 25-35 seconds  
-Benefit: Zone-based tone mapping with depth  
+Time: 25-35 seconds
+Benefit: Zone-based tone mapping with depth
 
 **Option 4: AI Enhancement (NOT RECOMMENDED)**
 Based on aerial results, avoid unless specifically requested.
@@ -261,10 +261,10 @@ CONSERVATIVE ENHANCEMENT - 750 PICACHO KITCHEN
 
 ---
 
-**Created:** 2025-11-05  
-**Approach:** Conservative enhancement (proven on aerial)  
-**Status:** ✅ READY TO EXECUTE  
-**Confidence:** High (based on previous success)  
+**Created:** 2025-11-05
+**Approach:** Conservative enhancement (proven on aerial)
+**Status:** ✅ READY TO EXECUTE
+**Confidence:** High (based on previous success)
 
 ---
 

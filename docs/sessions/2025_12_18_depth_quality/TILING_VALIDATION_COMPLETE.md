@@ -1,5 +1,5 @@
 # Tiling Implementation Validation Report
-**Date**: 2025-12-18  
+**Date**: 2025-12-18
 **Status**: ✅ Core claims VALIDATED with critical fixes required
 
 ---
@@ -52,8 +52,8 @@ Processor resample:     3
 
 ### Implementation Requirements
 
-✅ **MUST use `do_resize=False` in all tile inference calls**  
-✅ **MUST manually preprocess** (normalize, to_tensor) if bypass unavailable  
+✅ **MUST use `do_resize=False` in all tile inference calls**
+✅ **MUST manually preprocess** (normalize, to_tensor) if bypass unavailable
 ❌ **DO NOT rely on default processor** for tiling (gets 518px, not tile size)
 
 **Code pattern**:
@@ -91,7 +91,7 @@ inputs = self.processor(images=tile_pil, return_tensors="pt", do_resize=False)
 3. ✅ **Gradient strength doubles**: p95 5.20 → 11.40 (+119%)
 4. ✅ **No edge explosion**: Edge count stable at 2.02M (1.0× baseline)
 
-**Interpretation**: 
+**Interpretation**:
 - Tiling is **genuinely improving spatial fidelity**, not creating artifacts
 - The +14.7% overlap gain is the validation signature of "real high-res inference"
 - No seam artifacts (edge count didn't spike)
@@ -177,28 +177,28 @@ if cfg.bypass_image_processor:
 ## Documentation Claims vs. Reality
 
 ### Claim 1: "No internal resize"
-**Docs claim**: Tile inference runs at native resolution  
+**Docs claim**: Tile inference runs at native resolution
 **Reality**: ✅ **TRUE with `do_resize=False`**, ❌ **FALSE with default processor**
 
 **Fix needed**: Add explicit statement:
 > "Tile inference achieves high resolution via `do_resize=False` flag. Without this, the HuggingFace processor resizes tiles to 518px, negating tiling benefits. Implementation verified via tensor logging."
 
 ### Claim 2: "Edge snapping still planned"
-**Docs claim**: Phase 2 work  
+**Docs claim**: Phase 2 work
 **Reality**: ✅ **Already implemented** in `ProductionDepthRefiner`
 
 **Fix needed**: Update docs:
 > "Edge snapping implemented and validated (+1.3% overlap, +3.3% correlation). Uses AND-gated logic (RGB edges ∧ depth transitions) with configurable amount (default 1.5)."
 
 ### Claim 3: "Tiling improves edge fidelity"
-**Docs claim**: Step-change improvement  
+**Docs claim**: Step-change improvement
 **Reality**: ✅ **VALIDATED** (+14.7% overlap, +119% gradient strength)
 
 **Evidence**: Keep as-is, add validation reference:
 > "Validated on 750Picacho pool exterior (20.25MP): edge overlap improved from 62.0% to 76.7% (+14.7%), gradient strength doubled (p95: 5.20 → 11.40). No seam artifacts detected (edge count stable at 1.0× baseline)."
 
 ### Claim 4: "20,000+ unique levels" as quality metric
-**Docs claim**: Target/benefit  
+**Docs claim**: Target/benefit
 **Feedback**: Overemphasized, easy to inflate
 
 **Fix needed**: Downgrade to diagnostic:
@@ -221,7 +221,7 @@ if cfg.bypass_image_processor:
 ### Resolution Required
 
 1. **Retire or update** `research_grade_depth_pipeline.py` summary
-2. **Add migration note**: 
+2. **Add migration note**:
    > "Prior 'research-grade' pipeline prioritized ML model fidelity (smooth outputs). Current 'high-fidelity' pipeline prioritizes downstream usability (sharp boundaries for DOF/masking). Edge refinement (CLAHE, guided filter, edge snapping) is now standard, not optional."
 
 3. **Update metric narrative**:
@@ -294,17 +294,17 @@ planarity_mask = (grad_mag <= 0.05)
 
 ### What We Proved
 
-✅ **Priority 1**: "No internal resize" is TRUE **with `do_resize=False`**  
-✅ **Priority 2**: Tiling delivers +14.7% edge overlap, +119% gradient strength  
-✅ **Priority 3**: Edge snapping already implemented and working  
-⚠️ **Priority 4**: Global anchor needs bug fix before production  
+✅ **Priority 1**: "No internal resize" is TRUE **with `do_resize=False`**
+✅ **Priority 2**: Tiling delivers +14.7% edge overlap, +119% gradient strength
+✅ **Priority 3**: Edge snapping already implemented and working
+⚠️ **Priority 4**: Global anchor needs bug fix before production
 
 ### What Changed Our Understanding
 
-**Before**: "Tiling might help, but risky (seams, artifacts)"  
+**Before**: "Tiling might help, but risky (seams, artifacts)"
 **After**: "Tiling is THE highest-impact improvement (+14.7% overlap), seam-free with scale reconciliation"
 
-**Before**: "Soft boundaries might be ML model correctness"  
+**Before**: "Soft boundaries might be ML model correctness"
 **After**: "Soft boundaries are a 518px resize artifact. Bypass unlock 2× sharper gradients."
 
 ### Immediate Next Step
@@ -330,6 +330,5 @@ materials_v3.process(rgb, seg, depth_map=depth_refined)
 
 ---
 
-**Validation Complete**: 2025-12-18  
+**Validation Complete**: 2025-12-18
 **Recommendation**: Fix global anchor bug → Deploy tiled+refined depth to production → A/B test Materials V3
-

@@ -2,9 +2,9 @@
 
 ## Executive Summary
 
-**Status**: ✅ **PRODUCTION READY** (with caveats)  
-**Date**: 2025-12-18  
-**Validation Dataset**: 750_Picacho (2 images)  
+**Status**: ✅ **PRODUCTION READY** (with caveats)
+**Date**: 2025-12-18
+**Validation Dataset**: 750_Picacho (2 images)
 **Critical Fix**: Theil-Sen sampling reduced from 50k → 5k samples (14-20× speedup)
 
 ---
@@ -106,7 +106,7 @@ use_refinement: false
 
 **Likely cause**: Large planar interior with subtle depth gradients
 
-**Recommendation**: 
+**Recommendation**:
 - Test with global anchor enabled for planar-heavy scenes
 - Consider edge snapping (AND-gated) for final production
 
@@ -171,20 +171,20 @@ Before full production rollout, **MUST complete**:
 ## Next Actions (Priority Order)
 
 ### 1. **Immediate** (Today)
-✅ ~~Fix Theil-Sen sampling~~ **DONE**  
-⬜ Run full 750_Picacho validation (all images in Source_TIFFs_Base)  
-⬜ Review aggregate seam ratio distribution  
+✅ ~~Fix Theil-Sen sampling~~ **DONE**
+⬜ Run full 750_Picacho validation (all images in Source_TIFFs_Base)
+⬜ Review aggregate seam ratio distribution
 
 ### 2. **This Week**
-⬜ A/B validation (baseline vs tiled) on 10+ representative images  
-⬜ Add halo/overshoot metric to quality suite  
-⬜ Test global anchor on planar-heavy interiors (GreatRoom, large living spaces)  
+⬜ A/B validation (baseline vs tiled) on 10+ representative images
+⬜ Add halo/overshoot metric to quality suite
+⬜ Test global anchor on planar-heavy interiors (GreatRoom, large living spaces)
 
 ### 3. **Before Production**
-⬜ Materials V3 end-to-end integration test  
-⬜ Memory profiling at full resolution (6000×4000+)  
-⬜ Document edge cases and fallback strategies  
-⬜ Create production runbook (including when to use each preset)  
+⬜ Materials V3 end-to-end integration test
+⬜ Memory profiling at full resolution (6000×4000+)
+⬜ Document edge cases and fallback strategies
+⬜ Create production runbook (including when to use each preset)
 
 ---
 
@@ -231,5 +231,5 @@ The high-fidelity depth pipeline has passed **initial production validation** wi
 
 ---
 
-**Approved for pilot by**: Automated validation suite  
-**Production approval pending**: Full dataset validation + Materials V3 integration  
+**Approved for pilot by**: Automated validation suite
+**Production approval pending**: Full dataset validation + Materials V3 integration

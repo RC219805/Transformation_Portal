@@ -15,6 +15,7 @@ Usage:
     # Export memory metrics to knowledge base
     python tests/mem_test.py --enable-rag --export-kb memory_kb.json
 """
+
 import argparse
 import sys
 import time
@@ -26,8 +27,8 @@ from memory_profiler import memory_usage, profile
 
 # Memory usage thresholds (in MiB)
 MEMORY_THRESHOLDS = {
-    'import_core': 50.0,  # Core imports shouldn't exceed 50 MiB
-    'array_operations': 100.0,  # Array operations shouldn't exceed 100 MiB
+    "import_core": 50.0,  # Core imports shouldn't exceed 50 MiB
+    "array_operations": 100.0,  # Array operations shouldn't exceed 100 MiB
 }
 
 
@@ -65,12 +66,12 @@ def get_memory_delta(func, *args, **kwargs) -> Dict[str, Any]:
     mem_delta = max(0.0, mem_peak - mem_before)
 
     return {
-        'mem_before': mem_before,
-        'mem_peak': mem_peak,
-        'mem_after': mem_after,
-        'mem_delta': mem_delta,
-        'processing_time': end_time - start_time,
-        'success': True,
+        "mem_before": mem_before,
+        "mem_peak": mem_peak,
+        "mem_after": mem_after,
+        "mem_delta": mem_delta,
+        "processing_time": end_time - start_time,
+        "success": True,
     }
 
 
@@ -83,6 +84,7 @@ def _import_core_impl():
 def _array_operations_impl():
     """Implementation of array operations test."""
     import numpy as np
+
     # Create a moderate-sized array
     arr = np.random.rand(1000, 1000)
     # Perform some operations
@@ -122,19 +124,20 @@ def run_with_knowledge_integration(
         Dictionary with test results and metrics
     """
     results = {
-        'tests': {},
-        'overall_success': True,
-        'recommendations': [],
+        "tests": {},
+        "overall_success": True,
+        "recommendations": [],
     }
 
     # Try to import Knowledge Integration Engine
     engine = None
     try:
         # Add RAG system to path
-        rag_path = Path(__file__).parent.parent / '.github' / 'agents' / 'rag_system'
+        rag_path = Path(__file__).parent.parent / ".github" / "agents" / "rag_system"
         if rag_path.exists():
             sys.path.insert(0, str(rag_path))
             from knowledge_engine import KnowledgeIntegrationEngine
+
             engine = KnowledgeIntegrationEngine()
             if verbose:
                 print("✓ Knowledge Integration Engine loaded")
@@ -147,22 +150,23 @@ def run_with_knowledge_integration(
         print("\n📊 Running: test_import_core")
     try:
         metrics = get_memory_delta(_import_core_impl)
-        threshold = MEMORY_THRESHOLDS['import_core']
-        metrics['within_threshold'] = metrics['mem_delta'] <= threshold
+        threshold = MEMORY_THRESHOLDS["import_core"]
+        metrics["within_threshold"] = metrics["mem_delta"] <= threshold
 
-        results['tests']['import_core'] = metrics
+        results["tests"]["import_core"] = metrics
 
         if engine:
             engine.add_feedback(
-                pipeline='memory_profiler',
-                artifact_id='test_import_core',
-                success=metrics['within_threshold'],
-                processing_time=metrics['processing_time'],
-                parameters={'threshold_mib': threshold},
-                quality_score=max(0, 1 - (metrics['mem_delta'] / threshold)),
+                pipeline="memory_profiler",
+                artifact_id="test_import_core",
+                success=metrics["within_threshold"],
+                processing_time=metrics["processing_time"],
+                parameters={"threshold_mib": threshold},
+                quality_score=max(0, 1 - (metrics["mem_delta"] / threshold)),
                 error_message=(
-                    None if metrics['within_threshold'] else
-                    f"Memory usage {metrics['mem_delta']:.1f} MiB exceeded threshold {threshold} MiB"
+                    None
+                    if metrics["within_threshold"]
+                    else f"Memory usage {metrics['mem_delta']:.1f} MiB exceeded threshold {threshold} MiB"
                 ),
             )
 
@@ -172,12 +176,12 @@ def run_with_knowledge_integration(
             print(f"  Within threshold ({threshold} MiB): {'✓' if metrics['within_threshold'] else '✗'}")
 
     except Exception as e:
-        results['tests']['import_core'] = {'success': False, 'error': str(e)}
-        results['overall_success'] = False
+        results["tests"]["import_core"] = {"success": False, "error": str(e)}
+        results["overall_success"] = False
         if engine:
             engine.add_feedback(
-                pipeline='memory_profiler',
-                artifact_id='test_import_core',
+                pipeline="memory_profiler",
+                artifact_id="test_import_core",
                 success=False,
                 processing_time=0,
                 parameters={},
@@ -189,22 +193,23 @@ def run_with_knowledge_integration(
         print("\n📊 Running: test_basic_array_operations")
     try:
         metrics = get_memory_delta(_array_operations_impl)
-        threshold = MEMORY_THRESHOLDS['array_operations']
-        metrics['within_threshold'] = metrics['mem_delta'] <= threshold
+        threshold = MEMORY_THRESHOLDS["array_operations"]
+        metrics["within_threshold"] = metrics["mem_delta"] <= threshold
 
-        results['tests']['array_operations'] = metrics
+        results["tests"]["array_operations"] = metrics
 
         if engine:
             engine.add_feedback(
-                pipeline='memory_profiler',
-                artifact_id='test_basic_array_operations',
-                success=metrics['within_threshold'],
-                processing_time=metrics['processing_time'],
-                parameters={'threshold_mib': threshold, 'array_size': '1000x1000'},
-                quality_score=max(0, 1 - (metrics['mem_delta'] / threshold)),
+                pipeline="memory_profiler",
+                artifact_id="test_basic_array_operations",
+                success=metrics["within_threshold"],
+                processing_time=metrics["processing_time"],
+                parameters={"threshold_mib": threshold, "array_size": "1000x1000"},
+                quality_score=max(0, 1 - (metrics["mem_delta"] / threshold)),
                 error_message=(
-                    None if metrics['within_threshold'] else
-                    f"Memory usage {metrics['mem_delta']:.1f} MiB exceeded threshold {threshold} MiB"
+                    None
+                    if metrics["within_threshold"]
+                    else f"Memory usage {metrics['mem_delta']:.1f} MiB exceeded threshold {threshold} MiB"
                 ),
             )
 
@@ -214,12 +219,12 @@ def run_with_knowledge_integration(
             print(f"  Within threshold ({threshold} MiB): {'✓' if metrics['within_threshold'] else '✗'}")
 
     except Exception as e:
-        results['tests']['array_operations'] = {'success': False, 'error': str(e)}
-        results['overall_success'] = False
+        results["tests"]["array_operations"] = {"success": False, "error": str(e)}
+        results["overall_success"] = False
         if engine:
             engine.add_feedback(
-                pipeline='memory_profiler',
-                artifact_id='test_basic_array_operations',
+                pipeline="memory_profiler",
+                artifact_id="test_basic_array_operations",
                 success=False,
                 processing_time=0,
                 parameters={},
@@ -228,13 +233,13 @@ def run_with_knowledge_integration(
 
     # Generate recommendations if engine available
     if engine:
-        recommendations = engine.generate_recommendations('memory_profiler')
-        results['recommendations'] = [
+        recommendations = engine.generate_recommendations("memory_profiler")
+        results["recommendations"] = [
             {
-                'type': r.recommendation_type,
-                'severity': r.severity,
-                'title': r.title,
-                'action': r.suggested_action,
+                "type": r.recommendation_type,
+                "severity": r.severity,
+                "title": r.title,
+                "action": r.suggested_action,
             }
             for r in recommendations
         ]
@@ -256,25 +261,10 @@ def run_with_knowledge_integration(
 
 def main():
     """Main entry point with optional RAG integration."""
-    parser = argparse.ArgumentParser(
-        description='Memory profiling tests with optional RAG integration'
-    )
-    parser.add_argument(
-        '--enable-rag',
-        action='store_true',
-        help='Enable RAG/Knowledge Base integration for memory tracking'
-    )
-    parser.add_argument(
-        '--export-kb',
-        type=str,
-        metavar='PATH',
-        help='Export memory metrics to knowledge base JSON file'
-    )
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Enable verbose output'
-    )
+    parser = argparse.ArgumentParser(description="Memory profiling tests with optional RAG integration")
+    parser.add_argument("--enable-rag", action="store_true", help="Enable RAG/Knowledge Base integration for memory tracking")
+    parser.add_argument("--export-kb", type=str, metavar="PATH", help="Export memory metrics to knowledge base JSON file")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()
 
@@ -290,18 +280,18 @@ def main():
         print("\n" + "=" * 50)
         print("📊 Memory Test Summary")
         print("=" * 50)
-        for test_name, metrics in results['tests'].items():
-            if metrics.get('success', False):
-                status = '✓' if metrics.get('within_threshold', False) else '⚠'
+        for test_name, metrics in results["tests"].items():
+            if metrics.get("success", False):
+                status = "✓" if metrics.get("within_threshold", False) else "⚠"
                 print(f"  {status} {test_name}: {metrics.get('mem_delta', 0):.2f} MiB")
             else:
                 print(f"  ✗ {test_name}: {metrics.get('error', 'Unknown error')}")
 
-        if results['recommendations']:
+        if results["recommendations"]:
             print(f"\n  {len(results['recommendations'])} recommendation(s) generated")
 
         # Exit with appropriate code
-        sys.exit(0 if results['overall_success'] else 1)
+        sys.exit(0 if results["overall_success"] else 1)
     else:
         # Standard memory profiler execution
         test_import_core()

@@ -1,9 +1,9 @@
 # Validation System Integration Checklist
 
-**Purpose**: Step-by-step guide for integrating the validation system into Lux Depth V2  
-**Audience**: Implementation engineers  
-**Status**: Ready for use  
-**Date**: 2025-12-08  
+**Purpose**: Step-by-step guide for integrating the validation system into Lux Depth V2
+**Audience**: Implementation engineers
+**Status**: Ready for use
+**Date**: 2025-12-08
 
 ---
 
@@ -72,20 +72,20 @@ This checklist ensures systematic integration of the 5-priority validation syste
   version: "1.0.0"
   name: "validation_v1"
   root_dir: "data/benchmark_datasets/validation_v1"
-  
+
   categories:
     - name: interior_luxury
       images: [interior_01.tif, interior_02.tif, ...]
       weight: 0.30
       description: "Living rooms, bedrooms, kitchens"
-    
+
     - name: exterior_showcase
       images: [exterior_01.tif, ...]
       weight: 0.25
       description: "Facades, courtyards, pools"
-    
+
     # ... (rest of categories)
-  
+
   metrics:
     lpips: {weight: 0.40, net: alex, device: auto}
     nima: {weight: 0.30, device: auto}
@@ -121,7 +121,7 @@ This checklist ensures systematic integration of the 5-priority validation syste
       assert dataset.version == "1.0.0"
       assert len(dataset.categories) == 5
       assert sum(c.weight for c in dataset.categories) == pytest.approx(1.0)
-  
+
   def test_validates_checksums():
       registry = DatasetRegistry(...)
       dataset = registry.load_dataset("validation_v1")
@@ -199,7 +199,7 @@ If Phase 1 fails:
         ssim_min_delta: -0.01
         psnr_min_delta: -0.5
         nima_min_delta: -0.1
-    
+
     # ... (rest of golden images)
   ```
 
@@ -439,7 +439,7 @@ If Phase 4 fails:
             severity: warning
           annotations:
             summary: "High error rate detected"
-        
+
         - alert: HighLatency
           expr: histogram_quantile(0.95, lux_request_duration_seconds) > 60
           for: 10m
@@ -678,6 +678,6 @@ python -m lux_depth_v2.observability.query_traces \
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-12-08  
+**Document Version**: 1.0
+**Last Updated**: 2025-12-08
 **Status**: Ready for Implementation

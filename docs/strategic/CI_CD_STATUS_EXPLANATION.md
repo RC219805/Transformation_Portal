@@ -1,7 +1,7 @@
 # CI/CD Workflow Status Explanation
 
-**PR**: Lux Depth V3 Integration Validation Complete  
-**Branch**: copilot/validate-lux-depth-v3-integration  
+**PR**: Lux Depth V3 Integration Validation Complete
+**Branch**: copilot/validate-lux-depth-v3-integration
 **Date**: December 7, 2025
 
 ---
@@ -48,7 +48,7 @@ LUX_DEPTH_V3_INTEGRATION_EXECUTIVE_SUMMARY.md
 ### Workflows That SHOULD Skip (8 workflows)
 
 #### 1. **test-lux-depth-v2** (ci-consolidated.yml)
-**Why skipped**: 
+**Why skipped**:
 ```yaml
 if: contains(needs.setup.outputs.changed-files, 'lux_depth_v2') || github.event_name == 'workflow_dispatch'
 ```
@@ -143,15 +143,15 @@ if: contains(needs.setup.outputs.changed-files, 'lux_depth_v2') || github.event_
 ### Example Scenarios
 
 #### Scenario 1: Code Change in `lux_depth_v2/`
-✅ Runs: test-lux-depth-v2, lint, build, test-core  
+✅ Runs: test-lux-depth-v2, lint, build, test-core
 ⏭️ Skips: test-ml (if no ML code changed), performance (if not benchmarked)
 
 #### Scenario 2: Documentation-Only Change (This PR)
-✅ Runs: summary, pr-context, ai-review  
+✅ Runs: summary, pr-context, ai-review
 ⏭️ Skips: test-lux-depth-v2, test-core, test-ml, build, codeql
 
 #### Scenario 3: Dependency Change
-✅ Runs: ALL workflows (dependencies affect everything)  
+✅ Runs: ALL workflows (dependencies affect everything)
 ⏭️ Skips: None
 
 ---
@@ -235,7 +235,7 @@ if: contains(needs.setup.outputs.changed-files, 'lux_depth_v2') || github.event_
 ```yaml
 test-lux-depth-v2:
   if: |
-    contains(needs.setup.outputs.changed-files, 'lux_depth_v2') || 
+    contains(needs.setup.outputs.changed-files, 'lux_depth_v2') ||
     github.event_name == 'workflow_dispatch'
 ```
 
@@ -268,6 +268,6 @@ The "8 skipped CI/CD runs" are **not failures** - they are **intelligent optimiz
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 7, 2025  
+**Document Version**: 1.0
+**Last Updated**: December 7, 2025
 **Applies To**: PR copilot/validate-lux-depth-v3-integration

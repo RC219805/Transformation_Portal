@@ -55,11 +55,11 @@ Added a standalone validation harness and test suite to measure water detection 
 
 ## Quality Gates
 
-✅ **Linting:** flake8 clean (0 errors, max-line-length=127)  
-✅ **Tests:** 16/16 passing (0.19s)  
-✅ **Determinism:** Stability scores identical across runs with same seed  
-✅ **Schema Compliance:** Matches finalized ground truth schema  
-✅ **CI-Ready:** `--subset-file` + regression checker executable  
+✅ **Linting:** flake8 clean (0 errors, max-line-length=127)
+✅ **Tests:** 16/16 passing (0.19s)
+✅ **Determinism:** Stability scores identical across runs with same seed
+✅ **Schema Compliance:** Matches finalized ground truth schema
+✅ **CI-Ready:** `--subset-file` + regression checker executable
 
 ## Key Design Decisions
 
@@ -80,10 +80,10 @@ Added a standalone validation harness and test suite to measure water detection 
 
 ## What This PR Does NOT Include
 
-❌ Real water detector (PR-W1 scope)  
-❌ Labeled dataset (manual curation needed)  
-❌ Calibrated thresholds (requires dataset v0)  
-❌ CI job integration (ready, but waiting for baseline)  
+❌ Real water detector (PR-W1 scope)
+❌ Labeled dataset (manual curation needed)
+❌ Calibrated thresholds (requires dataset v0)
+❌ CI job integration (ready, but waiting for baseline)
 
 ## Next Steps
 
@@ -113,10 +113,10 @@ python scripts/check_regression.py \
 
 ## Status
 
-**Validation Harness:** ✅ Complete and tested  
-**Detector:** ⏳ Stub (PR-W1 pending)  
-**Dataset:** ⏳ Schema ready, no images yet  
-**CI Integration:** ✅ Ready for setup  
+**Validation Harness:** ✅ Complete and tested
+**Detector:** ⏳ Stub (PR-W1 pending)
+**Dataset:** ⏳ Schema ready, no images yet
+**CI Integration:** ✅ Ready for setup
 
 **Merge Status:** ✅ Ready (harness infrastructure complete; detector is explicit stub)
 

@@ -1,8 +1,8 @@
 # MaterialsV3 Integration: 5-Star Excellence Roadmap
 
-**Architect**: Transformation Portal Architect  
-**Date**: December 21, 2025, 05:21 UTC  
-**Current Rating**: ⭐⭐⭐⭐ EXCELLENT (4/5)  
+**Architect**: Transformation Portal Architect
+**Date**: December 21, 2025, 05:21 UTC
+**Current Rating**: ⭐⭐⭐⭐ EXCELLENT (4/5)
 **Target Rating**: ⭐⭐⭐⭐⭐ PERFECT (5/5)
 
 ---
@@ -38,13 +38,13 @@ The MaterialsV3 integration is **production-ready** with exemplary architectural
 
 ### Achievements (4/5 Stars)
 
-✅ **102K production code** across 5 modules (3,033 lines total)  
-✅ **76/77 tests passing** (98.7% pass rate)  
-✅ **Triple-gate safety** (import + config + enabled flag)  
-✅ **Environment killswitch** (`DISABLE_MATERIALS_V3=1`)  
-✅ **Graceful degradation** to Materials V2  
-✅ **Exception handling** at initialization and mask conversion  
-✅ **Comprehensive inline documentation**  
+✅ **102K production code** across 5 modules (3,033 lines total)
+✅ **76/77 tests passing** (98.7% pass rate)
+✅ **Triple-gate safety** (import + config + enabled flag)
+✅ **Environment killswitch** (`DISABLE_MATERIALS_V3=1`)
+✅ **Graceful degradation** to Materials V2
+✅ **Exception handling** at initialization and mask conversion
+✅ **Comprehensive inline documentation**
 ✅ **Zero impact** on existing workflows (disabled by default)
 
 ### Why Not 5/5? Gap Analysis
@@ -62,8 +62,8 @@ The MaterialsV3 integration is **production-ready** with exemplary architectural
 
 ## Phase 1: Critical Safety Hardening
 
-**Objective**: Eliminate all unhandled exception paths  
-**Priority**: 🔴 **CRITICAL** (blocks 5/5 rating)  
+**Objective**: Eliminate all unhandled exception paths
+**Priority**: 🔴 **CRITICAL** (blocks 5/5 rating)
 **Effort**: 2-3 hours
 
 ### Deliverables
@@ -108,7 +108,7 @@ def test_materials_v3_engine_process_exception_fallback():
 
 #### 1.2 Upgrade Mask Conversion Logging ✅ RECOMMENDED
 
-**Current**: `logger.debug()` for failed mask conversions (line 648, pipeline.py)  
+**Current**: `logger.debug()` for failed mask conversions (line 648, pipeline.py)
 **Issue**: Silent failures may hide issues
 
 **Fix**:
@@ -139,23 +139,23 @@ class TestMaterialsV3EdgeCases:
             "interior_luxury_apex_quality_materials_v3_stone_validate",
         ]
         # Verify each preset completes without errors
-    
+
     def test_corrupted_input_handling(self):
         """Test graceful handling of corrupted images."""
         # Invalid image files, truncated PNGs, etc.
-    
+
     def test_missing_depth_maps(self):
         """Test fallback when depth estimation fails."""
-    
+
     def test_unknown_material_types(self):
         """Test handling of unmapped material classes."""
-    
+
     def test_simultaneous_stage_failures(self):
         """Test when segmentation + MaterialsV3 both fail."""
-    
+
     def test_memory_exhaustion_graceful_failure(self):
         """Test behavior under low-memory conditions."""
-    
+
     def test_gpu_fallback_to_cpu(self):
         """Test MaterialsV3 on CPU-only systems."""
 ```
@@ -169,7 +169,7 @@ class TestMaterialsV3EdgeCases:
 
 ### Phase 1 Timeline
 
-**Effort**: 2-3 hours  
+**Effort**: 2-3 hours
 **Breakdown**:
 - Exception handling implementation: 30 minutes
 - Logging upgrade: 15 minutes
@@ -182,8 +182,8 @@ class TestMaterialsV3EdgeCases:
 
 ## Phase 2: End-to-End Validation
 
-**Objective**: Validate all preset combinations and workflow interplay  
-**Priority**: 🔴 **HIGH** (essential for production confidence)  
+**Objective**: Validate all preset combinations and workflow interplay
+**Priority**: 🔴 **HIGH** (essential for production confidence)
 **Effort**: 3-4 hours
 
 ### Deliverables
@@ -198,23 +198,23 @@ class TestMaterialsV3Workflows:
     def test_glass_preset_end_to_end(self):
         """Full pipeline with glass canary preset."""
         # Verify water detection, glass pixel ops, metadata completeness
-    
+
     def test_stone_preset_end_to_end(self):
         """Full pipeline with stone canary preset."""
         # Verify stone pixel ops, texture enhancement
-    
+
     def test_validation_preset_forced_pixel_ops(self):
         """Validate forced pixel ops application."""
         # Ensure validation presets bypass quality gates
-    
+
     def test_fallback_to_materials_v2(self):
         """Test graceful fallback when MaterialsV3 disabled."""
         # Disable MaterialsV3, verify Materials V2 continues
-    
+
     def test_metadata_consistency(self):
         """Verify all output files have correct metadata."""
         # Check for MaterialsV3 fields in result metadata
-    
+
     def test_log_correctness(self):
         """Validate log messages for MaterialsV3 stages."""
         # Ensure INFO/WARNING logs match expected behavior
@@ -277,7 +277,7 @@ python scripts/visual_diff.py baseline/ current/ --threshold 0.98
 
 ### Phase 2 Timeline
 
-**Effort**: 3-4 hours  
+**Effort**: 3-4 hours
 **Breakdown**:
 - Full workflow tests: 120 minutes
 - Preset matrix documentation: 45 minutes
@@ -290,8 +290,8 @@ python scripts/visual_diff.py baseline/ current/ --threshold 0.98
 
 ## Phase 3: User Transparency & Documentation
 
-**Objective**: Any user can use MaterialsV3 without developer help  
-**Priority**: 🟡 **HIGH** (usability requirement for 5/5)  
+**Objective**: Any user can use MaterialsV3 without developer help
+**Priority**: 🟡 **HIGH** (usability requirement for 5/5)
 **Effort**: 4-5 hours
 
 ### Deliverables
@@ -421,7 +421,7 @@ python scripts/visual_diff.py baseline/ current/ --threshold 0.98
 
 ### Phase 3 Timeline
 
-**Effort**: 4-5 hours  
+**Effort**: 4-5 hours
 **Breakdown**:
 - User guide: 150 minutes
 - Preset matrix (from Phase 2): 45 minutes
@@ -434,8 +434,8 @@ python scripts/visual_diff.py baseline/ current/ --threshold 0.98
 
 ## Phase 4: Observability & Metrics
 
-**Objective**: Full operational transparency via logs and metrics  
-**Priority**: 🟡 **MEDIUM** (improves maintainability)  
+**Objective**: Full operational transparency via logs and metrics
+**Priority**: 🟡 **MEDIUM** (improves maintainability)
 **Effort**: 3-4 hours
 
 ### Deliverables
@@ -449,26 +449,26 @@ python scripts/visual_diff.py baseline/ current/ --threshold 0.98
 if self.materials_v3_engine is not None:
     with self._stage(report, "material/materials_v3"):
         stage_start = time.time()
-        
+
         # Log stage entry
         self.logger.info(f"Materials V3 processing | preset={self.cfg.preset}")
-        
+
         try:
             v3_result = self.materials_v3_engine.process(...)
-            
+
             # Log material detection results
             if v3_result and 'water_candidate' in v3_result:
                 water_present = v3_result['water_candidate'].get('present', False)
                 self.logger.info(f"  Water detection: {water_present}")
-            
+
             # Log pixel ops application
             if v3_result and 'glass_pixel_ops_applied' in v3_result:
                 self.logger.info(f"  Glass pixel ops: {v3_result['glass_pixel_ops_applied']}")
-            
+
             # Log stage timing
             stage_duration = time.time() - stage_start
             self.logger.info(f"Materials V3 completed | duration={stage_duration:.2f}s")
-            
+
         except Exception as e:
             self.logger.warning(f"Materials V3 failed | error={e}; fallback to V2")
 ```
@@ -501,23 +501,23 @@ class MaterialsV3Metrics:
     stone_pixel_ops_applied: bool
     fallback_occurred: bool
     error_message: str = ""
-    
+
     def to_dict(self):
         return asdict(self)
 
 class MetricsCollector:
     """Collects and exports MaterialsV3 metrics."""
-    
+
     def __init__(self):
         self.metrics = []
-    
+
     def record(self, metric: MaterialsV3Metrics):
         self.metrics.append(metric)
-    
+
     def export_json(self, output_path: Path):
         with open(output_path, 'w') as f:
             json.dump([m.to_dict() for m in self.metrics], f, indent=2)
-    
+
     def export_csv(self, output_path: Path):
         # CSV export for analysis
         pass
@@ -576,7 +576,7 @@ self.metrics_collector.export_json(output_dir / "materials_v3_metrics.json")
 
 ### Phase 4 Timeline
 
-**Effort**: 3-4 hours  
+**Effort**: 3-4 hours
 **Breakdown**:
 - Enhanced logging: 60 minutes
 - Metrics collection module: 90 minutes
@@ -589,8 +589,8 @@ self.metrics_collector.export_json(output_dir / "materials_v3_metrics.json")
 
 ## Phase 5: Performance Benchmarking
 
-**Objective**: Data-driven performance guarantees  
-**Priority**: 🟡 **MEDIUM** (validates "no degradation" claim)  
+**Objective**: Data-driven performance guarantees
+**Priority**: 🟡 **MEDIUM** (validates "no degradation" claim)
 **Effort**: 4-5 hours
 
 ### Deliverables
@@ -607,19 +607,19 @@ class MaterialsV3Benchmark:
         # Test with 50 images (small, medium, large)
         # Measure: V2 baseline, V3 glass, V3 stone
         # Report: images/hour, % overhead
-    
+
     def benchmark_processing_time_per_image(self):
         """Measure per-image processing time."""
         # Test sizes: 512x512, 1024x1024, 2048x2048
         # Breakdown: segmentation, MaterialsV3, pixel ops
         # Report: milliseconds per stage
-    
+
     def benchmark_memory_usage(self):
         """Profile memory footprint."""
         # Measure: peak memory, average memory
         # Compare: V2 baseline, V3 glass, V3 stone
         # Report: MB per image
-    
+
     def benchmark_gpu_cpu_utilization(self):
         """Profile GPU/CPU resource usage."""
         # Measure: GPU memory, GPU compute, CPU usage
@@ -714,7 +714,7 @@ GPU Utilization (average):
 
 ### Phase 5 Timeline
 
-**Effort**: 4-5 hours  
+**Effort**: 4-5 hours
 **Breakdown**:
 - Benchmark suite: 150 minutes
 - Performance report: 90 minutes
@@ -799,11 +799,11 @@ GPU Utilization (average):
 
 ### Sequential Execution
 
-**Phase 1 (Critical Safety)**: 2-3 hours  
-**Phase 2 (E2E Validation)**: 3-4 hours  
-**Phase 3 (Documentation)**: 4-5 hours  
-**Phase 4 (Observability)**: 3-4 hours  
-**Phase 5 (Performance)**: 4-5 hours  
+**Phase 1 (Critical Safety)**: 2-3 hours
+**Phase 2 (E2E Validation)**: 3-4 hours
+**Phase 3 (Documentation)**: 4-5 hours
+**Phase 4 (Observability)**: 3-4 hours
+**Phase 5 (Performance)**: 4-5 hours
 **Bonus (Final Polish)**: 1 hour
 
 **Total Sequential Effort**: **17-22 hours** (~2-3 work days)
@@ -821,10 +821,10 @@ GPU Utilization (average):
 
 ### Recommended Approach
 
-**Session 1 (Day 1, 3-4 hours)**: Phase 1 + Phase 2.1 (critical safety + workflow tests)  
-**Session 2 (Day 2, 3-4 hours)**: Phase 2.2-2.3 + Phase 5.1 (preset matrix + benchmarks)  
-**Session 3 (Day 3, 4-5 hours)**: Phase 3 (documentation)  
-**Session 4 (Day 4, 2-3 hours)**: Phase 4 + Phase 5.2 (observability + performance report)  
+**Session 1 (Day 1, 3-4 hours)**: Phase 1 + Phase 2.1 (critical safety + workflow tests)
+**Session 2 (Day 2, 3-4 hours)**: Phase 2.2-2.3 + Phase 5.1 (preset matrix + benchmarks)
+**Session 3 (Day 3, 4-5 hours)**: Phase 3 (documentation)
+**Session 4 (Day 4, 2-3 hours)**: Phase 4 + Phase 5.2 (observability + performance report)
 **Session 5 (Day 5, 1 hour)**: Bonus (final polish)
 
 **Total Calendar Time**: **5 days** (13-17 hours of focused work)
@@ -835,8 +835,8 @@ GPU Utilization (average):
 
 ### Critical (Blocks Production Deployment) 🔴
 
-**Phase 1.1**: Exception handling in processing stage  
-**Phase 1.3**: Edge case stress testing  
+**Phase 1.1**: Exception handling in processing stage
+**Phase 1.3**: Edge case stress testing
 **Phase 2.1**: Full workflow tests
 
 **Rationale**: These close the **crash risk** gap. Without them, MaterialsV3 cannot be confidently deployed to production (even as opt-in).
@@ -845,9 +845,9 @@ GPU Utilization (average):
 
 ### High (Significantly Improves Reliability) 🟡
 
-**Phase 2.2**: Preset compatibility matrix  
-**Phase 3.1**: User guide  
-**Phase 3.4**: Migration guide  
+**Phase 2.2**: Preset compatibility matrix
+**Phase 3.1**: User guide
+**Phase 3.4**: Migration guide
 **Phase 5.1**: Benchmark suite
 
 **Rationale**: These provide **confidence and transparency**. Users need documentation to adopt MaterialsV3, and benchmarks validate the "no degradation" claim.
@@ -856,10 +856,10 @@ GPU Utilization (average):
 
 ### Medium (Improves Usability/Maintainability) 🟢
 
-**Phase 1.2**: Mask conversion logging upgrade  
-**Phase 3.2**: Preset matrix enhancements  
-**Phase 3.3**: Killswitch guide  
-**Phase 4**: Observability & metrics  
+**Phase 1.2**: Mask conversion logging upgrade
+**Phase 3.2**: Preset matrix enhancements
+**Phase 3.3**: Killswitch guide
+**Phase 4**: Observability & metrics
 **Phase 5.2**: Performance report
 
 **Rationale**: These improve **operational visibility** and **user experience** but are not blockers for deployment.
@@ -868,9 +868,9 @@ GPU Utilization (average):
 
 ### Low (Nice-to-Have) ⚪
 
-**Phase 2.3**: Regression test suite  
-**Phase 4.4**: Prometheus/Grafana  
-**Phase 5.3**: Optimization implementation  
+**Phase 2.3**: Regression test suite
+**Phase 4.4**: Prometheus/Grafana
+**Phase 5.3**: Optimization implementation
 **Bonus**: Failing test fix, inline comments
 
 **Rationale**: These add **polish** but MaterialsV3 is functional without them.
@@ -910,18 +910,18 @@ GPU Utilization (average):
 
 ### Week 1: Critical Path (5/5 Blockers)
 
-**Day 1-2**: Phase 1 + Phase 2.1 (safety + workflow tests)  
-**Day 3**: Phase 5.1 (benchmarks)  
+**Day 1-2**: Phase 1 + Phase 2.1 (safety + workflow tests)
+**Day 3**: Phase 5.1 (benchmarks)
 **Day 4-5**: Phase 3 (documentation)
 
 **Outcome**: MaterialsV3 achieves **crash-proof** status with **user documentation**
 
 ### Week 2: Enhancements (5/5 Polish)
 
-**Day 1**: Phase 2.2 (preset matrix) + Phase 5.2 (performance report)  
-**Day 2**: Phase 4 (observability)  
-**Day 3**: Phase 2.3 (regression tests, optional)  
-**Day 4**: Bonus (final polish)  
+**Day 1**: Phase 2.2 (preset matrix) + Phase 5.2 (performance report)
+**Day 2**: Phase 4 (observability)
+**Day 3**: Phase 2.3 (regression tests, optional)
+**Day 4**: Bonus (final polish)
 **Day 5**: Validation & review
 
 **Outcome**: MaterialsV3 achieves **5/5 PERFECT** rating
@@ -930,7 +930,7 @@ GPU Utilization (average):
 
 ## Conclusion
 
-**Current State**: MaterialsV3 is **production-ready** at 4/5 stars (EXCELLENT)  
+**Current State**: MaterialsV3 is **production-ready** at 4/5 stars (EXCELLENT)
 **Target State**: MaterialsV3 achieves **5/5 stars** (PERFECT) with executive-grade deployment confidence
 
 **Key Gaps**: Exception handling, edge case coverage, user documentation, performance benchmarks

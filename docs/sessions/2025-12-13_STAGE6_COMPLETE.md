@@ -1,6 +1,6 @@
 # Session Complete: Stage 6 Golden Baseline A/B + OOM Fix
-**Date**: December 13, 2025  
-**Duration**: ~3 hours  
+**Date**: December 13, 2025
+**Duration**: ~3 hours
 **Status**: ✅ Complete — EfficientSAM V3 validated, OOM guard implemented
 
 ---
@@ -218,8 +218,8 @@ Promote FUSED to default APEX **only if** all criteria met:
 
 ---
 
-**Session End**: December 13, 2025, 11:01 AM PST  
-**Status**: ✅ Stage 6 Complete — EfficientSAM V3 validated as canary-only  
+**Session End**: December 13, 2025, 11:01 AM PST
+**Status**: ✅ Stage 6 Complete — EfficientSAM V3 validated as canary-only
 **Next**: Stage 7 (prompt tuning + edge metrics) or defer and focus on other priorities
 
 **Ready for**: Production use with canary presets; NOT ready for default APEX promotion.

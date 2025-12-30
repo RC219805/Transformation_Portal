@@ -88,7 +88,7 @@ Integrated into `PipelineConfig.depth_zones`.
 
 **Current Status**: HOLD (pending kitchen validation)
 
-**Recommendation**: 
+**Recommendation**:
 - Complete kitchen scene test before production deployment
 - If kitchen shows >40% confidence, declare Phase 1 SUCCESS
 - If kitchen shows <20% confidence, investigate confidence calculation
@@ -130,6 +130,6 @@ python3 -m lux_depth_v2 \
 
 ---
 
-**Implementation Date**: 2024-12-12  
-**Version**: Lux Depth V2 APEX Quality  
-**Git Branch**: main  
+**Implementation Date**: 2024-12-12
+**Version**: Lux Depth V2 APEX Quality
+**Git Branch**: main

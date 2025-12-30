@@ -144,15 +144,15 @@ python scripts/check_regression.py \
 
 ## Acceptance Criteria (from PR-W4 Spec)
 
-✅ **Coverage sanity**: Pool/ocean recall, median coverage computed  
-✅ **Boundary pixels**: Computed from mask when available  
-✅ **Edge alignment** (primary): Computed from mask + image gradients  
-✅ **Stability**: Deterministic with `--seed`, computed across perturbations  
-✅ **False trigger checks**: Computed for should_detect=false  
-✅ **JSON reporting**: Clean schema, backward-compatible  
-✅ **CLI**: Supports ground-truth, output, subset-file, seed  
-✅ **Deterministic**: Tests prove stability is reproducible  
-✅ **CI regression gates**: 4 gates with epsilon guard, absolute deltas  
+✅ **Coverage sanity**: Pool/ocean recall, median coverage computed
+✅ **Boundary pixels**: Computed from mask when available
+✅ **Edge alignment** (primary): Computed from mask + image gradients
+✅ **Stability**: Deterministic with `--seed`, computed across perturbations
+✅ **False trigger checks**: Computed for should_detect=false
+✅ **JSON reporting**: Clean schema, backward-compatible
+✅ **CLI**: Supports ground-truth, output, subset-file, seed
+✅ **Deterministic**: Tests prove stability is reproducible
+✅ **CI regression gates**: 4 gates with epsilon guard, absolute deltas
 
 ---
 
@@ -219,7 +219,7 @@ python scripts/check_regression.py \
 
 ## Next Steps (72-Hour Plan)
 
-**Hour 0-6**: Collect dataset v0 (44 images) + establish baseline  
-**Hour 6-12**: Implement PR-W1 detector (HSV, component filtering, texture)  
-**Hour 12-18**: Calibrate thresholds + wire regression checker into CI  
+**Hour 0-6**: Collect dataset v0 (44 images) + establish baseline
+**Hour 6-12**: Implement PR-W1 detector (HSV, component filtering, texture)
+**Hour 12-18**: Calibrate thresholds + wire regression checker into CI
 **Hour 18-72**: Expand dataset + second detector iteration + CI hardening

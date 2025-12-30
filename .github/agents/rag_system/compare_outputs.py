@@ -37,7 +37,7 @@ def analyze_channels(img: Image.Image) -> dict:
         "B": {"mean": float(np.mean(b)), "std": float(np.std(b)), "max": int(np.max(b))},
         "brightness": float(np.mean(arr)),
         "contrast": float(np.std(arr)),
-        "is_neutral_gray": abs(np.mean(r) - np.mean(g)) < 1 and abs(np.mean(g) - np.mean(b)) < 1
+        "is_neutral_gray": abs(np.mean(r) - np.mean(g)) < 1 and abs(np.mean(g) - np.mean(b)) < 1,
     }
 
 
@@ -102,7 +102,7 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         "GreatRoom": "interior",
         "Kitchen": "kitchen",
         "PrimaryBathroom": "bathroom",
-        "PrimaryBedroom": "bedroom"
+        "PrimaryBedroom": "bedroom",
     }.get(scene_name, "unknown")
 
     results = {}
@@ -113,12 +113,7 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         img = Image.open(source_path)
         metrics = analyze_channels(img)
         score, reason = assess_quality(metrics, scene_type)
-        results["Source"] = {
-            "path": source_path,
-            "metrics": metrics,
-            "score": score,
-            "reason": reason
-        }
+        results["Source"] = {"path": source_path, "metrics": metrics, "score": score, "reason": reason}
 
     # Final Production
     final_path = base_dir / "Final_Production" / f"750Picacho_{scene_name}_luxury.tif"
@@ -126,12 +121,7 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         img = Image.open(final_path)
         metrics = analyze_channels(img)
         score, reason = assess_quality(metrics, scene_type)
-        results["Final Production"] = {
-            "path": final_path,
-            "metrics": metrics,
-            "score": score,
-            "reason": reason
-        }
+        results["Final Production"] = {"path": final_path, "metrics": metrics, "score": score, "reason": reason}
 
     # Ultimate Quality
     ultimate_path = base_dir / "Ultimate_Quality" / f"750Picacho_{scene_name}_ultimate.tif"
@@ -139,12 +129,7 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         img = Image.open(ultimate_path)
         metrics = analyze_channels(img)
         score, reason = assess_quality(metrics, scene_type)
-        results["Ultimate Quality"] = {
-            "path": ultimate_path,
-            "metrics": metrics,
-            "score": score,
-            "reason": reason
-        }
+        results["Ultimate Quality"] = {"path": ultimate_path, "metrics": metrics, "score": score, "reason": reason}
 
     # Phase3 Refined
     refined_path = base_dir / "Phase3_Refined" / f"750Picacho_{scene_name}_refined.tif"
@@ -152,36 +137,26 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         img = Image.open(refined_path)
         metrics = analyze_channels(img)
         score, reason = assess_quality(metrics, scene_type)
-        results["Phase3 Refined"] = {
-            "path": refined_path,
-            "metrics": metrics,
-            "score": score,
-            "reason": reason
-        }
+        results["Phase3 Refined"] = {"path": refined_path, "metrics": metrics, "score": score, "reason": reason}
 
     return results
 
 
 def main():
     parser = argparse.ArgumentParser(description="Compare 750 Picacho outputs")
-    parser.add_argument(
-        "--scene",
-        choices=SCENES,
-        required=True,
-        help="Scene to analyze"
-    )
+    parser.add_argument("--scene", choices=SCENES, required=True, help="Scene to analyze")
     parser.add_argument(
         "--base-dir",
         type=Path,
         default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views"),
-        help="Base directory with outputs"
+        help="Base directory with outputs",
     )
 
     args = parser.parse_args()
 
-    print("="*80)
+    print("=" * 80)
     print(f"SCENE COMPARISON: {args.scene}")
-    print("="*80)
+    print("=" * 80)
 
     results = compare_scene(args.scene, args.base_dir)
 
@@ -189,7 +164,7 @@ def main():
         print(f"\n{version}:")
         print(f"  Path: {data['path'].name}")
 
-        metrics = data['metrics']
+        metrics = data["metrics"]
         if "error" not in metrics:
             print(f"  RGB Means: R={metrics['R']['mean']:.1f} | G={metrics['G']['mean']:.1f} | B={metrics['B']['mean']:.1f}")
             print(f"  Brightness: {metrics['brightness']:.1f}")
@@ -199,18 +174,18 @@ def main():
         print(f"  Quality Score: {data['score']}/100")
         print(f"  Assessment: {data['reason']}")
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("RECOMMENDATIONS:")
-    print("="*80)
+    print("=" * 80)
 
     # Find best version
-    best_version = max(results.items(), key=lambda x: x[1]['score'])
+    best_version = max(results.items(), key=lambda x: x[1]["score"])
     print(f"\nBest Version: {best_version[0]} ({best_version[1]['score']}/100)")
 
     # Identify issues
     issues_found = []
     for version, data in results.items():
-        if data['score'] < 85:
+        if data["score"] < 85:
             issues_found.append(f"{version}: {data['reason']}")
 
     if issues_found:

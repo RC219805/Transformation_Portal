@@ -169,12 +169,12 @@ class OnnxMaterialSegmenter(MaterialSegmenter):
             if self.id_to_surface:
                 for idx, surf in self.id_to_surface.items():
                     if idx < probs.shape[1]:
-                        masks[surf] = probs[:, idx:idx+1]
+                        masks[surf] = probs[:, idx : idx + 1]
             else:
                 # fallback: assume cfg.surfaces order matches channels
                 for i, surf in enumerate(getattr(self.cfg, "surfaces", ())):
                     if i < probs.shape[1]:
-                        masks[surf] = probs[:, i:i+1]
+                        masks[surf] = probs[:, i : i + 1]
         else:
             raise RuntimeError(f"Unexpected ONNX output shape: {out.shape}")
 
@@ -215,7 +215,7 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
 
         # PRODUCTION DEFAULT: SegFormer-B5 for highest quality material segmentation
         model_id = cfg.segformer_model or "nvidia/segformer-b5-finetuned-ade-640-640"
-        
+
         # block downloads unless explicitly allowed
         if not cfg.allow_downloads and not (Path(model_id).exists() and Path(model_id).is_dir()):
             raise RuntimeError(
@@ -225,11 +225,11 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
 
         # Use local_files_only if downloads not allowed
         download_kwargs = {"local_files_only": not cfg.allow_downloads}
-        
+
         # Only add revision for remote models when specified (avoid cache issues)
         if cfg.segformer_revision and cfg.allow_downloads:
             download_kwargs["revision"] = cfg.segformer_revision
-        
+
         self.processor = SegformerImageProcessor.from_pretrained(model_id, **download_kwargs)
         self.model = SegformerForSemanticSegmentation.from_pretrained(model_id, **download_kwargs)
         self.model.to(device)
@@ -241,11 +241,11 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
 
         # Build token sets for mapping semantics -> our buckets
         self.bucket_rules = {
-            "glass":   ["window", "windowpane", "glass", "mirror", "screen"],
-            "wood":    ["wood", "door", "cabinet", "table", "chair", "desk", "floor", "stairs", "shelf"],
-            "metal":   ["sink", "faucet", "rail", "refrigerator", "oven", "microwave", "stove", "dishwasher"],
-            "stone":   ["wall", "concrete", "brick", "tile", "counter", "countertop", "ceiling", "pavement"],
-            "sky":     ["sky"],
+            "glass": ["window", "windowpane", "glass", "mirror", "screen"],
+            "wood": ["wood", "door", "cabinet", "table", "chair", "desk", "floor", "stairs", "shelf"],
+            "metal": ["sink", "faucet", "rail", "refrigerator", "oven", "microwave", "stove", "dishwasher"],
+            "stone": ["wall", "concrete", "brick", "tile", "counter", "countertop", "ceiling", "pavement"],
+            "sky": ["sky"],
             "foliage": ["tree", "plant", "grass", "foliage"],
         }
 
@@ -259,13 +259,13 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
     def predict(self, rgb: "torch_ops.torch.Tensor") -> Dict[str, "torch_ops.torch.Tensor"]:
         torch_ops.require_torch()
         device = rgb.device
-        
+
         # Use context manager instead of decorator to avoid import-time issues
         with torch_ops.torch.no_grad():
             rgb_in, scale = _resize_long_side(rgb, int(self.cfg.input_long_side))
 
             # processor expects PIL or numpy; use cpu numpy for preprocessing
-            np_img = (rgb_in[0].permute(1,2,0).clamp(0,1).to("cpu").numpy() * 255.0).astype(np.uint8)
+            np_img = (rgb_in[0].permute(1, 2, 0).clamp(0, 1).to("cpu").numpy() * 255.0).astype(np.uint8)
 
             inputs = self.processor(images=np_img, return_tensors="pt")
             inputs = {k: v.to(device) for k, v in inputs.items()}
@@ -303,48 +303,47 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
 
 class EfficientSAMSegmenter(MaterialSegmenter):
     """EfficientSAM-based material segmentation (PHASE 2 - STUB).
-    
+
     Provides high-precision boundary detection using EfficientSAM prompting.
     Expected 60-80% improvement in boundary precision over SegFormer-B5.
-    
+
     This is an architectural stub for Phase 2 implementation.
-    
+
     Phase 2 Implementation Tasks (24-32h):
     - EfficientSAM model loading and initialization
     - Prompt engineering for architectural scenes (grid-based, edge-aware)
     - Mask generation with quality filtering and confidence scoring
     - Integration with Materials V2 property schema
     - Benchmarking vs SegFormer-B5
-    
+
     Expected API:
         >>> segmenter = EfficientSAMSegmenter(cfg, device)
         >>> masks = segmenter.predict(rgb_tensor)  # Dict[str, Tensor]
         >>> # masks["water"], masks["stone"], etc.
-    
+
     Integration Points:
         - config.SegmentationConfig.backend = "efficientSAM"
         - config.SegmentationConfig.efficientSAM_model = "path/to/model"
         - materials_v2.MaterialsV2Engine (via create_material_segmenter)
     """
-    
+
     def __init__(self, cfg, device: "torch_ops.torch.device"):
         """Initialize EfficientSAM segmenter.
-        
+
         Phase 2 stub - requires implementation of:
         model loading, prompt encoder, mask decoder, mixed precision setup
         """
         torch_ops.require_torch()
         self.cfg = cfg
         self.device = device
-        
+
         raise NotImplementedError(
-            "EfficientSAM backend is a Phase 2 stub. "
-            "See PHASE2_IMPLEMENTATION_GUIDE.md for implementation details."
+            "EfficientSAM backend is a Phase 2 stub. See PHASE2_IMPLEMENTATION_GUIDE.md for implementation details."
         )
-    
+
     def predict(self, rgb: "torch_ops.torch.Tensor") -> Dict[str, "torch_ops.torch.Tensor"]:
         """Generate material masks using EfficientSAM prompting.
-        
+
         Phase 2 workflow:
         1. Generate architectural prompts (grid-based, edge-aware)
         2. Run EfficientSAM inference
@@ -352,21 +351,19 @@ class EfficientSAMSegmenter(MaterialSegmenter):
         4. Return material-specific masks
         """
         raise NotImplementedError("EfficientSAM predict() - Phase 2 stub")
-    
+
     def _generate_architectural_prompts(self, rgb: "torch_ops.torch.Tensor") -> List[Dict]:
         """Generate prompts optimized for architectural scenes.
-        
+
         Phase 2: Grid-based, edge-aware, and material-specific prompts.
         """
         raise NotImplementedError("Prompt engineering - Phase 2")
-    
+
     def _classify_masks_with_CLIP(
-        self,
-        rgb: "torch_ops.torch.Tensor",
-        sam_masks: List["torch_ops.torch.Tensor"]
+        self, rgb: "torch_ops.torch.Tensor", sam_masks: List["torch_ops.torch.Tensor"]
     ) -> Dict[str, "torch_ops.torch.Tensor"]:
         """Classify SAM masks using CLIP zero-shot classification.
-        
+
         Phase 2: Integrate with CLIPMaterialClassifier for mask classification.
         - Merge overlapping masks for same material
         """
@@ -408,9 +405,10 @@ class FusedMaterialSegmenter(MaterialSegmenter):
         self.device = device
         self.refinement_provider = refinement_provider
         self.fusion_stats: Dict[str, Dict[str, float]] = {}
-        
+
         # Stage 6.5: Log fusion initialization for observability
         import logging
+
         self.logger = logging.getLogger(__name__)
         fusion_mode = getattr(cfg, "fusion_mode", "NONE")
         model_name = getattr(cfg, "efficientSAM_model", None)
@@ -465,9 +463,7 @@ class FusedMaterialSegmenter(MaterialSegmenter):
 
             try:
                 # Get refined mask from provider
-                refined_mask = self.refinement_provider.get_refined_mask(
-                    rgb, base_mask, material_class
-                )
+                refined_mask = self.refinement_provider.get_refined_mask(rgb, base_mask, material_class)
 
                 if refined_mask is None:
                     # Provider unavailable or failed
@@ -507,6 +503,7 @@ class FusedMaterialSegmenter(MaterialSegmenter):
 
             except Exception as e:
                 import logging
+
                 logging.getLogger(__name__).warning(
                     "Fusion failed for %s: %s. Falling back to base mask.",
                     material_class,
@@ -523,7 +520,7 @@ class FusedMaterialSegmenter(MaterialSegmenter):
     def get_segmentation_v3_report(self) -> dict:
         """
         Stage 6.5: Generate observability report for EfficientSAM V3 fusion.
-        
+
         Returns dict containing:
         - backend_v3: segmentation backend used
         - fusion_mode: fusion strategy applied
@@ -532,7 +529,7 @@ class FusedMaterialSegmenter(MaterialSegmenter):
         - per_class: fusion stats per material class
         """
         from .config import SegmentationBackend, FusionMode
-        
+
         return {
             "backend_v3": str(getattr(self.cfg, "backend_v3", SegmentationBackend.SEGFORMER)),
             "fusion_mode": str(getattr(self.cfg, "fusion_mode", FusionMode.NONE)),
@@ -610,9 +607,8 @@ def create_material_segmenter(seg_cfg, device: "torch_ops.torch.device") -> Opti
                 refinement_provider = EfficientSAMRefinementProvider(esam_backend, device)
         except Exception as e:
             import logging
-            logging.getLogger(__name__).warning(
-                "EfficientSAM refinement provider unavailable: %s. Fusion disabled.", e
-            )
+
+            logging.getLogger(__name__).warning("EfficientSAM refinement provider unavailable: %s. Fusion disabled.", e)
 
         return FusedMaterialSegmenter(base_segmenter, seg_cfg, device, refinement_provider)
 

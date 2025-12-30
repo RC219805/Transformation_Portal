@@ -1,7 +1,7 @@
 # DA3 Integration Quick Reference
 
-**For**: Developers and Architects  
-**Date**: 2025-12-19  
+**For**: Developers and Architects
+**Date**: 2025-12-19
 **Module**: `lux_depth_v3/`
 
 ---
@@ -310,7 +310,7 @@ metrics = DepthQualityMetrics.compute(
 # Validate quality gates
 if metrics.rmse < 0.5 and metrics.delta_1 > 0.85:
     print("✅ Quality gate passed")
-    
+
 # Export to validation framework
 metrics.export_to_json("validation_v1_baseline_pack/metrics/da3.json")
 ```
@@ -505,6 +505,6 @@ results = estimator.process_directory("input/", "output/")
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: 2025-12-19  
+**Version**: 1.0
+**Last Updated**: 2025-12-19
 **Maintainer**: Transformation Portal Architect

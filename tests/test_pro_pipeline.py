@@ -269,7 +269,7 @@ class TestProPipeline:
         mock_image.size = (512, 512)
 
         # Depth stage should catch exception and return original
-        with patch.object(pipeline, '_apply_depth_stage', side_effect=Exception("Test error")):
+        with patch.object(pipeline, "_apply_depth_stage", side_effect=Exception("Test error")):
             result = pipeline.process_image(temp_image_file)
             # Should still complete despite error in one stage
             assert result is not None or pipeline.stats["images_failed"] == 1

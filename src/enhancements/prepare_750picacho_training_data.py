@@ -24,7 +24,7 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 # Repository paths
 REPO_ROOT = Path(__file__).parent.parent.parent
@@ -59,8 +59,8 @@ class Picacho750DataPreparation:
         # Load main BIM context
         if CONTEXT_JSON.exists():
             try:
-                with open(CONTEXT_JSON, 'r') as f:
-                    context['bim'] = json.load(f)
+                with open(CONTEXT_JSON, "r") as f:
+                    context["bim"] = json.load(f)
                     print("✓ Loaded BIM context")
             except Exception as e:
                 print(f"⚠️  Failed to load BIM context: {e}")
@@ -68,8 +68,8 @@ class Picacho750DataPreparation:
         # Load MBAR submittal context
         if MBAR_CONTEXT_JSON.exists():
             try:
-                with open(MBAR_CONTEXT_JSON, 'r') as f:
-                    context['mbar'] = json.load(f)
+                with open(MBAR_CONTEXT_JSON, "r") as f:
+                    context["mbar"] = json.load(f)
                     print("✓ Loaded MBAR submittal context (materials, elevations, details)")
             except Exception as e:
                 print(f"⚠️  Failed to load MBAR context: {e}")
@@ -78,9 +78,9 @@ class Picacho750DataPreparation:
 
     def prepare_ultraquality_renders(self):
         """Convert UltraQuality TIFFs to training pairs"""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("PREPARING ULTRAQUALITY RENDERS")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         if not ULTRAQUALITY_DIR.exists():
             print(f"❌ UltraQuality directory not found: {ULTRAQUALITY_DIR}")
@@ -88,7 +88,7 @@ class Picacho750DataPreparation:
 
         # Find all TIFF files
         tiff_files = list(ULTRAQUALITY_DIR.glob("*.tif")) + list(ULTRAQUALITY_DIR.glob("*.tiff"))
-        tiff_files = [f for f in tiff_files if not f.name.startswith('.')]
+        tiff_files = [f for f in tiff_files if not f.name.startswith(".")]
 
         print(f"Found {len(tiff_files)} UltraQuality renders")
 
@@ -101,10 +101,10 @@ class Picacho750DataPreparation:
         """Create training pairs from single UltraQuality render"""
         try:
             # Load high-quality image
-            high_img = Image.open(tiff_path).convert('RGB')
+            high_img = Image.open(tiff_path).convert("RGB")
 
             # Extract room name from filename (e.g., "750Picacho_Kitchen_UltraQuality.tif" -> "Kitchen")
-            room_name = tiff_path.stem.replace('750Picacho_', '').replace('_UltraQuality', '')
+            room_name = tiff_path.stem.replace("750Picacho_", "").replace("_UltraQuality", "")
 
             # Create multiple training pairs from crops
             self._create_crop_pairs(high_img, room_name, num_crops=5)
@@ -155,42 +155,42 @@ class Picacho750DataPreparation:
 
         # Room-specific degradation profiles
         degradation_profiles = {
-            'Kitchen': {'contrast': 0.75, 'noise': 6, 'blur': 0.6, 'saturation': 0.8},
-            'Pool': {'contrast': 0.70, 'noise': 8, 'blur': 0.8, 'saturation': 0.75},
-            'Aerial': {'contrast': 0.65, 'noise': 10, 'blur': 1.0, 'saturation': 0.7},
-            'GreatRoom': {'contrast': 0.75, 'noise': 5, 'blur': 0.6, 'saturation': 0.8},
-            'PrimaryBedroom': {'contrast': 0.70, 'noise': 6, 'blur': 0.7, 'saturation': 0.75},
-            'PrimaryBathroom': {'contrast': 0.72, 'noise': 6, 'blur': 0.7, 'saturation': 0.78},
+            "Kitchen": {"contrast": 0.75, "noise": 6, "blur": 0.6, "saturation": 0.8},
+            "Pool": {"contrast": 0.70, "noise": 8, "blur": 0.8, "saturation": 0.75},
+            "Aerial": {"contrast": 0.65, "noise": 10, "blur": 1.0, "saturation": 0.7},
+            "GreatRoom": {"contrast": 0.75, "noise": 5, "blur": 0.6, "saturation": 0.8},
+            "PrimaryBedroom": {"contrast": 0.70, "noise": 6, "blur": 0.7, "saturation": 0.75},
+            "PrimaryBathroom": {"contrast": 0.72, "noise": 6, "blur": 0.7, "saturation": 0.78},
         }
 
         # Get profile or use default
-        profile = degradation_profiles.get(room_name, {
-            'contrast': 0.72, 'noise': 7, 'blur': 0.7, 'saturation': 0.77
-        })
+        profile = degradation_profiles.get(room_name, {"contrast": 0.72, "noise": 7, "blur": 0.7, "saturation": 0.77})
 
         # 1. Reduce contrast
-        img_array = (img_array - 128) * profile['contrast'] + 128
+        img_array = (img_array - 128) * profile["contrast"] + 128
 
         # 2. Add noise
-        noise = np.random.randn(*img_array.shape) * profile['noise']
+        noise = np.random.randn(*img_array.shape) * profile["noise"]
         img_array += noise
 
         # 3. Slight blur
         from scipy.ndimage import gaussian_filter
+
         for c in range(3):
-            img_array[:, :, c] = gaussian_filter(img_array[:, :, c], sigma=profile['blur'])
+            img_array[:, :, c] = gaussian_filter(img_array[:, :, c], sigma=profile["blur"])
 
         # 4. Reduce saturation
         gray = img_array.mean(axis=2, keepdims=True)
-        img_array = gray * (1 - profile['saturation']) + img_array * profile['saturation']
+        img_array = gray * (1 - profile["saturation"]) + img_array * profile["saturation"]
 
         # 5. Add JPEG compression artifacts (simulate web quality)
         img_degraded = Image.fromarray(np.clip(img_array, 0, 255).astype(np.uint8))
 
         # Save to buffer with low quality to add compression
         from io import BytesIO
+
         buffer = BytesIO()
-        img_degraded.save(buffer, format='JPEG', quality=75)
+        img_degraded.save(buffer, format="JPEG", quality=75)
         buffer.seek(0)
         img_degraded = Image.open(buffer)
 
@@ -198,9 +198,9 @@ class Picacho750DataPreparation:
 
     def prepare_bim_images(self, max_images: int = 500):
         """Convert BIM-extracted images to training pairs"""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("PREPARING BIM ARCHITECTURAL IMAGES")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         if not BIM_IMAGES_DIR.exists():
             print(f"❌ BIM images directory not found: {BIM_IMAGES_DIR}")
@@ -208,7 +208,7 @@ class Picacho750DataPreparation:
 
         # Find all images
         image_files = list(BIM_IMAGES_DIR.glob("*.jpeg")) + list(BIM_IMAGES_DIR.glob("*.jpg"))
-        image_files = [f for f in image_files if not f.name.startswith('.')]
+        image_files = [f for f in image_files if not f.name.startswith(".")]
 
         print(f"Found {len(image_files)} BIM images")
 
@@ -227,7 +227,7 @@ class Picacho750DataPreparation:
         """Convert BIM image to training pair"""
         try:
             # Load image
-            img = Image.open(img_path).convert('RGB')
+            img = Image.open(img_path).convert("RGB")
 
             # Skip very small images (likely icons)
             if img.size[0] < 200 or img.size[1] < 200:
@@ -246,7 +246,7 @@ class Picacho750DataPreparation:
             img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
 
             # Create square canvas
-            square_img = Image.new('RGB', (target_size, target_size), (240, 240, 240))
+            square_img = Image.new("RGB", (target_size, target_size), (240, 240, 240))
             offset = ((target_size - new_size[0]) // 2, (target_size - new_size[1]) // 2)
             square_img.paste(img_resized, offset)
 
@@ -274,43 +274,43 @@ class Picacho750DataPreparation:
     def create_metadata(self):
         """Create metadata file with dataset information"""
         metadata = {
-            'dataset_name': '750_Picacho_Training_Data',
-            'project': '750 Picacho Lane, Montecito, CA',
-            'project_number': '24098.00',
-            'total_pairs': self.pairs_created,
-            'source_types': {
-                'ultraquality_renders': 'High-quality architectural renders (6 TIFFs)',
-                'bim_images': 'Extracted from BIM architectural plans (2,488 images)',
-                'mbar_submittal': 'Construction documents, elevations, material boards'
+            "dataset_name": "750_Picacho_Training_Data",
+            "project": "750 Picacho Lane, Montecito, CA",
+            "project_number": "24098.00",
+            "total_pairs": self.pairs_created,
+            "source_types": {
+                "ultraquality_renders": "High-quality architectural renders (6 TIFFs)",
+                "bim_images": "Extracted from BIM architectural plans (2,488 images)",
+                "mbar_submittal": "Construction documents, elevations, material boards",
             },
-            'data_sources': {
-                'ultraquality': str(ULTRAQUALITY_DIR),
-                'bim_images': str(BIM_IMAGES_DIR),
-                'bim_context': str(CONTEXT_JSON),
-                'mbar_context': str(MBAR_CONTEXT_JSON)
+            "data_sources": {
+                "ultraquality": str(ULTRAQUALITY_DIR),
+                "bim_images": str(BIM_IMAGES_DIR),
+                "bim_context": str(CONTEXT_JSON),
+                "mbar_context": str(MBAR_CONTEXT_JSON),
             },
-            'context_available': self.context is not None,
-            'context_types': list(self.context.keys()) if self.context else [],
-            'rooms': list(self.context.get('bim', {}).get('rooms', {}).keys()) if self.context else [],
-            'materials': self.context.get('mbar', {}).get('rooms', [])[:5] if self.context else [],
-            'degradation_types': [
-                'Room-specific contrast reduction',
-                'Gaussian noise addition',
-                'Depth-aware blur',
-                'Saturation reduction',
-                'JPEG compression artifacts'
+            "context_available": self.context is not None,
+            "context_types": list(self.context.keys()) if self.context else [],
+            "rooms": list(self.context.get("bim", {}).get("rooms", {}).keys()) if self.context else [],
+            "materials": self.context.get("mbar", {}).get("rooms", [])[:5] if self.context else [],
+            "degradation_types": [
+                "Room-specific contrast reduction",
+                "Gaussian noise addition",
+                "Depth-aware blur",
+                "Saturation reduction",
+                "JPEG compression artifacts",
             ],
-            'room_profiles': {
-                'Kitchen': 'Bright lighting, balanced depth, metal/stone/glass materials',
-                'Pool': 'Water reflections, atmospheric haze, outdoor lighting',
-                'Aerial': 'Distance blur, atmospheric effects, perspective',
-                'Bedroom': 'Soft lighting, fabric textures, warm tones',
-                'Bathroom': 'Stone/glass materials, spa aesthetic, neutral temperature'
-            }
+            "room_profiles": {
+                "Kitchen": "Bright lighting, balanced depth, metal/stone/glass materials",
+                "Pool": "Water reflections, atmospheric haze, outdoor lighting",
+                "Aerial": "Distance blur, atmospheric effects, perspective",
+                "Bedroom": "Soft lighting, fabric textures, warm tones",
+                "Bathroom": "Stone/glass materials, spa aesthetic, neutral temperature",
+            },
         }
 
         metadata_path = self.output_dir / "dataset_metadata.json"
-        with open(metadata_path, 'w') as f:
+        with open(metadata_path, "w") as f:
             json.dump(metadata, f, indent=2)
 
         print(f"\n✓ Metadata saved: {metadata_path}")
@@ -319,36 +319,15 @@ class Picacho750DataPreparation:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Prepare 750 Picacho BIM training data for Hyper-Reality Enhancement"
-    )
+    parser = argparse.ArgumentParser(description="Prepare 750 Picacho BIM training data for Hyper-Reality Enhancement")
     parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="data/training_750picacho",
-        help="Output directory for training data"
+        "--output-dir", type=str, default="data/training_750picacho", help="Output directory for training data"
     )
+    parser.add_argument("--ultraquality-only", action="store_true", help="Only use UltraQuality renders (skip BIM images)")
+    parser.add_argument("--bim-only", action="store_true", help="Only use BIM images (skip UltraQuality renders)")
+    parser.add_argument("--max-bim-images", type=int, default=500, help="Maximum number of BIM images to use (default: 500)")
     parser.add_argument(
-        "--ultraquality-only",
-        action="store_true",
-        help="Only use UltraQuality renders (skip BIM images)"
-    )
-    parser.add_argument(
-        "--bim-only",
-        action="store_true",
-        help="Only use BIM images (skip UltraQuality renders)"
-    )
-    parser.add_argument(
-        "--max-bim-images",
-        type=int,
-        default=500,
-        help="Maximum number of BIM images to use (default: 500)"
-    )
-    parser.add_argument(
-        "--crops-per-render",
-        type=int,
-        default=5,
-        help="Number of crops to extract from each UltraQuality render (default: 5)"
+        "--crops-per-render", type=int, default=5, help="Number of crops to extract from each UltraQuality render (default: 5)"
     )
 
     args = parser.parse_args()
@@ -406,5 +385,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\n❌ Failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

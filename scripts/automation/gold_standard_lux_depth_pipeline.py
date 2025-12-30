@@ -79,8 +79,10 @@ EPS = 1e-12
 
 # --------------------------- Presets ---------------------------
 
+
 class Preset(str, Enum):
     """Curated looks (conservative; tuned for real estate)."""
+
     PHOTO_REALISTIC = "photo_realistic"
     ARCHITECTURAL = "architectural"
     ARCHIVAL_QUALITY = "archival_quality"
@@ -91,6 +93,7 @@ class Preset(str, Enum):
 
 # --------------------------- Config ---------------------------
 
+
 @dataclass
 class Config:
     input_dir: Path
@@ -99,9 +102,9 @@ class Config:
 
     preset: Preset = Preset.PHOTO_REALISTIC
 
-    upscale: int = 4                 # 2 or 4
-    backend: str = "realesrgan"      # realesrgan | onnx | none
-    device: str = "auto"            # auto | cuda | cpu (Real-ESRGAN)
+    upscale: int = 4  # 2 or 4
+    backend: str = "realesrgan"  # realesrgan | onnx | none
+    device: str = "auto"  # auto | cuda | cpu (Real-ESRGAN)
     model_path: Optional[Path] = None
     model_sha256: Optional[str] = None
 
@@ -187,8 +190,8 @@ class Config:
 
     # Guard-rails
     validate_ai: bool = True
-    ai_color_warn: float = 0.06     # mean abs RGB diff (0..1)
-    ai_color_fail: float = 0.12     # if exceeded, skip AI details
+    ai_color_warn: float = 0.06  # mean abs RGB diff (0..1)
+    ai_color_fail: float = 0.12  # if exceeded, skip AI details
     ai_luma_warn: float = 0.06
     ai_luma_fail: float = 0.12
 
@@ -272,6 +275,7 @@ def _need_deps() -> None:
 
 
 # --------------------------- IO ---------------------------
+
 
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -359,6 +363,7 @@ def write_preview_jpg(path: Path, rgb_u8: np.ndarray, scale: float) -> None:
 
 # --------------------------- Utility math ---------------------------
 
+
 def luma(rgb01: np.ndarray) -> np.ndarray:
     return (rgb01[..., 0] * 0.2126 + rgb01[..., 1] * 0.7152 + rgb01[..., 2] * 0.0722).astype(np.float32)
 
@@ -421,6 +426,7 @@ def param_map(wfg: np.ndarray, wmid: np.ndarray, wbg: np.ndarray, fg: float, mid
 
 # --------------------------- Depth / Weights ---------------------------
 
+
 @dataclass
 class Weights:
     wfg: np.ndarray
@@ -465,15 +471,20 @@ def weights_from_assets(h: int, w: int, depth: Optional[np.ndarray], masks: Dict
     have = all(k in masks for k in ("foreground", "midground", "background"))
     if have:
         wfg, wmid, wbg = masks["foreground"], masks["midground"], masks["background"]
-        if wfg.shape != (h, w): wfg = resize(wfg, w, h, cv2.INTER_LINEAR)
-        if wmid.shape != (h, w): wmid = resize(wmid, w, h, cv2.INTER_LINEAR)
-        if wbg.shape != (h, w): wbg = resize(wbg, w, h, cv2.INTER_LINEAR)
+        if wfg.shape != (h, w):
+            wfg = resize(wfg, w, h, cv2.INTER_LINEAR)
+        if wmid.shape != (h, w):
+            wmid = resize(wmid, w, h, cv2.INTER_LINEAR)
+        if wbg.shape != (h, w):
+            wbg = resize(wbg, w, h, cv2.INTER_LINEAR)
         s = max(0.0, cfg.mask_soften_sigma)
         if s > 0:
             wfg, wmid, wbg = blur(wfg, s), blur(wmid, s), blur(wbg, s)
         sm = np.maximum(wfg + wmid + wbg, EPS)
         wfg, wmid, wbg = wfg / sm, wmid / sm, wbg / sm
-        return Weights(wfg=wfg.astype(np.float32), wmid=wmid.astype(np.float32), wbg=wbg.astype(np.float32), source="zone_masks")
+        return Weights(
+            wfg=wfg.astype(np.float32), wmid=wmid.astype(np.float32), wbg=wbg.astype(np.float32), source="zone_masks"
+        )
     if depth is None:
         # fall back to uniform
         u = np.ones((h, w), np.float32)
@@ -490,7 +501,9 @@ def weights_from_assets(h: int, w: int, depth: Optional[np.ndarray], masks: Dict
         wfg, wmid, wbg = blur(wfg, s), blur(wmid, s), blur(wbg, s)
         sm = np.maximum(wfg + wmid + wbg, EPS)
         wfg, wmid, wbg = wfg / sm, wmid / sm, wbg / sm
-    return Weights(wfg=wfg.astype(np.float32), wmid=wmid.astype(np.float32), wbg=wbg.astype(np.float32), source="depth_quantiles")
+    return Weights(
+        wfg=wfg.astype(np.float32), wmid=wmid.astype(np.float32), wbg=wbg.astype(np.float32), source="depth_quantiles"
+    )
 
 
 def upsample_weights(W: Weights, h2: int, w2: int) -> Weights:
@@ -502,6 +515,7 @@ def upsample_weights(W: Weights, h2: int, w2: int) -> Weights:
 
 
 # --------------------------- Upscalers ---------------------------
+
 
 class Upscaler:
     def __init__(self, cfg: Config):
@@ -598,10 +612,11 @@ def build_upscaler(cfg: Config) -> Upscaler:
 
 # --------------------------- Luxury: material response ---------------------------
 
+
 @dataclass(frozen=True)
 class SurfaceProfile:
-    temp_offset: float = 0.0     # additive (approx)
-    sat_mult: float = 1.0        # multiplicative
+    temp_offset: float = 0.0  # additive (approx)
+    sat_mult: float = 1.0  # multiplicative
     exp_mult: float = 1.0
     con_mult: float = 1.0
     detail_mult: float = 1.0
@@ -612,14 +627,37 @@ class SurfaceProfile:
 
 SURFACE_PROFILES: Dict[str, SurfaceProfile] = {
     # Subtle defaults; they're meant to be *barely noticeable*.
-    "wood":  SurfaceProfile(temp_offset=0.006, sat_mult=1.05, con_mult=1.015, detail_mult=1.05, clarity_mult=1.08, sharpen_mult=1.03),
-    "metal": SurfaceProfile(temp_offset=-0.001, sat_mult=0.99, con_mult=1.010, detail_mult=1.03, clarity_mult=1.06, sharpen_mult=1.03),
-    "glass": SurfaceProfile(temp_offset=-0.002, sat_mult=0.98, con_mult=0.995, detail_mult=0.80, clarity_mult=0.82, sharpen_mult=0.78, highlight_compress=0.20),
-    "stone": SurfaceProfile(temp_offset=0.000, sat_mult=1.00, con_mult=1.012, detail_mult=1.02, clarity_mult=1.05, sharpen_mult=1.02),
-
+    "wood": SurfaceProfile(
+        temp_offset=0.006, sat_mult=1.05, con_mult=1.015, detail_mult=1.05, clarity_mult=1.08, sharpen_mult=1.03
+    ),
+    "metal": SurfaceProfile(
+        temp_offset=-0.001, sat_mult=0.99, con_mult=1.010, detail_mult=1.03, clarity_mult=1.06, sharpen_mult=1.03
+    ),
+    "glass": SurfaceProfile(
+        temp_offset=-0.002,
+        sat_mult=0.98,
+        con_mult=0.995,
+        detail_mult=0.80,
+        clarity_mult=0.82,
+        sharpen_mult=0.78,
+        highlight_compress=0.20,
+    ),
+    "stone": SurfaceProfile(
+        temp_offset=0.000, sat_mult=1.00, con_mult=1.012, detail_mult=1.02, clarity_mult=1.05, sharpen_mult=1.02
+    ),
     # Optional extra surfaces you can add by providing matching masks.
-    "foliage": SurfaceProfile(temp_offset=0.000, sat_mult=1.02, con_mult=1.005, detail_mult=0.95, clarity_mult=0.92, sharpen_mult=0.92),
-    "sky":     SurfaceProfile(temp_offset=-0.003, sat_mult=1.00, con_mult=0.995, detail_mult=0.85, clarity_mult=0.78, sharpen_mult=0.75, highlight_compress=0.15),
+    "foliage": SurfaceProfile(
+        temp_offset=0.000, sat_mult=1.02, con_mult=1.005, detail_mult=0.95, clarity_mult=0.92, sharpen_mult=0.92
+    ),
+    "sky": SurfaceProfile(
+        temp_offset=-0.003,
+        sat_mult=1.00,
+        con_mult=0.995,
+        detail_mult=0.85,
+        clarity_mult=0.78,
+        sharpen_mult=0.75,
+        highlight_compress=0.15,
+    ),
 }
 
 
@@ -749,6 +787,7 @@ def apply_material_highlight_compression(rgb01: np.ndarray, hi_comp: np.ndarray,
 
 # --------------------------- Luxury: LUT (.cube) ---------------------------
 
+
 @dataclass(frozen=True)
 class CubeLUT:
     title: str
@@ -820,14 +859,14 @@ def load_cube_lut(path: Path) -> CubeLUT:
     if n1d > 0:
         if len(data) < idx + n1d:
             raise ValueError(f"Invalid .cube: not enough 1D entries (need {n1d})")
-        lut1d = np.array(data[idx:idx + n1d], np.float32)
+        lut1d = np.array(data[idx : idx + n1d], np.float32)
         idx += n1d
 
     if n3d > 0:
-        need = n3d ** 3
+        need = n3d**3
         if len(data) < idx + need:
             raise ValueError(f"Invalid .cube: not enough 3D entries (need {need})")
-        raw = np.array(data[idx:idx + need], np.float32)
+        raw = np.array(data[idx : idx + need], np.float32)
         idx += need
         lut3d = np.zeros((n3d, n3d, n3d, 3), np.float32)
         k = 0
@@ -877,9 +916,12 @@ def _lut_apply_3d(rgb01: np.ndarray, lut3d: np.ndarray, dom_min: np.ndarray, dom
     g = t[..., 1]
     b = t[..., 2]
 
-    r0 = np.floor(r).astype(np.int32); r1 = np.clip(r0 + 1, 0, n - 1)
-    g0 = np.floor(g).astype(np.int32); g1 = np.clip(g0 + 1, 0, n - 1)
-    b0 = np.floor(b).astype(np.int32); b1 = np.clip(b0 + 1, 0, n - 1)
+    r0 = np.floor(r).astype(np.int32)
+    r1 = np.clip(r0 + 1, 0, n - 1)
+    g0 = np.floor(g).astype(np.int32)
+    g1 = np.clip(g0 + 1, 0, n - 1)
+    b0 = np.floor(b).astype(np.int32)
+    b1 = np.clip(b0 + 1, 0, n - 1)
 
     fr = (r - r0).astype(np.float32)
     fg = (g - g0).astype(np.float32)
@@ -944,6 +986,7 @@ def apply_lut(rgb01: np.ndarray, lut: CubeLUT, cfg: Config) -> np.ndarray:
 
 # --------------------------- Enhancements ---------------------------
 
+
 def detail_transfer(base01: np.ndarray, ai01: np.ndarray, W: Weights, cfg: Config, mods: Optional[MaterialMods]) -> np.ndarray:
     if ai01.shape != base01.shape:
         ai01 = resize(ai01, base01.shape[1], base01.shape[0], cv2.INTER_LANCZOS4)
@@ -999,8 +1042,8 @@ def apply_sharpen(rgb01: np.ndarray, W: Weights, cfg: Config, mods: Optional[Mat
 def apply_temperature(rgb01: np.ndarray, temp: np.ndarray) -> np.ndarray:
     l0 = luma(rgb01)
     out = rgb01.copy().astype(np.float32)
-    out[..., 0] *= (1.0 + temp)  # R
-    out[..., 2] *= (1.0 - temp)  # B
+    out[..., 0] *= 1.0 + temp  # R
+    out[..., 2] *= 1.0 - temp  # B
     out = np.clip(out, 0.0, 1.5)
     l1 = luma(out)
     r = np.clip(l0 / np.maximum(l1, EPS), 0.0, 8.0)
@@ -1023,9 +1066,9 @@ def apply_exp_con(rgb01: np.ndarray, exp: np.ndarray, con: np.ndarray) -> np.nda
 
 def grade_core(rgb01: np.ndarray, W: Weights, cfg: Config, mods: Optional[MaterialMods]) -> np.ndarray:
     temp = param_map(W.wfg, W.wmid, W.wbg, cfg.temp_fg, cfg.temp_mid, cfg.temp_bg)
-    sat  = param_map(W.wfg, W.wmid, W.wbg, cfg.sat_fg,  cfg.sat_mid,  cfg.sat_bg)
-    exp  = param_map(W.wfg, W.wmid, W.wbg, cfg.exp_fg,  cfg.exp_mid,  cfg.exp_bg)
-    con  = param_map(W.wfg, W.wmid, W.wbg, cfg.con_fg,  cfg.con_mid,  cfg.con_bg)
+    sat = param_map(W.wfg, W.wmid, W.wbg, cfg.sat_fg, cfg.sat_mid, cfg.sat_bg)
+    exp = param_map(W.wfg, W.wmid, W.wbg, cfg.exp_fg, cfg.exp_mid, cfg.exp_bg)
+    con = param_map(W.wfg, W.wmid, W.wbg, cfg.con_fg, cfg.con_mid, cfg.con_bg)
 
     if mods is not None:
         # Ensure shapes match (they should)
@@ -1055,6 +1098,7 @@ def grade_core(rgb01: np.ndarray, W: Weights, cfg: Config, mods: Optional[Materi
 
 
 # --------------------------- Metrics ---------------------------
+
 
 def metrics(rgb01: np.ndarray) -> Dict[str, float]:
     hi = float(np.mean(rgb01 >= 1.0 - 1e-6))
@@ -1100,6 +1144,7 @@ def mean_abs_luma(a: np.ndarray, b: np.ndarray, max_samples: int = 250_000) -> f
 
 # --------------------------- Runner ---------------------------
 
+
 @dataclass
 class Context:
     lut: Optional[CubeLUT] = None
@@ -1108,6 +1153,7 @@ class Context:
 def _serialize_config(cfg: Config) -> Dict[str, Any]:
     """Convert Config to JSON-serializable dict."""
     d = dataclasses.asdict(cfg)
+
     # Convert Path objects to strings (recursively handle nested structures)
     def convert_paths(obj):
         if isinstance(obj, Path):
@@ -1118,7 +1164,7 @@ def _serialize_config(cfg: Config) -> Dict[str, Any]:
             return type(obj)(convert_paths(item) for item in obj)
         else:
             return obj
-    
+
     return convert_paths(d)
 
 
@@ -1151,7 +1197,7 @@ def process_one(path: Path, cfg: Config, up: Upscaler, ctx: Context) -> Tuple[bo
         stage["read_input"] = time.time() - t
 
         out_h, out_w = h * cfg.upscale, w * cfg.upscale
-        est_gb = (out_h * out_w * 3 * 4) / (1024 ** 3)  # float32 RGB buffer
+        est_gb = (out_h * out_w * 3 * 4) / (1024**3)  # float32 RGB buffer
         if est_gb > cfg.warn_float_gb:
             rep["warnings"].append(
                 f"High memory risk: {out_w}x{out_h} float32 RGB ~{est_gb:.2f}GB (consider --upscale 2 or smaller --tile)"
@@ -1177,7 +1223,11 @@ def process_one(path: Path, cfg: Config, up: Upscaler, ctx: Context) -> Tuple[bo
                     depth = norm_depth(dpth)
                 else:
                     # normalize anyway
-                    maxv = float(np.iinfo(dpth.dtype).max) if hasattr(np, "iinfo") and np.issubdtype(dpth.dtype, np.integer) else float(np.max(dpth))
+                    maxv = (
+                        float(np.iinfo(dpth.dtype).max)
+                        if hasattr(np, "iinfo") and np.issubdtype(dpth.dtype, np.integer)
+                        else float(np.max(dpth))
+                    )
                     if maxv <= 0:
                         maxv = 1.0
                     dd = np.clip(dpth.astype(np.float32) / maxv, 0.0, 1.0)
@@ -1341,8 +1391,6 @@ def process_one(path: Path, cfg: Config, up: Upscaler, ctx: Context) -> Tuple[bo
         return False, rep
 
 
-
-
 def write_batch_report_md(cfg: Config, reps: List[Dict[str, Any]], ok: int, total: int, out_path: Path) -> None:
     """
     Human-friendly summary (non-authoritative). JSON remains the source of truth.
@@ -1391,6 +1439,7 @@ def write_batch_report_md(cfg: Config, reps: List[Dict[str, Any]], ok: int, tota
 
 # --------------------------- CLI ---------------------------
 
+
 def parse(argv: Optional[List[str]] = None) -> Config:
     p = argparse.ArgumentParser()
     p.add_argument("--input", type=Path, default=None, help="Input TIFF file or directory")
@@ -1398,8 +1447,13 @@ def parse(argv: Optional[List[str]] = None) -> Config:
     p.add_argument("--depth-dir", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
 
-    p.add_argument("--preset", type=str, default=Preset.PHOTO_REALISTIC.value,
-                   choices=[e.value for e in Preset], help="Curated look preset")
+    p.add_argument(
+        "--preset",
+        type=str,
+        default=Preset.PHOTO_REALISTIC.value,
+        choices=[e.value for e in Preset],
+        help="Curated look preset",
+    )
 
     p.add_argument("--upscale", type=int, default=4, choices=[2, 4])
     p.add_argument("--backend", type=str, default="realesrgan", choices=["realesrgan", "onnx", "none"])
@@ -1425,8 +1479,12 @@ def parse(argv: Optional[List[str]] = None) -> Config:
     # Material
     p.add_argument("--no-material", action="store_true")
     p.add_argument("--material-strength", type=float, default=0.75)
-    p.add_argument("--surfaces", type=str, default="wood,metal,glass,stone",
-                   help="Comma-separated surface masks to search for (e.g. wood,metal,glass,stone,foliage,sky)")
+    p.add_argument(
+        "--surfaces",
+        type=str,
+        default="wood,metal,glass,stone",
+        help="Comma-separated surface masks to search for (e.g. wood,metal,glass,stone,foliage,sky)",
+    )
     p.add_argument("--material-mask-soften-sigma", type=float, default=2.0)
 
     # LUT
@@ -1448,7 +1506,7 @@ def parse(argv: Optional[List[str]] = None) -> Config:
 
     inp = a.input if a.input is not None else a.input_dir
     if inp is None:
-        p.error('You must provide --input (file/dir) or --input-dir')
+        p.error("You must provide --input (file/dir) or --input-dir")
 
     cfg = Config(
         input_dir=inp,
@@ -1472,12 +1530,10 @@ def parse(argv: Optional[List[str]] = None) -> Config:
         save_preview_jpg=not bool(a.no_preview),
         save_report=not bool(a.no_report),
         preview_scale=float(a.preview_scale),
-
         enable_material=not bool(a.no_material),
         material_strength=float(a.material_strength),
         surfaces=tuple([s.strip() for s in str(a.surfaces).split(",") if s.strip()]),
         material_mask_soften_sigma=float(a.material_mask_soften_sigma),
-
         enable_lut=bool(a.lut_path),
         lut_path=a.lut_path,
         lut_strength=float(a.lut_strength),
@@ -1485,7 +1541,6 @@ def parse(argv: Optional[List[str]] = None) -> Config:
         lut_protect_highlights=not bool(a.lut_no_protect_highlights),
         lut_protect_blacks=not bool(a.lut_no_protect_blacks),
         lut_midtone_bias=float(a.lut_midtone_bias),
-
         validate_ai=not bool(a.no_validate_ai),
         ai_color_warn=float(a.ai_color_warn),
         ai_color_fail=float(a.ai_color_fail),

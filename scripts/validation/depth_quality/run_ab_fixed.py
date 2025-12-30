@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Run A/B comparison with FIXED configuration."""
+
 import sys
-sys.path.insert(0, '.')
+
+sys.path.insert(0, ".")
 
 import numpy as np
 from PIL import Image
@@ -37,7 +39,7 @@ if result.edge_alignment_improvement > 0:
     print("\n✅ SUCCESS: Edge alignment IMPROVED")
 else:
     print("\n❌ FAILED: Edge alignment still degraded")
-    
+
 print(f"\nEdge overlap metrics:")
 print(f"  Baseline alignment: {result.baseline_edge_alignment:.4f}")
 print(f"  Enhanced alignment: {result.enhanced_edge_alignment:.4f}")

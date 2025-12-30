@@ -1,5 +1,5 @@
 # High-Fidelity Depth Pipeline - Validation Report
-**Date**: 2025-12-18  
+**Date**: 2025-12-18
 **Status**: ✅ TILING INTEGRATION VALIDATED
 
 ---
@@ -59,7 +59,7 @@ if H_in != tile_rgb.shape[0] or W_in != tile_rgb.shape[1]:
     logger.error("⚠️  Model is silently resizing tiles internally!")
 ```
 
-**Validation Log**: `🔍 Tile inference: RGB=(1024, 1024), pixel_values=1024×1024`  
+**Validation Log**: `🔍 Tile inference: RGB=(1024, 1024), pixel_values=1024×1024`
 ✅ NO internal resize detected
 
 #### 3. Scale Reconciliation (CRITICAL FIX)
@@ -75,27 +75,27 @@ def _reconcile_tile_scale(
 ) -> Tuple[np.ndarray, float, float]:
     """
     Reconcile tile scale to match reference using robust affine fit.
-    
+
     CRITICAL FIX: Prevents per-tile normalization artifacts.
     """
     # Compute gradient for robust pixel selection
     grad_mag = self._compute_gradient_magnitude(reference_region)
-    
+
     # Exclude high-gradient pixels (edges) from overlap
     stable_threshold = np.percentile(grad_mag[overlap_mask], 80)
     stable_mask = overlap_mask & (grad_mag < stable_threshold)
-    
+
     # Robust affine fit: a * tile + b ≈ reference
     tile_pixels = tile_depth[stable_mask].flatten()
     ref_pixels = reference_region[stable_mask].flatten()
-    
+
     # Percentile-based robust fit (Theil-Sen approximation)
     tile_p25, tile_p75 = np.percentile(tile_pixels, [25, 75])
     ref_p25, ref_p75 = np.percentile(ref_pixels, [25, 75])
-    
+
     a = (ref_p75 - ref_p25) / max(tile_p75 - tile_p25, 1e-6)
     b = ref_p25 - a * tile_p25
-    
+
     # Apply calibration
     tile_calibrated = a * tile_depth + b
     tile_calibrated = np.clip(tile_calibrated, 0.0, 1.0)
@@ -116,26 +116,26 @@ def _reconcile_tile_scale(
 def _validate_seam_boundaries(self, depth: np.ndarray):
     """
     Validate tile boundaries for seam artifacts.
-    
+
     Computes boundary gradient energy ratio (should be <1.2).
     """
     # Compute global gradient magnitude
     grad_mag = self._compute_gradient_magnitude(depth)
     global_mean = grad_mag.mean()
-    
+
     # Check tile boundaries (vertical and horizontal)
     boundary_energies = []
     for x in range(stride, w, stride):
         boundary_region = grad_mag[:, x-2:x+3]
         ratio = boundary_region.mean() / max(global_mean, 1e-6)
         boundary_energies.append(ratio)
-    
+
     max_ratio = max(boundary_energies)
     if max_ratio > self.config.seam_energy_threshold:
         logger.warning(f"⚠️  High seam energy detected: {max_ratio:.3f}")
 ```
 
-**Validation Result**: `max_ratio=1.861, mean_ratio=0.877`  
+**Validation Result**: `max_ratio=1.861, mean_ratio=0.877`
 ⚠️ Some seams detected but **mean is acceptable** (0.877 < 1.2)
 
 ---
@@ -234,10 +234,10 @@ class EdgeMetrics:
 
 1. **Apply Edge Snapping**: Use RGB edges to refine depth boundaries (from `lux_depth_v2/edge_snapping.py`)
    - Expected improvement: +0.3 to +0.5 alignment
-   
+
 2. **Guided Filter Refinement**: Smooth within-region noise without washing out edges
    - Expected improvement: -50% edge width, +0.1 alignment
-   
+
 3. **CLAHE on Low-Frequency**: Increase local contrast without amplifying tiling artifacts
    - Expected improvement: +20% unique depth levels
 

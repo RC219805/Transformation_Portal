@@ -1,6 +1,6 @@
 # Lux Depth V2 - Phase 1 Security Hardening Complete ✅
 
-**Date Completed**: 2025-12-06  
+**Date Completed**: 2025-12-06
 **Status**: READY FOR PRODUCTION USE
 
 ---
@@ -34,7 +34,7 @@ class TorchUpscaler(Upscaler):
     """Torch-based upscaling using torchvision (safe alternative to Real-ESRGAN)."""
     def upscale(self, rgb):
         # High-quality bicubic upscaling with edge enhancement
-        upscaled = self.TF.resize(rgb, [target_h, target_w], 
+        upscaled = self.TF.resize(rgb, [target_h, target_w],
                                    interpolation=InterpolationMode.BICUBIC,
                                    antialias=True)
         return upscaled.clamp(0.0, 1.0)
@@ -180,7 +180,7 @@ See: `LUX_DEPTH_V2_INTEGRATION_CHECKLIST.md` for full Phase 2 checklist.
 
 ---
 
-**Sign-Off**: Phase 1 Security Hardening  
-**Date**: 2025-12-06  
-**Status**: ✅ PRODUCTION READY  
+**Sign-Off**: Phase 1 Security Hardening
+**Date**: 2025-12-06
+**Status**: ✅ PRODUCTION READY
 **Next Phase**: Phase 2 Integration

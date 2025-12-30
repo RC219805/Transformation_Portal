@@ -1,8 +1,8 @@
 # Production Acceptance Criteria
 ## High-Fidelity Depth Pipeline - Go/No-Go Decision Framework
 
-**Date:** 2025-12-17  
-**Config Hash:** 4319f2d4  
+**Date:** 2025-12-17
+**Config Hash:** 4319f2d4
 **Reviewer Requirements:** Production validation on full 750_Picacho dataset
 
 ---
@@ -14,7 +14,7 @@
   - Minimum: 0.30 (per-image)
   - Target Mean: ≥ 0.45
   - No image below 0.20
-  
+
 - **Chamfer Distance** (spatial alignment)
   - Target Mean: < 5.0 px
   - Maximum acceptable: < 15.0 px
@@ -24,7 +24,7 @@
 - **Edge Count Ratio**
   - Target: 0.8 - 1.5×
   - Maximum: < 2.0× (prevents edge explosion)
-  
+
 - **Seam Energy**
   - Target Mean: < 1.1
   - Maximum (any tile boundary): < 1.2
@@ -95,7 +95,7 @@
   - Top-right: Depth visualization (colormap)
   - Bottom-left: Edge overlay (RGB + depth edges in red)
   - Bottom-right: Metrics overlay
-  
+
 ### 3. Failure Analysis
 - For any failed images:
   - Root cause (seam/halo/alignment)
@@ -125,33 +125,33 @@
 ## Go/No-Go Decision Tree
 
 ### GO (Approve for Production Pilot)
-✅ Pass rate ≥ 80%  
-✅ All critical scenes pass  
-✅ Chamfer worst-case < 20px  
-✅ Seam energy worst-case < 1.2  
-✅ Runtime within bounds  
-✅ Visual gallery shows no severe artifacts  
+✅ Pass rate ≥ 80%
+✅ All critical scenes pass
+✅ Chamfer worst-case < 20px
+✅ Seam energy worst-case < 1.2
+✅ Runtime within bounds
+✅ Visual gallery shows no severe artifacts
 
 **Action:** Deploy behind feature flag, monitor real-world usage
 
 ---
 
 ### CONDITIONAL GO (Limited Rollout)
-⚠️ Pass rate 70-80%  
-⚠️ One critical scene fails (but others pass)  
-⚠️ Chamfer worst-case 20-25px  
-⚠️ Minor halo artifacts (< 0.6) on <20% of images  
+⚠️ Pass rate 70-80%
+⚠️ One critical scene fails (but others pass)
+⚠️ Chamfer worst-case 20-25px
+⚠️ Minor halo artifacts (< 0.6) on <20% of images
 
 **Action:** Deploy to subset of images, gather feedback, iterate
 
 ---
 
 ### NO-GO (Block Production)
-❌ Pass rate < 70%  
-❌ Multiple critical scenes fail  
-❌ Seam artifacts (energy > 1.5) present  
-❌ Edge explosion (ratio > 2.5×) on any image  
-❌ Chamfer > 30px on any critical scene  
+❌ Pass rate < 70%
+❌ Multiple critical scenes fail
+❌ Seam artifacts (energy > 1.5) present
+❌ Edge explosion (ratio > 2.5×) on any image
+❌ Chamfer > 30px on any critical scene
 
 **Action:** Return to development, fix root cause, re-validate
 
@@ -159,9 +159,9 @@
 
 ## Current Status (In Progress)
 
-**Validation Run:** `outputs/full_validation_prod/`  
-**Started:** 2025-12-17 20:39:54  
-**Images:** 6 (Aerial, GreatRoom, Kitchen, Pool, Primary Bath, Primary Bedroom)  
+**Validation Run:** `outputs/full_validation_prod/`
+**Started:** 2025-12-17 20:39:54
+**Images:** 6 (Aerial, GreatRoom, Kitchen, Pool, Primary Bath, Primary Bedroom)
 **Config:**
 - Tile size: 1024×1024
 - Overlap: 128px
@@ -199,7 +199,7 @@
 
 ## Next Steps After Validation
 
-1. **If GO:** 
+1. **If GO:**
    - Update production config with validated parameters
    - Run Materials V3 integration A/B
    - Monitor first 100 production images
@@ -218,6 +218,5 @@
 
 ---
 
-**Acceptance Authority:** Technical review complete pending validation results  
+**Acceptance Authority:** Technical review complete pending validation results
 **Signed Off By:** [Pending - requires validation data]
-

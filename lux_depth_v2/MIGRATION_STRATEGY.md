@@ -1,8 +1,8 @@
 # Lux Depth V2 - Platform Core Migration Strategy
 
 ## Status: ✅ COMPLETED
-**Started**: 2025-12-09  
-**Completed**: 2025-12-09  
+**Started**: 2025-12-09
+**Completed**: 2025-12-09
 **Risk Level**: LOW (incremental approach with backward compatibility)
 **Result**: SUCCESS - All phases complete, 216/222 tests passing (97.3%)
 
@@ -46,14 +46,14 @@ class PipelineConfig:
     # NEW: Use core configs for common patterns
     _device_config: Optional[DeviceConfig] = None
     _paths_config: Optional[PathsConfig] = None
-    
+
     # KEEP: Existing fields for backward compatibility
     device: str = "auto"
     precision: str = "fp16"
     input_dir: Optional[Path] = None
     output_dir: Optional[Path] = None
     # ... rest of existing fields
-    
+
     @property
     def device_config(self) -> DeviceConfig:
         """Get or create DeviceConfig from legacy fields."""
@@ -65,7 +65,7 @@ class PipelineConfig:
                 memory_fraction=self.warn_float_gb / 64.0 if hasattr(self, 'warn_float_gb') else 0.85
             )
         return self._device_config
-    
+
     @property
     def paths_config(self) -> PathsConfig:
         """Get or create PathsConfig from legacy fields."""
@@ -111,11 +111,11 @@ def pick_device(device: str = "auto") -> "torch.device":
     # Use new detector for enhanced capabilities
     detector = DeviceDetector()
     device_info = detector.detect()
-    
+
     # Override if user specified device
     if device != "auto":
         return torch.device(device)
-    
+
     return device_info.device
 ```
 
@@ -130,7 +130,7 @@ def __init__(self, cfg: PipelineConfig):
         prefer_neural_engine=cfg.device_config.prefer_neural_engine
     )
     device_info = detector.detect()
-    
+
     # Use device_info.capabilities for optimization
     self.device_capabilities = device_info.capabilities
 ```
@@ -172,7 +172,7 @@ def validate_input(path: Path) -> None:
     """Validate input with core validator + lux_depth_v2 rules."""
     # Use core validator first
     result = _CORE_VALIDATOR.validate_file(path, strict=True)
-    
+
     # Add lux_depth_v2-specific checks
     # ... (existing checks)
 ```
@@ -182,7 +182,7 @@ def validate_input(path: Path) -> None:
 # lux_depth_v2/pipeline.py
 def process_batch(self, input_dir: Path) -> List[ProcessResult]:
     from transformation_portal.core.security.validation import InputValidator
-    
+
     validator = InputValidator()
     for img_path in input_dir.glob("*"):
         if not validator.validate_file(img_path, strict=False):

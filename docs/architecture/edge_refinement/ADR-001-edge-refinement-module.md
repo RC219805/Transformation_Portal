@@ -1,8 +1,8 @@
 # ADR 001: Edge Refinement Module Architecture
 
-**Status**: Proposed (Design Phase - Feature Freeze)  
-**Date**: December 20, 2025  
-**Deciders**: Transformation Portal Architect  
+**Status**: Proposed (Design Phase - Feature Freeze)
+**Date**: December 20, 2025
+**Deciders**: Transformation Portal Architect
 **Technical Story**: Structure scene improvement (25% → 60%+) via edge-aware post-processing
 
 ---
@@ -67,22 +67,22 @@ class LuxDepthV2Pipeline:
         # Existing stages
         depth_map = self.estimate_depth(image)
         enhanced = self.enhance_materials(image, depth_map)
-        
+
         # NEW: Optional refinement stage
         if config.enable_edge_refinement:
             enhanced = self._apply_edge_refinement(enhanced, depth_map, config)
-        
+
         return enhanced
-    
+
     def _apply_edge_refinement(
-        self, 
-        image: np.ndarray, 
-        depth_map: np.ndarray, 
+        self,
+        image: np.ndarray,
+        depth_map: np.ndarray,
         config: PipelineConfig
     ) -> np.ndarray:
         """Apply edge-aware refinement to preserve structural details."""
         from lux_depth_v2.refinement import EdgeRefinementPipeline
-        
+
         refiner = EdgeRefinementPipeline(config.refinement_config)
         return refiner.refine(image, depth_map)
 ```
@@ -96,22 +96,22 @@ from typing import Optional
 @dataclass
 class RefinementConfig:
     """Configuration for edge-aware refinement."""
-    
+
     # Bilateral filtering
     enable_bilateral: bool = True
     bilateral_sigma_space: float = 5.0
     bilateral_sigma_color: float = 0.1
-    
+
     # Guided filter
     enable_guided_filter: bool = True
     guided_filter_radius: int = 8
     guided_filter_eps: float = 0.01
-    
+
     # Edge enhancement
     enable_edge_enhancement: bool = True
     edge_enhancement_strength: float = 0.3
     edge_detection_threshold: float = 0.15
-    
+
     # Structure preservation
     structure_weight: float = 0.5  # Balance between smoothing and preservation
     min_structure_score: float = 0.6  # Target structure quality score
@@ -120,15 +120,15 @@ class RefinementConfig:
 @dataclass
 class PipelineConfig:
     """Main pipeline configuration (EXTENDED)."""
-    
+
     # Existing fields
     preset: str = "interior_luxury"
     input_size: int = 518  # NEW: Configurable input size for sweep experiments
-    
+
     # NEW: Refinement configuration
     enable_edge_refinement: bool = False
     refinement_config: Optional[RefinementConfig] = None
-    
+
     @classmethod
     def apply_preset(cls, preset: str) -> "PipelineConfig":
         """Apply named preset with refinement settings."""
@@ -167,7 +167,7 @@ def process(
     config = PipelineConfig.apply_preset(preset)
     config.enable_edge_refinement = enable_edge_refinement
     config.input_size = input_size
-    
+
     pipeline = LuxDepthV2Pipeline(config)
     # ... processing logic
 ```
@@ -189,22 +189,22 @@ def process(
 def bilateral_filter(image: np.ndarray, sigma_space: float, sigma_color: float) -> np.ndarray:
     """
     Apply bilateral filter for edge-preserving smoothing.
-    
+
     Uses OpenCV's bilateralFilter with automatic parameter scaling
     based on image resolution.
     """
     # Scale parameters for image resolution
     h, w = image.shape[:2]
     d = int(sigma_space * 2) + 1  # Diameter derived from sigma_space
-    
+
     # Apply bilateral filter (preserves edges)
     filtered = cv2.bilateralFilter(
-        image, 
-        d=d, 
+        image,
+        d=d,
         sigmaColor=sigma_color * 255,  # Scale to [0, 255]
         sigmaSpace=sigma_space
     )
-    
+
     return filtered
 ```
 
@@ -226,14 +226,14 @@ def bilateral_filter(image: np.ndarray, sigma_space: float, sigma_color: float) 
 def guided_filter(image: np.ndarray, depth_map: np.ndarray, radius: int, eps: float) -> np.ndarray:
     """
     Apply guided filter using depth map as guidance.
-    
+
     Aligns image edges with depth discontinuities for improved
     structure preservation.
     """
     # Implementation options:
     # 1. cv2.ximgproc.guidedFilter (requires opencv-contrib)
     # 2. Custom implementation (for dependency control)
-    
+
     # For now, use cv2.ximgproc if available, fallback to bilateral
     try:
         from cv2 import ximgproc
@@ -246,7 +246,7 @@ def guided_filter(image: np.ndarray, depth_map: np.ndarray, radius: int, eps: fl
     except ImportError:
         # Fallback: Use bilateral filter
         filtered = bilateral_filter(image, sigma_space=radius, sigma_color=eps)
-    
+
     return filtered
 ```
 
@@ -266,38 +266,38 @@ def guided_filter(image: np.ndarray, depth_map: np.ndarray, radius: int, eps: fl
 **Implementation Strategy**:
 ```python
 def edge_guided_enhancement(
-    image: np.ndarray, 
-    depth_map: np.ndarray, 
-    strength: float, 
+    image: np.ndarray,
+    depth_map: np.ndarray,
+    strength: float,
     threshold: float
 ) -> np.ndarray:
     """
     Apply edge-guided enhancement for structural detail preservation.
-    
+
     Detects edges from depth map and applies targeted sharpening
     and contrast enhancement.
     """
     # 1. Detect edges from depth map
     edges = cv2.Canny(
-        (depth_map * 255).astype(np.uint8), 
+        (depth_map * 255).astype(np.uint8),
         threshold1=threshold * 255 * 0.5,
         threshold2=threshold * 255
     )
-    
+
     # 2. Create edge mask (dilated for local enhancement)
     edge_mask = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
     edge_mask = edge_mask.astype(np.float32) / 255.0
-    
+
     # 3. Apply unsharp masking along edges
     blurred = cv2.GaussianBlur(image, (0, 0), sigmaX=1.0)
     sharpened = cv2.addWeighted(image, 1 + strength, blurred, -strength, 0)
-    
+
     # 4. Blend sharpened and original using edge mask
     enhanced = (
         image * (1 - edge_mask[:, :, np.newaxis]) +
         sharpened * edge_mask[:, :, np.newaxis]
     )
-    
+
     return enhanced
 ```
 
@@ -325,15 +325,15 @@ def run_input_size_sweep(
 ):
     """Execute input size sweep experiment."""
     results = []
-    
+
     for size in sizes:
         for image_path in image_paths:
             config = PipelineConfig(input_size=size)
             pipeline = LuxDepthV2Pipeline(config)
-            
+
             # Process image
             result = pipeline.process_image(load_image(image_path), config)
-            
+
             # Compute metrics
             metrics = {
                 "input_size": size,
@@ -342,7 +342,7 @@ def run_input_size_sweep(
                 "processing_time": pipeline.last_processing_time,
             }
             results.append(metrics)
-    
+
     # Generate sweep report
     generate_sweep_report(results, output_dir)
 ```

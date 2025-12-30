@@ -1,8 +1,8 @@
 # Phase 1 Architecture Review
 
-**Date**: 2025-12-08  
-**Reviewer**: Transformation Portal Architect  
-**System**: Apple M4 Max, 64GB Unified Memory  
+**Date**: 2025-12-08
+**Reviewer**: Transformation Portal Architect
+**System**: Apple M4 Max, 64GB Unified Memory
 **Status**: Production-Ready (27/27 tests passing, <2% overhead)
 
 ---
@@ -109,8 +109,8 @@ class ResourceThresholds:
 ### 2.1 Architectural Decisions (Solid)
 
 #### Decision: Sequential Processing (max_workers=1)
-**Rationale**: GPU memory safety on single-GPU systems  
-**Trade-off**: Sacrifices throughput for reliability  
+**Rationale**: GPU memory safety on single-GPU systems
+**Trade-off**: Sacrifices throughput for reliability
 **Validation**: Zero GPU OOM errors in production testing
 
 **Impact**:
@@ -120,8 +120,8 @@ class ResourceThresholds:
 - ❌ No parallelism gains (Phase 2 requirement)
 
 #### Decision: Stage-Level Checkpoints (Not Mid-Stage)
-**Rationale**: Balance granularity vs checkpoint overhead  
-**Trade-off**: Can't resume mid-upscale (potential waste)  
+**Rationale**: Balance granularity vs checkpoint overhead
+**Trade-off**: Can't resume mid-upscale (potential waste)
 **Validation**: <2% checkpoint overhead measured
 
 **Impact**:
@@ -131,8 +131,8 @@ class ResourceThresholds:
 - ❌ Wastes partial stage progress on interruption
 
 #### Decision: Subprocess Isolation
-**Rationale**: True fault containment  
-**Trade-off**: Process spawn overhead (~100ms/task)  
+**Rationale**: True fault containment
+**Trade-off**: Process spawn overhead (~100ms/task)
 **Validation**: 100ms << processing time (10-60s/image)
 
 **Impact**:
@@ -165,76 +165,76 @@ class ResourceThresholds:
 ### 3.1 Performance Limitations (By Design)
 
 #### Limitation 1: No Parallelism (max_workers=1)
-**Impact**: 10-30x throughput left on table  
+**Impact**: 10-30x throughput left on table
 **Mitigation** (Phase 2):
 - Multi-worker orchestrator (4-8 workers)
 - GPU memory partitioning (CUDA_VISIBLE_DEVICES)
 - Tiered storage (depth maps pre-computed)
 
-**Risk**: GPU OOM if not carefully managed  
+**Risk**: GPU OOM if not carefully managed
 **Mitigation**: Phase 2 introduces memory budgets per worker
 
 #### Limitation 2: Stage-Level Checkpoints (No Mid-Stage Resume)
-**Impact**: Interrupting during upscaling wastes 20-30 seconds  
+**Impact**: Interrupting during upscaling wastes 20-30 seconds
 **Mitigation** (Phase 2):
 - Tile-level checkpoints for upscaling stage
 - Streaming upscaling with incremental saves
 
-**Risk**: Checkpoint overhead grows (I/O bound)  
+**Risk**: Checkpoint overhead grows (I/O bound)
 **Mitigation**: Phase 2 uses memory-mapped checkpoints
 
 #### Limitation 3: Synchronous I/O
-**Impact**: 5-10% of time spent on disk I/O  
+**Impact**: 5-10% of time spent on disk I/O
 **Mitigation** (Phase 2):
 - Async I/O via `asyncio` or `aiofiles`
 - Prefetching next task while current task upscales
 
-**Risk**: Complexity increase  
+**Risk**: Complexity increase
 **Mitigation**: Phase 2 uses well-tested async patterns
 
 ### 3.2 Material Capabilities Limitations
 
 #### Limitation 4: No Confidence Gating
-**Current**: Material response applied uniformly  
-**Impact**: Over-processing low-confidence regions (e.g., glass, water)  
+**Current**: Material response applied uniformly
+**Impact**: Over-processing low-confidence regions (e.g., glass, water)
 **Mitigation** (Materials v2):
 - Confidence threshold per material (0.6 default)
 - Soft masking with feathered edges
 - Audit trail with confidence scores
 
-**Risk**: Under-processing if threshold too high  
+**Risk**: Under-processing if threshold too high
 **Mitigation**: Preset-specific thresholds (interior: 0.6, exterior: 0.5)
 
 #### Limitation 5: Full-Resolution Segmentation
-**Current**: Segmenting 4K-8K images directly  
-**Impact**: 2-3x slower segmentation, higher VRAM  
+**Current**: Segmenting 4K-8K images directly
+**Impact**: 2-3x slower segmentation, higher VRAM
 **Mitigation** (Materials v2):
 - Downscale to 1024-1536 before segmentation
 - Upsample masks with soft edges (Gaussian blur)
 
-**Risk**: Mask accuracy loss  
+**Risk**: Mask accuracy loss
 **Mitigation**: Bicubic upsampling + edge feathering preserves quality
 
 #### Limitation 6: No Hard VRAM Cleanup
-**Current**: Segmentation model persists through upscaling  
-**Impact**: Wasted 500MB-1GB VRAM during upscaling  
+**Current**: Segmentation model persists through upscaling
+**Impact**: Wasted 500MB-1GB VRAM during upscaling
 **Mitigation** (Materials v2):
 - Hard release after material stage
 - `torch.cuda.empty_cache()` / MPS equivalent
 - Memory tracking before/after stages
 
-**Risk**: Slower if re-segmenting needed  
+**Risk**: Slower if re-segmenting needed
 **Mitigation**: Cache masks (see Limitation 7)
 
 #### Limitation 7: No Mask Caching
-**Current**: Re-segment on every run  
-**Impact**: Wasted compute for iterative tuning  
+**Current**: Re-segment on every run
+**Impact**: Wasted compute for iterative tuning
 **Mitigation** (Materials v2):
 - Cache masks as PNG + JSON metadata
 - Check cache before segmenting
 - Audit trail (confidence scores, coverage stats)
 
-**Risk**: Stale cache if input changes  
+**Risk**: Stale cache if input changes
 **Mitigation**: Hash-based invalidation (image content hash)
 
 ---
@@ -316,7 +316,7 @@ class ResourceThresholds:
 - **Error Recovery**: 4 tests (classify, retry, fallback)
 - **Preflight**: 2 tests (validation, input checks)
 
-**Coverage**: 93% (measured via pytest-cov)  
+**Coverage**: 93% (measured via pytest-cov)
 **Gaps**: Edge cases (power failure during checkpoint write)
 
 #### Materials v2 Test Plan (13 tests)
@@ -353,8 +353,8 @@ class ResourceThresholds:
    - Profiling guide
    - Bottleneck interpretation
 
-**Effort**: 2-3 days  
-**Risk**: Low (additive only)  
+**Effort**: 2-3 days
+**Risk**: Low (additive only)
 **Value**: High (informs Phase 2 optimizations)
 
 ### 6.2 Phase 2 (Performance PR)
@@ -377,8 +377,8 @@ class ResourceThresholds:
    - Tile-based streaming upscale
    - Incremental saves (resume mid-upscale)
 
-**Effort**: 2-3 weeks  
-**Risk**: Medium (GPU memory management complex)  
+**Effort**: 2-3 weeks
+**Risk**: Medium (GPU memory management complex)
 **Value**: Very High (production-critical for large batches)
 
 ### 6.3 Materials v2 (Quality PR)
@@ -406,8 +406,8 @@ class ResourceThresholds:
    - Hash-based invalidation
    - Cache management
 
-**Effort**: 2 weeks  
-**Risk**: Low (feature gated)  
+**Effort**: 2 weeks
+**Risk**: Low (feature gated)
 **Value**: High (quality + efficiency)
 
 ---
@@ -432,19 +432,19 @@ class ResourceThresholds:
 
 ### 7.2 Known Limitations (Acceptable for Phase 1)
 
-1. **Sequential processing** (max_workers=1)  
+1. **Sequential processing** (max_workers=1)
    - Acceptable: Prioritizes reliability over speed
    - Mitigation: Phase 2 adds parallelism
 
-2. **Stage-level checkpoints** (no mid-stage resume)  
+2. **Stage-level checkpoints** (no mid-stage resume)
    - Acceptable: <2% overhead is negligible
    - Mitigation: Phase 2 adds tile-level checkpoints
 
-3. **Synchronous I/O**  
+3. **Synchronous I/O**
    - Acceptable: 5-10% overhead is minor
    - Mitigation: Phase 2 adds async I/O
 
-4. **No confidence gating for materials**  
+4. **No confidence gating for materials**
    - Acceptable: Current quality is production-grade
    - Mitigation: Materials v2 adds confidence gating
 
@@ -472,6 +472,6 @@ Phase 1 delivers **production-grade stability** with true fault isolation, stage
 
 ---
 
-**Reviewed by**: Transformation Portal Architect  
-**Date**: 2025-12-08  
+**Reviewed by**: Transformation Portal Architect
+**Date**: 2025-12-08
 **Status**: Approved for production deployment

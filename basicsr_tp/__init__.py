@@ -60,6 +60,7 @@ def __getattr__(name):
     if name == "RRDBNet":
         try:
             from basicsr_tp.archs.rrdbnet_arch import RRDBNet
+
             return RRDBNet
         except ImportError as e:
             raise ImportError(

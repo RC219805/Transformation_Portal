@@ -1,7 +1,7 @@
 # Materials v2 Visual Comparison Summary
 
-**Dataset**: 750 Picacho (6 images)  
-**Comparison**: Baseline vs Materials v2 Enhanced  
+**Dataset**: 750 Picacho (6 images)
+**Comparison**: Baseline vs Materials v2 Enhanced
 **Date**: December 8, 2025
 
 ---

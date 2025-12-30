@@ -24,6 +24,7 @@ import numpy as np
 # Try to import yaml
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -32,6 +33,7 @@ except ImportError:
 try:
     import torch
     import torch.distributed as dist
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -54,10 +56,7 @@ def load_config(config_path: Union[str, Path]) -> Dict[str, Any]:
         ValueError: If YAML is invalid
     """
     if not YAML_AVAILABLE:
-        raise ImportError(
-            "PyYAML required for config loading. "
-            "Install with: pip install pyyaml"
-        )
+        raise ImportError("PyYAML required for config loading. Install with: pip install pyyaml")
 
     config_path = Path(config_path)
 
@@ -135,10 +134,7 @@ def setup_device(
         Tuple of (device, world_size)
     """
     if not TORCH_AVAILABLE:
-        raise ImportError(
-            "PyTorch required for device setup. "
-            "Install with: pip install torch"
-        )
+        raise ImportError("PyTorch required for device setup. Install with: pip install torch")
 
     world_size = None
 
@@ -151,9 +147,7 @@ def setup_device(
         local_rank = dist.get_rank()
         device = torch.device(f"cuda:{local_rank}")
         torch.cuda.set_device(device)
-        logger.info(
-            f"Distributed training: rank {local_rank}/{world_size}"
-        )
+        logger.info(f"Distributed training: rank {local_rank}/{world_size}")
         return device, world_size
 
     # Single-device training
@@ -216,10 +210,7 @@ def create_logger(
     # Remove existing handlers
     log.handlers = []
 
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
     # Console handler
     if console:
@@ -343,6 +334,7 @@ class ProgressTracker:
             start_step: Starting step (for resume)
         """
         import time
+
         self.total_steps = total_steps
         self.current_step = start_step
         self.start_time = time.time()
@@ -356,6 +348,7 @@ class ProgressTracker:
             steps: Number of steps completed
         """
         import time
+
         self.current_step += steps
 
         current_time = time.time()

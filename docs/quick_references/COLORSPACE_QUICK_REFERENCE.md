@@ -58,4 +58,3 @@ Expected for linear:
 - **Test output:** `processed_images/pool_pro_linear/750Picacho_Pool_compatible_pool-luxury.tiff`
 - **Documentation:** `LINEAR_COLORSPACE_IMPLEMENTATION.md`
 - **Code:** `pro_pipeline.py` (modified with linear support)
-

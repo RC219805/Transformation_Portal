@@ -208,21 +208,21 @@ class MyRenderPipeline(CachedPipeline):
             image_path,
             model_name="depth_anything_v2_small"
         )
-        
+
         # Cached material detection
         materials = self.get_or_compute_material_mask(
             image_path,
             material_types=["wood", "metal", "glass"]
         )
-        
+
         # Apply effects (parameters only - recomputed each time)
         result = self.apply_effects(depth, materials, params)
         return result
-    
+
     def _compute_depth(self, image_path, model_name):
         # Implement depth computation
         return depth_estimator.estimate(image_path)
-    
+
     def _compute_material_masks(self, image_path, material_types):
         # Implement material detection
         return material_detector.detect(image_path, material_types)
@@ -243,7 +243,7 @@ cache.print_stats()
 # Total size: 2.34 GB (2344.5 MB)
 # Limit: 10.0 GB
 # Usage: 23.4%
-# 
+#
 # Namespaces:
 #   depth_maps: 50 entries, 1200.5 MB
 #   material_masks: 50 entries, 800.2 MB
@@ -288,14 +288,14 @@ processor = ParallelProcessor(WorkerConfig(num_workers=4))
 def process_image(image_path):
     # Load image
     image = np.array(Image.open(image_path))
-    
+
     # Get cached depth map
     depth = cache.get_or_compute(
         "depth_maps",
         lambda: depth_estimator.estimate(image),
         inputs={"image": image_path, "model": depth_estimator.model_name}
     )
-    
+
     # Apply effects
     result = apply_rendering_effects(image, depth)
     return result

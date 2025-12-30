@@ -33,12 +33,14 @@ from PIL import Image, ImageFilter
 # Optional dependencies
 try:
     import yaml
+
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
 
 try:
     import tifffile
+
     HAS_TIFFFILE = True
 except ImportError:
     HAS_TIFFFILE = False
@@ -47,16 +49,13 @@ except ImportError:
 from property_memory import PropertyMemory, SceneType, MaterialType
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("rag_enhanced_pipeline")
 
 
 class ProcessingStage(str, Enum):
     """Pipeline processing stages."""
+
     INPUT_ANALYSIS = "input_analysis"
     DEPTH_ESTIMATION = "depth_estimation"
     MATERIAL_DETECTION = "material_detection"
@@ -70,6 +69,7 @@ class ProcessingStage(str, Enum):
 @dataclass
 class RAGContext:
     """Context retrieved from RAG system for processing decisions."""
+
     query: str
     retrieved_patterns: List[Dict[str, Any]]
     recommended_parameters: Dict[str, Any]
@@ -81,6 +81,7 @@ class RAGContext:
 @dataclass
 class PipelineConfig:
     """Configuration for the RAG-enhanced pipeline."""
+
     # Input/Output
     input_dir: Path = field(default_factory=lambda: Path("input"))
     output_dir: Path = field(default_factory=lambda: Path("output"))
@@ -138,6 +139,7 @@ class PipelineConfig:
 @dataclass
 class ProcessingMetrics:
     """Metrics from a processing run."""
+
     start_time: float
     end_time: float
     stages_completed: List[str]
@@ -182,19 +184,18 @@ class KnowledgeIntegrationBridge:
             # Try environment variable first, then default relative path
             import os
             import importlib.util
-            rag_path_env = os.environ.get('RAG_SYSTEM_PATH')
+
+            rag_path_env = os.environ.get("RAG_SYSTEM_PATH")
             if rag_path_env:
                 rag_path = Path(rag_path_env)
             else:
                 # Default: relative to this file's location
-                rag_path = Path(__file__).parent.parent.parent / '.github' / 'agents' / 'rag_system'
+                rag_path = Path(__file__).parent.parent.parent / ".github" / "agents" / "rag_system"
 
-            knowledge_engine_path = rag_path / 'knowledge_engine.py'
+            knowledge_engine_path = rag_path / "knowledge_engine.py"
             if knowledge_engine_path.exists():
                 # Use importlib for safer dynamic import
-                spec = importlib.util.spec_from_file_location(
-                    "knowledge_engine", knowledge_engine_path
-                )
+                spec = importlib.util.spec_from_file_location("knowledge_engine", knowledge_engine_path)
                 if spec and spec.loader:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
@@ -242,11 +243,11 @@ class KnowledgeIntegrationBridge:
         if self._engine:
             analysis = self._engine.analyze_patterns(pipeline, days)
             return {
-                'success_rate': analysis.success_rate,
-                'avg_processing_time': analysis.avg_processing_time,
-                'optimal_parameters': analysis.optimal_parameters,
-                'time_trend': analysis.time_trend,
-                'quality_trend': analysis.quality_trend,
+                "success_rate": analysis.success_rate,
+                "avg_processing_time": analysis.avg_processing_time,
+                "optimal_parameters": analysis.optimal_parameters,
+                "time_trend": analysis.time_trend,
+                "quality_trend": analysis.quality_trend,
             }
         return {}
 
@@ -256,12 +257,12 @@ class KnowledgeIntegrationBridge:
             recs = self._engine.generate_recommendations(pipeline)
             return [
                 {
-                    'type': r.recommendation_type,
-                    'severity': r.severity,
-                    'title': r.title,
-                    'description': r.description,
-                    'suggested_action': r.suggested_action,
-                    'confidence': r.confidence,
+                    "type": r.recommendation_type,
+                    "severity": r.severity,
+                    "title": r.title,
+                    "description": r.description,
+                    "suggested_action": r.suggested_action,
+                    "confidence": r.confidence,
                 }
                 for r in recs
             ]
@@ -380,8 +381,8 @@ class RAGEnhancedPipeline:
             confidence=confidence,
             citations=[
                 {
-                    'source': 'property_memory',
-                    'description': f"Learned parameters for {scene_type.value}",
+                    "source": "property_memory",
+                    "description": f"Learned parameters for {scene_type.value}",
                 }
             ],
         )
@@ -399,8 +400,8 @@ class RAGEnhancedPipeline:
         img = Image.open(image_path)
 
         # Convert to RGB if needed
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
         # Convert to float32 array
         img_array = np.array(img, dtype=np.float32) / 255.0
@@ -425,33 +426,33 @@ class RAGEnhancedPipeline:
         graded = img.copy()
 
         # Contrast
-        contrast = params.get('contrast', self.config.contrast)
+        contrast = params.get("contrast", self.config.contrast)
         if contrast != 1.0:
             graded = np.clip((graded - 0.5) * contrast + 0.5, 0, 1)
 
         # Saturation
-        saturation = params.get('saturation', self.config.saturation)
+        saturation = params.get("saturation", self.config.saturation)
         if saturation != 1.0:
             luminance = 0.2126 * graded[:, :, 0] + 0.7152 * graded[:, :, 1] + 0.0722 * graded[:, :, 2]
             luminance = luminance[:, :, np.newaxis]
             graded = np.clip(luminance + (graded - luminance) * saturation, 0, 1)
 
         # Temperature
-        temperature = params.get('temperature', self.config.temperature)
+        temperature = params.get("temperature", self.config.temperature)
         if temperature != 0:
             temp_factor = temperature / 100.0
             graded[:, :, 0] = np.clip(graded[:, :, 0] * (1.0 + temp_factor * 0.1), 0, 1)
             graded[:, :, 2] = np.clip(graded[:, :, 2] * (1.0 - temp_factor * 0.05), 0, 1)
 
         # Warmth (for interiors)
-        warmth = params.get('warmth', 0)
+        warmth = params.get("warmth", 0)
         if warmth != 0:
             warmth_factor = warmth / 100.0
             graded[:, :, 0] = np.clip(graded[:, :, 0] * (1.0 + warmth_factor * 0.08), 0, 1)
             graded[:, :, 1] = np.clip(graded[:, :, 1] * (1.0 + warmth_factor * 0.04), 0, 1)
 
         # Clarity
-        clarity = params.get('clarity', 1.0)
+        clarity = params.get("clarity", 1.0)
         if clarity != 1.0:
             mid_mask = 1.0 - np.abs(graded - 0.5) * 2.0
             graded = np.clip(graded * (1.0 + (clarity - 1.0) * mid_mask), 0, 1)
@@ -479,22 +480,22 @@ class RAGEnhancedPipeline:
         r, g, b = enhanced[:, :, 0], enhanced[:, :, 1], enhanced[:, :, 2]
 
         # Water enhancement
-        if MaterialType.WATER in materials and params.get('water_enhance', False):
-            water_sat = params.get('water_saturation', 1.25)
+        if MaterialType.WATER in materials and params.get("water_enhance", False):
+            water_sat = params.get("water_saturation", 1.25)
             water_mask = (b > r * 1.1) & (b > g * 1.05)
             b[water_mask] = np.clip(b[water_mask] * water_sat, 0, 1)
             r[water_mask] = np.clip(r[water_mask] * 0.92, 0, 1)
 
         # Vegetation enhancement
-        if MaterialType.VEGETATION in materials and params.get('landscape_enhance', False):
+        if MaterialType.VEGETATION in materials and params.get("landscape_enhance", False):
             green_mask = (g > r * 1.1) & (g > b * 1.05) & (g > 0.2)
             g[green_mask] = np.clip(g[green_mask] * 1.12, 0, 1)
 
         # Sky enhancement (for aerial/exterior)
-        if params.get('atmospheric_depth', False):
+        if params.get("atmospheric_depth", False):
             height = img.shape[0]
             sky_region = np.zeros_like(r, dtype=bool)
-            sky_region[:height // 2, :] = True
+            sky_region[: height // 2, :] = True
             sky_mask = sky_region & (b > 0.4) & (b > r * 1.1) & (b > g * 1.05)
             b[sky_mask] = np.clip(b[sky_mask] * 1.15, 0, 1)
 
@@ -517,9 +518,7 @@ class RAGEnhancedPipeline:
             Enhanced PIL Image
         """
         # Sharpening
-        sharpened = img.filter(
-            ImageFilter.UnsharpMask(radius=2.0, percent=100, threshold=3)
-        )
+        sharpened = img.filter(ImageFilter.UnsharpMask(radius=2.0, percent=100, threshold=3))
 
         # Detail enhancement
         detailed = sharpened.filter(ImageFilter.DETAIL)
@@ -553,7 +552,7 @@ class RAGEnhancedPipeline:
 
         y, x = np.ogrid[:height, :width]
         center_x, center_y = width / 2, height / 2
-        dist = np.sqrt((x - center_x)**2 + (y - center_y)**2)
+        dist = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
         max_dist = np.sqrt(center_x**2 + center_y**2)
         dist_norm = dist / max_dist
 
@@ -566,9 +565,7 @@ class RAGEnhancedPipeline:
         result = Image.fromarray(img_array)
 
         # Final gentle sharpening
-        result = result.filter(
-            ImageFilter.UnsharpMask(radius=1.2, percent=60, threshold=3)
-        )
+        result = result.filter(ImageFilter.UnsharpMask(radius=1.2, percent=60, threshold=3))
 
         return result
 
@@ -594,10 +591,10 @@ class RAGEnhancedPipeline:
         output_dir.mkdir(parents=True, exist_ok=True)
         outputs = {}
 
-        scene_suffix = scene_type.value.replace('_', '')
+        scene_suffix = scene_type.value.replace("_", "")
 
         # Save TIFF (16-bit if enabled)
-        if 'tiff' in self.config.output_formats:
+        if "tiff" in self.config.output_formats:
             tiff_name = f"{base_name}_{scene_suffix}_Master.tif"
             tiff_path = output_dir / tiff_name
 
@@ -606,28 +603,28 @@ class RAGEnhancedPipeline:
                 # PIL Image arrays are already in 0-255 range, scale to 0-65535
                 # Use integer math: multiply by 257 exactly (255 * 257 = 65535)
                 img_array = np.array(img, dtype=np.uint8)
-                img_uint16 = (img_array.astype(np.uint16) * 257)
-                tifffile.imwrite(tiff_path, img_uint16, compression='lzw')
+                img_uint16 = img_array.astype(np.uint16) * 257
+                tifffile.imwrite(tiff_path, img_uint16, compression="lzw")
             else:
                 # Fall back to PIL (8-bit only)
-                img.save(tiff_path, format='TIFF', compression='lzw')
+                img.save(tiff_path, format="TIFF", compression="lzw")
 
-            outputs['tiff'] = tiff_path
+            outputs["tiff"] = tiff_path
 
         # Save JPEG
-        if 'jpg' in self.config.output_formats or 'jpeg' in self.config.output_formats:
+        if "jpg" in self.config.output_formats or "jpeg" in self.config.output_formats:
             jpg_name = f"{base_name}_{scene_suffix}_Web.jpg"
             jpg_path = output_dir / jpg_name
-            img.save(jpg_path, format='JPEG', quality=self.config.jpeg_quality, optimize=True)
-            outputs['jpg'] = jpg_path
+            img.save(jpg_path, format="JPEG", quality=self.config.jpeg_quality, optimize=True)
+            outputs["jpg"] = jpg_path
 
         # Save thumbnail
         thumb_name = f"{base_name}_{scene_suffix}_Thumbnail.jpg"
         thumb_path = output_dir / thumb_name
         thumb_img = img.copy()
         thumb_img.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
-        thumb_img.save(thumb_path, format='JPEG', quality=90, optimize=True)
-        outputs['thumbnail'] = thumb_path
+        thumb_img.save(thumb_path, format="JPEG", quality=90, optimize=True)
+        outputs["thumbnail"] = thumb_path
 
         return outputs
 
@@ -664,9 +661,11 @@ class RAGEnhancedPipeline:
 
         # Saturation balance (not over/under saturated)
         luminance = 0.2126 * processed[:, :, 0] + 0.7152 * processed[:, :, 1] + 0.0722 * processed[:, :, 2]
-        chroma = np.sqrt((processed[:, :, 0] - luminance)**2 +
-                         (processed[:, :, 1] - luminance)**2 +
-                         (processed[:, :, 2] - luminance)**2)
+        chroma = np.sqrt(
+            (processed[:, :, 0] - luminance) ** 2
+            + (processed[:, :, 1] - luminance) ** 2
+            + (processed[:, :, 2] - luminance) ** 2
+        )
         avg_chroma = np.mean(chroma)
         sat_score = 1.0 - abs(avg_chroma - self.TARGET_CHROMA) / self.TARGET_CHROMA
 
@@ -676,7 +675,7 @@ class RAGEnhancedPipeline:
         contrast_score = min(proc_std / max(orig_std, 0.01), 1.2) / 1.2
 
         # Weighted combination
-        quality = (range_score * 0.3 + sat_score * 0.4 + contrast_score * 0.3)
+        quality = range_score * 0.3 + sat_score * 0.4 + contrast_score * 0.3
 
         return max(0.0, min(1.0, quality))
 
@@ -741,7 +740,7 @@ class RAGEnhancedPipeline:
 
             # Convert to PIL for remaining stages
             img_uint8 = (np.clip(img_array, 0, 1) * 255).astype(np.uint8)
-            img_pil = Image.fromarray(img_uint8, mode='RGB')
+            img_pil = Image.fromarray(img_uint8, mode="RGB")
 
             # Stage 4: Detail Enhancement
             img_pil = self._apply_detail_enhancement(img_pil, params)
@@ -763,7 +762,7 @@ class RAGEnhancedPipeline:
 
             # Record result for learning
             if self.config.enable_learning:
-                output_path = outputs.get('tiff', outputs.get('jpg', ''))
+                output_path = outputs.get("tiff", outputs.get("jpg", ""))
                 self.memory.add_processing_result(
                     scene_type=scene_type,
                     input_path=str(image_path),
@@ -875,7 +874,7 @@ class RAGEnhancedPipeline:
 
         if input_paths:
             logger.info(f"Batch complete: {successful}/{len(input_paths)} successful")
-            logger.info(f"Total time: {batch_time:.1f}s ({batch_time/len(input_paths):.1f}s/image)")
+            logger.info(f"Total time: {batch_time:.1f}s ({batch_time / len(input_paths):.1f}s/image)")
         else:
             logger.info("Batch complete: No images to process")
 
@@ -891,7 +890,7 @@ class RAGEnhancedPipeline:
                 min_samples=self.config.min_samples_for_learning,
             )
 
-            if learning_result.get('status') == 'success':
+            if learning_result.get("status") == "success":
                 logger.info(
                     f"  {scene_type.value}: Learned from {learning_result['samples_analyzed']} samples, "
                     f"trend: {learning_result['quality_trend']}"
@@ -906,8 +905,8 @@ class RAGEnhancedPipeline:
         """
         if not self.session_metrics:
             return {
-                'session_id': self.session_id,
-                'processed': 0,
+                "session_id": self.session_id,
+                "processed": 0,
             }
 
         successful = [m for m in self.session_metrics if not m.errors]
@@ -915,15 +914,15 @@ class RAGEnhancedPipeline:
         avg_quality = sum(m.quality_score for m in successful) / len(successful) if successful else 0
 
         return {
-            'session_id': self.session_id,
-            'processed': len(self.session_metrics),
-            'successful': len(successful),
-            'failed': len(self.session_metrics) - len(successful),
-            'total_time': total_time,
-            'avg_time_per_image': total_time / len(self.session_metrics),
-            'avg_quality_score': avg_quality,
-            'rag_context_used': sum(1 for m in self.session_metrics if m.rag_context_used),
-            'stages_completed': [m.stages_completed for m in self.session_metrics],
+            "session_id": self.session_id,
+            "processed": len(self.session_metrics),
+            "successful": len(successful),
+            "failed": len(self.session_metrics) - len(successful),
+            "total_time": total_time,
+            "avg_time_per_image": total_time / len(self.session_metrics),
+            "avg_quality_score": avg_quality,
+            "rag_context_used": sum(1 for m in self.session_metrics if m.rag_context_used),
+            "stages_completed": [m.stages_completed for m in self.session_metrics],
         }
 
     def get_recommendations(self) -> List[Dict[str, Any]]:
@@ -944,24 +943,28 @@ class RAGEnhancedPipeline:
             avg_quality = sum(m.quality_score for m in self.session_metrics) / len(self.session_metrics)
 
             if avg_quality < 0.7:
-                recommendations.append({
-                    'type': 'quality',
-                    'severity': 'medium',
-                    'title': 'Low average quality score',
-                    'description': f'Average quality is {avg_quality:.1%}, consider parameter tuning',
-                    'suggested_action': 'Review and adjust color grading and material response parameters',
-                })
+                recommendations.append(
+                    {
+                        "type": "quality",
+                        "severity": "medium",
+                        "title": "Low average quality score",
+                        "description": f"Average quality is {avg_quality:.1%}, consider parameter tuning",
+                        "suggested_action": "Review and adjust color grading and material response parameters",
+                    }
+                )
 
             # Check for consistent failures
             failed = [m for m in self.session_metrics if m.errors]
             if len(failed) > len(self.session_metrics) * 0.2:
-                recommendations.append({
-                    'type': 'reliability',
-                    'severity': 'high',
-                    'title': 'High failure rate',
-                    'description': f'{len(failed)} of {len(self.session_metrics)} images failed',
-                    'suggested_action': 'Review error logs and input image requirements',
-                })
+                recommendations.append(
+                    {
+                        "type": "reliability",
+                        "severity": "high",
+                        "title": "High failure rate",
+                        "description": f"{len(failed)} of {len(self.session_metrics)} images failed",
+                        "suggested_action": "Review error logs and input image requirements",
+                    }
+                )
 
         return recommendations
 
@@ -980,63 +983,62 @@ def load_config_from_yaml(config_path: Path) -> PipelineConfig:
         ImportError: If pyyaml is not installed
     """
     if not HAS_YAML:
-        raise ImportError("PyYAML is required for YAML configuration loading. "
-                          "Install via: pip install pyyaml")
+        raise ImportError("PyYAML is required for YAML configuration loading. Install via: pip install pyyaml")
 
-    with open(config_path, 'r') as f:
+    with open(config_path, "r") as f:
         data = yaml.safe_load(f)
 
     # Map YAML structure to PipelineConfig
     config = PipelineConfig()
 
-    if 'input' in data:
-        config.input_dir = Path(data['input'].get('directory', 'input'))
+    if "input" in data:
+        config.input_dir = Path(data["input"].get("directory", "input"))
 
-    if 'output' in data:
-        config.output_dir = Path(data['output'].get('directory', 'output'))
-        config.output_formats = data['output'].get('formats', ['tiff', 'jpg'])
-        config.preserve_16bit = data['output'].get('preserve_16bit', True)
-        config.jpeg_quality = data['output'].get('jpeg_quality', 95)
+    if "output" in data:
+        config.output_dir = Path(data["output"].get("directory", "output"))
+        config.output_formats = data["output"].get("formats", ["tiff", "jpg"])
+        config.preserve_16bit = data["output"].get("preserve_16bit", True)
+        config.jpeg_quality = data["output"].get("jpeg_quality", 95)
 
-    if 'processing' in data:
-        proc = data['processing']
-        config.enable_depth = proc.get('enable_depth', True)
-        config.enable_material_response = proc.get('enable_material_response', True)
-        config.enable_color_grading = proc.get('enable_color_grading', True)
-        config.enable_ai_enhancement = proc.get('enable_ai_enhancement', False)
-        config.quality_mode = proc.get('quality_mode', 'premium')
+    if "processing" in data:
+        proc = data["processing"]
+        config.enable_depth = proc.get("enable_depth", True)
+        config.enable_material_response = proc.get("enable_material_response", True)
+        config.enable_color_grading = proc.get("enable_color_grading", True)
+        config.enable_ai_enhancement = proc.get("enable_ai_enhancement", False)
+        config.quality_mode = proc.get("quality_mode", "premium")
 
-    if 'depth' in data:
-        depth = data['depth']
-        config.depth_model = depth.get('model', 'depth_anything_v2')
-        config.depth_zones = depth.get('zones', 4)
-        config.atmospheric_haze = depth.get('atmospheric_haze', True)
-        config.haze_density = depth.get('haze_density', 0.02)
+    if "depth" in data:
+        depth = data["depth"]
+        config.depth_model = depth.get("model", "depth_anything_v2")
+        config.depth_zones = depth.get("zones", 4)
+        config.atmospheric_haze = depth.get("atmospheric_haze", True)
+        config.haze_density = depth.get("haze_density", 0.02)
 
-    if 'material_response' in data:
-        mr = data['material_response']
-        config.material_strength = mr.get('strength', 0.75)
-        config.preserve_highlights = mr.get('preserve_highlights', True)
+    if "material_response" in data:
+        mr = data["material_response"]
+        config.material_strength = mr.get("strength", 0.75)
+        config.preserve_highlights = mr.get("preserve_highlights", True)
 
-    if 'color_grading' in data:
-        cg = data['color_grading']
-        config.lut_path = cg.get('lut_path')
-        config.lut_strength = cg.get('lut_strength', 0.70)
-        config.saturation = cg.get('saturation', 1.05)
-        config.contrast = cg.get('contrast', 1.08)
-        config.temperature = cg.get('temperature', 5.0)
+    if "color_grading" in data:
+        cg = data["color_grading"]
+        config.lut_path = cg.get("lut_path")
+        config.lut_strength = cg.get("lut_strength", 0.70)
+        config.saturation = cg.get("saturation", 1.05)
+        config.contrast = cg.get("contrast", 1.08)
+        config.temperature = cg.get("temperature", 5.0)
 
-    if 'rag' in data:
-        rag = data['rag']
-        config.enable_rag_context = rag.get('enabled', True)
-        config.rag_top_k = rag.get('top_k', 5)
-        config.rag_confidence_threshold = rag.get('confidence_threshold', 0.7)
+    if "rag" in data:
+        rag = data["rag"]
+        config.enable_rag_context = rag.get("enabled", True)
+        config.rag_top_k = rag.get("top_k", 5)
+        config.rag_confidence_threshold = rag.get("confidence_threshold", 0.7)
 
-    if 'learning' in data:
-        learn = data['learning']
-        config.enable_learning = learn.get('enabled', True)
-        config.learning_threshold = learn.get('threshold', 0.85)
-        config.min_samples_for_learning = learn.get('min_samples', 3)
+    if "learning" in data:
+        learn = data["learning"]
+        config.enable_learning = learn.get("enabled", True)
+        config.learning_threshold = learn.get("threshold", 0.85)
+        config.min_samples_for_learning = learn.get("min_samples", 3)
 
     return config
 
@@ -1104,5 +1106,5 @@ def main():
     print("\n" + "=" * 70)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

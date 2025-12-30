@@ -13,6 +13,7 @@ class StageProfiler:
 
     Designed to match the "optional profiling <5% overhead" requirement.
     """
+
     enabled: bool = True
     stages_ms: Dict[str, float] = field(default_factory=dict)
     _stack: list[tuple[str, float]] = field(default_factory=list)

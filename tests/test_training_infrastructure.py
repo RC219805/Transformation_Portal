@@ -22,12 +22,13 @@ import numpy as np
 # Check if PyTorch is available (required for training infrastructure)
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 # pylint: disable=wrong-import-position
 # Try to import training modules - may fail if torch.nn not available
@@ -42,7 +43,7 @@ if TORCH_AVAILABLE:
             VGGFeatureExtractor,
             HyperRealityTrainer,
             TrainingConfig,
-            LPIPS_AVAILABLE
+            LPIPS_AVAILABLE,
         )
         from enhancements.model_loader import ModelLoader, load_pretrained_weights
         from enhancements.hyper_reality_enhancement import (
@@ -57,8 +58,7 @@ if TORCH_AVAILABLE:
 
 # Skip all tests in this module if PyTorch is not available
 pytestmark = pytest.mark.skipif(
-    not TORCH_AVAILABLE,
-    reason="PyTorch not installed - training infrastructure tests require ML dependencies"
+    not TORCH_AVAILABLE, reason="PyTorch not installed - training infrastructure tests require ML dependencies"
 )
 
 
@@ -142,10 +142,12 @@ class TestEnhancementDataset:
         """Test dataset can load image pairs"""
         from torchvision import transforms
 
-        transform = transforms.Compose([
-            transforms.Resize((128, 128)),
-            transforms.ToTensor(),
-        ])
+        transform = transforms.Compose(
+            [
+                transforms.Resize((128, 128)),
+                transforms.ToTensor(),
+            ]
+        )
 
         low_dir = Path(sample_dataset) / "low_quality"
         high_dir = Path(sample_dataset) / "high_quality"
@@ -189,6 +191,7 @@ class TestLossFunctions:
         """Check if torchvision is available for VGG-based tests"""
         try:
             import torchvision  # noqa: F401
+
             self.has_torchvision = True
         except ImportError:
             self.has_torchvision = False
@@ -297,11 +300,7 @@ class TestModelCheckpoints:
     def test_checkpoint_saving(self):
         """Test checkpoint can be saved"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config = TrainingConfig(
-                checkpoint_dir=tmpdir,
-                num_epochs=2,
-                batch_size=2
-            )
+            config = TrainingConfig(checkpoint_dir=tmpdir, num_epochs=2, batch_size=2)
 
             trainer = HyperRealityTrainer(config)
 
@@ -328,9 +327,9 @@ class TestModelCheckpoints:
             checkpoint = loader.load_best_model()
 
             assert checkpoint is not None
-            assert 'models' in checkpoint
-            assert 'epoch' in checkpoint
-            assert checkpoint['epoch'] == 0
+            assert "models" in checkpoint
+            assert "epoch" in checkpoint
+            assert checkpoint["epoch"] == 0
 
     def test_model_weights_loading(self):
         """Test loading weights into models"""
@@ -342,13 +341,14 @@ class TestModelCheckpoints:
 
             # Create fresh models
             from enhancements.hyper_reality_enhancement import EnhancementConfig
+
             enhancement_config = EnhancementConfig()
 
             models = {
-                'caustics': CausticGenerator(enhancement_config.quantum_caustics),
-                'atmosphere': AtmosphericSynthesizer(enhancement_config.neural_atmosphere),
-                'materials': MaterialTranscendence(enhancement_config.material_transcendence),
-                'harmonics': SpatialHarmonics(enhancement_config.spatial_harmonics),
+                "caustics": CausticGenerator(enhancement_config.quantum_caustics),
+                "atmosphere": AtmosphericSynthesizer(enhancement_config.neural_atmosphere),
+                "materials": MaterialTranscendence(enhancement_config.material_transcendence),
+                "harmonics": SpatialHarmonics(enhancement_config.spatial_harmonics),
             }
 
             # Load weights
@@ -373,10 +373,12 @@ class TestTrainingIntegration:
             from torchvision import transforms
             from torch.utils.data import DataLoader
 
-            transform = transforms.Compose([
-                transforms.Resize((128, 128)),
-                transforms.ToTensor(),
-            ])
+            transform = transforms.Compose(
+                [
+                    transforms.Resize((128, 128)),
+                    transforms.ToTensor(),
+                ]
+            )
 
             low_dir = Path(tmpdir) / "low_quality"
             high_dir = Path(tmpdir) / "high_quality"
@@ -385,21 +387,14 @@ class TestTrainingIntegration:
             # Split train/val
             train_size = 6
             val_size = 2
-            train_dataset, val_dataset = torch.utils.data.random_split(
-                dataset, [train_size, val_size]
-            )
+            train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
             train_loader = DataLoader(train_dataset, batch_size=2)
             val_loader = DataLoader(val_dataset, batch_size=2)
 
             # Train for 1 epoch
             checkpoint_dir = Path(tmpdir) / "checkpoints"
-            config = TrainingConfig(
-                checkpoint_dir=str(checkpoint_dir),
-                num_epochs=1,
-                batch_size=2,
-                save_frequency=1
-            )
+            config = TrainingConfig(checkpoint_dir=str(checkpoint_dir), num_epochs=1, batch_size=2, save_frequency=1)
 
             trainer = HyperRealityTrainer(config)
 
@@ -454,16 +449,14 @@ class TestDepthNormalsIntegration:
             trainer = HyperRealityTrainer(config)
 
             # Verify harmonics model exists and is included in training
-            assert 'harmonics' in trainer.models
-            assert isinstance(trainer.models['harmonics'], SpatialHarmonics)
+            assert "harmonics" in trainer.models
+            assert isinstance(trainer.models["harmonics"], SpatialHarmonics)
 
             # Verify harmonics parameters are in optimizer
-            harmonics_params = set(id(p) for p in trainer.models['harmonics'].parameters())
-            optimizer_params = set(id(p) for pg in trainer.optimizer.param_groups for p in pg['params'])
+            harmonics_params = set(id(p) for p in trainer.models["harmonics"].parameters())
+            optimizer_params = set(id(p) for pg in trainer.optimizer.param_groups for p in pg["params"])
 
-            assert harmonics_params.issubset(optimizer_params), (
-                "SpatialHarmonics parameters should be included in optimizer"
-            )
+            assert harmonics_params.issubset(optimizer_params), "SpatialHarmonics parameters should be included in optimizer"
 
     def test_caustics_receives_depth(self):
         """Test that caustics model receives depth during forward pass"""
@@ -476,7 +469,7 @@ class TestDepthNormalsIntegration:
             depth = trainer._estimate_depth(img)
 
             # Call caustics with depth (should not raise)
-            caustics = trainer.models['caustics'](img, depth)
+            caustics = trainer.models["caustics"](img, depth)
 
             assert caustics.shape == img.shape
 
@@ -510,29 +503,30 @@ class TestModelLoader:
     def test_checkpoint_info(self):
         """Test extracting checkpoint info"""
         checkpoint = {
-            'epoch': 25,
-            'best_val_loss': 0.0123,
-            'config': {'learning_rate': 1e-4},
-            'models': {'caustics': {}, 'atmosphere': {}},
+            "epoch": 25,
+            "best_val_loss": 0.0123,
+            "config": {"learning_rate": 1e-4},
+            "models": {"caustics": {}, "atmosphere": {}},
         }
 
         loader = ModelLoader()
         info = loader.checkpoint_info(checkpoint)
 
-        assert info['epoch'] == 25
-        assert info['best_val_loss'] == 0.0123
-        assert 'caustics' in info['models']
-        assert 'atmosphere' in info['models']
+        assert info["epoch"] == 25
+        assert info["best_val_loss"] == 0.0123
+        assert "caustics" in info["models"]
+        assert "atmosphere" in info["models"]
 
 
 def test_load_pretrained_weights_fallback():
     """Test fallback when no weights available"""
     with tempfile.TemporaryDirectory() as tmpdir:
         from enhancements.hyper_reality_enhancement import EnhancementConfig
+
         enhancement_config = EnhancementConfig()
 
         models = {
-            'caustics': CausticGenerator(enhancement_config.quantum_caustics),
+            "caustics": CausticGenerator(enhancement_config.quantum_caustics),
         }
 
         # Should return False when no weights found
@@ -546,7 +540,7 @@ class TestLPIPSIntegration:
     def test_trainer_has_lpips_config(self):
         """Test that TrainingConfig has lpips_weight parameter"""
         config = TrainingConfig()
-        assert hasattr(config, 'lpips_weight')
+        assert hasattr(config, "lpips_weight")
         assert config.lpips_weight == 1.0
 
     def test_trainer_history_includes_lpips(self):
@@ -556,7 +550,7 @@ class TestLPIPSIntegration:
             trainer = HyperRealityTrainer(config)
 
             # Training history should have lpips key
-            assert 'lpips' in trainer.training_history
+            assert "lpips" in trainer.training_history
 
     def test_trainer_lpips_fn_attribute(self):
         """Test that trainer has lpips_fn attribute"""
@@ -565,7 +559,7 @@ class TestLPIPSIntegration:
             trainer = HyperRealityTrainer(config)
 
             # lpips_fn should exist (may be None if lpips not installed)
-            assert hasattr(trainer, 'lpips_fn')
+            assert hasattr(trainer, "lpips_fn")
 
     @pytest.mark.skipif(not LPIPS_AVAILABLE, reason="LPIPS not installed")
     def test_lpips_loss_computation(self):

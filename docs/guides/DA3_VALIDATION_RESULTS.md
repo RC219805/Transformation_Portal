@@ -1,9 +1,9 @@
 # DA3 Validation Results - A/B Test vs v1.0 Baseline
 
-**Test Date**: 2025-12-19  
-**Baseline**: v1.0-validation-baseline (commit 85ebba2)  
-**DA3 Model**: Depth-Anything-V3-Large-1.1  
-**Dataset**: 46/50 images (92% completion)  
+**Test Date**: 2025-12-19
+**Baseline**: v1.0-validation-baseline (commit 85ebba2)
+**DA3 Model**: Depth-Anything-V3-Large-1.1
+**Dataset**: 46/50 images (92% completion)
 **Status**: 🚧 **IN PROGRESS**
 
 ---
@@ -145,21 +145,21 @@ python lux_depth_v3/validation.py \
 ## Decision Criteria Analysis
 
 ### Criterion 1: Structure Scene Performance
-**Target**: ≥60% pass rate (5/8 images)  
-**DA2 Baseline**: 25.0% (2/8)  
-**DA3 Result**: **TBD**  
+**Target**: ≥60% pass rate (5/8 images)
+**DA2 Baseline**: 25.0% (2/8)
+**DA3 Result**: **TBD**
 **Status**: 🚧 **PENDING**
 
 ### Criterion 2: Overall Quality
-**Target**: ≥95% lenient pass  
-**DA2 Baseline**: 84.8%  
-**DA3 Result**: **TBD**  
+**Target**: ≥95% lenient pass
+**DA2 Baseline**: 84.8%
+**DA3 Result**: **TBD**
 **Status**: 🚧 **PENDING**
 
 ### Criterion 3: Texture Scene Regression
-**Target**: ≤2% regression (≥95.4% pass)  
-**DA2 Baseline**: 97.4%  
-**DA3 Result**: **TBD**  
+**Target**: ≤2% regression (≥95.4% pass)
+**DA2 Baseline**: 97.4%
+**DA3 Result**: **TBD**
 **Status**: 🚧 **PENDING**
 
 ---
@@ -216,15 +216,15 @@ python lux_depth_v3/validation.py \
 [TBD] Model: depth-anything-v3-large-1.1
 [TBD] Baseline: validation_v1_baseline_pack/
 [TBD] Dataset: 46 images
-[TBD] 
+[TBD]
 [TBD] Processing images... 0/46
 [TBD] ...
 [TBD] Processing complete: 46/46
-[TBD] 
+[TBD]
 [TBD] Metrics computation...
 [TBD] Scene classification...
 [TBD] Quality gates evaluation...
-[TBD] 
+[TBD]
 [TBD] Results exported to: da3_validation_results/
 ```
 

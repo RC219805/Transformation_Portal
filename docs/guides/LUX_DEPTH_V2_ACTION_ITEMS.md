@@ -1,6 +1,6 @@
 # Lux Depth V2 - Action Items Checklist
 
-**Date**: December 25, 2025  
+**Date**: December 25, 2025
 **Priority**: Immediate → Sprint PR-1 → Post-Deployment
 
 ---
@@ -94,16 +94,16 @@ pip show realesrgan
 ## Approved Exceptions
 
 ### Exception #1: Sprint PR-1 (Depth Contract + Cache Fix)
-**Approved**: December 25, 2025  
-**Justification**: Critical production quality risk (silent degradation)  
+**Approved**: December 25, 2025
+**Justification**: Critical production quality risk (silent degradation)
 **Scope**:
 - DepthMode enum (REQUIRED/AUTO/OPTIONAL)
 - Auto-depth generation with caching
 - Materials V2 cache type safety fix
 - Depth provenance tracking
 
-**Timeline**: 1 week (Dec 25 - Jan 1)  
-**Risk**: Low (additive changes, backward-compatible)  
+**Timeline**: 1 week (Dec 25 - Jan 1)
+**Risk**: Low (additive changes, backward-compatible)
 **Approver**: Repo Maintainer (RC219805)
 ```
 
@@ -166,7 +166,7 @@ class DepthConfig:
     tile_size: int = 512
     tile_overlap: int = 64
 
-@dataclass  
+@dataclass
 class PipelineConfig:
     # ... existing fields ...
     depth: DepthConfig = field(default_factory=DepthConfig)
@@ -211,13 +211,13 @@ def _ensure_depth(self, rgb: np.ndarray, stem: str) -> np.ndarray:
         depth_path = _find_depth(self.depth_dir, stem)
         if depth_path:
             return io_utils.read_depth_u16(depth_path)
-    
+
     # 2. Check cache
     if self.cfg.depth.cache_enabled:
         cached = self.depth_cache.get(stem, rgb)
         if cached is not None:
             return cached
-    
+
     # 3. Auto-generate or fail
     if self.cfg.depth.mode == DepthMode.REQUIRED:
         raise FileNotFoundError(f"Depth required but missing: {stem}")
@@ -247,7 +247,7 @@ class CachedSegmentationResult:
     confidence: float
     quality_flags: Dict[str, bool]
     cache_hit: bool = False
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> "CachedSegmentationResult":
         """Convert cached dict to SegmentationResult-compatible object."""
@@ -266,7 +266,7 @@ def test_cache_roundtrip():
     # Save result
     result = SegmentationResult(masks={...}, confidence=0.85)
     cache.set(key, result)
-    
+
     # Load result
     cached = cache.get(key)
     assert isinstance(cached, CachedSegmentationResult)

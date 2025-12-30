@@ -82,7 +82,7 @@ From `outputs/validation_hf_fixed_20251218_211645_01fb79c/validation_report.json
 
 **Claimed**: "Scene classification improved"
 
-**Reality**: 
+**Reality**:
 - No confusion matrix produced for 50-image run
 - No balanced accuracy metric computed
 - Scene split (38/8) suggests **classifier may still be misrouting structure → texture**
@@ -121,12 +121,12 @@ From `outputs/validation_hf_fixed_20251218_211645_01fb79c/validation_report.json
 
 **Issue**: No consolidated `validation_report.json` was generated.
 
-**Impact**: 
+**Impact**:
 - Cannot claim "50-image validation completed"
 - No aggregate statistics available
 - Downstream analysis scripts will fail
 
-**Fix Required**: 
+**Fix Required**:
 - Option A: Rerun 4 failed images with pre-cached model
 - Option B: Rerun full 50-image suite deterministically
 
@@ -374,7 +374,7 @@ You are **not** production-ready. You **are** at a clean transition point:
 
 ---
 
-**Document Status**: Fact-checked review, Dec 19 2025  
-**Baseline Run**: `outputs/validation_hf_fixed_20251218_211645_01fb79c` (18 images, validated)  
-**Partial Run**: `outputs/validation_full_50img_20251218_214935_2a2b25c` (46/50 images, incomplete)  
+**Document Status**: Fact-checked review, Dec 19 2025
+**Baseline Run**: `outputs/validation_hf_fixed_20251218_211645_01fb79c` (18 images, validated)
+**Partial Run**: `outputs/validation_full_50img_20251218_214935_2a2b25c` (46/50 images, incomplete)
 **Next Milestone**: Complete 50-image validation with consolidated report

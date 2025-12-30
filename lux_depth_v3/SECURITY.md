@@ -1,7 +1,7 @@
 # Security Guidelines for Lux Depth V3
 
-**Last Updated**: 2025-12-19  
-**Module**: lux_depth_v3  
+**Last Updated**: 2025-12-19
+**Module**: lux_depth_v3
 **Security Contact**: See root SECURITY.md
 
 ---
@@ -249,20 +249,20 @@ uvicorn lux_depth_v3.service:app \
 server {
     listen 443 ssl;
     server_name api.yourdomain.com;
-    
+
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
-    
+
     location /depth/ {
         proxy_pass http://127.0.0.1:8088;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        
+
         # Security headers
         add_header X-Content-Type-Options nosniff;
         add_header X-Frame-Options DENY;
         add_header X-XSS-Protection "1; mode=block";
-        
+
         # Request size limits
         client_max_body_size 50M;
     }
@@ -317,7 +317,7 @@ try:
 except Exception as e:
     # Log full error internally
     logger.error(f"Inference failed: {str(e)}", exc_info=True)
-    
+
     # Return generic error to user
     raise HTTPException(
         status_code=500,

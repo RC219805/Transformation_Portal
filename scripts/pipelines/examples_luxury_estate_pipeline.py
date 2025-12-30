@@ -94,12 +94,12 @@ def example_3_batch_processing():
 
     # Define room type mappings
     room_types = {
-        '750Picacho_Aerial_HDR_32-bit': 'aerial',
-        '750Picacho_Bathroom_HDR_32-bit': 'bathroom',
-        '750Picacho_Bedroom_HDR_32-bit': 'bedroom',
-        '750Picacho_Great_Room_HDR_32-bit': 'great_room',
-        '750Picacho_Kitchen_HDR_32-bit': 'kitchen',
-        '750Picacho_Pool_HDR_32-bit': 'pool',
+        "750Picacho_Aerial_HDR_32-bit": "aerial",
+        "750Picacho_Bathroom_HDR_32-bit": "bathroom",
+        "750Picacho_Bedroom_HDR_32-bit": "bedroom",
+        "750Picacho_Great_Room_HDR_32-bit": "great_room",
+        "750Picacho_Kitchen_HDR_32-bit": "kitchen",
+        "750Picacho_Pool_HDR_32-bit": "pool",
     }
 
     # Batch process
@@ -108,7 +108,7 @@ def example_3_batch_processing():
     print("\n✓ Batch processing complete!")
     print(f"  Processed: {len(results)} images")
     print(f"  Total time: {pipeline.stats['total_time']:.1f}s")
-    print(f"  Average: {pipeline.stats['total_time']/len(results):.1f}s per image")
+    print(f"  Average: {pipeline.stats['total_time'] / len(results):.1f}s per image")
 
 
 def example_4_custom_preset():
@@ -121,7 +121,6 @@ def example_4_custom_preset():
     custom_preset = PipelinePreset(
         name="Fast Processing",
         description="Speed-optimized configuration for quick turnaround",
-
         # Enable only essential stages
         depth=DepthConfig(
             enabled=True,
@@ -129,32 +128,26 @@ def example_4_custom_preset():
             backend="coreml",  # Fastest on M-series
             clarity_strength=0.5,
         ),
-
         material_response=MaterialResponseConfig(
             enabled=True,
             strength=0.6,  # Reduced for speed
         ),
-
         tone_mapping=ToneMappingConfig(
             method="filmic",
             exposure=0.0,
             contrast=1.05,
         ),
-
         color_grading=ColorGradingConfig(
             enabled=True,
             saturation=1.08,
         ),
-
         # Disable slow stages
         ai_enhancement=AIEnhancementConfig(
             enabled=False,  # Skip AI for speed
         ),
-
         upscaling=UpscalingConfig(
             enabled=False,  # Skip upscaling for speed
         ),
-
         output=OutputConfig(
             save_master_tiff=True,
             save_delivery_jpeg=True,
@@ -291,11 +284,11 @@ def example_8_report_analysis():
         print(f"  Average time: {report['average_time']:.1f}s per image")
 
         # Analyze stage times
-        if report['results']:
-            first_result = report['results'][0]
-            if 'stages' in first_result:
+        if report["results"]:
+            first_result = report["results"][0]
+            if "stages" in first_result:
                 print("\nStage breakdown (first image):")
-                for stage, duration in first_result['stages'].items():
+                for stage, duration in first_result["stages"].items():
                     print(f"    {stage}: {duration:.2f}s")
     else:
         print(f"⚠ Report not found: {report_path}")
@@ -329,5 +322,5 @@ def main():
     print("=" * 80)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

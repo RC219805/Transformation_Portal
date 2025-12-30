@@ -117,7 +117,7 @@ make lint
 ## Tech Stack
 
 - **Languages**: Python 3.10+, Shell (Bash), TypeScript (minimal)
-- **Key Dependencies**: 
+- **Key Dependencies**:
   - **ML/AI**: PyTorch 2.0+, Diffusers, ControlNet-aux, transformers, Real-ESRGAN
   - **Image Processing**: NumPy, Pillow, scipy, scikit-image, tifffile, imagecodecs
   - **Video Processing**: FFmpeg 6+

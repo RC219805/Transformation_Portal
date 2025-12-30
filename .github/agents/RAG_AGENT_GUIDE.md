@@ -200,7 +200,7 @@ for source in response.sources[:3]:
 # Step 3: Check confidence
 if response.confidence != ConfidenceLevel.LOW:
     print("Sufficient context found - proceeding with implementation")
-    
+
     # Step 4: Generate implementation plan
     for citation in response.citations:
         print(f"\nReference: {citation['file_path']}")
@@ -333,7 +333,7 @@ if response.gaps_identified:
     print("Knowledge Gaps Detected:")
     for gap in response.gaps_identified:
         print(f"  ⚠️  {gap}")
-    
+
     print("\nRecommendations:")
     for rec in response.recommendations:
         print(f"  ✅  {rec}")
@@ -350,7 +350,7 @@ if response.conflicts:
     print("⚠️  Conflicts Detected:")
     for conflict in response.conflicts:
         print(f"  - {conflict}")
-    
+
     # Review sources manually
     print("\nReview these sources:")
     for source in response.sources:
@@ -537,7 +537,7 @@ if response.confidence == ConfidenceLevel.LOW:
     print("Gaps found:")
     for gap in response.gaps_identified:
         print(f"  - {gap}")
-    
+
     # Try broader query
     response2 = agent.query(
         "broader query terms",
@@ -614,9 +614,9 @@ class RAGAgent:
         enable_cache: bool = True,
         enable_learning: bool = True
     )
-    
+
     def initialize(self, force_reindex: bool = False) -> int
-    
+
     def query(
         self,
         query_text: str,
@@ -626,21 +626,21 @@ class RAGAgent:
         include_citations: bool = True,
         max_citations: int = 5
     ) -> RAGResponse
-    
+
     def prepare_context_for_agent(
         self,
         agent_name: str,
         task: str,
         include_history: bool = False
     ) -> Dict[str, Any]
-    
+
     def add_feedback(
         self,
         query: str,
         helpful: bool,
         comment: Optional[str] = None
     )
-    
+
     def get_statistics(self) -> Dict[str, Any]
 ```
 
@@ -670,7 +670,7 @@ class RAGResponse:
     recommendations: List[str]
     gaps_identified: List[str]
     conflicts: List[str]
-    
+
     def to_dict(self) -> Dict[str, Any]
     def to_json(self, indent: int = 2) -> str
 ```

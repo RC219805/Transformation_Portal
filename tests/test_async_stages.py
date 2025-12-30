@@ -34,21 +34,20 @@ try:
         ResizeStage,
         create_luxury_pipeline_stages,
     )
+
     STAGES_AVAILABLE = True
 except ImportError as e:
     IMPORT_ERROR = str(e)
 
 
 # Skip all tests if stages module dependencies not available
-pytestmark = pytest.mark.skipif(
-    not STAGES_AVAILABLE,
-    reason=f"Stages module dependencies not available: {IMPORT_ERROR}"
-)
+pytestmark = pytest.mark.skipif(not STAGES_AVAILABLE, reason=f"Stages module dependencies not available: {IMPORT_ERROR}")
 
 
 # ============================================================================
 # ImageData Tests
 # ============================================================================
+
 
 class TestImageData:
     """Tests for ImageData container."""
@@ -57,15 +56,12 @@ class TestImageData:
         """Test ImageData creation."""
         try:
             import numpy as np
+
             array = np.zeros((100, 100, 3), dtype=np.uint8)
         except ImportError:
             pytest.skip("numpy not available")
 
-        data = ImageData(
-            array=array,
-            path=Path("/test/image.jpg"),
-            metadata={"format": "JPEG"}
-        )
+        data = ImageData(array=array, path=Path("/test/image.jpg"), metadata={"format": "JPEG"})
 
         assert data.path == Path("/test/image.jpg")
         assert data.shape == (100, 100, 3)
@@ -82,11 +78,7 @@ class TestImageData:
         array = np.zeros((100, 100, 3))
         depth = np.zeros((100, 100))
 
-        data = ImageData(
-            array=array,
-            path=Path("/test/image.jpg"),
-            depth_map=depth
-        )
+        data = ImageData(array=array, path=Path("/test/image.jpg"), depth_map=depth)
 
         assert data.depth_map is not None
         assert data.depth_map.shape == (100, 100)
@@ -96,16 +88,13 @@ class TestImageData:
 # ImageLoadStage Tests
 # ============================================================================
 
+
 class TestImageLoadStage:
     """Tests for ImageLoadStage."""
 
     def test_stage_initialization(self):
         """Test stage initialization."""
-        stage = ImageLoadStage(
-            max_concurrent=4,
-            load_exif=True,
-            convert_16bit=True
-        )
+        stage = ImageLoadStage(max_concurrent=4, load_exif=True, convert_16bit=True)
 
         assert stage.name == "image_load"
         assert stage.max_concurrent == 4
@@ -188,17 +177,13 @@ class TestImageLoadStage:
 # ImageSaveStage Tests
 # ============================================================================
 
+
 class TestImageSaveStage:
     """Tests for ImageSaveStage."""
 
     def test_stage_initialization(self):
         """Test stage initialization."""
-        stage = ImageSaveStage(
-            output_dir="/tmp/output",
-            output_format="JPEG",
-            quality=90,
-            suffix="_out"
-        )
+        stage = ImageSaveStage(output_dir="/tmp/output", output_format="JPEG", quality=90, suffix="_out")
 
         assert stage.name == "image_save"
         assert stage._format == "JPEG"
@@ -214,17 +199,12 @@ class TestImageSaveStage:
             pytest.skip("numpy not available")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            stage = ImageSaveStage(
-                output_dir=tmpdir,
-                output_format="JPEG",
-                quality=85
-            )
+            stage = ImageSaveStage(output_dir=tmpdir, output_format="JPEG", quality=85)
             await stage.startup()
 
             try:
                 image_data = ImageData(
-                    array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8),
-                    path=Path("/original/test_image.jpg")
+                    array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8), path=Path("/original/test_image.jpg")
                 )
 
                 result = await stage(image_data)
@@ -245,18 +225,12 @@ class TestImageSaveStage:
             pytest.skip("numpy not available")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            stage = ImageSaveStage(
-                output_dir=tmpdir,
-                output_format="PNG"
-            )
+            stage = ImageSaveStage(output_dir=tmpdir, output_format="PNG")
             await stage.startup()
 
             try:
                 # Float32 array in 0-1 range
-                image_data = ImageData(
-                    array=np.random.rand(100, 100, 3).astype(np.float32),
-                    path=Path("/original/test.png")
-                )
+                image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/original/test.png"))
 
                 result = await stage(image_data)
 
@@ -271,6 +245,7 @@ class TestImageSaveStage:
 # DepthEstimationStage Tests
 # ============================================================================
 
+
 class TestDepthEstimationStage:
     """Tests for DepthEstimationStage."""
 
@@ -278,11 +253,7 @@ class TestDepthEstimationStage:
         """Test stage initialization."""
         from transformation_portal.streaming.async_pipeline import DeviceType
 
-        stage = DepthEstimationStage(
-            device=DeviceType.CPU,
-            model_size="base",
-            max_concurrent=1
-        )
+        stage = DepthEstimationStage(device=DeviceType.CPU, model_size="base", max_concurrent=1)
 
         assert stage.name == "depth_estimation"
         assert stage._model_size == "base"
@@ -300,10 +271,7 @@ class TestDepthEstimationStage:
         await stage.startup()
 
         try:
-            image_data = ImageData(
-                array=np.random.rand(100, 100, 3).astype(np.float32),
-                path=Path("/test/image.jpg")
-            )
+            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
 
             result = await stage(image_data)
 
@@ -319,16 +287,13 @@ class TestDepthEstimationStage:
 # MaterialResponseStage Tests
 # ============================================================================
 
+
 class TestMaterialResponseStage:
     """Tests for MaterialResponseStage."""
 
     def test_stage_initialization(self):
         """Test stage initialization."""
-        stage = MaterialResponseStage(
-            materials=["wood", "metal"],
-            intensity=0.8,
-            use_depth=True
-        )
+        stage = MaterialResponseStage(materials=["wood", "metal"], intensity=0.8, use_depth=True)
 
         assert stage.name == "material_response"
         assert stage._materials == ["wood", "metal"]
@@ -347,10 +312,7 @@ class TestMaterialResponseStage:
         await stage.startup()
 
         try:
-            image_data = ImageData(
-                array=np.random.rand(100, 100, 3).astype(np.float32),
-                path=Path("/test/image.jpg")
-            )
+            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
 
             result = await stage(image_data)
 
@@ -364,15 +326,13 @@ class TestMaterialResponseStage:
 # ColorGradingStage Tests
 # ============================================================================
 
+
 class TestColorGradingStage:
     """Tests for ColorGradingStage."""
 
     def test_stage_initialization(self):
         """Test stage initialization."""
-        stage = ColorGradingStage(
-            lut_path=None,
-            intensity=0.8
-        )
+        stage = ColorGradingStage(lut_path=None, intensity=0.8)
 
         assert stage.name == "color_grading"
         assert stage._intensity == 0.8
@@ -389,10 +349,7 @@ class TestColorGradingStage:
         await stage.startup()
 
         try:
-            image_data = ImageData(
-                array=np.random.rand(100, 100, 3).astype(np.float32),
-                path=Path("/test/image.jpg")
-            )
+            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
 
             result = await stage(image_data)
 
@@ -410,7 +367,7 @@ class TestColorGradingStage:
             pytest.skip("numpy not available")
 
         # Create a minimal .cube LUT file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.cube', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".cube", delete=False) as f:
             f.write("# Test LUT\n")
             f.write("LUT_3D_SIZE 2\n")
             # Write 8 values for 2x2x2 LUT
@@ -424,10 +381,7 @@ class TestColorGradingStage:
         await stage.startup()
 
         try:
-            image_data = ImageData(
-                array=np.random.rand(100, 100, 3).astype(np.float32),
-                path=Path("/test/image.jpg")
-            )
+            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
 
             result = await stage(image_data)
 
@@ -441,16 +395,13 @@ class TestColorGradingStage:
 # ResizeStage Tests
 # ============================================================================
 
+
 class TestResizeStage:
     """Tests for ResizeStage."""
 
     def test_stage_initialization(self):
         """Test stage initialization."""
-        stage = ResizeStage(
-            target_size=(1920, 1080),
-            method="lanczos",
-            maintain_aspect=True
-        )
+        stage = ResizeStage(target_size=(1920, 1080), method="lanczos", maintain_aspect=True)
 
         assert stage.name == "resize"
         assert stage._target_size == (1920, 1080)
@@ -465,16 +416,12 @@ class TestResizeStage:
         except ImportError:
             pytest.skip("numpy not available")
 
-        stage = ResizeStage(
-            target_size=(50, 50),
-            maintain_aspect=False
-        )
+        stage = ResizeStage(target_size=(50, 50), maintain_aspect=False)
         await stage.startup()
 
         try:
             image_data = ImageData(
-                array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8),
-                path=Path("/test/image.jpg")
+                array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8), path=Path("/test/image.jpg")
             )
 
             result = await stage(image_data)
@@ -493,16 +440,12 @@ class TestResizeStage:
         except ImportError:
             pytest.skip("numpy not available")
 
-        stage = ResizeStage(
-            scale_factor=0.5,
-            maintain_aspect=True
-        )
+        stage = ResizeStage(scale_factor=0.5, maintain_aspect=True)
         await stage.startup()
 
         try:
             image_data = ImageData(
-                array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8),
-                path=Path("/test/image.jpg")
+                array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8), path=Path("/test/image.jpg")
             )
 
             result = await stage(image_data)
@@ -517,15 +460,13 @@ class TestResizeStage:
 # DenoiseStage Tests
 # ============================================================================
 
+
 class TestDenoiseStage:
     """Tests for DenoiseStage."""
 
     def test_stage_initialization(self):
         """Test stage initialization."""
-        stage = DenoiseStage(
-            strength=0.5,
-            use_depth=True
-        )
+        stage = DenoiseStage(strength=0.5, use_depth=True)
 
         assert stage.name == "denoise"
         assert stage._strength == 0.5
@@ -544,10 +485,7 @@ class TestDenoiseStage:
 
         try:
             # Create noisy image
-            image_data = ImageData(
-                array=np.random.rand(100, 100, 3).astype(np.float32),
-                path=Path("/test/image.jpg")
-            )
+            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
 
             result = await stage(image_data)
 
@@ -571,7 +509,7 @@ class TestDenoiseStage:
             image_data = ImageData(
                 array=np.random.rand(100, 100, 3).astype(np.float32),
                 path=Path("/test/image.jpg"),
-                depth_map=np.random.rand(100, 100).astype(np.float32)
+                depth_map=np.random.rand(100, 100).astype(np.float32),
             )
 
             result = await stage(image_data)
@@ -585,6 +523,7 @@ class TestDenoiseStage:
 # ============================================================================
 # Factory Function Tests
 # ============================================================================
+
 
 class TestCreateLuxuryPipelineStages:
     """Tests for create_luxury_pipeline_stages factory function."""
@@ -608,10 +547,7 @@ class TestCreateLuxuryPipelineStages:
         """Test creating minimal pipeline (load + save only)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             stages = create_luxury_pipeline_stages(
-                output_dir=tmpdir,
-                enable_depth=False,
-                enable_material=False,
-                enable_color_grading=False
+                output_dir=tmpdir, enable_depth=False, enable_material=False, enable_color_grading=False
             )
 
             # Should have only: load, save
@@ -625,17 +561,11 @@ class TestCreateLuxuryPipelineStages:
         """Test creating stages with LUT path."""
         with tempfile.TemporaryDirectory() as tmpdir:
             stages = create_luxury_pipeline_stages(
-                output_dir=tmpdir,
-                enable_depth=False,
-                enable_material=False,
-                lut_path="/path/to/lut.cube"
+                output_dir=tmpdir, enable_depth=False, enable_material=False, lut_path="/path/to/lut.cube"
             )
 
             # Find color grading stage and check LUT path
-            color_stage = next(
-                (s for s in stages if s.name == "color_grading"),
-                None
-            )
+            color_stage = next((s for s in stages if s.name == "color_grading"), None)
             assert color_stage is not None
             assert color_stage._lut_path == Path("/path/to/lut.cube")
 
@@ -643,6 +573,7 @@ class TestCreateLuxuryPipelineStages:
 # ============================================================================
 # Integration Tests
 # ============================================================================
+
 
 class TestStagesIntegration:
     """Integration tests for pipeline stages."""

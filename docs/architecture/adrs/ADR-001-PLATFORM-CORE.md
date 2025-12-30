@@ -1,8 +1,8 @@
 # ADR-001: Platform Core Extraction
 
-**Status**: Proposed  
-**Date**: 2025-12-08  
-**Authors**: Transformation Portal Architect  
+**Status**: Proposed
+**Date**: 2025-12-08
+**Authors**: Transformation Portal Architect
 **Related PRs**: PR-2 (Platform Core)
 
 ---
@@ -263,26 +263,26 @@ device = manager.device
 
 ### Alternative 1: Keep Status Quo
 
-**Pros**: No refactoring effort required  
-**Cons**: Continued duplication, inconsistency, maintenance burden  
+**Pros**: No refactoring effort required
+**Cons**: Continued duplication, inconsistency, maintenance burden
 **Verdict**: ❌ Technical debt compounds over time
 
 ### Alternative 2: Refactor Individual Pipelines
 
-**Pros**: Incremental improvement  
-**Cons**: Duplication remains, no shared benefits  
+**Pros**: Incremental improvement
+**Cons**: Duplication remains, no shared benefits
 **Verdict**: ❌ Doesn't solve root cause
 
 ### Alternative 3: Microservices Architecture
 
-**Pros**: Strong module boundaries  
-**Cons**: Massive overhead, premature complexity  
+**Pros**: Strong module boundaries
+**Cons**: Massive overhead, premature complexity
 **Verdict**: ❌ Overkill for current scale
 
 ### Alternative 4: Platform Core (Selected)
 
-**Pros**: Shared infrastructure, consistency, maintainability  
-**Cons**: Upfront refactoring effort  
+**Pros**: Shared infrastructure, consistency, maintainability
+**Cons**: Upfront refactoring effort
 **Verdict**: ✅ **Best balance of benefits and costs**
 
 ---
@@ -305,7 +305,7 @@ device = manager.device
 
 ---
 
-**Decision**: ✅ **APPROVED**  
-**Implementation**: PR-2 (Platform Core Extraction)  
-**Timeline**: Week 1-2  
+**Decision**: ✅ **APPROVED**
+**Implementation**: PR-2 (Platform Core Extraction)
+**Timeline**: Week 1-2
 **Next Review**: 2025-12-22

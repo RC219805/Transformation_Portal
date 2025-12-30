@@ -6,9 +6,9 @@ Commit: b2e32a8
 
 EXECUTIVE SUMMARY
 -----------------
-The texture-dominated gate fix is VALIDATED and WORKING. Structure-dominated 
+The texture-dominated gate fix is VALIDATED and WORKING. Structure-dominated
 performance is the confirmed bottleneck. The path forward is clear: complete
-50-image validation, validate classifier, then run input-size sweep on 
+50-image validation, validate classifier, then run input-size sweep on
 structure scenes.
 
 CURRENT STATUS (Evidence-Based)
@@ -44,7 +44,7 @@ WHAT THE NUMBERS MEAN
   - Scene split: 38 texture / 8 structure (BIAS: intended 25/25)
   - All lenient failures: structure-dominated scenes
 
-KEY INSIGHT: Texture path is healthy. Structure path is bottlenecked by 
+KEY INSIGHT: Texture path is healthy. Structure path is bottlenecked by
             edge fidelity (not tiling, not gates, not preprocessing).
 
 TECHNICAL CORRECTNESS
@@ -53,7 +53,7 @@ TECHNICAL CORRECTNESS
    - Targets "texture copying" artifacts via high-frequency energy
    - Uses percentile-based range (robust to outliers)
    - Bilateral filtering preserves edges while suppressing texture
-   
+
 ✅ Infrastructure is reliable:
    - Tiling + Hann-weighted blending: mathematically correct
    - Seam validation: 100% pass rate

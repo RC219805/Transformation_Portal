@@ -197,11 +197,11 @@ Start
 
 ## 📚 Additional Resources
 
-**Golden Path Documentation**: [docs/GOLDEN_PATH_INDEX.md](GOLDEN_PATH_INDEX.md)  
-**Feature Freeze Policy**: [docs/FEATURE_FREEZE_POLICY.md](FEATURE_FREEZE_POLICY.md)  
+**Golden Path Documentation**: [docs/GOLDEN_PATH_INDEX.md](GOLDEN_PATH_INDEX.md)
+**Feature Freeze Policy**: [docs/FEATURE_FREEZE_POLICY.md](FEATURE_FREEZE_POLICY.md)
 **Strategic Assessment**: [docs/STRATEGIC_ARCHITECTURE_ASSESSMENT_2025-12-20.md](STRATEGIC_ARCHITECTURE_ASSESSMENT_2025-12-20.md)
 
 ---
 
-**Last Updated**: December 20, 2025  
+**Last Updated**: December 20, 2025
 **Maintained by**: Transformation Portal Architect

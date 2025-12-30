@@ -1,8 +1,8 @@
 # ADR-003: Security Hardening Strategy
 
-**Status**: Proposed  
-**Date**: 2025-12-08  
-**Authors**: Transformation Portal Architect  
+**Status**: Proposed
+**Date**: 2025-12-08
+**Authors**: Transformation Portal Architect
 **Related PRs**: PR-1 (Security + Repo Hygiene)
 
 ---
@@ -167,23 +167,23 @@ def check_installed_packages():
         capture_output=True,
         text=True
     )
-    
+
     installed = result.stdout.lower()
     found_banned = []
-    
+
     for pkg in BANNED_PACKAGES:
         if pkg in installed:
             found_banned.append(pkg)
-    
+
     return found_banned
 
 def check_imports():
     """Check if banned packages are imported."""
     import ast
     from pathlib import Path
-    
+
     found_imports = []
-    
+
     for py_file in Path("lux_depth_v2").rglob("*.py"):
         try:
             tree = ast.parse(py_file.read_text())
@@ -197,29 +197,29 @@ def check_imports():
                         found_imports.append((py_file, node.module))
         except:
             pass
-    
+
     return found_imports
 
 def main():
     errors = []
-    
+
     # Check installed packages
     banned_installed = check_installed_packages()
     if banned_installed:
         errors.append(f"❌ Banned packages installed: {banned_installed}")
-    
+
     # Check imports
     banned_imports = check_imports()
     if banned_imports:
         errors.append(f"❌ Banned imports found: {banned_imports}")
-    
+
     if errors:
         print("🔒 SECURITY GATE FAILED")
         for error in errors:
             print(error)
         print("\n📖 See lux_depth_v2/SECURITY.md for mitigation")
         sys.exit(1)
-    
+
     print("✅ Security gate passed: No banned packages")
     sys.exit(0)
 
@@ -235,22 +235,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Enforce Safe Dependencies
         run: python scripts/ci/enforce_safe_deps.py
-      
+
       - name: Secret Scanning
         uses: trufflesecurity/trufflehog@v3
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-      
+
       - name: Dependency Vulnerability Scan
         run: |
           pip install safety
           safety check --file requirements.txt --json
-      
+
       - name: Code Security Scan
         run: |
           pip install bandit
@@ -268,45 +268,45 @@ import re
 
 class PathValidator:
     """Prevent path traversal and symlink attacks."""
-    
+
     def __init__(self, allowed_base: Union[str, Path]):
         self.allowed_base = Path(allowed_base).resolve()
-    
+
     def validate(self, user_input: Union[str, Path]) -> Path:
         """Validate path is safe."""
         path = Path(user_input).resolve()
-        
+
         # Prevent path traversal (e.g., "../../../etc/passwd")
         if not path.is_relative_to(self.allowed_base):
             raise ValueError(
                 f"Path traversal attempt: {user_input} outside {self.allowed_base}"
             )
-        
+
         # Prevent symlink attacks
         if path.is_symlink():
             raise ValueError(f"Symlinks not allowed: {user_input}")
-        
+
         # Prevent null bytes (C-style string termination attacks)
         if "\x00" in str(user_input):
             raise ValueError("Null bytes in path")
-        
+
         return path
-    
+
     @staticmethod
     def sanitize_filename(filename: str) -> str:
         """Remove dangerous characters from filename."""
         # Allow: alphanumeric, underscore, hyphen, period
         safe = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', filename)
-        
+
         # Prevent double extensions (.png.exe)
         parts = safe.split('.')
         if len(parts) > 2:
             safe = f"{'_'.join(parts[:-1])}.{parts[-1]}"
-        
+
         # Prevent hidden files
         if safe.startswith('.'):
             safe = '_' + safe[1:]
-        
+
         return safe
 ```
 
@@ -325,19 +325,19 @@ def validate_image_file(file_path: Path) -> None:
     # Check file size
     if file_path.stat().st_size > MAX_IMAGE_SIZE:
         raise ValueError(f"File too large: {file_path.stat().st_size} bytes")
-    
+
     # Check MIME type (prevents .exe renamed to .jpg)
     mime = magic.from_file(str(file_path), mime=True)
     if mime not in ALLOWED_FORMATS:
         raise ValueError(f"Unsupported file type: {mime}")
-    
+
     # Verify image integrity (detects corrupted/malicious files)
     try:
         with Image.open(file_path) as img:
             img.verify()
     except Exception as e:
         raise ValueError(f"Invalid or corrupted image: {e}")
-    
+
     # Prevent decompression bombs
     Image.MAX_IMAGE_PIXELS = 933120000  # 30000 x 31104 (reasonable UHR)
 ```
@@ -394,7 +394,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, max_size: int = 100_000_000):  # 100MB
         super().__init__(app)
         self.max_size = max_size
-    
+
     async def dispatch(self, request: Request, call_next):
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > self.max_size:
@@ -526,7 +526,7 @@ git push --force origin main
 
 ---
 
-**Decision**: ✅ **APPROVED (CRITICAL)**  
-**Implementation**: PR-1 (Security + Repo Hygiene)  
-**Timeline**: Days 1-3 (Week 1)  
+**Decision**: ✅ **APPROVED (CRITICAL)**
+**Implementation**: PR-1 (Security + Repo Hygiene)
+**Timeline**: Days 1-3 (Week 1)
 **Next Review**: 2025-12-15 (1 week post-merge)

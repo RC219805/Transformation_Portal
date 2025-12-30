@@ -20,11 +20,11 @@ Establishes **quality-ceiling baseline** for Lux Depth V2 pipeline using 6 × 16
 
 ### What This PR Is
 
-✅ **Quality-ceiling validation**  
-✅ **16-bit TIFF fidelity verification**  
-✅ **Deterministic test infrastructure**  
-✅ **Production readiness baseline documentation**  
-✅ **Pre-flight dependency validation**  
+✅ **Quality-ceiling validation**
+✅ **16-bit TIFF fidelity verification**
+✅ **Deterministic test infrastructure**
+✅ **Production readiness baseline documentation**
+✅ **Pre-flight dependency validation**
 
 **Classification**: Quality validation + documentation (freeze-exempt)
 
@@ -34,12 +34,12 @@ Establishes **quality-ceiling baseline** for Lux Depth V2 pipeline using 6 × 16
 
 This PR **intentionally excludes**:
 
-❌ **No new features** - Zero pipeline code changes  
-❌ **No model changes** - No retraining, no model evolution  
-❌ **No taxonomy expansion** - Materials V3 classification unchanged  
-❌ **No heuristic modifications** - Existing logic validated as-is  
-❌ **No runtime dependency additions** - Test-time dependencies only  
-❌ **No architectural changes** - Pure validation layer  
+❌ **No new features** - Zero pipeline code changes
+❌ **No model changes** - No retraining, no model evolution
+❌ **No taxonomy expansion** - Materials V3 classification unchanged
+❌ **No heuristic modifications** - Existing logic validated as-is
+❌ **No runtime dependency additions** - Test-time dependencies only
+❌ **No architectural changes** - Pure validation layer
 
 **Scope discipline**: This PR optimizes nothing. It validates everything.
 
@@ -170,9 +170,9 @@ This PR follows **deterministic validation principles**:
 
 Per `.github/workflows/feature-freeze-check.yml` (lines 53-58):
 
-✅ **Test improvements** ← This PR  
-✅ **Documentation improvements** ← This PR  
-✅ **Performance verification (no behavior change)** ← This PR  
+✅ **Test improvements** ← This PR
+✅ **Documentation improvements** ← This PR
+✅ **Performance verification (no behavior change)** ← This PR
 
 **Production Risk**: 🟢 **ZERO**
 - No `lux_depth_v2/*.py` pipeline files modified
@@ -234,6 +234,6 @@ Review feedback should focus on:
 
 ---
 
-**Labels**: `testing`, `documentation`, `quality`, `freeze-approved`  
-**Milestone**: Phase 2 - Production Readiness  
+**Labels**: `testing`, `documentation`, `quality`, `freeze-approved`
+**Milestone**: Phase 2 - Production Readiness
 **Reviewers**: Focus on determinism and fidelity verification

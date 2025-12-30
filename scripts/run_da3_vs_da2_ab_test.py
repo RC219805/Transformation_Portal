@@ -34,6 +34,7 @@ try:
     from lux_depth_v3.config import DA3Config, DA3APIConfig, ModelVariant, InferenceMode
     from lux_depth_v3.inference import DA3InferenceEngine
     from lux_depth_v3.input_manager import ImageInput
+
     DA3_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  DA3 import failed: {e}")
@@ -41,6 +42,7 @@ except ImportError as e:
 
 try:
     from high_fidelity_depth.quality_metrics import validate_depth_quality, EdgeMetrics
+
     QUALITY_METRICS_AVAILABLE = True
 except ImportError:
     QUALITY_METRICS_AVAILABLE = False
@@ -50,6 +52,7 @@ except ImportError:
 @dataclass
 class ABTestResult:
     """A/B test result for single image."""
+
     image_name: str
 
     # DA3 results
@@ -145,9 +148,9 @@ def run_da3_validation(image_paths: List[Path], output_dir: Path) -> Dict[str, d
             if QUALITY_METRICS_AVAILABLE:
                 metrics_obj = validate_depth_quality(image_np, depth_norm)
                 # Convert EdgeMetrics object to dict
-                if hasattr(metrics_obj, '__dict__'):
+                if hasattr(metrics_obj, "__dict__"):
                     metrics = {k: v for k, v in metrics_obj.__dict__.items()}
-                elif hasattr(metrics_obj, '_asdict'):
+                elif hasattr(metrics_obj, "_asdict"):
                     metrics = metrics_obj._asdict()
                 else:
                     # Assume it's already a dict
@@ -157,8 +160,8 @@ def run_da3_validation(image_paths: List[Path], output_dir: Path) -> Dict[str, d
                 # These fields are required for A/B comparison but not included in validate_depth_quality()
                 scene_type = metrics.get("scene_type", "unknown")
                 edge_f1 = metrics.get("edge_f1", 0.0)
-                chamfer = metrics.get("chamfer_distance", float('inf'))
-                edge_width = metrics.get("edge_width", float('inf'))
+                chamfer = metrics.get("chamfer_distance", float("inf"))
+                edge_width = metrics.get("edge_width", float("inf"))
 
                 # Get scene metadata for texture-specific gates
                 scene_metadata = metrics.get("scene_metadata", {})
@@ -182,22 +185,17 @@ def run_da3_validation(image_paths: List[Path], output_dir: Path) -> Dict[str, d
                 else:
                     # Structure scenes: prioritize edge quality and localization
                     # Lenient: edge F1 >= 0.35 AND chamfer < 50px
-                    lenient_pass = (edge_f1 >= 0.35 and chamfer < 50.0)
+                    lenient_pass = edge_f1 >= 0.35 and chamfer < 50.0
 
                     # Strict: edge F1 >= 0.50 AND chamfer < 25px AND edge width < 5px
-                    strict_pass = (edge_f1 >= 0.50 and chamfer < 25.0 and edge_width < 5.0)
+                    strict_pass = edge_f1 >= 0.50 and chamfer < 25.0 and edge_width < 5.0
 
                 # Add quality gate results to metrics (ensure Python bool, not numpy bool_)
                 metrics["lenient_pass"] = bool(lenient_pass)
                 metrics["strict_pass"] = bool(strict_pass)
             else:
                 # Minimal metrics if quality module unavailable
-                metrics = {
-                    "edge_f1": 0.0,
-                    "lenient_pass": False,
-                    "strict_pass": False,
-                    "scene_type": "unknown"
-                }
+                metrics = {"edge_f1": 0.0, "lenient_pass": False, "strict_pass": False, "scene_type": "unknown"}
 
             # Add inference time
             if isinstance(metrics, dict):
@@ -229,14 +227,13 @@ def run_da3_validation(image_paths: List[Path], output_dir: Path) -> Dict[str, d
                 "strict_pass": False,
                 "scene_type": "error",
                 "edge_f1": 0.0,
-                "inference_time": 0.0
+                "inference_time": 0.0,
             }
 
     return results
 
 
-def compare_results(da3_results: Dict[str, dict],
-                    da2_baseline: Dict[str, dict]) -> List[ABTestResult]:
+def compare_results(da3_results: Dict[str, dict], da2_baseline: Dict[str, dict]) -> List[ABTestResult]:
     """Generate A/B comparison."""
 
     comparisons = []
@@ -262,7 +259,7 @@ def compare_results(da3_results: Dict[str, dict],
             da2_edge_f1=da2.get("edge_f1", 0.0),
             lenient_improved=(da3.get("lenient_pass", False) and not da2.get("lenient_pass", False)),
             strict_improved=(da3.get("strict_pass", False) and not da2.get("strict_pass", False)),
-            edge_f1_delta=da3.get("edge_f1", 0.0) - da2.get("edge_f1", 0.0)
+            edge_f1_delta=da3.get("edge_f1", 0.0) - da2.get("edge_f1", 0.0),
         )
 
         comparisons.append(comparison)
@@ -319,7 +316,7 @@ def generate_decision_report(comparisons: List[ABTestResult], output_path: Path)
     # Generate report
     report = f"""# DA3 vs DA2 A/B Validation Report
 
-**Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}
+**Date**: {time.strftime("%Y-%m-%d %H:%M:%S")}
 **Decision**: {decision}
 **Rationale**: {rationale}
 
@@ -404,12 +401,11 @@ Total comparisons: {total}
 
 def main():
     parser = argparse.ArgumentParser(description="DA3 vs DA2 A/B Validation")
-    parser.add_argument("--baseline-dir", type=Path, default=Path("validation_v1_baseline_pack"),
-                        help="Baseline metrics directory")
-    parser.add_argument("--image-dir", type=Path, default=Path("data/validation_full"),
-                        help="Validation images directory")
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/da3_ab_validation"),
-                        help="Output directory")
+    parser.add_argument(
+        "--baseline-dir", type=Path, default=Path("validation_v1_baseline_pack"), help="Baseline metrics directory"
+    )
+    parser.add_argument("--image-dir", type=Path, default=Path("data/validation_full"), help="Validation images directory")
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs/da3_ab_validation"), help="Output directory")
 
     args = parser.parse_args()
 
@@ -436,7 +432,7 @@ def main():
 
     # Save DA3 results
     da3_results_path = args.output_dir / "da3_metrics.json"
-    with open(da3_results_path, 'w') as f:
+    with open(da3_results_path, "w") as f:
         json.dump(da3_results, f, indent=2)
     print(f"✅ DA3 results saved: {da3_results_path}")
 
@@ -446,7 +442,7 @@ def main():
 
     # Save comparisons
     comparisons_path = args.output_dir / "ab_comparisons.json"
-    with open(comparisons_path, 'w') as f:
+    with open(comparisons_path, "w") as f:
         json.dump([asdict(c) for c in comparisons], f, indent=2)
     print(f"✅ Comparisons saved: {comparisons_path}")
 

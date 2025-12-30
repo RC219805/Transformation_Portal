@@ -30,16 +30,11 @@ def load_canonical_manifest(manifest_path: Path) -> Dict:
     if not manifest_path.exists():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
-    with open(manifest_path, 'r') as f:
+    with open(manifest_path, "r") as f:
         return json.load(f)
 
 
-def process_single_image(
-    source_path: Path,
-    output_dir: Path,
-    scene_name: str,
-    pipeline_config: Optional[Dict] = None
-) -> Dict:
+def process_single_image(source_path: Path, output_dir: Path, scene_name: str, pipeline_config: Optional[Dict] = None) -> Dict:
     """
     Process a single image through the optimized pipeline.
 
@@ -54,19 +49,19 @@ def process_single_image(
     """
     from unified_luxury_pipeline import UnifiedLuxuryPipeline, LuxuryConfig
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Processing: {scene_name}")
     print(f"Source: {source_path.name}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     start_time = datetime.now()
     results = {
-        'scene': scene_name,
-        'source': str(source_path),
-        'start_time': start_time.isoformat(),
-        'status': 'started',
-        'outputs': [],
-        'errors': []
+        "scene": scene_name,
+        "source": str(source_path),
+        "start_time": start_time.isoformat(),
+        "status": "started",
+        "outputs": [],
+        "errors": [],
     }
 
     try:
@@ -75,7 +70,7 @@ def process_single_image(
             # Use scene name (not source filename) for outputs
             output_name_override=scene_name,
             # Enable all output formats
-            output_formats=['jpg', 'ti', 'png'],
+            output_formats=["jpg", "ti", "png"],
             # Maximum quality settings
             depth_estimation=True,
             material_response=True,
@@ -86,7 +81,7 @@ def process_single_image(
             saturation=1.02,
             clarity=0.15,
             # Device optimization
-            device='mps',  # Use Apple Silicon
+            device="mps",  # Use Apple Silicon
         )
 
         # Apply any custom overrides
@@ -102,12 +97,9 @@ def process_single_image(
         print("\n🚀 Starting pipeline processing...")
         output_paths = pipeline.process_image(source_path, output_dir)
 
-        results['status'] = 'success'
-        results['outputs'] = [str(p) for p in output_paths.values()]
-        results['output_details'] = {
-            format_name: str(path)
-            for format_name, path in output_paths.items()
-        }
+        results["status"] = "success"
+        results["outputs"] = [str(p) for p in output_paths.values()]
+        results["output_details"] = {format_name: str(path) for format_name, path in output_paths.items()}
 
         # Validation
         print("\n✅ Processing complete!")
@@ -118,30 +110,27 @@ def process_single_image(
                 print(f"   ✓ {format_name.upper()}: {path.name} ({size_mb:.1f} MB)")
             else:
                 print(f"   ❌ {format_name.upper()}: MISSING")
-                results['errors'].append(f"Output missing: {format_name}")
+                results["errors"].append(f"Output missing: {format_name}")
 
     except Exception as e:
-        results['status'] = 'failed'
-        results['error'] = str(e)
-        results['traceback'] = traceback.format_exc()
+        results["status"] = "failed"
+        results["error"] = str(e)
+        results["traceback"] = traceback.format_exc()
         print(f"\n❌ Processing failed: {e}")
         print(f"   Traceback:\n{results['traceback']}")
 
     finally:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        results['end_time'] = end_time.isoformat()
-        results['duration_seconds'] = duration
+        results["end_time"] = end_time.isoformat()
+        results["duration_seconds"] = duration
         print(f"\n⏱  Duration: {duration:.1f} seconds")
 
     return results
 
 
 def batch_process_canonical_sources(
-    manifest_path: Path,
-    output_base_dir: Path,
-    scene_filter: Optional[List[str]] = None,
-    continue_on_error: bool = True
+    manifest_path: Path, output_base_dir: Path, scene_filter: Optional[List[str]] = None, continue_on_error: bool = True
 ) -> Dict:
     """
     Batch process all canonical sources.
@@ -164,7 +153,7 @@ def batch_process_canonical_sources(
     manifest = load_canonical_manifest(manifest_path)
     print(f"   Found {len(manifest['canonical_sources'])} canonical sources")
 
-    if manifest.get('duplicates_found'):
+    if manifest.get("duplicates_found"):
         print(f"   Note: {len(manifest['duplicates_found'])} scenes had duplicates (now resolved)")
 
     # Prepare output directory
@@ -174,74 +163,56 @@ def batch_process_canonical_sources(
     print(f"\n📁 Output directory: {output_dir}")
 
     # Filter scenes if requested
-    sources_to_process = manifest['canonical_sources']
+    sources_to_process = manifest["canonical_sources"]
     if scene_filter:
-        sources_to_process = {
-            k: v for k, v in sources_to_process.items()
-            if k in scene_filter
-        }
+        sources_to_process = {k: v for k, v in sources_to_process.items() if k in scene_filter}
         print(f"\n🎯 Filtering to {len(sources_to_process)} scenes: {', '.join(scene_filter)}")
 
     # Process each source
     batch_start = datetime.now()
     results_summary = {
-        'manifest_used': str(manifest_path),
-        'output_directory': str(output_dir),
-        'start_time': batch_start.isoformat(),
-        'scenes_processed': [],
-        'successes': [],
-        'failures': [],
-        'skipped': []
+        "manifest_used": str(manifest_path),
+        "output_directory": str(output_dir),
+        "start_time": batch_start.isoformat(),
+        "scenes_processed": [],
+        "successes": [],
+        "failures": [],
+        "skipped": [],
     }
 
     total_scenes = len(sources_to_process)
 
     for idx, (scene_name, source_info) in enumerate(sources_to_process.items(), 1):
-        print(f"\n\n{'#'*80}")
+        print(f"\n\n{'#' * 80}")
         print(f"# Scene {idx}/{total_scenes}: {scene_name}")
-        print(f"{'#'*80}")
+        print(f"{'#' * 80}")
 
-        source_path = Path(source_info['path'])
+        source_path = Path(source_info["path"])
 
         # Validate source exists
         if not source_path.exists():
             print(f"⚠️  Source file not found, skipping: {source_path}")
-            results_summary['skipped'].append({
-                'scene': scene_name,
-                'reason': 'source_not_found',
-                'path': str(source_path)
-            })
+            results_summary["skipped"].append({"scene": scene_name, "reason": "source_not_found", "path": str(source_path)})
             continue
 
         # Process the scene
         try:
-            scene_results = process_single_image(
-                source_path,
-                output_dir,
-                scene_name
-            )
+            scene_results = process_single_image(source_path, output_dir, scene_name)
 
-            results_summary['scenes_processed'].append(scene_results)
+            results_summary["scenes_processed"].append(scene_results)
 
-            if scene_results['status'] == 'success':
-                results_summary['successes'].append(scene_name)
+            if scene_results["status"] == "success":
+                results_summary["successes"].append(scene_name)
             else:
-                results_summary['failures'].append({
-                    'scene': scene_name,
-                    'error': scene_results.get('error', 'Unknown error')
-                })
+                results_summary["failures"].append({"scene": scene_name, "error": scene_results.get("error", "Unknown error")})
 
                 if not continue_on_error:
                     print("\n❌ Stopping batch processing due to error (continue_on_error=False)")
                     break
 
         except Exception as e:
-            error_info = {
-                'scene': scene_name,
-                'error': str(e),
-                'traceback': traceback.format_exc()
-            }
-            results_summary['failures'].append(error_info)
+            error_info = {"scene": scene_name, "error": str(e), "traceback": traceback.format_exc()}
+            results_summary["failures"].append(error_info)
             print(f"\n❌ Unexpected error processing {scene_name}: {e}")
             print(f"   Traceback:\n{error_info['traceback']}")
 
@@ -252,20 +223,20 @@ def batch_process_canonical_sources(
     # Finalize summary
     batch_end = datetime.now()
     batch_duration = (batch_end - batch_start).total_seconds()
-    results_summary['end_time'] = batch_end.isoformat()
-    results_summary['total_duration_seconds'] = batch_duration
-    results_summary['summary'] = {
-        'total_scenes': total_scenes,
-        'processed': len(results_summary['scenes_processed']),
-        'successful': len(results_summary['successes']),
-        'failed': len(results_summary['failures']),
-        'skipped': len(results_summary['skipped']),
-        'success_rate': len(results_summary['successes']) / max(len(results_summary['scenes_processed']), 1) * 100
+    results_summary["end_time"] = batch_end.isoformat()
+    results_summary["total_duration_seconds"] = batch_duration
+    results_summary["summary"] = {
+        "total_scenes": total_scenes,
+        "processed": len(results_summary["scenes_processed"]),
+        "successful": len(results_summary["successes"]),
+        "failed": len(results_summary["failures"]),
+        "skipped": len(results_summary["skipped"]),
+        "success_rate": len(results_summary["successes"]) / max(len(results_summary["scenes_processed"]), 1) * 100,
     }
 
     # Save results
-    results_file = output_dir / 'batch_processing_results.json'
-    with open(results_file, 'w') as f:
+    results_file = output_dir / "batch_processing_results.json"
+    with open(results_file, "w") as f:
         json.dump(results_summary, f, indent=2)
 
     # Print summary
@@ -282,9 +253,9 @@ def batch_process_canonical_sources(
     print(f"\n⏱  Total duration: {batch_duration / 60:.1f} minutes")
     print(f"\n💾 Results saved to: {results_file}")
 
-    if results_summary['failures']:
+    if results_summary["failures"]:
         print("\n⚠️  Failed scenes:")
-        for failure in results_summary['failures']:
+        for failure in results_summary["failures"]:
             print(f"   - {failure['scene']}: {failure['error']}")
 
     print(f"\n✨ All outputs saved to: {output_dir}")
@@ -297,32 +268,21 @@ def main():
     """Main execution function."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='Optimized batch processor for 750 Picacho Lane'
-    )
+    parser = argparse.ArgumentParser(description="Optimized batch processor for 750 Picacho Lane")
     parser.add_argument(
-        '--manifest',
+        "--manifest",
         type=Path,
-        default=Path('/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/canonical_sources_manifest.json'),
-        help='Path to canonical sources manifest'
+        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/canonical_sources_manifest.json"),
+        help="Path to canonical sources manifest",
     )
     parser.add_argument(
-        '--output-dir',
+        "--output-dir",
         type=Path,
-        default=Path('/Users/rc/Desktop/Cache/750_LightFiction_Final_Views'),
-        help='Base output directory'
+        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views"),
+        help="Base output directory",
     )
-    parser.add_argument(
-        '--scenes',
-        nargs='+',
-        default=None,
-        help='Specific scenes to process (space-separated)'
-    )
-    parser.add_argument(
-        '--stop-on-error',
-        action='store_true',
-        help='Stop processing if any scene fails (default: continue)'
-    )
+    parser.add_argument("--scenes", nargs="+", default=None, help="Specific scenes to process (space-separated)")
+    parser.add_argument("--stop-on-error", action="store_true", help="Stop processing if any scene fails (default: continue)")
 
     args = parser.parse_args()
 
@@ -334,18 +294,15 @@ def main():
 
     # Run batch processing
     results = batch_process_canonical_sources(
-        args.manifest,
-        args.output_dir,
-        scene_filter=args.scenes,
-        continue_on_error=not args.stop_on_error
+        args.manifest, args.output_dir, scene_filter=args.scenes, continue_on_error=not args.stop_on_error
     )
 
     # Exit with appropriate code
-    if results['summary']['failed'] > 0:
+    if results["summary"]["failed"] > 0:
         sys.exit(1)
     else:
         sys.exit(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

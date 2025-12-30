@@ -8,10 +8,10 @@
 
 ## Validation Summary
 
-**Test Image**: `750Picacho_Kitchen_UltraQuality.tif` (23MB)  
-**Preset**: `interior_luxury_apex_quality_materials_v3_glass` (canary)  
-**Device**: MPS (Apple Silicon)  
-**Processing Time**: ~10 seconds  
+**Test Image**: `750Picacho_Kitchen_UltraQuality.tif` (23MB)
+**Preset**: `interior_luxury_apex_quality_materials_v3_glass` (canary)
+**Device**: MPS (Apple Silicon)
+**Processing Time**: ~10 seconds
 **Result**: ✅ SUCCESS - All v3.1 schema fields present and correct
 
 ---
@@ -116,7 +116,7 @@ Kitchen scene analysis:
 | **sky** | ✅ | not_in_canary_set | Visible through windows |
 | **foliage** | ✅ | not_in_canary_set | Exterior visible |
 
-**Key Insight**: 
+**Key Insight**:
 - 6 materials detected
 - 5 have `no_implementation` (candidates for PR-4D)
 - Wood appears most frequently (good PR-4D candidate)
@@ -164,7 +164,7 @@ Degenerate boundary guard correctly triggered:
 
 ## Threshold Adjustment Validated ✅
 
-**Previous**: `refine_conf_ambiguity_threshold = 0.50`  
+**Previous**: `refine_conf_ambiguity_threshold = 0.50`
 **Current**: `refine_conf_ambiguity_threshold = 0.70`
 
 **Impact**:
@@ -184,7 +184,7 @@ Degenerate boundary guard correctly triggered:
 basicsr==1.4.2, realesrgan==0.3.0, gfpgan==1.3.8
 ```
 
-**Status**: 
+**Status**:
 - ⚠️ WARNING is correct (these packages exist in environment)
 - ✅ Pipeline used `--upscaler-backend torch` (safe)
 - ✅ No vulnerable code executed
@@ -265,25 +265,25 @@ Generated files:
 ## Success Criteria Met ✅
 
 ### Schema Validation
-✅ v3.1 schema fully implemented  
-✅ All new fields present and correct  
-✅ Backward compatibility preserved  
+✅ v3.1 schema fully implemented
+✅ All new fields present and correct
+✅ Backward compatibility preserved
 ✅ No breaking changes detected
 
 ### Decision Separation
-✅ Refinement ≠ Pixel Ops (structural fix)  
-✅ Independent decision paths verified  
+✅ Refinement ≠ Pixel Ops (structural fix)
+✅ Independent decision paths verified
 ✅ Explicit audit trail in JSON
 
 ### Edge Signals
-✅ Boundary pixels computed  
-✅ Edge alignment via Sobel working  
-✅ Degenerate boundary guard active  
+✅ Boundary pixels computed
+✅ Edge alignment via Sobel working
+✅ Degenerate boundary guard active
 ✅ Notes array provides diagnostics
 
 ### Reason Histograms
-✅ Pixel ops reasons aggregated  
-✅ Refinement reasons aggregated  
+✅ Pixel ops reasons aggregated
+✅ Refinement reasons aggregated
 ✅ Data-driven PR-4D enabled
 
 ---
@@ -353,13 +353,13 @@ Once material selected:
 
 **Validation Result**: ✅ **COMPLETE AND SUCCESSFUL**
 
-**PR-4C Schema v3.1**: ✅ Verified in production  
-**Backward Compatibility**: ✅ 100% preserved  
-**Reason Histograms**: ✅ Data collection ready  
+**PR-4C Schema v3.1**: ✅ Verified in production
+**Backward Compatibility**: ✅ 100% preserved
+**Reason Histograms**: ✅ Data collection ready
 **Next Phase**: ✅ PR-4D planning enabled
 
-**Time to Complete**: ~5 minutes  
-**Issues Found**: 0  
+**Time to Complete**: ~5 minutes
+**Issues Found**: 0
 **Confidence**: Very High
 
 ---

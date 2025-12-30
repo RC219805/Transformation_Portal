@@ -2,6 +2,7 @@
 """
 Test each pipeline stage to find where blue cast is introduced.
 """
+
 import numpy as np
 import tifffile
 from PIL import Image
@@ -12,7 +13,7 @@ print("=" * 80)
 
 # Load source
 print("\nLoading source image...")
-source = tifffile.imread('projects/750_picacho_lane/Final_Production_UltraQuality/750Picacho_Pool_UltraQuality.tif')
+source = tifffile.imread("projects/750_picacho_lane/Final_Production_UltraQuality/750Picacho_Pool_UltraQuality.tif")
 image_linear = source.astype(np.float32) / 65535.0
 
 
@@ -55,7 +56,7 @@ analyze_color(balanced, "STAGE 1.5: After White Balance")
 
 # Save for visual inspection
 preview = (np.clip(balanced, 0, 1) * 255).astype(np.uint8)
-Image.fromarray(preview).save('debug_after_white_balance.jpg', quality=95)
+Image.fromarray(preview).save("debug_after_white_balance.jpg", quality=95)
 print("\n  💾 Saved: debug_after_white_balance.jpg")
 
 print("\n" + "=" * 80)

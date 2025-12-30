@@ -110,10 +110,7 @@ def download_file(
         if verify_sha256:
             actual = compute_sha256(temp_path)
             if actual != verify_sha256:
-                raise ModelDownloadError(
-                    f"SHA256 mismatch for {dest.name}: "
-                    f"expected {verify_sha256}, got {actual}"
-                )
+                raise ModelDownloadError(f"SHA256 mismatch for {dest.name}: expected {verify_sha256}, got {actual}")
             log.info("SHA256 verified: %s", verify_sha256[:16])
         else:
             actual = compute_sha256(temp_path)
@@ -179,9 +176,7 @@ def get_model_path(
         return model_path
 
     if not auto_download:
-        raise ModelDownloadError(
-            f"Model {model_name} not found at {model_path} and auto_download=False"
-        )
+        raise ModelDownloadError(f"Model {model_name} not found at {model_path} and auto_download=False")
 
     # Attempt download
     if url_override:
@@ -192,9 +187,7 @@ def get_model_path(
         url = info["url"]
         sha256 = sha256_override or info.get("sha256")
     else:
-        raise ModelDownloadError(
-            f"Unknown model {model_name} and no URL override provided"
-        )
+        raise ModelDownloadError(f"Unknown model {model_name} and no URL override provided")
 
     log.info("Model %s not cached; downloading from %s", model_name, url)
     download_file(url, model_path, verify_sha256=sha256)

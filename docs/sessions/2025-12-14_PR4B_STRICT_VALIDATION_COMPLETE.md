@@ -40,7 +40,7 @@ python scripts/pr4b_glass_pixel_validation.py --scenes kitchen bedroom --force-a
 
 **Bedroom Scene**:
 - Status: `success`
-- Glass pixels processed: 609K (552K core + 56K edge)  
+- Glass pixels processed: 609K (552K core + 56K edge)
 - Mean delta: 0.0132
 - Halo risk: LOW
 - Gradient improvement: Positive

@@ -1,8 +1,8 @@
 # Lux Depth V2 Pipeline: Comprehensive Quality Audit Report
 
-**Date:** December 12, 2025  
-**Preset Audited:** `interior_luxury_max_quality`  
-**Auditor:** Transformation Portal Architect  
+**Date:** December 12, 2025
+**Preset Audited:** `interior_luxury_max_quality`
+**Auditor:** Transformation Portal Architect
 **Scope:** Identify all quality optimizations not utilized in current max quality preset
 
 ---
@@ -47,9 +47,9 @@ The current `interior_luxury_max_quality` preset is **NOT running at absolute ma
 ### Category 1: Segmentation Quality Parameters
 
 #### 1.1 **Segmentation Input Resolution** 🔴 CRITICAL
-**Current:** `input_long_side: 1280`  
-**Maximum Possible:** No hard limit documented; 2048+ feasible  
-**Impact:** High - larger resolution = more accurate material detection  
+**Current:** `input_long_side: 1280`
+**Maximum Possible:** No hard limit documented; 2048+ feasible
+**Impact:** High - larger resolution = more accurate material detection
 **Location:** `config.py:288`
 
 **Recommendation:**
@@ -66,9 +66,9 @@ self.segmentation.input_long_side = 2048  # Match materials_v2 max_segmentation_
 ---
 
 #### 1.2 **Segmentation Confidence Threshold** 🟡 MODERATE
-**Current:** `min_confidence: 0.25`  
-**For Max Quality:** `0.15` or lower  
-**Impact:** Moderate - lower threshold = better recall, more material coverage  
+**Current:** `min_confidence: 0.25`
+**For Max Quality:** `0.15` or lower
+**Impact:** Moderate - lower threshold = better recall, more material coverage
 **Location:** `config.py:289`
 
 **Recommendation:**
@@ -86,9 +86,9 @@ self.segmentation.min_confidence = 0.15  # Increase recall for max coverage
 ### Category 2: Materials V2 Quality Parameters
 
 #### 2.1 **Materials V2 Confidence Threshold** 🟡 MODERATE
-**Current:** `confidence_threshold: 0.4`  
-**For Max Quality:** `0.3` (paired with lower segmentation threshold)  
-**Impact:** Moderate - affects material response strength gating  
+**Current:** `confidence_threshold: 0.4`
+**For Max Quality:** `0.3` (paired with lower segmentation threshold)
+**Impact:** Moderate - affects material response strength gating
 **Location:** `config.py:299`
 
 **Recommendation:**
@@ -104,9 +104,9 @@ self.materials_v2.confidence.confidence_threshold = 0.3
 ---
 
 #### 2.2 **Max Segmentation Side** 🟢 ACCEPTABLE
-**Current:** `max_segmentation_side: 2048`  
-**Maximum Possible:** 4096+ (limited by VRAM)  
-**Impact:** Low-Moderate - diminishing returns above 2048px  
+**Current:** `max_segmentation_side: 2048`
+**Maximum Possible:** 4096+ (limited by VRAM)
+**Impact:** Low-Moderate - diminishing returns above 2048px
 **Location:** `config.py:313`
 
 **Recommendation:** Keep at 2048px for now
@@ -117,9 +117,9 @@ self.materials_v2.confidence.confidence_threshold = 0.3
 ---
 
 #### 2.3 **Require High Quality Flag** 🔴 CRITICAL QUALITY COMPROMISE
-**Current:** `require_high_quality: False`  
-**For Max Quality:** `True`  
-**Impact:** HIGH - disables quality validation entirely  
+**Current:** `require_high_quality: False`
+**For Max Quality:** `True`
+**Impact:** HIGH - disables quality validation entirely
 **Location:** `config.py:318`
 
 **Recommendation:**
@@ -136,9 +136,9 @@ self.materials_v2.segmentation.require_high_quality = True
 ---
 
 #### 2.4 **Quality Threshold** 🟡 MODERATE
-**Current:** `quality_threshold: 0.4`  
-**For Max Quality:** `0.5` or `0.55`  
-**Impact:** Moderate - only matters if `require_high_quality=True`  
+**Current:** `quality_threshold: 0.4`
+**For Max Quality:** `0.5` or `0.55`
+**Impact:** Moderate - only matters if `require_high_quality=True`
 **Location:** `config.py:319`
 
 **Recommendation:**
@@ -154,9 +154,9 @@ self.materials_v2.segmentation.quality_threshold = 0.55
 ---
 
 #### 2.5 **Material-Specific Confidence Thresholds** 🟢 ACCEPTABLE
-**Current:** Mixed thresholds (wood=0.55, glass=0.45, etc.)  
-**For Max Quality:** Could be lowered for better coverage  
-**Impact:** Low - well-tuned per material  
+**Current:** Mixed thresholds (wood=0.55, glass=0.45, etc.)
+**For Max Quality:** Could be lowered for better coverage
+**Impact:** Low - well-tuned per material
 **Location:** `config.py:300-308`
 
 **Recommendation:** Keep current values
@@ -169,9 +169,9 @@ self.materials_v2.segmentation.quality_threshold = 0.55
 ### Category 3: Upscaling Quality
 
 #### 3.1 **Upscaler Backend** 🟡 MODERATE
-**Current:** `torch` (TorchUpscaler with bicubic interpolation)  
-**Higher Quality Option:** ONNX with custom high-quality model  
-**Impact:** Moderate - depends on ONNX model quality  
+**Current:** `torch` (TorchUpscaler with bicubic interpolation)
+**Higher Quality Option:** ONNX with custom high-quality model
+**Impact:** Moderate - depends on ONNX model quality
 **Location:** Not set in preset (defaults to config default)
 
 **Recommendation:**
@@ -194,9 +194,9 @@ self.upscaler_backend = "torch"  # CURRENT - SAFE
 ---
 
 #### 3.2 **Upscaling Tile Size** 🟢 ACCEPTABLE
-**Current:** `tile: 512` (default from PipelineConfig)  
-**For Max Quality:** 1024 or larger  
-**Impact:** Low - larger tiles reduce seam artifacts  
+**Current:** `tile: 512` (default from PipelineConfig)
+**For Max Quality:** 1024 or larger
+**Impact:** Low - larger tiles reduce seam artifacts
 **Location:** `config.py:141`
 
 **Recommendation:**
@@ -213,9 +213,9 @@ self.tile = 1024  # Larger tiles for seamless upscaling (if VRAM allows)
 ---
 
 #### 3.3 **Upscaling Tile Padding** 🟢 ACCEPTABLE
-**Current:** `tile_pad: 16`  
-**For Max Quality:** 32-64  
-**Impact:** Low - larger padding reduces edge artifacts  
+**Current:** `tile_pad: 16`
+**For Max Quality:** 32-64
+**Impact:** Low - larger padding reduces edge artifacts
 **Location:** `config.py:142`
 
 **Recommendation:**
@@ -232,9 +232,9 @@ self.tile_pad = 32  # Reduce edge artifacts (if tiled upscaling used)
 ### Category 4: Precision and Device Settings
 
 #### 4.1 **Precision** 🟡 MODERATE
-**Current:** Defaults to `fp16` (cuda) or `fp32` (cpu/mps)  
-**For Max Quality:** `fp32` everywhere  
-**Impact:** Moderate - fp32 has higher numerical precision  
+**Current:** Defaults to `fp16` (cuda) or `fp32` (cpu/mps)
+**For Max Quality:** `fp32` everywhere
+**Impact:** Moderate - fp32 has higher numerical precision
 **Location:** Not set in preset (uses PipelineConfig default)
 
 **Recommendation:**
@@ -254,9 +254,9 @@ self.half = False  # Disable fp16 even on CUDA
 ### Category 5: Post-Processing Quality
 
 #### 5.1 **Post-Processing Tile Size** 🟢 ACCEPTABLE
-**Current:** `post_tile: 2048`  
-**For Max Quality:** Disable tiling (0) if VRAM allows  
-**Impact:** Low - disabling tiling = no seams, slightly sharper  
+**Current:** `post_tile: 2048`
+**For Max Quality:** Disable tiling (0) if VRAM allows
+**Impact:** Low - disabling tiling = no seams, slightly sharper
 **Location:** `config.py:282`
 
 **Recommendation:**
@@ -277,9 +277,9 @@ self.post_tile = 2048
 ---
 
 #### 5.2 **Post-Processing Tile Overlap** 🟢 ACCEPTABLE
-**Current:** `post_overlap: 64`  
-**For Max Quality:** 128-256  
-**Impact:** Low - larger overlap reduces seam visibility  
+**Current:** `post_overlap: 64`
+**For Max Quality:** 128-256
+**Impact:** Low - larger overlap reduces seam visibility
 **Location:** `config.py:283`
 
 **Recommendation:**
@@ -297,9 +297,9 @@ self.post_overlap = 128  # Smoother seam blending
 ### Category 6: Export Quality Settings
 
 #### 6.1 **Marketing PNG Compression** 🟡 MODERATE
-**Current:** `marketing_png_compression: 1` (default)  
-**For Max Quality:** `0` (no compression)  
-**Impact:** Low-Moderate - affects marketing PNG file quality  
+**Current:** `marketing_png_compression: 1` (default)
+**For Max Quality:** `0` (no compression)
+**Impact:** Low-Moderate - affects marketing PNG file quality
 **Location:** Not set in preset (uses default)
 
 **Recommendation:**
@@ -315,9 +315,9 @@ self.marketing_png_compression = 0  # Lossless PNG for max quality
 ---
 
 #### 6.2 **TIFF Compression** 🟡 MODERATE
-**Current:** `deflate` (default in Phase2Config)  
-**For Max Quality:** `None` (uncompressed)  
-**Impact:** Low - TIFF compression is lossless but may reduce precision in edge cases  
+**Current:** `deflate` (default in Phase2Config)
+**For Max Quality:** `None` (uncompressed)
+**Impact:** Low - TIFF compression is lossless but may reduce precision in edge cases
 **Location:** Phase2Config (if enabled)
 
 **Recommendation:**
@@ -336,9 +336,9 @@ self.phase2.tiff_compression = None  # Uncompressed TIFF for absolute max qualit
 ### Category 7: Phase 2 Optimizations (Performance vs Quality Tradeoffs)
 
 #### 7.1 **Phase 2 Optimizations** 🔴 CRITICAL QUESTION
-**Current:** `phase2: None` (Phase 2 optimizations disabled)  
-**For Max Quality:** Keep disabled OR enable with quality-first settings  
-**Impact:** Variable - depends on which Phase 2 features are enabled  
+**Current:** `phase2: None` (Phase 2 optimizations disabled)
+**For Max Quality:** Keep disabled OR enable with quality-first settings
+**Impact:** Variable - depends on which Phase 2 features are enabled
 **Location:** Not set in preset
 
 **Analysis:**
@@ -372,25 +372,25 @@ self.phase2 = Phase2Config(
 ---
 
 #### 7.2 **Streaming Upscale** 🟡 MODERATE (if Phase 2 enabled)
-**Current:** N/A (Phase 2 disabled)  
-**Default:** `True` (Phase2Config)  
-**For Max Quality:** `False`  
+**Current:** N/A (Phase 2 disabled)
+**Default:** `True` (Phase2Config)
+**For Max Quality:** `False`
 **Impact:** Moderate - streaming may reduce quality at tile boundaries
 
 ---
 
 #### 7.3 **Tile-Based Upscaling** 🟡 MODERATE (if Phase 2 enabled)
-**Current:** N/A (Phase 2 disabled)  
-**Default:** `True` (Phase2Config)  
-**For Max Quality:** `False`  
+**Current:** N/A (Phase 2 disabled)
+**Default:** `True` (Phase2Config)
+**For Max Quality:** `False`
 **Impact:** Moderate - tiling introduces seams
 
 ---
 
 #### 7.4 **Progressive Upscaling** 🟡 MODERATE (if Phase 2 enabled)
-**Current:** N/A (Phase 2 disabled)  
-**Default:** `True` (Phase2Config: 2×2 instead of 4×)  
-**For Max Quality:** `False`  
+**Current:** N/A (Phase 2 disabled)
+**Default:** `True` (Phase2Config: 2×2 instead of 4×)
+**For Max Quality:** `False`
 **Impact:** Moderate - progressive may reduce sharpness
 
 ---
@@ -398,8 +398,8 @@ self.phase2 = Phase2Config(
 ### Category 8: Depth Processing Quality
 
 #### 8.1 **Depth Map Precision** 🟢 OPTIMAL
-**Current:** 16-bit TIFF (Depth Anything V2 Large)  
-**For Max Quality:** Already optimal  
+**Current:** 16-bit TIFF (Depth Anything V2 Large)
+**For Max Quality:** Already optimal
 **Impact:** N/A - already using highest precision depth
 
 **Finding:** ✅ Already optimal
@@ -407,9 +407,9 @@ self.phase2 = Phase2Config(
 ---
 
 #### 8.2 **Depth Preprocessing** 🟡 MODERATE (Feature Not Exposed)
-**Current:** No explicit depth preprocessing  
-**Potential Enhancement:** Depth normalization, histogram equalization, edge-preserving smoothing  
-**Impact:** Low-Moderate - could improve zone weight quality  
+**Current:** No explicit depth preprocessing
+**Potential Enhancement:** Depth normalization, histogram equalization, edge-preserving smoothing
+**Impact:** Low-Moderate - could improve zone weight quality
 **Location:** Not exposed in config
 
 **Recommendation:** Consider adding optional depth preprocessing
@@ -432,9 +432,9 @@ self.depth_preprocessing = DepthPreprocessConfig(
 ### Category 9: Detail Transfer Quality
 
 #### 9.1 **Detail Transfer Strength** 🟢 ACCEPTABLE
-**Current:** `detail_strength: 0.70`  
-**For Max Quality:** Could increase to 0.75-0.80  
-**Impact:** Low - higher values = more AI detail  
+**Current:** `detail_strength: 0.70`
+**For Max Quality:** Could increase to 0.75-0.80
+**Impact:** Low - higher values = more AI detail
 **Location:** `config.py:278`
 
 **Recommendation:**
@@ -450,9 +450,9 @@ self.detail_strength = 0.75  # Slightly higher for max detail transfer
 ---
 
 #### 9.2 **Detail Sigma** 🟢 ACCEPTABLE
-**Current:** `detail_sigma: 1.2`  
-**For Max Quality:** Keep at 1.2 or slightly lower (1.0)  
-**Impact:** Low - sigma controls detail transfer blur radius  
+**Current:** `detail_sigma: 1.2`
+**For Max Quality:** Keep at 1.2 or slightly lower (1.0)
+**Impact:** Low - sigma controls detail transfer blur radius
 **Location:** PipelineConfig default
 
 **Recommendation:** Keep at 1.2 (already optimal)
@@ -467,8 +467,8 @@ self.detail_strength = 0.75  # Slightly higher for max detail transfer
 - `clarity_mid: 0.12` (midground)
 - `clarity_bg: 0.06` (background)
 
-**For Max Quality:** Already aggressive  
-**Impact:** Low - already at high values  
+**For Max Quality:** Already aggressive
+**Impact:** Low - already at high values
 **Location:** `config.py:279`
 
 **Recommendation:** Keep current values (already optimal for luxury interiors)
@@ -481,8 +481,8 @@ self.detail_strength = 0.75  # Slightly higher for max detail transfer
 - `sharpen_mid: 0.06`
 - `sharpen_bg: 0.035`
 
-**For Max Quality:** Already optimal  
-**Impact:** Low  
+**For Max Quality:** Already optimal
+**Impact:** Low
 **Location:** `config.py:280`
 
 **Recommendation:** Keep current values
@@ -492,9 +492,9 @@ self.detail_strength = 0.75  # Slightly higher for max detail transfer
 ### Category 11: Color Grading Quality
 
 #### 11.1 **Temperature/Saturation/Contrast** 🟢 OPTIMAL
-**Current:** Tuned for luxury interiors  
-**For Max Quality:** Already optimal  
-**Impact:** Aesthetic preference, not quality metric  
+**Current:** Tuned for luxury interiors
+**For Max Quality:** Already optimal
+**Impact:** Aesthetic preference, not quality metric
 **Location:** `config.py:275-277`
 
 **Recommendation:** Keep current values (preset-specific)
@@ -504,7 +504,7 @@ self.detail_strength = 0.75  # Slightly higher for max detail transfer
 ### Category 12: Advanced/Experimental Features
 
 #### 12.1 **Undocumented Quality Features** ❓ UNKNOWN
-**Finding:** Code search revealed no commented-out experimental features  
+**Finding:** Code search revealed no commented-out experimental features
 **Impact:** N/A
 
 **Recommendation:** No hidden features identified
@@ -512,9 +512,9 @@ self.detail_strength = 0.75  # Slightly higher for max detail transfer
 ---
 
 #### 12.2 **Custom ONNX Upscaling Model** 🟡 MODERATE (if available)
-**Current:** Not configured  
-**Potential:** Use custom-trained ONNX model for highest quality  
-**Impact:** High IF high-quality model available  
+**Current:** Not configured
+**Potential:** Use custom-trained ONNX model for highest quality
+**Impact:** High IF high-quality model available
 **Location:** Not set
 
 **Recommendation:**
@@ -535,9 +535,9 @@ self.model_sha256 = "abc123..."  # Verify model integrity
 ### Category 13: Device-Specific Quality Features
 
 #### 13.1 **Apple Neural Engine (ANE) Optimization** 🟢 ENABLED
-**Current:** Platform Core integration enables ANE when available  
-**For Max Quality:** Already optimal  
-**Impact:** N/A (performance optimization, not quality)  
+**Current:** Platform Core integration enables ANE when available
+**For Max Quality:** Already optimal
+**Impact:** N/A (performance optimization, not quality)
 **Location:** torch_ops.py
 
 **Finding:** ✅ Already optimal (automatic via Platform Core)
@@ -545,9 +545,9 @@ self.model_sha256 = "abc123..."  # Verify model integrity
 ---
 
 #### 13.2 **CUDA Tensor Cores** 🟢 ENABLED
-**Current:** `cudnn_benchmark: True`  
-**For Max Quality:** Already optimal  
-**Impact:** N/A (performance optimization)  
+**Current:** `cudnn_benchmark: True`
+**For Max Quality:** Already optimal
+**Impact:** N/A (performance optimization)
 **Location:** PipelineConfig default
 
 **Finding:** ✅ Already optimal
@@ -557,29 +557,29 @@ self.model_sha256 = "abc123..."  # Verify model integrity
 ### Category 14: Missing Quality-Enhancing Features
 
 #### 14.1 **HDR Processing** ❌ NOT AVAILABLE
-**Status:** No HDR tone mapping or color space conversion  
-**Impact:** N/A for SDR workflows  
+**Status:** No HDR tone mapping or color space conversion
+**Impact:** N/A for SDR workflows
 **Recommendation:** Not applicable for current use case
 
 ---
 
 #### 14.2 **Advanced Color Science** ❌ NOT AVAILABLE
-**Status:** No ACES/ODT transforms, no color space conversion  
-**Impact:** Low - current RGB workflow is adequate  
+**Status:** No ACES/ODT transforms, no color space conversion
+**Impact:** Low - current RGB workflow is adequate
 **Recommendation:** Future enhancement for broadcast/archival workflows
 
 ---
 
 #### 14.3 **Multi-Scale Processing** ❌ NOT AVAILABLE
-**Status:** No multi-scale detail transfer or clarity enhancement  
-**Impact:** Low-Moderate  
+**Status:** No multi-scale detail transfer or clarity enhancement
+**Impact:** Low-Moderate
 **Recommendation:** Future enhancement for extreme detail preservation
 
 ---
 
 #### 14.4 **Adaptive Processing** ❌ PARTIALLY AVAILABLE
-**Status:** Depth-aware processing exists, but no scene-adaptive parameter tuning  
-**Impact:** Low  
+**Status:** Depth-aware processing exists, but no scene-adaptive parameter tuning
+**Impact:** Low
 **Recommendation:** Phase 2 autotune provides some adaptivity
 
 ---
@@ -598,35 +598,35 @@ elif p == Preset.INTERIOR_LUXURY_MAX_QUALITY:
     self.detail_strength = 0.75  # ⬆️ Increased from 0.70
     self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.20, 0.12, 0.06
     self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.09, 0.06, 0.035
-    
+
     # APEX: Maximum precision
     self.precision = "fp32"  # ⬆️ NEW: Maximum numerical precision
     self.half = False  # ⬆️ NEW: Disable fp16 even on CUDA
-    
+
     # APEX: Disable tiling for seamless processing (HIGH VRAM)
     # self.post_tile = 0  # ⬆️ OPTIONAL: Disable tiling (use only if 24GB+ VRAM)
     self.post_tile = 2048  # SAFE: Keep for stability
     self.post_overlap = 128  # ⬆️ Increased from 64
     self.validate_ai = True
-    
+
     # APEX: Maximum upscaling quality
     self.tile = 1024  # ⬆️ Increased from 512 (for ONNX/tiled backends)
     self.tile_pad = 32  # ⬆️ Increased from 16
-    
+
     # APEX: Maximum export quality
     self.marketing_png_compression = 0  # ⬆️ NEW: Lossless PNG
-    
+
     # APEX: Maximum segmentation quality
     self.segmentation.backend = "segformer"
     self.segmentation.input_long_side = 2048  # ⬆️ Increased from 1280
     self.segmentation.min_confidence = 0.15  # ⬆️ Lowered from 0.25 (better recall)
     self.segmentation.allow_downloads = True
-    
+
     # APEX: Maximum Materials V2 quality
     if self.materials_v2 is None:
         from lux_depth_v2.materials_v2 import MaterialsV2Config
         self.materials_v2 = MaterialsV2Config()
-    
+
     self.materials_v2.enabled = True
     self.materials_v2.confidence.confidence_threshold = 0.3  # ⬆️ Lowered from 0.4
     self.materials_v2.confidence.material_thresholds = {
@@ -649,7 +649,7 @@ elif p == Preset.INTERIOR_LUXURY_MAX_QUALITY:
     self.materials_v2.segmentation.edge_feather_sigma = 1.0
     self.materials_v2.segmentation.require_high_quality = True  # ⬆️ Changed from False
     self.materials_v2.segmentation.quality_threshold = 0.55  # ⬆️ Increased from 0.4
-    
+
     # APEX: Disable Phase 2 performance optimizations
     self.phase2 = None  # Keep disabled for max quality
 ```

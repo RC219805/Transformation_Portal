@@ -186,19 +186,19 @@ This implementation complements existing performance infrastructure:
 
 ### Before PR #608
 
-❌ Production claims (127-400 images/hour) were unvalidated  
-❌ No baseline to measure against  
-❌ Performance regressions could merge silently  
-❌ No automated throughput validation in CI  
+❌ Production claims (127-400 images/hour) were unvalidated
+❌ No baseline to measure against
+❌ Performance regressions could merge silently
+❌ No automated throughput validation in CI
 
 ### After PR #608
 
-✅ Throughput validated on every PR  
-✅ Conservative baselines prevent catastrophic regressions  
-✅ CI blocks merges if throughput < baseline  
-✅ PR comments provide transparency  
-✅ Artifacts enable trend analysis  
-✅ Foundation for future performance monitoring  
+✅ Throughput validated on every PR
+✅ Conservative baselines prevent catastrophic regressions
+✅ CI blocks merges if throughput < baseline
+✅ PR comments provide transparency
+✅ Artifacts enable trend analysis
+✅ Foundation for future performance monitoring
 
 ## Files Changed
 
@@ -268,6 +268,6 @@ PR #608 successfully implements **automated throughput validation**, closing a c
 
 ---
 
-**PR #608 Status:** ✅ **COMPLETE AND READY FOR REVIEW**  
-**Implements:** P0-2 from Performance Readiness Assessment  
+**PR #608 Status:** ✅ **COMPLETE AND READY FOR REVIEW**
+**Implements:** P0-2 from Performance Readiness Assessment
 **Next:** P0-3 (Enable Phase 2 benchmark by default)

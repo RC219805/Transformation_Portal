@@ -69,13 +69,13 @@ production_model:
   validation_pass_rate: 84.8%
   texture_pass_rate: 97.4%
   structure_pass_rate: 25.0%
-  
+
 deferred_models:
   - name: "DA3-Large-1.1"
     reason: "Edge fidelity incompatibility"
     validation_pass_rate: 13.0%
     defer_until: "Ground truth depth + fine-tuning resources available"
-    
+
 next_optimization:
   target: "Structure scenes (25% → 60%+)"
   approach: "Input-size sweep (518px → 1022px)"

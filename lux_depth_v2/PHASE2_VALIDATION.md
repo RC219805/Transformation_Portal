@@ -1,7 +1,7 @@
 # Phase 2 Validation Framework
 
-**Status**: Foundation Complete  
-**Purpose**: Define validation methodology for Phase 2 features  
+**Status**: Foundation Complete
+**Purpose**: Define validation methodology for Phase 2 features
 **Scope**: EfficientSAM, CLIP, Expanded Taxonomy, Lighting Detection
 
 ---
@@ -40,16 +40,16 @@ def validate_boundary_precision(pred_mask, gt_mask, tolerance_px=2):
     # Extract boundaries
     pred_boundary = extract_boundary(pred_mask)
     gt_boundary = extract_boundary(gt_mask)
-    
+
     # Compute boundary recall
     distances = distance_transform(gt_boundary, pred_boundary)
     recall = (distances <= tolerance_px).sum() / gt_boundary.sum()
-    
+
     # Compute boundary IoU
     pred_band = dilate(pred_boundary, tolerance_px)
     gt_band = dilate(gt_boundary, tolerance_px)
     iou = (pred_band & gt_band).sum() / (pred_band | gt_band).sum()
-    
+
     return {
         'boundary_recall': recall,
         'boundary_iou': iou,
@@ -92,35 +92,35 @@ def validate_boundary_precision(pred_mask, gt_mask, tolerance_px=2):
 def validate_clip_classification(image, gt_labels):
     """Validate CLIP zero-shot classification."""
     classifier = CLIPMaterialClassifier(device)
-    
+
     results = {}
     for region_name, (bbox, gt_label) in gt_labels.items():
         region = crop_image(image, bbox)
         scores = classifier.classify_image(region)
-        
+
         # Top-1 accuracy
         pred_label = max(scores, key=scores.get)
         top1_correct = (pred_label == gt_label)
-        
+
         # Top-3 accuracy
         top3_labels = sorted(scores, key=scores.get, reverse=True)[:3]
         top3_correct = (gt_label in top3_labels)
-        
+
         # Confidence score
         confidence = scores[gt_label]
-        
+
         results[region_name] = {
             'top1_correct': top1_correct,
             'top3_correct': top3_correct,
             'confidence': confidence,
             'pred_label': pred_label,
         }
-    
+
     # Aggregate metrics
     top1_acc = sum(r['top1_correct'] for r in results.values()) / len(results)
     top3_acc = sum(r['top3_correct'] for r in results.values()) / len(results)
     avg_conf = sum(r['confidence'] for r in results.values()) / len(results)
-    
+
     return {
         'top1_accuracy': top1_acc,
         'top3_accuracy': top3_acc,
@@ -163,16 +163,16 @@ def validate_clip_classification(image, gt_labels):
 def validate_taxonomy_coverage(masks, confidences, image_shape):
     """Validate expanded taxonomy coverage."""
     total_pixels = image_shape[0] * image_shape[1]
-    
+
     # Count classified pixels
     classified_mask = np.zeros(image_shape, dtype=bool)
     for material, mask in masks.items():
         classified_mask |= (mask > 0.5)
     classified_pixels = classified_mask.sum()
-    
+
     # Coverage percentage
     coverage_pct = classified_pixels / total_pixels
-    
+
     # Per-class statistics
     class_stats = {}
     for material, mask in masks.items():
@@ -184,7 +184,7 @@ def validate_taxonomy_coverage(masks, confidences, image_shape):
                 'percentage': material_pixels / total_pixels,
                 'avg_confidence': avg_conf,
             }
-    
+
     return {
         'coverage_percentage': coverage_pct,
         'classified_pixels': classified_pixels,
@@ -225,24 +225,24 @@ def validate_taxonomy_coverage(masks, confidences, image_shape):
 def validate_lighting_detection(image, gt_lighting):
     """Validate lighting condition detection."""
     detector = LightingConditionDetector(device)
-    
+
     # Detect lighting (with depth map and sky mask)
     depth_map = generate_depth_map(image)
     sky_mask = segment_sky(image)
     condition = detector.detect(image, depth_map, sky_mask)
-    
+
     # Validate time of day
     tod_correct = (condition.time_of_day == gt_lighting['time_of_day'])
     tod_confidence = condition.confidence
-    
+
     # Validate sky characteristics (with tolerance)
     sky_coverage_ok = abs(condition.sky_coverage - gt_lighting['sky_coverage']) < 0.1
     color_temp_ok = abs(condition.sky_color_temp - gt_lighting['color_temp']) < 1000
     warmth_ok = abs(condition.warmth - gt_lighting['warmth']) < 0.3
-    
+
     # Validate shadow detection
     shadows_ok = (condition.has_strong_shadows == gt_lighting['has_shadows'])
-    
+
     return {
         'time_of_day_correct': tod_correct,
         'time_of_day_confidence': tod_confidence,
@@ -345,18 +345,18 @@ def compare_phase1_vs_phase2(image_path):
     # Phase 1 processing
     phase1_output = process_with_segformer(image_path)
     phase1_metrics = compute_metrics(phase1_output)
-    
+
     # Phase 2 processing
     phase2_output = process_with_efficientsam_clip(image_path)
     phase2_metrics = compute_metrics(phase2_output)
-    
+
     # Compute improvements
     improvements = {
         'boundary_precision': (phase2_metrics['boundary_recall'] - phase1_metrics['boundary_recall']) / phase1_metrics['boundary_recall'],
         'classification_accuracy': (phase2_metrics['accuracy'] - phase1_metrics['accuracy']) / phase1_metrics['accuracy'],
         'coverage': (phase2_metrics['coverage'] - phase1_metrics['coverage']) / phase1_metrics['coverage'],
     }
-    
+
     return {
         'phase1': phase1_metrics,
         'phase2': phase2_metrics,
@@ -380,20 +380,20 @@ def measure_boundary_precision(pred_mask, gt_mask, tolerance_px=2):
     # Extract boundaries (edge detection)
     pred_edge = extract_edges(pred_mask)
     gt_edge = extract_edges(gt_mask)
-    
+
     # Distance from prediction to ground truth
     dist_to_gt = distance_transform_edt(~gt_edge)
-    
+
     # Boundary recall: % of pred edge within tolerance of GT edge
     recall = (dist_to_gt[pred_edge] <= tolerance_px).sum() / pred_edge.sum()
-    
+
     # Boundary precision: % of GT edge within tolerance of pred edge
     dist_to_pred = distance_transform_edt(~pred_edge)
     precision = (dist_to_pred[gt_edge] <= tolerance_px).sum() / gt_edge.sum()
-    
+
     # F1 score
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-    
+
     return {
         'boundary_recall': recall,
         'boundary_precision': precision,
@@ -421,17 +421,17 @@ def measure_classification_accuracy(predictions, ground_truth):
     # Flatten predictions and ground truth
     pred_labels = []
     gt_labels = []
-    
+
     for region_id in ground_truth.keys():
         pred_labels.append(predictions[region_id])
         gt_labels.append(ground_truth[region_id])
-    
+
     # Compute confusion matrix
     cm = confusion_matrix(gt_labels, pred_labels)
-    
+
     # Classification report (per-class metrics)
     report = classification_report(gt_labels, pred_labels, output_dict=True)
-    
+
     return {
         'confusion_matrix': cm,
         'overall_accuracy': report['accuracy'],
@@ -477,16 +477,16 @@ def measure_color_accuracy(output_image, reference_image):
     # Convert to LAB color space
     output_lab = rgb2lab(output_image)
     ref_lab = rgb2lab(reference_image)
-    
+
     # Compute CIEDE2000 color distance
     color_dist = deltaE_ciede2000(ref_lab, output_lab)
     avg_color_dist = color_dist.mean()
-    
+
     # Luma difference
     output_luma = 0.299 * output_image[..., 0] + 0.587 * output_image[..., 1] + 0.114 * output_image[..., 2]
     ref_luma = 0.299 * reference_image[..., 0] + 0.587 * reference_image[..., 1] + 0.114 * reference_image[..., 2]
     luma_diff = abs(output_luma - ref_luma).mean()
-    
+
     return {
         'avg_color_distance': avg_color_dist,
         'max_color_distance': color_dist.max(),
@@ -528,8 +528,8 @@ def measure_color_accuracy(output_image, reference_image):
 ```markdown
 # Phase 2 Validation Report
 
-**Scene**: 750Picacho_Pool / 750Picacho_Kitchen  
-**Date**: YYYY-MM-DD  
+**Scene**: 750Picacho_Pool / 750Picacho_Kitchen
+**Date**: YYYY-MM-DD
 **Validator**: [Name]
 
 ## 1. EfficientSAM Boundary Precision
@@ -593,48 +593,48 @@ All validation criteria met. Ready for production deployment.
 def run_phase2_validation(test_scenes):
     """Run complete Phase 2 validation suite."""
     results = {}
-    
+
     for scene in test_scenes:
         print(f"Validating scene: {scene['name']}")
-        
+
         # Load test data
         image = load_image(scene['image_path'])
         gt_data = load_ground_truth(scene['gt_path'])
-        
+
         # Run Phase 1 (baseline)
         phase1_output = run_phase1_pipeline(image)
-        
+
         # Run Phase 2 (EfficientSAM + CLIP)
         phase2_output = run_phase2_pipeline(image)
-        
+
         # Validate EfficientSAM
         efficientsam_metrics = validate_boundary_precision(
             phase2_output['masks'], gt_data['boundary_annotations']
         )
-        
+
         # Validate CLIP
         clip_metrics = validate_clip_classification(
             image, gt_data['material_labels']
         )
-        
+
         # Validate Coverage
         coverage_metrics = validate_taxonomy_coverage(
             phase2_output['masks'],
             phase2_output['confidences'],
             image.shape[:2]
         )
-        
+
         # Validate Lighting
         lighting_metrics = validate_lighting_detection(
             image, gt_data['lighting_metadata']
         )
-        
+
         # Performance
         perf_metrics = {
             'total_time': phase2_output['timing']['total'],
             'memory_peak': phase2_output['memory']['peak_vram_gb'],
         }
-        
+
         results[scene['name']] = {
             'efficientsam': efficientsam_metrics,
             'clip': clip_metrics,
@@ -643,10 +643,10 @@ def run_phase2_validation(test_scenes):
             'performance': perf_metrics,
             'overall_pass': check_all_criteria(efficientsam_metrics, clip_metrics, coverage_metrics, lighting_metrics, perf_metrics),
         }
-    
+
     # Generate validation report
     generate_validation_report(results)
-    
+
     return results
 
 
@@ -655,9 +655,9 @@ if __name__ == '__main__':
         {'name': 'pool', 'image_path': 'test/750Picacho_Pool.jpg', 'gt_path': 'test/pool_gt.json'},
         {'name': 'kitchen', 'image_path': 'test/750Picacho_Kitchen.jpg', 'gt_path': 'test/kitchen_gt.json'},
     ]
-    
+
     results = run_phase2_validation(test_scenes)
-    
+
     if all(r['overall_pass'] for r in results.values()):
         print("✅ Phase 2 Validation: PASS")
         exit(0)
@@ -668,5 +668,5 @@ if __name__ == '__main__':
 
 ---
 
-**Phase 2 Validation Framework Complete** ✅  
+**Phase 2 Validation Framework Complete** ✅
 **Ready for Implementation Testing** 🧪

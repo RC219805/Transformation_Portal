@@ -67,11 +67,11 @@ echo ""
 echo "2.1 Capturing edge case performance baseline..."
 if pytest tests/test_materials_v3_edge_cases.py -v --durations=0 > phase2_baseline_edge_cases.log 2>&1; then
     echo -e "${GREEN}✓${NC} Edge case tests executed successfully"
-    
+
     # Extract duration
     TOTAL_DURATION=$(grep -oP '\d+\.\d+(?=s)' phase2_baseline_edge_cases.log | tail -1 || echo "0.0")
     echo "  Total duration: ${TOTAL_DURATION}s"
-    
+
     # Count tests
     TESTS_PASSED=$(grep -c "PASSED" phase2_baseline_edge_cases.log || echo "0")
     TESTS_SKIPPED=$(grep -c "SKIPPED" phase2_baseline_edge_cases.log || echo "0")

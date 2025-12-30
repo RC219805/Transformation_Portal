@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Small epsilon values to avoid division by zero
 EPSILON_SMALL = 1e-6  # For general division safety
-EPSILON_TINY = 1e-8   # For geometric calculations requiring higher precision
+EPSILON_TINY = 1e-8  # For geometric calculations requiring higher precision
 
 # ============================================================================
 # 1. MATERIAL SYSTEM RECONSTRUCTION
@@ -43,6 +43,7 @@ EPSILON_TINY = 1e-8   # For geometric calculations requiring higher precision
 
 class MaterialType(Enum):
     """Physically-based material types."""
+
     PLASTER = "plaster"
     STONE = "stone"
     WOOD = "wood"
@@ -54,6 +55,7 @@ class MaterialType(Enum):
 @dataclass
 class PBRMaterialProperties:
     """Physically-based rendering material properties."""
+
     name: str
     albedo_color: Tuple[float, float, float]  # Base color (RGB)
     roughness: float = 0.5  # 0.0 (mirror) to 1.0 (diffuse)
@@ -74,7 +76,7 @@ class MaterialSystemReconstructor:
             metallic=0.0,
             subsurface_scattering=0.15,
             luminance_variation=0.08,
-            grain_intensity=0.25
+            grain_intensity=0.25,
         ),
         MaterialType.STONE: PBRMaterialProperties(
             name="Travertine/Warm Limestone",
@@ -83,7 +85,7 @@ class MaterialSystemReconstructor:
             metallic=0.0,
             subsurface_scattering=0.08,
             luminance_variation=0.175,  # 15-20% luminance variation
-            grain_intensity=0.45
+            grain_intensity=0.45,
         ),
         MaterialType.WOOD: PBRMaterialProperties(
             name="Walnut/Teak",
@@ -92,7 +94,7 @@ class MaterialSystemReconstructor:
             metallic=0.0,
             subsurface_scattering=0.12,
             luminance_variation=0.25,
-            grain_intensity=0.75  # Visible grain at 50cm viewing distance
+            grain_intensity=0.75,  # Visible grain at 50cm viewing distance
         ),
         MaterialType.WATER: PBRMaterialProperties(
             name="Pool Water",
@@ -101,8 +103,8 @@ class MaterialSystemReconstructor:
             metallic=0.0,
             subsurface_scattering=0.85,
             luminance_variation=0.20,
-            grain_intensity=0.0
-        )
+            grain_intensity=0.0,
+        ),
     }
 
     def __init__(self):
@@ -132,11 +134,7 @@ class MaterialSystemReconstructor:
         wood_mask = warm_mask.astype(float)
         wood_mask = ndimage.gaussian_filter(wood_mask, sigma=2)
 
-        masks = {
-            MaterialType.WATER: water_mask,
-            MaterialType.STONE: stone_mask,
-            MaterialType.WOOD: wood_mask
-        }
+        masks = {MaterialType.WATER: water_mask, MaterialType.STONE: stone_mask, MaterialType.WOOD: wood_mask}
 
         # Print material coverage
         for mat_type, mask in masks.items():
@@ -186,6 +184,7 @@ class MaterialSystemReconstructor:
 # 2. ATMOSPHERIC INTEGRATION
 # ============================================================================
 
+
 class AtmosphericIntegrator:
     """Site-specific HDRI and mountain profile integration."""
 
@@ -209,20 +208,28 @@ class AtmosphericIntegrator:
         shadow_mask = luminance < 0.3
 
         # Cool highlights (higher color temp ~6500K)
-        enhanced[:, :, 2] = np.where(highlight_mask[:, :, 0],
-                                     enhanced[:, :, 2] * 1.08,  # Boost blue
-                                     enhanced[:, :, 2])
-        enhanced[:, :, 0] = np.where(highlight_mask[:, :, 0],
-                                     enhanced[:, :, 0] * 0.95,  # Reduce red
-                                     enhanced[:, :, 0])
+        enhanced[:, :, 2] = np.where(
+            highlight_mask[:, :, 0],
+            enhanced[:, :, 2] * 1.08,  # Boost blue
+            enhanced[:, :, 2],
+        )
+        enhanced[:, :, 0] = np.where(
+            highlight_mask[:, :, 0],
+            enhanced[:, :, 0] * 0.95,  # Reduce red
+            enhanced[:, :, 0],
+        )
 
         # Warm shadows (lower color temp ~2800K)
-        enhanced[:, :, 0] = np.where(shadow_mask[:, :, 0],
-                                     enhanced[:, :, 0] * 1.12,  # Boost red
-                                     enhanced[:, :, 0])
-        enhanced[:, :, 2] = np.where(shadow_mask[:, :, 0],
-                                     enhanced[:, :, 2] * 0.92,  # Reduce blue
-                                     enhanced[:, :, 2])
+        enhanced[:, :, 0] = np.where(
+            shadow_mask[:, :, 0],
+            enhanced[:, :, 0] * 1.12,  # Boost red
+            enhanced[:, :, 0],
+        )
+        enhanced[:, :, 2] = np.where(
+            shadow_mask[:, :, 0],
+            enhanced[:, :, 2] * 0.92,  # Reduce blue
+            enhanced[:, :, 2],
+        )
 
         print("  ✓ Blue hour color temperature applied (2700-3200K range)")
         print("  ✓ Mountain profile geometric integration (simulated)")
@@ -233,6 +240,7 @@ class AtmosphericIntegrator:
 # ============================================================================
 # 3. LIGHTING STRATIFICATION
 # ============================================================================
+
 
 class LightingStratification:
     """Multi-zone interior lighting with inverse-square falloff."""
@@ -253,7 +261,7 @@ class LightingStratification:
             # Simple depth estimation based on vertical position and luminance
             y_gradient = np.linspace(0, 1, h)[:, None] * np.ones((1, w))
             lum = np.mean(img, axis=2)
-            depth_map = (y_gradient * 0.7 + (1 - lum) * 0.3)
+            depth_map = y_gradient * 0.7 + (1 - lum) * 0.3
 
         # Divide into depth zones
         zone_boundaries = np.linspace(0, 1, self.num_zones + 1)
@@ -275,7 +283,7 @@ class LightingStratification:
 
             # Apply inverse-square falloff
             distance_factor = 1 + i
-            falloff = 1.0 / (distance_factor ** 2)
+            falloff = 1.0 / (distance_factor**2)
 
             # Color temperature adjustment
             if color_temp < 3000:  # Warmer
@@ -285,14 +293,10 @@ class LightingStratification:
 
             # Apply to zone
             for c, mult in enumerate([r_mult, g_mult, b_mult]):
-                enhanced[:, :, c] = np.where(
-                    zone_mask,
-                    enhanced[:, :, c] * mult * falloff,
-                    enhanced[:, :, c]
-                )
+                enhanced[:, :, c] = np.where(zone_mask, enhanced[:, :, c] * mult * falloff, enhanced[:, :, c])
 
             coverage = zone_mask.sum() / (h * w) * 100
-            print(f"    Zone {i+1}: {color_temp:.0f}K, falloff={falloff:.3f}, coverage={coverage:.1f}%")
+            print(f"    Zone {i + 1}: {color_temp:.0f}K, falloff={falloff:.3f}, coverage={coverage:.1f}%")
 
         # Preserve darkness in specified percentage of frame
         luminance = np.mean(enhanced, axis=2)
@@ -312,6 +316,7 @@ class LightingStratification:
 # ============================================================================
 # 4. STYLING RECTIFICATION
 # ============================================================================
+
 
 class StylingRectifier:
     """Remove prohibited elements and add museum-quality accessories."""
@@ -346,11 +351,7 @@ class StylingRectifier:
         if high_sat_mask.any():
             for c in range(3):
                 mean_val = np.mean(enhanced[:, :, c])
-                enhanced[:, :, c] = np.where(
-                    high_sat_mask,
-                    enhanced[:, :, c] * 0.92 + mean_val * 0.08,
-                    enhanced[:, :, c]
-                )
+                enhanced[:, :, c] = np.where(high_sat_mask, enhanced[:, :, c] * 0.92 + mean_val * 0.08, enhanced[:, :, c])
             print(f"    ✓ Reduced saturation in {high_sat_mask.sum() / high_sat_mask.size * 100:.1f}% of frame")
 
         return enhanced
@@ -359,6 +360,7 @@ class StylingRectifier:
 # ============================================================================
 # 5. POST-PRODUCTION DEPTH PROCESSING
 # ============================================================================
+
 
 class DepthPostProcessor:
     """Atmospheric scattering, luminance reduction, chromatic aberration."""
@@ -395,7 +397,7 @@ class DepthPostProcessor:
             enhanced[:, :, c] = np.where(
                 scatter_mask,
                 enhanced[:, :, c] * (1 - scatter_strength * 0.3) + haze_color[c] * scatter_strength * 0.3,
-                enhanced[:, :, c]
+                enhanced[:, :, c],
             )
 
         scatter_coverage = scatter_mask.sum() / (h * w) * 100
@@ -407,11 +409,7 @@ class DepthPostProcessor:
         luminance_reduction = 0.5  # 1 stop reduction: 2^(-1) = 0.5x luminance
 
         for c in range(3):
-            enhanced[:, :, c] = np.where(
-                background_mask,
-                enhanced[:, :, c] * luminance_reduction,
-                enhanced[:, :, c]
-            )
+            enhanced[:, :, c] = np.where(background_mask, enhanced[:, :, c] * luminance_reduction, enhanced[:, :, c])
 
         bg_coverage = background_mask.sum() / (h * w) * 100
         print(f"  ✓ Luminance reduced by 1-2 stops on background ({bg_coverage:.1f}%)")
@@ -428,7 +426,7 @@ class DepthPostProcessor:
         # Create radial distance map from center
         y, x = np.ogrid[:h, :w]
         center_y, center_x = h / 2, w / 2
-        dist = np.sqrt((x - center_x)**2 + (y - center_y)**2)
+        dist = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
         max_dist = np.sqrt(center_x**2 + center_y**2)
         dist_normalized = dist / max_dist
 
@@ -461,10 +459,12 @@ class DepthPostProcessor:
             blue_x = np.where(aberration_mask, blue_x, x)
 
             # Remap channels using map_coordinates
-            img_red = ndimage.map_coordinates(img[:, :, 0], [red_y.ravel(), red_x.ravel()],
-                                              order=1, mode='nearest').reshape(h, w)
-            img_blue = ndimage.map_coordinates(img[:, :, 2], [blue_y.ravel(), blue_x.ravel()],
-                                               order=1, mode='nearest').reshape(h, w)
+            img_red = ndimage.map_coordinates(img[:, :, 0], [red_y.ravel(), red_x.ravel()], order=1, mode="nearest").reshape(
+                h, w
+            )
+            img_blue = ndimage.map_coordinates(
+                img[:, :, 2], [blue_y.ravel(), blue_x.ravel()], order=1, mode="nearest"
+            ).reshape(h, w)
             img[:, :, 0] = img_red
             img[:, :, 2] = img_blue
             print("  ✓ Chromatic aberration applied to peripheral elements (large-format simulation)")
@@ -476,6 +476,7 @@ class DepthPostProcessor:
 # MAIN PIPELINE
 # ============================================================================
 
+
 class PicachoPoolRemediationPipeline:
     """Complete technical remediation pipeline orchestrator."""
 
@@ -486,13 +487,11 @@ class PicachoPoolRemediationPipeline:
         self.material_reconstructor = MaterialSystemReconstructor()
         self.atmospheric_integrator = AtmosphericIntegrator()
         self.lighting_stratification = LightingStratification(
-            num_zones=self.config.get('lighting_zones', 4),
-            darkness_preservation=self.config.get('darkness_preservation', 0.35)
+            num_zones=self.config.get("lighting_zones", 4),
+            darkness_preservation=self.config.get("darkness_preservation", 0.35),
         )
         self.styling_rectifier = StylingRectifier()
-        self.depth_processor = DepthPostProcessor(
-            distance_threshold_m=self.config.get('scattering_threshold_m', 30.0)
-        )
+        self.depth_processor = DepthPostProcessor(distance_threshold_m=self.config.get("scattering_threshold_m", 30.0))
 
     def _default_config(self) -> Dict:
         """
@@ -502,14 +501,14 @@ class PicachoPoolRemediationPipeline:
             Dict: Default configuration with all pipeline stages enabled.
         """
         return {
-            'lighting_zones': 4,
-            'darkness_preservation': 0.35,  # 35% of frame
-            'scattering_threshold_m': 30.0,
-            'enable_material_reconstruction': True,
-            'enable_atmospheric_integration': True,
-            'enable_lighting_stratification': True,
-            'enable_styling_rectification': True,
-            'enable_depth_processing': True,
+            "lighting_zones": 4,
+            "darkness_preservation": 0.35,  # 35% of frame
+            "scattering_threshold_m": 30.0,
+            "enable_material_reconstruction": True,
+            "enable_atmospheric_integration": True,
+            "enable_lighting_stratification": True,
+            "enable_styling_rectification": True,
+            "enable_depth_processing": True,
         }
 
     def process(self, input_path: Path, output_path: Path) -> bool:
@@ -548,24 +547,24 @@ class PicachoPoolRemediationPipeline:
         print(f"  ✓ Loaded: {w}x{h} pixels, {img.dtype}")
 
         # Stage 1: Material System Reconstruction
-        if self.config['enable_material_reconstruction']:
+        if self.config["enable_material_reconstruction"]:
             masks = self.material_reconstructor.detect_materials(img)
             img = self.material_reconstructor.apply_pbr_enhancement(img, masks)
 
         # Stage 2: Atmospheric Integration
-        if self.config['enable_atmospheric_integration']:
+        if self.config["enable_atmospheric_integration"]:
             img = self.atmospheric_integrator.apply_blue_hour_lighting(img)
 
         # Stage 3: Lighting Stratification
-        if self.config['enable_lighting_stratification']:
+        if self.config["enable_lighting_stratification"]:
             img = self.lighting_stratification.apply_multi_zone_lighting(img)
 
         # Stage 4: Styling Rectification
-        if self.config['enable_styling_rectification']:
+        if self.config["enable_styling_rectification"]:
             img = self.styling_rectifier.apply_styling_corrections(img)
 
         # Stage 5: Post-Production Depth Processing
-        if self.config['enable_depth_processing']:
+        if self.config["enable_depth_processing"]:
             img = self.depth_processor.apply_atmospheric_scattering(img)
 
         # Save output
@@ -589,17 +588,14 @@ class PicachoPoolRemediationPipeline:
     def _load_image(self, path: Path) -> Optional[np.ndarray]:
         """Load image file (TIFF, EXR, JPG, PNG)."""
         try:
-            if path.suffix.lower() in ['.exr']:
+            if path.suffix.lower() in [".exr"]:
                 # Load EXR
                 import imageio.v3 as iio
+
                 img = iio.imread(path)
                 img = img.astype(np.float32)
                 # Convert linear to sRGB
-                img = np.where(
-                    img <= 0.0031308,
-                    img * 12.92,
-                    1.055 * np.power(np.clip(img, 0, None), 1.0 / 2.4) - 0.055
-                )
+                img = np.where(img <= 0.0031308, img * 12.92, 1.055 * np.power(np.clip(img, 0, None), 1.0 / 2.4) - 0.055)
                 return np.clip(img, 0, 1)
             else:
                 # Load standard formats
@@ -653,28 +649,31 @@ class PicachoPoolRemediationPipeline:
             # PIL does not support 16-bit RGB TIFFs properly - use tifffile for true 16-bit RGB output.
             try:
                 import tifffile
+
                 # Try LZW compression, fallback to deflate if imagecodecs not available
                 try:
-                    tifffile.imwrite(path, img_uint16, compression='lzw', photometric='rgb')
-                    compression_type = 'LZW'
+                    tifffile.imwrite(path, img_uint16, compression="lzw", photometric="rgb")
+                    compression_type = "LZW"
                 except (KeyError, AttributeError):
                     # LZW not available, use deflate (zlib) instead
-                    tifffile.imwrite(path, img_uint16, compression='deflate', photometric='rgb')
-                    compression_type = 'deflate'
+                    tifffile.imwrite(path, img_uint16, compression="deflate", photometric="rgb")
+                    compression_type = "deflate"
                 file_size_mb = path.stat().st_size / 1024 / 1024
                 print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 16-bit TIFF, {compression_type})")
             except ImportError:
                 # Fallback: save as 8-bit if tifffile not available
                 print("  ⚠️  tifffile not available, **degrading to 8-bit** TIFF")
                 img_uint8 = (img_clipped * 255).astype(np.uint8)
-                img_pil = Image.fromarray(img_uint8, mode='RGB')
-                img_pil.save(path, compression='lzw')
+                img_pil = Image.fromarray(img_uint8, mode="RGB")
+                img_pil.save(path, compression="lzw")
                 file_size_mb = path.stat().st_size / 1024 / 1024
                 print(f"  ✓ Saved: {path.name} ({file_size_mb:.1f} MB, 8-bit TIFF)")
         except Exception as e:
             # Note: ImportError from tifffile is handled above; this block catches all other unexpected errors.
             print(f"❌ Error saving image to {path}: {type(e).__name__}: {e}")
             raise
+
+
 # ============================================================================
 # CLI ENTRY POINT
 # ============================================================================
@@ -684,26 +683,20 @@ def main() -> int:
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='750 Picacho Pool Technical Remediation Pipeline'
+    parser = argparse.ArgumentParser(description="750 Picacho Pool Technical Remediation Pipeline")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=Path(__file__).parent / "Final_Production_UltraQuality" / "750Picacho_Pool_UltraQuality.tif",
+        help="Input image path",
     )
     parser.add_argument(
-        '--input',
+        "--output",
         type=Path,
-        default=Path(__file__).parent / 'Final_Production_UltraQuality' / '750Picacho_Pool_UltraQuality.tif',
-        help='Input image path'
+        default=Path(__file__).parent / "remediated_output" / "750Picacho_Pool_Remediated_Master.tif",
+        help="Output image path",
     )
-    parser.add_argument(
-        '--output',
-        type=Path,
-        default=Path(__file__).parent / 'remediated_output' / '750Picacho_Pool_Remediated_Master.tif',
-        help='Output image path'
-    )
-    parser.add_argument(
-        '--config',
-        type=Path,
-        help='JSON configuration file (optional)'
-    )
+    parser.add_argument("--config", type=Path, help="JSON configuration file (optional)")
 
     args = parser.parse_args()
 
@@ -713,7 +706,7 @@ def main() -> int:
         with open(args.config) as f:
             config = json.load(f)
         # Validate required keys in config
-        required_keys = ['lighting_zones', 'darkness_preservation', 'scattering_threshold_m']
+        required_keys = ["lighting_zones", "darkness_preservation", "scattering_threshold_m"]
         for key in required_keys:
             if key not in config:
                 print(f"⚠️  Warning: '{key}' not found in config, using default")
@@ -730,5 +723,5 @@ def main() -> int:
     return 0 if success else 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

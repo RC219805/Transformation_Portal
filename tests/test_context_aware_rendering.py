@@ -69,9 +69,10 @@ def pipeline(sample_context, tmp_path):
     mock_module.RoomContext = MockRoomContext
     mock_module.ArchitecturalContextExtractor = MagicMock()
 
-    with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+    with patch.dict(sys.modules, {"architectural_context_extractor": mock_module}):
         # Import after mocking
         from context_aware_rendering import ContextAwareRenderingPipeline
+
         return ContextAwareRenderingPipeline(
             project_context=sample_context,
             output_dir=tmp_path / "output",
@@ -89,7 +90,7 @@ class TestRenderingStrategy:
         mock_module.RoomContext = MockRoomContext
         mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+        with patch.dict(sys.modules, {"architectural_context_extractor": mock_module}):
             from context_aware_rendering import RenderingStrategy
 
             strategy = RenderingStrategy(
@@ -286,7 +287,7 @@ class TestHelperFunctions:
         mock_module.RoomContext = MockRoomContext
         mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+        with patch.dict(sys.modules, {"architectural_context_extractor": mock_module}):
             from context_aware_rendering import _image_to_array
 
             arr = _image_to_array(sample_image)
@@ -304,7 +305,7 @@ class TestHelperFunctions:
         mock_module.RoomContext = MockRoomContext
         mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+        with patch.dict(sys.modules, {"architectural_context_extractor": mock_module}):
             from context_aware_rendering import _array_to_image
 
             # Use fixed seed for reproducibility
@@ -326,7 +327,7 @@ class TestHelperFunctions:
         mock_module.RoomContext = MockRoomContext
         mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+        with patch.dict(sys.modules, {"architectural_context_extractor": mock_module}):
             from context_aware_rendering import _check_depth_pipeline
 
             # Should return True or False without raising
@@ -341,7 +342,7 @@ class TestHelperFunctions:
         mock_module.RoomContext = MockRoomContext
         mock_module.ArchitecturalContextExtractor = MagicMock()
 
-        with patch.dict(sys.modules, {'architectural_context_extractor': mock_module}):
+        with patch.dict(sys.modules, {"architectural_context_extractor": mock_module}):
             from context_aware_rendering import _check_tiff_processor
 
             # Should return True when luxury_tiff_batch_processor is installed

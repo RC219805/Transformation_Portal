@@ -1,7 +1,7 @@
 # High-Fidelity Depth: Production-Grade Fixes Complete
 
-**Date**: December 18, 2025  
-**Status**: ✅ ALL CRITICAL BLOCKERS ADDRESSED  
+**Date**: December 18, 2025
+**Status**: ✅ ALL CRITICAL BLOCKERS ADDRESSED
 **Validation**: In Progress (35 tiles/image, 192px overlap, no slivers)
 
 ---
@@ -147,28 +147,28 @@ snap_mask = rgb_structural_edges & depth_edges
 ## SUPPORTING FIXES
 
 ### 1. Spatial Smoothing of Tile Calibrations
-**Location**: `depth_estimator.py` lines 320-382  
-**Method**: Gaussian filter (sigma=1.5) on per-tile (a, b) corrections  
+**Location**: `depth_estimator.py` lines 320-382
+**Method**: Gaussian filter (sigma=1.5) on per-tile (a, b) corrections
 **Impact**: Reduces "alternating tile bias" artifacts in vegetation/texture
 
 ### 2. Theil-Sen Sampling Cap (Performance)
-**Location**: `depth_estimator.py` line 253  
-**Value**: `MAX_SAMPLES = 5000` (down from 50,000)  
+**Location**: `depth_estimator.py` line 253
+**Value**: `MAX_SAMPLES = 5000` (down from 50,000)
 **Impact**: 10× speedup in reconciliation, prevents O(n²) blowup
 
 ### 3. Float32 Edge Detection (Metric Fix)
-**Location**: `quality_metrics.py` lines 130-185  
-**Fix**: Compute gradients on float32 depth [0, 1], not uint8  
+**Location**: `quality_metrics.py` lines 130-185
+**Fix**: Compute gradients on float32 depth [0, 1], not uint8
 **Impact**: Edge metrics went from 0.004 → 0.60+ (metric was broken, now functioning)
 
 ### 4. Streaming Weighted Blending (Memory Safety)
-**Location**: `depth_estimator.py` lines 496-530  
-**Method**: Incremental accumulation (no tile stacking)  
+**Location**: `depth_estimator.py` lines 496-530
+**Method**: Incremental accumulation (no tile stacking)
 **Impact**: Prevents OOM on 4K+ images with 30+ tiles
 
 ### 5. Seam Boundary Validation
-**Location**: `production_depth_validation_fixed.py` lines 102-133  
-**Threshold**: Boundary gradient ratio < 1.2  
+**Location**: `production_depth_validation_fixed.py` lines 102-133
+**Threshold**: Boundary gradient ratio < 1.2
 **Impact**: Hard gate against visible tiling artifacts
 
 ---
@@ -342,5 +342,5 @@ The depth pipeline is no longer "numerically 16-bit but spatially low-fidelity."
 
 ---
 
-**Signed**: High-Fidelity Depth Pipeline Engineering Team  
+**Signed**: High-Fidelity Depth Pipeline Engineering Team
 **Validation Status**: Running (check `outputs/validation_blocker_fixes_test/validation_report.json`)

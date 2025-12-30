@@ -127,7 +127,7 @@ POOL_IMAGE=$(find "$INPUT_DIR" -name "*Pool*.tif" -type f | head -1)
 
 if [ -n "$POOL_IMAGE" ]; then
     echo "Testing: $POOL_IMAGE"
-    
+
     python3 -m lux_depth_v2.cli \
         --input "$POOL_IMAGE" \
         --output-dir "$POOL_TEST_DIR" \
@@ -139,7 +139,7 @@ if [ -n "$POOL_IMAGE" ]; then
         --cache-masks \
         --cache-dir "$CACHE_DIR" \
         2>&1 | tee "${OUTPUT_BASE}/pool_test_log.txt"
-    
+
     echo ""
     echo "✓ Pool edge case test complete"
 else
@@ -159,7 +159,7 @@ BATHROOM_IMAGE=$(find "$INPUT_DIR" -name "*Bathroom*.tif" -type f | head -1)
 
 if [ -n "$BATHROOM_IMAGE" ]; then
     echo "Testing: $BATHROOM_IMAGE"
-    
+
     python3 -m lux_depth_v2.cli \
         --input "$BATHROOM_IMAGE" \
         --output-dir "$BATHROOM_TEST_DIR" \
@@ -171,7 +171,7 @@ if [ -n "$BATHROOM_IMAGE" ]; then
         --cache-masks \
         --cache-dir "$CACHE_DIR" \
         2>&1 | tee "${OUTPUT_BASE}/bathroom_test_log.txt"
-    
+
     echo ""
     echo "✓ Bathroom edge case test complete"
 else
@@ -191,7 +191,7 @@ KITCHEN_IMAGE=$(find "$INPUT_DIR" -name "*Kitchen*.tif" -type f | head -1)
 
 if [ -n "$KITCHEN_IMAGE" ]; then
     echo "Testing: $KITCHEN_IMAGE"
-    
+
     python3 -m lux_depth_v2.cli \
         --input "$KITCHEN_IMAGE" \
         --output-dir "$KITCHEN_TEST_DIR" \
@@ -203,7 +203,7 @@ if [ -n "$KITCHEN_IMAGE" ]; then
         --cache-masks \
         --cache-dir "$CACHE_DIR" \
         2>&1 | tee "${OUTPUT_BASE}/kitchen_test_log.txt"
-    
+
     echo ""
     echo "✓ Kitchen edge case test complete"
 else
@@ -226,7 +226,7 @@ if [ -d "$BASELINE_DIR" ] && [ -d "$ENHANCED_DIR" ]; then
         --cache-dir "$CACHE_DIR" \
         --output "${OUTPUT_BASE}/quality_report.json" \
         2>&1 | tee "${OUTPUT_BASE}/quality_analysis_log.txt"
-    
+
     echo ""
     echo "✓ Quality comparison complete"
 fi

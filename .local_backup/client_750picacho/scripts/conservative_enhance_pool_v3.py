@@ -25,6 +25,7 @@ Expected Results:
 - Pool water: Jewel-toned turquoise (restored)
 - Sky gradient: Smooth and detailed (preserved)
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +34,7 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -51,42 +53,43 @@ OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Tone Mapping (NEW in V3 - replaces gamma correction)
-TONE_MAP_METHOD = 'agx'                # AgX for photorealistic rendering
-MIN_EV = -10.0                         # Shadow detail preservation
-MAX_EV = 6.5                           # Highlight compression range
+TONE_MAP_METHOD = "agx"  # AgX for photorealistic rendering
+MIN_EV = -10.0  # Shadow detail preservation
+MAX_EV = 6.5  # Highlight compression range
 
 # Post-Tone-Map Adjustments (CORRECTED)
-GLOBAL_EXPOSURE_LIFT = 0.2             # +20% brightness to counteract sky protection
-SHADOW_LIFT_STOPS = 0.15               # +0.15 stops (reduced from 0.25)
-SHADOW_THRESHOLD = 0.25                # Luminance < 0.25 is shadow
-MIDTONE_CONTRAST = 1.08                # +8% contrast
+GLOBAL_EXPOSURE_LIFT = 0.2  # +20% brightness to counteract sky protection
+SHADOW_LIFT_STOPS = 0.15  # +0.15 stops (reduced from 0.25)
+SHADOW_THRESHOLD = 0.25  # Luminance < 0.25 is shadow
+MIDTONE_CONTRAST = 1.08  # +8% contrast
 
 # Color & Saturation (CORRECTED)
-GLOBAL_SATURATION = 1.03               # +3% saturation (reduced from 1.05)
-VEGETATION_SAT_BOOST = 1.04            # +4% green saturation (gentle)
+GLOBAL_SATURATION = 1.03  # +3% saturation (reduced from 1.05)
+VEGETATION_SAT_BOOST = 1.04  # +4% green saturation (gentle)
 
 # Pool Water Color Correction (MAJOR REVISION - jewel-toned cyan)
-WATER_RED_REDUCTION = 0.97             # -3% red (subtle, reduced from -5%)
-WATER_GREEN_MAINTAIN = 1.00            # 0% green (maintain)
-WATER_BLUE_BOOST = 1.10                # +10% blue (jewel tone, reduced from +15%)
-WATER_STRENGTH = 0.4                   # 40% blend strength (reduced from 0.5)
+WATER_RED_REDUCTION = 0.97  # -3% red (subtle, reduced from -5%)
+WATER_GREEN_MAINTAIN = 1.00  # 0% green (maintain)
+WATER_BLUE_BOOST = 1.10  # +10% blue (jewel tone, reduced from +15%)
+WATER_STRENGTH = 0.4  # 40% blend strength (reduced from 0.5)
 
 # Sky Protection (ADJUSTED - less aggressive)
-SKY_PROTECTION_THRESHOLD = 0.80        # Protect luminance > 0.80 (higher threshold)
-SKY_PROTECTION_STRENGTH = 0.5          # 50% reduction in sky areas (reduced from 0.7)
-SKY_MASK_SIGMA = 30.0                  # Very smooth transition
+SKY_PROTECTION_THRESHOLD = 0.80  # Protect luminance > 0.80 (higher threshold)
+SKY_PROTECTION_STRENGTH = 0.5  # 50% reduction in sky areas (reduced from 0.7)
+SKY_MASK_SIGMA = 30.0  # Very smooth transition
 
 # Material Enhancement (CORRECTED)
-CLARITY_STRENGTH = 0.04                # 4% clarity (reduced from 0.08)
-CLARITY_RADIUS = 96                    # Increased radius for subtlety
-CLARITY_MASK_THRESHOLD = 0.85          # Exclude bright areas from clarity
+CLARITY_STRENGTH = 0.04  # 4% clarity (reduced from 0.08)
+CLARITY_RADIUS = 96  # Increased radius for subtlety
+CLARITY_MASK_THRESHOLD = 0.85  # Exclude bright areas from clarity
 
 # Output
-OUTPUT_BIT_DEPTH = 16                  # 16-bit TIFF
+OUTPUT_BIT_DEPTH = 16  # 16-bit TIFF
 
 # ============================================================================
 # TONE MAPPING FUNCTIONS (NEW IN V3)
 # ============================================================================
+
 
 def apply_agx_tone_map(rgb_linear):
     """
@@ -114,11 +117,13 @@ def apply_agx_tone_map(rgb_linear):
     rgb_compressed = smoothstep(rgb_log)
 
     # Convert to sRGB gamma
-    return np.power(rgb_compressed, 1/2.2)
+    return np.power(rgb_compressed, 1 / 2.2)
+
 
 # ============================================================================
 # SKY PROTECTION FUNCTION (NEW IN V3)
 # ============================================================================
+
 
 def protect_sky_highlights(rgb, threshold=0.75):
     """
@@ -131,7 +136,7 @@ def protect_sky_highlights(rgb, threshold=0.75):
     Returns:
         sky_mask: Smooth mask [0-1] indicating sky regions
     """
-    r, g, b = rgb[:,:,0], rgb[:,:,1], rgb[:,:,2]
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
 
     # Detect sky (bright, neutral, top of frame)
@@ -139,16 +144,17 @@ def protect_sky_highlights(rgb, threshold=0.75):
     y_coords = np.arange(height)[:, np.newaxis] / height
 
     sky_mask = (
-        (luminance > threshold) &              # Bright
-        (np.abs(r - g) < 0.1) &               # Neutral (not color cast)
-        (np.abs(g - b) < 0.15) &              # Neutral
-        (y_coords < 0.5)                      # Upper half of frame
+        (luminance > threshold)  # Bright
+        & (np.abs(r - g) < 0.1)  # Neutral (not color cast)
+        & (np.abs(g - b) < 0.15)  # Neutral
+        & (y_coords < 0.5)  # Upper half of frame
     )
 
     # Smooth mask for natural transition
     sky_mask_smooth = gaussian_filter(sky_mask.astype(np.float32), sigma=SKY_MASK_SIGMA)
 
     return sky_mask_smooth
+
 
 # ============================================================================
 # LOAD IMAGE
@@ -181,7 +187,7 @@ if TIFFFILE_AVAILABLE:
         TIFFFILE_AVAILABLE = False
 
 if not TIFFFILE_AVAILABLE:
-    img = Image.open(INPUT).convert('RGB')
+    img = Image.open(INPUT).convert("RGB")
     rgb_linear = np.array(img, dtype=np.float32) / 255.0
 
 print(f"  Range: [{rgb_linear.min():.3f}, {rgb_linear.max():.3f}]")
@@ -229,7 +235,7 @@ print(f"  ✓ Sky will receive {int(SKY_PROTECTION_STRENGTH * 100)}% reduced adj
 # ============================================================================
 print(f"\n[4/10] Recovering shadow detail (+{SHADOW_LIFT_STOPS} stops)...")
 
-r, g, b_ch = rgb[:,:,0], rgb[:,:,1], rgb[:,:,2]
+r, g, b_ch = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
 luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b_ch
 
 # Shadow mask
@@ -243,10 +249,10 @@ print(f"  Shadows detected: {shadow_pixels:,} pixels ({shadow_percent:.1f}%)")
 shadow_mask_smooth = gaussian_filter(shadow_mask.astype(np.float32), sigma=15.0)
 
 # Apply shadow lift
-shadow_lift_factor = 2 ** SHADOW_LIFT_STOPS  # Convert stops to multiplier
+shadow_lift_factor = 2**SHADOW_LIFT_STOPS  # Convert stops to multiplier
 rgb_lifted = rgb.copy()
 for i in range(3):
-    rgb_lifted[:,:,i] = rgb[:,:,i] * (1 + shadow_mask_smooth * (shadow_lift_factor - 1))
+    rgb_lifted[:, :, i] = rgb[:, :, i] * (1 + shadow_mask_smooth * (shadow_lift_factor - 1))
 
 rgb_exposed = np.clip(rgb_lifted, 0, 1)
 
@@ -254,7 +260,7 @@ print(f"  ✓ Shadow lift applied (factor: {shadow_lift_factor:.3f}×)")
 
 # Apply sky protection to shadow lift
 protection = 1.0 - sky_mask * SKY_PROTECTION_STRENGTH
-rgb_exposed = rgb_exposed * protection[:,:,np.newaxis]
+rgb_exposed = rgb_exposed * protection[:, :, np.newaxis]
 
 print("  ✓ Sky protected from shadow lift")
 
@@ -270,8 +276,7 @@ img_contrast = enhancer.enhance(MIDTONE_CONTRAST)
 rgb_contrast = np.array(img_contrast, dtype=np.float32) / 255.0
 
 # Re-apply sky protection
-rgb_contrast = rgb_contrast * protection[:,:,np.newaxis] + \
-               rgb_exposed * (1 - protection[:,:,np.newaxis])
+rgb_contrast = rgb_contrast * protection[:, :, np.newaxis] + rgb_exposed * (1 - protection[:, :, np.newaxis])
 
 print("  ✓ Contrast enhanced with sky protection")
 
@@ -280,16 +285,17 @@ print("  ✓ Contrast enhanced with sky protection")
 # ============================================================================
 print("\n[6/10] Enhancing pool water (jewel-toned turquoise)...")
 
-r, g, b_ch = rgb_contrast[:,:,0], rgb_contrast[:,:,1], rgb_contrast[:,:,2]
+r, g, b_ch = rgb_contrast[:, :, 0], rgb_contrast[:, :, 1], rgb_contrast[:, :, 2]
 
 # Detect pool water (blue-dominant, mid-brightness)
 luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b_ch
 water_mask = (
-    (b_ch > r * 1.15) &          # Blue-dominant
-    (b_ch > g * 1.05) &          # Blue > green
-    (luminance > 0.2) &          # Not too dark
-    (luminance < 0.8) &          # Not too bright (preserve highlights)
-    (b_ch > 0.3) & (b_ch < 0.9)  # Blue channel range
+    (b_ch > r * 1.15)  # Blue-dominant
+    & (b_ch > g * 1.05)  # Blue > green
+    & (luminance > 0.2)  # Not too dark
+    & (luminance < 0.8)  # Not too bright (preserve highlights)
+    & (b_ch > 0.3)
+    & (b_ch < 0.9)  # Blue channel range
 )
 
 water_pixels = water_mask.sum()
@@ -302,9 +308,9 @@ water_mask_smooth = gaussian_filter(water_mask.astype(np.float32), sigma=20.0)
 
 # Color shift for jewel-toned turquoise
 # Strategy: Enhance cyan (reduce R, maintain G, boost B)
-water_r = r * WATER_RED_REDUCTION     # -5% red (remove muddiness)
-water_g = g * WATER_GREEN_MAINTAIN    # 0% green (maintain)
-water_b = b_ch * WATER_BLUE_BOOST     # +15% blue (jewel tone)
+water_r = r * WATER_RED_REDUCTION  # -5% red (remove muddiness)
+water_g = g * WATER_GREEN_MAINTAIN  # 0% green (maintain)
+water_b = b_ch * WATER_BLUE_BOOST  # +15% blue (jewel tone)
 
 # Luminance preservation (maintain transparency perception)
 original_lum = 0.2126 * r + 0.7152 * g + 0.0722 * b_ch
@@ -317,9 +323,9 @@ water_b *= luminance_ratio
 
 # Blend with original using smooth mask
 mask_3d = np.stack([water_mask_smooth * WATER_STRENGTH] * 3, axis=2)
-r_final = r * (1 - mask_3d[:,:,0]) + water_r * mask_3d[:,:,0]
-g_final = g * (1 - mask_3d[:,:,1]) + water_g * mask_3d[:,:,1]
-b_final = b_ch * (1 - mask_3d[:,:,2]) + water_b * mask_3d[:,:,2]
+r_final = r * (1 - mask_3d[:, :, 0]) + water_r * mask_3d[:, :, 0]
+g_final = g * (1 - mask_3d[:, :, 1]) + water_g * mask_3d[:, :, 1]
+b_final = b_ch * (1 - mask_3d[:, :, 2]) + water_b * mask_3d[:, :, 2]
 
 rgb_water = np.clip(np.stack([r_final, g_final, b_final], axis=2), 0, 1)
 
@@ -344,15 +350,15 @@ print("  ✓ Saturation enhanced globally")
 # ============================================================================
 print("\n[8/10] Enhancing vegetation (saturation only, preserve shadows)...")
 
-r, g, b_ch = rgb_saturated[:,:,0], rgb_saturated[:,:,1], rgb_saturated[:,:,2]
+r, g, b_ch = rgb_saturated[:, :, 0], rgb_saturated[:, :, 1], rgb_saturated[:, :, 2]
 
 # Detect vegetation (green-dominant, not too bright)
 luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b_ch
 vegetation_mask = (
-    (g > r * 1.1) &            # Green-dominant
-    (g > b_ch * 1.05) &        # Green > blue
-    (g > 0.15) &               # Not too dark (exclude deep shadows)
-    (luminance < 0.6)          # Not too bright
+    (g > r * 1.1)  # Green-dominant
+    & (g > b_ch * 1.05)  # Green > blue
+    & (g > 0.15)  # Not too dark (exclude deep shadows)
+    & (luminance < 0.6)  # Not too bright
 )
 
 veg_pixels = vegetation_mask.sum()
@@ -365,17 +371,17 @@ vegetation_mask_smooth = gaussian_filter(vegetation_mask.astype(np.float32), sig
 
 # Convert to HSV for saturation-only adjustment
 img_pil = Image.fromarray((rgb_saturated * 255).astype(np.uint8))
-img_hsv = img_pil.convert('HSV')
+img_hsv = img_pil.convert("HSV")
 hsv = np.array(img_hsv, dtype=np.float32)
 
 # Boost saturation ONLY in vegetation areas (no brightness change)
 saturation_boost_amount = (VEGETATION_SAT_BOOST - 1) * 0.3  # 30% of target boost
-hsv[:,:,1] = hsv[:,:,1] * (1 + vegetation_mask_smooth * saturation_boost_amount)
-hsv[:,:,1] = np.clip(hsv[:,:,1], 0, 255)
+hsv[:, :, 1] = hsv[:, :, 1] * (1 + vegetation_mask_smooth * saturation_boost_amount)
+hsv[:, :, 1] = np.clip(hsv[:, :, 1], 0, 255)
 
 # Convert back to RGB
-img_hsv_enhanced = Image.fromarray(hsv.astype(np.uint8), mode='HSV')
-img_rgb_enhanced = img_hsv_enhanced.convert('RGB')
+img_hsv_enhanced = Image.fromarray(hsv.astype(np.uint8), mode="HSV")
+img_rgb_enhanced = img_hsv_enhanced.convert("RGB")
 rgb_vegetation = np.array(img_rgb_enhanced, dtype=np.float32) / 255.0
 
 print(f"  ✓ Vegetation saturation enhanced (+{int(saturation_boost_amount * 100)}%)")
@@ -387,7 +393,7 @@ print("  ✓ Shadow depth preserved (no brightness lift)")
 print(f"\n[9/10] Adding clarity ({int(CLARITY_STRENGTH * 100)}%)...")
 
 # Calculate luminance mask (exclude bright areas from clarity)
-r, g, b_ch = rgb_vegetation[:,:,0], rgb_vegetation[:,:,1], rgb_vegetation[:,:,2]
+r, g, b_ch = rgb_vegetation[:, :, 0], rgb_vegetation[:, :, 1], rgb_vegetation[:, :, 2]
 luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b_ch
 clarity_mask = luminance < CLARITY_MASK_THRESHOLD
 
@@ -441,11 +447,13 @@ luminance_change = ((final_luminance / original_luminance_display) - 1) * 100
 highlight_clipping = (rgb_final > 0.95).sum() / rgb_final.size * 100
 shadow_clipping = (rgb_final < 0.05).sum() / rgb_final.size * 100
 
+
 # Saturation calculation (compare in same color space)
 def calc_saturation(rgb):
     max_rgb = rgb.max(axis=2)
     min_rgb = rgb.min(axis=2)
     return ((max_rgb - min_rgb) / (max_rgb + 1e-10)).mean()
+
 
 original_sat = calc_saturation(original_display)  # Compare display to display
 final_sat = calc_saturation(rgb_final)
@@ -479,10 +487,7 @@ print(f"   Status: {'✅ PASS' if 5 <= saturation_change <= 15 else '❌ FAIL'}"
 # Overall assessment
 # pylint: disable=chained-comparison
 overall_pass = (
-    15 <= luminance_change <= 25 and
-    highlight_clipping < 1.0 and
-    shadow_clipping < 2.0 and
-    5 <= saturation_change <= 15
+    15 <= luminance_change <= 25 and highlight_clipping < 1.0 and shadow_clipping < 2.0 and 5 <= saturation_change <= 15
 )
 
 print("\n" + "=" * 80)

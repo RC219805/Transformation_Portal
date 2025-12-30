@@ -187,17 +187,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           pip install scipy scikit-learn pandas
-      
+
       - name: Run multi-model validation
         run: |
           python scripts/run_multi_model_comparison.py \
@@ -205,13 +205,13 @@ jobs:
             --labels data/validation_quick/labels.csv \
             --models DA2_Large DA2_Metric_Indoor \
             --sweep-sizes 518 768
-      
+
       - name: Analyze results
         run: |
           python scripts/analyze_model_comparison.py \
             --comparison-dir outputs/model_comparison/run_* \
             --baseline-model DA2_Large
-      
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -275,7 +275,7 @@ outputs/model_comparison/run_20251218_143022_a7b3c4d/
 
 **Cause**: Model requires more VRAM than available.
 
-**Fix**: 
+**Fix**:
 - Use smaller model (Large instead of Giant)
 - Reduce batch size in validator
 - Use `--skip-vram-check` (CPU fallback, slow)
@@ -329,5 +329,5 @@ For issues or questions:
 
 ---
 
-**Last Updated**: 2025-12-18  
+**Last Updated**: 2025-12-18
 **Maintained By**: Transformation Portal Team

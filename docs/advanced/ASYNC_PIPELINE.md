@@ -95,16 +95,16 @@ await pipeline.process_directory(
 
 ## When It Goes Wrong
 
-**Symptom**: OOM (Out of Memory) errors  
+**Symptom**: OOM (Out of Memory) errors
 **Fix**: Reduce `batch_size` and `queue_size`
 
-**Symptom**: Low throughput (worse than sync)  
+**Symptom**: Low throughput (worse than sync)
 **Fix**: Increase `workers`, check GPU utilization
 
-**Symptom**: Inconsistent outputs  
+**Symptom**: Inconsistent outputs
 **Fix**: Check for race conditions, use synchronous mode
 
-**Symptom**: Hung pipeline (no progress)  
+**Symptom**: Hung pipeline (no progress)
 **Fix**: Enable debug logging, check for deadlocks
 
 ---
@@ -123,8 +123,8 @@ await pipeline.process_directory(
 
 ## Maintenance
 
-**Stability**: ✅ Stable (no breaking changes expected)  
-**Support**: Community-supported (not feature-frozen like Golden Path)  
+**Stability**: ✅ Stable (no breaking changes expected)
+**Support**: Community-supported (not feature-frozen like Golden Path)
 **Testing**: Moderate coverage (integration tests required)
 
 ---

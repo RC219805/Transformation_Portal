@@ -1,7 +1,7 @@
 # Migration Guide: Platform Core
 
-**Version**: 1.0  
-**Date**: 2025-12-08  
+**Version**: 1.0
+**Date**: 2025-12-08
 **Target**: PR-2 (Platform Core Extraction)
 
 ---
@@ -74,7 +74,7 @@ class LuxDepthPipeline:
             self.device = torch.device("mps")
         else:
             self.device = torch.device("cpu")
-        
+
         # Duplicated dtype selection
         if self.device.type == "cuda":
             self.dtype = torch.float16
@@ -94,7 +94,7 @@ class LuxDepthPipeline:
         self.device_manager = DeviceManager(preferred=device)
         self.device = self.device_manager.device
         self.dtype = self.device_manager.dtype
-    
+
     def get_metrics(self):
         """Get device metrics (optional)."""
         return self.device_manager.profile()
@@ -124,7 +124,7 @@ class PipelineConfig:
     output_dir: str
     preset: str = "default"
     device: str = "auto"
-    
+
     @classmethod
     def from_yaml(cls, yaml_path: str):
         # Duplicated YAML loading
@@ -142,13 +142,13 @@ from pydantic import Field
 
 class LuxDepthConfig(ProcessingConfig):
     """Lux Depth V2 specific configuration."""
-    
+
     # Inherit: input_path, output_dir, preset, device
     # Add pipeline-specific fields
     tone_map_operator: str = Field(default="agx", description="Tone mapping operator")
     enable_tiling: bool = Field(default=False, description="Enable UHR tiling")
     tile_size: int = Field(default=512, ge=256, le=2048, description="Tile size")
-    
+
     class Config:
         # Custom validators, if needed
         pass
@@ -187,14 +187,14 @@ class LuxDepthPipeline:
     def __init__(self):
         self.cache_dir = Path(".cache")
         self.cache_dir.mkdir(exist_ok=True)
-    
+
     def _compute_cache_key(self, input_path, config):
         # Duplicated hashing logic
         hasher = hashlib.md5()  # ⚠️ MD5 is weak
         hasher.update(input_path.encode())
         hasher.update(str(config).encode())
         return hasher.hexdigest()
-    
+
     def _get_cached(self, cache_key):
         cache_path = self.cache_dir / f"{cache_key}.pkl"
         if cache_path.exists():
@@ -213,19 +213,19 @@ class LuxDepthPipeline:
     def __init__(self, cache_dir: Path = Path(".cache")):
         # Unified artifact store
         self.artifact_store = ArtifactStore(cache_dir=cache_dir)
-    
+
     def process(self, input_path: Path, config: dict):
         # Check cache (content-addressed, SHA256)
         cached = self.artifact_store.get(input_path, config)
         if cached is not None:
             return cached
-        
+
         # Process
         result = self._expensive_computation(input_path, config)
-        
+
         # Store in cache
         self.artifact_store.put(input_path, config, result)
-        
+
         return result
 ```
 
@@ -312,7 +312,7 @@ async def process(input_path: str):
         safe_path = path_validator.validate(input_path)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     result = pipeline.process(safe_path)
     return result
 ```
@@ -468,7 +468,7 @@ from transformation_portal.core.config import ProcessingConfig as _CoreConfig
 
 class PipelineConfig(_CoreConfig):
     """Legacy config (deprecated)."""
-    
+
     def __init__(self, *args, **kwargs):
         warnings.warn(
             "PipelineConfig is deprecated. Use transformation_portal.core.config.ProcessingConfig",
@@ -499,14 +499,14 @@ def test_config_inherits_from_processing_config():
     """Verify config uses Platform Core base class."""
     from my_pipeline.config import MyConfig
     from transformation_portal.core.config import ProcessingConfig
-    
+
     config = MyConfig(input_path="test.jpg", output_dir="out/")
     assert isinstance(config, ProcessingConfig)
 
 def test_artifact_store_used_for_caching():
     """Verify pipeline uses Platform Core artifact store."""
     from transformation_portal.core.artifacts import ArtifactStore
-    
+
     pipeline = MyPipeline()
     assert isinstance(pipeline.artifact_store, ArtifactStore)
 ```
@@ -518,13 +518,13 @@ def test_artifact_store_used_for_caching():
 def test_pipeline_end_to_end():
     """Verify pipeline works end-to-end with Platform Core."""
     from my_pipeline import MyPipeline
-    
+
     pipeline = MyPipeline()
     result = pipeline.process("test_image.jpg")
-    
+
     # Verify result
     assert result is not None
-    
+
     # Verify metrics available
     metrics = pipeline.device_manager.profile()
     assert "device" in metrics
@@ -637,6 +637,6 @@ Before marking migration complete:
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: 2025-12-08  
+**Version**: 1.0
+**Last Updated**: 2025-12-08
 **Next Review**: 2025-12-22

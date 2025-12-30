@@ -14,13 +14,16 @@ from typing import Any, Callable, Sequence, Type, Union
 
 def documents(note: str) -> Callable[[Callable], Callable]:
     """Attach a docstring note to a function, preserving existing doc."""
+
     def decorator(func: Callable) -> Callable:
         if func.__doc__:
             func.__doc__ = f"{note}\n{func.__doc__}"
         else:
             func.__doc__ = note
         return func
+
     return decorator
+
 
 # -------------------------
 # demonstrates decorator
@@ -52,7 +55,9 @@ def demonstrates(concepts: Union[ConceptType, Sequence[ConceptType]]) -> Callabl
         else:
             func.__doc__ = prefix
         return func
+
     return decorator
+
 
 # -------------------------
 # valid_until decorator

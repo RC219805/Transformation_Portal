@@ -28,7 +28,7 @@ If you discover a security vulnerability in Transformation Portal, please **DO N
 
 - **Initial Response**: Within 48 hours
 - **Status Update**: Within 5 business days
-- **Resolution Target**: 
+- **Resolution Target**:
   - Critical: 7 days
   - High: 14 days
   - Medium: 30 days
@@ -76,11 +76,11 @@ Given our image/video processing nature, special attention is required for:
 
 ### ML Model Security
 
-- **Model Files**: 
+- **Model Files**:
   - Only load models from trusted sources
   - Verify model checksums before loading
   - Sandboxed model execution environment recommended
-  
+
 - **Depth Pipeline**:
   - Input size restrictions to prevent OOM attacks
   - Rate limiting for API endpoints
@@ -88,7 +88,7 @@ Given our image/video processing nature, special attention is required for:
 
 ### Dependencies
 
-- **Supply Chain**: 
+- **Supply Chain**:
   - All dependencies use version constraints to balance security and compatibility
   - For security-critical deployments, consider strict version pinning (e.g., via lock files)
   - Regular dependency audits via `pip-audit` and `safety`
@@ -104,7 +104,7 @@ Given our image/video processing nature, special attention is required for:
 If exposing Transformation Portal as a service:
 
 - **Authentication**: Implement API key or OAuth 2.0
-- **Rate Limiting**: 
+- **Rate Limiting**:
   - Default: 100 requests/minute per IP
   - Heavy operations: 10 requests/hour
 - **Input Sanitization**: All user inputs must be validated
@@ -168,7 +168,7 @@ security:
   allowed_extensions: ['.jpg', '.png', '.tiff', '.mp4', '.mov']
   temp_directory: '/tmp/transformation_portal'
   cleanup_interval: 3600  # seconds
-  
+
   depth_processing:
     max_input_dimension: 4096
     max_vertices: 10000000
@@ -197,7 +197,7 @@ make test-full
 # pip install bandit
 # bandit -r src/ -ll
 
-# Note: Additional security testing tools like bandit, pip-audit, safety, 
+# Note: Additional security testing tools like bandit, pip-audit, safety,
 # semgrep, etc. are recommended but not included in project dependencies.
 # Install them separately if needed for security auditing.
 ```
@@ -209,21 +209,21 @@ In case of a security breach:
 1. **Isolate**: Immediately isolate affected systems
    - Disable affected endpoints
    - Revoke compromised credentials
-   
+
 2. **Assess**: Determine scope and impact
    - Identify affected versions
    - Review access logs
    - Determine data exposure
-   
+
 3. **Notify**: Alert users within 72 hours if data was compromised
    - GitHub Security Advisory
    - Email to affected users (if applicable)
    - Update security status page
-   
+
 4. **Patch**: Deploy fixes with priority
    - Emergency patch for critical vulnerabilities
    - Coordinate disclosure with reporters
-   
+
 5. **Review**: Post-mortem and update security measures
    - Document lessons learned
    - Update security policies
@@ -301,8 +301,8 @@ We support responsible disclosure and will:
 
 ## Security Contact
 
-**Primary**: Create a security advisory at https://github.com/RC219805/Transformation_Portal/security/advisories/new  
-**GitHub**: @RC219805  
+**Primary**: Create a security advisory at https://github.com/RC219805/Transformation_Portal/security/advisories/new
+**GitHub**: @RC219805
 **Response Time**: 48 hours maximum
 
 ## Additional Resources
@@ -313,6 +313,6 @@ We support responsible disclosure and will:
 
 ---
 
-*Last Updated: November 2025*  
-*Next Review: February 2026*  
+*Last Updated: November 2025*
+*Next Review: February 2026*
 *Security Policy Version: 1.0*

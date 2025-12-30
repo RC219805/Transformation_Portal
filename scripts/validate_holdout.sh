@@ -81,13 +81,13 @@ if command -v jq &> /dev/null; then
       false_trigger_rate,
       average_confidence
     }' "$OUTPUT"
-    
+
     echo ""
     echo -e "${YELLOW}Acceptance Gates Check:${NC}"
-    
+
     # Extract false trigger count
     FT_COUNT=$(jq -r '.summary.false_trigger_count' "$OUTPUT")
-    
+
     # Check acceptance gates (max 1 false trigger)
     MAX_FT=1
     if [ "$FT_COUNT" -gt "$MAX_FT" ]; then
@@ -104,7 +104,7 @@ if command -v jq &> /dev/null; then
         FT_RATE=$(jq -r '.summary.false_trigger_rate' "$OUTPUT")
         echo -e "${GREEN}✅ PASSED: Holdout FT count ($FT_COUNT) within limit (max $MAX_FT, effective rate: $FT_RATE)${NC}"
     fi
-    
+
     # Note if any false triggers exist (require telemetry review)
     if [ "$FT_COUNT" -gt 0 ]; then
         echo ""

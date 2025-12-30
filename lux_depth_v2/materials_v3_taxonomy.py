@@ -32,7 +32,6 @@ CANONICAL_MATERIALS = {
     "wall",
     "floor",
     "ceiling",
-    
     # Expanded (Materials V3)
     "concrete",
     "brick",
@@ -79,7 +78,6 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
     "pond": "water",
     "still_water": "water",
     "water_surface": "water",
-    
     # Foliage variants
     "foliage": "foliage",
     "tree": "foliage",
@@ -95,7 +93,6 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
     "lawn": "foliage",
     "leaves": "foliage",
     "canopy": "foliage",
-    
     # Glass variants
     "glass": "glass",
     "window": "glass",
@@ -105,7 +102,6 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
     "mirror": "glass",
     "mirrors": "glass",
     "glazing": "glass",
-    
     # Wood variants
     "wood": "wood",
     "wooden": "wood",
@@ -117,7 +113,6 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
     "laminate": "wood",
     "plywood": "wood",
     "mdf": "wood",
-    
     # Metal variants
     "metal": "metal",
     "steel": "metal",
@@ -131,7 +126,6 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
     "copper": "metal",
     "bronze": "metal",
     "polished_metal": "metal",
-    
     # Stone variants
     "stone": "stone",
     "rock": "stone",
@@ -146,7 +140,6 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
     "pavers": "stone",
     "flagstone": "stone",
     "cobblestone": "stone",
-    
     # Fabric variants
     "fabric": "fabric",
     "textile": "fabric",
@@ -159,7 +152,6 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
     "cotton": "fabric",
     "velvet": "fabric",
     "silk": "fabric",
-    
     # Architectural surfaces
     "wall": "wall",
     "walls": "wall",
@@ -173,7 +165,6 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
     "soil": "ground",
     "dirt": "ground",
     "sand": "ground",
-    
     # Other common
     "sky": "sky",
     "clouds": "sky",
@@ -190,7 +181,7 @@ SEMANTIC_TO_CANONICAL: Dict[str, str] = {
 @dataclass
 class MaterialMetadata:
     """Per-material metadata for V3 processing.
-    
+
     Attributes
     ----------
     canonical_key : str
@@ -206,14 +197,14 @@ class MaterialMetadata:
     specular_sensitive : bool
         Whether material has strong highlights
     """
-    
+
     canonical_key: str
     confidence_threshold: float = 0.50
     edge_threshold: float = 0.30
     refinement_priority: int = 5
     response_strength: float = 1.0
     specular_sensitive: bool = False
-    
+
     # Refinement hints
     benefits_from_effsam: bool = False
     typical_coverage_range: tuple[float, float] = (0.01, 0.80)
@@ -290,17 +281,17 @@ DEFAULT_MATERIAL_METADATA: Dict[str, MaterialMetadata] = {
 
 def normalize_material_name(semantic_name: str) -> str:
     """Normalize a semantic material name to canonical key.
-    
+
     Parameters
     ----------
     semantic_name : str
         Input material name (e.g., 'pool_water', 'window', 'tree')
-    
+
     Returns
     -------
     str
         Canonical material key (e.g., 'water', 'glass', 'foliage')
-    
+
     Examples
     --------
     >>> normalize_material_name("pool_water")
@@ -312,33 +303,33 @@ def normalize_material_name(semantic_name: str) -> str:
     """
     name_lower = semantic_name.lower().strip().replace("-", "_")
     canonical = SEMANTIC_TO_CANONICAL.get(name_lower, name_lower)
-    
+
     # If still not in canonical set, pass through but log warning
     if canonical not in CANONICAL_MATERIALS:
         canonical = name_lower
-    
+
     return canonical
 
 
 def get_material_metadata(material_name: str) -> MaterialMetadata:
     """Get metadata for a material (normalizes name first).
-    
+
     Parameters
     ----------
     material_name : str
         Material name (semantic or canonical)
-    
+
     Returns
     -------
     MaterialMetadata
         Metadata object with thresholds and refinement hints
     """
     canonical = normalize_material_name(material_name)
-    
+
     # Return known metadata or construct default
     if canonical in DEFAULT_MATERIAL_METADATA:
         return DEFAULT_MATERIAL_METADATA[canonical]
-    
+
     # Fallback: generic metadata
     return MaterialMetadata(
         canonical_key=canonical,
@@ -355,7 +346,7 @@ def should_refine_material(
     force_list: Optional[Set[str]] = None,
 ) -> bool:
     """Decide if a material should use EfficientSAM refinement.
-    
+
     Parameters
     ----------
     material_name : str
@@ -364,7 +355,7 @@ def should_refine_material(
         'off', 'canary', 'selective', 'aggressive'
     force_list : Optional[Set[str]]
         Optional explicit list of materials to refine
-    
+
     Returns
     -------
     bool
@@ -372,25 +363,25 @@ def should_refine_material(
     """
     canonical = normalize_material_name(material_name)
     metadata = get_material_metadata(canonical)
-    
+
     if force_list is not None:
         return canonical in force_list
-    
+
     if refinement_strategy == "off":
         return False
-    
+
     if refinement_strategy == "canary":
         # Stage 6 validated list
         return canonical in {"glass", "water", "foliage"}
-    
+
     if refinement_strategy == "selective":
         # Use refinement_priority >= 6
         return metadata.refinement_priority >= 6
-    
+
     if refinement_strategy == "aggressive":
         # Refine everything except sky/ground
         return canonical not in {"sky", "ground", "ceiling"}
-    
+
     return False
 
 
@@ -398,17 +389,17 @@ def normalize_material_dict(
     material_dict: Dict[str, any],
 ) -> Dict[str, any]:
     """Normalize all keys in a material dictionary to canonical keys.
-    
+
     Parameters
     ----------
     material_dict : Dict[str, any]
         Dictionary with semantic material keys
-    
+
     Returns
     -------
     Dict[str, any]
         Dictionary with canonical material keys
-    
+
     Examples
     --------
     >>> d = {"pool_water": 0.8, "window": 0.6, "tree": 0.5}

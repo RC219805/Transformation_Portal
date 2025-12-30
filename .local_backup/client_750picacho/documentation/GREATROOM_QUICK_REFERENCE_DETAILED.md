@@ -1,17 +1,17 @@
 # Great Room Processing - Quick Reference Guide
 
-**Date**: November 5, 2025  
-**Image**: `750Picacho_GreatRoom.tiff`  
+**Date**: November 5, 2025
+**Image**: `750Picacho_GreatRoom.tiff`
 **Status**: ✅ Ready to Process
 
 ---
 
 ## 🎯 TL;DR - What You Need to Know
 
-**Quality**: 9.5/10 - Already EXCELLENT  
-**Approach**: Conservative (6/10) - Minimal intervention  
-**Primary Issue**: Window highlights + shadow detail  
-**Processing Time**: 5-10 seconds  
+**Quality**: 9.5/10 - Already EXCELLENT
+**Approach**: Conservative (6/10) - Minimal intervention
+**Primary Issue**: Window highlights + shadow detail
+**Processing Time**: 5-10 seconds
 **Expected Result**: 99% fidelity with natural polish
 
 ---
@@ -39,7 +39,7 @@ python conservative_enhance.py \
   --preset great_room_conservative
 ```
 
-**Time**: 5-10 seconds  
+**Time**: 5-10 seconds
 **Output**: TIFF + JPEG (optional)
 
 ---
@@ -211,9 +211,9 @@ material_response: 0.65-0.70  # Moderate wood
 
 ## 📁 File Locations
 
-**Input**: `input_images/750Picacho_GreatRoom.tiff` (183 MB)  
-**Output**: `processed_images/750Picacho_GreatRoom_Conservative.tiff`  
-**Config**: `config/great_room_depth.yaml` (if using depth-aware)  
+**Input**: `input_images/750Picacho_GreatRoom.tiff` (183 MB)
+**Output**: `processed_images/750Picacho_GreatRoom_Conservative.tiff`
+**Config**: `config/great_room_depth.yaml` (if using depth-aware)
 **Analysis**: `GREATROOM_COMPREHENSIVE_ANALYSIS.md` (full report)
 
 ---
@@ -226,10 +226,10 @@ material_response: 0.65-0.70  # Moderate wood
 4. ⏭️ Adjust if needed (iterative)
 5. ⏭️ Export deliverables (TIFF + JPEG)
 
-**Status**: Ready to process  
+**Status**: Ready to process
 **Confidence**: HIGH (based on successful Kitchen processing)
 
 ---
 
-**For Full Analysis**: See `GREATROOM_COMPREHENSIVE_ANALYSIS.md`  
+**For Full Analysis**: See `GREATROOM_COMPREHENSIVE_ANALYSIS.md`
 **For Kitchen Comparison**: See `GREATROOM_VS_KITCHEN_COMPARISON.md`

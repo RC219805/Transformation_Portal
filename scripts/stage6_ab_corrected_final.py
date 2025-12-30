@@ -50,6 +50,7 @@ TARGET_CLASSES = ["glass", "water", "foliage"]
 @dataclass
 class SceneBenchmark:
     """Single scene benchmark config."""
+
     name: str
     input_path: Path
     baseline_preset: Preset
@@ -105,16 +106,16 @@ def _as_dict(metrics_obj):
 def compute_image_gradients(rgb: np.ndarray) -> np.ndarray:
     """Compute gradient magnitude (Sobel) for edge alignment."""
     from scipy.ndimage import sobel
-    
+
     if rgb.ndim == 3:
         gray = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
     else:
         gray = rgb
-    
+
     gx = sobel(gray, axis=1)
     gy = sobel(gray, axis=0)
     grad_mag = np.sqrt(gx**2 + gy**2)
-    
+
     # Normalize to [0,1]
     grad_mag = grad_mag / (grad_mag.max() + 1e-8)
     return grad_mag.astype(np.float32)
@@ -126,23 +127,20 @@ def extract_masks_from_segmenter(
     device: str,
 ) -> Dict[str, np.ndarray]:
     """Extract material masks directly from segmenter (no disk I/O).
-    
+
     Returns canonicalized masks: {canonical_key: HxW float32 [0,1]}
     """
     rgb_t = torch_ops.to_torch_rgb(rgb01, device=device)
-    
+
     seg = create_material_segmenter(cfg.segmentation, device=device)
     masks_dict_torch = seg.predict(rgb_t)
-    
+
     # Convert to numpy dict
-    raw_masks = {
-        k: masks_dict_torch[k][0, 0].cpu().numpy().astype(np.float32)
-        for k in masks_dict_torch.keys()
-    }
-    
+    raw_masks = {k: masks_dict_torch[k][0, 0].cpu().numpy().astype(np.float32) for k in masks_dict_torch.keys()}
+
     # Canonicalize keys (fixes water/pool_water/etc.)
     normalized_masks = normalize_material_dict(raw_masks)
-    
+
     return normalized_masks
 
 
@@ -152,7 +150,7 @@ def run_segmentation_only(
     device: str,
 ) -> Tuple[Dict[str, np.ndarray], np.ndarray, float]:
     """Run segmentation and return masks + RGB + runtime.
-    
+
     Returns
     -------
     masks : Dict[str, np.ndarray]
@@ -163,17 +161,17 @@ def run_segmentation_only(
         Segmentation runtime in seconds
     """
     import time
-    
+
     # Load image
     rgb01, _ = io_utils.read_rgb_any(input_path)
-    
+
     # Configure for segmentation-only
     cfg = PipelineConfig(preset=preset)
-    
+
     t0 = time.perf_counter()
     masks = extract_masks_from_segmenter(rgb01, cfg, device)
     runtime = time.perf_counter() - t0
-    
+
     return masks, rgb01, runtime
 
 
@@ -184,7 +182,7 @@ def compute_class_boundary_metrics(
     class_name: str,
 ) -> Dict:
     """Compute boundary metrics for one class.
-    
+
     Returns dict with:
     - boundary_f1_vs_baseline
     - trimap_iou_*
@@ -197,14 +195,13 @@ def compute_class_boundary_metrics(
     # Compute gradients at mask resolution
     if rgb01.shape[:2] != base_mask.shape:
         from skimage.transform import resize
-        rgb_resized = resize(
-            rgb01, base_mask.shape, order=1, preserve_range=True, anti_aliasing=True
-        ).astype(np.float32)
+
+        rgb_resized = resize(rgb01, base_mask.shape, order=1, preserve_range=True, anti_aliasing=True).astype(np.float32)
     else:
         rgb_resized = rgb01
-    
+
     gradients = compute_image_gradients(rgb_resized)
-    
+
     # Metrics: canary vs baseline (regression guard)
     regression_metrics_obj = compute_full_boundary_metrics(
         pred_mask=canary_mask,
@@ -213,7 +210,7 @@ def compute_class_boundary_metrics(
         band_width_px=5,
     )
     regression_metrics = _as_dict(regression_metrics_obj)
-    
+
     # Metrics: baseline vs gradients (improvement baseline)
     base_metrics_obj = compute_full_boundary_metrics(
         pred_mask=base_mask,
@@ -222,7 +219,7 @@ def compute_class_boundary_metrics(
         band_width_px=5,
     )
     base_metrics = _as_dict(base_metrics_obj)
-    
+
     # Metrics: canary vs gradients (improvement target)
     canary_metrics_obj = compute_full_boundary_metrics(
         pred_mask=canary_mask,
@@ -231,27 +228,24 @@ def compute_class_boundary_metrics(
         band_width_px=5,
     )
     canary_metrics = _as_dict(canary_metrics_obj)
-    
+
     # Extract key values
     bf1 = regression_metrics.get("boundary_f1", 0.0)
     boundary_px = regression_metrics.get("boundary_pixels", 0)
-    
+
     edge_align_base = base_metrics.get("edge_alignment", 0.0)
     edge_align_canary = canary_metrics.get("edge_alignment", 0.0)
     edge_align_delta = edge_align_canary - edge_align_base
-    
+
     # Decision logic
     is_improvement = (
         edge_align_delta > EDGE_ALIGN_IMPROVEMENT_THRESHOLD
         and bf1 >= BF1_REGRESSION_THRESHOLD
         and boundary_px >= MIN_BOUNDARY_PX
     )
-    
-    is_regression = (
-        bf1 < BF1_REGRESSION_THRESHOLD
-        and boundary_px >= MIN_BOUNDARY_PX
-    )
-    
+
+    is_regression = bf1 < BF1_REGRESSION_THRESHOLD and boundary_px >= MIN_BOUNDARY_PX
+
     return {
         "class": class_name,
         "boundary_f1_vs_baseline": float(bf1),
@@ -270,27 +264,23 @@ def compute_class_boundary_metrics(
 def run_scene_ab(scene: SceneBenchmark, device: str) -> Dict:
     """Run A/B test for one scene."""
     log.info(f"=== {scene.name.upper()} ===")
-    
+
     if not scene.input_path.exists():
         log.warning(f"Input missing: {scene.input_path}")
         return {
             "scene": scene.name,
             "status": "input_missing",
         }
-    
+
     try:
         # Baseline
         log.info(f"  Baseline: {scene.baseline_preset.name}")
-        base_masks, rgb01, base_runtime = run_segmentation_only(
-            scene.input_path, scene.baseline_preset, device
-        )
-        
+        base_masks, rgb01, base_runtime = run_segmentation_only(scene.input_path, scene.baseline_preset, device)
+
         # Canary
         log.info(f"  Canary: {scene.canary_preset.name}")
-        canary_masks, _, canary_runtime = run_segmentation_only(
-            scene.input_path, scene.canary_preset, device
-        )
-        
+        canary_masks, _, canary_runtime = run_segmentation_only(scene.input_path, scene.canary_preset, device)
+
     except Exception as exc:
         log.error(f"  ERROR: {exc}", exc_info=True)
         return {
@@ -298,26 +288,24 @@ def run_scene_ab(scene: SceneBenchmark, device: str) -> Dict:
             "status": "error",
             "error": str(exc),
         }
-    
+
     # Per-class metrics
     class_results = []
     improvements = []
     regressions = []
-    
+
     for cls in TARGET_CLASSES:
         if cls not in base_masks or cls not in canary_masks:
             log.warning(f"  {cls}: missing in one or both runs")
             continue
-        
+
         base_mask = base_masks[cls]
         canary_mask = canary_masks[cls]
-        
-        metrics = compute_class_boundary_metrics(
-            base_mask, canary_mask, rgb01, cls
-        )
-        
+
+        metrics = compute_class_boundary_metrics(base_mask, canary_mask, rgb01, cls)
+
         class_results.append(metrics)
-        
+
         if metrics["is_improvement"]:
             improvements.append(cls)
             log.info(
@@ -325,17 +313,14 @@ def run_scene_ab(scene: SceneBenchmark, device: str) -> Dict:
                 f"(edge_delta={metrics['edge_align_delta']:+.4f}, "
                 f"bf1={metrics['boundary_f1_vs_baseline']:.3f})"
             )
-        
+
         if metrics["is_regression"]:
             regressions.append(cls)
-            log.warning(
-                f"  {cls}: REGRESSION "
-                f"(bf1={metrics['boundary_f1_vs_baseline']:.3f})"
-            )
-    
+            log.warning(f"  {cls}: REGRESSION (bf1={metrics['boundary_f1_vs_baseline']:.3f})")
+
     # Scene decision
     scene_improved = len(improvements) > 0 and len(regressions) == 0
-    
+
     return {
         "scene": scene.name,
         "status": "success",
@@ -354,29 +339,25 @@ def run_scene_ab(scene: SceneBenchmark, device: str) -> Dict:
 def run_full_benchmark(device: str) -> Dict:
     """Run full A/B benchmark across all scenes."""
     results = []
-    
+
     for scene in BENCHMARK_SCENES:
         result = run_scene_ab(scene, device)
         results.append(result)
-    
+
     # Global summary
     success_count = sum(1 for r in results if r.get("status") == "success")
     improved_count = sum(1 for r in results if r.get("scene_improved", False))
-    
+
     # Collect all improvements/regressions
     all_improvements = []
     all_regressions = []
     for r in results:
         all_improvements.extend(r.get("improvements", []))
         all_regressions.extend(r.get("regressions", []))
-    
+
     # Promotion decision
-    promote_to_apex = (
-        success_count >= 4
-        and improved_count >= 3
-        and len(all_regressions) == 0
-    )
-    
+    promote_to_apex = success_count >= 4 and improved_count >= 3 and len(all_regressions) == 0
+
     summary = {
         "device": device,
         "total_scenes": len(BENCHMARK_SCENES),
@@ -392,7 +373,7 @@ def run_full_benchmark(device: str) -> Dict:
         ),
         "scene_results": results,
     }
-    
+
     return summary
 
 
@@ -400,20 +381,20 @@ def main() -> int:
     """Run Stage 6 A/B boundary metrics test."""
     output_dir = Path("outputs/stage6_ab_boundary_metrics")
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     log.info("Stage 6 A/B Test: Boundary Metrics (Corrected Final)")
     log.info(f"Device: {FORCE_DEVICE}")
     log.info(f"Min boundary pixels: {MIN_BOUNDARY_PX}")
     log.info(f"Edge align threshold: +{EDGE_ALIGN_IMPROVEMENT_THRESHOLD}")
     log.info(f"BF1 regression threshold: {BF1_REGRESSION_THRESHOLD}")
     log.info("")
-    
+
     summary = run_full_benchmark(FORCE_DEVICE)
-    
+
     # Write results
     summary_json = output_dir / "stage6_ab_summary.json"
     summary_json.write_text(json.dumps(summary, indent=2))
-    
+
     log.info("")
     log.info("=== SUMMARY ===")
     log.info(f"Success: {summary['success_count']}/{summary['total_scenes']}")
@@ -424,7 +405,7 @@ def main() -> int:
     log.info(f"DECISION: {summary['decision']}")
     log.info("")
     log.info(f"Full results: {summary_json}")
-    
+
     return 0 if summary["promote_to_apex"] else 1
 
 

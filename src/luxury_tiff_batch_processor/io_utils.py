@@ -31,6 +31,7 @@ float_to_dtype_array
 save_image
     Save image with comprehensive TIFF metadata and compression support.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -110,13 +111,11 @@ class ProcessingCapabilities:
         """
         if self.bit_depth < 16:
             raise LuxuryGradeException(
-                "Material Response requires 16-bit precision. "
-                "Install tifffile to unlock quantum color depth."
+                "Material Response requires 16-bit precision. Install tifffile to unlock quantum color depth."
             )
         if not self.hdr_capable:
             raise LuxuryGradeException(
-                "Luxury-grade processing requires HDR capability. "
-                "Install tifffile or ensure your environment supports HDR."
+                "Luxury-grade processing requires HDR capability. Install tifffile or ensure your environment supports HDR."
             )
 
 
@@ -397,9 +396,7 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
         return result.array, result.dtype, result.alpha, result.base_channels
     allowed_formats = ("object", "tuple3", "tuple4")
     if return_format not in allowed_formats:
-        raise ValueError(
-            f"Unsupported return_format: {return_format}. Allowed values are: {allowed_formats}"
-        )
+        raise ValueError(f"Unsupported return_format: {return_format}. Allowed values are: {allowed_formats}")
     return result
 
 
@@ -547,7 +544,7 @@ def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int,
 
 
 def save_image(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-                 # pylint: disable=too-many-branches,too-many-statements
+    # pylint: disable=too-many-branches,too-many-statements
     destination: Path,
     arr_int: np.ndarray,
     dtype: np.dtype,
@@ -564,9 +561,10 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
     writer_compression = compression_for_tifffile(compression)
     lzw_requires_codec = writer_compression in {"lzw", "jpeg"} and imagecodecs is None
 
-    use_tifffile = tifffile is not None and not lzw_requires_codec and (
-        (dtype_info is not None and dtype_info.bits >= 16)
-        or np.issubdtype(np_dtype, np.floating)
+    use_tifffile = (
+        tifffile is not None
+        and not lzw_requires_codec
+        and ((dtype_info is not None and dtype_info.bits >= 16) or np.issubdtype(np_dtype, np.floating))
     )
 
     array_to_write = arr_int
@@ -591,9 +589,7 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
             "compression": writer_compression,
             "metadata": None,
         }
-        if extrasample_needed or (
-            array_to_write.ndim == 3 and array_to_write.shape[2] > 3
-        ):
+        if extrasample_needed or (array_to_write.ndim == 3 and array_to_write.shape[2] > 3):
             tiff_kwargs["extrasamples"] = "unassoc"
         extratags = []
         if icc_profile:

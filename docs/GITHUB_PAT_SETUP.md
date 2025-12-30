@@ -23,11 +23,11 @@ GitHub Actions is not permitted to create or approve pull requests.
 3. Configure the token:
 
    **Token name:** `Transformation_Portal_Automation`
-   
+
    **Expiration:** Choose appropriate duration (recommended: 90 days or 1 year)
-   
+
    **Resource owner:** RC219805
-   
+
    **Repository access:** Select "Only select repositories" → Choose `Transformation_Portal`
 
 4. **Permissions** (Repository permissions):
@@ -202,5 +202,5 @@ The automated dependency update workflow:
 
 ---
 
-**Last Updated:** 2025-12-15  
+**Last Updated:** 2025-12-15
 **Maintainer:** RC219805

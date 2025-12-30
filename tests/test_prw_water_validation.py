@@ -39,8 +39,8 @@ def create_test_image(size=(256, 256), pool_region=True):
 
     if pool_region:
         # Blue pool region in center
-        rgb[h//4:3*h//4, w//4:3*w//4, 2] = 0.6  # Blue channel
-        rgb[h//4:3*h//4, w//4:3*w//4, 1] = 0.4  # Some green
+        rgb[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4, 2] = 0.6  # Blue channel
+        rgb[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4, 1] = 0.4  # Some green
     else:
         # Green foliage (non-water)
         rgb[:, :, 1] = 0.5  # Green channel
@@ -76,7 +76,7 @@ def test_validation_result_dataclass():
         saturation_boost_applied=False,  # PR-W4
         candidate_stage_passed=True,  # PR-W4
         injection_stage_passed=True,  # PR-W4
-        processing_time_ms=45.2
+        processing_time_ms=45.2,
     )
 
     # Verify all fields are present
@@ -102,10 +102,10 @@ def test_validation_result_dataclass():
 def test_edge_alignment_computation():
     """Verify edge alignment metric computation."""
     pytest.importorskip("scipy")  # Skip if scipy not available
-    
+
     config = MaterialsV3Config(
         water_detection_enabled=True,
-        enabled=False  # Disable Materials V3 to avoid ML dependencies
+        enabled=False,  # Disable Materials V3 to avoid ML dependencies
     )
     harness = WaterValidationHarness(config)
 
@@ -130,11 +130,8 @@ def test_edge_alignment_computation():
 def test_boundary_extraction():
     """Verify boundary extraction from mask."""
     pytest.importorskip("scipy")  # Skip if scipy not available
-    
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config)
 
     # Create simple mask
@@ -160,11 +157,8 @@ def test_boundary_extraction():
 def test_count_boundary_pixels():
     """Verify boundary pixel counting."""
     pytest.importorskip("scipy")  # Skip if scipy not available
-    
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config)
 
     # Create mask
@@ -184,10 +178,7 @@ def test_count_boundary_pixels():
 
 def test_stability_computation():
     """Verify stability metric computation (deterministic with seed)."""
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
 
     # Create test image
@@ -203,17 +194,14 @@ def test_stability_computation():
     # Should be between 0 and 1
     assert 0.0 <= stability1 <= 1.0
     assert 0.0 <= stability2 <= 1.0
-    
+
     # Should be deterministic (same results)
     assert abs(stability1 - stability2) < 0.01
 
 
 def test_false_trigger_detection():
     """Verify false trigger detection logic (should_detect=false)."""
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
 
     # Create hard negative image (blue but not water)
@@ -230,7 +218,7 @@ def test_false_trigger_detection():
             label="pool",
             should_detect=False,
             difficulty="hard",
-            tags=["hard_negative"]
+            tags=["hard_negative"],
         )
 
         # Verify schema
@@ -252,10 +240,7 @@ def test_false_trigger_detection():
 
 def test_validate_single_image():
     """Test single image validation (v0 schema)."""
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
 
     # Create test image
@@ -271,7 +256,7 @@ def test_validate_single_image():
             label="pool",
             should_detect=True,
             difficulty="easy",
-            tags=[]
+            tags=[],
         )
 
         # Verify result structure
@@ -294,10 +279,7 @@ def test_validate_single_image():
 
 def test_validate_dataset():
     """Test dataset validation (v0 schema)."""
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
 
     # Create test dataset
@@ -309,10 +291,10 @@ def test_validate_dataset():
         # Create 2 test images
         pool_img = pool_dir / "pool_001.jpg"
         neg_img = pool_dir / "neg_blue_wall_001.jpg"
-        
+
         img1 = Image.fromarray((create_test_image(pool_region=True) * 255).astype(np.uint8))
         img1.save(pool_img)
-        
+
         img2 = Image.fromarray((create_test_image(pool_region=False) * 255).astype(np.uint8))
         img2.save(neg_img)
 
@@ -322,25 +304,21 @@ def test_validate_dataset():
             "root": str(temp_dir),
             "labels": ["pool"],
             "images": {
-                "pool/pool_001.jpg": {
-                    "label": "pool",
-                    "should_detect": True,
-                    "difficulty": "easy",
-                    "tags": []
-                },
+                "pool/pool_001.jpg": {"label": "pool", "should_detect": True, "difficulty": "easy", "tags": []},
                 "pool/neg_blue_wall_001.jpg": {
                     "label": "pool",
                     "should_detect": False,
                     "difficulty": "hard",
-                    "tags": ["hard_negative"]
-                }
-            }
+                    "tags": ["hard_negative"],
+                },
+            },
         }
-        
+
         # Write ground truth to file
         gt_path = temp_dir / "ground_truth.json"
         import json
-        with open(gt_path, 'w') as f:
+
+        with open(gt_path, "w") as f:
             json.dump(ground_truth, f)
 
         # Validate dataset
@@ -349,7 +327,7 @@ def test_validate_dataset():
         # Verify results
         assert len(results) == 2
         assert all(isinstance(r, ValidationResult) for r in results)
-        
+
         # Check schema fields
         assert results[0].should_detect is True
         assert results[1].should_detect is False
@@ -366,10 +344,7 @@ def test_validate_dataset():
 
 def test_report_generation():
     """Verify JSON report structure (v0 schema)."""
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
 
     # Create mock results (v0 schema)
@@ -392,14 +367,14 @@ def test_report_generation():
             is_false_positive=False,
             is_false_trigger=False,
             processing_time_ms=42.0,
-        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
-        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
-        confidence_raw=0.0,  # PR-W4
-        confidence_after_suppressors=0.0,  # PR-W4
-        confidence_final=0.0,  # PR-W4
-        saturation_boost_applied=False,  # PR-W4
-        candidate_stage_passed=False,  # PR-W4
-        injection_stage_passed=False  # PR-W4
+            coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+            coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+            confidence_raw=0.0,  # PR-W4
+            confidence_after_suppressors=0.0,  # PR-W4
+            confidence_final=0.0,  # PR-W4
+            saturation_boost_applied=False,  # PR-W4
+            candidate_stage_passed=False,  # PR-W4
+            injection_stage_passed=False,  # PR-W4
         ),
         ValidationResult(
             image_path="ocean_001.jpg",
@@ -419,14 +394,14 @@ def test_report_generation():
             is_false_positive=False,
             is_false_trigger=False,
             processing_time_ms=45.0,
-        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
-        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
-        confidence_raw=0.0,  # PR-W4
-        confidence_after_suppressors=0.0,  # PR-W4
-        confidence_final=0.0,  # PR-W4
-        saturation_boost_applied=False,  # PR-W4
-        candidate_stage_passed=False,  # PR-W4
-        injection_stage_passed=False  # PR-W4
+            coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+            coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+            confidence_raw=0.0,  # PR-W4
+            confidence_after_suppressors=0.0,  # PR-W4
+            confidence_final=0.0,  # PR-W4
+            saturation_boost_applied=False,  # PR-W4
+            candidate_stage_passed=False,  # PR-W4
+            injection_stage_passed=False,  # PR-W4
         ),
         ValidationResult(
             image_path="neg_blue_wall_001.jpg",
@@ -446,22 +421,19 @@ def test_report_generation():
             is_false_positive=False,
             is_false_trigger=False,
             processing_time_ms=38.0,
-        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
-        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
-        confidence_raw=0.0,  # PR-W4
-        confidence_after_suppressors=0.0,  # PR-W4
-        confidence_final=0.0,  # PR-W4
-        saturation_boost_applied=False,  # PR-W4
-        candidate_stage_passed=False,  # PR-W4
-        injection_stage_passed=False  # PR-W4
-        )
+            coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+            coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+            confidence_raw=0.0,  # PR-W4
+            confidence_after_suppressors=0.0,  # PR-W4
+            confidence_final=0.0,  # PR-W4
+            saturation_boost_applied=False,  # PR-W4
+            candidate_stage_passed=False,  # PR-W4
+            injection_stage_passed=False,  # PR-W4
+        ),
     ]
 
     # Mock ground truth
-    ground_truth = {
-        "version": "v0",
-        "labels": ["pool", "ocean"]
-    }
+    ground_truth = {"version": "v0", "labels": ["pool", "ocean"]}
 
     # Generate report
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
@@ -486,7 +458,7 @@ def test_report_generation():
         assert summary["ocean_images"] == 1
         assert summary["should_detect_true"] == 2
         assert summary["should_detect_false"] == 1
-        
+
         # New fields
         assert "pool_recall" in summary
         assert "ocean_recall" in summary
@@ -494,7 +466,7 @@ def test_report_generation():
         assert "ocean_median_coverage" in summary
         assert "false_trigger_count" in summary
         assert "false_trigger_rate" in summary
-        
+
         # Backward compatibility: false_positive_* should equal false_trigger_* (PR #560 fix)
         assert "false_positive_count" in summary
         assert summary["false_positive_count"] == summary["false_trigger_count"]
@@ -525,10 +497,7 @@ def test_report_generation():
 
 def test_report_summary_statistics():
     """Verify summary statistics calculations (v0 schema)."""
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
 
     # Create results with known values (v0 schema)
@@ -551,14 +520,14 @@ def test_report_summary_statistics():
             is_false_positive=False,
             is_false_trigger=False,
             processing_time_ms=40.0,
-        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
-        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
-        confidence_raw=0.0,  # PR-W4
-        confidence_after_suppressors=0.0,  # PR-W4
-        confidence_final=0.0,  # PR-W4
-        saturation_boost_applied=False,  # PR-W4
-        candidate_stage_passed=False,  # PR-W4
-        injection_stage_passed=False  # PR-W4
+            coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+            coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+            confidence_raw=0.0,  # PR-W4
+            confidence_after_suppressors=0.0,  # PR-W4
+            confidence_final=0.0,  # PR-W4
+            saturation_boost_applied=False,  # PR-W4
+            candidate_stage_passed=False,  # PR-W4
+            injection_stage_passed=False,  # PR-W4
         ),
         ValidationResult(
             image_path="pool_002.jpg",
@@ -578,14 +547,14 @@ def test_report_summary_statistics():
             is_false_positive=False,
             is_false_trigger=False,
             processing_time_ms=42.0,
-        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
-        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
-        confidence_raw=0.0,  # PR-W4
-        confidence_after_suppressors=0.0,  # PR-W4
-        confidence_final=0.0,  # PR-W4
-        saturation_boost_applied=False,  # PR-W4
-        candidate_stage_passed=False,  # PR-W4
-        injection_stage_passed=False  # PR-W4
+            coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+            coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+            confidence_raw=0.0,  # PR-W4
+            confidence_after_suppressors=0.0,  # PR-W4
+            confidence_final=0.0,  # PR-W4
+            saturation_boost_applied=False,  # PR-W4
+            candidate_stage_passed=False,  # PR-W4
+            injection_stage_passed=False,  # PR-W4
         ),
         ValidationResult(
             image_path="neg_blue_wall_001.jpg",
@@ -605,22 +574,19 @@ def test_report_summary_statistics():
             is_false_positive=True,  # Legacy alias for is_false_trigger
             is_false_trigger=True,  # Detected despite should_detect=false
             processing_time_ms=38.0,
-        coverage_all=0.0,  # PR-W4 (will be computed from coverage)
-        coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
-        confidence_raw=0.0,  # PR-W4
-        confidence_after_suppressors=0.0,  # PR-W4
-        confidence_final=0.0,  # PR-W4
-        saturation_boost_applied=False,  # PR-W4
-        candidate_stage_passed=False,  # PR-W4
-        injection_stage_passed=False  # PR-W4
-        )
+            coverage_all=0.0,  # PR-W4 (will be computed from coverage)
+            coverage_detected=0.0,  # PR-W4 (will be computed from coverage)
+            confidence_raw=0.0,  # PR-W4
+            confidence_after_suppressors=0.0,  # PR-W4
+            confidence_final=0.0,  # PR-W4
+            saturation_boost_applied=False,  # PR-W4
+            candidate_stage_passed=False,  # PR-W4
+            injection_stage_passed=False,  # PR-W4
+        ),
     ]
 
     # Mock ground truth
-    ground_truth = {
-        "version": "v0",
-        "labels": ["pool"]
-    }
+    ground_truth = {"version": "v0", "labels": ["pool"]}
 
     # Generate report
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
@@ -665,11 +631,8 @@ def test_report_summary_statistics():
 def test_edge_alignment_with_strong_edges():
     """Test edge alignment with image containing strong edges."""
     pytest.importorskip("scipy")  # Skip if scipy not available
-    
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
 
     # Create image with strong edges
@@ -690,11 +653,8 @@ def test_edge_alignment_with_strong_edges():
 def test_edge_alignment_with_misaligned_mask():
     """Test edge alignment with mask that doesn't match edges."""
     pytest.importorskip("scipy")  # Skip if scipy not available
-    
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
 
     # Create image with horizontal edge
@@ -715,22 +675,19 @@ def test_edge_alignment_with_misaligned_mask():
 def test_edge_alignment_with_detector_enabled():
     """Edge alignment computed when water detection enabled."""
     pytest.importorskip("scipy")  # Skip if scipy not available
-    
-    config = MaterialsV3Config(
-        water_detection_enabled=True,
-        enabled=False
-    )
+
+    config = MaterialsV3Config(water_detection_enabled=True, enabled=False)
     harness = WaterValidationHarness(config, seed=42)
-    
+
     # Create synthetic pool-like image
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         rgb = np.zeros((256, 256, 3), dtype=np.uint8)
         rgb[50:200, 50:200, 2] = 180  # Blue region
-        rgb[50:200, 50:200, 1] = 76   # Some green
+        rgb[50:200, 50:200, 1] = 76  # Some green
         img = Image.fromarray(rgb)
         img.save(f.name)
         img_path = Path(f.name)
-    
+
     try:
         result = harness.validate_single(
             img_path,
@@ -738,19 +695,19 @@ def test_edge_alignment_with_detector_enabled():
             label="pool",
             should_detect=True,
             difficulty="easy",
-            tags=[]
+            tags=[],
         )
-        
+
         # Verify mask-based metrics are computed (not fallback 0.0)
         # Stub detector should produce a mask for this blue image
         assert result.edge_alignment_score > 0.0, "Should compute real edge score when mask available"
         assert result.boundary_px > 0, "Should count actual boundary pixels when mask available"
-        
+
         # Also verify other fields populated
         assert result.coverage >= 0.0
         assert result.confidence >= 0.0
         assert result.should_detect is True
-        
+
     finally:
         img_path.unlink()  # Cleanup
 
@@ -759,128 +716,126 @@ def test_suppressor_telemetry_export():
     """Verify suppressor telemetry is exported in validation results (Phase A)."""
     import json
     from pathlib import Path
-    
+
     # Load baseline with telemetry
     baseline_path = Path("data/water_v0/baseline_ci_current_v1.json")
     if not baseline_path.exists():
         pytest.skip("Baseline not available")
-    
+
     with open(baseline_path) as f:
         baseline = json.load(f)
-    
+
     # Check first result has telemetry fields
     first_result = baseline["results"][0]
-    
+
     required_fields = [
         "suppressors_applied",
         "suppressor_telemetry",
         "glass_detector",
         "flat_surface_detector",
     ]
-    
+
     for field in required_fields:
         assert field in first_result, f"Missing telemetry field: {field}"
-    
+
     # suppressors_applied should be a list
     assert isinstance(first_result["suppressors_applied"], list)
-    
+
     # suppressor_telemetry can be None or dict
     assert first_result["suppressor_telemetry"] is None or isinstance(first_result["suppressor_telemetry"], dict)
-    
+
     print("✅ All telemetry fields present in baseline")
 
 
 def test_multiscale_flag_off_no_behavior_change():
     """Verify flag OFF preserves exact prior behavior (Phase C)."""
     from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
-    
+
     # Create test image with pool-like region
     rgb01 = create_test_image(size=(256, 256), pool_region=True)
-    
+
     # Run with flag OFF (default)
     params_off = WaterDetectionParams(glass_multiscale_enabled=False)
     detector_off = WaterCandidateDetector(params=params_off)
     result_off = detector_off.detect(rgb01)
-    
+
     # Verify telemetry fields are present but None when flag OFF
     assert result_off.suppressor_telemetry is not None
     glass_detector = result_off.suppressor_telemetry.get("glass_detector")
-    
+
     if glass_detector is not None:
         # Check multi-scale fields are None when flag OFF
         assert glass_detector.get("grid_score_coarse") is None, "grid_score_coarse should be None when flag OFF"
         assert glass_detector.get("grid_persistence_ratio") is None, "grid_persistence_ratio should be None when flag OFF"
         assert glass_detector.get("tile_exempted") is False, "tile_exempted should be False when flag OFF"
-        
+
         # Verify core glass detection still works
         assert "is_glass" in glass_detector
         assert "edge_alignment_score" in glass_detector
         assert "grid_score" in glass_detector
-    
+
     print("✅ Flag OFF preserves prior behavior with telemetry fields set to None")
 
 
 def test_multiscale_flag_on_telemetry_present():
     """Verify flag ON adds telemetry keys and tile exemption logic runs (Phase C)."""
     from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
-    
+
     # Create test image with grid-like pattern (simulates tiled pool)
     h, w = 256, 256
     rgb01 = np.zeros((h, w, 3), dtype=np.float32)
-    
+
     # Create grid pattern (high-frequency tiles)
     tile_size = 16
     for i in range(0, h, tile_size):
         for j in range(0, w, tile_size):
             # Checkerboard pattern with blue tiles
             if (i // tile_size + j // tile_size) % 2 == 0:
-                rgb01[i:i+tile_size, j:j+tile_size, 2] = 0.6  # Blue
-                rgb01[i:i+tile_size, j:j+tile_size, 1] = 0.3  # Some green
+                rgb01[i : i + tile_size, j : j + tile_size, 2] = 0.6  # Blue
+                rgb01[i : i + tile_size, j : j + tile_size, 1] = 0.3  # Some green
             else:
-                rgb01[i:i+tile_size, j:j+tile_size, 2] = 0.5  # Lighter blue
-                rgb01[i:i+tile_size, j:j+tile_size, 1] = 0.35
-    
+                rgb01[i : i + tile_size, j : j + tile_size, 2] = 0.5  # Lighter blue
+                rgb01[i : i + tile_size, j : j + tile_size, 1] = 0.35
+
     # Run with flag ON
     params_on = WaterDetectionParams(
-        glass_multiscale_enabled=True,
-        glass_multiscale_downsample_factor=4,
-        glass_tile_persistence_threshold=0.8
+        glass_multiscale_enabled=True, glass_multiscale_downsample_factor=4, glass_tile_persistence_threshold=0.8
     )
     detector_on = WaterCandidateDetector(params=params_on)
     result_on = detector_on.detect(rgb01)
-    
+
     # Verify telemetry fields are present and computed when flag ON
     assert result_on.suppressor_telemetry is not None
     glass_detector = result_on.suppressor_telemetry.get("glass_detector")
-    
+
     if glass_detector is not None and glass_detector.get("grid_score", 0.0) > 0.0:
         # Multi-scale fields should be computed when flag ON
         grid_score_coarse = glass_detector.get("grid_score_coarse")
         grid_persistence_ratio = glass_detector.get("grid_persistence_ratio")
-        
+
         # grid_score_coarse can be None if downsampling failed, or a float if computed
         if grid_score_coarse is not None:
             assert isinstance(grid_score_coarse, (float, int)), "grid_score_coarse should be numeric when computed"
             assert grid_persistence_ratio is not None, "grid_persistence_ratio should be computed when grid_score_coarse is"
             assert isinstance(grid_persistence_ratio, (float, int)), "grid_persistence_ratio should be numeric"
-        
+
         # tile_exempted should be a boolean
         assert "tile_exempted" in glass_detector
         assert isinstance(glass_detector["tile_exempted"], bool)
-    
+
     print("✅ Flag ON computes multi-scale telemetry and runs tile exemption logic")
 
 
 def test_multiscale_downsampling_robustness():
     """Verify multi-scale downsampling handles edge cases (Phase C)."""
     from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
-    
+
     # Test with very small image (should handle gracefully)
     small_rgb = np.random.rand(64, 64, 3).astype(np.float32)
-    
+
     params = WaterDetectionParams(glass_multiscale_enabled=True, glass_multiscale_downsample_factor=4)
     detector = WaterCandidateDetector(params=params)
-    
+
     try:
         result = detector.detect(small_rgb)
         # Should not crash
@@ -888,11 +843,11 @@ def test_multiscale_downsampling_robustness():
         print("✅ Multi-scale downsampling handles small images")
     except Exception as e:
         pytest.fail(f"Multi-scale downsampling failed on small image: {e}")
-    
+
     # Test with very large downsample factor
     params_large_factor = WaterDetectionParams(glass_multiscale_enabled=True, glass_multiscale_downsample_factor=16)
     detector_large = WaterCandidateDetector(params=params_large_factor)
-    
+
     try:
         result_large = detector_large.detect(small_rgb)
         # Should handle gracefully (may return None for grid_score_coarse)

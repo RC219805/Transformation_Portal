@@ -1,5 +1,5 @@
 # Session Complete: Materials V3 Scaffolding + Roadmap
-**Date**: December 13, 2025  
+**Date**: December 13, 2025
 **Session Focus**: Materials V3 Foundation (PR-1) + Implementation Roadmap
 
 ---
@@ -68,14 +68,14 @@ class ConfidenceSemantics:
     base_threshold: float = 0.50  # SegFormer
     refined_threshold: float = 0.45  # EfficientSAM (can be slightly lower)
     edge_threshold: float = 0.30  # Boundary-specific
-    
+
     material_thresholds: Dict[str, float] = {
         'glass': 0.40,  # Inherently low confidence
         'water': 0.35,  # Highly variable
         'wood': 0.65,   # High confidence required
         ...
     }
-    
+
     use_edge_confidence: bool = True
     edge_band_width: float = 0.20
 ```
@@ -88,14 +88,14 @@ class ConfidenceSemantics:
 @dataclass
 class PromptGenerationConfig:
     strategy: str = "mask_peaks"  # NOT box centers
-    
+
     num_fg_points: int = 4
     fg_confidence_percentile: float = 80.0  # Top 20% of mask
     fg_spacing_min_px: int = 32  # Farthest-point sampling
-    
+
     num_bg_points: int = 2  # Sparse negatives
     bg_margin_px: int = 16
-    
+
     use_roi_crop: bool = True  # Crop-first refinement
     roi_padding_px: int = 32
     roi_max_side: int = 1024
@@ -111,10 +111,10 @@ class EdgeAwareGating:
     core_threshold: float = 0.70
     edge_low: float = 0.20
     edge_high: float = 0.70
-    
+
     core_strength: float = 1.0
     edge_strength: float = 0.8  # Conservative at edges
-    
+
     edge_method: str = "confidence_gradient"
 ```
 
@@ -447,5 +447,5 @@ This session establishes **Materials V3 as the right path forward** for advanced
 
 ---
 
-**Session End**: December 13, 2025, 12:59 PM PST  
+**Session End**: December 13, 2025, 12:59 PM PST
 **Status**: ✅ Complete, Repository Stable, All Tests Passing, CI Green

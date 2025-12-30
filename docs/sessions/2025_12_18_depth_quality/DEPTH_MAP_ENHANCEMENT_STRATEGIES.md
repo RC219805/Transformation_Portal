@@ -1,6 +1,6 @@
 # Advanced Depth Map Enhancement Strategies
 
-**Current State**: 65,536 unique levels, 16-bit precision, 4K DCI resolution  
+**Current State**: 65,536 unique levels, 16-bit precision, 4K DCI resolution
 **Goal**: Further elevate quality, precision, and usability for luxury architectural rendering
 
 ---
@@ -397,8 +397,8 @@ python depth_ultimate_pipeline.py \
 
 **Current state is already excellent** (65K levels, true 16-bit), but several paths exist for further improvement:
 
-**Best ROI**: Guided filter (2x edge sharpness, minimal effort)  
-**Best Quality**: Multi-model ensemble + guided filter  
+**Best ROI**: Guided filter (2x edge sharpness, minimal effort)
+**Best Quality**: Multi-model ensemble + guided filter
 **Best for Production**: Current + guided filter + normal maps
 
 Would you like me to implement any of these enhancements?

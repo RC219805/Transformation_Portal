@@ -22,7 +22,7 @@ This PR addresses all errors and issues identified in the code review of PR 100 
 
 ### 3. 16-bit Image Saving
 **Issue:** PIL mode 'I;16' only supports 2D (grayscale) arrays
-**Fix:** 
+**Fix:**
 - RGB arrays fallback to 8-bit with warning
 - Grayscale arrays use proper 'I;16' mode
 - Function returns actual bit depth used

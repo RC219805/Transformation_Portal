@@ -210,7 +210,7 @@ Checkpoint files are JSON with this structure:
 ```
 Initial batch (interrupted at image 3 during upscaling):
   ✅ image_001: COMPLETE
-  ✅ image_002: COMPLETE  
+  ✅ image_002: COMPLETE
   ⏸️  image_003: POST_PROCESSING complete, UPSCALING interrupted
   ⏹️  image_004: Not started
   ⏹️  image_005: Not started
@@ -232,7 +232,7 @@ Image processing failed during MATERIAL_SEGMENTATION:
 
 Resume #1 (automatic fallback to CPU):
   Attempt 2: ✅ Success (CPU device)
-  
+
 Final result: SUCCESS after 1 retry
 ```
 
@@ -401,22 +401,22 @@ Processing Flow with Checkpoints + Error Recovery:
 
 ## FAQ
 
-**Q: Do checkpoints slow down processing?**  
+**Q: Do checkpoints slow down processing?**
 A: No, overhead is <1% of total processing time (~5-10ms per stage).
 
-**Q: Can I disable checkpointing?**  
+**Q: Can I disable checkpointing?**
 A: Yes, but not recommended. To disable, use a legacy workflow or manually delete checkpoints after each run.
 
-**Q: How long are checkpoints kept?**  
+**Q: How long are checkpoints kept?**
 A: Forever unless you run manual cleanup. Recommended: cleanup completed checkpoints after 7 days.
 
-**Q: Can I move checkpoint files?**  
+**Q: Can I move checkpoint files?**
 A: Yes, but update paths in JSON files or they won't match inputs.
 
-**Q: Do checkpoints work with --overwrite?**  
+**Q: Do checkpoints work with --overwrite?**
 A: Yes, but `--overwrite` will reprocess all images. Checkpoints are primarily for resume, not for intentional reprocessing.
 
-**Q: Can multiple processes share checkpoints?**  
+**Q: Can multiple processes share checkpoints?**
 A: Not recommended - each process should have its own checkpoint directory to avoid conflicts.
 
 ---

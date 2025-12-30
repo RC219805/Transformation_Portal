@@ -1,7 +1,7 @@
 # Aerial Pool Rendering Analysis: 750Picacho_Pool.tiff
 
-**Analysis Date:** November 6, 2025  
-**Image:** `input_images/750Picacho_Pool.tiff`  
+**Analysis Date:** November 6, 2025
+**Image:** `input_images/750Picacho_Pool.tiff`
 **Purpose:** Detailed assessment for photorealistic enhancement strategy
 
 ---
@@ -58,7 +58,7 @@ This is a **4K aerial pool rendering** (4000x2250, 16:9) showcasing a contempora
 ### Pool Water (61% of frame) - DOMINANT FEATURE
 - **Color:** RGB(0.435, 0.524, 0.648) - cyan-blue with slight artificial cast
 - **Luminance:** 0.514 ± 0.204 (moderately bright with good variation)
-- **Characteristics:** 
+- **Characteristics:**
   - Blue-dominant pixels indicate pool water successfully
   - High coverage suggests proper aerial composition
   - Color needs subtle warming to reduce "rendered" appearance
@@ -67,7 +67,7 @@ This is a **4K aerial pool rendering** (4000x2250, 16:9) showcasing a contempora
 ### Sky/Background (25% of frame)
 - **Color:** RGB(0.491, 0.611, 0.750) - natural blue sky
 - **Luminance:** 0.596 ± 0.200 (well-exposed, good tonal variation)
-- **Characteristics:** 
+- **Characteristics:**
   - Clear daylight conditions
   - No blown highlights
   - Natural color gradient
@@ -145,22 +145,22 @@ This is a **4K aerial pool rendering** (4000x2250, 16:9) showcasing a contempora
 ## 5. Specific Quality Issues
 
 ### Issue #1: Low Global Contrast (Priority: HIGH)
-**Problem:** Flat, washed-out appearance  
-**Measurement:** Local contrast 0.105 (should be 0.15+)  
+**Problem:** Flat, washed-out appearance
+**Measurement:** Local contrast 0.105 (should be 0.15+)
 **Solution:** Apply contrast multiplier 1.08-1.12
 
 ### Issue #2: Underexposure (Priority: HIGH)
-**Problem:** Overall image 0.2-0.3 EV too dark  
-**Measurement:** Average luminance 0.441 (target: 0.50-0.55)  
+**Problem:** Overall image 0.2-0.3 EV too dark
+**Measurement:** Average luminance 0.441 (target: 0.50-0.55)
 **Solution:** Global exposure lift +0.25 EV
 
 ### Issue #3: Shadow Detail Loss (Priority: MEDIUM)
-**Problem:** Foreground shadows too dense (28% coverage)  
+**Problem:** Foreground shadows too dense (28% coverage)
 **Solution:** Selective shadow lift +0.3-0.4 for pixels < 0.25 luminance
 
 ### Issue #4: Pool Water Color (Priority: MEDIUM)
-**Problem:** Blue cast creates "CGI rendered" appearance  
-**Solution:** 
+**Problem:** Blue cast creates "CGI rendered" appearance
+**Solution:**
 - Reduce blue channel by 3-5%
 - Boost green channel by 5-8%
 - Target: RGB(0.42, 0.58, 0.68)
@@ -170,7 +170,7 @@ This is a **4K aerial pool rendering** (4000x2250, 16:9) showcasing a contempora
 ## 6. Technical Challenges for Enhancement
 
 ### Challenge #1: Water Surface Reflections
-**Issue:** Pool contains sky reflections that must be preserved  
+**Issue:** Pool contains sky reflections that must be preserved
 **Strategy:**
 - Zone-based processing
 - Preserve high-frequency detail in reflections
@@ -178,7 +178,7 @@ This is a **4K aerial pool rendering** (4000x2250, 16:9) showcasing a contempora
 - Use gradient masks for sky reflection preservation
 
 ### Challenge #2: Material Differentiation
-**Issue:** Water, concrete, vegetation require different processing  
+**Issue:** Water, concrete, vegetation require different processing
 **Strategy:**
 - Material Response technology with surface detection
 - Water: cyan-blue target with transparency preservation
@@ -186,14 +186,14 @@ This is a **4K aerial pool rendering** (4000x2250, 16:9) showcasing a contempora
 - Vegetation: green enhancement without over-saturation
 
 ### Challenge #3: Transparency and Depth in Water
-**Issue:** Pool water shows both surface and depth  
+**Issue:** Pool water shows both surface and depth
 **Strategy:**
 - Preserve luminance gradient from shallow to deep
 - Avoid flattening water tonality with global adjustments
 - Use depth-aware processing if depth map available
 
 ### Challenge #4: Edge Preservation
-**Issue:** Sharp edges between water and concrete must remain crisp  
+**Issue:** Sharp edges between water and concrete must remain crisp
 **Strategy:**
 - Minimal global sharpening (0.10-0.15 max)
 - Use edge-aware filters (bilateral, guided filter)
@@ -298,7 +298,7 @@ water:
 concrete:
   saturation_limit: 0.15
   texture_emphasis: 0.50
-  
+
 vegetation:
   green_boost: 1.05      # +5%
 
@@ -320,56 +320,56 @@ lut_strength: 0.65
 ## 9. Specific Warnings: Common Pitfalls
 
 ### ⚠️ WARNING #1: Over-Sharpening Water Surfaces
-**Problem:** Pool edges are high-contrast - sharpening creates halos  
+**Problem:** Pool edges are high-contrast - sharpening creates halos
 **Solution:**
 - Use clarity instead of sharpening (max 0.12)
 - Apply edge-aware filters
 - Test at 100% zoom
 
 ### ⚠️ WARNING #2: Destroying Water Transparency
-**Problem:** Aggressive tone mapping flattens depth  
+**Problem:** Aggressive tone mapping flattens depth
 **Solution:**
 - Preserve luminance gradient
 - Use Material Response with `preserve_highlights=True`
 - Avoid contrast > 1.12
 
 ### ⚠️ WARNING #3: Sky-Water Reflection Mismatch
-**Problem:** Independent processing breaks color continuity  
+**Problem:** Independent processing breaks color continuity
 **Solution:**
 - Apply color adjustments to both sky and reflections
 - Use luminosity masks for reflection zones
 - Verify continuity at water edges
 
 ### ⚠️ WARNING #4: Over-Saturating Concrete
-**Problem:** Global saturation affects neutral surfaces  
+**Problem:** Global saturation affects neutral surfaces
 **Solution:**
 - Limit concrete saturation to < 0.15
 - Apply Material Response for neutrality
 - Test at 100% zoom
 
 ### ⚠️ WARNING #5: Artificial Green Vegetation
-**Problem:** Excessive green boost creates "video game" look  
+**Problem:** Excessive green boost creates "video game" look
 **Solution:**
 - Limit green boost to 1.05× max
 - Use vegetation masks
 - Compare to reference photography
 
 ### ⚠️ WARNING #6: Shadow Noise Amplification
-**Problem:** Lifting shadows reveals noise/grain  
+**Problem:** Lifting shadows reveals noise/grain
 **Solution:**
 - Apply gentle denoising before shadow lift
 - Limit to +0.35 stops max
 - Use gradual zone-based transitions
 
 ### ⚠️ WARNING #7: LUT Flattening Depth
-**Problem:** Strong LUTs flatten tonal range  
+**Problem:** Strong LUTs flatten tonal range
 **Solution:**
 - Use LUT strength ≤ 0.70
 - Test with depth map overlay
 - Reduce if depth perception lost
 
 ### ⚠️ WARNING #8: Ignoring Linear Color Space
-**Problem:** Processing in linear produces incorrect results  
+**Problem:** Processing in linear produces incorrect results
 **Solution:**
 - **ALWAYS convert to sRGB first** (gamma 2.2)
 - Apply adjustments in sRGB space
@@ -451,7 +451,7 @@ Before:
   local_contrast: 0.105
   saturation_avg: 0.545
   detail_level: 0.047
-  
+
 After:
   luminance_avg: 0.525     # +19% brighter
   local_contrast: 0.135    # +29% more contrast
@@ -510,6 +510,6 @@ This aerial pool rendering requires **moderate enhancement** to achieve photorea
 
 ---
 
-**Analysis Complete**  
-**Confidence: High**  
+**Analysis Complete**
+**Confidence: High**
 **Next Step:** Create enhancement script or use existing `lux_render_pipeline.py`

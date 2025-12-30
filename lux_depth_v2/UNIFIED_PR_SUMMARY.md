@@ -1,8 +1,8 @@
 # Unified Hardening Sprint PR Summary
 
-**Branch**: `hardening-sprint-unified`  
-**Commit**: `260d657`  
-**Status**: ✅ Ready for Review  
+**Branch**: `hardening-sprint-unified`
+**Commit**: `260d657`
+**Status**: ✅ Ready for Review
 **Tests**: 38/38 passing
 
 ---
@@ -63,7 +63,7 @@ This PR eliminates three critical production risks:
 ```python
 class DepthMode(str, Enum):
     REQUIRED = "required"   # Fail if missing
-    AUTO = "auto"           # Generate if missing  
+    AUTO = "auto"           # Generate if missing
     OPTIONAL = "optional"   # Allow uniform fallback (CI only)
 
 @dataclass
@@ -125,7 +125,7 @@ if cfg.depth.mode in (DepthMode.AUTO, DepthMode.REQUIRED):
 elif cfg.depth.mode == DepthMode.AUTO:
     if self._depth_estimator is None:
         raise RuntimeError("Depth AUTO requested but depth estimator unavailable")
-    
+
     # cache-first
     if self.depth_cache_manager is not None:
         cache_key = self.depth_cache_manager.compute_cache_key(...)
@@ -133,17 +133,17 @@ elif cfg.depth.mode == DepthMode.AUTO:
         if cached is not None:
             depth01 = cached["depth"]
             depth_source = "cache"
-    
+
     # generate if needed
     if depth01 is None:
         with self._stage(report, "depth/estimate_tiled"):
             depth01 = self._depth_estimator.estimate_depth(rgb01)
         depth_source = "generated"
-        
+
         # Advisory "confidence proxy"
         corr = self._depth_estimator.compute_edge_alignment(rgb01, depth01)
         confidence_proxy = max(0.0, min(1.0, (corr + 1.0) * 0.5))
-        
+
         # cache-save
         if self.depth_cache_manager is not None:
             self.depth_cache_manager.save(cache_key, depth01, meta, confidence_proxy)
@@ -342,7 +342,7 @@ jq '.materials_precedence' out_apex/*_report.json
 - **Cache size**: ~5–20 MB per depth map (depends on resolution)
 
 ### Cache Invalidation Triggers
-- Model change: `depth.model_name` 
+- Model change: `depth.model_name`
 - Tile config change: `tile_size`, `overlap`, `fusion_mode`
 - Global anchor toggle: `use_global_anchor`
 - Edge snapping toggle: `use_edge_snapping`
@@ -357,22 +357,22 @@ jq '.materials_precedence' out_apex/*_report.json
 ## 🛡️ Safety Guarantees
 
 ### Depth Contract
-✅ **CI_BASELINE only**: Can use `DepthMode.OPTIONAL` (uniform fallback)  
-✅ **Production presets**: Must use `AUTO` or `REQUIRED` (enforced at init)  
-✅ **APEX presets**: Always `REQUIRED` (fail fast if depth missing)  
-✅ **Report provenance**: Always includes `depth.source` for audit trail  
+✅ **CI_BASELINE only**: Can use `DepthMode.OPTIONAL` (uniform fallback)
+✅ **Production presets**: Must use `AUTO` or `REQUIRED` (enforced at init)
+✅ **APEX presets**: Always `REQUIRED` (fail fast if depth missing)
+✅ **Report provenance**: Always includes `depth.source` for audit trail
 
 ### Materials Precedence
-✅ **V3 always uses V2 masks** when V2 succeeds (no more dual-segmentation)  
-✅ **V3 fallback to legacy** is explicit and tracked in report  
-✅ **RGB mutation order** is one-way: V3 pixel ops → grading (never backwards)  
-✅ **Report tracking**: `materials_precedence.v3_segmentation_source` shows authority  
+✅ **V3 always uses V2 masks** when V2 succeeds (no more dual-segmentation)
+✅ **V3 fallback to legacy** is explicit and tracked in report
+✅ **RGB mutation order** is one-way: V3 pixel ops → grading (never backwards)
+✅ **Report tracking**: `materials_precedence.v3_segmentation_source` shows authority
 
 ### Cache Correctness
-✅ **V2 cache keys** include config fingerprint (no stale reuse)  
-✅ **Depth cache keys** include model + tile config (no mismatched inference)  
-✅ **Cache validation** checks fingerprint match before loading  
-✅ **Cache invalidation** is automatic when config changes  
+✅ **V2 cache keys** include config fingerprint (no stale reuse)
+✅ **Depth cache keys** include model + tile config (no mismatched inference)
+✅ **Cache validation** checks fingerprint match before loading
+✅ **Cache invalidation** is automatic when config changes
 
 ---
 
@@ -428,8 +428,8 @@ git cherry-pick <commit-sha>
 
 ## 👥 Reviewers
 
-**Code Review**: @transformation-portal-architect  
-**QA Review**: @transformation-portal-specialist  
+**Code Review**: @transformation-portal-architect
+**QA Review**: @transformation-portal-specialist
 **Performance Review**: (run benchmarks on sample dataset)
 
 ---

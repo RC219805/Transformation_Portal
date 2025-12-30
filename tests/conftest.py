@@ -60,7 +60,7 @@ def pytest_collection_modifyitems(config, items):
     if run_slow:
         # --slow flag provided: run all tests including slow ones
         return
-    
+
     # Skip slow tests by default
     skip_slow = pytest.mark.skip(reason="need --slow option to run")
     for item in items:

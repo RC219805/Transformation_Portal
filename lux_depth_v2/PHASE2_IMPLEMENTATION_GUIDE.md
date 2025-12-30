@@ -1,8 +1,8 @@
 # Lux Depth V2 - Phase 2 Implementation Guide
 
-**Status**: Foundation Complete (Architectural Scaffolding)  
-**Effort Estimate**: 64-86 hours (4-6 weeks)  
-**Expected Impact**: 60-80% boundary precision improvement, >85% material classification accuracy  
+**Status**: Foundation Complete (Architectural Scaffolding)
+**Effort Estimate**: 64-86 hours (4-6 weeks)
+**Expected Impact**: 60-80% boundary precision improvement, >85% material classification accuracy
 **Risk Level**: Medium (new ML models, API integration)
 
 ---
@@ -143,8 +143,8 @@ Phase 2 builds on Phase 1's Material Property Schema and Hybrid Depth Zones to d
 
 ## Task 1: EfficientSAM Integration
 
-**Effort**: 24-32 hours  
-**Priority**: High (critical for boundary precision improvement)  
+**Effort**: 24-32 hours
+**Priority**: High (critical for boundary precision improvement)
 **Status**: Stub created in `lux_depth_v2/material_segmentation.py`
 
 ### Objectives
@@ -179,7 +179,7 @@ Phase 2 builds on Phase 1's Material Property Schema and Hybrid Depth Zones to d
       self.model.load_state_dict(torch.load(cfg.efficientSAM_model))
       self.model.to(device)
       self.model.eval()
-      
+
       # Initialize prompt encoder and mask decoder
       self.prompt_encoder = self.model.prompt_encoder
       self.mask_decoder = self.model.mask_decoder
@@ -207,7 +207,7 @@ def _generate_architectural_prompts(self, rgb: torch.Tensor) -> List[Dict]:
     """Generate prompts optimized for architectural scenes."""
     b, c, h, w = rgb.shape
     prompts = []
-    
+
     # Grid-based prompts for uniform coverage
     grid_spacing = max(h, w) // 16
     for i in range(0, h, grid_spacing):
@@ -217,7 +217,7 @@ def _generate_architectural_prompts(self, rgb: torch.Tensor) -> List[Dict]:
                 'coords': [[j, i]],  # (x, y)
                 'labels': [1],  # Foreground
             })
-    
+
     # Edge-aware prompts (detect edges with Sobel/Canny)
     edges = detect_edges(rgb)  # TODO: Implement
     edge_points = extract_edge_points(edges, num_points=50)
@@ -227,20 +227,20 @@ def _generate_architectural_prompts(self, rgb: torch.Tensor) -> List[Dict]:
             'coords': [[x, y]],
             'labels': [1],
         })
-    
+
     # Material-specific prompts
     # Water: bottom third
     prompts.append({
         'type': 'box',
         'coords': [[0, int(h * 0.66), w, h]],  # (x1, y1, x2, y2)
     })
-    
+
     # Sky: top third
     prompts.append({
         'type': 'box',
         'coords': [[0, 0, w, int(h * 0.33)]],
     })
-    
+
     return prompts
 ```
 
@@ -258,17 +258,17 @@ def predict(self, rgb: torch.Tensor) -> Dict[str, torch.Tensor]:
     """Generate material masks using EfficientSAM."""
     # Generate prompts
     prompts = self._generate_architectural_prompts(rgb)
-    
+
     # Preprocess to EfficientSAM input size
     rgb_resized, scale = resize_to_1024(rgb)
-    
+
     # Encode prompts
     sparse_embeddings, dense_embeddings = self.prompt_encoder(
         points=batch_points(prompts),
         boxes=batch_boxes(prompts),
         masks=None,
     )
-    
+
     # Generate masks with mask decoder
     low_res_masks, iou_predictions = self.mask_decoder(
         image_embeddings=self.model.image_encoder(rgb_resized),
@@ -277,13 +277,13 @@ def predict(self, rgb: torch.Tensor) -> Dict[str, torch.Tensor]:
         dense_prompt_embeddings=dense_embeddings,
         multimask_output=True,
     )
-    
+
     # Postprocess masks
     masks = postprocess_masks(low_res_masks, rgb.shape[-2:])
-    
+
     # Classify masks with CLIP (Task 2 integration)
     material_masks = self._classify_masks_with_CLIP(rgb, masks)
-    
+
     return material_masks
 ```
 
@@ -314,8 +314,8 @@ def predict(self, rgb: torch.Tensor) -> Dict[str, torch.Tensor]:
 
 ## Task 2: CLIP Material Classification
 
-**Effort**: 16-24 hours  
-**Priority**: High (enables zero-shot classification and hybrid fusion)  
+**Effort**: 16-24 hours
+**Priority**: High (enables zero-shot classification and hybrid fusion)
 **Status**: Stub created in `lux_depth_v2/materials_v2.py`
 
 ### Objectives
@@ -345,7 +345,7 @@ def predict(self, rgb: torch.Tensor) -> Dict[str, torch.Tensor]:
       self.model, self.preprocess = clip.load(model_name, device=device)
       self.model.eval()
       self.device = device
-      
+
       # Precompute text embeddings for material templates
       self.material_embeddings = self._precompute_embeddings()
   ```
@@ -366,13 +366,13 @@ def classify_image(self, rgb: torch.Tensor, material_classes=None):
     with torch.no_grad():
         image_features = self.model.encode_image(rgb)
         image_features /= image_features.norm(dim=-1, keepdim=True)
-        
+
         # Compute similarity with material embeddings
         material_classes = material_classes or self.material_classes
         text_features = self.material_embeddings[material_classes]
-        
+
         similarity = (image_features @ text_features.T).softmax(dim=-1)
-        
+
         # Return confidence scores
         return {cls: sim.item() for cls, sim in zip(material_classes, similarity[0])}
 ```
@@ -405,18 +405,18 @@ def classify_image(self, rgb: torch.Tensor, material_classes=None):
 def fuse_with_segformer(self, rgb, segformer_masks, segformer_confidences):
     """Hybrid fusion of SegFormer + CLIP."""
     refined_masks = {}
-    
+
     for material, seg_mask in segformer_masks.items():
         # Extract region features
         region_features = extract_region_features(rgb, seg_mask)
-        
+
         # Classify region with CLIP
         clip_scores = self.classify_image(region_features)
-        
+
         # Compute fusion alpha based on SegFormer confidence
         seg_conf = segformer_confidences[material].mean()
         alpha = min(0.9, seg_conf + 0.2)  # High SegFormer conf → trust SegFormer
-        
+
         # Fuse masks
         clip_material = max(clip_scores, key=clip_scores.get)
         if clip_material == material:
@@ -425,7 +425,7 @@ def fuse_with_segformer(self, rgb, segformer_masks, segformer_confidences):
         else:
             # Conflict: blend based on confidence
             refined_masks[material] = alpha * seg_mask + (1 - alpha) * clip_mask
-    
+
     return refined_masks
 ```
 
@@ -445,8 +445,8 @@ def fuse_with_segformer(self, rgb, segformer_masks, segformer_confidences):
 
 ## Task 3: Expand Material Classes
 
-**Effort**: 12-16 hours  
-**Priority**: Medium (enhances coverage and granularity)  
+**Effort**: 12-16 hours
+**Priority**: Medium (enhances coverage and granularity)
 **Status**: Stub created in `lux_depth_v2/materials_v2.py`
 
 ### Objectives
@@ -499,8 +499,8 @@ def fuse_with_segformer(self, rgb, segformer_masks, segformer_confidences):
 
 ## Task 4: Lighting Condition Metadata
 
-**Effort**: 12-14 hours  
-**Priority**: Low-Medium (enables adaptive processing)  
+**Effort**: 12-14 hours
+**Priority**: Low-Medium (enables adaptive processing)
 **Status**: Stub created in `lux_depth_v2/lighting_detector.py`
 
 ### Objectives
@@ -596,17 +596,17 @@ def _generate_architectural_prompts(self, rgb: torch.Tensor) -> List[Dict]:
     """Generate prompts optimized for architectural scenes."""
     b, c, h, w = rgb.shape
     prompts = []
-    
+
     # Grid-based prompts (uniform coverage)
     grid_spacing = max(h, w) // 16
     for i in range(0, h, grid_spacing):
         for j in range(0, w, grid_spacing):
             prompts.append({'type': 'point', 'coords': [[j, i]], 'labels': [1]})
-    
+
     # Material-specific box prompts
     prompts.append({'type': 'box', 'coords': [[0, int(h*0.66), w, h]]})  # Water (bottom)
     prompts.append({'type': 'box', 'coords': [[0, 0, w, int(h*0.33)]]})  # Sky (top)
-    
+
     return prompts
 ```
 
@@ -645,7 +645,7 @@ def _get_material_templates(self) -> Dict[str, List[str]]:
 ```python
 class MaterialClass:
     """Expanded material taxonomy (18-24 classes)."""
-    
+
     # Architecture
     STUCCO_WALL = "stucco_wall"
     STONE_COLUMN = "stone_column"
@@ -653,25 +653,25 @@ class MaterialClass:
     WOOD_STRUCTURE = "wood_structure"
     CONCRETE_SURFACE = "concrete_surface"
     TILE_SURFACE = "tile_surface"
-    
+
     # Hardscape
     POOL_TILE_MOSAIC = "pool_tile_mosaic"
     POOL_DECK_PAVER = "pool_deck_paver"
     STONE_PAVER = "stone_paver"
     CONCRETE_DECK = "concrete_deck"
-    
+
     # Water
     POOL_WATER_SURFACE = "pool_water_surface"
     POOL_WATER_VOLUME = "pool_water_volume"
     WATER_FEATURE = "water_feature"
-    
+
     # Vegetation
     TREE_CANOPY = "tree_canopy"
     FLOWERING_TREE = "flowering_tree"
     SHRUB = "shrub"
     GRASS = "grass"
     SUCCULENT = "succulent"
-    
+
     # Sky
     SKY_GRADIENT = "sky_gradient"
     MOUNTAIN_DISTANT = "mountain_distant"
@@ -684,17 +684,17 @@ def detect(self, rgb: torch.Tensor, depth_map=None, sky_mask=None) -> LightingCo
     """Detect lighting conditions in scene."""
     # Extract sky region
     sky_coverage, color_temp, brightness = self._analyze_sky_region(rgb, sky_mask)
-    
+
     # Classify time of day
     dominant_hue = compute_dominant_hue(rgb)
     warmth = compute_warmth(rgb)
     time_of_day, confidence = self._classify_time_of_day(
         color_temp, brightness, dominant_hue, warmth
     )
-    
+
     # Detect shadows
     has_shadows, shadow_dir = self._detect_shadows(rgb, depth_map)
-    
+
     return LightingCondition(
         time_of_day=time_of_day,
         confidence=confidence,
@@ -810,7 +810,7 @@ clip>=1.0  # OpenAI CLIP for zero-shot classification (ViT-B/32)
 
 ---
 
-**Phase 2 Foundation Complete** ✅  
+**Phase 2 Foundation Complete** ✅
 **Ready for Implementation** 🚀
 
 For questions or clarification, consult:

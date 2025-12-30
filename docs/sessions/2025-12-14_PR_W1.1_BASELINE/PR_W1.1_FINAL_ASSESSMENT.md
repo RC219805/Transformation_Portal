@@ -72,10 +72,10 @@ This means:
 ## Merge Decision
 
 ### MERGE NOW if you accept this framing:
-✅ PR-W1.1 is **infrastructure + contract guardrail**  
-✅ Current baseline is **uncalibrated but functional**  
-✅ 100% FT is **documented and expected** until PR-W1.2  
-✅ Regression checker **won't punish calibration improvements**  
+✅ PR-W1.1 is **infrastructure + contract guardrail**
+✅ Current baseline is **uncalibrated but functional**
+✅ 100% FT is **documented and expected** until PR-W1.2
+✅ Regression checker **won't punish calibration improvements**
 
 ### Required PR Body Language
 Replace any "stub detector" references with:
@@ -91,10 +91,10 @@ Current baseline metrics:
 - Pool/ocean recall: 100% (detector is functional)
 - False trigger rate: 100% (uncalibrated thresholds, expected)
 
-The 100% false trigger rate reflects **uncalibrated default thresholds** (confidence=0.4), 
+The 100% false trigger rate reflects **uncalibrated default thresholds** (confidence=0.4),
 not broken detection logic. PR-W1.2 will calibrate thresholds using a real-world dataset.
 
-The regression checker uses monotonic constraints, so calibration improvements 
+The regression checker uses monotonic constraints, so calibration improvements
 (reducing FT from 100% → target <20%) will pass cleanly.
 ```
 
@@ -175,11 +175,11 @@ The 100% false trigger rate is:
 - ✅ **Not a blocker** (regression checker won't punish improvements)
 - ✅ **Fixed in PR-W1.2** (calibration)
 
-This baseline is a **contract + determinism guardrail**, not a quality benchmark.  
+This baseline is a **contract + determinism guardrail**, not a quality benchmark.
 That's sufficient for PR-W1.1 scope.
 
 ---
 
-**Assessment Date:** 2025-12-15  
-**Reviewer:** Context analysis (automated)  
+**Assessment Date:** 2025-12-15
+**Reviewer:** Context analysis (automated)
 **Status:** READY TO MERGE (with documentation update)

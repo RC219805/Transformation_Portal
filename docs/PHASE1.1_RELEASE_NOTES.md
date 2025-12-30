@@ -1,8 +1,8 @@
 # Phase 1.1 Release Notes
 
-**Version**: 1.1.0  
-**Date**: 2025-12-08  
-**Type**: Feature Release (Instrumentation)  
+**Version**: 1.1.0
+**Date**: 2025-12-08
+**Type**: Feature Release (Instrumentation)
 **Status**: Ready for Integration
 
 ---
@@ -137,7 +137,7 @@ lux-depth-v2 \
 ```
 ⚠️  Bottleneck detected: upscale_infer (67.2% of total time)
     Recommendation: Consider Phase 2 upscaling optimization
-    
+
 ⚠️  Bottleneck detected: material_segmentation (12.4% of total time)
     Recommendation: Enable Materials v2 downscaled segmentation
 ```
@@ -418,6 +418,6 @@ Phase 1.1 builds on the solid foundation of Phase 1 stability architecture, addi
 
 ---
 
-**Author**: Transformation Portal Architect  
-**Date**: 2025-12-08  
+**Author**: Transformation Portal Architect
+**Date**: 2025-12-08
 **Version**: 1.1.0

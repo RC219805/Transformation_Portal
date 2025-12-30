@@ -58,11 +58,11 @@ result = estimator.process_image(
 if result.success:
     # View 3D point cloud
     glb_file = result.glb_path  # scene.glb
-    
+
     # Access depth array
     depth = result.depth_array  # numpy array (1, H, W)
     confidence = result.confidence_array  # confidence map
-    
+
     # Depth visualizations
     depth_vis = result.depth_vis_dir  # folder with colorized depth images
 ```
@@ -188,7 +188,7 @@ for prop in properties:
         output_dir=f"output/depth/{prop}",
         export_format="glb-depth_vis"
     )
-    
+
     if result.success:
         print(f"✅ {prop} complete")
     else:

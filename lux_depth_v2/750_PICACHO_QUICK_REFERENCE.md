@@ -1,7 +1,7 @@
 # 750 Picacho TIFF Testing - Quick Reference Card
 
-**Pipeline**: Lux Depth V2  
-**Files**: 6 × 16-bit TIFF (23-43 MB each, 180 MB total)  
+**Pipeline**: Lux Depth V2
+**Files**: 6 × 16-bit TIFF (23-43 MB each, 180 MB total)
 **Status**: ✅ READY FOR TESTING
 
 ---
@@ -222,5 +222,5 @@ python lux_depth_v2/test_750_picacho.py --device cuda
 
 ---
 
-**Last Updated**: December 22, 2025  
+**Last Updated**: December 22, 2025
 **Status**: Production Ready - Test Execution Pending

@@ -15,6 +15,7 @@ Example Usage
     profile = PROCESSING_PROFILES["balanced"]
     effective_glow = profile.resolve_glow(0.5)  # Returns 0.3 (60% of requested)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

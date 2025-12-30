@@ -141,14 +141,14 @@ config = DA3Config(
     # Model
     model_variant=ModelVariant.METRIC_LARGE,
     inference_mode=InferenceMode.METRIC,
-    
+
     # Device
     device=DeviceConfig(
         device="cuda",  # or "mps", "cpu", "auto"
         precision="fp16",
         use_compile=True,  # PyTorch 2.0+ optimization
     ),
-    
+
     # Preprocessing
     preprocessing=PreprocessingConfig(
         target_size=(1024, 1024),
@@ -156,7 +156,7 @@ config = DA3Config(
         normalize=True,
         pad_to_multiple=32,
     ),
-    
+
     # Postprocessing
     postprocessing=PostprocessingConfig(
         apply_metric_scaling=True,
@@ -164,18 +164,18 @@ config = DA3Config(
         apply_bilateral_filter=True,
         preserve_edges=True,
     ),
-    
+
     # Export
     export=ExportConfig(
         formats=[ExportFormat.PNG, ExportFormat.NPZ],
         output_dir=Path("output"),
         depth_scale=1000.0,  # mm per unit
     ),
-    
+
     # Cache
     cache_dir=Path.home() / ".cache" / "lux_depth_v3",
     enable_model_cache=True,
-    
+
     # Batch
     batch_size=4,
     num_workers=4,
@@ -247,7 +247,7 @@ exporter = Exporter(config.export)
 for img_input in tqdm(manager.get_images()):
     result = engine.inference(img_input)
     result = postprocessor.process(result)
-    
+
     filename_base = img_input.path.stem
     exporter.export(result, filename_base)
 ```
@@ -284,18 +284,18 @@ for i, img_path in enumerate(image_paths):
         [-np.sin(angle), 0, np.cos(angle)],
     ])
     translation = np.array([i * 0.5, 0, 0])
-    
+
     # Camera intrinsics
     focal_length = (1000.0, 1000.0)  # fx, fy
     principal_point = (512.0, 512.0)  # cx, cy
-    
+
     pose = CameraPose(
         rotation=rotation,
         translation=translation,
         focal_length=focal_length,
         principal_point=principal_point,
     )
-    
+
     manager.add_image(path=img_path, pose=pose)
 
 # Run multi-view inference
@@ -330,11 +330,11 @@ report = ValidationReport()
 for img_input in manager.get_images():
     result = engine.inference(img_input)
     result = postprocessor.process(result)
-    
+
     # Validate against ground truth
     metrics = validator.validate(result)
     report.add_result(metrics)
-    
+
     # Check quality gate
     if metrics.passes_quality_gate(min_delta_1=0.85, max_rmse=0.3):
         print(f"✓ {img_input.path}: Passed quality gate")
@@ -362,28 +362,28 @@ from lux_depth_v3 import DA3InferenceEngine, DA3Config
 
 def enhance_with_depth(image_path: Path, output_path: Path):
     """Enhance render using DA3 depth information."""
-    
+
     # Generate depth map
     config = DA3Config.from_preset(Preset.INTERIOR_LUXURY)
     engine = DA3InferenceEngine(config)
     engine.load_model()
-    
+
     manager = InputManager()
     manager.add_image(path=image_path)
-    
+
     result = engine.inference(manager.get_images()[0])
     depth = result.depth_map
-    
+
     # Use depth for zone-based processing
     # (integrate with existing lux_depth_v2 patterns)
     from lux_depth_v2.pipeline import apply_depth_aware_enhancement
-    
+
     enhanced = apply_depth_aware_enhancement(
         image=result.original_image,
         depth=depth,
         config=config,
     )
-    
+
     # Save result
     Image.fromarray(enhanced).save(output_path)
 ```
@@ -565,7 +565,7 @@ Add to `.github/workflows/ci.yml`:
 - name: Test Lux Depth V3
   run: |
     pytest lux_depth_v3/tests/ -v --cov=lux_depth_v3
-    
+
 - name: Benchmark
   run: |
     lux-depth-v3 benchmark --model metric-large --iterations 10
@@ -618,12 +618,12 @@ from lux_depth_v3 import DA3Config, InputManager, DA3InferenceEngine, Preset
 
 class DepthPipelineV2Compat:
     """V2-compatible wrapper for V3 pipeline."""
-    
+
     def __init__(self, preset=Preset.PHOTO_REALISTIC):
         self.config = DA3Config.from_preset(preset)
         self.engine = DA3InferenceEngine(self.config)
         self.engine.load_model()
-    
+
     def process(self, image_path):
         """V2-compatible process method."""
         manager = InputManager()

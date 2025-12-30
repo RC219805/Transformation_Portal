@@ -59,22 +59,14 @@ def build_parser() -> argparse.ArgumentParser:
     Returns:
         Configured ArgumentParser for the manifest generation tool.
     """
-    parser = argparse.ArgumentParser(
-        description=(
-            "Generate a CSV manifest (filename, bytes, md5) for an output directory."
-        )
-    )
-    parser.add_argument(
-        "root",
-        type=Path,
-        help="Root directory to scan for files."
-    )
+    parser = argparse.ArgumentParser(description=("Generate a CSV manifest (filename, bytes, md5) for an output directory."))
+    parser.add_argument("root", type=Path, help="Root directory to scan for files.")
     parser.add_argument(
         "destination",
         nargs="?",
         type=Path,
         default=Path("manifest.csv"),
-        help="Where to write the manifest (defaults to ./manifest.csv)."
+        help="Where to write the manifest (defaults to ./manifest.csv).",
     )
     return parser
 
@@ -97,7 +89,8 @@ def main() -> None:
     if not root.exists():
         raise SystemExit(
             f"Root path '{root}' does not exist. Please check the path for typos "
-            "and verify that you have the necessary permissions.")
+            "and verify that you have the necessary permissions."
+        )
     if not root.is_dir():
         raise SystemExit(
             f"Root path '{root}' exists but is not a directory. Please check that "

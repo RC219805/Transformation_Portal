@@ -11,6 +11,7 @@ Usage:
       --mask-root   "/Users/rc/Desktop/my_project/outputs/seg/750_Picacho" \
       --device cpu --save-panoptic
 """
+
 import glob
 import os
 
@@ -25,12 +26,8 @@ from PIL import Image
 
 def build_predictor(device="cpu"):
     cfg = get_cfg()
-    cfg.merge_from_file(model_zoo.get_config_file(
-        "COCO-PanopticSegmentation/panoptic_fpn_R_50_3x.yaml"
-    ))
-    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(
-        "COCO-PanopticSegmentation/panoptic_fpn_R_50_3x.yaml"
-    )
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-PanopticSegmentation/panoptic_fpn_R_50_3x.yaml"))
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-PanopticSegmentation/panoptic_fpn_R_50_3x.yaml")
     cfg.MODEL.DEVICE = device
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
     return DefaultPredictor(cfg), MetadataCatalog.get(cfg.DATASETS.TRAIN[0])
@@ -42,8 +39,9 @@ def extract_masks(panoptic_seg, segments_info, meta):
     """
     id_to_name = {s["id"]: meta.stuff_classes[s["category_id"]] for s in segments_info}
     sky_ids = [sid for sid, name in id_to_name.items() if "sky" in name.lower()]
-    bld_ids = [sid for sid, name in id_to_name.items()
-               if any(x in name.lower() for x in ["building", "wall", "house", "structure"])]
+    bld_ids = [
+        sid for sid, name in id_to_name.items() if any(x in name.lower() for x in ["building", "wall", "house", "structure"])
+    ]
 
     sky_mask = np.isin(panoptic_seg.cpu().numpy(), sky_ids).astype(np.uint8) * 255
     bld_mask = np.isin(panoptic_seg.cpu().numpy(), bld_ids).astype(np.uint8) * 255
@@ -79,8 +77,7 @@ def main(images_root, depths_root, mask_root, device="cpu", save_panoptic=False)
         if save_panoptic:
             vis = Visualizer(im[:, :, ::-1], meta, instance_mode=ColorMode.IMAGE_BW)
             vis_out = vis.draw_panoptic_seg_predictions(panoptic_seg.to("cpu"), segments_info)
-            Image.fromarray(vis_out.get_image()[:, :, ::-1]).save(
-                os.path.join(mask_root, f"{base}_panoptic_vis.jpg"))
+            Image.fromarray(vis_out.get_image()[:, :, ::-1]).save(os.path.join(mask_root, f"{base}_panoptic_vis.jpg"))
         print(f"[{i}] ✓ {base}")
 
     print(f"\nDone → {mask_root}")
@@ -88,6 +85,7 @@ def main(images_root, depths_root, mask_root, device="cpu", save_panoptic=False)
 
 if __name__ == "__main__":
     import argparse
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--images-root", required=True)
     ap.add_argument("--depths-root", required=True)
@@ -95,5 +93,4 @@ if __name__ == "__main__":
     ap.add_argument("--device", default="cpu", choices=["cpu", "cuda", "mps"])
     ap.add_argument("--save-panoptic", action="store_true")
     args = ap.parse_args()
-    main(args.images_root, args.depths_root, args.mask_root,
-         device=args.device, save_panoptic=args.save_panoptic)
+    main(args.images_root, args.depths_root, args.mask_root, device=args.device, save_panoptic=args.save_panoptic)

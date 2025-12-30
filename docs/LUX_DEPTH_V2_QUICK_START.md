@@ -1,6 +1,6 @@
 # Lux Depth V2 - Quick Start Guide
 
-**For Transformation Portal Integration**  
+**For Transformation Portal Integration**
 **Date**: 2025-12-06
 
 ---
@@ -198,11 +198,11 @@ pip install -r lux_depth_v2/requirements-repo.txt
 
 ## Support
 
-**Questions**: Open GitHub issue with `[lux_depth_v2]` tag  
-**Security**: See `/SECURITY.md` for secure reporting  
+**Questions**: Open GitHub issue with `[lux_depth_v2]` tag
+**Security**: See `/SECURITY.md` for secure reporting
 **Documentation**: `lux_depth_v2/README.md`
 
 ---
 
-**Version**: 1.0  
+**Version**: 1.0
 **Last Updated**: 2025-12-06

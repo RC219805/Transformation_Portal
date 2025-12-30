@@ -65,23 +65,23 @@ move_file() {
     local dest_dir="$2"
     local filename="$(basename "$src")"
     local dest="$dest_dir/$filename"
-    
+
     # Skip if source doesn't exist
     if [[ ! -f "$src" ]]; then
         return
     fi
-    
+
     # Skip if already in the right place
     if [[ "$(cd "$(dirname "$src")" && pwd)" == "$(cd "$dest_dir" && pwd)" ]]; then
         log_skip "$filename (already in correct location)"
         return
     fi
-    
+
     # Create destination directory
     if [[ "$DRY_RUN" == "false" ]]; then
         mkdir -p "$dest_dir"
     fi
-    
+
     # Move the file
     log_move "$src" "$dest"
     if [[ "$DRY_RUN" == "false" ]]; then
@@ -92,14 +92,14 @@ move_file() {
 # Main organization logic
 organize_repository() {
     log_info "Starting repository organization..."
-    
+
     cd "$SCRIPT_DIR"
-    
+
     # ========================================
     # Documentation Files
     # ========================================
     log_info "Organizing documentation files..."
-    
+
     # Strategy and planning documents → docs/guides/
     for file in \
         CI_WORKFLOW_OPTIMIZATION.md \
@@ -114,12 +114,12 @@ organize_repository() {
     do
         move_file "$file" "docs/guides"
     done
-    
+
     # ========================================
     # Scripts
     # ========================================
     log_info "Organizing scripts..."
-    
+
     # Utility scripts → scripts/utilities/
     for file in \
         navigate.sh \
@@ -127,19 +127,19 @@ organize_repository() {
     do
         move_file "$file" "scripts/utilities"
     done
-    
+
     # Python CLI wrappers → scripts/utilities/
     for file in \
         luxury_tiff_batch_processor_cli.py
     do
         move_file "$file" "scripts/utilities"
     done
-    
+
     # ========================================
     # Text Files and Summaries
     # ========================================
     log_info "Organizing text files..."
-    
+
     # Project summaries → docs/guides/
     for file in \
         750_PICACHO_QUICK_SUMMARY.txt \
@@ -150,12 +150,12 @@ organize_repository() {
     do
         move_file "$file" "docs/guides"
     done
-    
+
     # ========================================
     # Data Files
     # ========================================
     log_info "Organizing data files..."
-    
+
     # JSON files → data/
     for file in \
         depth_model_comparison.json \
@@ -163,19 +163,19 @@ organize_repository() {
     do
         move_file "$file" "data"
     done
-    
+
     # Images → archive/ (unless actively used)
     for file in \
         debug_after_white_balance.jpg
     do
         move_file "$file" "archive"
     done
-    
+
     # ========================================
     # Configuration and Build Files
     # ========================================
     log_info "Checking configuration files..."
-    
+
     # These stay in root:
     # - README.md
     # - Makefile
@@ -188,12 +188,12 @@ organize_repository() {
     # - docker-compose.yml
     # - .gitignore
     # - .gitattributes (to be created)
-    
+
     # ========================================
     # Hidden/System Files
     # ========================================
     log_info "Organizing hidden files..."
-    
+
     # Move old organization scripts to archive
     for file in \
         .organize_docs.sh
@@ -202,7 +202,7 @@ organize_repository() {
             move_file "$file" "archive"
         fi
     done
-    
+
     # Quality check scripts → scripts/utilities/
     for file in \
         .codebase_health_monitor.py \
@@ -221,7 +221,7 @@ organize_repository() {
             fi
         fi
     done
-    
+
     # TypeScript code files → archive/ (unless actively used)
     for file in \
         code.ts
@@ -230,7 +230,7 @@ organize_repository() {
             move_file "$file" "archive"
         fi
     done
-    
+
     log_info "Organization complete!"
 }
 
@@ -240,9 +240,9 @@ main() {
         echo "=== DRY RUN MODE - No changes will be made ==="
         echo ""
     fi
-    
+
     organize_repository
-    
+
     if [[ "$DRY_RUN" == "true" ]]; then
         echo ""
         echo "=== DRY RUN COMPLETE ==="

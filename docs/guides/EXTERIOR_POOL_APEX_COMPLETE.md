@@ -10,15 +10,15 @@ Successfully created and deployed the `exterior_pool_apex_quality` preset, speci
 
 ### Preset Characteristics
 
-**Scene Type**: Exterior twilight pool scene  
-**Optimized For**: Water, sky gradients, vegetation, stucco, stone  
+**Scene Type**: Exterior twilight pool scene
+**Optimized For**: Water, sky gradients, vegetation, stucco, stone
 **Quality Tier**: APEX (maximum quality, flagship deliverables)
 
 ### Key Configuration
 
 #### Grading Parameters
 - **Material Strength**: 0.95 (highest exterior enhancement)
-- **Color Temperature**: 
+- **Color Temperature**:
   - Foreground: +0.005 (slight warmth for pool edge/vegetation)
   - Midground: 0.000 (neutral)
   - Background: -0.008 (cool for twilight sky)
@@ -252,25 +252,25 @@ Plus standard: Wood, Metal, Glass, Stone
 ## Phase 1 & Phase 2 Features Utilized
 
 ### Phase 1 (Core Quality)
-✅ **Material Property Schema** - Physics-based properties (water, vegetation, wood, metal, glass, stone)  
-✅ **Hybrid Depth Zones** - Percentile-based with exterior scene optimization  
-✅ **Materials V2** - SegFormer-B5 backend with confidence-aware blending  
-✅ **16-bit Depth Map** - Depth Anything V2 Large, lossless precision  
-✅ **APEX Segmentation** - 2048px resolution, min_confidence=0.15  
+✅ **Material Property Schema** - Physics-based properties (water, vegetation, wood, metal, glass, stone)
+✅ **Hybrid Depth Zones** - Percentile-based with exterior scene optimization
+✅ **Materials V2** - SegFormer-B5 backend with confidence-aware blending
+✅ **16-bit Depth Map** - Depth Anything V2 Large, lossless precision
+✅ **APEX Segmentation** - 2048px resolution, min_confidence=0.15
 ✅ **Strict AI Validation** - Color/luma accuracy < 0.002 (40× better than threshold)
 
 ### Phase 2 (Performance & Orchestration)
-✅ **Orchestration** - Resilient execution with checkpointing  
-✅ **Pre-flight Validation** - Memory, disk space, dependency checks  
-✅ **Telemetry** - Detailed stage timing, reproducibility metadata  
-✅ **Export Optimization** - Lossless PNG compression=0 for archival  
+✅ **Orchestration** - Resilient execution with checkpointing
+✅ **Pre-flight Validation** - Memory, disk space, dependency checks
+✅ **Telemetry** - Detailed stage timing, reproducibility metadata
+✅ **Export Optimization** - Lossless PNG compression=0 for archival
 ✅ **Device Acceleration** - Apple MPS (Neural Engine)
 
 ### Not Yet Utilized (Future)
-⏸️ **CLIP Hybrid Fusion** - Scene understanding (lighting detection available but not enabled)  
-⏸️ **Lighting Detection** - Adaptive tone mapping based on time-of-day  
-⏸️ **EfficientSAM** - Prompt-based segmentation refinement  
-⏸️ **Phase 2 Async I/O** - Parallel read/write operations  
+⏸️ **CLIP Hybrid Fusion** - Scene understanding (lighting detection available but not enabled)
+⏸️ **Lighting Detection** - Adaptive tone mapping based on time-of-day
+⏸️ **EfficientSAM** - Prompt-based segmentation refinement
+⏸️ **Phase 2 Async I/O** - Parallel read/write operations
 ⏸️ **Phase 2 Streaming Upscale** - Memory-efficient tile-based upscaling
 
 ---
@@ -301,11 +301,11 @@ Plus standard: Wood, Metal, Glass, Stone
 
 ## Reproducibility
 
-**Git Commit**: `fd376d62d60c5d74e11d4b4c6fe11b663deab9da`  
-**Device**: Apple Silicon (MPS)  
-**Python**: 3.11.14  
-**PyTorch**: 2.9.1  
-**Timestamp**: 2025-12-12 20:28:19 UTC  
+**Git Commit**: `fd376d62d60c5d74e11d4b4c6fe11b663deab9da`
+**Device**: Apple Silicon (MPS)
+**Python**: 3.11.14
+**PyTorch**: 2.9.1
+**Timestamp**: 2025-12-12 20:28:19 UTC
 **Preset**: `exterior_pool_apex_quality`
 
 ---

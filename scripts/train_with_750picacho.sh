@@ -1,6 +1,6 @@
 #!/bin/bash
 # Training with 750 Picacho BIM Data
-# 
+#
 # This script trains Hyper-Reality Enhancement models using real project data
 # from the 750 Picacho Lane BIM model, including:
 # - 6 UltraQuality TIFF renders (23-42 MB each)
@@ -149,15 +149,15 @@ TEST_IMAGE="projects/750_picacho_lane/Final_Production_UltraQuality/750Picacho_K
 
 if [ -f "$TEST_IMAGE" ]; then
     echo "Testing on actual project render: 750Picacho_Kitchen"
-    
+
     # Copy weights to default location so they're auto-loaded
     cp weights/hyper_reality_750picacho/best_model.pth weights/hyper_reality/best_model.pth 2>/dev/null || true
-    
+
     python src/enhancements/hyper_reality_enhancement.py \
         "$TEST_IMAGE" \
         -o "output_kitchen_750picacho_trained.jpg" \
         -q 105
-    
+
     if [ $? -eq 0 ]; then
         echo ""
         echo -e "${GREEN}✓ Test completed${NC}"

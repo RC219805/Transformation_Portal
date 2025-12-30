@@ -34,11 +34,7 @@ def example_1_simple_processing():
     preset.ai_enhancement.upscale_4x = False
 
     # Initialize pipeline
-    pipeline = EliteArchitecturalPipeline(
-        preset=preset,
-        output_dir=Path("output_example_1"),
-        dry_run=False
-    )
+    pipeline = EliteArchitecturalPipeline(preset=preset, output_dir=Path("output_example_1"), dry_run=False)
 
     # Process image
     input_path = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs/750Picacho_Great_Room_HDR_32-bit.tif")
@@ -52,6 +48,7 @@ def example_1_simple_processing():
 # ============================================================================
 # Example 2: Batch Processing with Custom Settings
 # ============================================================================
+
 
 def example_2_batch_processing():
     """Batch process all 750 Picacho images."""
@@ -73,11 +70,7 @@ def example_2_batch_processing():
     # Disable upscaling for faster batch processing
     preset.ai_enhancement.upscale_4x = False
 
-    pipeline = EliteArchitecturalPipeline(
-        preset=preset,
-        output_dir=Path("output_example_2_batch"),
-        dry_run=False
-    )
+    pipeline = EliteArchitecturalPipeline(preset=preset, output_dir=Path("output_example_2_batch"), dry_run=False)
 
     input_dir = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs")
     if input_dir.exists():
@@ -90,6 +83,7 @@ def example_2_batch_processing():
 # ============================================================================
 # Example 3: Maximum Quality Processing
 # ============================================================================
+
 
 def example_3_maximum_quality():
     """Process with all features enabled for maximum quality."""
@@ -107,11 +101,7 @@ def example_3_maximum_quality():
     preset.ai_enhancement.num_steps = 40  # More inference steps
     preset.ai_enhancement.strength = 0.30  # Lower strength for faithfulness
 
-    pipeline = EliteArchitecturalPipeline(
-        preset=preset,
-        output_dir=Path("output_example_3_maximum_quality"),
-        dry_run=False
-    )
+    pipeline = EliteArchitecturalPipeline(preset=preset, output_dir=Path("output_example_3_maximum_quality"), dry_run=False)
 
     input_path = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs/750Picacho_Aerial_HDR_32-bit.tif")
     if input_path.exists():
@@ -125,6 +115,7 @@ def example_3_maximum_quality():
 # Example 4: Custom Preset from Scratch
 # ============================================================================
 
+
 def example_4_custom_preset():
     """Create a completely custom preset."""
     print("\n" + "=" * 80)
@@ -135,7 +126,6 @@ def example_4_custom_preset():
     preset = PipelinePreset(
         name="Custom Pool Enhancement",
         description="Specialized preset for pool photography with vivid water",
-
         # Depth processing
         depth=DepthConfig(
             enabled=True,
@@ -143,14 +133,12 @@ def example_4_custom_preset():
             atmospheric_haze=False,
             clarity_strength=0.5,
         ),
-
         # Aggressive tone mapping for drama
         tone_mapping=ToneMappingConfig(
             method="filmic",
             exposure=0.1,
             contrast=1.15,
         ),
-
         # Cool color grade for water
         color_grading=ColorGradingConfig(
             lut_stack=[
@@ -160,7 +148,6 @@ def example_4_custom_preset():
             saturation=1.15,
             temperature_shift=(0.98, 1.0, 1.05),  # Cool tones
         ),
-
         # AI enhancement with pool-specific prompt
         ai_enhancement=AIEnhancementConfig(
             enabled=False,  # Disabled for this example
@@ -171,11 +158,7 @@ def example_4_custom_preset():
         ),
     )
 
-    pipeline = EliteArchitecturalPipeline(
-        preset=preset,
-        output_dir=Path("output_example_4_custom"),
-        dry_run=False
-    )
+    pipeline = EliteArchitecturalPipeline(preset=preset, output_dir=Path("output_example_4_custom"), dry_run=False)
 
     input_path = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs/750Picacho_Pool_HDR_32-bit.tif")
     if input_path.exists():
@@ -189,6 +172,7 @@ def example_4_custom_preset():
 # Example 5: Dry Run Configuration Preview
 # ============================================================================
 
+
 def example_5_dry_run():
     """Preview configuration without processing."""
     print("\n" + "=" * 80)
@@ -200,7 +184,7 @@ def example_5_dry_run():
     _pipeline = EliteArchitecturalPipeline(  # noqa: F841
         preset=preset,
         output_dir=Path("output_example_5"),
-        dry_run=True  # Preview only
+        dry_run=True,  # Preview only
     )
 
     # This will show configuration without processing
@@ -214,6 +198,7 @@ def example_5_dry_run():
 # ============================================================================
 # Example 6: Fast Processing Mode (Depth + Tone Mapping Only)
 # ============================================================================
+
 
 def example_6_fast_mode():
     """Fast processing without AI enhancement or upscaling."""
@@ -229,11 +214,7 @@ def example_6_fast_mode():
     preset.ai_enhancement.enabled = False
     preset.ai_enhancement.upscale_4x = False
 
-    pipeline = EliteArchitecturalPipeline(
-        preset=preset,
-        output_dir=Path("output_example_6_fast"),
-        dry_run=False
-    )
+    pipeline = EliteArchitecturalPipeline(preset=preset, output_dir=Path("output_example_6_fast"), dry_run=False)
 
     input_dir = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs")
     if input_dir.exists():
@@ -247,6 +228,7 @@ def example_6_fast_mode():
 # ============================================================================
 # Main Runner
 # ============================================================================
+
 
 def main():
     """Run all examples."""
@@ -276,11 +258,11 @@ def main():
 
     choice = input("\nSelect example to run: ").strip().lower()
 
-    if choice == 'q':
+    if choice == "q":
         print("Exiting.")
         return
 
-    if choice == 'all':
+    if choice == "all":
         for _, _, func in examples:
             func()
     else:
@@ -296,5 +278,5 @@ def main():
     print("=" * 80)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

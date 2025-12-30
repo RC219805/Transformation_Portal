@@ -1,6 +1,6 @@
 # Session Complete: 50-Image Validation In Progress
-**Date**: 2025-12-18  
-**Commit**: 2a2b25c  
+**Date**: 2025-12-18
+**Commit**: 2a2b25c
 **Status**: ✅ Dataset Ready, ⏳ Validation Running
 
 ---
@@ -14,7 +14,7 @@ Successfully completed dataset expansion (18→50 images with perfect 50/50 stra
    - Created `data/validation_full/` with 50 images (25 texture, 25 structure)
    - 5× more structure examples for robust calibration
    - Machine-readable `labels.csv` with proper stratification
-   
+
 2. **Validation Launch** ⏳
    - Full 50-image validation running via `production_depth_validation_fixed.py`
    - Output: `outputs/validation_full_50img_20251218_214935_2a2b25c/`
@@ -40,7 +40,7 @@ python scripts/automation/production_depth_validation_fixed.py \
   --no-smooth-calibrations
 ```
 
-**Status**: ~12/50 images complete (24% through)  
+**Status**: ~12/50 images complete (24% through)
 **Log**: `validation_full_50img_run.log`
 
 ### Next Session Actions
@@ -88,7 +88,7 @@ python scripts/analyze_validation_v2.py outputs/validation_full_50img_20251218_2
 ```
 
 #### 4️⃣ **Materials V3 Decision** (Shadow Mode Only)
-**Current Status**: NO-GO for active integration  
+**Current Status**: NO-GO for active integration
 **Unblocked For**: Shadow mode (log-only, no behavior change)
 
 **Graduation Criteria** (for active mode):
@@ -250,6 +250,6 @@ Next: analyze results, generate confusion matrix, calibrate thresholds
 
 ---
 
-**Session End**: 2025-12-18 22:06 PST  
-**Validation ETA**: ~22:55 PST (check `validation_full_50img_run.log`)  
+**Session End**: 2025-12-18 22:06 PST
+**Validation ETA**: ~22:55 PST (check `validation_full_50img_run.log`)
 **Next Milestone**: Stratified analysis → structure input-size sweep → Materials V3 shadow mode

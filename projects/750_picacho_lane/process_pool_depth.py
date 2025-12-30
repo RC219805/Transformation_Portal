@@ -20,10 +20,7 @@ sys.path.insert(0, str(repo_root / "src"))
 
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -81,12 +78,7 @@ def main():
 
         # Save results
         logger.info("Saving outputs...")
-        pipeline.save_result(
-            result,
-            output_dir,
-            save_depth=True,
-            save_visualization=True
-        )
+        pipeline.save_result(result, output_dir, save_depth=True, save_visualization=True)
 
         # Print results summary
         logger.info("")
@@ -94,7 +86,7 @@ def main():
         logger.info("PROCESSING SUMMARY")
         logger.info("=" * 80)
 
-        metadata = result['metadata']
+        metadata = result["metadata"]
         logger.info(f"Processing Time:      {metadata['processing_time_sec']:.2f}s")
         logger.info(f"Depth Inference:      {metadata['depth_inference_time_ms']:.1f}ms")
         logger.info(f"Input Resolution:     {metadata['input_shape'][1]}x{metadata['input_shape'][0]}")
@@ -102,7 +94,7 @@ def main():
         logger.info("")
 
         # Depth statistics
-        depth_stats = metadata['depth_stats']
+        depth_stats = metadata["depth_stats"]
         logger.info("Depth Map Statistics:")
         logger.info(f"  Min Depth:          {depth_stats['min']:.3f}")
         logger.info(f"  Max Depth:          {depth_stats['max']:.3f}")

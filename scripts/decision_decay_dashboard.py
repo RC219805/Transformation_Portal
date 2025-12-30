@@ -90,11 +90,7 @@ def collect_outdated_valid_until_records(tests_root: Path) -> List[ValidUntilRec
     """Return ``valid_until`` records whose deadlines have passed."""
 
     today = date.today()
-    return [
-        record
-        for record in collect_valid_until_records(tests_root)
-        if record.deadline < today
-    ]
+    return [record for record in collect_valid_until_records(tests_root) if record.deadline < today]
 
 
 def _valid_until_from_decorator(  # pylint: disable=too-many-branches
@@ -127,9 +123,7 @@ def _valid_until_from_decorator(  # pylint: disable=too-many-branches
         raise ValueError(f"Unable to evaluate valid_until deadline in {path}") from exc
 
     if not isinstance(deadline_value, str):
-        raise ValueError(
-            f"valid_until decorator in {path} must use a string ISO date literal"
-        )
+        raise ValueError(f"valid_until decorator in {path} must use a string ISO date literal")
 
     reason_value: Optional[str] = None
     if decorator.keywords:
@@ -139,14 +133,10 @@ def _valid_until_from_decorator(  # pylint: disable=too-many-branches
                 break
 
     if reason_value is None:
-        raise ValueError(
-            f"valid_until decorator in {path} is missing required 'reason' keyword"
-        )
+        raise ValueError(f"valid_until decorator in {path} is missing required 'reason' keyword")
 
     if not isinstance(reason_value, str):
-        raise ValueError(
-            f"valid_until decorator in {path} must use a string reason literal"
-        )
+        raise ValueError(f"valid_until decorator in {path} must use a string reason literal")
 
     deadline = date.fromisoformat(deadline_value)
     return deadline, reason_value
@@ -205,18 +195,10 @@ def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:  # pylint
         # Graceful degradation when tokens file is missing or invalid
         return ColorTokenReport(tokens=[], orphans=[])
 
-    brand_tokens = (
-        tokens_data.get("tokens", {})
-        .get("color", {})
-        .get("brand", {})
-    )
+    brand_tokens = tokens_data.get("tokens", {}).get("color", {}).get("brand", {})
 
     directory = tokens_path.parent
-    deliverables = [
-        path
-        for path in directory.iterdir()
-        if path.suffix.lower() in {".css", ".js", ".mjs", ".cjs"}
-    ]
+    deliverables = [path for path in directory.iterdir() if path.suffix.lower() in {".css", ".js", ".mjs", ".cjs"}]
 
     usages: List[ColorTokenUsage] = []
     orphans: List[ColorTokenUsage] = []
@@ -232,11 +214,7 @@ def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:  # pylint
         used_in: List[str] = []
         for deliverable in deliverables:
             text = deliverable.read_text().lower()
-            if (
-                normalized_hex in text
-                or token_ref in text
-                or css_var in text
-            ):
+            if normalized_hex in text or token_ref in text or css_var in text:
                 used_in.append(deliverable.name)
 
         usage = ColorTokenUsage(
@@ -298,9 +276,7 @@ def render_dashboard(
     pv_table.add_column("Count", justify="right")
     pv_table.add_column("Examples")
 
-    for summary in sorted(
-        principle_summaries.values(), key=lambda item: item.count, reverse=True
-    ):
+    for summary in sorted(principle_summaries.values(), key=lambda item: item.count, reverse=True):
         pv_table.add_row(
             summary.principle,
             str(summary.count),
@@ -352,9 +328,7 @@ def _render_plain_dashboard(
 
     print("\n=== Philosophy Violations ===")
     if principle_summaries:
-        for summary in sorted(
-            principle_summaries.values(), key=lambda item: item.count, reverse=True
-        ):
+        for summary in sorted(principle_summaries.values(), key=lambda item: item.count, reverse=True):
             print(f"- {summary.principle}: {summary.count}")
             for example in summary.examples:
                 print(f"    • {example}")
@@ -365,10 +339,7 @@ def _render_plain_dashboard(
     if color_report.tokens:
         for usage in color_report.tokens:
             status = "unused" if usage in color_report.orphans else "used"
-            print(
-                f"- {usage.token} ({usage.hex_value}): "
-                f"{', '.join(usage.used_in) if usage.used_in else status}"
-            )
+            print(f"- {usage.token} ({usage.hex_value}): {', '.join(usage.used_in) if usage.used_in else status}")
     else:
         print("No brand colors found in token file.")
 
@@ -451,16 +422,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.tokens is not None:
         tokens_path = args.tokens.resolve()
     else:
-        tokens_path = (
-            root / "assets"
-            / "brand"
-            / "lantern_logo"
-            / "lantern_tokens.json"
-        )
+        tokens_path = root / "assets" / "brand" / "lantern_logo" / "lantern_tokens.json"
 
     # Validate paths and provide graceful degradation
     if not tests_root.exists():
         import sys
+
         print(f"Warning: Tests directory not found: {tests_root}", file=sys.stderr)
         valid_until_records = []
     else:
@@ -470,6 +437,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     if not tokens_path.exists():
         import sys
+
         print(f"Warning: Brand tokens file not found: {tokens_path}", file=sys.stderr)
         color_report = ColorTokenReport(tokens=[], orphans=[])
     else:

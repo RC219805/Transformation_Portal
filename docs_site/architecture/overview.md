@@ -11,4 +11,3 @@ This project is designed around **modular pipelines**, with additive layers for:
 - **Low-cardinality metrics**: no request IDs or filenames in Prometheus labels.
 - **Deterministic stamping**: config hashing + commit stamping for reproducibility.
 - **Operational safety**: input validation and output path constraints when deployed.
-

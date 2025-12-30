@@ -1,15 +1,15 @@
 # EfficientSAM ONNX Model Source Guide
 
-**Date**: December 12, 2025  
+**Date**: December 12, 2025
 **Purpose**: Official EfficientSAM ONNX model sources, download URLs, and integration guidance for Transformation Portal
 
 ---
 
 ## Executive Summary
 
-✅ **Official ONNX models are available** from the `wkentaro/efficient-sam` GitHub repository (fork specifically for ONNX export).  
-✅ **Two model variants** with different size/speed tradeoffs are recommended.  
-✅ **Full models** (encoder + decoder combined) are production-ready.  
+✅ **Official ONNX models are available** from the `wkentaro/efficient-sam` GitHub repository (fork specifically for ONNX export).
+✅ **Two model variants** with different size/speed tradeoffs are recommended.
+✅ **Full models** (encoder + decoder combined) are production-ready.
 ✅ **Direct download URLs** with known file sizes are documented below.
 
 ---
@@ -258,6 +258,6 @@ for o in m.graph.output:
 
 ---
 
-**Status**: Ready for download and Stage 5A execution  
-**Risk**: Low – official repository, Apache 2.0 license, community-validated  
+**Status**: Ready for download and Stage 5A execution
+**Risk**: Low – official repository, Apache 2.0 license, community-validated
 **Action**: Execute commands above and paste output for Stage 5A I/O wiring

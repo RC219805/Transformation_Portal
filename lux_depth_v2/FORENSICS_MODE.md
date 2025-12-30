@@ -4,12 +4,12 @@
 
 **Problem**: CLI was ignoring runtime intent and force-applying preset defaults, preventing clean baseline forensic diagnosis.
 
-**Root Cause**: 
+**Root Cause**:
 1. Preset application in `PipelineConfig.__post_init__` sets defaults (e.g., `post_tile=2048`)
 2. Pipeline's `__init__` called `apply_preset()` AGAIN, overwriting CLI overrides
 3. No mechanism for non-negotiable CLI overrides
 
-**Solution**: 
+**Solution**:
 - Added `_preset_applied` flag to prevent re-application
 - Added forensics mode CLI flags with guaranteed override capability
 - Overrides applied AFTER preset load and preserved through pipeline construction
@@ -144,14 +144,14 @@ pipe = LuxPipelineV2(cfg)
 ```python
 def apply_preset(self) -> None:
     """Apply preset configuration.
-    
+
     Only applies once to preserve forensics mode overrides.
     """
     if self._preset_applied:
         return  # Skip re-application
-    
+
     # Apply preset logic...
-    
+
     self._preset_applied = True  # Mark as applied
 ```
 
@@ -210,15 +210,15 @@ Forensics mode is working correctly when:
 ## Troubleshooting
 
 ### Issue: Pipeline still shows `post_tile=2048`
-**Cause**: Running older code before fix  
+**Cause**: Running older code before fix
 **Solution**: Ensure you're running latest code with `_preset_applied` flag
 
 ### Issue: Upscaled file still generated
-**Cause**: Using `--disable-upscale` without `--disable-exports`  
+**Cause**: Using `--disable-upscale` without `--disable-exports`
 **Solution**: Use `--master16-only` or add `--disable-exports`
 
 ### Issue: Processing still slow (>5 seconds)
-**Cause**: Not using forensics mode correctly  
+**Cause**: Not using forensics mode correctly
 **Solution**: Use `--master16-only` and verify logs show forensics warnings
 
 ## Version History

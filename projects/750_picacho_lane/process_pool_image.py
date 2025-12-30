@@ -46,7 +46,7 @@ def process_pool_image(input_path: Path, output_path: Path):
     float_norm = result.float_normalisation
 
     # Extract ICC profile (metadata is available but not currently used)
-    icc_profile = pil_image.info.get('icc_profile')
+    icc_profile = pil_image.info.get("icc_profile")
 
     print(f"Array: {img_array.shape}, dtype: {img_array.dtype}")
     print(f"Value range: [{img_array.min():.3f}, {img_array.max():.3f}]")
@@ -55,34 +55,25 @@ def process_pool_image(input_path: Path, output_path: Path):
     pool_adjustments = AdjustmentSettings(
         # Slight positive exposure for bright, inviting water
         exposure=0.15,
-
         # Enhanced clarity for crisp architectural details and water surface
         clarity=0.35,
-
         # Boost vibrance for vibrant water blues and landscape greens
         vibrance=0.25,
-
         # Moderate saturation boost for luxury aesthetic
         saturation=0.15,
-
         # Subtle shadow lift to reveal detail in poolside areas
         shadow_lift=0.08,
-
         # Gentle highlight recovery to preserve sky and reflections
         highlight_recovery=0.12,
-
         # Enhanced midtone contrast for dimensional depth
         midtone_contrast=0.18,
-
         # Cool white balance for refreshing water tones
         white_balance_temp=5800,  # Slightly cool daylight
-        white_balance_tint=-2,    # Subtle blue shift
-
+        white_balance_tint=-2,  # Subtle blue shift
         # Luxury glow for premium aesthetic
         glow=0.20,
-
         # Minimal chroma denoise to preserve detail
-        chroma_denoise=0.10
+        chroma_denoise=0.10,
     )
 
     print("\nApplying luxury pool enhancements:")
@@ -100,13 +91,7 @@ def process_pool_image(input_path: Path, output_path: Path):
     print(f"\nProcessed image range: [{processed.min():.3f}, {processed.max():.3f}]")
 
     # Convert back to original dtype
-    arr_int = float_to_dtype_array(
-        processed,
-        orig_dtype,
-        alpha,
-        base_channels,
-        float_normalisation=float_norm
-    )
+    arr_int = float_to_dtype_array(processed, orig_dtype, alpha, base_channels, float_normalisation=float_norm)
 
     # Save the processed image - skip problematic metadata
     print(f"Saving to: {output_path}")
@@ -117,13 +102,13 @@ def process_pool_image(input_path: Path, output_path: Path):
         orig_dtype,
         None,  # Skip metadata to avoid TIFF tag issues
         icc_profile,
-        compression="tiff_lzw"
+        compression="tiff_lzw",
     )
 
     print("✅ Processing complete!")
 
     # Also save a high-quality JPEG for quick preview
-    jpeg_path = output_path.with_suffix('.jpg')
+    jpeg_path = output_path.with_suffix(".jpg")
 
     # Convert to 8-bit for JPEG
     img_8bit = np.clip(processed * 255, 0, 255).astype(np.uint8)
@@ -133,16 +118,16 @@ def process_pool_image(input_path: Path, output_path: Path):
     exif_data = None
     try:
         original_img = Image.open(input_path)
-        exif_data = original_img.info.get('exif')
+        exif_data = original_img.info.get("exif")
     except Exception:
         # EXIF extraction is optional; ignore errors and proceed without EXIF metadata for JPEG preview.
         pass
 
     # Save progressive JPEG at 98% quality
     if exif_data:
-        img_pil.save(jpeg_path, 'JPEG', quality=98, progressive=True, exif=exif_data)
+        img_pil.save(jpeg_path, "JPEG", quality=98, progressive=True, exif=exif_data)
     else:
-        img_pil.save(jpeg_path, 'JPEG', quality=98, progressive=True)
+        img_pil.save(jpeg_path, "JPEG", quality=98, progressive=True)
 
     print(f"✅ JPEG preview saved: {jpeg_path}")
 
@@ -169,5 +154,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error processing image: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

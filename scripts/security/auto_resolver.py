@@ -54,10 +54,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Configure module logger
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("auto_security_resolver")
 
 
@@ -68,6 +65,7 @@ logger = logging.getLogger("auto_security_resolver")
 
 class ResolutionStrategy(Enum):
     """Available resolution strategies."""
+
     CONSTRAINT_BLOCK = "constraint_block"
     VENDOR_REPLACE = "vendor_replace"
     UPGRADE = "upgrade"
@@ -77,6 +75,7 @@ class ResolutionStrategy(Enum):
 
 class ConfidenceLevel(Enum):
     """Confidence levels for automated actions."""
+
     HIGH = "high"  # >0.9 - Auto-apply
     MEDIUM = "medium"  # 0.7-0.9 - Auto-apply with notification
     LOW = "low"  # 0.5-0.7 - Suggest, require approval
@@ -85,6 +84,7 @@ class ConfidenceLevel(Enum):
 
 class ResolutionStatus(Enum):
     """Status of a resolution attempt."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     APPLIED = "applied"
@@ -97,6 +97,7 @@ class ResolutionStatus(Enum):
 @dataclass
 class ResolutionPattern:
     """A learned pattern for resolving security issues."""
+
     pattern_id: str
     vulnerability_type: str  # e.g., "command_injection", "path_traversal"
     package_pattern: str  # Regex pattern for matching packages
@@ -112,9 +113,7 @@ class ResolutionPattern:
     success_count: int = 0
     failure_count: int = 0
     last_used: Optional[str] = None
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @property
     def effectiveness_score(self) -> float:
@@ -129,19 +128,20 @@ class ResolutionPattern:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         data = asdict(self)
-        data['strategy'] = self.strategy.value
+        data["strategy"] = self.strategy.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ResolutionPattern':
+    def from_dict(cls, data: Dict[str, Any]) -> "ResolutionPattern":
         """Create from dictionary."""
-        data['strategy'] = ResolutionStrategy(data['strategy'])
+        data["strategy"] = ResolutionStrategy(data["strategy"])
         return cls(**data)
 
 
 @dataclass
 class ResolutionAttempt:
     """Record of an attempted resolution."""
+
     attempt_id: str
     vulnerability_id: str
     pattern_id: str
@@ -150,9 +150,7 @@ class ResolutionAttempt:
     confidence: float
 
     # Execution details
-    started_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: Optional[str] = None
 
     # Changes made
@@ -170,21 +168,20 @@ class ResolutionAttempt:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         data = asdict(self)
-        data['strategy'] = self.strategy.value
-        data['status'] = self.status.value
+        data["strategy"] = self.strategy.value
+        data["status"] = self.status.value
         return data
 
 
 @dataclass
 class SecurityFeedback:
     """Feedback on a resolution for learning."""
+
     attempt_id: str
     success: bool
     feedback_type: str  # "auto", "human_approved", "human_rejected", "rollback"
     notes: Optional[str] = None
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 # =============================================================================
@@ -260,30 +257,29 @@ class PatternLearner:
         """Load patterns from storage."""
         # Start with built-in patterns
         for pattern_data in self.BUILT_IN_PATTERNS:
-            self.patterns.append(ResolutionPattern(
-                pattern_id=pattern_data["pattern_id"],
-                vulnerability_type=pattern_data["vulnerability_type"],
-                package_pattern=pattern_data["package_pattern"],
-                strategy=pattern_data["strategy"],
-                confidence_base=pattern_data["confidence_base"],
-                files_to_modify=pattern_data.get("files_to_modify", []),
-                commands=pattern_data.get("commands", []),
-                verification_steps=pattern_data.get("verification_steps", []),
-                success_count=pattern_data.get("success_count", 0),
-                failure_count=pattern_data.get("failure_count", 0),
-            ))
+            self.patterns.append(
+                ResolutionPattern(
+                    pattern_id=pattern_data["pattern_id"],
+                    vulnerability_type=pattern_data["vulnerability_type"],
+                    package_pattern=pattern_data["package_pattern"],
+                    strategy=pattern_data["strategy"],
+                    confidence_base=pattern_data["confidence_base"],
+                    files_to_modify=pattern_data.get("files_to_modify", []),
+                    commands=pattern_data.get("commands", []),
+                    verification_steps=pattern_data.get("verification_steps", []),
+                    success_count=pattern_data.get("success_count", 0),
+                    failure_count=pattern_data.get("failure_count", 0),
+                )
+            )
 
         # Load learned patterns
         if self.patterns_file.exists():
             try:
-                with open(self.patterns_file, 'r') as f:
+                with open(self.patterns_file, "r") as f:
                     data = json.load(f)
                     for pattern_data in data.get("patterns", []):
                         # Update existing or add new
-                        existing = next(
-                            (p for p in self.patterns if p.pattern_id == pattern_data["pattern_id"]),
-                            None
-                        )
+                        existing = next((p for p in self.patterns if p.pattern_id == pattern_data["pattern_id"]), None)
                         if existing:
                             existing.success_count = pattern_data.get("success_count", existing.success_count)
                             existing.failure_count = pattern_data.get("failure_count", existing.failure_count)
@@ -297,19 +293,20 @@ class PatternLearner:
         """Save patterns to storage."""
         self.patterns_file.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with open(self.patterns_file, 'w') as f:
-                json.dump({
-                    "patterns": [p.to_dict() for p in self.patterns],
-                    "last_updated": datetime.now(timezone.utc).isoformat(),
-                }, f, indent=2)
+            with open(self.patterns_file, "w") as f:
+                json.dump(
+                    {
+                        "patterns": [p.to_dict() for p in self.patterns],
+                        "last_updated": datetime.now(timezone.utc).isoformat(),
+                    },
+                    f,
+                    indent=2,
+                )
         except IOError as e:
             logger.error(f"Failed to save patterns: {e}")
 
     def find_matching_patterns(
-        self,
-        package_name: str,
-        vulnerability_type: Optional[str] = None,
-        has_patch: bool = False
+        self, package_name: str, vulnerability_type: Optional[str] = None, has_patch: bool = False
     ) -> List[Tuple[ResolutionPattern, float]]:
         """Find patterns matching a vulnerability, sorted by confidence."""
         matches = []
@@ -407,12 +404,12 @@ class AutoFixer:
         """Load resolution attempts history."""
         if self.attempts_file.exists():
             try:
-                with open(self.attempts_file, 'r') as f:
+                with open(self.attempts_file, "r") as f:
                     data = json.load(f)
                     # Keep only recent attempts (last 100)
                     for attempt_data in data.get("attempts", [])[-100:]:
-                        attempt_data['strategy'] = ResolutionStrategy(attempt_data['strategy'])
-                        attempt_data['status'] = ResolutionStatus(attempt_data['status'])
+                        attempt_data["strategy"] = ResolutionStrategy(attempt_data["strategy"])
+                        attempt_data["status"] = ResolutionStatus(attempt_data["status"])
                         self.attempts.append(ResolutionAttempt(**attempt_data))
             except (IOError, json.JSONDecodeError) as e:
                 logger.warning(f"Failed to load attempts: {e}")
@@ -421,11 +418,15 @@ class AutoFixer:
         """Save resolution attempts."""
         self.attempts_file.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with open(self.attempts_file, 'w') as f:
-                json.dump({
-                    "attempts": [a.to_dict() for a in self.attempts[-100:]],
-                    "last_updated": datetime.now(timezone.utc).isoformat(),
-                }, f, indent=2)
+            with open(self.attempts_file, "w") as f:
+                json.dump(
+                    {
+                        "attempts": [a.to_dict() for a in self.attempts[-100:]],
+                        "last_updated": datetime.now(timezone.utc).isoformat(),
+                    },
+                    f,
+                    indent=2,
+                )
         except IOError as e:
             logger.error(f"Failed to save attempts: {e}")
 
@@ -517,14 +518,7 @@ class AutoFixer:
             # Execute commands
             for cmd in commands:
                 logger.info(f"Executing: {cmd}")
-                result = subprocess.run(
-                    cmd,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    cwd=self.repo_root,
-                    check=False
-                )
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=self.repo_root, check=False)
                 if result.returncode != 0:
                     raise RuntimeError(f"Command failed: {cmd}\n{result.stderr}")
 
@@ -568,7 +562,7 @@ class AutoFixer:
         - Must start with alphanumeric character
         """
         # PEP 508 compliant package name pattern
-        pattern = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$')
+        pattern = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$")
         return bool(pattern.match(package_name)) and len(package_name) <= 100
 
     def _generate_commands(self, pattern: ResolutionPattern, package_name: str) -> List[str]:
@@ -624,13 +618,7 @@ class AutoFixer:
         for step in verification_steps:
             step = step.replace("{package}", safe_package)
             try:
-                result = subprocess.run(
-                    step,
-                    shell=True,
-                    capture_output=True,
-                    cwd=self.repo_root,
-                    check=False
-                )
+                result = subprocess.run(step, shell=True, capture_output=True, cwd=self.repo_root, check=False)
                 if result.returncode != 0:
                     logger.warning(f"Verification step failed: {step}")
                     return False
@@ -658,7 +646,7 @@ class FeedbackCollector:
         """Record feedback on a resolution attempt."""
         self.feedback_file.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with open(self.feedback_file, 'a') as f:
+            with open(self.feedback_file, "a") as f:
                 f.write(json.dumps(asdict(feedback)) + "\n")
         except IOError as e:
             logger.error(f"Failed to record feedback: {e}")
@@ -668,14 +656,11 @@ class FeedbackCollector:
         attempts_file = self.repo_root / ".github" / "security" / "resolution_attempts.json"
         if attempts_file.exists():
             try:
-                with open(attempts_file, 'r') as f:
+                with open(attempts_file, "r") as f:
                     data = json.load(f)
                     for attempt in data.get("attempts", []):
                         if attempt["attempt_id"] == feedback.attempt_id:
-                            self.pattern_learner.record_outcome(
-                                attempt["pattern_id"],
-                                feedback.success
-                            )
+                            self.pattern_learner.record_outcome(attempt["pattern_id"], feedback.success)
                             break
             except (IOError, json.JSONDecodeError) as e:
                 logger.warning(f"Failed to update pattern outcome in resolution_attempts.json: {e}")
@@ -697,7 +682,7 @@ class FeedbackCollector:
         failure_notes = []
 
         try:
-            with open(self.feedback_file, 'r') as f:
+            with open(self.feedback_file, "r") as f:
                 for line in f:
                     if line.strip():
                         feedback = json.loads(line)
@@ -755,7 +740,7 @@ class AutoSecurityResolver:
         """Find repository root."""
         current = Path(__file__).resolve().parent
         for _ in range(10):
-            if (current / '.git').exists():
+            if (current / ".git").exists():
                 return current
             if current.parent == current:
                 break
@@ -775,11 +760,7 @@ class AutoSecurityResolver:
         logger.info(f"Resolving vulnerability {vulnerability_id} for package {package_name}")
 
         # Find matching patterns
-        matches = self.pattern_learner.find_matching_patterns(
-            package_name,
-            vulnerability_type,
-            has_patch
-        )
+        matches = self.pattern_learner.find_matching_patterns(package_name, vulnerability_type, has_patch)
 
         if not matches:
             logger.warning(f"No matching patterns found for {package_name}")
@@ -872,7 +853,7 @@ class AutoSecurityResolver:
 
         if self.stats_file.exists():
             try:
-                with open(self.stats_file, 'r') as f:
+                with open(self.stats_file, "r") as f:
                     stats = json.load(f)
             except (IOError, json.JSONDecodeError) as e:
                 logger.warning(f"Could not read stats file '{self.stats_file}': {e}. Using default stats.")
@@ -889,7 +870,7 @@ class AutoSecurityResolver:
 
         self.stats_file.parent.mkdir(parents=True, exist_ok=True)
         try:
-            with open(self.stats_file, 'w') as f:
+            with open(self.stats_file, "w") as f:
                 json.dump(stats, f, indent=2)
         except IOError as e:
             logger.error(f"Failed to update stats: {e}")
@@ -904,9 +885,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Self-Improving Security Resolution System"
-    )
+    parser = argparse.ArgumentParser(description="Self-Improving Security Resolution System")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Resolve command
@@ -988,9 +967,9 @@ def main():
         print(f"  Patterns: {status['patterns_count']}")
         print(f"  Attempts: {status['attempts_count']}")
         print(f"  Success Rate: {status['feedback_analysis']['success_rate']:.1%}")
-        if status['recent_attempts']:
+        if status["recent_attempts"]:
             print("\nRecent Attempts:")
-            for attempt in status['recent_attempts']:
+            for attempt in status["recent_attempts"]:
                 print(f"  - {attempt['vulnerability']}: {attempt['status']} ({attempt['confidence']:.2f})")
 
     elif args.command == "patterns":

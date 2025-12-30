@@ -1,8 +1,8 @@
 # Lux Depth V2 - Pool Source TIFF Test Results
 
-**Test Date:** December 6, 2025  
-**Test Image:** V2_750Picacho_Pool.tiff  
-**Module:** lux_depth_v2 (Enhanced Production Version)  
+**Test Date:** December 6, 2025
+**Test Image:** V2_750Picacho_Pool.tiff
+**Module:** lux_depth_v2 (Enhanced Production Version)
 **Status:** ✅ SUCCESSFUL
 
 ---
@@ -58,7 +58,7 @@
 | `V2_750Picacho_Pool_upscaled16.tif` | 468 MB | 12000×6750 | 16-bit TIFF |
 | `V2_750Picacho_Pool_report.json` | 2.7 KB | - | JSON report |
 
-**Preview JPG:** Not saved (optional output disabled for test)  
+**Preview JPG:** Not saved (optional output disabled for test)
 **Marketing PNG:** Disabled (OpenCV PNG writer issue detected)
 
 ---
@@ -103,7 +103,7 @@
 
 **Zone Weights:** Successfully generated from depth map using percentile-based method
 - Foreground: 0-35th percentile
-- Midground: 35-65th percentile  
+- Midground: 35-65th percentile
 - Background: 65-100th percentile
 
 **Material Response:** ✅ Heuristic segmentation successfully detected:
@@ -146,7 +146,7 @@ ln -s V2_750Picacho_Pool_depth_16bit.tiff V2_750Picacho_Pool.tiff
 
 ### Issue 2: OpenCV PNG Writer Error ❌
 
-**Problem:** 
+**Problem:**
 ```
 cv2.error: could not find a writer for the specified extension in function 'imwrite_'
 ```
@@ -156,7 +156,7 @@ cv2.error: could not find a writer for the specified extension in function 'imwr
 cfg.save_marketing_png = False
 ```
 
-**Root Cause:** OpenCV 4.12.0 PNG writer issue on macOS  
+**Root Cause:** OpenCV 4.12.0 PNG writer issue on macOS
 **Recommendation:** Add fallback to Pillow for PNG writing or make PNG optional
 
 ---
@@ -278,7 +278,7 @@ The **Lux Depth V2** module successfully processed the Pool source TIFF with:
 
 ---
 
-**Test Date:** December 6, 2025  
-**Tester:** AI Assistant  
-**Module Version:** V2 (Enhanced)  
+**Test Date:** December 6, 2025
+**Tester:** AI Assistant
+**Module Version:** V2 (Enhanced)
 **Test Status:** SUCCESSFUL

@@ -222,7 +222,7 @@ jobs:
     needs: [lint, test, deploy]
     runs-on: ubuntu-latest
     if: always()
-    
+
     steps:
     - name: Clean up temporary files
       run: |
@@ -231,7 +231,7 @@ jobs:
         rm -rf ~/.cache/pip || true
         rm -rf ~/.cache/huggingface || true
         docker system prune -f || true
-        
+
     - name: Verify cleanup
       run: |
         echo "Final disk usage:"

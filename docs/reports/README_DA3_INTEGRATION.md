@@ -96,16 +96,16 @@ These can be enabled/tested as needed in future sessions.
 
 ## Troubleshooting
 
-**Issue:** `OMP: Error #15: Initializing libomp.dylib`  
+**Issue:** `OMP: Error #15: Initializing libomp.dylib`
 **Fix:** Set `os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"` before imports (already done in test scripts)
 
-**Issue:** `gsplat` warning  
+**Issue:** `gsplat` warning
 **Fix:** Optional - only needed for Gaussian Splatting workflows
 
-**Issue:** Model not found  
+**Issue:** Model not found
 **Fix:** Models auto-download on first use. DA3-LARGE-1.1 and DA3NESTED-GIANT-LARGE-1.1 are pre-cached.
 
 ---
 
-**Date:** 2025-12-19  
+**Date:** 2025-12-19
 **Status:** ✅ Production Ready

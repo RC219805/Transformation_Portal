@@ -1,7 +1,7 @@
 # Materials v2 Technical Specification
 
-**Version:** 2.0  
-**Last Updated:** 2025-12-09  
+**Version:** 2.0
+**Last Updated:** 2025-12-09
 **Status:** Production Testing
 
 ## Architecture Overview
@@ -52,13 +52,13 @@ def apply_confidence_gating(
 ) -> Tensor:
     """
     Apply confidence-gated blending.
-    
+
     For each pixel:
     - confidence < (threshold - blend_range): 0% enhancement (fallback)
     - confidence > threshold: 100% enhancement
     - in-between: smooth blend (if mode='soft')
     """
-    
+
     if blend_mode == 'soft':
         # Smooth transition using sigmoid-like curve
         blend_factor = torch.clamp(
@@ -68,10 +68,10 @@ def apply_confidence_gating(
     else:  # hard
         # Sharp cutoff
         blend_factor = (confidence_map >= threshold).float()
-    
+
     # Blend enhancement with original
     result = original * (1 - blend_factor) + enhancement * blend_factor
-    
+
     return result
 ```
 
@@ -114,20 +114,20 @@ def segment_downscaled(
 ) -> Dict[str, Tensor]:
     """
     Segment at reduced resolution with soft masks.
-    
+
     Returns:
         Dict mapping material types to soft masks [0, 1]
     """
-    
+
     # Calculate downscale factor
     h, w = image.shape[-2:]
     max_dim = max(h, w)
-    
+
     if max_dim > max_side:
         scale_factor = max_side / max_dim
         new_h = int(h * scale_factor)
         new_w = int(w * scale_factor)
-        
+
         # Downscale image
         image_small = F.interpolate(
             image, size=(new_h, new_w),
@@ -136,10 +136,10 @@ def segment_downscaled(
     else:
         image_small = image
         scale_factor = 1.0
-    
+
     # Run segmentation
     masks_small = segmentation_backend(image_small)
-    
+
     # Apply edge feathering (Gaussian blur)
     masks_soft = {}
     for material, mask in masks_small.items():
@@ -148,7 +148,7 @@ def segment_downscaled(
             sigma=feather_sigma
         )
         masks_soft[material] = mask_soft
-    
+
     # Upscale masks to original resolution
     masks_upscaled = {}
     for material, mask in masks_soft.items():
@@ -157,7 +157,7 @@ def segment_downscaled(
             mode='bicubic', align_corners=False
         )
         masks_upscaled[material] = mask_upscaled.clamp(0, 1)
-    
+
     return masks_upscaled
 ```
 
@@ -182,12 +182,12 @@ def segment_downscaled(
 ```python
 class VRAMLifecycleManager:
     """Hard VRAM lifecycle control."""
-    
+
     def __init__(self, device: str):
         self.device = device
         self.is_mps = 'mps' in device
         self.is_cuda = 'cuda' in device
-    
+
     def get_allocated(self) -> int:
         """Get current VRAM allocation in bytes."""
         if self.is_cuda:
@@ -195,11 +195,11 @@ class VRAMLifecycleManager:
         elif self.is_mps:
             return torch.mps.current_allocated_memory()
         return 0
-    
+
     def check_headroom(self, required_mb: int = 2048) -> bool:
         """Check if enough VRAM headroom available."""
         allocated = self.get_allocated() / 1024 / 1024  # MB
-        
+
         if self.is_mps:
             # M-series unified memory: check system memory
             available = psutil.virtual_memory().available / 1024 / 1024
@@ -209,16 +209,16 @@ class VRAMLifecycleManager:
             available = total - allocated
         else:
             available = float('inf')
-        
+
         return available >= required_mb
-    
+
     def release_resources(self):
         """Hard cleanup of VRAM."""
         import gc
-        
+
         # Force garbage collection
         gc.collect()
-        
+
         # Empty VRAM cache
         if self.is_cuda:
             torch.cuda.empty_cache()
@@ -226,7 +226,7 @@ class VRAMLifecycleManager:
         elif self.is_mps:
             torch.mps.empty_cache()
             torch.mps.synchronize()
-    
+
     def context_manager(self):
         """Context manager for automatic cleanup."""
         return VRAMContext(self)
@@ -234,19 +234,19 @@ class VRAMLifecycleManager:
 
 class VRAMContext:
     """Context manager for VRAM lifecycle."""
-    
+
     def __init__(self, manager: VRAMLifecycleManager):
         self.manager = manager
         self.initial_allocated = 0
-    
+
     def __enter__(self):
         self.initial_allocated = self.manager.get_allocated()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Always cleanup on exit
         self.manager.release_resources()
-        
+
         # Log memory reduction
         final_allocated = self.manager.get_allocated()
         freed = (self.initial_allocated - final_allocated) / 1024 / 1024
@@ -293,23 +293,23 @@ upscaled = upscaler.upscale(enhanced)
 def calculate_image_hash(image_tensor: Tensor) -> str:
     """
     Calculate deterministic hash of image.
-    
+
     Includes:
     - Image content (pixel values)
     - Resolution
     - Data type
     """
-    
+
     # Convert to numpy for hashing
     image_np = image_tensor.cpu().numpy()
-    
+
     # Create hash from content
     content_hash = hashlib.sha256(image_np.tobytes()).hexdigest()
-    
+
     # Include metadata
     metadata = f"{image_np.shape}_{image_np.dtype}"
     metadata_hash = hashlib.sha256(metadata.encode()).hexdigest()
-    
+
     # Combined hash (first 16 chars of each)
     return f"{content_hash[:16]}_{metadata_hash[:16]}"
 ```
@@ -324,36 +324,36 @@ def load_cached_masks(
 ) -> Optional[Dict[str, Tensor]]:
     """
     Load cached masks if available and valid.
-    
+
     Validates:
     - Image hash matches
     - Confidence threshold matches (within tolerance)
     - Masks exist and are valid
     """
-    
+
     # Check confidence metadata
     confidence_file = cache_dir / f"{image_hash}_confidence.json"
     if not confidence_file.exists():
         return None
-    
+
     with open(confidence_file) as f:
         metadata = json.load(f)
-    
+
     # Validate confidence threshold (within 0.01 tolerance)
     cached_threshold = metadata['confidence_threshold']
     if abs(cached_threshold - confidence_threshold) > 0.01:
         return None
-    
+
     # Load masks
     masks = {}
     for material in metadata['materials']:
         mask_file = cache_dir / f"{image_hash}_{material}_mask.npy"
         if not mask_file.exists():
             return None
-        
+
         mask = np.load(mask_file)
         masks[material] = torch.from_numpy(mask)
-    
+
     return masks
 ```
 

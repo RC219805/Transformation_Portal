@@ -39,17 +39,18 @@ from enhancements.hyper_reality_enhancement import (  # noqa: E402
     MaterialTranscendence,
     SpatialHarmonics,
     EnhancementConfig,
-    configure_device
+    configure_device,
 )
 
 # Optional LPIPS import for enhanced perceptual loss
 try:
     import lpips
+
     LPIPS_AVAILABLE = True
 except ImportError:
     LPIPS_AVAILABLE = False
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 # Configure device
 device = configure_device()
@@ -107,9 +108,9 @@ class SyntheticDataGenerator:
 
     def generate_training_data(self):
         """Generate synthetic low→high quality image pairs"""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("GENERATING SYNTHETIC TRAINING DATA")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         low_quality_dir = self.output_dir / "low_quality"
         high_quality_dir = self.output_dir / "high_quality"
@@ -160,7 +161,7 @@ class SyntheticDataGenerator:
             intensity = 1.0 - (y / sky_height) * 0.5
             img[y, :, 2] = int(180 * intensity)  # Blue
             img[y, :, 1] = int(120 * intensity)  # Green
-            img[y, :, 0] = int(80 * intensity)   # Red
+            img[y, :, 0] = int(80 * intensity)  # Red
 
         # Building structure
         building_y = sky_height
@@ -177,16 +178,14 @@ class SyntheticDataGenerator:
             for window_y in range(building_y + 30, h - 30, 80):
                 window_w, window_h = 60, 50
                 # Glass reflection (blue tint)
-                img[window_y:window_y + window_h, window_x:window_x + window_w, 2] = 140
-                img[window_y:window_y + window_h, window_x:window_x + window_w, 1] = 120
-                img[window_y:window_y + window_h, window_x:window_x + window_w, 0] = 100
+                img[window_y : window_y + window_h, window_x : window_x + window_w, 2] = 140
+                img[window_y : window_y + window_h, window_x : window_x + window_w, 1] = 120
+                img[window_y : window_y + window_h, window_x : window_x + window_w, 0] = 100
 
         # Add subtle lighting variations
         x_gradient = np.linspace(0.9, 1.1, w)
         for c in range(3):
-            img[building_y:, :, c] = np.clip(
-                img[building_y:, :, c] * x_gradient, 0, 255
-            )
+            img[building_y:, :, c] = np.clip(img[building_y:, :, c] * x_gradient, 0, 255)
 
         return img.astype(np.uint8)
 
@@ -203,6 +202,7 @@ class SyntheticDataGenerator:
 
         # 3. Slight blur (loss of sharpness)
         from scipy.ndimage import gaussian_filter
+
         for c in range(3):
             degraded[:, :, c] = gaussian_filter(degraded[:, :, c], sigma=0.8)
 
@@ -242,8 +242,8 @@ class EnhancementDataset(Dataset):
         low_path, high_path = self.image_pairs[idx]
 
         # Load images
-        low_img = Image.open(low_path).convert('RGB')
-        high_img = Image.open(high_path).convert('RGB')
+        low_img = Image.open(low_path).convert("RGB")
+        high_img = Image.open(high_path).convert("RGB")
 
         if self.transform:
             low_img = self.transform(low_img)
@@ -271,10 +271,12 @@ class VGGFeatureExtractor(nn.Module):
 
         try:
             from torchvision.models import vgg19, VGG19_Weights
+
             vgg = vgg19(weights=VGG19_Weights.IMAGENET1K_V1).features
         except (ImportError, TypeError):
             # Fallback for older torchvision versions
             from torchvision.models import vgg19
+
             vgg = vgg19(pretrained=True).features
 
         # Extract required layers
@@ -290,8 +292,8 @@ class VGGFeatureExtractor(nn.Module):
         self.features.to(device)
 
         # ImageNet normalization
-        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+        self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, x):
         """Extract multi-scale VGG features"""
@@ -423,7 +425,7 @@ class HyperRealityTrainer:
         self.lpips_fn = None
         if LPIPS_AVAILABLE:
             try:
-                self.lpips_fn = lpips.LPIPS(net='vgg').to(device)
+                self.lpips_fn = lpips.LPIPS(net="vgg").to(device)
                 self.lpips_fn.eval()  # LPIPS should be in eval mode
                 print("✓ LPIPS loss initialized (using VGG backbone)")
             except Exception as e:
@@ -437,39 +439,25 @@ class HyperRealityTrainer:
         for model in self.models.values():
             all_params.extend(model.parameters())
 
-        self.optimizer = torch.optim.AdamW(
-            all_params,
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay
-        )
+        self.optimizer = torch.optim.AdamW(all_params, lr=config.learning_rate, weight_decay=config.weight_decay)
 
         # Learning rate scheduler
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer,
-            T_max=config.num_epochs
-        )
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=config.num_epochs)
 
         # Training state
         self.current_epoch = 0
-        self.best_val_loss = float('inf')
-        self.training_history = {
-            'train_loss': [],
-            'val_loss': [],
-            'mse': [],
-            'perceptual': [],
-            'style': [],
-            'lpips': []
-        }
+        self.best_val_loss = float("inf")
+        self.training_history = {"train_loss": [], "val_loss": [], "mse": [], "perceptual": [], "style": [], "lpips": []}
 
     def _init_models(self):
         """Initialize all enhancement models"""
         enhancement_config = EnhancementConfig()
 
         self.models = {
-            'caustics': CausticGenerator(enhancement_config.quantum_caustics).to(device),
-            'atmosphere': AtmosphericSynthesizer(enhancement_config.neural_atmosphere).to(device),
-            'materials': MaterialTranscendence(enhancement_config.material_transcendence).to(device),
-            'harmonics': SpatialHarmonics(enhancement_config.spatial_harmonics).to(device),
+            "caustics": CausticGenerator(enhancement_config.quantum_caustics).to(device),
+            "atmosphere": AtmosphericSynthesizer(enhancement_config.neural_atmosphere).to(device),
+            "materials": MaterialTranscendence(enhancement_config.material_transcendence).to(device),
+            "harmonics": SpatialHarmonics(enhancement_config.spatial_harmonics).to(device),
         }
 
         # Set to training mode
@@ -478,9 +466,9 @@ class HyperRealityTrainer:
 
     def train(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None):
         """Main training loop"""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("HYPER-REALITY TRAINING PIPELINE")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         print(f"Device: {device}")
         print(f"Epochs: {self.config.num_epochs}")
         print(f"Batch size: {self.config.batch_size}")
@@ -495,12 +483,12 @@ class HyperRealityTrainer:
 
             # Training phase
             train_loss = self._train_epoch(train_loader, epoch)
-            self.training_history['train_loss'].append(train_loss)
+            self.training_history["train_loss"].append(train_loss)
 
             # Validation phase
             if val_loader and (epoch + 1) % self.config.val_frequency == 0:
                 val_loss = self._validate(val_loader, epoch)
-                self.training_history['val_loss'].append(val_loss)
+                self.training_history["val_loss"].append(val_loss)
 
                 # Save best model
                 if val_loss < self.best_val_loss:
@@ -514,9 +502,9 @@ class HyperRealityTrainer:
             # Update learning rate
             self.scheduler.step()
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TRAINING COMPLETE")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"Best validation loss: {self.best_val_loss:.6f}")
         print(f"Checkpoint directory: {self.config.checkpoint_dir}")
 
@@ -549,14 +537,8 @@ class HyperRealityTrainer:
             Surface normals [B, 3, H, W] as unit vectors (x, y, z components)
         """
         # Sobel filters for gradients
-        sobel_x = torch.tensor(
-            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
-            dtype=torch.float32
-        ).view(1, 1, 3, 3).to(depth.device)
-        sobel_y = torch.tensor(
-            [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
-            dtype=torch.float32
-        ).view(1, 1, 3, 3).to(depth.device)
+        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3).to(depth.device)
+        sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3).to(depth.device)
 
         dx = F.conv2d(depth, sobel_x, padding=1)
         dy = F.conv2d(depth, sobel_y, padding=1)
@@ -574,7 +556,7 @@ class HyperRealityTrainer:
         total_loss = 0.0
         num_batches = len(train_loader)
 
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{self.config.num_epochs}")
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{self.config.num_epochs}")
 
         for batch_idx, (low_img, high_img) in enumerate(pbar):
             low_img = low_img.to(device)
@@ -589,20 +571,20 @@ class HyperRealityTrainer:
 
             # Stage 1: Caustics (with depth information)
             with torch.set_grad_enabled(True):
-                caustics = self.models['caustics'](enhanced, depth)
+                caustics = self.models["caustics"](enhanced, depth)
                 enhanced = enhanced + caustics * 0.3
 
             # Stage 2: Atmosphere
             with torch.set_grad_enabled(True):
-                enhanced = self.models['atmosphere'](enhanced)
+                enhanced = self.models["atmosphere"](enhanced)
 
             # Stage 3: Materials
             with torch.set_grad_enabled(True):
-                enhanced = self.models['materials'](enhanced)
+                enhanced = self.models["materials"](enhanced)
 
             # Stage 4: Spatial Harmonics (illumination from normals)
             with torch.set_grad_enabled(True):
-                illumination = self.models['harmonics'](normals)
+                illumination = self.models["harmonics"](normals)
                 enhanced = enhanced * (1 + illumination * 0.3)
 
             # Compute losses
@@ -620,10 +602,10 @@ class HyperRealityTrainer:
 
             # Combined loss
             loss = (
-                self.config.mse_weight * mse +
-                self.config.perceptual_weight * perceptual +
-                self.config.style_weight * style +
-                self.config.lpips_weight * lpips_loss
+                self.config.mse_weight * mse
+                + self.config.perceptual_weight * perceptual
+                + self.config.style_weight * style
+                + self.config.lpips_weight * lpips_loss
             )
 
             # Backward pass
@@ -632,8 +614,7 @@ class HyperRealityTrainer:
 
             # Gradient clipping
             torch.nn.utils.clip_grad_norm_(
-                [p for model in self.models.values() for p in model.parameters()],
-                self.config.gradient_clip
+                [p for model in self.models.values() for p in model.parameters()], self.config.gradient_clip
             )
 
             self.optimizer.step()
@@ -642,12 +623,12 @@ class HyperRealityTrainer:
 
             # Update progress bar
             postfix = {
-                'loss': f'{loss.item():.4f}',
-                'mse': f'{mse.item():.4f}',
-                'percep': f'{perceptual.item():.4f}',
+                "loss": f"{loss.item():.4f}",
+                "mse": f"{mse.item():.4f}",
+                "percep": f"{perceptual.item():.4f}",
             }
             if self.lpips_fn is not None:
-                postfix['lpips'] = f'{lpips_loss.item():.4f}'
+                postfix["lpips"] = f"{lpips_loss.item():.4f}"
             pbar.set_postfix(postfix)
 
         avg_loss = total_loss / num_batches
@@ -675,17 +656,17 @@ class HyperRealityTrainer:
                 normals = self._compute_normals(depth)
 
                 # Stage 1: Caustics (with depth information)
-                caustics = self.models['caustics'](enhanced, depth)
+                caustics = self.models["caustics"](enhanced, depth)
                 enhanced = enhanced + caustics * 0.3
 
                 # Stage 2: Atmosphere
-                enhanced = self.models['atmosphere'](enhanced)
+                enhanced = self.models["atmosphere"](enhanced)
 
                 # Stage 3: Materials
-                enhanced = self.models['materials'](enhanced)
+                enhanced = self.models["materials"](enhanced)
 
                 # Stage 4: Spatial Harmonics (illumination from normals)
-                illumination = self.models['harmonics'](normals)
+                illumination = self.models["harmonics"](normals)
                 enhanced = enhanced * (1 + illumination * 0.3)
 
                 # Compute losses (consistent with training)
@@ -702,10 +683,10 @@ class HyperRealityTrainer:
 
                 # Combined loss (same formula as training)
                 loss = (
-                    self.config.mse_weight * mse +
-                    self.config.perceptual_weight * perceptual +
-                    self.config.style_weight * style +
-                    self.config.lpips_weight * lpips_loss
+                    self.config.mse_weight * mse
+                    + self.config.perceptual_weight * perceptual
+                    + self.config.style_weight * style
+                    + self.config.lpips_weight * lpips_loss
                 )
                 total_loss += loss.item()
 
@@ -720,17 +701,17 @@ class HyperRealityTrainer:
     def _save_checkpoint(self, epoch: int, is_best: bool = False):
         """Save model checkpoint"""
         checkpoint = {
-            'epoch': epoch,
-            'config': asdict(self.config),
-            'models': {name: model.state_dict() for name, model in self.models.items()},
-            'optimizer': self.optimizer.state_dict(),
-            'scheduler': self.scheduler.state_dict(),
-            'best_val_loss': self.best_val_loss,
-            'training_history': self.training_history,
+            "epoch": epoch,
+            "config": asdict(self.config),
+            "models": {name: model.state_dict() for name, model in self.models.items()},
+            "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.scheduler.state_dict(),
+            "best_val_loss": self.best_val_loss,
+            "training_history": self.training_history,
         }
 
         # Save checkpoint
-        checkpoint_path = Path(self.config.checkpoint_dir) / f"checkpoint_epoch_{epoch+1}.pth"
+        checkpoint_path = Path(self.config.checkpoint_dir) / f"checkpoint_epoch_{epoch + 1}.pth"
         torch.save(checkpoint, checkpoint_path)
 
         if is_best:
@@ -743,20 +724,13 @@ class HyperRealityTrainer:
 
 def main():
     parser = argparse.ArgumentParser(description="Train Hyper-Reality Enhancement Models")
-    parser.add_argument("--data-dir", type=str, default="data/training",
-                        help="Directory for training data")
-    parser.add_argument("--generate-data", action="store_true",
-                        help="Generate synthetic training data")
-    parser.add_argument("--num-pairs", type=int, default=1000,
-                        help="Number of synthetic pairs to generate")
-    parser.add_argument("--epochs", type=int, default=50,
-                        help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=4,
-                        help="Training batch size")
-    parser.add_argument("--lr", type=float, default=1e-4,
-                        help="Learning rate")
-    parser.add_argument("--checkpoint-dir", type=str, default="weights/hyper_reality",
-                        help="Directory for checkpoints")
+    parser.add_argument("--data-dir", type=str, default="data/training", help="Directory for training data")
+    parser.add_argument("--generate-data", action="store_true", help="Generate synthetic training data")
+    parser.add_argument("--num-pairs", type=int, default=1000, help="Number of synthetic pairs to generate")
+    parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=4, help="Training batch size")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument("--checkpoint-dir", type=str, default="weights/hyper_reality", help="Directory for checkpoints")
 
     args = parser.parse_args()
 
@@ -775,36 +749,24 @@ def main():
         return 1
 
     # Create datasets
-    transform = transforms.Compose([
-        transforms.Resize((512, 512)),
-        transforms.ToTensor(),
-    ])
+    transform = transforms.Compose(
+        [
+            transforms.Resize((512, 512)),
+            transforms.ToTensor(),
+        ]
+    )
 
     dataset = EnhancementDataset(low_quality_dir, high_quality_dir, transform)
 
     # Split into train/val
     val_size = int(0.1 * len(dataset))
     train_size = len(dataset) - val_size
-    train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, [train_size, val_size]
-    )
+    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
     # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True
-    )
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True
-    )
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     # Create training config
     config = TrainingConfig(
@@ -831,5 +793,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\n❌ Training failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

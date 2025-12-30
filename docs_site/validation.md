@@ -18,4 +18,3 @@ Metrics are reported separately for runtime weighting:
 - Fidelity: SSIM / PSNR
 - Perceptual: LPIPS
 - Aesthetic: NIMA
-

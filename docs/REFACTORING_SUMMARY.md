@@ -28,7 +28,7 @@ The Transformation Portal repository has undergone a comprehensive refactoring t
 ```
 src/transformation_portal/     # Main package (NEW)
 ├── pipelines/                # Processing workflows
-├── processors/               # Core engines  
+├── processors/               # Core engines
 ├── enhancers/                # Enhancement tools
 ├── analyzers/                # Analysis tools
 ├── rendering/                # Rendering utilities

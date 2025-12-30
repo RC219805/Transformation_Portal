@@ -22,7 +22,7 @@ Infrastructure complete, detector is stub, validation ready but primary metric b
    ```python
    # Add to MaterialsV3Config
    water_validation_emit_mask: bool = False  # Debug mode for validation
-   
+
    # Expose mask in report when enabled
    # Update validation harness to decode and use mask
    ```

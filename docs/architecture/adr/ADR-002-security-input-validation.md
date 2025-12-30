@@ -1,9 +1,9 @@
 # ADR-002: Security Input Validation
 
-**Date**: December 7, 2025  
-**Status**: Accepted  
-**Implementation Date**: December 7, 2025  
-**Priority**: Critical  
+**Date**: December 7, 2025
+**Status**: Accepted
+**Implementation Date**: December 7, 2025
+**Priority**: Critical
 **Architect**: Transformation Portal Security Team
 
 ## Context
@@ -46,7 +46,7 @@ malicious_filter = "scale=1920:1080; $(rm -rf /)"
 # Results in: ffmpeg -i input.mp4 -vf "scale=1920:1080; $(rm -rf /)" output.mp4
 ```
 
-**Scope**: 
+**Scope**:
 - 15+ files accepting user file paths
 - 3 files constructing FFmpeg commands
 - 0 files with comprehensive input validation
@@ -75,19 +75,19 @@ def validate_filepath(
 ) -> Path:
     """
     Validate file path against security constraints.
-    
+
     Args:
         filepath: Path to validate
         allowed_dirs: List of allowed parent directories
         max_file_size: Maximum file size in bytes (None = no limit)
         allowed_extensions: Whitelist of allowed extensions
-        
+
     Returns:
         Resolved, validated Path
-        
+
     Raises:
         SecurityError: If validation fails
-        
+
     Security Guarantees:
     - Prevents path traversal (../../)
     - Validates file exists within allowed directories
@@ -100,17 +100,17 @@ def validate_filepath(
         resolved = filepath.resolve(strict=True)
     except (OSError, RuntimeError) as e:
         raise SecurityError(f"Cannot resolve path {filepath}: {e}")
-    
+
     # Check file exists
     if not resolved.exists():
         raise SecurityError(f"File does not exist: {filepath}")
-    
+
     # Validate within allowed directories
     if not any(resolved.is_relative_to(d.resolve()) for d in allowed_dirs):
         raise SecurityError(
             f"Path {filepath} outside allowed directories: {allowed_dirs}"
         )
-    
+
     # Check file size
     if max_file_size and resolved.is_file():
         file_size = resolved.stat().st_size
@@ -118,13 +118,13 @@ def validate_filepath(
             raise SecurityError(
                 f"File {filepath} exceeds size limit: {file_size} > {max_file_size}"
             )
-    
+
     # Check extension
     if allowed_extensions and resolved.suffix.lower() not in allowed_extensions:
         raise SecurityError(
             f"File extension {resolved.suffix} not in whitelist: {allowed_extensions}"
         )
-    
+
     return resolved
 ```
 
@@ -142,17 +142,17 @@ def build_ffmpeg_command(
 ) -> List[str]:
     """
     Build FFmpeg command with injection-safe argument list.
-    
+
     Args:
         input_file: Validated input path
         output_file: Validated output path
         filters: List of filter strings (will be validated)
         codec: Output codec
         additional_args: Additional FFmpeg arguments
-        
+
     Returns:
         List of command arguments (no shell required)
-        
+
     Security:
     - No shell=True subprocess execution
     - Arguments passed as list (no string parsing)
@@ -165,7 +165,7 @@ def build_ffmpeg_command(
             raise SecurityError(
                 f"Filter contains dangerous characters: {filter_str}"
             )
-    
+
     cmd = [
         "ffmpeg",
         "-i", str(input_file),
@@ -173,10 +173,10 @@ def build_ffmpeg_command(
         "-c:v", codec,
         str(output_file)
     ]
-    
+
     if additional_args:
         cmd.extend(additional_args)
-    
+
     return cmd
 
 # Usage
@@ -198,18 +198,18 @@ class TimeoutError(Exception):
 def timeout(seconds: int):
     """
     Context manager for operation timeout.
-    
+
     Note: This implementation uses signal.SIGALRM which only works on Unix-like
     systems (Linux, macOS). Windows support requires a different approach
     (e.g., threading-based timeout or multiprocessing).
-    
+
     Usage:
         with timeout(30):
             slow_operation()  # Raises TimeoutError after 30s
     """
     def timeout_handler(signum, frame):
         raise TimeoutError(f"Operation exceeded {seconds}s timeout")
-    
+
     signal.signal(signal.SIGALRM, timeout_handler)
     signal.alarm(seconds)
     try:
@@ -283,7 +283,7 @@ def test_path_traversal_blocked():
         Path("/etc/passwd"),
         Path("../../../../root/.ssh/id_rsa"),
     ]
-    
+
     for path in malicious_paths:
         with pytest.raises(SecurityError):
             validate_filepath(path, [Path("/allowed/dir")])
@@ -295,7 +295,7 @@ def test_ffmpeg_injection_blocked():
         "scale=1920:1080 | cat /etc/passwd",
         "scale=1920:1080 && echo pwned",
     ]
-    
+
     for filter_str in malicious_filters:
         with pytest.raises(SecurityError):
             build_ffmpeg_command(
@@ -308,7 +308,7 @@ def test_file_size_limit_enforced():
     """Ensure file size limits are enforced."""
     # Create 200MB test file
     large_file = create_test_file(200 * 1024 * 1024)
-    
+
     with pytest.raises(SecurityError, match="exceeds size limit"):
         validate_filepath(
             large_file,
@@ -362,8 +362,8 @@ def process_image(filename: str, base_dir: Path = Path.cwd()):
 
 ---
 
-**Approval**: Accepted and Implemented  
-**Implementation**: Completed December 7, 2025  
+**Approval**: Accepted and Implemented
+**Implementation**: Completed December 7, 2025
 **Review Date**: January 7, 2026
 
 ## Implementation Status

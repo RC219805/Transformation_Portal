@@ -1,4 +1,5 @@
 """Add linear colorspace output support to pro_pipeline.py"""
+
 import numpy as np
 from PIL import Image
 
@@ -9,11 +10,7 @@ def srgb_to_linear(img_array):
     img_float = img_array.astype(np.float32) / 255.0
 
     # Apply inverse sRGB gamma curve
-    linear = np.where(
-        img_float <= 0.04045,
-        img_float / 12.92,
-        np.power((img_float + 0.055) / 1.055, 2.4)
-    )
+    linear = np.where(img_float <= 0.04045, img_float / 12.92, np.power((img_float + 0.055) / 1.055, 2.4))
 
     return linear
 
@@ -36,9 +33,9 @@ def save_linear_tiff(image: Image.Image, output_path, bit_depth=16):
 
     # Create PIL image from linear array
     if bit_depth == 16:
-        linear_img = Image.fromarray(linear_scaled, mode='RGB')
+        linear_img = Image.fromarray(linear_scaled, mode="RGB")
     else:
-        linear_img = Image.fromarray(linear_scaled, mode='F')
+        linear_img = Image.fromarray(linear_scaled, mode="F")
 
     # Save with compression
     linear_img.save(
@@ -48,7 +45,7 @@ def save_linear_tiff(image: Image.Image, output_path, bit_depth=16):
             # Tag 259: Compression
             # Tag 262: PhotometricInterpretation (2 = RGB)
             # Could add custom tag to mark as linear
-        }
+        },
     )
 
     return output_path

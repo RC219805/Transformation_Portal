@@ -1,5 +1,5 @@
 # Critical Tiling Bugs Found
-**Date**: 2025-12-18  
+**Date**: 2025-12-18
 **Status**: ❌ ROOT CAUSE IDENTIFIED
 
 ---
@@ -28,7 +28,7 @@ Ran systematic isolation tests on each pipeline stage:
 for idx, (tile_depth, y0, y1, x0, x1) in enumerate(tile_depths):
     th, tw = tile_depth.shape
     window = blend_window[:th, :tw]
-    
+
     depth_stack[idx, y0:y1, x0:x1] = tile_depth  # ← BUG: No scale reconciliation!
     weight_stack[idx, y0:y1, x0:x1] = window
 ```

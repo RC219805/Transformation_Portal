@@ -1,7 +1,7 @@
 # Material Segmentation Model Installation Guide
 
-**Date:** December 11, 2025  
-**Model:** SegFormer-B5 (nvidia/segformer-b5-finetuned-ade-640-640)  
+**Date:** December 11, 2025
+**Model:** SegFormer-B5 (nvidia/segformer-b5-finetuned-ade-640-640)
 **Purpose:** Production-grade material segmentation for luxury real estate rendering
 
 ---
@@ -96,11 +96,11 @@ The production defaults have been updated in `lux_depth_v2/config.py`:
 @dataclass
 class SegmentationConfig:
     backend: str = "auto"  # auto|onnx|segformer|heuristic|none
-    
+
     # PRODUCTION DEFAULT: SegFormer-B5 (highest quality)
     segformer_model: Optional[str] = "nvidia/segformer-b5-finetuned-ade-640-640"
     segformer_revision: Optional[str] = None  # Use latest cached version
-    
+
     input_long_side: int = 768  # Segmentation resolution (pixels)
     soften_sigma_px: float = 2.0  # Mask smoothing
     min_confidence: float = 0.25  # Confidence threshold

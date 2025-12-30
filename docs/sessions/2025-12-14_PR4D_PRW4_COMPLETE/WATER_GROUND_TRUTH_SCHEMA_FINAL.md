@@ -136,17 +136,17 @@ data/water_v0/
   "should_detect": true,
   "difficulty": "easy",
   "tags": [],
-  
+
   "coverage": 0.85,
   "coverage_px": 55296,
   "confidence": 0.72,
   "source": "heuristic",
   "implementation": "baseline_blue_threshold_v0",
-  
+
   "edge_alignment_score": 0.68,
   "boundary_px": 1024,
   "stability_score": 0.82,
-  
+
   "is_false_positive": false,
   "is_false_trigger": false,
   "processing_time_ms": 28.5
@@ -176,26 +176,26 @@ data/water_v0/
     "ocean_images": 22,
     "should_detect_true": 40,
     "should_detect_false": 4,
-    
+
     "pool_recall": 0.90,
     "pool_avg_coverage": 0.78,
     "pool_median_coverage": 0.75,
     "pool_avg_confidence": 0.68,
     "pool_avg_edge_alignment": 0.62,
     "pool_avg_stability": 0.80,
-    
+
     "ocean_recall": 0.85,
     "ocean_avg_coverage": 0.65,
     "ocean_median_coverage": 0.62,
     "ocean_avg_confidence": 0.58,
     "ocean_avg_edge_alignment": 0.55,
     "ocean_avg_stability": 0.75,
-    
+
     "false_trigger_count": 1,
     "false_trigger_rate": 0.25,
-    
+
     "overall_avg_processing_time_ms": 32.1,
-    
+
     "false_positive_count": 0,
     "false_positive_rate": 0.0
   },
@@ -355,10 +355,10 @@ Before calling v0 "ready," verify:
     "pool/pool_0018.jpg": {"label": "pool", "should_detect": true, "difficulty": "hard", "notes": "Mosaic", "tags": ["tile"]},
     "pool/pool_0019.jpg": {"label": "pool", "should_detect": true, "difficulty": "easy", "notes": "Resort clear", "tags": []},
     "pool/pool_0020.jpg": {"label": "pool", "should_detect": true, "difficulty": "medium", "notes": "Curved edge", "tags": []},
-    
+
     "pool/neg_blue_wall_0001.jpg": {"label": "pool", "should_detect": false, "difficulty": "hard", "notes": "HARD NEGATIVE: blue painted wall", "tags": ["hard_negative", "blue_paint"]},
     "pool/neg_blue_sky_0001.jpg": {"label": "pool", "should_detect": false, "difficulty": "hard", "notes": "HARD NEGATIVE: blue sky through window", "tags": ["hard_negative", "sky"]},
-    
+
     "ocean/ocean_0001.jpg": {"label": "ocean", "should_detect": true, "difficulty": "easy", "notes": "Calm, sunny", "tags": []},
     "ocean/ocean_0002.jpg": {"label": "ocean", "should_detect": true, "difficulty": "medium", "notes": "Overcast", "tags": ["overcast"]},
     "ocean/ocean_0003.jpg": {"label": "ocean", "should_detect": true, "difficulty": "hard", "notes": "Gray water", "tags": ["gray"]},
@@ -379,7 +379,7 @@ Before calling v0 "ready," verify:
     "ocean/ocean_0018.jpg": {"label": "ocean", "should_detect": true, "difficulty": "hard", "notes": "Far horizon", "tags": ["distant"]},
     "ocean/ocean_0019.jpg": {"label": "ocean", "should_detect": true, "difficulty": "easy", "notes": "Clear water", "tags": []},
     "ocean/ocean_0020.jpg": {"label": "ocean", "should_detect": true, "difficulty": "medium", "notes": "Mid-distance", "tags": []},
-    
+
     "ocean/neg_glass_building_0001.jpg": {"label": "ocean", "should_detect": false, "difficulty": "hard", "notes": "HARD NEGATIVE: reflective glass", "tags": ["hard_negative", "glass"]},
     "ocean/neg_blue_umbrella_0001.jpg": {"label": "ocean", "should_detect": false, "difficulty": "hard", "notes": "HARD NEGATIVE: blue fabric", "tags": ["hard_negative", "fabric"]}
   }
@@ -408,7 +408,7 @@ Before calling v0 "ready," verify:
     "pool/pool_0008.jpg": {"label": "pool", "should_detect": true, "difficulty": "easy", "tags": []},
     "pool/pool_0009.jpg": {"label": "pool", "should_detect": true, "difficulty": "medium", "tags": ["indoor"]},
     "pool/neg_blue_wall_0001.jpg": {"label": "pool", "should_detect": false, "difficulty": "hard", "tags": ["hard_negative", "blue_paint"]},
-    
+
     "ocean/ocean_0001.jpg": {"label": "ocean", "should_detect": true, "difficulty": "easy", "tags": []},
     "ocean/ocean_0003.jpg": {"label": "ocean", "should_detect": true, "difficulty": "hard", "tags": ["gray"]},
     "ocean/ocean_0004.jpg": {"label": "ocean", "should_detect": true, "difficulty": "hard", "tags": ["waves"]},

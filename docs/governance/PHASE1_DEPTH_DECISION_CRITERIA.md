@@ -1,9 +1,9 @@
 # Phase 1 Depth Decision Criteria
 ## Visual Verification Guidelines for Depth Parameter Sweeps
 
-**Date**: 2025-12-22  
-**Domain**: Depth Processing (4 parameters)  
-**Applicable After**: Color/Tone parameters locked  
+**Date**: 2025-12-22
+**Domain**: Depth Processing (4 parameters)
+**Applicable After**: Color/Tone parameters locked
 **Reference**: `PHASE1_VISUAL_VERIFICATION_CHECKLIST.md` (color/tone template)
 
 ---
@@ -270,9 +270,9 @@ DECISION: LOCK Delta 1 (gamma=1.1) - Both scenes agree, all criteria met
 
 ### Other Scenes (Secondary validation)
 
-**Aerial**: High-altitude depth range (not representative for interiors)  
-**Pool**: Outdoor lighting, water reflections (edge case)  
-**Primary Bedroom**: Low edge density (less critical)  
+**Aerial**: High-altitude depth range (not representative for interiors)
+**Pool**: Outdoor lighting, water reflections (edge case)
+**Primary Bedroom**: Low edge density (less critical)
 **Primary Bathroom**: Similar to Kitchen (good validation)
 
 **Recommendation**: Use Kitchen + Great Room as primary decision scenes. If they disagree, test on Primary Bathroom as tiebreaker.
@@ -395,6 +395,6 @@ DECISION: LOCK Delta 1 (gamma=1.1) - Both scenes agree, all criteria met
 
 ---
 
-**Document Status**: ✅ COMPLETE  
-**Usage**: Reference during depth parameter visual verification  
+**Document Status**: ✅ COMPLETE
+**Usage**: Reference during depth parameter visual verification
 **Next Review**: After first depth sweep completes (depth.gamma recommended)

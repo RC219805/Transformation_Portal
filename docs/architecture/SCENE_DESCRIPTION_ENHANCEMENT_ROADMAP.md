@@ -1,9 +1,9 @@
 # Scene Description Enhancement Roadmap
 ## Architectural Analysis: Integrating Structured Scene Intelligence into Lux Depth V2
 
-**Document Version:** 1.0  
-**Date:** 2025-12-12  
-**Author:** Transformation Portal Architect  
+**Document Version:** 1.0
+**Date:** 2025-12-12
+**Author:** Transformation Portal Architect
 **Status:** Strategic Recommendation
 
 ---
@@ -105,13 +105,13 @@ lux-depth-v2 \
   --input input_images/750_Picacho/Source_TIFFs/750Picacho_Pool_16bit.tiff \
   --preset interior_luxury_apex_quality \
   --output-dir output_pool_segformer_test
-  
+
 # Compare confidence metrics in report.json
 ```
 
 ### 2. Enhanced Material Schema (JSON) [4-6 hours]
 
-**Current:** Material classes are strings with implicit properties  
+**Current:** Material classes are strings with implicit properties
 **Proposed:** Explicit material property definitions
 
 **Implementation:**
@@ -121,18 +121,18 @@ lux-depth-v2 \
 @dataclass
 class MaterialProperties:
     """Physics-based material properties for response tuning."""
-    
+
     # Surface characteristics
     roughness: float = 0.5      # 0=mirror, 1=diffuse
     specular: float = 0.1       # Highlight intensity
     metallic: float = 0.0       # Metallic workflow (0=dielectric, 1=conductor)
     albedo: Tuple[float, float, float] = (0.5, 0.5, 0.5)  # Base color
-    
+
     # Optical properties
     transmission: float = 0.0   # Transparency (glass, water)
     ior: float = 1.5           # Index of refraction
     anisotropy: float = 0.0    # Directional reflections (wood grain)
-    
+
     # Enhancement guidance
     clarity_boost: float = 1.0
     saturation_mult: float = 1.0
@@ -174,7 +174,7 @@ MATERIAL_SCHEMA = {
 
 ### 3. Depth Zone Refinement [3-4 hours]
 
-**Current:** Percentile-based (foreground=35th, background=65th)  
+**Current:** Percentile-based (foreground=35th, background=65th)
 **Proposed:** Hybrid (percentile + metric thresholds)
 
 **Scene Description Depth Ranges:**
@@ -189,18 +189,18 @@ MATERIAL_SCHEMA = {
 
 def _compute_zone_masks_hybrid(depth_map, cfg, scene_type="interior"):
     """Hybrid depth classification: percentile + metric."""
-    
+
     if scene_type == "exterior":
         # Use metric thresholds for outdoor scenes
         # Assuming depth range [0, max_depth]
         d_norm = depth_map / depth_map.max()
-        
+
         # Foreground: 0-2m (assuming max_depth ~50m)
         fg_mask = d_norm < 0.04
-        
+
         # Background: >10m
         bg_mask = d_norm > 0.20
-        
+
         # Mid-ground: 2-10m
         mid_mask = ~(fg_mask | bg_mask)
     else:
@@ -208,7 +208,7 @@ def _compute_zone_masks_hybrid(depth_map, cfg, scene_type="interior"):
         fg_mask = depth_map < np.percentile(depth_map, cfg.fg_q * 100)
         bg_mask = depth_map > np.percentile(depth_map, cfg.bg_q * 100)
         mid_mask = ~(fg_mask | bg_mask)
-    
+
     return fg_mask, mid_mask, bg_mask
 ```
 
@@ -244,26 +244,26 @@ def _compute_zone_masks_hybrid(depth_map, cfg, scene_type="interior"):
 
 class SAMSegmenter(MaterialSegmenter):
     """Segment Anything Model for high-precision material masks."""
-    
+
     def __init__(self, cfg, device):
         from transformers import SamModel, SamProcessor
-        
+
         self.model = SamModel.from_pretrained(
             "facebook/sam-hq-vit-h",
             cache_dir=".cache/sam"
         ).to(device)
         self.processor = SamProcessor.from_pretrained("facebook/sam-hq-vit-h")
         self.device = device
-    
+
     def predict(self, rgb: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Automatic mask generation + CLIP classification."""
-        
+
         # 1. Generate candidate masks
         masks = self._generate_masks(rgb)  # SAM automatic mode
-        
+
         # 2. Classify each mask with CLIP
         material_masks = self._classify_masks(rgb, masks)
-        
+
         # 3. Merge overlapping masks
         return self._merge_masks(material_masks)
 ```
@@ -275,11 +275,11 @@ from transformers import CLIPModel, CLIPProcessor
 
 class CLIPMaterialClassifier:
     """Classify SAM masks into material categories."""
-    
+
     def __init__(self):
         self.model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
         self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
-        
+
         self.material_prompts = [
             "a photo of stucco wall surface",
             "a photo of pool mosaic tile",
@@ -287,7 +287,7 @@ class CLIPMaterialClassifier:
             "a photo of wood furniture",
             # ... 16-20 materials
         ]
-    
+
     def classify_region(self, image, mask):
         """Return material probabilities for masked region."""
         cropped = self._apply_mask(image, mask)
@@ -332,7 +332,7 @@ class CLIPMaterialClassifier:
 
 ### 5. Expanded Material Classes [16-20 hours]
 
-**Current:** 8 materials  
+**Current:** 8 materials
 **Proposed:** 18-24 materials with subcategories
 
 **New Classes:**
@@ -342,21 +342,21 @@ EXPANDED_MATERIALS = {
     "stucco": {"subcategories": ["smooth", "textured", "aged"]},
     "concrete": {"subcategories": ["polished", "exposed_aggregate", "raw"]},
     "brick": {"subcategories": ["red", "white_painted", "stone_veneer"]},
-    
+
     # Water features
     "pool_tile": {"subcategories": ["mosaic", "glass_tile", "natural_stone"]},
     "pool_water_surface": {"properties": {"reflectivity": "high"}},
     "pool_water_volume": {"properties": {"transparency": "partial"}},
-    
+
     # Vegetation
     "vegetation_trees": {"subcategories": ["deciduous", "evergreen", "flowering"]},
     "vegetation_shrubs": {},
     "vegetation_grass": {},
-    
+
     # Sky/Atmosphere
     "sky": {"subcategories": ["clear", "twilight", "overcast"]},
     "mountains": {"properties": {"depth": "distant"}},
-    
+
     # Existing (refined)
     "wood": {"subcategories": ["teak", "oak", "walnut", "treated"]},
     "metal": {"subcategories": ["aluminum", "stainless", "bronze", "iron"]},
@@ -398,16 +398,16 @@ EXPANDED_MATERIALS = {
 @dataclass
 class LightingConfig:
     """Scene lighting analysis for color grading."""
-    
+
     time_of_day: str = "auto"  # dawn|day|twilight|night|auto
     primary_light_source: str = "natural"  # natural|artificial|mixed
     color_temperature_k: Optional[int] = None  # 2700-6500K
-    
+
     # Light source types present
     has_interior_lighting: bool = False
     has_pool_lighting: bool = False
     has_landscape_lighting: bool = False
-    
+
     # Auto-detection thresholds
     twilight_luma_range: Tuple[float, float] = (0.15, 0.45)
     warm_light_temp_k: int = 2850
@@ -417,7 +417,7 @@ class LightingConfig:
 def _detect_lighting_conditions(rgb: torch.Tensor) -> LightingConfig:
     """Analyze image for lighting metadata."""
     luma = torch_ops.luma(rgb).mean()
-    
+
     # Detect time of day
     if luma < 0.2:
         time_of_day = "night"
@@ -425,10 +425,10 @@ def _detect_lighting_conditions(rgb: torch.Tensor) -> LightingConfig:
         time_of_day = "twilight"
     else:
         time_of_day = "day"
-    
+
     # Detect mixed lighting (warm + cool)
     color_temp = _estimate_color_temperature(rgb)
-    
+
     return LightingConfig(
         time_of_day=time_of_day,
         color_temperature_k=color_temp,
@@ -460,10 +460,10 @@ def _detect_lighting_conditions(rgb: torch.Tensor) -> LightingConfig:
 {
   "image_id": "750Picacho_Pool_16bit",
   "resolution": {"width": 6000, "height": 3375, "megapixels": 20.25},
-  
+
   "scene_type": "exterior",
   "architecture_style": "mediterranean_modern",
-  
+
   "materials": [
     {
       "type": "stucco",
@@ -479,14 +479,14 @@ def _detect_lighting_conditions(rgb: torch.Tensor) -> LightingConfig:
       "lighting": ["cool_led_uplights", "sky_reflection"]
     }
   ],
-  
+
   "depth_zones": {
     "foreground": {"range_m": [0, 2], "coverage_pct": 28.5},
     "midground": {"range_m": [2, 10], "coverage_pct": 45.2},
     "background": {"range_m": [10, 20], "coverage_pct": 22.1},
     "distant": {"range_m": [1000, 5000], "coverage_pct": 4.2}
   },
-  
+
   "lighting": {
     "time_of_day": "twilight",
     "sky_gradient": {"top": "#1a3a5c", "horizon": "#f0e8d8"},
@@ -496,9 +496,9 @@ def _detect_lighting_conditions(rgb: torch.Tensor) -> LightingConfig:
       {"type": "landscape", "temperature_k": 3000, "intensity": "low"}
     ]
   },
-  
+
   "description": "Twilight exterior pool scene with white stucco Mediterranean architecture...",
-  
+
   "processing_recommendations": {
     "preset": "exterior_showcase",
     "material_strength": 0.9,
@@ -552,27 +552,27 @@ def _detect_lighting_conditions(rgb: torch.Tensor) -> LightingConfig:
 ```python
 class SceneIntelligenceEngine:
     """Automated scene understanding for optimal processing."""
-    
+
     def __init__(self):
         self.vlm = LLaVAProcessor()  # Scene description
         self.segmenter = SAMSegmenter()  # Material detection
         self.depth_analyzer = DepthAnalyzer()  # Spatial analysis
-    
+
     def analyze(self, image_path: Path) -> SceneAnalysis:
         """Comprehensive scene understanding."""
-        
+
         # 1. VLM description
         description = self.vlm.describe_scene(image_path)
-        
+
         # 2. Material segmentation
         materials = self.segmenter.detect_materials(image_path)
-        
+
         # 3. Depth analysis
         depth = self.depth_analyzer.analyze(image_path)
-        
+
         # 4. Lighting detection
         lighting = self._detect_lighting(image_path)
-        
+
         return SceneAnalysis(
             description=description,
             materials=materials,
@@ -580,10 +580,10 @@ class SceneIntelligenceEngine:
             lighting=lighting,
             recommendations=self._generate_recommendations(...)
         )
-    
+
     def _generate_recommendations(self, analysis) -> PipelineConfig:
         """Suggest optimal processing parameters."""
-        
+
         if analysis.scene_type == "exterior" and analysis.lighting.time_of_day == "twilight":
             return PipelineConfig(
                 preset=Preset.EXTERIOR_SHOWCASE,
@@ -617,8 +617,8 @@ class SceneIntelligenceEngine:
 | Material property schema (JSON) | 4-6h | Material response: +30-40% | LOW | P0 |
 | Depth zone refinement (hybrid) | 3-4h | Depth accuracy: +20-30% | LOW | P0 |
 
-**Estimated Total:** 9-14 hours  
-**Quality Improvement:** 40-60%  
+**Estimated Total:** 9-14 hours
+**Quality Improvement:** 40-60%
 **Processing Time Impact:** +0.5-1.0s (negligible)
 
 ### Phase 2: SAM Integration (Weeks 2-4)
@@ -630,8 +630,8 @@ class SceneIntelligenceEngine:
 | Prompt engineering | 12-16h | Context awareness: +50% | LOW | P1 |
 | Integration testing | 8-12h | Production readiness | MED | P1 |
 
-**Estimated Total:** 40-54 hours  
-**Quality Improvement:** 60-80% (cumulative with Phase 1)  
+**Estimated Total:** 40-54 hours
+**Quality Improvement:** 60-80% (cumulative with Phase 1)
 **Processing Time Impact:** +1.5-6s (backend-dependent)
 
 ### Phase 3: Material & Lighting Expansion (Weeks 3-5)
@@ -641,7 +641,7 @@ class SceneIntelligenceEngine:
 | Expanded material classes (18-24) | 16-20h | Material precision: 3-4x | MED | P1 |
 | Lighting condition metadata | 8-12h | Tone mapping: +20-30% | LOW | P1 |
 
-**Estimated Total:** 24-32 hours  
+**Estimated Total:** 24-32 hours
 **Quality Improvement:** 70-90% (cumulative)
 
 ### Phase 4: Long-Term Architecture (Months 2-3)
@@ -688,21 +688,21 @@ cfg = PipelineConfig(
 ```python
 def create_material_segmenter(cfg, device):
     """Factory with fallback chain."""
-    
+
     if cfg.backend == "sam":
         try:
             return SAMSegmenter(cfg, device)
         except (ImportError, FileNotFoundError) as e:
             logger.warning(f"SAM unavailable: {e}. Falling back to SegFormer.")
             cfg.backend = "segformer"
-    
+
     if cfg.backend == "segformer":
         try:
             return SegFormerSegmenter(cfg, device)
         except Exception as e:
             logger.warning(f"SegFormer unavailable: {e}. Falling back to heuristic.")
             cfg.backend = "heuristic"
-    
+
     return HeuristicMaterialSegmenter(cfg, device)
 ```
 
@@ -716,11 +716,11 @@ def create_material_segmenter(cfg, device):
 class MaterialsV2Config:
     # NEW: Material property database
     material_properties: Dict[str, MaterialProperties] = field(default_factory=dict)
-    
+
     # NEW: Depth zone mode
     depth_zone_mode: str = "percentile"  # percentile|metric|hybrid
 
-@dataclass  
+@dataclass
 class PipelineConfig:
     # NEW: Lighting analysis
     lighting_config: Optional[LightingConfig] = None
@@ -734,7 +734,7 @@ class SegmentationConfig:
     sam_backend: str = "sam_hq"  # sam_hq|mobile_sam|efficient_sam
     sam_automatic_points: int = 32  # Auto-mask density
     sam_mask_threshold: float = 0.0
-    
+
     # NEW: CLIP integration
     clip_model: str = "openai/clip-vit-large-patch14"
     clip_material_prompts: Optional[List[str]] = None
@@ -779,24 +779,24 @@ def validate_segmentation_upgrade(
     backend_new: str = "segformer"
 ) -> ValidationReport:
     """Ensure segmentation upgrade improves quality."""
-    
+
     # Run both backends
     result_old = run_pipeline(image_path, backend=backend_old)
     result_new = run_pipeline(image_path, backend=backend_new)
-    
+
     # Compare metrics
     assert result_new.confidence_avg > result_old.confidence_avg * 2.5, \
         "SegFormer should provide 2.5x+ confidence improvement"
-    
+
     assert result_new.high_confidence_pct > 0.40, \
         "SegFormer should achieve 40%+ high-confidence coverage"
-    
+
     # Material-specific validation
     for material in ["water", "glass", "metal"]:
         assert result_new.material_masks[material].quality > \
                result_old.material_masks[material].quality, \
                f"{material} quality must improve"
-    
+
     return ValidationReport(passed=True, improvements={...})
 ```
 
@@ -882,17 +882,17 @@ def validate_segmentation_upgrade(
 
 ### Phase 1 Risks (LOW)
 
-**Risk 1.1:** SegFormer-B5 download fails on client hardware  
-**Likelihood:** Low (5%)  
-**Impact:** Medium (pipeline fails)  
+**Risk 1.1:** SegFormer-B5 download fails on client hardware
+**Likelihood:** Low (5%)
+**Impact:** Medium (pipeline fails)
 **Mitigation:**
 - Pre-download models during installation (`make install-models`)
 - Graceful fallback to heuristic if download times out
 - Clear error messages: "SegFormer model not available. Using heuristic fallback."
 
-**Risk 1.2:** SegFormer VRAM exhaustion on 4GB GPUs  
-**Likelihood:** Medium (15%)  
-**Impact:** High (OOM crash)  
+**Risk 1.2:** SegFormer VRAM exhaustion on 4GB GPUs
+**Likelihood:** Medium (15%)
+**Impact:** High (OOM crash)
 **Mitigation:**
 - Reduce `input_long_side` from 2048 → 1536 on low-VRAM GPUs
 - Auto-detect VRAM and adjust parameters
@@ -900,25 +900,25 @@ def validate_segmentation_upgrade(
 
 ### Phase 2 Risks (MEDIUM)
 
-**Risk 2.1:** SAM model download size (2.5GB) exceeds user bandwidth  
-**Likelihood:** Medium (20%)  
-**Impact:** Medium (slow first run)  
+**Risk 2.1:** SAM model download size (2.5GB) exceeds user bandwidth
+**Likelihood:** Medium (20%)
+**Impact:** Medium (slow first run)
 **Mitigation:**
 - Add `--download-models` flag for pre-download
 - Provide model download progress bar
 - Document alternative: manual download from HuggingFace
 
-**Risk 2.2:** SAM inference time exceeds 60s APEX budget  
-**Likelihood:** Medium (25%)  
-**Impact:** High (breaks APEX quality promise)  
+**Risk 2.2:** SAM inference time exceeds 60s APEX budget
+**Likelihood:** Medium (25%)
+**Impact:** High (breaks APEX quality promise)
 **Mitigation:**
 - Use EfficientSAM for APEX quality (faster, 95% of SAM-HQ quality)
 - Reserve SAM-HQ for "ULTRA" quality tier (no time constraints)
 - Benchmark on M4 Max before production release
 
-**Risk 2.3:** CLIP+SAM integration produces incorrect material classifications  
-**Likelihood:** Medium (20%)  
-**Impact:** High (wrong material response → degraded output)  
+**Risk 2.3:** CLIP+SAM integration produces incorrect material classifications
+**Likelihood:** Medium (20%)
+**Impact:** High (wrong material response → degraded output)
 **Mitigation:**
 - Extensive validation on 50+ diverse scenes
 - Confidence threshold gating: only apply if classification confidence >0.5
@@ -927,17 +927,17 @@ def validate_segmentation_upgrade(
 
 ### Phase 3 Risks (MEDIUM-HIGH)
 
-**Risk 3.1:** Custom ControlNet training requires GPU cluster (cost: $2k-5k)  
-**Likelihood:** High (80%)  
-**Impact:** Medium (budget constraints)  
+**Risk 3.1:** Custom ControlNet training requires GPU cluster (cost: $2k-5k)
+**Likelihood:** High (80%)
+**Impact:** Medium (budget constraints)
 **Mitigation:**
 - Apply for free GPU credits (Google Cloud, Paperspace, etc.)
 - Use pre-trained ControlNet with domain adaptation (cheaper)
 - Partner with university research lab (shared resources)
 
-**Risk 3.2:** Training dataset lacks diversity (bias toward Santa Barbara)  
-**Likelihood:** Medium (30%)  
-**Impact:** High (model overfits, fails on other regions)  
+**Risk 3.2:** Training dataset lacks diversity (bias toward Santa Barbara)
+**Likelihood:** Medium (30%)
+**Impact:** High (model overfits, fails on other regions)
 **Mitigation:**
 - Collect images from 10+ geographic regions
 - Include variety: modern/traditional, interior/exterior, day/night
@@ -949,44 +949,44 @@ def validate_segmentation_upgrade(
 
 ### Immediate Action (This Week)
 
-**Recommendation 1:** **Activate SegFormer-B5 backend immediately**  
-**Rationale:** This is a 2-4 hour change with 3-5x confidence improvement. The model is already in the dependency tree, so risk is minimal.  
+**Recommendation 1:** **Activate SegFormer-B5 backend immediately**
+**Rationale:** This is a 2-4 hour change with 3-5x confidence improvement. The model is already in the dependency tree, so risk is minimal.
 **Action:** Update `config.py` preset defaults to `backend="segformer"`
 
-**Recommendation 2:** **Implement material property schema (JSON)**  
-**Rationale:** Structured material properties enable precise tuning without code changes. This is foundational for all future enhancements.  
+**Recommendation 2:** **Implement material property schema (JSON)**
+**Rationale:** Structured material properties enable precise tuning without code changes. This is foundational for all future enhancements.
 **Action:** Create `material_profiles.py` with 12-16 material definitions
 
-**Recommendation 3:** **Add hybrid depth zone classification**  
-**Rationale:** Pool scene demonstrates the value of metric-based zones for exterior scenes. Hybrid approach maintains interior quality while improving exterior.  
+**Recommendation 3:** **Add hybrid depth zone classification**
+**Rationale:** Pool scene demonstrates the value of metric-based zones for exterior scenes. Hybrid approach maintains interior quality while improving exterior.
 **Action:** Implement `_compute_zone_masks_hybrid()` with `scene_type` detection
 
 ### Medium-Term Strategy (Month 1)
 
-**Recommendation 4:** **Integrate EfficientSAM (not SAM-HQ)**  
-**Rationale:** EfficientSAM provides 95% of SAM-HQ quality at 40% of the processing time. This is the optimal balance for production APEX quality.  
+**Recommendation 4:** **Integrate EfficientSAM (not SAM-HQ)**
+**Rationale:** EfficientSAM provides 95% of SAM-HQ quality at 40% of the processing time. This is the optimal balance for production APEX quality.
 **Action:** Prioritize EfficientSAM wrapper over SAM-HQ
 
-**Recommendation 5:** **Expand material classes to 18-24**  
-**Rationale:** Current 8 materials are insufficient for luxury real estate. Stucco, pool tile, vegetation subcategories are critical for pool/exterior scenes.  
+**Recommendation 5:** **Expand material classes to 18-24**
+**Rationale:** Current 8 materials are insufficient for luxury real estate. Stucco, pool tile, vegetation subcategories are critical for pool/exterior scenes.
 **Action:** Implement expanded material schema in parallel with SAM integration
 
-**Recommendation 6:** **Add lighting condition metadata**  
-**Rationale:** Twilight/mixed-lighting scenes (like the pool) require color temperature awareness for accurate tone mapping.  
+**Recommendation 6:** **Add lighting condition metadata**
+**Rationale:** Twilight/mixed-lighting scenes (like the pool) require color temperature awareness for accurate tone mapping.
 **Action:** Implement `LightingConfig` with auto-detection
 
 ### Long-Term Vision (Months 2-3)
 
-**Recommendation 7:** **Invest in training dataset generation**  
-**Rationale:** Structured scene descriptions are valuable for multiple use cases: custom ControlNet, RAG system, automated processing recommendations.  
+**Recommendation 7:** **Invest in training dataset generation**
+**Rationale:** Structured scene descriptions are valuable for multiple use cases: custom ControlNet, RAG system, automated processing recommendations.
 **Action:** Allocate 60-80 hours to create 200-500 annotated scenes
 
-**Recommendation 8:** **Build scene intelligence engine**  
-**Rationale:** "Upload → Process" with zero configuration is the ultimate UX. This requires automated scene understanding.  
+**Recommendation 8:** **Build scene intelligence engine**
+**Rationale:** "Upload → Process" with zero configuration is the ultimate UX. This requires automated scene understanding.
 **Action:** Prototype with LLaVA + rule-based recommendations
 
-**Recommendation 9:** **Consider custom ControlNet (conditional)**  
-**Rationale:** Only pursue if SegFormer/SAM integration proves insufficient for client demands. High effort, high reward, but risky.  
+**Recommendation 9:** **Consider custom ControlNet (conditional)**
+**Rationale:** Only pursue if SegFormer/SAM integration proves insufficient for client demands. High effort, high reward, but risky.
 **Action:** Defer decision until Phase 2 validation complete
 
 ---
@@ -1016,6 +1016,6 @@ By implementing these enhancements, the Transformation Portal will achieve **ind
 3. Schedule Phase 2 kick-off (Week 2)
 4. Begin validation planning for SAM integration
 
-**Document Status:** Ready for review  
-**Approver:** Project Lead / Technical Director  
+**Document Status:** Ready for review
+**Approver:** Project Lead / Technical Director
 **Target Approval Date:** 2025-12-13

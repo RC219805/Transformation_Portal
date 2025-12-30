@@ -5,6 +5,7 @@
 These tests ensure that the repository maintains good structure and
 prevents accumulation of clutter or structural issues.
 """
+
 from pathlib import Path
 
 import pytest
@@ -75,18 +76,12 @@ class TestPackageStructure:
 
     def test_utils_performance_module_exists(self):
         """Test that performance utilities module exists."""
-        perf_module = (
-            _repo_root / "src" / "transformation_portal" /
-            "utils" / "performance.py"
-        )
+        perf_module = _repo_root / "src" / "transformation_portal" / "utils" / "performance.py"
         assert perf_module.exists(), "performance.py should exist in utils/"
 
     def test_utils_error_handling_module_exists(self):
         """Test that error handling utilities module exists."""
-        error_module = (
-            _repo_root / "src" / "transformation_portal" /
-            "utils" / "error_handling.py"
-        )
+        error_module = _repo_root / "src" / "transformation_portal" / "utils" / "error_handling.py"
         assert error_module.exists(), "error_handling.py should exist in utils/"
 
 
@@ -103,8 +98,7 @@ class TestDocumentationOrganization:
         markdown_files = list(_repo_root.glob("*.md"))
         # Allow README files but not excessive documentation
         assert len(markdown_files) <= 10, (
-            f"Too many markdown files in root ({len(markdown_files)}). "
-            "Move documentation to docs/"
+            f"Too many markdown files in root ({len(markdown_files)}). Move documentation to docs/"
         )
 
     def test_docs_subdirectories_exist(self):
@@ -188,9 +182,7 @@ class TestGitignore:
         ]
 
         for pattern in patterns:
-            assert pattern in content, (
-                f".gitignore should include pattern: {pattern}"
-            )
+            assert pattern in content, f".gitignore should include pattern: {pattern}"
 
     def test_gitignore_covers_outputs(self):
         """Test that .gitignore covers processing outputs."""
@@ -206,9 +198,7 @@ class TestGitignore:
         ]
 
         for pattern in output_patterns:
-            assert pattern in content, (
-                f".gitignore should include output pattern: {pattern}"
-            )
+            assert pattern in content, f".gitignore should include output pattern: {pattern}"
 
 
 class TestNoOrphanedFiles:
@@ -217,10 +207,7 @@ class TestNoOrphanedFiles:
     def test_no_duplicate_material_response(self):
         """Test that material_response isn't duplicated unnecessarily."""
         root_file = _repo_root / "material_response.py"
-        src_file = (
-            _repo_root / "src" / "transformation_portal" /
-            "processors" / "material_response" / "core.py"
-        )
+        src_file = _repo_root / "src" / "transformation_portal" / "processors" / "material_response" / "core.py"
 
         # Both may exist for backward compatibility, but root should be thin
         if root_file.exists() and src_file.exists():
@@ -230,17 +217,13 @@ class TestNoOrphanedFiles:
             # Root file should not be a full duplicate
             # (Allow some size for a substantial wrapper, but not full copy)
             assert root_size < src_size * 0.5, (
-                "Root material_response.py seems to be a full duplicate. "
-                "Should be a thin wrapper."
+                "Root material_response.py seems to be a full duplicate. Should be a thin wrapper."
             )
 
             # Check that the root file actually delegates to the src implementation
             root_text = root_file.read_text(encoding="utf-8")
             # Look for an import from transformation_portal (allow whitespace, case-insensitive)
-            import_found = (
-                "from transformation_portal" in root_text
-                or "import transformation_portal" in root_text
-            )
+            import_found = "from transformation_portal" in root_text or "import transformation_portal" in root_text
             assert import_found, (
                 "Root material_response.py should import from transformation_portal "
                 "to delegate implementation, not duplicate it."

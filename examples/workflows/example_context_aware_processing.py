@@ -66,46 +66,17 @@ print("-" * 80)
 
 # Add dimensions (from floor plans)
 if not context.dimensions:
-    context.dimensions = DimensionInfo(
-        width=18.0,
-        length=22.0,
-        ceiling_height=10.0,
-        area=396.0,
-        unit="feet"
-    )
+    context.dimensions = DimensionInfo(width=18.0, length=22.0, ceiling_height=10.0, area=396.0, unit="feet")
     print(f"  Added dimensions: {context.dimensions.to_prompt_fragment()}")
 
 # Add material specifications
 if not context.materials:
     context.materials = [
-        MaterialSpec(
-            material_type="wood",
-            location="cabinetry",
-            finish="white oak",
-            color="natural"
-        ),
-        MaterialSpec(
-            material_type="stone",
-            location="countertop",
-            finish="quartz",
-            color="white"
-        ),
-        MaterialSpec(
-            material_type="metal",
-            location="hardware",
-            finish="brushed brass"
-        ),
-        MaterialSpec(
-            material_type="stone",
-            location="backsplash",
-            finish="marble",
-            color="carrara white"
-        ),
-        MaterialSpec(
-            material_type="metal",
-            location="appliances",
-            finish="stainless steel"
-        ),
+        MaterialSpec(material_type="wood", location="cabinetry", finish="white oak", color="natural"),
+        MaterialSpec(material_type="stone", location="countertop", finish="quartz", color="white"),
+        MaterialSpec(material_type="metal", location="hardware", finish="brushed brass"),
+        MaterialSpec(material_type="stone", location="backsplash", finish="marble", color="carrara white"),
+        MaterialSpec(material_type="metal", location="appliances", finish="stainless steel"),
     ]
     print(f"  Added {len(context.materials)} material specifications")
     for mat in context.materials:
@@ -120,19 +91,13 @@ if not context.spatial_context:
         windows=["North wall (3)", "East wall (2)"],
         doors=["Entry from dining", "Pantry door"],
         ceiling_type="Coffered ceiling",
-        flooring_type="White oak hardwood"
+        flooring_type="White oak hardwood",
     )
     print(f"  Added spatial context: {context.spatial_context.to_prompt_fragment()}")
 
 # Add design intent
 if not context.design_intent:
-    context.design_intent = [
-        "open concept",
-        "natural light",
-        "luxury finishes",
-        "contemporary design",
-        "indoor-outdoor flow"
-    ]
+    context.design_intent = ["open concept", "natural light", "luxury finishes", "contemporary design", "indoor-outdoor flow"]
     print(f"  Added design intent: {', '.join(context.design_intent)}")
 
 # Step 4: Generate enhanced prompts

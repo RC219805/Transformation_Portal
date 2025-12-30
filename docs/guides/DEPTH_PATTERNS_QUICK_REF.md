@@ -5,7 +5,7 @@
 ## 📊 At a Glance
 
 - **72 files** analyzed
-- **1,143 patterns** identified  
+- **1,143 patterns** identified
 - **2 implementations**: Lux Depth V2 (production) + Depth Anything V2 (legacy)
 - **5 presets**: photo_realistic, interior_luxury, exterior_showcase, architectural, archival_quality
 - **Performance**: 300-500ms/image, 7,200 images/hour
@@ -32,7 +32,7 @@ pipeline = LuxPipelineV2(config)
 result = pipeline.process_image("render.jpg")
 ```
 
-**Location**: `lux_depth_v2/` (29 files)  
+**Location**: `lux_depth_v2/` (29 files)
 **Features**: GPU-accelerated, 5 presets, security-hardened, FastAPI service
 
 ## ⚡ Performance

@@ -51,7 +51,7 @@ Generate coverage reports:
 
    # HTML report
    pytest --cov=lux_depth_v2 --cov-report=html
-   
+
    # Terminal report
    pytest --cov=lux_depth_v2 --cov-report=term-missing
 

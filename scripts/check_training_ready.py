@@ -11,9 +11,9 @@ from pathlib import Path
 
 def print_header(text):
     """Print a formatted header."""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  {text}")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
 
 def print_check(passed, message):
@@ -48,6 +48,7 @@ def check_pytorch():
 
     try:
         import torch
+
         version = torch.__version__
         print_check(True, f"PyTorch {version} installed")
 
@@ -60,7 +61,7 @@ def check_pytorch():
             return True
 
         # Check MPS (Apple Silicon)
-        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             print_check(True, "MPS available (Apple Silicon)")
             print("   Training will be FAST (~2.5-3.5 hours)")
             return True
@@ -82,13 +83,13 @@ def check_dependencies():
     print_header("Python Dependencies")
 
     required = [
-        ('torch', 'PyTorch'),
-        ('torchvision', 'TorchVision'),
-        ('PIL', 'Pillow'),
-        ('numpy', 'NumPy'),
-        ('scipy', 'SciPy'),
-        ('tqdm', 'tqdm'),
-        ('skimage', 'scikit-image'),
+        ("torch", "PyTorch"),
+        ("torchvision", "TorchVision"),
+        ("PIL", "Pillow"),
+        ("numpy", "NumPy"),
+        ("scipy", "SciPy"),
+        ("tqdm", "tqdm"),
+        ("skimage", "scikit-image"),
     ]
 
     all_passed = True
@@ -138,6 +139,7 @@ def check_memory():
         # Try psutil first
         try:
             import psutil
+
             mem = psutil.virtual_memory()
             total_gb = mem.total / (1024**3)
             avail_gb = mem.available / (1024**3)
@@ -163,8 +165,8 @@ def check_memory():
 
         except ImportError:
             # Fallback: try /proc/meminfo on Linux
-            if Path('/proc/meminfo').exists():
-                with open('/proc/meminfo') as f:
+            if Path("/proc/meminfo").exists():
+                with open("/proc/meminfo") as f:
                     lines = f.readlines()
                     mem_avail = int(lines[2].split()[1]) / (1024**2)  # GB
 
@@ -284,13 +286,13 @@ def main():
     print("=" * 70)
 
     checks = {
-        'Python Version': check_python_version(),
-        'PyTorch & GPU': check_pytorch(),
-        'Dependencies': check_dependencies(),
-        'Disk Space': check_disk_space(),
-        'Memory': check_memory(),
-        'Training Data': check_training_data(),
-        'Infrastructure': check_training_infrastructure(),
+        "Python Version": check_python_version(),
+        "PyTorch & GPU": check_pytorch(),
+        "Dependencies": check_dependencies(),
+        "Disk Space": check_disk_space(),
+        "Memory": check_memory(),
+        "Training Data": check_training_data(),
+        "Infrastructure": check_training_infrastructure(),
     }
 
     all_passed = print_summary(checks)

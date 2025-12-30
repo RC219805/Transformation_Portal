@@ -263,25 +263,25 @@ def monitor_performance(func):
     """Decorator to monitor function performance."""
     def wrapper(*args, **kwargs):
         process = psutil.Process()
-        
+
         # Before
         mem_before = process.memory_info().rss / 1024 / 1024  # MB
         cpu_before = process.cpu_percent()
         start = time.perf_counter()
-        
+
         # Execute
         result = func(*args, **kwargs)
-        
+
         # After
         elapsed = time.perf_counter() - start
         mem_after = process.memory_info().rss / 1024 / 1024
         cpu_after = process.cpu_percent()
-        
+
         logging.info(f"{func.__name__}:")
         logging.info(f"  Time: {elapsed:.2f}s")
         logging.info(f"  Memory: {mem_after - mem_before:.1f} MB delta")
         logging.info(f"  CPU: {cpu_after:.1f}%")
-        
+
         return result
     return wrapper
 ```

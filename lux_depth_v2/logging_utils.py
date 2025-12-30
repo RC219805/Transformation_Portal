@@ -23,6 +23,7 @@ def setup_logging(level: str = "INFO", json_logs: bool = False) -> logging.Logge
         class JsonFormatter(logging.Formatter):
             def format(self, record: logging.LogRecord) -> str:
                 import json
+
                 payload = {
                     "level": record.levelname,
                     "name": record.name,

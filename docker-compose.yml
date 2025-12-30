@@ -37,7 +37,7 @@ services:
         limits:
           memory: 4G
           cpus: '2.0'
-  
+
   # CPU-only service (lightweight - legacy)
   transformation-portal-cpu:
     build:
@@ -61,7 +61,7 @@ services:
       timeout: 10s
       retries: 3
     command: python -m transformation_portal.cli serve --host 0.0.0.0 --port 8000
-  
+
   # Lux Depth V2 GPU Service (CUDA)
   lux-depth-v2-gpu:
     build:
@@ -104,7 +104,7 @@ services:
         limits:
           memory: 8G
           cpus: '4.0'
-  
+
   # GPU-enabled service (CUDA - legacy)
   transformation-portal-gpu:
     build:
@@ -137,7 +137,7 @@ services:
               count: 1
               capabilities: [gpu]
     command: python -m transformation_portal.cli serve --host 0.0.0.0 --port 8000
-  
+
   # Lux Depth V2 Batch Worker (Phase 2)
   lux-depth-v2-worker:
     build:
@@ -159,7 +159,7 @@ services:
     networks:
       - transformation-portal
     command: python -m lux_depth_v2.cli --input-dir /data/input --output-dir /data/output --preset interior_luxury --device cpu
-  
+
   # Batch processing worker (legacy)
   transformation-portal-worker:
     build:
@@ -176,7 +176,7 @@ services:
       - DEVICE=cpu
       - PYTHONUNBUFFERED=1
     command: python -m transformation_portal.cli batch-process /app/input /app/output --preset golden_hour
-  
+
   # Monitoring dashboard (optional)
   transformation-portal-monitor:
     build:

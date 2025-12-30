@@ -68,7 +68,7 @@ def example_batch_processing():
 
     print(f"\n✓ Processed {stats['processed']} images")
     print(f"  Average time: {stats['avg_time']:.2f}s per image")
-    print(f"  Throughput: {3600/stats['avg_time']:.1f} images/hour")
+    print(f"  Throughput: {3600 / stats['avg_time']:.1f} images/hour")
 
 
 def example_custom_configuration():

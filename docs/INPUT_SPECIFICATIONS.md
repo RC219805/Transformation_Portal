@@ -1,8 +1,8 @@
 # Transformation Portal: Optimal Input Specifications
 ## Based on 750 Picacho Processing Analysis (December 2025)
 
-**System Tested**: Apple M4 Max, 64GB unified memory, MPS backend  
-**Processing Date**: 2025-12-08  
+**System Tested**: Apple M4 Max, 64GB unified memory, MPS backend
+**Processing Date**: 2025-12-08
 **Sample Set**: 6 luxury real estate images (12-48 megapixels)
 
 ---
@@ -275,8 +275,8 @@ lux-depth-v2 \
 ## Troubleshooting Guide
 
 ### MPS Out of Memory
-**Symptom**: Process crashes with "MPS memory allocation failed"  
-**Cause**: Image >24MP, insufficient MPS memory  
+**Symptom**: Process crashes with "MPS memory allocation failed"
+**Cause**: Image >24MP, insufficient MPS memory
 **Solutions**:
 1. Use CPU fallback: `--device cpu`
 2. Reduce upscale factor: `--upscale 2` (4x → 2x)
@@ -284,8 +284,8 @@ lux-depth-v2 \
 4. Process one image at a time
 
 ### Disk Space Exhaustion
-**Symptom**: Process fails during upscaled write, `.tmp` files remain  
-**Cause**: <15x source file size available  
+**Symptom**: Process fails during upscaled write, `.tmp` files remain
+**Cause**: <15x source file size available
 **Solutions**:
 1. Free disk space (aim for <85% usage)
 2. Reduce batch size (1-2 images at a time)
@@ -293,8 +293,8 @@ lux-depth-v2 \
 4. Use 2x upscale instead of 4x
 
 ### Slow Processing (>5 min per 20MP image)
-**Symptom**: Processing takes 3-5x longer than expected  
-**Cause**: Disk I/O bottleneck (>90% disk usage)  
+**Symptom**: Processing takes 3-5x longer than expected
+**Cause**: Disk I/O bottleneck (>90% disk usage)
 **Solutions**:
 1. Free disk space (target <80% usage)
 2. Close other disk-intensive applications
@@ -302,8 +302,8 @@ lux-depth-v2 \
 4. Reduce concurrent processes
 
 ### Quality Issues
-**Symptom**: AI validation warning (color_diff >0.06)  
-**Cause**: Poor input quality or incorrect color space  
+**Symptom**: AI validation warning (color_diff >0.06)
+**Cause**: Poor input quality or incorrect color space
 **Solutions**:
 1. Verify input is 16-bit (not 8-bit)
 2. Check color space: sRGB recommended
@@ -340,7 +340,7 @@ lux-depth-v2 \
 
 ---
 
-**Analysis Date**: 2025-12-08  
-**System**: Apple M4 Max (64GB), macOS  
-**Software**: Lux Depth V2 Pipeline  
+**Analysis Date**: 2025-12-08
+**System**: Apple M4 Max (64GB), macOS
+**Software**: Lux Depth V2 Pipeline
 **Test Dataset**: 750 Picacho (6 images, 12-48MP)

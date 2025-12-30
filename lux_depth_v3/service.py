@@ -34,7 +34,7 @@ from lux_depth_v3.export import Exporter
 # Security configuration
 MAX_FILE_SIZE_MB = 50
 # Canonical allowlist pattern for filenames (letters, digits, dot, underscore, dash)
-SAFE_FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_.-]+$')
+SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+$")
 MAX_IMAGE_DIMENSION = 4096
 RATE_LIMIT_REQUESTS_PER_MINUTE = 60
 
@@ -86,26 +86,26 @@ request_timestamps: List[float] = []
 
 def sanitize_and_validate_filepath(filename: str, base_dir: Path) -> Path:
     """Sanitize and validate a user-provided filename for safe file access.
-    
+
     This function implements path traversal prevention through strict validation:
     1. Allowlist validation: Only alphanumeric, dots, dashes, underscores (no separators)
     2. Explicit dot-dot blocking
     3. Safe path construction (base_dir / validated_filename)
-    
+
     Args:
         filename: User-provided filename to validate
         base_dir: Trusted base directory (must be absolute)
-        
+
     Returns:
         Safe Path object within base_dir (guaranteed by validation)
-        
+
     Raises:
         ValueError: If filename contains invalid characters or patterns
-        
+
     Security:
         CWE-22 Path Traversal Prevention
         OWASP A01:2021 Broken Access Control
-        
+
         The strict allowlist ensures no path separators (/, \) can appear in filename,
         making it impossible for base_dir / filename to escape base_dir.
         This sanitization barrier is explicit for static analysis tools.
@@ -114,25 +114,25 @@ def sanitize_and_validate_filepath(filename: str, base_dir: Path) -> Path:
     # CodeQL: This regex validation acts as a sanitizer barrier
     if not filename or not SAFE_FILENAME_PATTERN.fullmatch(filename):
         raise ValueError("Invalid filename")
-    
+
     # Layer 2: Explicit dot-dot blocking
     if filename in {".", ".."}:
         raise ValueError("Invalid filename")
-    
+
     # At this point, filename is guaranteed to be safe:
     # - Contains only [a-zA-Z0-9._-]
     # - Not "." or ".."
     # - No path separators, no "..", no absolute paths possible
-    
+
     # Ensure base_dir is resolved to absolute path for secure comparison
     base_dir_resolved = base_dir.resolve(strict=False)
-    
+
     # Layer 3: Safe path construction using validated filename
     # At this point, candidate_path is safe because:
     # 1. base_dir_resolved is trusted (from global config)
     # 2. filename is strictly validated to contain no path separators or traversal
     #    sequences, so base_dir_resolved / filename cannot escape base_dir_resolved.
-    
+
     # Returning candidate_path directly also makes the sanitization barrier clearer
     # to static analysis tools such as CodeQL.
     return base_dir_resolved / filename
@@ -152,10 +152,7 @@ def check_rate_limit(client_ip: str) -> bool:
     current_time = time.time()
 
     # Remove timestamps older than 1 minute
-    request_timestamps = [
-        ts for ts in request_timestamps
-        if current_time - ts < 60
-    ]
+    request_timestamps = [ts for ts in request_timestamps if current_time - ts < 60]
 
     # Check limit
     if len(request_timestamps) >= RATE_LIMIT_REQUESTS_PER_MINUTE:
@@ -172,7 +169,7 @@ async def startup_event():
 
     # Resolve output_dir to absolute path for security validation
     output_dir = output_dir.resolve()
-    
+
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -332,7 +329,7 @@ async def download_depth(filename: str):
 
     Returns:
         File response
-    
+
     Security:
         - Validates filename to prevent directory traversal (CWE-22)
         - Ensures path stays within configured output directory

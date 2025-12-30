@@ -1,8 +1,8 @@
 # PR-2: Intelligent Prompt Generation + ROI Refinement
 
-**Status:** ✅ Implemented, Tested, Ready for Stage 6 Revalidation  
-**Branch:** `feature/pr2-prompt-roi-refinement`  
-**Date:** December 13, 2025  
+**Status:** ✅ Implemented, Tested, Ready for Stage 6 Revalidation
+**Branch:** `feature/pr2-prompt-roi-refinement`
+**Date:** December 13, 2025
 
 ---
 
@@ -290,11 +290,11 @@ provider.refinement_stats = {
 
 ## Commit Summary
 
-**Branch:** `feature/pr2-prompt-roi-refinement`  
-**Commit:** `eef139b`  
-**Files changed:** 8  
-**Lines added:** +1407  
-**Tests:** 10 new (all passing)  
+**Branch:** `feature/pr2-prompt-roi-refinement`
+**Commit:** `eef139b`
+**Files changed:** 8
+**Lines added:** +1407
+**Tests:** 10 new (all passing)
 
 **Key files:**
 - `lux_depth_v2/backends/prompt_generation.py` (new)

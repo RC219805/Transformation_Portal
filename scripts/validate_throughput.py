@@ -25,14 +25,12 @@ from typing import Dict, Any, List, Tuple
 
 def load_json(path: Path) -> Dict[str, Any]:
     """Load JSON file."""
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         return json.load(f)
 
 
 def validate_standard_quality(
-    current: Dict[str, Any],
-    baseline: Dict[str, Any],
-    max_regression_pct: float
+    current: Dict[str, Any], baseline: Dict[str, Any], max_regression_pct: float
 ) -> Tuple[bool, List[str]]:
     """Validate standard quality throughput.
 
@@ -63,36 +61,23 @@ def validate_standard_quality(
     min_throughput = baseline_config["min_images_per_hour"]
     if throughput < min_throughput:
         passed = False
-        warnings.append(
-            f"❌ Throughput {throughput:.1f} images/hour below baseline "
-            f"{min_throughput} images/hour"
-        )
+        warnings.append(f"❌ Throughput {throughput:.1f} images/hour below baseline {min_throughput} images/hour")
     else:
-        warnings.append(
-            f"✅ Throughput {throughput:.1f} images/hour meets baseline "
-            f"({min_throughput} images/hour)"
-        )
+        warnings.append(f"✅ Throughput {throughput:.1f} images/hour meets baseline ({min_throughput} images/hour)")
 
     # Check memory
     max_memory = baseline_config["max_memory_mb"]
     if memory_mb > max_memory:
         passed = False
-        warnings.append(
-            f"❌ Memory {memory_mb:.1f}MB exceeds baseline {max_memory}MB"
-        )
+        warnings.append(f"❌ Memory {memory_mb:.1f}MB exceeds baseline {max_memory}MB")
     else:
-        warnings.append(
-            f"✅ Memory {memory_mb:.1f}MB within baseline ({max_memory}MB)"
-        )
+        warnings.append(f"✅ Memory {memory_mb:.1f}MB within baseline ({max_memory}MB)")
 
     return passed, warnings
 
 
 def validate_max_quality(
-    current: Dict[str, Any],
-    baseline: Dict[str, Any],
-    max_regression_pct: float,
-    has_gpu: bool = False
+    current: Dict[str, Any], baseline: Dict[str, Any], max_regression_pct: float, has_gpu: bool = False
 ) -> Tuple[bool, List[str]]:
     """Validate max quality throughput.
 
@@ -137,21 +122,14 @@ def validate_max_quality(
     max_memory = baseline_config["max_memory_mb"]
     if memory_mb > max_memory:
         passed = False
-        warnings.append(
-            f"❌ Memory {memory_mb:.1f}MB exceeds baseline {max_memory}MB"
-        )
+        warnings.append(f"❌ Memory {memory_mb:.1f}MB exceeds baseline {max_memory}MB")
     else:
-        warnings.append(
-            f"✅ Memory {memory_mb:.1f}MB within baseline ({max_memory}MB)"
-        )
+        warnings.append(f"✅ Memory {memory_mb:.1f}MB within baseline ({max_memory}MB)")
 
     return passed, warnings
 
 
-def compare_against_production_targets(
-    current: Dict[str, Any],
-    baseline: Dict[str, Any]
-) -> List[str]:
+def compare_against_production_targets(current: Dict[str, Any], baseline: Dict[str, Any]) -> List[str]:
     """Compare against production targets (informational only).
 
     Returns list of informational messages.
@@ -168,65 +146,33 @@ def compare_against_production_targets(
         # Compare to CPU target
         cpu_target = targets.get("cpu_standard", {}).get("target_images_per_hour", 127)
         if throughput >= cpu_target:
-            messages.append(
-                f"🎯 Meets CPU production target: {throughput:.1f} >= {cpu_target} images/hour"
-            )
+            messages.append(f"🎯 Meets CPU production target: {throughput:.1f} >= {cpu_target} images/hour")
         else:
             pct_of_target = (throughput / cpu_target) * 100
-            messages.append(
-                f"ℹ️  {pct_of_target:.1f}% of CPU production target "
-                f"({throughput:.1f}/{cpu_target} images/hour)"
-            )
+            messages.append(f"ℹ️  {pct_of_target:.1f}% of CPU production target ({throughput:.1f}/{cpu_target} images/hour)")
 
         # Compare to GPU target (aspirational)
         gpu_target = targets.get("gpu_max", {}).get("target_images_per_hour", 400)
         if throughput >= gpu_target:
-            messages.append(
-                f"🎯 Meets GPU production target: {throughput:.1f} >= {gpu_target} images/hour!"
-            )
+            messages.append(f"🎯 Meets GPU production target: {throughput:.1f} >= {gpu_target} images/hour!")
         else:
             pct_of_target = (throughput / gpu_target) * 100
-            messages.append(
-                f"ℹ️  {pct_of_target:.1f}% of GPU production target "
-                f"({throughput:.1f}/{gpu_target} images/hour)"
-            )
+            messages.append(f"ℹ️  {pct_of_target:.1f}% of GPU production target ({throughput:.1f}/{gpu_target} images/hour)")
 
     return messages
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Validate throughput benchmarks against baseline"
+    parser = argparse.ArgumentParser(description="Validate throughput benchmarks against baseline")
+    parser.add_argument("--baseline", type=Path, required=True, help="Path to baseline throughput JSON")
+    parser.add_argument("--current", type=Path, required=True, help="Path to current benchmark results JSON")
+    parser.add_argument(
+        "--max-regression", type=float, default=20, help="Maximum allowed throughput regression percentage (default: 20)"
     )
     parser.add_argument(
-        "--baseline",
-        type=Path,
-        required=True,
-        help="Path to baseline throughput JSON"
+        "--quality", choices=["standard", "max"], default="standard", help="Quality level to validate (default: standard)"
     )
-    parser.add_argument(
-        "--current",
-        type=Path,
-        required=True,
-        help="Path to current benchmark results JSON"
-    )
-    parser.add_argument(
-        "--max-regression",
-        type=float,
-        default=20,
-        help="Maximum allowed throughput regression percentage (default: 20)"
-    )
-    parser.add_argument(
-        "--quality",
-        choices=["standard", "max"],
-        default="standard",
-        help="Quality level to validate (default: standard)"
-    )
-    parser.add_argument(
-        "--gpu",
-        action="store_true",
-        help="Validate for GPU configuration"
-    )
+    parser.add_argument("--gpu", action="store_true", help="Validate for GPU configuration")
 
     args = parser.parse_args()
 
@@ -253,13 +199,9 @@ def main():
 
     # Validate based on quality level
     if args.quality == "standard":
-        passed, warnings = validate_standard_quality(
-            current, baseline, args.max_regression
-        )
+        passed, warnings = validate_standard_quality(current, baseline, args.max_regression)
     else:  # max
-        passed, warnings = validate_max_quality(
-            current, baseline, args.max_regression, args.gpu
-        )
+        passed, warnings = validate_max_quality(current, baseline, args.max_regression, args.gpu)
 
     # Print validation results
     print("\n📊 Validation Results:")

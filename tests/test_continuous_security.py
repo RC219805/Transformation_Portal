@@ -28,11 +28,11 @@ class TestSecurityCheckType:
         """Test that all expected check types are defined."""
         from security.continuous_security import SecurityCheckType
 
-        assert hasattr(SecurityCheckType, 'IMPORT_SCAN')
-        assert hasattr(SecurityCheckType, 'PACKAGE_AUDIT')
-        assert hasattr(SecurityCheckType, 'CONSTRAINT_VERIFY')
-        assert hasattr(SecurityCheckType, 'VULNERABILITY_SCAN')
-        assert hasattr(SecurityCheckType, 'CODE_PATTERN')
+        assert hasattr(SecurityCheckType, "IMPORT_SCAN")
+        assert hasattr(SecurityCheckType, "PACKAGE_AUDIT")
+        assert hasattr(SecurityCheckType, "CONSTRAINT_VERIFY")
+        assert hasattr(SecurityCheckType, "VULNERABILITY_SCAN")
+        assert hasattr(SecurityCheckType, "CODE_PATTERN")
 
 
 class TestSecurityStatus:
@@ -42,10 +42,10 @@ class TestSecurityStatus:
         """Test that all expected status levels are defined."""
         from security.continuous_security import SecurityStatus
 
-        assert hasattr(SecurityStatus, 'SECURE')
-        assert hasattr(SecurityStatus, 'WARNING')
-        assert hasattr(SecurityStatus, 'CRITICAL')
-        assert hasattr(SecurityStatus, 'UNKNOWN')
+        assert hasattr(SecurityStatus, "SECURE")
+        assert hasattr(SecurityStatus, "WARNING")
+        assert hasattr(SecurityStatus, "CRITICAL")
+        assert hasattr(SecurityStatus, "UNKNOWN")
 
 
 class TestSecurityCheckResult:
@@ -53,9 +53,7 @@ class TestSecurityCheckResult:
 
     def test_result_creation(self):
         """Test that security check results can be created."""
-        from security.continuous_security import (
-            SecurityCheckResult, SecurityCheckType, SecurityStatus
-        )
+        from security.continuous_security import SecurityCheckResult, SecurityCheckType, SecurityStatus
 
         result = SecurityCheckResult(
             check_type=SecurityCheckType.IMPORT_SCAN,
@@ -69,9 +67,7 @@ class TestSecurityCheckResult:
 
     def test_result_to_dict(self):
         """Test that results can be converted to dictionary."""
-        from security.continuous_security import (
-            SecurityCheckResult, SecurityCheckType, SecurityStatus
-        )
+        from security.continuous_security import SecurityCheckResult, SecurityCheckType, SecurityStatus
 
         result = SecurityCheckResult(
             check_type=SecurityCheckType.IMPORT_SCAN,
@@ -81,9 +77,9 @@ class TestSecurityCheckResult:
 
         data = result.to_dict()
 
-        assert data['check_type'] == 'import_scan'
-        assert data['status'] == 'secure'
-        assert data['message'] == "No issues found"
+        assert data["check_type"] == "import_scan"
+        assert data["status"] == "secure"
+        assert data["message"] == "No issues found"
 
 
 class TestImportScanner:
@@ -98,9 +94,7 @@ class TestImportScanner:
 
     def test_detect_blocked_import(self, tmp_path):
         """Test that blocked imports are detected."""
-        from security.continuous_security import (
-            ImportScanner, SecurityStatus
-        )
+        from security.continuous_security import ImportScanner, SecurityStatus
 
         # Create a test file with a blocked import
         test_file = tmp_path / "test_module.py"
@@ -115,9 +109,7 @@ class TestImportScanner:
 
     def test_detect_blocked_from_import(self, tmp_path):
         """Test that 'from X import' for blocked packages is detected."""
-        from security.continuous_security import (
-            ImportScanner, SecurityStatus
-        )
+        from security.continuous_security import ImportScanner, SecurityStatus
 
         # Create a test file with a blocked from import
         test_file = tmp_path / "test_module.py"
@@ -131,9 +123,7 @@ class TestImportScanner:
 
     def test_allow_basicsr_tp(self, tmp_path):
         """Test that basicsr_tp imports are allowed."""
-        from security.continuous_security import (
-            ImportScanner, SecurityStatus
-        )
+        from security.continuous_security import ImportScanner, SecurityStatus
 
         # Create a test file with basicsr_tp import
         test_file = tmp_path / "test_module.py"
@@ -146,9 +136,7 @@ class TestImportScanner:
 
     def test_clean_code_passes(self, tmp_path):
         """Test that clean code passes the scan."""
-        from security.continuous_security import (
-            ImportScanner, SecurityStatus
-        )
+        from security.continuous_security import ImportScanner, SecurityStatus
 
         # Create a test file with safe imports
         test_file = tmp_path / "test_module.py"
@@ -161,9 +149,7 @@ class TestImportScanner:
 
     def test_skip_pycache_directories(self, tmp_path):
         """Test that __pycache__ directories are skipped."""
-        from security.continuous_security import (
-            ImportScanner, SecurityStatus
-        )
+        from security.continuous_security import ImportScanner, SecurityStatus
 
         # Create a file in __pycache__ with blocked import
         pycache_dir = tmp_path / "__pycache__"
@@ -190,9 +176,7 @@ class TestConstraintVerifier:
 
     def test_verify_basicsr_constraint_present(self, tmp_path):
         """Test verification when basicsr constraint is present."""
-        from security.continuous_security import (
-            ConstraintVerifier, SecurityStatus
-        )
+        from security.continuous_security import ConstraintVerifier, SecurityStatus
 
         # Create requirements directory and constraints file
         req_dir = tmp_path / "requirements"
@@ -218,9 +202,7 @@ class TestCodePatternScanner:
 
     def test_detect_shell_true(self, tmp_path):
         """Test that subprocess with shell=True is detected."""
-        from security.continuous_security import (
-            CodePatternScanner, SecurityStatus
-        )
+        from security.continuous_security import CodePatternScanner, SecurityStatus
 
         # Create a test file with shell=True
         test_file = tmp_path / "test_module.py"
@@ -234,9 +216,7 @@ class TestCodePatternScanner:
 
     def test_clean_code_passes(self, tmp_path):
         """Test that clean code passes the pattern scan."""
-        from security.continuous_security import (
-            CodePatternScanner, SecurityStatus
-        )
+        from security.continuous_security import CodePatternScanner, SecurityStatus
 
         # Create a test file with safe code
         test_file = tmp_path / "test_module.py"
@@ -254,9 +234,7 @@ class TestSecurityHealthReport:
 
     def test_report_creation(self):
         """Test that security health report can be created."""
-        from security.continuous_security import (
-            SecurityHealthReport, SecurityStatus
-        )
+        from security.continuous_security import SecurityHealthReport, SecurityStatus
 
         report = SecurityHealthReport(
             overall_status=SecurityStatus.SECURE,
@@ -270,9 +248,7 @@ class TestSecurityHealthReport:
 
     def test_report_to_markdown(self):
         """Test markdown report generation."""
-        from security.continuous_security import (
-            SecurityHealthReport, SecurityStatus
-        )
+        from security.continuous_security import SecurityHealthReport, SecurityStatus
 
         report = SecurityHealthReport(
             overall_status=SecurityStatus.SECURE,
@@ -299,9 +275,7 @@ class TestContinuousSecurityVerifier:
 
     def test_quick_check(self, tmp_path):
         """Test quick security check functionality."""
-        from security.continuous_security import (
-            ContinuousSecurityVerifier, SecurityStatus
-        )
+        from security.continuous_security import ContinuousSecurityVerifier, SecurityStatus
 
         # Create a minimal valid directory structure
         req_dir = tmp_path / "requirements"

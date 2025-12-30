@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 # Add agents directory to path for imports
-agents_path = Path(__file__).parent.parent / '.github' / 'agents'
+agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))
 
 from rag_system.citation import Citation, CitationGenerator  # noqa: E402
@@ -377,14 +377,14 @@ def full_rag_pipeline(temp_repository):
     classifier = ArtifactClassifier()
 
     return {
-        'indexer': indexer,
-        'retriever': retriever,
-        'reranker': reranker,
-        'citation_gen': citation_gen,
-        'knowledge_engine': knowledge_engine,
-        'classifier': classifier,
-        'chunks': chunks,
-        'repo_path': temp_repository,
+        "indexer": indexer,
+        "retriever": retriever,
+        "reranker": reranker,
+        "citation_gen": citation_gen,
+        "knowledge_engine": knowledge_engine,
+        "classifier": classifier,
+        "chunks": chunks,
+        "repo_path": temp_repository,
     }
 
 
@@ -406,7 +406,7 @@ class TestEndToEndIndexing:
 
         # Check for different chunk types
         chunk_types = {c.chunk_type for c in chunks}
-        assert 'doc' in chunk_types or 'code' in chunk_types or 'test' in chunk_types
+        assert "doc" in chunk_types or "code" in chunk_types or "test" in chunk_types
 
     def test_indexing_extracts_metadata(self, temp_repository):
         """Test that indexing extracts metadata from chunks."""
@@ -414,7 +414,7 @@ class TestEndToEndIndexing:
         chunks = indexer.index_repository()
 
         # Check code chunks have metadata
-        code_chunks = [c for c in chunks if c.chunk_type == 'code']
+        code_chunks = [c for c in chunks if c.chunk_type == "code"]
         if code_chunks:
             for chunk in code_chunks[:5]:
                 assert chunk.metadata is not None
@@ -425,10 +425,10 @@ class TestEndToEndIndexing:
         chunks = indexer.index_repository()
         stats = indexer.get_statistics()
 
-        assert stats['total_chunks'] == len(chunks)
-        assert 'by_type' in stats
-        assert 'by_language' in stats
-        assert stats['total_chars'] > 0
+        assert stats["total_chunks"] == len(chunks)
+        assert "by_type" in stats
+        assert "by_language" in stats
+        assert stats["total_chars"] > 0
 
 
 class TestEndToEndRetrieval:
@@ -436,34 +436,26 @@ class TestEndToEndRetrieval:
 
     def test_retrieval_finds_relevant_content(self, full_rag_pipeline):
         """Test that retrieval finds relevant content for queries."""
-        retriever = full_rag_pipeline['retriever']
+        retriever = full_rag_pipeline["retriever"]
 
         results = retriever.retrieve("depth pipeline processing", top_k=5)
 
         assert len(results) > 0, "Should find relevant results"
         # Check that results have required attributes
         for r in results:
-            assert hasattr(r, 'content')
-            assert hasattr(r, 'score')
-            assert hasattr(r, 'file_path')
+            assert hasattr(r, "content")
+            assert hasattr(r, "score")
+            assert hasattr(r, "file_path")
 
     def test_retrieval_with_type_filter(self, full_rag_pipeline):
         """Test retrieval with chunk type filtering."""
-        retriever = full_rag_pipeline['retriever']
+        retriever = full_rag_pipeline["retriever"]
 
         # Filter for code only
-        code_results = retriever.retrieve(
-            "process image",
-            top_k=10,
-            chunk_type_filter=['code']
-        )
+        code_results = retriever.retrieve("process image", top_k=10, chunk_type_filter=["code"])
 
         # Filter for docs only
-        doc_results = retriever.retrieve(
-            "documentation guide",
-            top_k=10,
-            chunk_type_filter=['doc']
-        )
+        doc_results = retriever.retrieve("documentation guide", top_k=10, chunk_type_filter=["doc"])
 
         # Both should return results
         assert len(code_results) >= 0
@@ -471,21 +463,17 @@ class TestEndToEndRetrieval:
 
     def test_retrieval_with_file_filter(self, full_rag_pipeline):
         """Test retrieval with file path filtering."""
-        retriever = full_rag_pipeline['retriever']
+        retriever = full_rag_pipeline["retriever"]
 
-        results = retriever.retrieve(
-            "test",
-            top_k=10,
-            file_path_filter=r'test_'
-        )
+        results = retriever.retrieve("test", top_k=10, file_path_filter=r"test_")
 
         if results:
             for r in results:
-                assert 'test_' in r.file_path.lower()
+                assert "test_" in r.file_path.lower()
 
     def test_retrieval_scoring_order(self, full_rag_pipeline):
         """Test that results are ordered by score."""
-        retriever = full_rag_pipeline['retriever']
+        retriever = full_rag_pipeline["retriever"]
 
         results = retriever.retrieve("depth map estimation", top_k=10)
 
@@ -499,8 +487,8 @@ class TestEndToEndReranking:
 
     def test_reranking_improves_results(self, full_rag_pipeline):
         """Test that reranking maintains or improves result quality."""
-        retriever = full_rag_pipeline['retriever']
-        reranker = full_rag_pipeline['reranker']
+        retriever = full_rag_pipeline["retriever"]
+        reranker = full_rag_pipeline["reranker"]
 
         query = "how to add a new LUT preset"
         results = retriever.retrieve(query, top_k=10)
@@ -516,15 +504,15 @@ class TestEndToEndReranking:
 
     def test_reranking_adds_boost_metadata(self, full_rag_pipeline):
         """Test that reranking adds boost metadata."""
-        retriever = full_rag_pipeline['retriever']
-        reranker = full_rag_pipeline['reranker']
+        retriever = full_rag_pipeline["retriever"]
+        reranker = full_rag_pipeline["reranker"]
 
         results = retriever.retrieve("depth pipeline", top_k=5)
         reranked = reranker.rerank(results, "depth pipeline")
 
         if reranked:
             for r in reranked:
-                assert 'rerank_boost' in r.metadata
+                assert "rerank_boost" in r.metadata
 
 
 class TestEndToEndCitations:
@@ -532,9 +520,9 @@ class TestEndToEndCitations:
 
     def test_citation_generation(self, full_rag_pipeline):
         """Test citation generation from results."""
-        retriever = full_rag_pipeline['retriever']
-        reranker = full_rag_pipeline['reranker']
-        citation_gen = full_rag_pipeline['citation_gen']
+        retriever = full_rag_pipeline["retriever"]
+        reranker = full_rag_pipeline["reranker"]
+        citation_gen = full_rag_pipeline["citation_gen"]
 
         query = "depth processing"
         results = retriever.retrieve(query, top_k=10)
@@ -550,45 +538,45 @@ class TestEndToEndCitations:
 
     def test_citation_formatting_markdown(self, full_rag_pipeline):
         """Test citation markdown formatting."""
-        retriever = full_rag_pipeline['retriever']
-        citation_gen = full_rag_pipeline['citation_gen']
+        retriever = full_rag_pipeline["retriever"]
+        citation_gen = full_rag_pipeline["citation_gen"]
 
         results = retriever.retrieve("LUT processing", top_k=3)
         citations = citation_gen.generate_citations(results, max_citations=3)
 
-        formatted = citation_gen.format_citations(citations, format_type='markdown')
+        formatted = citation_gen.format_citations(citations, format_type="markdown")
 
         assert isinstance(formatted, str)
         if citations:
-            assert '##' in formatted or '[' in formatted
+            assert "##" in formatted or "[" in formatted
 
     def test_citation_formatting_json(self, full_rag_pipeline):
         """Test citation JSON formatting."""
-        retriever = full_rag_pipeline['retriever']
-        citation_gen = full_rag_pipeline['citation_gen']
+        retriever = full_rag_pipeline["retriever"]
+        citation_gen = full_rag_pipeline["citation_gen"]
 
         results = retriever.retrieve("config preset", top_k=2)
         citations = citation_gen.generate_citations(results, max_citations=2)
 
-        json_str = citation_gen.format_citations(citations, format_type='json')
+        json_str = citation_gen.format_citations(citations, format_type="json")
 
         # Should be valid JSON
         parsed = json.loads(json_str)
-        assert 'citations' in parsed
+        assert "citations" in parsed
 
     def test_citation_formatting_text(self, full_rag_pipeline):
         """Test citation plain text formatting."""
-        retriever = full_rag_pipeline['retriever']
-        citation_gen = full_rag_pipeline['citation_gen']
+        retriever = full_rag_pipeline["retriever"]
+        citation_gen = full_rag_pipeline["citation_gen"]
 
         results = retriever.retrieve("test", top_k=2)
         citations = citation_gen.generate_citations(results, max_citations=2)
 
-        text = citation_gen.format_citations(citations, format_type='text')
+        text = citation_gen.format_citations(citations, format_type="text")
 
         assert isinstance(text, str)
         if citations:
-            assert 'CITATIONS' in text or 'Confidence' in text
+            assert "CITATIONS" in text or "Confidence" in text
 
 
 class TestEndToEndPromptTemplates:
@@ -597,8 +585,7 @@ class TestEndToEndPromptTemplates:
     def test_feature_implementation_template(self):
         """Test feature implementation template."""
         template = PromptTemplates.feature_implementation(
-            "Add HDR tone mapping support",
-            context="Existing tone mapping in tone_mapper.py"
+            "Add HDR tone mapping support", context="Existing tone mapping in tone_mapper.py"
         )
 
         assert "HDR" in template
@@ -609,7 +596,7 @@ class TestEndToEndPromptTemplates:
         template = PromptTemplates.bug_triage(
             "ImportError: No module named 'torch'",
             reproduction_steps="Run: python pipeline.py",
-            environment="Python 3.10, Ubuntu 22.04"
+            environment="Python 3.10, Ubuntu 22.04",
         )
 
         assert "torch" in template
@@ -617,10 +604,7 @@ class TestEndToEndPromptTemplates:
 
     def test_ci_change_template(self):
         """Test CI change template."""
-        template = PromptTemplates.ci_change(
-            "build.yml",
-            "Add Python 3.12 to test matrix"
-        )
+        template = PromptTemplates.ci_change("build.yml", "Add Python 3.12 to test matrix")
 
         assert "build.yml" in template
         assert "Python 3.12" in template
@@ -638,8 +622,8 @@ class TestEndToEndPromptTemplates:
         # Check example structure
         for examples in [feature_examples, bug_examples, ci_examples]:
             for ex in examples:
-                assert 'input' in ex
-                assert 'output' in ex
+                assert "input" in ex
+                assert "output" in ex
 
     def test_template_with_few_shot_examples(self):
         """Test adding few-shot examples to templates."""
@@ -663,7 +647,7 @@ class TestEndToEndCodeModificationResponse:
                 FileModification(
                     path="depth_pipeline/effects.py",
                     patch="+ def apply_haze(image, depth): pass",
-                    description="Add haze effect function"
+                    description="Add haze effect function",
                 )
             ],
             tests=["tests/test_effects.py"],
@@ -679,13 +663,7 @@ class TestEndToEndCodeModificationResponse:
         """Test JSON serialization."""
         response = CodeModificationResponse(
             summary="Test change",
-            files=[
-                FileModification(
-                    path="test.py",
-                    patch="+ pass",
-                    description="Test"
-                )
-            ],
+            files=[FileModification(path="test.py", patch="+ pass", description="Test")],
             tests=["test_test.py"],
             explanation="Test explanation",
             confidence=0.9,
@@ -695,42 +673,48 @@ class TestEndToEndCodeModificationResponse:
 
         # Should be valid JSON
         parsed = json.loads(json_str)
-        assert parsed['summary'] == "Test change"
-        assert parsed['confidence'] == 0.9
+        assert parsed["summary"] == "Test change"
+        assert parsed["confidence"] == 0.9
 
     def test_response_from_json(self):
         """Test JSON deserialization."""
-        json_str = json.dumps({
-            'summary': 'From JSON',
-            'files': [{'path': 'a.py', 'patch': '+ x', 'description': 'd'}],
-            'tests': ['test.py'],
-            'explanation': 'Explanation',
-            'confidence': 0.8,
-        })
+        json_str = json.dumps(
+            {
+                "summary": "From JSON",
+                "files": [{"path": "a.py", "patch": "+ x", "description": "d"}],
+                "tests": ["test.py"],
+                "explanation": "Explanation",
+                "confidence": 0.8,
+            }
+        )
 
         response = CodeModificationResponse.from_json(json_str)
 
-        assert response.summary == 'From JSON'
+        assert response.summary == "From JSON"
         assert len(response.files) == 1
         assert response.confidence == 0.8
 
     def test_schema_validation_valid(self):
         """Test schema validation with valid response."""
-        valid_json = json.dumps({
-            'summary': 'Valid',
-            'files': [{'path': 'a.py', 'patch': 'x', 'description': 'd'}],
-            'tests': ['test.py'],
-            'explanation': 'Explanation',
-            'confidence': 0.85,
-        })
+        valid_json = json.dumps(
+            {
+                "summary": "Valid",
+                "files": [{"path": "a.py", "patch": "x", "description": "d"}],
+                "tests": ["test.py"],
+                "explanation": "Explanation",
+                "confidence": 0.85,
+            }
+        )
 
         assert validate_response_schema(valid_json) is True
 
     def test_schema_validation_invalid(self):
         """Test schema validation with invalid response."""
-        invalid_json = json.dumps({
-            'summary': 'Missing required fields',
-        })
+        invalid_json = json.dumps(
+            {
+                "summary": "Missing required fields",
+            }
+        )
 
         assert validate_response_schema(invalid_json) is False
 
@@ -857,11 +841,7 @@ class TestEndToEndArtifactClassifier:
         # First classify the artifact, then extract metadata with required args
         artifact_type = classifier.classify_artifact("output_2025-01-15_depth_map.png")
         pipeline_type = classifier.detect_pipeline("output_2025-01-15_depth_map.png")
-        metadata = classifier.extract_metadata(
-            "output_2025-01-15_depth_map.png",
-            artifact_type,
-            pipeline_type
-        )
+        metadata = classifier.extract_metadata("output_2025-01-15_depth_map.png", artifact_type, pipeline_type)
         assert metadata is not None
 
     def test_artifact_hierarchy(self):
@@ -894,9 +874,9 @@ class TestEndToEndFullWorkflow:
 
     def test_complete_search_to_citation_workflow(self, full_rag_pipeline):
         """Test the complete workflow from search to citation."""
-        retriever = full_rag_pipeline['retriever']
-        reranker = full_rag_pipeline['reranker']
-        citation_gen = full_rag_pipeline['citation_gen']
+        retriever = full_rag_pipeline["retriever"]
+        reranker = full_rag_pipeline["reranker"]
+        citation_gen = full_rag_pipeline["citation_gen"]
 
         # Step 1: Search
         query = "How to process images with depth maps?"
@@ -912,27 +892,24 @@ class TestEndToEndFullWorkflow:
         assert len(citations) > 0, "Should generate citations"
 
         # Step 4: Format citations
-        markdown_citations = citation_gen.format_citations(citations, format_type='markdown')
+        markdown_citations = citation_gen.format_citations(citations, format_type="markdown")
         assert len(markdown_citations) > 0, "Should format citations"
 
     def test_template_with_rag_context(self, full_rag_pipeline):
         """Test generating templates with RAG context."""
-        retriever = full_rag_pipeline['retriever']
-        reranker = full_rag_pipeline['reranker']
-        citation_gen = full_rag_pipeline['citation_gen']
+        retriever = full_rag_pipeline["retriever"]
+        reranker = full_rag_pipeline["reranker"]
+        citation_gen = full_rag_pipeline["citation_gen"]
 
         # Get context via RAG
         query = "LUT preset configuration"
         results = retriever.retrieve(query, top_k=5)
         reranked = reranker.rerank(results, query, top_k=3)
         citations = citation_gen.generate_citations(reranked, max_citations=2)
-        context = citation_gen.format_citations(citations, format_type='markdown')
+        context = citation_gen.format_citations(citations, format_type="markdown")
 
         # Generate template with context
-        template = PromptTemplates.feature_implementation(
-            "Add new sunset LUT preset",
-            context=context
-        )
+        template = PromptTemplates.feature_implementation("Add new sunset LUT preset", context=context)
 
         assert "sunset" in template.lower()
         if citations:
@@ -941,8 +918,8 @@ class TestEndToEndFullWorkflow:
 
     def test_knowledge_engine_with_rag_results(self, full_rag_pipeline):
         """Test knowledge engine integration with RAG results."""
-        knowledge_engine = full_rag_pipeline['knowledge_engine']
-        retriever = full_rag_pipeline['retriever']
+        knowledge_engine = full_rag_pipeline["knowledge_engine"]
+        retriever = full_rag_pipeline["retriever"]
 
         # Simulate processing and feedback
         results = retriever.retrieve("depth processing", top_k=5)
@@ -977,7 +954,7 @@ class TestEndToEndPerformance:
 
     def test_retrieval_performance(self, full_rag_pipeline):
         """Test that retrieval is fast."""
-        retriever = full_rag_pipeline['retriever']
+        retriever = full_rag_pipeline["retriever"]
 
         start = time.time()
         results = retriever.retrieve("depth pipeline processing", top_k=10)
@@ -988,9 +965,9 @@ class TestEndToEndPerformance:
 
     def test_full_pipeline_performance(self, full_rag_pipeline):
         """Test complete pipeline performance."""
-        retriever = full_rag_pipeline['retriever']
-        reranker = full_rag_pipeline['reranker']
-        citation_gen = full_rag_pipeline['citation_gen']
+        retriever = full_rag_pipeline["retriever"]
+        reranker = full_rag_pipeline["reranker"]
+        citation_gen = full_rag_pipeline["citation_gen"]
 
         start = time.time()
 
@@ -998,7 +975,7 @@ class TestEndToEndPerformance:
         results = retriever.retrieve("image processing", top_k=10)
         reranked = reranker.rerank(results, "image processing", top_k=5)
         citations = citation_gen.generate_citations(reranked, max_citations=3)
-        _ = citation_gen.format_citations(citations, format_type='markdown')
+        _ = citation_gen.format_citations(citations, format_type="markdown")
 
         elapsed = time.time() - start
 
@@ -1019,7 +996,7 @@ class TestEndToEndErrorHandling:
 
     def test_invalid_query_handling(self, full_rag_pipeline):
         """Test handling of edge case queries."""
-        retriever = full_rag_pipeline['retriever']
+        retriever = full_rag_pipeline["retriever"]
 
         # Empty query
         results = retriever.retrieve("", top_k=5)
@@ -1053,19 +1030,14 @@ class TestPhase2Vector1GitHooks:
         config = GitHookConfig()
 
         assert config.enabled_hooks is not None
-        assert 'post-commit' in config.enabled_hooks
-        assert 'post-merge' in config.enabled_hooks
+        assert "post-commit" in config.enabled_hooks
+        assert "post-merge" in config.enabled_hooks
         assert config.max_files_for_sync > 0
 
     def test_change_detector_initialization(self, temp_repository):
         """Test ChangeDetector can be initialized."""
         # Initialize git repo
-        subprocess.run(
-            ['git', 'init'],
-            cwd=temp_repository,
-            capture_output=True,
-            check=True
-        )
+        subprocess.run(["git", "init"], cwd=temp_repository, capture_output=True, check=True)
 
         config = GitHookConfig()
         detector = ChangeDetector(str(temp_repository), config)
@@ -1073,22 +1045,13 @@ class TestPhase2Vector1GitHooks:
 
     def test_change_detector_get_current_branch(self, temp_repository):
         """Test getting current branch."""
-        subprocess.run(['git', 'init'], cwd=temp_repository, capture_output=True)
-        subprocess.run(
-            ['git', 'config', 'user.email', 'test@test.com'],
-            cwd=temp_repository, capture_output=True
-        )
-        subprocess.run(
-            ['git', 'config', 'user.name', 'Test'],
-            cwd=temp_repository, capture_output=True
-        )
+        subprocess.run(["git", "init"], cwd=temp_repository, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=temp_repository, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=temp_repository, capture_output=True)
         # Create initial commit
-        (temp_repository / 'test.txt').write_text('test')
-        subprocess.run(['git', 'add', '.'], cwd=temp_repository, capture_output=True)
-        subprocess.run(
-            ['git', 'commit', '-m', 'Initial'],
-            cwd=temp_repository, capture_output=True
-        )
+        (temp_repository / "test.txt").write_text("test")
+        subprocess.run(["git", "add", "."], cwd=temp_repository, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "Initial"], cwd=temp_repository, capture_output=True)
 
         config = GitHookConfig()
         detector = ChangeDetector(str(temp_repository), config)
@@ -1099,7 +1062,7 @@ class TestPhase2Vector1GitHooks:
 
     def test_hook_installer_initialization(self, temp_repository):
         """Test HookInstaller can be initialized."""
-        subprocess.run(['git', 'init'], cwd=temp_repository, capture_output=True)
+        subprocess.run(["git", "init"], cwd=temp_repository, capture_output=True)
 
         config = GitHookConfig()
         installer = HookInstaller(str(temp_repository), config)
@@ -1107,14 +1070,14 @@ class TestPhase2Vector1GitHooks:
 
     def test_hook_installer_status(self, temp_repository):
         """Test HookInstaller status check."""
-        subprocess.run(['git', 'init'], cwd=temp_repository, capture_output=True)
+        subprocess.run(["git", "init"], cwd=temp_repository, capture_output=True)
 
         config = GitHookConfig()
         installer = HookInstaller(str(temp_repository), config)
         status = installer.status()
 
         assert isinstance(status, dict)
-        assert 'post-commit' in status
+        assert "post-commit" in status
 
     def test_git_hook_manager_initialization(self):
         """Test GitHookManager initialization."""
@@ -1128,9 +1091,9 @@ class TestPhase2Vector1GitHooks:
         manager = GitHookManager()
         status = manager.get_status()
 
-        assert 'hooks' in status
-        assert 'current_branch' in status
-        assert 'valid' in status
+        assert "hooks" in status
+        assert "current_branch" in status
+        assert "valid" in status
 
 
 class TestPhase2Vector3KnowledgeFeedback:
@@ -1157,13 +1120,14 @@ class TestPhase2Vector3KnowledgeFeedback:
 
         assert engine is not None
         # Check actual attributes
-        assert hasattr(engine, 'ingester')
-        assert hasattr(engine, 'tracker')
-        assert hasattr(engine, 'analyzer')
+        assert hasattr(engine, "ingester")
+        assert hasattr(engine, "tracker")
+        assert hasattr(engine, "analyzer")
 
     def test_test_result_ingester_initialization(self):
         """Test TestResultIngester initialization."""
         from rag_system.knowledge_feedback import KnowledgeEngineConfig
+
         config = KnowledgeEngineConfig()
         ingester = TestResultIngester(config)
 
@@ -1172,6 +1136,7 @@ class TestPhase2Vector3KnowledgeFeedback:
     def test_quality_metrics_tracker_initialization(self):
         """Test QualityMetricsTracker initialization."""
         from rag_system.knowledge_feedback import KnowledgeEngineConfig
+
         config = KnowledgeEngineConfig()
         tracker = QualityMetricsTracker(config)
 
@@ -1180,6 +1145,7 @@ class TestPhase2Vector3KnowledgeFeedback:
     def test_failure_analyzer_initialization(self):
         """Test FailureAnalyzer initialization."""
         from rag_system.knowledge_feedback import KnowledgeEngineConfig
+
         config = KnowledgeEngineConfig()
         analyzer = FailureAnalyzer(config)
 
@@ -1190,14 +1156,15 @@ class TestPhase2Vector3KnowledgeFeedback:
     def test_failure_analyzer_patterns(self):
         """Test FailureAnalyzer has expected patterns."""
         from rag_system.knowledge_feedback import KnowledgeEngineConfig
+
         config = KnowledgeEngineConfig()
         analyzer = FailureAnalyzer(config)
 
         pattern_names = [p.name for p in analyzer.patterns]
 
         # Should have common error patterns
-        assert any('import' in name.lower() for name in pattern_names)
-        assert any('assert' in name.lower() for name in pattern_names)
+        assert any("import" in name.lower() for name in pattern_names)
+        assert any("assert" in name.lower() for name in pattern_names)
 
     def test_knowledge_feedback_engine_status(self):
         """Test KnowledgeFeedbackEngine status retrieval."""
@@ -1206,8 +1173,8 @@ class TestPhase2Vector3KnowledgeFeedback:
 
         assert isinstance(status, dict)
         # Actual status fields
-        assert 'knowledge_entries' in status
-        assert 'patterns_tracked' in status
+        assert "knowledge_entries" in status
+        assert "patterns_tracked" in status
 
 
 class TestPhase2Vector4DependencyAnalysis:
@@ -1218,7 +1185,7 @@ class TestPhase2Vector4DependencyAnalysis:
         config = DependencyConfig()
 
         assert config.include_patterns is not None
-        assert '*.py' in config.include_patterns
+        assert "*.py" in config.include_patterns
         assert config.exclude_patterns is not None
 
     def test_dependency_node_dataclass(self):
@@ -1301,7 +1268,7 @@ class TestPhase2Vector4DependencyAnalysis:
         stats = analyzer.get_stats()
 
         # Should indicate graph not built
-        assert stats.get('status') == 'not_built' or stats.get('total_nodes', 0) >= 0
+        assert stats.get("status") == "not_built" or stats.get("total_nodes", 0) >= 0
 
     def test_test_selector_initialization(self, temp_repository):
         """Test TestSelector initialization."""
@@ -1309,6 +1276,7 @@ class TestPhase2Vector4DependencyAnalysis:
 
         # Create a minimal graph for testing
         from rag_system.dependency_analysis import DependencyGraph
+
         graph = DependencyGraph(root_path=str(temp_repository))
 
         selector = TestSelector(config, graph)
@@ -1320,6 +1288,7 @@ class TestPhase2Vector4DependencyAnalysis:
         config = DependencyConfig()
 
         from rag_system.dependency_analysis import DependencyGraph
+
         graph = DependencyGraph(root_path=str(temp_repository))
 
         calc = ImpactCalculator(config, graph)
@@ -1354,7 +1323,7 @@ class TestPhase2Activation:
         report = activator.ingest_ci_results(sample_results)
 
         assert isinstance(report, dict)
-        assert 'entries_created' in report
+        assert "entries_created" in report
 
     def test_phase2_activator_build_dependency_graph(self):
         """Test Phase2Activator dependency graph building."""
@@ -1363,8 +1332,8 @@ class TestPhase2Activation:
         report = activator.build_dependency_graph()
 
         assert isinstance(report, dict)
-        assert 'nodes' in report
-        assert 'edges' in report
+        assert "nodes" in report
+        assert "edges" in report
 
     def test_phase2_activator_test_selection_strategy(self):
         """Test Phase2Activator test selection strategy."""
@@ -1373,9 +1342,9 @@ class TestPhase2Activation:
         selection = activator.generate_test_selection_strategy()
 
         assert isinstance(selection, dict)
-        assert 'changed_files' in selection
-        assert 'affected_tests' in selection
-        assert 'test_reduction_percent' in selection
+        assert "changed_files" in selection
+        assert "affected_tests" in selection
+        assert "test_reduction_percent" in selection
 
     def test_phase2_activator_generate_report(self):
         """Test Phase2Activator report generation."""
@@ -1421,32 +1390,32 @@ class TestPhase2Integration:
     def test_phase2_files_exist(self):
         """Test that Phase 2 implementation files exist."""
         repo_root = Path(__file__).parent.parent
-        rag_system_path = repo_root / '.github' / 'agents' / 'rag_system'
+        rag_system_path = repo_root / ".github" / "agents" / "rag_system"
 
         # Vector 1
-        assert (rag_system_path / 'git_hooks.py').exists()
+        assert (rag_system_path / "git_hooks.py").exists()
 
         # Vector 3
-        assert (rag_system_path / 'knowledge_feedback.py').exists()
+        assert (rag_system_path / "knowledge_feedback.py").exists()
 
         # Vector 4
-        assert (rag_system_path / 'dependency_analysis.py').exists()
+        assert (rag_system_path / "dependency_analysis.py").exists()
 
         # Activation
-        assert (rag_system_path / 'phase2_activation.py').exists()
+        assert (rag_system_path / "phase2_activation.py").exists()
 
         # Documentation
-        assert (rag_system_path / 'PHASE2_IMPLEMENTATION_STATUS.md').exists()
+        assert (rag_system_path / "PHASE2_IMPLEMENTATION_STATUS.md").exists()
 
     def test_phase2_documentation_version(self):
         """Test that Phase 2 documentation indicates v2.1.0."""
         repo_root = Path(__file__).parent.parent
-        status_file = repo_root / '.github' / 'agents' / 'rag_system' / 'PHASE2_IMPLEMENTATION_STATUS.md'
+        status_file = repo_root / ".github" / "agents" / "rag_system" / "PHASE2_IMPLEMENTATION_STATUS.md"
 
         content = status_file.read_text()
 
-        assert '2.1.0' in content
-        assert 'FULLY IMPLEMENTED' in content
+        assert "2.1.0" in content
+        assert "FULLY IMPLEMENTED" in content
 
     def test_knowledge_feedback_with_dependency_analysis(self):
         """Test integration of knowledge feedback with dependency analysis."""
@@ -1462,7 +1431,7 @@ class TestPhase2Integration:
 
         # Engine should be operational
         status = engine.get_status()
-        assert 'knowledge_entries' in status
+        assert "knowledge_entries" in status
 
     def test_full_phase2_workflow(self):
         """Test complete Phase 2 workflow simulation."""
@@ -1479,15 +1448,15 @@ class TestPhase2Integration:
             "duration": 30.0,
         }
         ingestion_report = activator.ingest_ci_results(ci_results)
-        assert ingestion_report['entries_created'] >= 0
+        assert ingestion_report["entries_created"] >= 0
 
         # 3. Build dependency graph
         graph_report = activator.build_dependency_graph()
-        assert graph_report['nodes'] >= 0
+        assert graph_report["nodes"] >= 0
 
         # 4. Generate test selection
         selection = activator.generate_test_selection_strategy()
-        assert 'test_reduction_percent' in selection
+        assert "test_reduction_percent" in selection
 
         # 5. Generate report
         report = activator.generate_activation_report()
@@ -1502,21 +1471,21 @@ class TestPhase2ConsolidatedCI:
         repo_root = Path(__file__).parent.parent
 
         # Check documentation exists and references consolidated CI
-        status_file = repo_root / '.github' / 'agents' / 'rag_system' / 'PHASE2_IMPLEMENTATION_STATUS.md'
+        status_file = repo_root / ".github" / "agents" / "rag_system" / "PHASE2_IMPLEMENTATION_STATUS.md"
         content = status_file.read_text()
 
         # Documentation should reference consolidated CI
-        assert 'ci-consolidated' in content.lower() or 'consolidated' in content.lower()
+        assert "ci-consolidated" in content.lower() or "consolidated" in content.lower()
 
     def test_deprecated_workflows_documented(self):
         """Test that deprecated workflows are documented."""
         repo_root = Path(__file__).parent.parent
-        status_file = repo_root / '.github' / 'agents' / 'rag_system' / 'PHASE2_IMPLEMENTATION_STATUS.md'
+        status_file = repo_root / ".github" / "agents" / "rag_system" / "PHASE2_IMPLEMENTATION_STATUS.md"
         content = status_file.read_text()
 
         # Should mention deprecated workflows
-        assert 'deprecated' in content.lower()
+        assert "deprecated" in content.lower()
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

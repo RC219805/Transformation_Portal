@@ -10,6 +10,7 @@ Key improvements over v2:
 - Smooth gradient transitions to prevent visible masking artifacts
 - Material-aware enhancement for stone, wood, and textiles
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,7 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -38,21 +40,21 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Sky Correction (CRITICAL - addresses cyan cast)
 SKY_PERCENTILE = 99  # Top 1% brightest pixels (~120k pixels)
-SKY_MASK_SIGMA = 7   # Large blur for smooth transitions
+SKY_MASK_SIGMA = 7  # Large blur for smooth transitions
 SKY_GREEN_REDUCTION = 0.85  # G: 114 → 97 (-15%)
-SKY_BLUE_REDUCTION = 0.92   # B: 126 → 116 (-8%)
-SKY_RED_BOOST = 1.10        # R: 89 → 98 (+10%)
+SKY_BLUE_REDUCTION = 0.92  # B: 126 → 116 (-8%)
+SKY_RED_BOOST = 1.10  # R: 89 → 98 (+10%)
 
 # Global Adjustments (REDUCED from v2 to preserve neutrality)
-GLOBAL_SATURATION = 1.05    # Down from 1.10
-GLOBAL_CONTRAST = 1.06      # Down from 1.08
-SHADOW_LIFT = 1.10          # +10% shadow detail
-EDGE_SHARPENING = 0.20      # Down from 0.30
+GLOBAL_SATURATION = 1.05  # Down from 1.10
+GLOBAL_CONTRAST = 1.06  # Down from 1.08
+SHADOW_LIFT = 1.10  # +10% shadow detail
+EDGE_SHARPENING = 0.20  # Down from 0.30
 
 # Material Response (Subtle)
-WOOD_ENHANCEMENT = 1.03     # Minimal wood grain boost
-STONE_ENHANCEMENT = 1.02    # Minimal stone texture
-MIDTONE_LIFT = 1.02         # Very gentle midtone boost
+WOOD_ENHANCEMENT = 1.03  # Minimal wood grain boost
+STONE_ENHANCEMENT = 1.02  # Minimal stone texture
+MIDTONE_LIFT = 1.02  # Very gentle midtone boost
 
 print("\n[1/9] Loading 32-bit TIFF...")
 
@@ -93,21 +95,21 @@ if TIFFFILE_AVAILABLE:
 
         # Convert to 8-bit for PIL processing
         img_8bit = (rgb * 255).astype(np.uint8)
-        img = Image.fromarray(img_8bit, 'RGB')
+        img = Image.fromarray(img_8bit, "RGB")
 
     except Exception as e:
         print(f"  ⚠️  tifffile error: {e}")
         print("  Falling back to PIL...")
         img = Image.open(INPUT)
-        if img.mode == 'RGBA':
-            img = img.convert('RGB')
+        if img.mode == "RGBA":
+            img = img.convert("RGB")
 else:
     img = Image.open(INPUT)
-    if img.mode == 'RGBA':
-        img = img.convert('RGB')
+    if img.mode == "RGBA":
+        img = img.convert("RGB")
 
 width, height = img.size
-print(f"  Image: {width}x{height} ({width*height:,} pixels)")
+print(f"  Image: {width}x{height} ({width * height:,} pixels)")
 
 # ============================================================================
 # STEP 1: CREATE SKY MASK (Surgical targeting of cyan areas)
@@ -125,7 +127,7 @@ sky_mask = (brightness >= threshold).astype(float)
 sky_mask_smooth = gaussian_filter(sky_mask, sigma=SKY_MASK_SIGMA)
 
 sky_pixel_count = np.sum(sky_mask > 0.5)
-print(f"  ✓ Sky pixels identified: {sky_pixel_count:,} ({sky_pixel_count/img_array.size*300:.2f}% of image)")
+print(f"  ✓ Sky pixels identified: {sky_pixel_count:,} ({sky_pixel_count / img_array.size * 300:.2f}% of image)")
 print(f"  ✓ Smoothing sigma: {SKY_MASK_SIGMA} (prevents visible edges)")
 
 # ============================================================================
@@ -159,14 +161,16 @@ avg_sky_after = img_corrected[sky_mask > 0.5].mean(axis=0)
 
 print(f"  Sky color before: R={avg_sky_before[0]:.1f}, G={avg_sky_before[1]:.1f}, B={avg_sky_before[2]:.1f}")
 print(f"  Sky color after:  R={avg_sky_after[0]:.1f}, G={avg_sky_after[1]:.1f}, B={avg_sky_after[2]:.1f}")
-print(f"  ✓ Cyan reduction: G-{(1-SKY_GREEN_REDUCTION)*100:.0f}%, B-{(1-SKY_BLUE_REDUCTION)*100:.0f}%, R+{(SKY_RED_BOOST-1)*100:.0f}%")
+print(
+    f"  ✓ Cyan reduction: G-{(1 - SKY_GREEN_REDUCTION) * 100:.0f}%, B-{(1 - SKY_BLUE_REDUCTION) * 100:.0f}%, R+{(SKY_RED_BOOST - 1) * 100:.0f}%"
+)
 
 img = Image.fromarray(img_corrected.astype(np.uint8))
 
 # ============================================================================
 # STEP 3: SHADOW LIFT (Preserve deep blacks, lift midtone shadows)
 # ============================================================================
-print(f"\n[4/9] Applying shadow lift (+{(SHADOW_LIFT-1)*100:.0f}%)...")
+print(f"\n[4/9] Applying shadow lift (+{(SHADOW_LIFT - 1) * 100:.0f}%)...")
 
 img_array = np.array(img).astype(float) / 255.0
 
@@ -181,12 +185,12 @@ img_lifted = np.clip(img_lifted, 0, 1)
 
 img = Image.fromarray((img_lifted * 255).astype(np.uint8))
 shadow_pixels = np.sum(shadow_mask > 0.1)
-print(f"  ✓ Shadow pixels enhanced: {shadow_pixels:,} ({shadow_pixels/img_array.size*100:.1f}%)")
+print(f"  ✓ Shadow pixels enhanced: {shadow_pixels:,} ({shadow_pixels / img_array.size * 100:.1f}%)")
 
 # ============================================================================
 # STEP 4: GLOBAL SATURATION (Subtle boost)
 # ============================================================================
-print(f"\n[5/9] Adjusting saturation (+{(GLOBAL_SATURATION-1)*100:.0f}%)...")
+print(f"\n[5/9] Adjusting saturation (+{(GLOBAL_SATURATION - 1) * 100:.0f}%)...")
 
 enhancer = ImageEnhance.Color(img)
 img = enhancer.enhance(GLOBAL_SATURATION)
@@ -194,7 +198,7 @@ img = enhancer.enhance(GLOBAL_SATURATION)
 # ============================================================================
 # STEP 5: GLOBAL CONTRAST (Subtle boost)
 # ============================================================================
-print(f"\n[6/9] Adjusting contrast (+{(GLOBAL_CONTRAST-1)*100:.0f}%)...")
+print(f"\n[6/9] Adjusting contrast (+{(GLOBAL_CONTRAST - 1) * 100:.0f}%)...")
 
 enhancer = ImageEnhance.Contrast(img)
 img = enhancer.enhance(GLOBAL_CONTRAST)
@@ -234,8 +238,8 @@ img = Image.fromarray((img_enhanced * 255).astype(np.uint8))
 
 wood_count = np.sum(wood_mask > 0.1)
 stone_count = np.sum(stone_mask > 0.1)
-print(f"  ✓ Wood enhancement: {wood_count:,} pixels (+{(WOOD_ENHANCEMENT-1)*100:.0f}%)")
-print(f"  ✓ Stone enhancement: {stone_count:,} pixels (+{(STONE_ENHANCEMENT-1)*100:.0f}%)")
+print(f"  ✓ Wood enhancement: {wood_count:,} pixels (+{(WOOD_ENHANCEMENT - 1) * 100:.0f}%)")
+print(f"  ✓ Stone enhancement: {stone_count:,} pixels (+{(STONE_ENHANCEMENT - 1) * 100:.0f}%)")
 
 # ============================================================================
 # STEP 7: EDGE SHARPENING (Subtle, structure-preserving)
@@ -271,7 +275,7 @@ sky_color_final = img_final[sky_mask > 0.5].mean(axis=0) if np.any(sky_mask > 0.
 print("\nFinal Metrics:")
 print(f"  Overall brightness: {brightness_final:.1f}")
 print(f"  Sky color (final): R={sky_color_final[0]:.1f}, G={sky_color_final[1]:.1f}, B={sky_color_final[2]:.1f}")
-print(f"  Cyan bias removed: {avg_sky_before[1]-sky_color_final[1]:.1f} (G channel)")
+print(f"  Cyan bias removed: {avg_sky_before[1] - sky_color_final[1]:.1f} (G channel)")
 print(f"  Enhanced pixels: {(wood_count + stone_count + sky_pixel_count):,}")
 
 print("\nKey Improvements:")

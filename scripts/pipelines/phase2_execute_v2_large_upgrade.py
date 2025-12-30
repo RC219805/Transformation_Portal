@@ -28,28 +28,25 @@ import numpy as np
 from PIL import Image
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def test_model_variant(variant: str) -> Dict:
     """Test a specific Depth Anything V2 model variant."""
 
-    logger.info(f"\n{'='*70}")
+    logger.info(f"\n{'=' * 70}")
     logger.info(f"Testing: Depth Anything V2-{variant.upper()}")
-    logger.info(f"{'='*70}")
+    logger.info(f"{'=' * 70}")
 
     try:
         from depth_anything_v2 import DepthAnythingV2Model, ModelVariant, ModelBackend
 
         # Map variant names to enum
         variant_map = {
-            'small': ModelVariant.SMALL,
-            'base': ModelVariant.BASE,
-            'large': ModelVariant.LARGE,
+            "small": ModelVariant.SMALL,
+            "base": ModelVariant.BASE,
+            "large": ModelVariant.LARGE,
         }
 
         model_variant = variant_map[variant.lower()]
@@ -61,8 +58,8 @@ def test_model_variant(variant: str) -> Dict:
         depth_model = DepthAnythingV2Model(
             variant=model_variant,
             backend=ModelBackend.PYTORCH_MPS,  # M4 Max Metal Performance Shaders
-            device='mps',
-            precision='fp16'
+            device="mps",
+            precision="fp16",
         )
 
         init_time = time.time() - start_init
@@ -82,10 +79,10 @@ def test_model_variant(variant: str) -> Dict:
         for i in range(5):
             start = time.time()
             depth_result = depth_model.estimate_depth(test_pil)
-            depth_map = depth_result['depth']
+            depth_map = depth_result["depth"]
             elapsed = (time.time() - start) * 1000  # Convert to ms
             times.append(elapsed)
-            logger.info(f"  Run {i+1}: {elapsed:.1f}ms")
+            logger.info(f"  Run {i + 1}: {elapsed:.1f}ms")
 
         avg_time = np.mean(times)
         std_time = np.std(times)
@@ -94,16 +91,16 @@ def test_model_variant(variant: str) -> Dict:
         model_id = model_variant.value
 
         results = {
-            'variant': variant,
-            'model_id': model_id,
-            'init_time_sec': init_time,
-            'avg_inference_ms': avg_time,
-            'std_inference_ms': std_time,
-            'min_inference_ms': min(times),
-            'max_inference_ms': max(times),
-            'depth_map_shape': depth_map.shape,
-            'depth_map_dtype': str(depth_map.dtype),
-            'depth_range': [float(depth_map.min()), float(depth_map.max())],
+            "variant": variant,
+            "model_id": model_id,
+            "init_time_sec": init_time,
+            "avg_inference_ms": avg_time,
+            "std_inference_ms": std_time,
+            "min_inference_ms": min(times),
+            "max_inference_ms": max(times),
+            "depth_map_shape": depth_map.shape,
+            "depth_map_dtype": str(depth_map.dtype),
+            "depth_range": [float(depth_map.min()), float(depth_map.max())],
         }
 
         logger.info("\n✓ Results:")
@@ -118,8 +115,9 @@ def test_model_variant(variant: str) -> Dict:
     except Exception as e:
         logger.error(f"✗ Failed to test V2-{variant.upper()}: {e}")
         import traceback
+
         traceback.print_exc()
-        return {'variant': variant, 'error': str(e)}
+        return {"variant": variant, "error": str(e)}
 
 
 def compare_variants() -> Dict:
@@ -129,7 +127,7 @@ def compare_variants() -> Dict:
     logger.info("PHASE 2: DEPTH ANYTHING V2 VARIANT COMPARISON")
     logger.info("=" * 70)
 
-    variants = ['small', 'large']  # Skip 'base' to save time
+    variants = ["small", "large"]  # Skip 'base' to save time
     results = {}
 
     for variant in variants:
@@ -140,13 +138,13 @@ def compare_variants() -> Dict:
     logger.info("COMPARISON SUMMARY")
     logger.info("=" * 70)
 
-    if 'small' in results and 'large' in results:
-        small = results['small']
-        large = results['large']
+    if "small" in results and "large" in results:
+        small = results["small"]
+        large = results["large"]
 
-        if 'error' not in small and 'error' not in large:
-            small_time = small['avg_inference_ms']
-            large_time = large['avg_inference_ms']
+        if "error" not in small and "error" not in large:
+            small_time = small["avg_inference_ms"]
+            large_time = large["avg_inference_ms"]
             slowdown = (large_time / small_time - 1) * 100
 
             logger.info("\nV2-Small:")
@@ -167,7 +165,7 @@ def compare_variants() -> Dict:
             logger.info(f"  V2-Large: {large_throughput:.0f} images/hour")
 
             # Recommendation
-            logger.info(f"\n{'='*70}")
+            logger.info(f"\n{'=' * 70}")
             logger.info("RECOMMENDATION")
             logger.info("=" * 70)
 
@@ -221,7 +219,7 @@ def main():
 
     # Save results
     output_file = "phase2_benchmark_results.json"
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         json.dump(results, f, indent=2)
     logger.info(f"\n✓ Results saved to {output_file}")
 

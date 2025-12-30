@@ -12,9 +12,9 @@ All 10 tests in `test_materials_v3_edge_cases.py` failed because the `ci_safe_co
 The fixture was using `pytest.importorskip("torch")` which doesn't properly integrate with pytest's skip mechanism when used in fixtures. The fixture would execute and attempt to import PyTorch-dependent classes before the skip could take effect.
 
 ## Solution
-✅ Replace `pytest.importorskip()` with a check of the module-level `TORCH_AVAILABLE` flag  
-✅ Call `pytest.skip()` early in the fixture, before any imports  
-✅ Ensures the class-level `@pytest.mark.skipif` decorator works correctly  
+✅ Replace `pytest.importorskip()` with a check of the module-level `TORCH_AVAILABLE` flag
+✅ Call `pytest.skip()` early in the fixture, before any imports
+✅ Ensures the class-level `@pytest.mark.skipif` decorator works correctly
 
 ### Changed Code
 ```python
@@ -23,7 +23,7 @@ def ci_safe_config(self, output_dir):
     # Skip the entire fixture if PyTorch is not available
     if not TORCH_AVAILABLE:
         pytest.skip("PyTorch required for V2 pipeline")
-    
+
     config = PipelineConfig(...)
     return config
 ```

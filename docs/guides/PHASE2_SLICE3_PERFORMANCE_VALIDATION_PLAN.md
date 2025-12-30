@@ -1,7 +1,7 @@
 # Phase 2 Slice 3: Performance Validation Plan
 
-**Status**: Ready to Execute  
-**Date**: 2025-12-10  
+**Status**: Ready to Execute
+**Date**: 2025-12-10
 **Owner**: Performance & Optimization Team
 
 ---
@@ -269,7 +269,7 @@ if preset in OPTIMIZED_PRESETS:
     export_config.tiff_compression = "lzw"
 ```
 
-**Pros**: Controlled, predictable  
+**Pros**: Controlled, predictable
 **Cons**: Misses large images in other presets
 
 ### Option B: Size-Based Rollout
@@ -282,7 +282,7 @@ if image_size_mp > SIZE_THRESHOLD_MP:
     export_config.tiff_compression = "lzw"
 ```
 
-**Pros**: Captures all large images  
+**Pros**: Captures all large images
 **Cons**: Harder to A/B test
 
 ### Option C: Environment Variable Opt-In
@@ -290,7 +290,7 @@ if image_size_mp > SIZE_THRESHOLD_MP:
 export LUX_EXPORT_OPTIMIZATIONS=1
 ```
 
-**Pros**: Easy to enable/disable for testing  
+**Pros**: Easy to enable/disable for testing
 **Cons**: Not automatic
 
 ### Option D: Gradual Rollout (Recommended)
@@ -307,7 +307,7 @@ if image_size_mp > 50:
 enable_optimizations()  # Always on
 ```
 
-**Pros**: Gradual risk reduction, data-driven  
+**Pros**: Gradual risk reduction, data-driven
 **Cons**: Requires monitoring
 
 ---

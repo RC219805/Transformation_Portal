@@ -23,13 +23,13 @@ def test_audit_module_detects_missing_docstring(tmp_path: Path, auditor: Codebas
     module_path = _write_module(
         tmp_path,
         dedent(
-            '''
+            """
             from math import sqrt
 
 
             def area(radius):
                 return 3.14 * radius * radius
-            '''
+            """
         ).strip(),
     )
 

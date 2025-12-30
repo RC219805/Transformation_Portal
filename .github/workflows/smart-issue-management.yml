@@ -217,7 +217,7 @@ jobs:
               if analysis and 'duplicate_check' in analysis and not is_pr:
                   search_terms = analysis['duplicate_check']
                   search_url = f'https://api.github.com/search/issues?q=repo:{repo}+{search_terms}+is:issue'
-                  
+
                   try:
                       search_response = requests.get(search_url, headers=headers)
 

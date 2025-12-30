@@ -32,26 +32,26 @@ import numpy as np
 # Try to import dependencies
 try:
     from PIL import Image
+
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
 
 try:
     import tifffile
+
     TIFF_AVAILABLE = True
 except ImportError:
     TIFF_AVAILABLE = False
 
 try:
     from tqdm import tqdm
+
     TQDM_AVAILABLE = True
 except ImportError:
     TQDM_AVAILABLE = False
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -167,6 +167,7 @@ def load_depth(path: Path) -> np.ndarray:
     elif suffix == ".exr":
         try:
             import cv2
+
             depth = cv2.imread(str(path), cv2.IMREAD_ANYDEPTH | cv2.IMREAD_GRAYSCALE)
         except ImportError:
             raise ImportError("OpenCV required for EXR files. Install with: pip install opencv-python")
@@ -272,10 +273,7 @@ def split_data(
         "test": [pairs[i] for i in indices[val_end:]],
     }
 
-    logger.info(
-        f"Split data: train={len(splits['train'])}, "
-        f"val={len(splits['val'])}, test={len(splits['test'])}"
-    )
+    logger.info(f"Split data: train={len(splits['train'])}, val={len(splits['val'])}, test={len(splits['test'])}")
 
     return splits
 
@@ -424,7 +422,7 @@ def create_sample_data(output_dir: Path, num_samples: int = 100) -> None:
         # Windows
         for wx in range(50, w - 50, 100):
             for wy in range(sky_h + 30, h - 30, 80):
-                image[wy:wy + 50, wx:wx + 60, :] = [80, 100, 120]
+                image[wy : wy + 50, wx : wx + 60, :] = [80, 100, 120]
 
         # Create corresponding depth map
         depth = np.zeros((h, w), dtype=np.float32)
@@ -438,7 +436,7 @@ def create_sample_data(output_dir: Path, num_samples: int = 100) -> None:
         # Windows are slightly recessed
         for wx in range(50, w - 50, 100):
             for wy in range(sky_h + 30, h - 30, 80):
-                depth[wy:wy + 50, wx:wx + 60] = 25.0
+                depth[wy : wy + 50, wx : wx + 60] = 25.0
 
         # Add noise for realism
         depth += np.random.randn(h, w).astype(np.float32) * 0.5
@@ -538,80 +536,29 @@ def parse_args() -> argparse.Namespace:
     Returns:
         Parsed arguments
     """
-    parser = argparse.ArgumentParser(
-        description="Prepare training data for depth estimation"
-    )
+    parser = argparse.ArgumentParser(description="Prepare training data for depth estimation")
+
+    parser.add_argument("--source-dir", type=str, default="data/raw", help="Source directory containing raw data")
+
+    parser.add_argument("--output-dir", type=str, default="data/architectural", help="Output directory for prepared data")
+
+    parser.add_argument("--val-split", type=float, default=0.1, help="Fraction of data for validation")
+
+    parser.add_argument("--test-split", type=float, default=0.1, help="Fraction of data for testing")
+
+    parser.add_argument("--depth-format", type=str, default="npy", choices=["npy", "png", "tiff"], help="Output depth format")
 
     parser.add_argument(
-        "--source-dir",
-        type=str,
-        default="data/raw",
-        help="Source directory containing raw data"
+        "--resize", type=int, nargs=2, default=None, metavar=("HEIGHT", "WIDTH"), help="Resize images to specified size"
     )
 
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="data/architectural",
-        help="Output directory for prepared data"
-    )
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for splitting")
 
-    parser.add_argument(
-        "--val-split",
-        type=float,
-        default=0.1,
-        help="Fraction of data for validation"
-    )
+    parser.add_argument("--stats-only", action="store_true", help="Only compute statistics, don't copy data")
 
-    parser.add_argument(
-        "--test-split",
-        type=float,
-        default=0.1,
-        help="Fraction of data for testing"
-    )
+    parser.add_argument("--create-sample", action="store_true", help="Create synthetic sample data for testing")
 
-    parser.add_argument(
-        "--depth-format",
-        type=str,
-        default="npy",
-        choices=["npy", "png", "tiff"],
-        help="Output depth format"
-    )
-
-    parser.add_argument(
-        "--resize",
-        type=int,
-        nargs=2,
-        default=None,
-        metavar=("HEIGHT", "WIDTH"),
-        help="Resize images to specified size"
-    )
-
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for splitting"
-    )
-
-    parser.add_argument(
-        "--stats-only",
-        action="store_true",
-        help="Only compute statistics, don't copy data"
-    )
-
-    parser.add_argument(
-        "--create-sample",
-        action="store_true",
-        help="Create synthetic sample data for testing"
-    )
-
-    parser.add_argument(
-        "--num-samples",
-        type=int,
-        default=100,
-        help="Number of synthetic samples to create"
-    )
+    parser.add_argument("--num-samples", type=int, default=100, help="Number of synthetic samples to create")
 
     return parser.parse_args()
 
@@ -626,5 +573,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

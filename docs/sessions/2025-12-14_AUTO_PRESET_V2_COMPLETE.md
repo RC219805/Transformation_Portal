@@ -1,6 +1,6 @@
 # Session Complete: Auto-Preset v2 Implementation
-**Date**: December 13-14, 2025  
-**Branch**: `feature/auto-preset-v2`  
+**Date**: December 13-14, 2025
+**Branch**: `feature/auto-preset-v2`
 **Session Focus**: Complete Auto-Preset v2 with complexity scoring + canary blocking
 
 ---
@@ -16,7 +16,7 @@
 
 **Test Coverage**: 57 passing tests total
 - 16 complexity scorer tests
-- 17 canary blocking tests  
+- 17 canary blocking tests
 - 24 existing preset selector tests
 
 **Status**: Ready for merge to `main`.
@@ -102,7 +102,7 @@
 ```bash
 --quality-tier {standard,max,apex,auto}
   # auto → decides based on intent + complexity
-  
+
 --intent {preview,client,hero}
   # preview → STANDARD
   # client → MAX (or APEX if complex)
@@ -254,9 +254,9 @@ def _is_canary_preset(preset: Preset) -> bool:
 **Fallback mapping:**
 ```python
 CANARY_MAP = {
-    Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM: 
+    Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM:
         Preset.INTERIOR_LUXURY_APEX_QUALITY,
-    Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM: 
+    Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM:
         Preset.EXTERIOR_POOL_APEX_QUALITY,
 }
 ```
@@ -277,7 +277,7 @@ if not allow_canary and self._is_canary_preset(recommendation.preset):
 
 ### Why complexity scoring is valuable
 
-**Problem**: 
+**Problem**:
 - APEX tier is expensive (runtime + compute)
 - MAX tier is often sufficient for low-complexity images
 - Humans can't reliably guess "complexity" from image dimensions alone
@@ -297,7 +297,7 @@ Complexity scorer provides objective, fast (~10–20 ms) metrics to decide when 
 
 ### Why canary blocking is critical
 
-**Problem**: 
+**Problem**:
 EfficientSAM FUSED refinement is:
 - Still canary-only (Stage 6 PR-3C showed 0/5 scenes improved)
 - Not validated for general production use
@@ -509,15 +509,15 @@ Implement edge-aware enhancement using canonical material taxonomy + boundary me
 
 Auto-Preset v2 represents a **significant UX improvement** for the Transformation Portal:
 
-✅ **Intelligent tier selection** (intent + complexity → optimal preset)  
-✅ **Safety-first canary blocking** (explicit opt-in required)  
-✅ **Fast, deterministic complexity scoring** (8–25 ms overhead)  
-✅ **Comprehensive test coverage** (57 tests, all passing)  
+✅ **Intelligent tier selection** (intent + complexity → optimal preset)
+✅ **Safety-first canary blocking** (explicit opt-in required)
+✅ **Fast, deterministic complexity scoring** (8–25 ms overhead)
+✅ **Comprehensive test coverage** (57 tests, all passing)
 ✅ **Production-ready** (no behavior change unless user enables auto-tier)
 
 **Ready for merge to `main`.**
 
 ---
 
-**Session End**: December 14, 2025, ~00:50 AM PST  
+**Session End**: December 14, 2025, ~00:50 AM PST
 **Status**: ✅ Complete, All Tests Passing, Ready for Merge

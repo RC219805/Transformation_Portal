@@ -1,13 +1,13 @@
 # 750 Picacho Lane - Professional Refinement Plan
 
-**Date**: November 17, 2025  
-**Client Direction**: Premium luxury real estate photography refinement  
+**Date**: November 17, 2025
+**Client Direction**: Premium luxury real estate photography refinement
 **Goal**: Museum-quality hero shots for campaign
 
 ---
 
 ## Image 1: Front Exterior / Arrival (HERO SHOT)
-**File**: `V2_750Picacho_Aerial.tiff` (396 MB)  
+**File**: `V2_750Picacho_Aerial.tiff` (396 MB)
 **Priority**: HIGHEST - Primary campaign visual
 
 ### Refinements Required:
@@ -54,7 +54,7 @@ settings = {
 ---
 
 ## Image 2: Great Room / Double-Height Living
-**File**: `V2_750Picacho_GreatRoom.tiff` (69 MB)  
+**File**: `V2_750Picacho_GreatRoom.tiff` (69 MB)
 **Goal**: Reduce blown-out feel, increase texture richness
 
 ### Refinements Required:
@@ -99,7 +99,7 @@ settings = {
 ---
 
 ## Image 3: Kitchen + Casual Living
-**File**: `V2_750Picacho_Kitchen.tiff` (116 MB)  
+**File**: `V2_750Picacho_Kitchen.tiff` (116 MB)
 **Goal**: Clean, bright, calm - reduce busyness
 
 ### Refinements Required:
@@ -144,7 +144,7 @@ settings = {
 ---
 
 ## Image 4: Pool / Rear Elevation at Dusk (PRIMARY CAMPAIGN VISUAL)
-**File**: `V2_750Picacho_Pool.tiff` (116 MB)  
+**File**: `V2_750Picacho_Pool.tiff` (116 MB)
 **Priority**: HIGHEST - Already processed, needs upgrade to Tier 3
 
 ### Refinements Required:
@@ -193,7 +193,7 @@ settings = {
 ---
 
 ## Image 5: Primary Bath + Outdoor Shower
-**File**: `V2_750Picacho_PrimaryBathroom.tiff` (275 MB)  
+**File**: `V2_750Picacho_PrimaryBathroom.tiff` (275 MB)
 **Goal**: Emphasize indoor-outdoor spa experience
 
 ### Refinements Required:
@@ -237,7 +237,7 @@ settings = {
 ---
 
 ## Image 6: Primary Bedroom Opening to Pool
-**File**: `V2_750Picacho_PrimaryBedroom.tiff` (137 MB)  
+**File**: `V2_750Picacho_PrimaryBedroom.tiff` (137 MB)
 **Goal**: Romantic, calm, ocean/pool oriented
 
 ### Refinements Required:

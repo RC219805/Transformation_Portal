@@ -1,9 +1,9 @@
 # Phase 1 Visual Verification Checklist
 ## Color/Tone Parameters — Kitchen & Great Room
 
-**Date**: 2025-12-22  
-**Reviewer**: _________  
-**Duration**: ~15-20 minutes  
+**Date**: 2025-12-22
+**Reviewer**: _________
+**Duration**: ~15-20 minutes
 
 ---
 
@@ -212,6 +212,6 @@ _____________________________________________________________________________
 
 ---
 
-**Verification Complete**: _____ (initial)  
-**Timestamp**: _____________________  
-**Ready for Depth Sweep**: [ ] YES / [ ] NO  
+**Verification Complete**: _____ (initial)
+**Timestamp**: _____________________
+**Ready for Depth Sweep**: [ ] YES / [ ] NO

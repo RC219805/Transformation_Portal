@@ -41,7 +41,7 @@ class PresenceParameters:
         seed = int.from_bytes(self.salt[2:4], "big")
         self._rng.seed(seed)
         w1 = 0.65 + (self._rng.randrange(0, 101) / 1000.0)  # 0.65–0.75
-        w2 = 0.95 + (self._rng.randrange(0, 51) / 1000.0)   # 0.95–1.00
+        w2 = 0.95 + (self._rng.randrange(0, 51) / 1000.0)  # 0.95–1.00
         return [round(w1, 3), round(w2, 3), round(w1, 3)]
 
     def prompt_order(self, prompts):

@@ -96,7 +96,7 @@ if self.config.enable_depth_processing and self.depth_processor:
     # Estimate depth and apply zone adjustments
     image, depth_map = self.depth_processor.process(image)
     result.depth_map_generated = (depth_map is not None)
-    
+
     # Save visualization if intermediate outputs enabled
     if depth_map and self.config.save_intermediate:
         self.depth_processor.save_depth_visualization(depth_map, output_path)
@@ -256,21 +256,21 @@ config = UnifiedPipelineConfig(
     input_path="input.tif",
     output_dir="output/",
     preset=PipelinePreset.PHOTO_REALISTIC,
-    
+
     # All stages enabled
     enable_upscaling=True,
     enable_depth_processing=True,
     enable_material_response=True,
     enable_color_grading=True,
-    
+
     # Depth settings
     depth_model="depth_anything_v2",
     zone_based_processing=True,
-    
+
     # Material settings
     material_strength=0.80,
     surface_types=["wood", "metal", "glass", "stone"],
-    
+
     # Save intermediate results
     save_intermediate=True
 )
@@ -540,7 +540,7 @@ material_config = MaterialResponseConfig(depth_aware=False)
 
 **Status**: ✅ **Phase 2 Complete** - Full depth and material integration
 
-**Date**: December 5, 2025  
-**Implementation**: 750+ lines integration code, 21 tests, 500+ lines tests  
-**Performance**: 106-400 images/hour (preset-dependent)  
+**Date**: December 5, 2025
+**Implementation**: 750+ lines integration code, 21 tests, 500+ lines tests
+**Performance**: 106-400 images/hour (preset-dependent)
 **Next Phase**: LUT system integration

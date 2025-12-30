@@ -1,8 +1,8 @@
 # Security Hardening Migration Guide
 
-**Version**: 1.0  
-**Date**: December 7, 2025  
-**Status**: Active  
+**Version**: 1.0
+**Date**: December 7, 2025
+**Status**: Active
 **Priority**: Critical
 
 This guide provides practical examples for migrating code to use secure validation utilities defined in ADR-002.
@@ -89,14 +89,14 @@ from transformation_portal.utils.security import validate_image_path, SecurityEr
 def load_image(filepath: str, base_dir: Path = Path.cwd()):
     """
     Load image from validated path.
-    
+
     Args:
         filepath: Path to image file
         base_dir: Base directory (must contain filepath)
-        
+
     Returns:
         Image as numpy array
-        
+
     Raises:
         SecurityError: If path validation fails
     """
@@ -146,11 +146,11 @@ from transformation_portal.utils.security import (
 def process_directory(input_dir: str, output_dir: str):
     """
     Process all images in directory with security validation.
-    
+
     Args:
         input_dir: Input directory path
         output_dir: Output directory path
-        
+
     Raises:
         SecurityError: If directory validation fails
     """
@@ -160,33 +160,33 @@ def process_directory(input_dir: str, output_dir: str):
         allowed_dirs=[Path.cwd()],
         must_exist=True
     )
-    
+
     output_path = validate_filepath(
         Path(output_dir),
         allowed_dirs=[Path.cwd()],
         must_exist=False
     )
     output_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Process files
     for file in input_path.iterdir():
         if file.suffix.lower() not in IMAGE_EXTENSIONS:
             continue
-        
+
         try:
             # Validate input file
             safe_input = validate_filepath(
                 file,
                 allowed_dirs=[input_path]
             )
-            
+
             # Sanitize output filename
             safe_name = sanitize_filename(file.name)
             safe_output = output_path / safe_name
-            
+
             # Process
             process_image(safe_input, safe_output)
-            
+
         except SecurityError as e:
             print(f"⚠️  Skipping {file.name}: {e}")
             continue
@@ -211,29 +211,29 @@ from transformation_portal.utils.security import sanitize_filename, validate_fil
 def save_result(data, user_filename: str, output_dir: Path):
     """
     Save result with sanitized user-supplied name.
-    
+
     Args:
         data: Data to save
         user_filename: User-provided filename (will be sanitized)
         output_dir: Output directory (must be validated)
-        
+
     Returns:
         Path to saved file
     """
     # Sanitize filename
     safe_name = sanitize_filename(user_filename)
-    
+
     # Validate output path
     output_path = validate_filepath(
         output_dir / safe_name,
         allowed_dirs=[output_dir],
         must_exist=False
     )
-    
+
     # Save
     with open(output_path, 'wb') as f:
         f.write(data)
-    
+
     return output_path
 ```
 
@@ -271,13 +271,13 @@ def apply_video_filter(
 ):
     """
     Apply FFmpeg filter with security validation.
-    
+
     Args:
         input_file: Input video path
         output_file: Output video path
         filter_str: FFmpeg filter string
         base_dir: Base directory for validation
-        
+
     Raises:
         SecurityError: If validation fails
     """
@@ -291,11 +291,11 @@ def apply_video_filter(
             validate_paths=True,
             allowed_dirs=[base_dir]
         )
-        
+
         # Execute safely (no shell=True)
         result = subprocess.run(cmd, check=True, capture_output=True)
         print(f"✅ Video processed successfully")
-        
+
     except SecurityError as e:
         print(f"❌ Security violation: {e}")
         raise
@@ -341,13 +341,13 @@ def create_video_master(
 ):
     """
     Apply LUT and color grading with security validation.
-    
+
     Args:
         input_file: Input video path
         output_file: Output video path
         lut_path: Path to LUT file
         base_dir: Base directory for validation
-        
+
     Raises:
         SecurityError: If validation fails
     """
@@ -357,13 +357,13 @@ def create_video_master(
         allowed_dirs=[base_dir / "assets" / "luts"],
         allowed_extensions=['.cube']
     )
-    
+
     # Build filter graph
     filter_graph = f"lut3d={safe_lut},colorbalance=rs=0.1"
-    
+
     # Validate filter (checks for shell metacharacters)
     validate_filter_graph(filter_graph)
-    
+
     # Build safe command
     cmd = build_ffmpeg_command(
         Path(input_file),
@@ -374,7 +374,7 @@ def create_video_master(
         validate_paths=True,
         allowed_dirs=[base_dir]
     )
-    
+
     # Execute
     subprocess.run(cmd, check=True)
 ```
@@ -397,11 +397,11 @@ from transformation_portal.utils.security import timeout, TimeoutError
 def process_video(input_file: str, max_duration: int = 300):
     """
     Process video with timeout.
-    
+
     Args:
         input_file: Input video path
         max_duration: Maximum processing time in seconds (default 5 minutes)
-        
+
     Raises:
         TimeoutError: If processing exceeds max_duration
     """
@@ -412,7 +412,7 @@ def process_video(input_file: str, max_duration: int = 300):
                 check=True
             )
             print(f"✅ Processing complete")
-            
+
     except TimeoutError:
         print(f"❌ Processing timed out after {max_duration}s")
         raise
@@ -441,7 +441,7 @@ def test_path_traversal_blocked(tmp_path):
     # Create a file outside allowed directory
     outside = tmp_path.parent / "outside.jpg"
     outside.touch()
-    
+
     # Try to access via traversal
     with pytest.raises(SecurityError, match="outside allowed"):
         load_image(str(outside), base_dir=tmp_path)
@@ -449,7 +449,7 @@ def test_path_traversal_blocked(tmp_path):
 def test_command_injection_blocked():
     """Test that command injection is blocked."""
     from my_module import apply_video_filter
-    
+
     with pytest.raises(SecurityError, match="dangerous characters"):
         apply_video_filter(
             "input.mp4",
@@ -461,7 +461,7 @@ def test_valid_path_accepted(tmp_path):
     """Test that valid paths are accepted."""
     valid_file = tmp_path / "valid.jpg"
     valid_file.write_bytes(b"fake image")
-    
+
     # Should not raise
     result = load_image(str(valid_file), base_dir=tmp_path)
     assert result is not None

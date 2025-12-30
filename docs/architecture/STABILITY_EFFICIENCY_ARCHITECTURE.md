@@ -1,9 +1,9 @@
 # Transformation Portal: Stability & Efficiency Architecture
 ## System Enhancement Design Document
 
-**Document Version:** 1.0  
-**Date:** 2025-12-08  
-**Author:** Transformation Portal Architect  
+**Document Version:** 1.0
+**Date:** 2025-12-08
+**Author:** Transformation Portal Architect
 **Status:** Design Specification
 
 ---
@@ -380,7 +380,7 @@ lux-depth-v2-storage status
 /Users/rc/Transformation_Portal/output_750_Picacho/750Picacho_Pool_upscaled16.tif (1.6GB)
 
 # After migration
-/Users/rc/Transformation_Portal/output_750_Picacho/750Picacho_Pool_upscaled16.tif → 
+/Users/rc/Transformation_Portal/output_750_Picacho/750Picacho_Pool_upscaled16.tif →
   /Volumes/T9/Transformation_Portal_Outputs/750_Picacho/750Picacho_Pool_upscaled16.tif
 
 # Scripts continue to work without changes
@@ -394,16 +394,16 @@ open output_750_Picacho/750Picacho_Pool_upscaled16.tif  # ✓ Works
 # Before starting batch
 def preflight_disk_check(images: List[Path]) -> bool:
     required_gb = sum(img.stat().st_size / 1e9 * 15 for img in images)
-    
+
     internal_free = psutil.disk_usage('/').free / 1e9
     t9_free = psutil.disk_usage('/Volumes/T9').free / 1e9 if t9_available else 0
-    
+
     total_free = internal_free + t9_free
-    
+
     if total_free < required_gb:
         logger.error(f"Insufficient disk space: need {required_gb:.1f}GB, have {total_free:.1f}GB")
         return False
-    
+
     return True
 ```
 
@@ -542,7 +542,7 @@ Stage 6: EXPORT (I/O Bound)
 def resume_from_checkpoint(checkpoint_file: Path, config: PipelineConfig):
     """Resume processing from saved checkpoint."""
     checkpoint = json.loads(checkpoint_file.read_text())
-    
+
     # Find first incomplete stage
     stages = ["load", "depth", "material", "grade", "upscale", "export"]
     resume_from = None
@@ -550,20 +550,20 @@ def resume_from_checkpoint(checkpoint_file: Path, config: PipelineConfig):
         if not checkpoint["stages"][stage]["completed"]:
             resume_from = stage
             break
-    
+
     if resume_from is None:
         logger.info("All stages completed, nothing to resume")
         return
-    
+
     logger.info(f"Resuming from stage: {resume_from}")
-    
+
     # Load completed stage data
     stage_data = {}
     for stage in stages:
         if checkpoint["stages"][stage]["completed"]:
             data_path = Path(checkpoint["stages"][stage]["data_path"])
             stage_data[stage] = np.load(data_path)
-    
+
     # Execute remaining stages
     pipeline = ModularPipeline(config)
     for stage in stages[stages.index(resume_from):]:
@@ -618,4 +618,3 @@ Resource Scheduler:
 Phase 1 focuses on sequential reliability. Parallel processing added in Phase 2 after stability proven.
 
 ---
-

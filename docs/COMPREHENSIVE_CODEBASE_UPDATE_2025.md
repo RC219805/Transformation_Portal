@@ -107,7 +107,7 @@ async def process():
     pipeline.add_stage(ImageLoadStage(max_concurrent=4))
     pipeline.add_stage(DepthEstimationStage())
     pipeline.add_stage(ImageSaveStage(output_dir="./output"))
-    
+
     async with pipeline:
         async for result in pipeline.process_batch(image_paths):
             print(f"Processed: {result.data.path}")
@@ -426,6 +426,6 @@ The Transformation Portal has evolved into a mature, production-grade toolkit wi
 ✅ **Secure & Reliable** - Comprehensive CI/CD with security hardening
 ✅ **Developer-Friendly** - Extensive documentation, testing, and tooling
 
-**Last Updated:** December 2025  
-**Version:** 0.1.0 (Development)  
+**Last Updated:** December 2025
+**Version:** 0.1.0 (Development)
 **Test Status:** 1348 passed, 257 skipped

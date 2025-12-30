@@ -18,6 +18,7 @@ import time
 try:
     from scipy import ndimage
     from skimage import metrics
+
     ADVANCED_METRICS = True
 except ImportError:
     ADVANCED_METRICS = False
@@ -61,11 +62,7 @@ class ImageQualityAnalyzer:
         # Generate summary
         summary = self.generate_summary()
 
-        return {
-            "individual_results": self.results,
-            "summary": summary,
-            "processing_report": self.processing_report
-        }
+        return {"individual_results": self.results, "summary": summary, "processing_report": self.processing_report}
 
     def analyze_room(self, room: str) -> Dict[str, Any]:
         """Analyze all outputs for a specific room."""
@@ -86,8 +83,8 @@ class ImageQualityAnalyzer:
                 "source": str(source_path),
                 "master": str(master_path),
                 "delivery": str(delivery_path),
-                "tonemapped": str(tonemapped_path)
-            }
+                "tonemapped": str(tonemapped_path),
+            },
         }
 
         # Analyze each file type
@@ -152,18 +149,18 @@ class ImageQualityAnalyzer:
         }
 
         # Bit depth analysis
-        if img.mode in ['I', 'F']:
+        if img.mode in ["I", "F"]:
             analysis["bit_depth"] = "32-bit float"
-        elif img.mode == 'I;16':
+        elif img.mode == "I;16":
             analysis["bit_depth"] = "16-bit"
-        elif img.mode in ['RGB', 'RGBA', 'L', 'LA']:
+        elif img.mode in ["RGB", "RGBA", "L", "LA"]:
             analysis["bit_depth"] = "8-bit"
         else:
             analysis["bit_depth"] = img.mode
 
         # Color space
-        if hasattr(img, 'info'):
-            if 'icc_profile' in img.info:
+        if hasattr(img, "info"):
+            if "icc_profile" in img.info:
                 analysis["color_profile"] = "ICC profile present"
             else:
                 analysis["color_profile"] = "No ICC profile"
@@ -184,17 +181,17 @@ class ImageQualityAnalyzer:
                 "max": float(np.max(img_float)),
                 "mean": float(np.mean(img_float)),
                 "std": float(np.std(img_float)),
-                "dynamic_range_stops": round(np.log2(np.max(img_float) / (np.min(img_float) + 1e-10)), 2)
+                "dynamic_range_stops": round(np.log2(np.max(img_float) / (np.min(img_float) + 1e-10)), 2),
             }
 
             # Color channel analysis
-            for i, channel in enumerate(['Red', 'Green', 'Blue'][:img_array.shape[2]]):
+            for i, channel in enumerate(["Red", "Green", "Blue"][: img_array.shape[2]]):
                 channel_data = img_float[:, :, i]
                 analysis[f"{channel.lower()}_channel"] = {
                     "mean": round(float(np.mean(channel_data)), 4),
                     "std": round(float(np.std(channel_data)), 4),
                     "min": round(float(np.min(channel_data)), 4),
-                    "max": round(float(np.max(channel_data)), 4)
+                    "max": round(float(np.max(channel_data)), 4),
                 }
 
             # Sharpness estimation (Laplacian variance)
@@ -212,7 +209,7 @@ class ImageQualityAnalyzer:
                 "whites_clipped": int(clipped_whites),
                 "blacks_clipped": int(clipped_blacks),
                 "whites_percent": round(100 * clipped_whites / total_pixels, 3),
-                "blacks_percent": round(100 * clipped_blacks / total_pixels, 3)
+                "blacks_percent": round(100 * clipped_blacks / total_pixels, 3),
             }
 
             # Color saturation analysis
@@ -227,7 +224,7 @@ class ImageQualityAnalyzer:
 
             analysis["saturation"] = {
                 "mean": round(float(np.mean(hsv[:, :, 1])), 4),
-                "std": round(float(np.std(hsv[:, :, 1])), 4)
+                "std": round(float(np.std(hsv[:, :, 1])), 4),
             }
 
         return analysis
@@ -240,32 +237,29 @@ class ImageQualityAnalyzer:
         comparison = {
             "resolution_increase": f"{source.size} → {output.size}",
             "scale_factor": round(output.width / source.width, 2),
-            "megapixel_increase": round((output.width * output.height) / (source.width * source.height), 2)
+            "megapixel_increase": round((output.width * output.height) / (source.width * source.height), 2),
         }
 
         # Resize output to source size for comparison
         output_resized = output.resize(source.size, Image.LANCZOS)
 
-        source_array = np.array(source.convert('RGB')).astype(np.float32) / 255.0
-        output_array = np.array(output_resized.convert('RGB')).astype(np.float32) / 255.0
+        source_array = np.array(source.convert("RGB")).astype(np.float32) / 255.0
+        output_array = np.array(output_resized.convert("RGB")).astype(np.float32) / 255.0
 
         # Calculate PSNR and MSE
         mse = np.mean((source_array - output_array) ** 2)
         if mse > 0:
             psnr = 20 * np.log10(1.0 / np.sqrt(mse))
         else:
-            psnr = float('inf')
+            psnr = float("inf")
 
         comparison["mse"] = round(float(mse), 6)
-        comparison["psnr_db"] = round(float(psnr), 2) if psnr != float('inf') else "Infinite"
+        comparison["psnr_db"] = round(float(psnr), 2) if psnr != float("inf") else "Infinite"
 
         # SSIM if available
         if ADVANCED_METRICS:
             try:
-                ssim = metrics.structural_similarity(
-                    source_array, output_array,
-                    channel_axis=2, data_range=1.0
-                )
+                ssim = metrics.structural_similarity(source_array, output_array, channel_axis=2, data_range=1.0)
                 comparison["ssim"] = round(float(ssim), 4)
             except Exception as e:
                 comparison["ssim"] = f"Error: {str(e)}"
@@ -279,18 +273,14 @@ class ImageQualityAnalyzer:
             "red": round(float(color_shift[0]), 4),
             "green": round(float(color_shift[1]), 4),
             "blue": round(float(color_shift[2]), 4),
-            "magnitude": round(float(np.linalg.norm(color_shift)), 4)
+            "magnitude": round(float(np.linalg.norm(color_shift)), 4),
         }
 
         return comparison
 
     def get_room_insights(self, room: str, analysis: Dict) -> Dict[str, Any]:
         """Generate room-specific quality insights."""
-        insights = {
-            "room_type": room,
-            "expected_challenges": [],
-            "quality_notes": []
-        }
+        insights = {"room_type": room, "expected_challenges": [], "quality_notes": []}
 
         # Define expected challenges per room type
         challenges = {
@@ -299,7 +289,7 @@ class ImageQualityAnalyzer:
             "Bedroom": ["Textile rendering", "Soft lighting", "Fabric detail preservation"],
             "Great_Room": ["Complex mixed lighting", "Multiple materials", "Large dynamic range"],
             "Kitchen": ["Metal appliances", "Stone counters", "Specular highlights", "Color accuracy"],
-            "Pool": ["Water rendering", "Outdoor materials", "Sky/reflections", "Wet surfaces"]
+            "Pool": ["Water rendering", "Outdoor materials", "Sky/reflections", "Wet surfaces"],
         }
 
         insights["expected_challenges"] = challenges.get(room, [])
@@ -358,7 +348,7 @@ class ImageQualityAnalyzer:
             "overall_quality_score": 0,
             "strengths": [],
             "weaknesses": [],
-            "recommendations": []
+            "recommendations": [],
         }
 
         # Collect metrics across all rooms
@@ -478,14 +468,16 @@ def generate_markdown_report(analysis_results: Dict, output_path: Path):
             stages = result.get("stages", {})
             total = sum(stages.values())
 
-            md.append(f"| {room_name} | {total:.2f} | "
-                      f"{stages.get('1_load', 0):.3f} | "
-                      f"{stages.get('2_depth', 0):.3f} | "
-                      f"{stages.get('3_material', 0):.2f} | "
-                      f"{stages.get('4_tonemap', 0):.3f} | "
-                      f"{stages.get('5_color', 0):.3f} | "
-                      f"{stages.get('6_ai', 0):.2f} | "
-                      f"{stages.get('7_upscale', 0):.2f} |")
+            md.append(
+                f"| {room_name} | {total:.2f} | "
+                f"{stages.get('1_load', 0):.3f} | "
+                f"{stages.get('2_depth', 0):.3f} | "
+                f"{stages.get('3_material', 0):.2f} | "
+                f"{stages.get('4_tonemap', 0):.3f} | "
+                f"{stages.get('5_color', 0):.3f} | "
+                f"{stages.get('6_ai', 0):.2f} | "
+                f"{stages.get('7_upscale', 0):.2f} |"
+            )
 
         md.append("")
         md.append("**Key Insights:**")
@@ -512,11 +504,13 @@ def generate_markdown_report(analysis_results: Dict, output_path: Path):
             key = f"{img_type}_analysis"
             if key in data:
                 img_data = data[key]
-                md.append(f"| {img_type.title()} | "
-                          f"{img_data.get('file_size_mb', 'N/A')} MB | "
-                          f"{img_data.get('width', 0)}x{img_data.get('height', 0)} | "
-                          f"{img_data.get('bit_depth', 'N/A')} | "
-                          f"{img_data.get('format', 'N/A')} |")
+                md.append(
+                    f"| {img_type.title()} | "
+                    f"{img_data.get('file_size_mb', 'N/A')} MB | "
+                    f"{img_data.get('width', 0)}x{img_data.get('height', 0)} | "
+                    f"{img_data.get('bit_depth', 'N/A')} | "
+                    f"{img_data.get('format', 'N/A')} |"
+                )
 
         md.append("")
 
@@ -649,8 +643,8 @@ def generate_markdown_report(analysis_results: Dict, output_path: Path):
     md.append("")
 
     # Write to file
-    with open(output_path, 'w') as f:
-        f.write('\n'.join(md))
+    with open(output_path, "w") as f:
+        f.write("\n".join(md))
 
     print(f"\n✓ Report generated: {output_path}")
 
@@ -692,7 +686,7 @@ def main():
 
     results_native = convert_to_native(results)
 
-    with open(json_path, 'w') as f:
+    with open(json_path, "w") as f:
         json.dump(results_native, f, indent=2)
     print(f"\n✓ JSON results saved: {json_path}")
 

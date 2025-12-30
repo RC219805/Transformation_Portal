@@ -18,7 +18,7 @@ import numpy as np
 @pytest.fixture
 def golden_hour_scene():
     """Sample golden hour scene (warm, low sun).
-    
+
     Phase 2: Replace with actual golden hour test image.
     """
     # Synthetic golden hour: warm tones, medium brightness
@@ -32,7 +32,7 @@ def golden_hour_scene():
 @pytest.fixture
 def dawn_scene():
     """Sample dawn scene (cool, low brightness).
-    
+
     Phase 2: Replace with actual dawn test image.
     """
     # Synthetic dawn: cool blue tones, low brightness
@@ -45,14 +45,14 @@ def dawn_scene():
 
 class TestLightingDetection:
     """Test lighting condition detection.
-    
+
     Phase 2: Implement once detect() method is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_detect_golden_hour(self, golden_hour_scene):
         """Test detection of golden hour lighting.
-        
+
         Expected behavior:
         - time_of_day = TimeOfDay.GOLDEN_HOUR
         - confidence > 0.8
@@ -66,11 +66,11 @@ class TestLightingDetection:
         # assert condition.confidence > 0.8
         # assert condition.warmth > 0.5
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_detect_dawn(self, dawn_scene):
         """Test detection of dawn lighting.
-        
+
         Expected behavior:
         - time_of_day = TimeOfDay.DAWN
         - confidence > 0.7
@@ -79,11 +79,11 @@ class TestLightingDetection:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_detect_twilight(self):
         """Test detection of twilight lighting.
-        
+
         Expected behavior:
         - time_of_day = TimeOfDay.TWILIGHT
         - cool tones (purple-blue)
@@ -92,11 +92,11 @@ class TestLightingDetection:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_detect_overcast(self):
         """Test detection of overcast lighting.
-        
+
         Expected behavior:
         - time_of_day = TimeOfDay.OVERCAST
         - low color temperature variance
@@ -109,14 +109,14 @@ class TestLightingDetection:
 
 class TestSkyRegionAnalysis:
     """Test sky region analysis.
-    
+
     Phase 2: Implement once _analyze_sky_region() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_sky_coverage_calculation(self):
         """Test sky coverage percentage calculation.
-        
+
         Expected behavior:
         - Accurate coverage percentage [0, 1]
         - Uses sky mask from material segmentation
@@ -124,11 +124,11 @@ class TestSkyRegionAnalysis:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_color_temperature_estimation(self):
         """Test color temperature estimation from sky.
-        
+
         Expected behavior:
         - Estimates Kelvin temperature (2000-10000K)
         - Golden hour: 2500-3500K
@@ -137,11 +137,11 @@ class TestSkyRegionAnalysis:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_sky_gradient_detection(self):
         """Test detection of sky gradient patterns.
-        
+
         Expected behavior:
         - Detects dawn/sunset gradients
         - Distinguishes from uniform sky
@@ -153,14 +153,14 @@ class TestSkyRegionAnalysis:
 
 class TestTimeOfDayClassification:
     """Test time-of-day classification logic.
-    
+
     Phase 2: Implement once _classify_time_of_day() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_classification_decision_tree(self):
         """Test classification decision tree logic.
-        
+
         Decision tree:
         - Golden hour: warm (>0.5), low-mid brightness, hue [20, 60]
         - Dawn: cool (<-0.3), low brightness, hue [200, 260]
@@ -169,11 +169,11 @@ class TestTimeOfDayClassification:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_classification_confidence_scores(self):
         """Test confidence scores for classifications.
-        
+
         Expected behavior:
         - Clear cases: confidence > 0.8
         - Ambiguous cases: confidence 0.5-0.7
@@ -185,14 +185,14 @@ class TestTimeOfDayClassification:
 
 class TestShadowDetection:
     """Test shadow detection and direction estimation.
-    
+
     Phase 2: Implement once _detect_shadows() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_detect_strong_shadows(self):
         """Test detection of strong directional shadows.
-        
+
         Expected behavior:
         - Detects sharp luminance gradients
         - Uses depth map to distinguish shadows from geometry
@@ -200,11 +200,11 @@ class TestShadowDetection:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_shadow_direction_estimation(self):
         """Test shadow direction estimation.
-        
+
         Expected behavior:
         - Estimates direction: "top", "left", "right", etc.
         - Uses gradient orientation analysis
@@ -216,14 +216,14 @@ class TestShadowDetection:
 
 class TestToneMappingAdaptation:
     """Test adaptive tone mapping based on lighting.
-    
+
     Phase 2: Implement once adapt_tone_mapping() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_adapt_golden_hour_tone_mapping(self, golden_hour_scene):
         """Test tone mapping adaptation for golden hour.
-        
+
         Expected behavior:
         - Increase highlight preservation (prevent clipping)
         - Gentle shadow adjustments
@@ -231,11 +231,11 @@ class TestToneMappingAdaptation:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_adapt_midday_tone_mapping(self):
         """Test tone mapping adaptation for midday.
-        
+
         Expected behavior:
         - Reduce shadow crushing
         - Increase global contrast
@@ -243,11 +243,11 @@ class TestToneMappingAdaptation:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_adapt_overcast_tone_mapping(self):
         """Test tone mapping adaptation for overcast.
-        
+
         Expected behavior:
         - Increase local contrast
         - Reduce global contrast
@@ -259,14 +259,14 @@ class TestToneMappingAdaptation:
 
 class TestColorGradingAdaptation:
     """Test adaptive color grading based on lighting.
-    
+
     Phase 2: Implement once adapt_color_grading() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_adapt_golden_hour_color_grading(self):
         """Test color grading adaptation for golden hour.
-        
+
         Expected behavior:
         - Enhance warm tones (reds, yellows, oranges)
         - Reduce cool tones slightly
@@ -274,11 +274,11 @@ class TestColorGradingAdaptation:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_adapt_dawn_twilight_color_grading(self):
         """Test color grading adaptation for dawn/twilight.
-        
+
         Expected behavior:
         - Enhance cool tones (blues, purples)
         - Preserve purple-blue gradient
@@ -286,11 +286,11 @@ class TestColorGradingAdaptation:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_confidence_weighted_blending(self):
         """Test confidence-weighted blending of adaptations.
-        
+
         Expected behavior:
         - High confidence: strong adaptation (alpha ~ 0.8)
         - Low confidence: gentle adaptation (alpha ~ 0.3)
@@ -302,14 +302,14 @@ class TestColorGradingAdaptation:
 
 class TestLightingDetectorIntegration:
     """Test integration with processing pipeline.
-    
+
     Phase 2: Implement once pipeline integration is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_pipeline_uses_lighting_metadata(self):
         """Test that pipeline uses lighting metadata.
-        
+
         Expected behavior:
         - Lighting detected in pre-analysis phase
         - Tone mapping adapted based on lighting
@@ -318,11 +318,11 @@ class TestLightingDetectorIntegration:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_lighting_config_feature_gate(self):
         """Test that lighting detection respects enabled flag.
-        
+
         Expected behavior:
         - lighting.enabled=False: no detection or adaptation
         - lighting.enabled=True: full detection and adaptation

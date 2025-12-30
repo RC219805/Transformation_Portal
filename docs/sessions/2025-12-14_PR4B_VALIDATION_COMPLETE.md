@@ -17,7 +17,7 @@ The Materials V3 glass pixel response system is fully integrated, correctly wire
 - **Decision**: Pixel ops NOT needed - mask quality already excellent
 
 ### Bedroom Scene
-- **Status**: `success_skipped`  
+- **Status**: `success_skipped`
 - **Reason**: `confidence_already_high`
 - **Glass Coverage**: 2.54% (514K pixels)
 - **Mean Confidence**: 0.765 (HIGH)

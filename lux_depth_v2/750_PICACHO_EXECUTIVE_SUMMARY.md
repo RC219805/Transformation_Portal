@@ -1,6 +1,6 @@
 # 750 Picacho TIFF Testing - Executive Summary
 
-**Date**: December 22, 2025  
+**Date**: December 22, 2025
 **Question**: Is the lux depth v2 pipeline ready to test on the six (6), 75-100 MB 750 Picacho source TIFF files?
 
 ---
@@ -182,7 +182,7 @@ All documentation is in the `lux_depth_v2/` directory:
 ## Important Notes
 
 ### ⚠️ File Size Discrepancy
-**Expected**: 75-100 MB per file  
+**Expected**: 75-100 MB per file
 **Actual**: 23-43 MB per file
 
 **Reason**: Files are LZW compressed 16-bit TIFFs, which is normal.
@@ -280,6 +280,6 @@ The pipeline is production-ready. Follow the 3-step process above:
 
 ---
 
-**Document Created**: December 22, 2025  
-**Status**: Ready for User Action  
+**Document Created**: December 22, 2025
+**Status**: Ready for User Action
 **Next Step**: Install dependencies and run test script

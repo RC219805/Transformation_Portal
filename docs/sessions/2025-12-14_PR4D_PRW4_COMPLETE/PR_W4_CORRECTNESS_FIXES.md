@@ -2,11 +2,11 @@
 
 ## Three Critical Semantic Drift Issues Fixed
 
-### 1. ✅ `is_false_positive` Now Equals `is_false_trigger` 
+### 1. ✅ `is_false_positive` Now Equals `is_false_trigger`
 
 **Problem**: Legacy field was hardcoded to `False`, violating stated contract that it's an alias.
 
-**Fix**: 
+**Fix**:
 ```python
 is_false_trigger = (not should_detect and detected)
 is_fp = is_false_trigger  # legacy alias, same semantics
@@ -89,9 +89,9 @@ tests/test_prw_water_validation_deterministic.py::test_full_validation_determini
 
 ## Validation
 
-✅ Tests pass (3/3)  
-✅ No false positives from `is_false_positive != is_false_trigger`  
-✅ Recall computed from explicit detector boolean  
+✅ Tests pass (3/3)
+✅ No false positives from `is_false_positive != is_false_trigger`
+✅ Recall computed from explicit detector boolean
 ✅ Subfolder images properly ignored by git
 
 ---

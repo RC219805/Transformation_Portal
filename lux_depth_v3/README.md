@@ -387,7 +387,7 @@ lux-depth-v3 api-process outdoor.jpg -o output \
 # Feature extraction
 lux-depth-v3 api-process image.jpg -o output \
   --export-feat "0,3,6,9" -f "feat_vis"
-  
+
 # Strict license validation (raises error on violation)
 lux-depth-v3 api-process image.jpg -o output \
   -m nested-giant-large-v1.1 --commercial --strict-license
@@ -583,14 +583,14 @@ from lux_depth_v3.config import PostprocessingConfig, ExportConfig, ExportFormat
 config = DA3Config(
     model_variant=ModelVariant.METRIC_LARGE,
     inference_mode=InferenceMode.METRIC,
-    
+
     # Postprocessing
     postprocessing=PostprocessingConfig(
         apply_metric_scaling=True,
         apply_bilateral_filter=True,
         preserve_edges=True,
     ),
-    
+
     # Export
     export=ExportConfig(
         formats=[ExportFormat.PNG, ExportFormat.NPZ],
@@ -619,7 +619,7 @@ for i, img_path in enumerate(image_paths):
         focal_length=(fx, fy),
         principal_point=(cx, cy),
     )
-    
+
     manager.add_image(path=img_path, pose=pose)
 
 # Run multi-view inference
@@ -643,11 +643,11 @@ report = ValidationReport()
 for img_input in tqdm(manager.get_images()):
     result = engine.inference(img_input)
     result = postprocessor.process(result)
-    
+
     # Validate
     metrics = validator.validate(result)
     report.add_result(metrics)
-    
+
     # Check quality gate
     if not metrics.passes_quality_gate():
         print(f"Quality gate failed: {img_input.path}")

@@ -1,7 +1,7 @@
 # EfficientSAM V3 — Stage 3 Complete ✅
 
-**Date**: December 12, 2025  
-**Branch**: `feature/efficientsam-v3`  
+**Date**: December 12, 2025
+**Branch**: `feature/efficientsam-v3`
 **Status**: Stage 3 stabilized and ready for Stage 4
 
 ---

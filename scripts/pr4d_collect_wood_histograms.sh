@@ -55,11 +55,11 @@ for SCENE in "${SCENES[@]}"; do
   SCENE_NAME="${SCENE%.*}"  # Remove extension
   INPUT_FILE="$INPUT_DIR/$SCENE"
   OUTPUT_DIR="$OUTPUT_BASE/$SCENE_NAME"
-  
+
   echo -e "${BLUE}--------------------------------------------------${NC}"
   echo -e "${BLUE}Processing: $SCENE_NAME${NC}"
   echo -e "${BLUE}--------------------------------------------------${NC}"
-  
+
   # Check if input file exists
   if [ ! -f "$INPUT_FILE" ]; then
     echo -e "${RED}❌ ERROR: Input file not found: $INPUT_FILE${NC}"
@@ -67,7 +67,7 @@ for SCENE in "${SCENES[@]}"; do
     echo ""
     continue
   fi
-  
+
   # Check if already processed
   REPORT_FILE="$OUTPUT_DIR/${SCENE_NAME}_report.json"
   if [ -f "$REPORT_FILE" ]; then
@@ -77,31 +77,31 @@ for SCENE in "${SCENES[@]}"; do
     echo ""
     continue
   fi
-  
+
   # Process the scene
   SCENE_START=$(date +%s)
   echo "Input: $INPUT_FILE"
   echo "Output: $OUTPUT_DIR"
   echo ""
-  
+
   if lux-depth-v2 \
     --input "$INPUT_FILE" \
     --output-dir "$OUTPUT_DIR" \
     --preset "$PRESET" \
     --device "$DEVICE" \
     --allow-canary; then
-    
+
     SCENE_END=$(date +%s)
     SCENE_DURATION=$((SCENE_END - SCENE_START))
     SCENE_TIMES+=("$SCENE_NAME: ${SCENE_DURATION}s")
-    
+
     echo -e "${GREEN}✓ Successfully processed $SCENE_NAME in ${SCENE_DURATION}s${NC}"
     PROCESSED_SCENES+=("$SCENE_NAME")
   else
     echo -e "${RED}❌ ERROR: Processing failed for $SCENE_NAME${NC}"
     FAILED_SCENES+=("$SCENE_NAME (processing error)")
   fi
-  
+
   echo ""
 done
 

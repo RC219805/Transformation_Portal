@@ -1,8 +1,8 @@
 # Stage 6 A/B Boundary Metrics: Ready to Execute
 
-**Date**: 2025-12-13 23:13 UTC  
-**Status**: ✅ **VALIDATED AND READY**  
-**Script**: `scripts/stage6_ab_corrected_final.py`  
+**Date**: 2025-12-13 23:13 UTC
+**Status**: ✅ **VALIDATED AND READY**
+**Script**: `scripts/stage6_ab_corrected_final.py`
 **Sanity Check**: `scripts/stage6_sanity.py`
 
 ---
@@ -239,8 +239,8 @@ jq '.scene_results[] | {scene, scene_improved, improvements, regressions}' \
 
 ---
 
-**Author**: RC + GitHub Copilot  
-**Session**: 2025-12-13 Stage 6 Final Validation  
+**Author**: RC + GitHub Copilot
+**Session**: 2025-12-13 Stage 6 Final Validation
 **Repository**: Transformation_Portal (`origin/main` @ commit f869f73)
 
 **Ready to execute.**

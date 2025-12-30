@@ -64,7 +64,7 @@ class TestFlatBlueSurfaceSuppressor:
         np.random.seed(42)
         for _ in range(10):
             y, x = np.random.randint(0, 400, 2)
-            rgb[y:y + 50, x:x + 50] = 0.95  # Bright specular patches
+            rgb[y : y + 50, x : x + 50] = 0.95  # Bright specular patches
 
         rgb = np.clip(rgb, 0, 1)
 
@@ -110,11 +110,11 @@ class TestArchitecturalGlassSuppressor:
 
         # Add stronger vertical lines (window mullions)
         for x in range(0, 512, 64):
-            rgb[:, x:x + 4] = 0.05  # Dark mullions (wider)
+            rgb[:, x : x + 4] = 0.05  # Dark mullions (wider)
 
         # Add stronger horizontal lines (floors)
         for y in range(0, 512, 64):
-            rgb[y:y + 4, :] = 0.05  # Dark floors (wider)
+            rgb[y : y + 4, :] = 0.05  # Dark floors (wider)
 
         detector = WaterCandidateDetector()
         result = detector.detect(rgb, scene_context=SceneContext.OCEAN)
@@ -170,7 +170,7 @@ class TestArchitecturalGlassSuppressor:
 
         # Add grid
         for x in range(0, 512, 64):
-            rgb[:, x:x + 2] = 0.1
+            rgb[:, x : x + 2] = 0.1
 
         params = WaterDetectionParams(glass_suppressor_enabled=False)
         detector = WaterCandidateDetector(params)
@@ -285,9 +285,9 @@ class TestSuppressorCalibration:
 
         # Add window grid
         for x in range(0, 512, 64):
-            rgb[:, x:x + 3] = 0.05  # Dark mullions
+            rgb[:, x : x + 3] = 0.05  # Dark mullions
         for y in range(0, 512, 64):
-            rgb[y:y + 3, :] = 0.05
+            rgb[y : y + 3, :] = 0.05
 
         detector = WaterCandidateDetector()
         result = detector.detect(rgb, scene_context=SceneContext.OCEAN)

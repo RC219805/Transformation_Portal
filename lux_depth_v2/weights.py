@@ -47,12 +47,15 @@ def weights_from_assets(
         # basic resize with numpy if needed; torch resize is in torch_ops but expects tensor
         if wfg.shape != (h, w):
             import cv2
+
             wfg = cv2.resize(wfg.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
         if wmid.shape != (h, w):
             import cv2
+
             wmid = cv2.resize(wmid.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
         if wbg.shape != (h, w):
             import cv2
+
             wbg = cv2.resize(wbg.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
 
         wfg_t = _to_1x1(wfg, device)

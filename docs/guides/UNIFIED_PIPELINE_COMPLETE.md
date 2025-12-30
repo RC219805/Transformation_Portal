@@ -298,7 +298,7 @@ config = UnifiedPipelineConfig(
    ```python
    # TODO: Connect to existing depth_pipeline module
    from depth_pipeline import ArchitecturalDepthPipeline
-   
+
    depth_pipeline = ArchitecturalDepthPipeline.from_config(config)
    depth_map = depth_pipeline.estimate_depth(image)
    image = depth_pipeline.apply_zone_adjustments(image, depth_map)
@@ -308,7 +308,7 @@ config = UnifiedPipelineConfig(
    ```python
    # TODO: Connect to existing material_response module
    from material_response import MaterialResponse
-   
+
    mr = MaterialResponse()
    image = mr.enhance(
        image,
@@ -382,21 +382,21 @@ from unified_luxury_pipeline import UnifiedPipelineConfig, UpscalingModel
 config = UnifiedPipelineConfig(
     input_path="input.tif",
     output_dir="output/",
-    
+
     # Custom stages
     enable_upscaling=True,
     enable_depth_processing=True,
     enable_material_response=True,
     enable_color_grading=False,
-    
+
     # Model: Fast upscaling
     upscale_model=UpscalingModel.REALESRGAN_4X,
     tile_size=512,
-    
+
     # Material: Focus on wood
     material_strength=0.80,
     surface_types=["wood"],
-    
+
     # Quality: 16-bit with validation
     preserve_16bit=True,
     validate_colors=True
@@ -584,7 +584,7 @@ python unified_luxury_pipeline.py input.tif --saturation 1.15
 
 **Status**: ✅ **Core Pipeline Complete** - Production-ready with integration interfaces
 
-**Date**: December 5, 2025  
-**Implementation**: 900+ lines core, 40KB documentation, 7 presets  
-**Performance**: 120-450 images/hour (preset-dependent)  
+**Date**: December 5, 2025
+**Implementation**: 900+ lines core, 40KB documentation, 7 presets
+**Performance**: 120-450 images/hour (preset-dependent)
 **Next Phase**: Depth and Material Response integration

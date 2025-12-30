@@ -103,24 +103,40 @@ class RAGConfig:
     query_cache_size: int = 100
 
     # Directories to index
-    index_directories: List[str] = field(default_factory=lambda: [
-        "docs/",
-        "depth_pipeline/",
-        "tests/",
-        ".github/agents/",
-        "config/",
-        "tools/",
-    ])
+    index_directories: List[str] = field(
+        default_factory=lambda: [
+            "docs/",
+            "depth_pipeline/",
+            "tests/",
+            ".github/agents/",
+            "config/",
+            "tools/",
+        ]
+    )
 
     # File patterns
-    include_patterns: List[str] = field(default_factory=lambda: [
-        "*.py", "*.md", "*.yaml", "*.yml", "*.json", "*.txt",
-    ])
+    include_patterns: List[str] = field(
+        default_factory=lambda: [
+            "*.py",
+            "*.md",
+            "*.yaml",
+            "*.yml",
+            "*.json",
+            "*.txt",
+        ]
+    )
 
-    exclude_patterns: List[str] = field(default_factory=lambda: [
-        "deprecated/*", ".venv/*", "__pycache__/*", "*.pyc",
-        ".git/*", "node_modules/*", ".rag_cache/*",
-    ])
+    exclude_patterns: List[str] = field(
+        default_factory=lambda: [
+            "deprecated/*",
+            ".venv/*",
+            "__pycache__/*",
+            "*.pyc",
+            ".git/*",
+            "node_modules/*",
+            ".rag_cache/*",
+        ]
+    )
 
     # Logging
     log_level: str = "INFO"
@@ -141,13 +157,12 @@ class RAGConfig:
         if "persistence" in data:
             flat["cache_dir"] = data["persistence"].get("index_path", ".rag_cache")
         if "feature_flags" in data:
-            flat["enable_vector_search"] = data["feature_flags"].get(
-                "vector_search", True
-            )
+            flat["enable_vector_search"] = data["feature_flags"].get("vector_search", True)
             flat["cache_enabled"] = data["feature_flags"].get("persistent_cache", True)
 
         # Map to dataclass fields
         import dataclasses
+
         valid_fields = {f.name for f in dataclasses.fields(cls)}
         config_dict = {}
         for key, value in flat.items():
@@ -323,16 +338,18 @@ class SimpleIndexer:
             if current_size + line_size > chunk_chars and current_chunk:
                 # Create chunk
                 chunk_content = "\n".join(current_chunk)
-                chunk_id = f"{rel_path}:{line_start}-{i-1}"
+                chunk_id = f"{rel_path}:{line_start}-{i - 1}"
 
-                chunks.append(Chunk(
-                    chunk_id=chunk_id,
-                    content=chunk_content,
-                    file_path=rel_path,
-                    line_start=line_start,
-                    line_end=i - 1,
-                    chunk_type=chunk_type,
-                ))
+                chunks.append(
+                    Chunk(
+                        chunk_id=chunk_id,
+                        content=chunk_content,
+                        file_path=rel_path,
+                        line_start=line_start,
+                        line_end=i - 1,
+                        chunk_type=chunk_type,
+                    )
+                )
 
                 # Overlap: keep last few lines
                 overlap_lines = []
@@ -355,14 +372,16 @@ class SimpleIndexer:
             chunk_content = "\n".join(current_chunk)
             chunk_id = f"{rel_path}:{line_start}-{len(lines)}"
 
-            chunks.append(Chunk(
-                chunk_id=chunk_id,
-                content=chunk_content,
-                file_path=rel_path,
-                line_start=line_start,
-                line_end=len(lines),
-                chunk_type=chunk_type,
-            ))
+            chunks.append(
+                Chunk(
+                    chunk_id=chunk_id,
+                    content=chunk_content,
+                    file_path=rel_path,
+                    line_start=line_start,
+                    line_end=len(lines),
+                    chunk_type=chunk_type,
+                )
+            )
 
         return chunks
 
@@ -408,9 +427,7 @@ class SimpleIndexer:
                 rel_path = str(file_path.relative_to(self.repo_root))
                 source_files[rel_path] = [c.chunk_id for c in chunks]
 
-        logger.info(
-            f"Indexed {len(all_chunks)} chunks from {len(source_files)} files"
-        )
+        logger.info(f"Indexed {len(all_chunks)} chunks from {len(source_files)} files")
         return all_chunks, source_files
 
 
@@ -455,9 +472,7 @@ class RAGSystem:
         self.source_files: Dict[str, List[str]] = {}
         self._indexed = False
 
-        logger.info(
-            f"RAGSystem initialized (vector_search={self.config.enable_vector_search})"
-        )
+        logger.info(f"RAGSystem initialized (vector_search={self.config.enable_vector_search})")
 
     @property
     def cache_manager(self):
@@ -533,16 +548,11 @@ class RAGSystem:
             current_files = self._get_current_files()
 
             # Load with validation
-            chunks, invalidated = self.cache_manager.load_chunks_with_validation(
-                current_files
-            )
+            chunks, invalidated = self.cache_manager.load_chunks_with_validation(current_files)
 
             if chunks and not invalidated:
                 # Cache hit - use cached chunks
-                self.chunks = [
-                    Chunk.from_dict(c) if isinstance(c, dict) else c
-                    for c in chunks
-                ]
+                self.chunks = [Chunk.from_dict(c) if isinstance(c, dict) else c for c in chunks]
 
                 # Load embeddings if available
                 if self.config.enable_vector_search:
@@ -552,9 +562,7 @@ class RAGSystem:
                 self.retriever.index(self.chunks)
 
                 elapsed = (time.time() - start_time) * 1000
-                logger.info(
-                    f"Loaded {len(self.chunks)} chunks from cache in {elapsed:.1f}ms"
-                )
+                logger.info(f"Loaded {len(self.chunks)} chunks from cache in {elapsed:.1f}ms")
                 self._indexed = True
                 return len(self.chunks)
 
@@ -564,9 +572,7 @@ class RAGSystem:
         # Full indexing
         logger.info("Performing full repository indexing...")
 
-        self.chunks, self.source_files = self.indexer.index_repository(
-            directories=self.config.index_directories
-        )
+        self.chunks, self.source_files = self.indexer.index_repository(directories=self.config.index_directories)
 
         # Index retriever
         self.retriever.index(self.chunks)
@@ -588,51 +594,51 @@ class RAGSystem:
 
     def _get_current_files(self) -> Dict[str, Path]:
         """Get current repository files for cache validation.
-        
+
         CRITICAL: Must scan identical directories as SimpleIndexer.index_repository()
         to ensure cache validation only considers files that were actually indexed.
         Previously scanned entire repo causing 452 extra files → full re-index every commit.
-        
+
         Fix applied: 2025-12-01 - Align with index_directories configuration.
         """
         import fnmatch
-        
+
         files = {}
         repo_root = Path(self.config.repo_root).resolve()
-        
+
         # Use same directory list as index_repository (THE KEY FIX)
         # Previously: scanned entire repo_root with rglob
         # Now: scan only configured index_directories
         if self.config.index_directories:
             scan_dirs = []
             for d in self.config.index_directories:
-                dir_path = repo_root / d.rstrip('/')
+                dir_path = repo_root / d.rstrip("/")
                 if dir_path.exists():
                     scan_dirs.append(dir_path)
         else:
             scan_dirs = [repo_root]
-        
+
         for scan_dir in scan_dirs:
             for pattern in self.config.include_patterns:
                 for file_path in scan_dir.rglob(pattern):
                     if not file_path.is_file():
                         continue
-                    
+
                     try:
                         rel_path = str(file_path.relative_to(repo_root))
                     except ValueError:
                         continue
-                    
+
                     # Check exclude patterns
                     excluded = False
                     for excl in self.config.exclude_patterns:
                         if fnmatch.fnmatch(rel_path, excl):
                             excluded = True
                             break
-                    
+
                     if not excluded:
                         files[rel_path] = file_path
-        
+
         return files
 
     def _load_cached_embeddings(self) -> bool:
@@ -793,9 +799,7 @@ def main():
     """CLI entry point for Phase 1 RAG system."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Transformation Portal RAG System (Phase 1)"
-    )
+    parser = argparse.ArgumentParser(description="Transformation Portal RAG System (Phase 1)")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -803,19 +807,13 @@ def main():
     index_parser = subparsers.add_parser("index", help="Index repository")
     index_parser.add_argument("--repo-root", default=".", help="Repository root")
     index_parser.add_argument("--force", action="store_true", help="Force re-index")
-    index_parser.add_argument(
-        "--no-vector", action="store_true", help="Disable vector search"
-    )
+    index_parser.add_argument("--no-vector", action="store_true", help="Disable vector search")
 
     # Search command
     search_parser = subparsers.add_parser("search", help="Search repository")
     search_parser.add_argument("query", help="Search query")
-    search_parser.add_argument(
-        "--top-k", type=int, default=5, help="Number of results"
-    )
-    search_parser.add_argument(
-        "--type", choices=["code", "doc", "test"], help="Filter by type"
-    )
+    search_parser.add_argument("--top-k", type=int, default=5, help="Number of results")
+    search_parser.add_argument("--type", choices=["code", "doc", "test"], help="Filter by type")
 
     # Stats command
     subparsers.add_parser("stats", help="Show statistics")

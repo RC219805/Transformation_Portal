@@ -105,8 +105,8 @@ CORE WORKFLOW:
 ## 3. Implementation Priority (Ranked 1-4)
 
 ### Priority 1: **Declare Golden Path** (Critical - Week 1)
-**Impact**: Immediate clarity for all users  
-**Effort**: 2-4 hours  
+**Impact**: Immediate clarity for all users
+**Effort**: 2-4 hours
 **Risk**: None - documentation only
 
 **Actions**:
@@ -118,8 +118,8 @@ CORE WORKFLOW:
 ---
 
 ### Priority 2: **Freeze Feature Surface** (Enabling - Week 1-3)
-**Impact**: Prevents further sprawl during consolidation  
-**Effort**: 0 hours (discipline)  
+**Impact**: Prevents further sprawl during consolidation
+**Effort**: 0 hours (discipline)
 **Risk**: Low - prevents rework
 
 **Actions**:
@@ -135,8 +135,8 @@ CORE WORKFLOW:
 ---
 
 ### Priority 3: **Promote Edge Refinement to First-Class** (Validation - Week 2)
-**Impact**: Clarifies experimental → production transition process  
-**Effort**: 4-6 hours  
+**Impact**: Clarifies experimental → production transition process
+**Effort**: 4-6 hours
 **Risk**: Low - feature already implemented
 
 **Actions**:
@@ -152,8 +152,8 @@ CORE WORKFLOW:
 ---
 
 ### Priority 4: **Collapse Training Docs** (Cleanup - Week 2-3)
-**Impact**: Removes training from primary navigation path  
-**Effort**: 1-2 hours  
+**Impact**: Removes training from primary navigation path
+**Effort**: 1-2 hours
 **Risk**: None - moves not deletes
 
 **Actions**:
@@ -223,18 +223,18 @@ CORE WORKFLOW:
 ## 6. Risk Assessment
 
 ### Risk: Alienating Power Users
-**Likelihood**: Low  
-**Impact**: Medium  
+**Likelihood**: Low
+**Impact**: Medium
 **Mitigation**: All features remain accessible through docs/ADVANCED_FEATURES.md index. README includes explicit "Looking for async pipelines? training? context-aware?" with direct links.
 
 ### Risk: Feature Freeze Slows Innovation
-**Likelihood**: Low  
-**Impact**: Low  
+**Likelihood**: Low
+**Impact**: Low
 **Mitigation**: 2-3 week freeze is **narrative consolidation window**, not permanent. Validation, performance, security work continues. Freeze applies to *new feature surfaces*, not refinements.
 
 ### Risk: Wrong Golden Path Choice
-**Likelihood**: Very Low  
-**Impact**: High  
+**Likelihood**: Very Low
+**Impact**: High
 **Validation**: Lux Depth V2 is the only module with:
 - Production Docker deployment
 - Security hardening (CVE mitigation)
@@ -299,20 +299,20 @@ A production path must satisfy:
 6. ✅ Complete user documentation
 7. ✅ Performance validated
 
-**Lux Depth V2**: 7/7  
-**Async Pipeline**: 4/7 (no deployment, observability, user docs)  
-**Unified Luxury**: 3/7 (no deployment, observability, recent commits)  
-**Context-Aware**: 2/7 (experimental, no deployment)  
+**Lux Depth V2**: 7/7
+**Async Pipeline**: 4/7 (no deployment, observability, user docs)
+**Unified Luxury**: 3/7 (no deployment, observability, recent commits)
+**Context-Aware**: 2/7 (experimental, no deployment)
 **Lux Depth V3**: 1/7 (DEFERRED per PR #573)
 
 ---
 
 ## Signature
 
-**Transformation Portal Architect**  
+**Transformation Portal Architect**
 December 20, 2025
 
-**Status**: Ready for implementation  
+**Status**: Ready for implementation
 **Next Action**: Architect to draft new README structure (Day 1-2)
 
 ---

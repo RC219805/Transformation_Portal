@@ -1,5 +1,5 @@
 # Transformation Portal Status Report
-**Date**: 2025-12-15 06:36 UTC  
+**Date**: 2025-12-15 06:36 UTC
 **Session**: PR-W1.1 Water Baseline Infrastructure Complete
 
 ---
@@ -45,7 +45,7 @@ def _flat_surface_penalty(self, ...) -> float:
     """Penalize low edge energy + low specular."""
     edge_energy = sobel_magnitude.mean()
     specular_fraction = (specular_mask > 0.5).mean()
-    
+
     if edge_energy < 0.05 and specular_fraction < 0.15:
         return 0.5  # confidence *= 0.5
     return 1.0
@@ -58,7 +58,7 @@ def _architectural_penalty(self, ...) -> float:
     """Penalize grid-like edge structure."""
     # Sobel orientation histogram (0°/90° bins)
     axis_aligned_fraction = (orientations in [0±15°, 90±15°]).sum() / total_edges
-    
+
     if axis_aligned_fraction > 0.6:  # Strong grid
         return 0.6  # confidence *= 0.6
     return 1.0
@@ -170,6 +170,6 @@ python scripts/prw_water_validation.py \
 
 ---
 
-**Status**: ✅ Ready for PR-W1.2  
-**Blocking Issues**: None  
+**Status**: ✅ Ready for PR-W1.2
+**Blocking Issues**: None
 **Estimated Time**: 2-4 hours (suppressors + fixtures + validation)

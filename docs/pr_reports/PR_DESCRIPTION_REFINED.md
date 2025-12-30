@@ -89,8 +89,8 @@ Structure: 25.0% pass (2/8) ⚠️  Bottleneck identified
 
 ### What This Decision Does NOT Mean
 
-❌ **DA3 is "bad"** → DA3 is state-of-the-art for metric depth on standard benchmarks  
-❌ **DA3 rejected forever** → DEFER pending resources/requirements  
+❌ **DA3 is "bad"** → DA3 is state-of-the-art for metric depth on standard benchmarks
+❌ **DA3 rejected forever** → DEFER pending resources/requirements
 ❌ **Validation failed** → Validation worked perfectly (proved incompatibility)
 
 ### Future Evaluation Criteria
@@ -118,7 +118,7 @@ DA3 reconsidered when **all 5 conditions** met:
 
 ### Next Sprint
 
-**Goal**: Structure scene improvement (25% → 60%+)  
+**Goal**: Structure scene improvement (25% → 60%+)
 **Approach**: Input-size sweep (518px → 1022px)
 
 **Rationale**: Improving structure scene pass rates via input-size optimization is a proven lever within the existing DA2 framework, with predictable ROI and no need for large-scale model adaptation.
@@ -183,7 +183,7 @@ DA3 reconsidered when **all 5 conditions** met:
 
 ---
 
-**Ready to merge**: Production deployment approved  
+**Ready to merge**: Production deployment approved
 **Next action**: Structure scenes input-size sweep (6h, proven ROI)
 
 ---

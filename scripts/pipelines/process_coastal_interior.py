@@ -47,16 +47,16 @@ def analyze_image(img_array):
     contrast_score = (std / max_range) * 100
 
     return {
-        'bit_depth': bit_depth,
-        'mean_brightness': float(mean),
-        'normalized_mean': float(normalized_mean),
-        'std_dev': float(std),
-        'contrast_score': float(contrast_score),
-        'min': float(min_val),
-        'max': float(max_val),
-        'shadow_clipping_pct': float(shadow_clip),
-        'highlight_clipping_pct': float(highlight_clip),
-        'dynamic_range': float(max_val - min_val),
+        "bit_depth": bit_depth,
+        "mean_brightness": float(mean),
+        "normalized_mean": float(normalized_mean),
+        "std_dev": float(std),
+        "contrast_score": float(contrast_score),
+        "min": float(min_val),
+        "max": float(max_val),
+        "shadow_clipping_pct": float(shadow_clip),
+        "highlight_clipping_pct": float(highlight_clip),
+        "dynamic_range": float(max_val - min_val),
     }
 
 
@@ -64,17 +64,17 @@ def conservative_enhance(img, params):
     """Apply conservative enhancements preserving 16-bit quality."""
 
     # Ensure we're working with high bit depth
-    if img.mode not in ('I;16', 'I', 'RGB', 'L'):
-        if img.mode == 'I;16':
+    if img.mode not in ("I;16", "I", "RGB", "L"):
+        if img.mode == "I;16":
             pass  # Already 16-bit
         else:
-            img = img.convert('RGB')
+            img = img.convert("RGB")
 
     # Store original mode for restoration
     _original_mode = img.mode  # noqa: F841
 
     # Work in RGB for processing (Pillow requirement)
-    if img.mode == 'I;16':
+    if img.mode == "I;16":
         # Convert to RGB while preserving dynamic range
         img_array = np.array(img)
         # Normalize to 8-bit for Pillow processing
@@ -82,34 +82,34 @@ def conservative_enhance(img, params):
         img_rgb = Image.fromarray(img_8bit)
         working_16bit = True
     else:
-        img_rgb = img.convert('RGB')
+        img_rgb = img.convert("RGB")
         working_16bit = False
 
     # Apply enhancements
     print(f"  Applying exposure adjustment: {params['exposure']:+.2f}")
-    if params['exposure'] != 0:
+    if params["exposure"] != 0:
         # Manual exposure adjustment via array math
         img_array = np.array(img_rgb, dtype=np.float32)
-        exposure_factor = 2 ** params['exposure']
+        exposure_factor = 2 ** params["exposure"]
         img_array = np.clip(img_array * exposure_factor, 0, 255).astype(np.uint8)
         img_rgb = Image.fromarray(img_array)
 
     print(f"  Applying contrast: {params['contrast']:.2f}x")
     enhancer = ImageEnhance.Contrast(img_rgb)
-    img_rgb = enhancer.enhance(params['contrast'])
+    img_rgb = enhancer.enhance(params["contrast"])
 
     print(f"  Applying saturation: {params['saturation']:.2f}x")
     enhancer = ImageEnhance.Color(img_rgb)
-    img_rgb = enhancer.enhance(params['saturation'])
+    img_rgb = enhancer.enhance(params["saturation"])
 
-    if params.get('clarity', 0) > 0:
+    if params.get("clarity", 0) > 0:
         print(f"  Applying clarity: {params['clarity']:.2f}")
         # Unsharp mask for clarity
         radius = 2.0
-        amount = params['clarity']
+        amount = params["clarity"]
         img_rgb = img_rgb.filter(ImageFilter.UnsharpMask(radius=radius, percent=int(amount * 100), threshold=3))
 
-    if params.get('denoise', 0) > 0:
+    if params.get("denoise", 0) > 0:
         print(f"  Applying denoising: strength {params['denoise']}")
         # Gentle median filter
         img_rgb = img_rgb.filter(ImageFilter.MedianFilter(size=3))
@@ -120,7 +120,7 @@ def conservative_enhance(img, params):
         img_array = np.array(img_rgb, dtype=np.float32)
         img_16bit = (img_array / 255.0 * 65535).astype(np.uint16)
         # Note: PIL doesn't have great 16-bit support, so we'll save via numpy
-        return Image.fromarray(img_16bit, mode='I;16'), img_rgb
+        return Image.fromarray(img_16bit, mode="I;16"), img_rgb
     else:
         return img_rgb, img_rgb
 
@@ -129,17 +129,17 @@ def create_comparison(img1, img2, labels, output_path):
     """Create side-by-side comparison image."""
 
     # Work with 8-bit RGB for display
-    if img1.mode == 'I;16':
+    if img1.mode == "I;16":
         arr1 = np.array(img1)
         img1_display = Image.fromarray(((arr1 / 65535.0) * 255).astype(np.uint8))
     else:
-        img1_display = img1.convert('RGB')
+        img1_display = img1.convert("RGB")
 
-    if img2.mode == 'I;16':
+    if img2.mode == "I;16":
         arr2 = np.array(img2)
         img2_display = Image.fromarray(((arr2 / 65535.0) * 255).astype(np.uint8))
     else:
-        img2_display = img2.convert('RGB')
+        img2_display = img2.convert("RGB")
 
     # Resize for comparison if too large
     max_width = 1920
@@ -152,7 +152,7 @@ def create_comparison(img1, img2, labels, output_path):
     # Create comparison canvas
     width = img1_display.width * 2 + 60  # Gap between images
     height = img1_display.height + 100  # Space for labels
-    comparison = Image.new('RGB', (width, height), color=(30, 30, 30))
+    comparison = Image.new("RGB", (width, height), color=(30, 30, 30))
 
     # Paste images
     comparison.paste(img1_display, (10, 60))
@@ -219,36 +219,36 @@ def main():
 
     # Conservative parameters based on analysis
     params = {
-        'exposure': 0.0,  # Start neutral
-        'contrast': 1.08,
-        'saturation': 1.05,
-        'clarity': 0.15,
-        'denoise': 0,
+        "exposure": 0.0,  # Start neutral
+        "contrast": 1.08,
+        "saturation": 1.05,
+        "clarity": 0.15,
+        "denoise": 0,
     }
 
     # Adjust based on brightness
-    if original_metrics['normalized_mean'] < 45:
-        params['exposure'] = 0.15
+    if original_metrics["normalized_mean"] < 45:
+        params["exposure"] = 0.15
         print(f"   Image appears slightly dark (brightness {original_metrics['normalized_mean']:.1f})")
         print("   Increasing exposure by +0.15 stops")
-    elif original_metrics['normalized_mean'] > 55:
-        params['exposure'] = -0.10
+    elif original_metrics["normalized_mean"] > 55:
+        params["exposure"] = -0.10
         print(f"   Image appears slightly bright (brightness {original_metrics['normalized_mean']:.1f})")
         print("   Decreasing exposure by -0.10 stops")
     else:
         print(f"   Brightness optimal ({original_metrics['normalized_mean']:.1f}), no exposure adjustment")
 
     # Adjust contrast if needed
-    if original_metrics['contrast_score'] < 20:
-        params['contrast'] = 1.12
+    if original_metrics["contrast_score"] < 20:
+        params["contrast"] = 1.12
         print(f"   Low contrast detected ({original_metrics['contrast_score']:.1f}), boosting to 1.12x")
-    elif original_metrics['contrast_score'] > 35:
-        params['contrast'] = 1.05
+    elif original_metrics["contrast_score"] > 35:
+        params["contrast"] = 1.05
         print(f"   High contrast detected ({original_metrics['contrast_score']:.1f}), using gentle 1.05x")
 
     print("\n   FINAL PARAMETERS:")
     for key, value in params.items():
-        if key == 'exposure':
+        if key == "exposure":
             print(f"     {key}: {value:+.2f} stops")
         else:
             print(f"     {key}: {value}")
@@ -261,12 +261,12 @@ def main():
     print("\n5. SAVING OUTPUT")
     print(f"   Output: {output_path}")
 
-    if enhanced_img.mode == 'I;16':
+    if enhanced_img.mode == "I;16":
         # Save 16-bit TIFF with compression
-        enhanced_img.save(output_path, compression='tiff_adobe_deflate')
+        enhanced_img.save(output_path, compression="tiff_adobe_deflate")
         print("   Format: 16-bit TIFF with lossless compression")
     else:
-        enhanced_img.save(output_path, compression='tiff_adobe_deflate')
+        enhanced_img.save(output_path, compression="tiff_adobe_deflate")
         print(f"   Format: {enhanced_img.mode} TIFF with lossless compression")
 
     # Analyze enhanced
@@ -274,28 +274,37 @@ def main():
     enhanced_array = np.array(enhanced_img)
     enhanced_metrics = analyze_image(enhanced_array)
 
-    print(f"   Mean Brightness: {enhanced_metrics['normalized_mean']:.1f}/100 "
-          f"(Δ {enhanced_metrics['normalized_mean'] - original_metrics['normalized_mean']:+.1f})")
-    print(f"   Contrast Score: {enhanced_metrics['contrast_score']:.1f}/100 "
-          f"(Δ {enhanced_metrics['contrast_score'] - original_metrics['contrast_score']:+.1f})")
-    print(f"   Shadow Clipping: {enhanced_metrics['shadow_clipping_pct']:.3f}% "
-          f"(Δ {enhanced_metrics['shadow_clipping_pct'] - original_metrics['shadow_clipping_pct']:+.3f}%)")
-    print(f"   Highlight Clipping: {enhanced_metrics['highlight_clipping_pct']:.3f}% "
-          f"(Δ {enhanced_metrics['highlight_clipping_pct'] - original_metrics['highlight_clipping_pct']:+.3f}%)")
+    print(
+        f"   Mean Brightness: {enhanced_metrics['normalized_mean']:.1f}/100 "
+        f"(Δ {enhanced_metrics['normalized_mean'] - original_metrics['normalized_mean']:+.1f})"
+    )
+    print(
+        f"   Contrast Score: {enhanced_metrics['contrast_score']:.1f}/100 "
+        f"(Δ {enhanced_metrics['contrast_score'] - original_metrics['contrast_score']:+.1f})"
+    )
+    print(
+        f"   Shadow Clipping: {enhanced_metrics['shadow_clipping_pct']:.3f}% "
+        f"(Δ {enhanced_metrics['shadow_clipping_pct'] - original_metrics['shadow_clipping_pct']:+.3f}%)"
+    )
+    print(
+        f"   Highlight Clipping: {enhanced_metrics['highlight_clipping_pct']:.3f}% "
+        f"(Δ {enhanced_metrics['highlight_clipping_pct'] - original_metrics['highlight_clipping_pct']:+.3f}%)"
+    )
 
     # Calculate brightness change percentage
-    brightness_change = ((enhanced_metrics['normalized_mean'] - original_metrics['normalized_mean'])
-                         / original_metrics['normalized_mean'] * 100)
+    brightness_change = (
+        (enhanced_metrics["normalized_mean"] - original_metrics["normalized_mean"]) / original_metrics["normalized_mean"] * 100
+    )
     print(f"   Brightness Change: {brightness_change:+.2f}%")
 
     # Quality verification
     print("\n7. QUALITY VERIFICATION")
     checks = {
-        '16-bit preservation': enhanced_metrics['bit_depth'] >= original_metrics['bit_depth'],
-        'Resolution maintained': enhanced_img.size == img.size,
-        'No excessive shadow clipping': enhanced_metrics['shadow_clipping_pct'] < 1.0,
-        'No excessive highlight clipping': enhanced_metrics['highlight_clipping_pct'] < 1.0,
-        'Brightness change < 5%': abs(brightness_change) < 5.0,
+        "16-bit preservation": enhanced_metrics["bit_depth"] >= original_metrics["bit_depth"],
+        "Resolution maintained": enhanced_img.size == img.size,
+        "No excessive shadow clipping": enhanced_metrics["shadow_clipping_pct"] < 1.0,
+        "No excessive highlight clipping": enhanced_metrics["highlight_clipping_pct"] < 1.0,
+        "Brightness change < 5%": abs(brightness_change) < 5.0,
     }
 
     for check, passed in checks.items():
@@ -304,27 +313,22 @@ def main():
 
     # Create comparison
     print("\n8. GENERATING COMPARISON")
-    create_comparison(
-        img,
-        enhanced_img,
-        ["ORIGINAL", "ENHANCED"],
-        comparison_path
-    )
+    create_comparison(img, enhanced_img, ["ORIGINAL", "ENHANCED"], comparison_path)
 
     # Save metrics
     print("\n9. SAVING METRICS")
     metrics = {
-        'timestamp': timestamp,
-        'input_file': str(input_path),
-        'output_file': str(output_path),
-        'parameters': params,
-        'original_metrics': original_metrics,
-        'enhanced_metrics': enhanced_metrics,
-        'quality_checks': checks,
-        'brightness_change_pct': brightness_change,
+        "timestamp": timestamp,
+        "input_file": str(input_path),
+        "output_file": str(output_path),
+        "parameters": params,
+        "original_metrics": original_metrics,
+        "enhanced_metrics": enhanced_metrics,
+        "quality_checks": checks,
+        "brightness_change_pct": brightness_change,
     }
 
-    with open(metrics_path, 'w') as f:
+    with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=2)
     print(f"   Metrics: {metrics_path}")
 

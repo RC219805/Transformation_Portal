@@ -1,7 +1,7 @@
 # BasicSR Dependency Update - Summary
 
-**Date:** November 13, 2025  
-**Branch:** `basicsr-explicit`  
+**Date:** November 13, 2025
+**Branch:** `basicsr-explicit`
 **Base Branch:** `origin/copilot/fine-tune-dependency-management`
 
 ---
@@ -38,17 +38,17 @@ Added **explicit BasicSR dependency** to the layered requirements system to repl
 - Could lead to version conflicts or unexpected updates
 - Harder to debug dependency issues
 
-### Solution  
+### Solution
 - **Explicit declaration** in `requirements/ml.in`
 - Version constraint: `>=1.4.2,<2`
 - Compiled to pinned version: `basicsr==1.4.2`
 
 ### Benefits
-✅ **Version Control** - Explicit version constraints prevent surprises  
-✅ **Dependency Clarity** - Clear relationship between BasicSR and Real-ESRGAN  
-✅ **Better Resolution** - pip-compile can optimize dependency tree  
-✅ **Easier Debugging** - Issues traced to specific versions  
-✅ **Documentation** - Dependencies are self-documenting  
+✅ **Version Control** - Explicit version constraints prevent surprises
+✅ **Dependency Clarity** - Clear relationship between BasicSR and Real-ESRGAN
+✅ **Better Resolution** - pip-compile can optimize dependency tree
+✅ **Easier Debugging** - Issues traced to specific versions
+✅ **Documentation** - Dependencies are self-documenting
 
 ---
 
@@ -59,7 +59,7 @@ Added **explicit BasicSR dependency** to the layered requirements system to repl
 ```
 basicsr==1.4.2
 ├── addict (via basicsr)
-├── future (via basicsr)  
+├── future (via basicsr)
 ├── lmdb (via basicsr)
 ├── opencv-python (via basicsr, realesrgan, others)
 ├── pillow (via basicsr, others)
@@ -153,7 +153,7 @@ grep basicsr requirements/ml.txt
 
 ## Git Commit
 
-**Commit:** `fe592c5`  
+**Commit:** `fe592c5`
 **Branch:** `basicsr-explicit`
 
 **Commit Message:**

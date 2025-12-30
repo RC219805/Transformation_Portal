@@ -1,7 +1,7 @@
 # Water Detection Holdout Set
 
-**Version**: v1  
-**Created**: 2025-12-16  
+**Version**: v1
+**Created**: 2025-12-16
 **Purpose**: Prevent overfitting to synthetic CI fixtures
 
 ## Overview
@@ -61,7 +61,7 @@ jq '.results[] | select(.detected == true) | .suppressor_telemetry' holdout_vali
 - ✅ **Holdout Set**: ≤5% false trigger rate (at most 1 trigger on 15-20 images)
 - ✅ **Telemetry**: All triggers must have explainable suppressor telemetry
 
-**Justification**: 
+**Justification**:
 - CI fixtures provide synthetic baseline (zero regressions allowed)
 - Holdout provides real-world validation (5% tolerance for edge cases)
 - Telemetry ensures explainability (no mystery suppressions)
@@ -78,33 +78,33 @@ Any of the following **rejects** baseline v2+ promotion:
 ## Image Categories
 
 ### 1. Architectural Glass (3-5 images)
-**Difficulty**: Hard  
-**Examples**: Modern façades, reflective windows, curtain walls  
+**Difficulty**: Hard
+**Examples**: Modern façades, reflective windows, curtain walls
 **Confuser**: Blue tint, edge alignment, specular highlights
 
 ### 2. Blue Painted Walls (2-3 images)
-**Difficulty**: Medium  
-**Examples**: Flat surfaces, exterior/interior  
+**Difficulty**: Medium
+**Examples**: Flat surfaces, exterior/interior
 **Confuser**: Saturation, hue similarity
 
 ### 3. Reflective Stone/Concrete (2-3 images)
-**Difficulty**: Medium-Hard  
-**Examples**: Polished surfaces, wet pavement  
+**Difficulty**: Medium-Hard
+**Examples**: Polished surfaces, wet pavement
 **Confuser**: Specular highlights, transient water-like appearance
 
 ### 4. Skylight Reflections (1-2 images)
-**Difficulty**: Hard  
-**Examples**: Glass roof, interior reflections  
+**Difficulty**: Hard
+**Examples**: Glass roof, interior reflections
 **Confuser**: Blue hue, brightness, diffused light
 
 ### 5. Pool Tiles (2-3 images)
-**Difficulty**: Hard  
-**Examples**: Close-up grid patterns, no water visible  
+**Difficulty**: Hard
+**Examples**: Close-up grid patterns, no water visible
 **Confuser**: Grid alignment, ceramic blue color
 
 ### 6. Ocean Horizon Glare (1-2 images)
-**Difficulty**: Medium  
-**Examples**: Sun reflection, bright highlights  
+**Difficulty**: Medium
+**Examples**: Sun reflection, bright highlights
 **Confuser**: Brightness saturation, overexposure artifacts
 
 ## Governance
@@ -180,5 +180,5 @@ When modifying water detection thresholds:
 
 ---
 
-**Status**: Infrastructure Complete (2025-12-16)  
+**Status**: Infrastructure Complete (2025-12-16)
 **Next**: Acquire real-world images, generate SHA256 hashes, run first validation

@@ -102,7 +102,7 @@ class QualityFixer:
             return False
 
         try:
-            content = path.read_bytes().decode('utf-8')
+            content = path.read_bytes().decode("utf-8")
         except (UnicodeDecodeError, PermissionError, OSError) as e:
             self.log(f"  ✗ Skipping (cannot read): {path} ({e})", "warning")
             return False
@@ -124,17 +124,17 @@ class QualityFixer:
         # Note: This normalizes all line endings in the file to maintain consistency.
         # The implementation normalizes to the first non-LF ending found (CRLF or CR),
         # falling back to LF only if no other endings are detected.
-        line_ending = '\n'  # default to Unix-style
+        line_ending = "\n"  # default to Unix-style
         for line in lines:
-            if line.endswith('\r\n'):
-                line_ending = '\r\n'
+            if line.endswith("\r\n"):
+                line_ending = "\r\n"
                 break
-            elif line.endswith('\r'):
-                line_ending = '\r'
+            elif line.endswith("\r"):
+                line_ending = "\r"
                 break
 
         # Check if file ends with a newline
-        has_final_newline = lines and lines[-1].endswith(('\n', '\r'))
+        has_final_newline = lines and lines[-1].endswith(("\n", "\r"))
 
         # Strip trailing whitespace from all lines
         fixed_lines = [line.rstrip(" \t\r\n") for line in lines]
@@ -145,7 +145,7 @@ class QualityFixer:
         else:
             content_fixed = line_ending.join(fixed_lines)
         try:
-            path.write_bytes(content_fixed.encode('utf-8'))
+            path.write_bytes(content_fixed.encode("utf-8"))
         except (PermissionError, OSError) as e:
             self.log(f"  ✗ Failed to write file (read-only?): {path} ({e})", "error")
             return False
@@ -202,7 +202,7 @@ class QualityFixer:
                         imports.add(f"import {alias.name}")
             elif isinstance(node, ast.ImportFrom):
                 # Handle relative imports: node.level gives number of leading dots
-                dots = '.' * node.level if hasattr(node, 'level') and node.level else ''
+                dots = "." * node.level if hasattr(node, "level") and node.level else ""
                 module = node.module or ""
                 from_part = f"{dots}{module}" if module else dots
                 for alias in node.names:

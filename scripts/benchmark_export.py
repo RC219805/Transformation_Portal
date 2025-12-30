@@ -18,6 +18,7 @@ Modes:
     tiled_atomic    - tiled + use_atomic_image_writes=True
     full_optimized  - tiled + atomic + tiered storage
 """
+
 from __future__ import annotations
 
 import argparse
@@ -39,25 +40,25 @@ from transformation_portal.core.storage.export_manager import ExportConfig
 def get_mode_config(mode: str, output_dir: Path, scratch_dir: Path | None = None) -> ExportConfig:
     """
     Build ExportConfig for the specified mode.
-    
+
     Args:
         mode: One of "baseline", "tiled", "tiled_atomic", "full_optimized"
         output_dir: Output directory
         scratch_dir: Scratch directory (for tiered storage)
-    
+
     Returns:
         ExportConfig with appropriate flags
     """
     if mode == "baseline":
         return ExportConfig(output_dir=output_dir)
-    
+
     elif mode == "tiled":
         return ExportConfig(
             output_dir=output_dir,
             tiff_tile_size=512,
             tiff_compression="lzw",
         )
-    
+
     elif mode == "tiled_atomic":
         return ExportConfig(
             output_dir=output_dir,
@@ -66,7 +67,7 @@ def get_mode_config(mode: str, output_dir: Path, scratch_dir: Path | None = None
             use_atomic_image_writes=True,
             use_atomic_report_writes=True,
         )
-    
+
     elif mode == "full_optimized":
         if scratch_dir is None:
             scratch_dir = output_dir / ".scratch"
@@ -79,7 +80,7 @@ def get_mode_config(mode: str, output_dir: Path, scratch_dir: Path | None = None
             enable_tiered_storage=True,
             scratch_dir=scratch_dir,
         )
-    
+
     else:
         raise ValueError(f"Unknown mode: {mode}")
 
@@ -95,6 +96,7 @@ def get_image_dimensions(path: Path) -> tuple[int, int]:
     """Get image dimensions from file."""
     try:
         from PIL import Image
+
         with Image.open(path) as img:
             return img.size  # (width, height)
     except Exception:
@@ -109,21 +111,21 @@ def benchmark_single_run(
 ) -> Dict[str, Any]:
     """
     Run benchmark for a single image with specified mode.
-    
+
     Returns:
         Dictionary with timing, file size, memory, throughput metrics
     """
     # Get baseline memory
     process = psutil.Process()
     baseline_rss_mb = process.memory_info().rss / (1024 * 1024)
-    
+
     # Get input info
     width, height = get_image_dimensions(input_path)
     input_size_mp = (width * height) / 1_000_000 if width > 0 else 0
-    
+
     # Build config
     export_config = get_mode_config(mode, output_dir, scratch_dir)
-    
+
     # TODO: Wire ExportConfig into PipelineConfig
     # For now, use default PipelineConfig and note that export optimizations
     # will need to be wired through the pipeline
@@ -131,19 +133,19 @@ def benchmark_single_run(
         output_dir=str(output_dir),
         write_outputs=True,
     )
-    
+
     # Create pipeline
     pipeline = LuxPipelineV2(pipeline_config)
-    
+
     # Run processing
     start_time = time.time()
     result = pipeline.process_one(input_path)
     end_time = time.time()
-    
+
     # Get peak memory
     peak_rss_mb = process.memory_info().rss / (1024 * 1024)
     delta_rss_mb = peak_rss_mb - baseline_rss_mb
-    
+
     # Extract timing from result
     timing_stages = result.get("timing_stages_s", {})
     export_master = timing_stages.get("export_master", 0.0)
@@ -152,21 +154,21 @@ def benchmark_single_run(
     export_marketing = timing_stages.get("export_marketing", 0.0)
     export_report = timing_stages.get("export_report", 0.0)
     total_export = export_master + export_upscaled + export_preview + export_marketing + export_report
-    
+
     # Get file sizes (approximate paths)
     stem = input_path.stem
     master_path = output_dir / f"{stem}_master16.tif"
     upscaled_path = output_dir / f"{stem}_upscaled16.tif"
-    
+
     master_size_mb = get_file_size_mb(master_path)
     upscaled_size_mb = get_file_size_mb(upscaled_path)
     total_size_mb = master_size_mb + upscaled_size_mb
-    
+
     # Calculate throughput
     total_time = end_time - start_time
     images_per_hour = 3600 / total_time if total_time > 0 else 0
     mb_per_second = total_size_mb / total_time if total_time > 0 else 0
-    
+
     return {
         "input": {
             "path": str(input_path),
@@ -208,34 +210,34 @@ def run_benchmark(
 ) -> Dict[str, Any]:
     """
     Run benchmark multiple times and aggregate results.
-    
+
     Args:
         input_path: Input image path
         output_dir: Output directory
         mode: Benchmark mode
         runs: Number of runs (for averaging)
         scratch_dir: Scratch directory (optional)
-    
+
     Returns:
         Dictionary with aggregated results
     """
     print(f"Running benchmark: mode={mode}, runs={runs}")
     print(f"Input: {input_path}")
     print(f"Output: {output_dir}")
-    
+
     results = []
     for i in range(runs):
-        print(f"\nRun {i+1}/{runs}...")
-        run_output = output_dir / f"run_{i+1}"
+        print(f"\nRun {i + 1}/{runs}...")
+        run_output = output_dir / f"run_{i + 1}"
         result = benchmark_single_run(input_path, run_output, mode, scratch_dir)
         results.append(result)
-        
+
         # Print timing
         timing = result["timing"]
         print(f"  Export time: {timing['total_export']:.2f}s")
         print(f"  Total time: {timing['total_pipeline']:.2f}s")
         print(f"  File size: {result['file_size']['total_mb']:.1f} MB")
-    
+
     # Aggregate results (average)
     def avg(key_path: List[str]) -> float:
         """Compute true arithmetic mean across all runs."""
@@ -252,7 +254,7 @@ def run_benchmark(
         if not values:
             return 0.0
         return sum(values) / len(values)
-    
+
     # Convert config to JSON-serializable dict
     config = get_mode_config(mode, output_dir, scratch_dir)
     config_dict = {
@@ -264,7 +266,7 @@ def run_benchmark(
         "use_atomic_image_writes": config.use_atomic_image_writes,
         "use_atomic_report_writes": config.use_atomic_report_writes,
     }
-    
+
     aggregated = {
         "test_id": f"{mode}_{input_path.stem}",
         "mode": mode,
@@ -288,7 +290,7 @@ def run_benchmark(
         },
         "all_runs": results,
     }
-    
+
     return aggregated
 
 
@@ -304,17 +306,17 @@ def main():
     )
     parser.add_argument("--runs", type=int, default=3, help="Number of runs for averaging")
     parser.add_argument("--scratch", type=Path, help="Scratch directory (for full_optimized mode)")
-    
+
     args = parser.parse_args()
-    
+
     # Validate input
     if not args.input.exists():
         print(f"Error: Input file not found: {args.input}")
         sys.exit(1)
-    
+
     # Create output directory
     args.output.mkdir(parents=True, exist_ok=True)
-    
+
     # Run benchmark
     results = run_benchmark(
         input_path=args.input,
@@ -323,12 +325,12 @@ def main():
         runs=args.runs,
         scratch_dir=args.scratch,
     )
-    
+
     # Save results
     results_path = args.output / "results.json"
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
-    
+
     print(f"\n✅ Benchmark complete!")
     print(f"Results saved to: {results_path}")
     print(f"\nSummary:")

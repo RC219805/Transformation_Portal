@@ -19,15 +19,15 @@ scrape_configs:
       - targets: ['lux-depth-service:8088']
     metrics_path: '/metrics'
     scheme: 'http'
-    
+
     # Optional: Bearer token authentication
     # bearer_token: '${METRICS_TOKEN}'
-    
+
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
         replacement: 'lux-depth-v2'
-  
+
   # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:

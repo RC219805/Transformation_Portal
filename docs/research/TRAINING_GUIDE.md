@@ -397,6 +397,6 @@ After training on 750 Picacho data:
 
 ---
 
-**Last Updated**: 2025-11-19  
-**Version**: 1.0.0  
+**Last Updated**: 2025-11-19
+**Version**: 1.0.0
 **Project**: 750 Picacho Lane, Montecito, CA

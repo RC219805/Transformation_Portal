@@ -52,9 +52,7 @@ def _require_module(module_name: str):
     """Return the imported module, raising a helpful error when missing."""
 
     if importlib.util.find_spec(module_name) is None:
-        raise ModuleNotFoundError(
-            f"The optional dependency '{module_name}' is required to convert that asset."
-        )
+        raise ModuleNotFoundError(f"The optional dependency '{module_name}' is required to convert that asset.")
     return importlib.import_module(module_name)
 
 
@@ -70,10 +68,7 @@ def _convert_exr_to_jpg(exr_path: Path, jpg_path: Path) -> None:
     height = data_window.max.y - data_window.min.y + 1
 
     pixel_type = imath.PixelType(imath.PixelType.FLOAT)
-    channels = [
-        np.frombuffer(exr_file.channel(channel, pixel_type), dtype=np.float32)
-        for channel in ("R", "G", "B")
-    ]
+    channels = [np.frombuffer(exr_file.channel(channel, pixel_type), dtype=np.float32) for channel in ("R", "G", "B")]
     exr_file.close()
 
     rgb = [channel.reshape(height, width) for channel in channels]

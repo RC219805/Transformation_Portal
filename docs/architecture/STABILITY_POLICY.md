@@ -1,7 +1,7 @@
 # Stability Policy
 
-**Version**: 1.0  
-**Effective Date**: December 23, 2025  
+**Version**: 1.0
+**Effective Date**: December 23, 2025
 **Review Cycle**: Quarterly
 
 ---
@@ -110,9 +110,9 @@ This document defines the long-term stability guarantees for Transformation Port
 
 ### Security Fixes
 
-**Priority**: Critical  
-**Timeline**: 48 hours for critical CVEs, 1 week for high  
-**Allowed in**: All tiers  
+**Priority**: Critical
+**Timeline**: 48 hours for critical CVEs, 1 week for high
+**Allowed in**: All tiers
 **Process**: Expedited review, can bypass feature freeze
 
 **Examples**:
@@ -122,9 +122,9 @@ This document defines the long-term stability guarantees for Transformation Port
 
 ### Bug Fixes
 
-**Priority**: High (if production-blocking), Medium (otherwise)  
-**Timeline**: 1 week (blocking), 2-4 weeks (non-blocking)  
-**Allowed in**: All tiers  
+**Priority**: High (if production-blocking), Medium (otherwise)
+**Timeline**: 1 week (blocking), 2-4 weeks (non-blocking)
+**Allowed in**: All tiers
 **Process**: Standard review, requires test coverage
 
 **Examples**:
@@ -135,9 +135,9 @@ This document defines the long-term stability guarantees for Transformation Port
 
 ### Performance Optimizations
 
-**Priority**: Medium  
-**Timeline**: 2-4 weeks  
-**Allowed in**: All tiers  
+**Priority**: Medium
+**Timeline**: 2-4 weeks
+**Allowed in**: All tiers
 **Process**: Benchmark before/after, no behavior changes
 
 **Examples**:
@@ -153,9 +153,9 @@ This document defines the long-term stability guarantees for Transformation Port
 
 ### Feature Additions
 
-**Priority**: Low (Tier 1), Medium (Tier 2), N/A (Tier 3)  
-**Timeline**: Blocked (Tier 1), 2-6 weeks (Tier 2)  
-**Allowed in**: Tier 2, Tier 3 only (Tier 1 frozen)  
+**Priority**: Low (Tier 1), Medium (Tier 2), N/A (Tier 3)
+**Timeline**: Blocked (Tier 1), 2-6 weeks (Tier 2)
+**Allowed in**: Tier 2, Tier 3 only (Tier 1 frozen)
 **Process**: Design review, test coverage, documentation
 
 **Examples**:
@@ -165,9 +165,9 @@ This document defines the long-term stability guarantees for Transformation Port
 
 ### Breaking Changes
 
-**Priority**: Low  
-**Timeline**: 4-8 weeks notice  
-**Allowed in**: Tier 2, Tier 3 only (never Tier 1)  
+**Priority**: Low
+**Timeline**: 4-8 weeks notice
+**Allowed in**: Tier 2, Tier 3 only (never Tier 1)
 **Process**: Migration guide required, announced in advance
 
 **Examples**:

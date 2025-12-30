@@ -1,7 +1,7 @@
 # Auto-Preset v2 Merge Verification Report
 
-**Date**: 2025-12-14  
-**Branch**: feature/auto-preset-v2  
+**Date**: 2025-12-14
+**Branch**: feature/auto-preset-v2
 **Status**: ✅ READY TO MERGE
 
 ---
@@ -15,8 +15,8 @@ Auto-Preset v2 implementation is **complete, tested, and safe to merge**. All th
 ## Critical Checks (All Passing)
 
 ### ✅ Check 1: Canary Hard-Gate
-**Test**: Auto-preset WITHOUT `--allow-canary` must never select canary presets  
-**Result**: PASS  
+**Test**: Auto-preset WITHOUT `--allow-canary` must never select canary presets
+**Result**: PASS
 - Selected preset: `INTERIOR_LUXURY_APEX_QUALITY` (non-canary)
 - Reason: "Fallback preset for interior + apex (confidence: 0.14 < 0.5)"
 - Canary blocked: ✅
@@ -26,7 +26,7 @@ Auto-Preset v2 implementation is **complete, tested, and safe to merge**. All th
 ---
 
 ### ✅ Check 2: Intent → Tier Mapping
-**Test**: Verify intent correctly maps to quality tiers  
+**Test**: Verify intent correctly maps to quality tiers
 **Results**:
 - `HERO` intent → `INTERIOR_LUXURY_APEX_QUALITY` ✅
 - `PREVIEW` intent → `INTERIOR_LUXURY` (standard) ✅
@@ -37,8 +37,8 @@ Auto-Preset v2 implementation is **complete, tested, and safe to merge**. All th
 ---
 
 ### ✅ Check 3: Offline Safety
-**Test**: No network/model downloads during preset selection  
-**Result**: PASS  
+**Test**: No network/model downloads during preset selection
+**Result**: PASS
 - No HuggingFace Hub calls
 - No "downloading CLIP model" messages
 - No EfficientSAM auto-download attempts
@@ -50,10 +50,10 @@ Auto-Preset v2 implementation is **complete, tested, and safe to merge**. All th
 
 ## Test Suite Status
 
-**Total tests**: 41  
-**Passed**: 41  
-**Failed**: 0  
-**Duration**: 1.91s  
+**Total tests**: 41
+**Passed**: 41
+**Failed**: 0
+**Duration**: 1.91s
 **Coverage**: Scene classification, preset mapping, fallback behavior, canary blocking, auto-tier with complexity
 
 ### Test Breakdown
@@ -73,19 +73,19 @@ Auto-Preset v2 implementation is **complete, tested, and safe to merge**. All th
 ## Functional Verification
 
 ### Intent-Based Selection
-✅ `--intent preview` → standard tier  
-✅ `--intent client` → max tier (or apex if complex)  
-✅ `--intent hero` → apex tier  
+✅ `--intent preview` → standard tier
+✅ `--intent client` → max tier (or apex if complex)
+✅ `--intent hero` → apex tier
 
 ### Complexity Scoring
-✅ High complexity (>0.6) + client intent → upgrades to APEX  
-✅ Low complexity + client intent → stays at MAX  
-✅ Large megapixels (>50MP) → upgrades to APEX  
+✅ High complexity (>0.6) + client intent → upgrades to APEX
+✅ Low complexity + client intent → stays at MAX
+✅ Large megapixels (>50MP) → upgrades to APEX
 
 ### Canary Protection
-✅ Default behavior blocks canary presets  
-✅ `--allow-canary` required for canary selection  
-✅ Non-canary equivalents returned when blocked  
+✅ Default behavior blocks canary presets
+✅ `--allow-canary` required for canary selection
+✅ Non-canary equivalents returned when blocked
 
 ---
 
@@ -144,6 +144,6 @@ tests/test_complexity_scorer.py                     | 223 ++++++++
 
 ---
 
-**Verified by**: Auto-Preset v2 verification suite  
-**Date**: 2025-12-14  
+**Verified by**: Auto-Preset v2 verification suite
+**Date**: 2025-12-14
 **Conclusion**: Ready to merge to `main`

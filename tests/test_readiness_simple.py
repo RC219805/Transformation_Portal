@@ -11,10 +11,11 @@ from pathlib import Path
 from PIL import Image
 
 # Add scripts to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 try:
     import check_image_processing_readiness as readiness
+
     READINESS_AVAILABLE = True
 except ImportError:
     READINESS_AVAILABLE = False
@@ -22,6 +23,7 @@ except ImportError:
 
 try:
     import simple_image_processor as processor
+
     PROCESSOR_AVAILABLE = True
 except ImportError:
     PROCESSOR_AVAILABLE = False
@@ -38,30 +40,30 @@ def test_readiness_check():
 
     # Test package checking
     print("  Testing package check...")
-    installed, version = readiness.check_package('sys')
+    installed, version = readiness.check_package("sys")
     assert installed is True, "sys package should be installed"
     print("  ✓ Package check works")
 
     # Test disk space
     print("  Testing disk space check...")
     disk = readiness.check_disk_space()
-    if 'error' not in disk:
-        assert 'total_gb' in disk
-        assert disk['total_gb'] > 0
+    if "error" not in disk:
+        assert "total_gb" in disk
+        assert disk["total_gb"] > 0
     print("  ✓ Disk space check works")
 
     # Test capabilities assessment
     print("  Testing capability assessment...")
     capabilities = readiness.assess_capabilities()
-    assert 'core_packages' in capabilities
-    assert 'minimal_ready' in capabilities
+    assert "core_packages" in capabilities
+    assert "minimal_ready" in capabilities
     print("  ✓ Capability assessment works")
 
     # Test sample image checking
     print("  Testing sample image check...")
     images = readiness.check_sample_images()
-    assert 'sample_count' in images
-    assert images['sample_count'] >= 0
+    assert "sample_count" in images
+    assert images["sample_count"] >= 0
     print("  ✓ Sample image check works")
 
     print("✓ All readiness check tests passed!")
@@ -78,7 +80,7 @@ def test_simple_processor():
 
     # Test brightness adjustment
     print("  Testing brightness adjustment...")
-    img = Image.new('RGB', (100, 100), color=(128, 128, 128))
+    img = Image.new("RGB", (100, 100), color=(128, 128, 128))
     result = processor.adjust_brightness(img, factor=1.5)
     assert result is not None
     assert result.size == img.size
@@ -98,7 +100,7 @@ def test_simple_processor():
 
     # Test resize with aspect
     print("  Testing resize (maintain aspect)...")
-    large_img = Image.new('RGB', (1920, 1080), color=(200, 200, 200))
+    large_img = Image.new("RGB", (1920, 1080), color=(200, 200, 200))
     result = processor.resize_image(large_img, (1280, 720), maintain_aspect=True)
     assert result is not None
     assert result.size[0] <= 1280
@@ -118,20 +120,14 @@ def test_simple_processor():
         tmpdir = Path(tmpdir)
 
         # Create test image
-        input_path = tmpdir / 'test_input.jpg'
-        test_img = Image.new('RGB', (800, 600), color=(128, 128, 128))
+        input_path = tmpdir / "test_input.jpg"
+        test_img = Image.new("RGB", (800, 600), color=(128, 128, 128))
         test_img.save(input_path, quality=95)
 
         # Process it
-        output_path = tmpdir / 'test_output.jpg'
+        output_path = tmpdir / "test_output.jpg"
         success = processor.process_image(
-            input_path,
-            output_path,
-            brightness=1.1,
-            contrast=1.05,
-            saturation=1.0,
-            quality=90,
-            verbose=False
+            input_path, output_path, brightness=1.1, contrast=1.05, saturation=1.0, quality=90, verbose=False
         )
 
         assert success is True, "Processing should succeed"
@@ -149,17 +145,17 @@ def test_simple_processor():
         tmpdir = Path(tmpdir)
 
         # Create PNG input
-        input_path = tmpdir / 'test.png'
-        test_img = Image.new('RGB', (400, 300), color=(100, 200, 150))
+        input_path = tmpdir / "test.png"
+        test_img = Image.new("RGB", (400, 300), color=(100, 200, 150))
         test_img.save(input_path)
 
         # Convert to JPEG
-        output_path = tmpdir / 'test.jpg'
+        output_path = tmpdir / "test.jpg"
         success = processor.process_image(input_path, output_path, verbose=False)
 
         assert success is True
         assert output_path.exists()
-        assert output_path.suffix == '.jpg'
+        assert output_path.suffix == ".jpg"
 
     print("  ✓ Format conversion works")
 
@@ -181,6 +177,7 @@ def main():
     except Exception as e:
         print(f"✗ Readiness check tests failed: {e}")
         import traceback
+
         traceback.print_exc()
         all_passed = False
 
@@ -190,6 +187,7 @@ def main():
     except Exception as e:
         print(f"✗ Processor tests failed: {e}")
         import traceback
+
         traceback.print_exc()
         all_passed = False
 
@@ -204,5 +202,5 @@ def main():
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

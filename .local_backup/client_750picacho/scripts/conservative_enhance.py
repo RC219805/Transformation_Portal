@@ -3,6 +3,7 @@
 Conservative Enhancement - Maximum Fidelity
 Preserves original quality while applying subtle professional-grade enhancements
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -45,7 +46,7 @@ print("  ✓ Contrast: +5%")
 print("\n[4/6] Applying selective sharpening...")
 # Create edge mask for selective sharpening
 edges = result.filter(ImageFilter.FIND_EDGES)
-edges_gray = edges.convert('L')
+edges_gray = edges.convert("L")
 edges_array = np.array(edges_gray)
 edge_mask = (edges_array > 30).astype(float)
 

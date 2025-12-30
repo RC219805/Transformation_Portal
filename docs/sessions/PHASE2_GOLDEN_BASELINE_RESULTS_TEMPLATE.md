@@ -1,8 +1,8 @@
 # Phase 2 Golden Baseline Results Template
 
-**Date:** YYYY-MM-DD  
-**Commit:** `<git SHA>`  
-**Tester:** `<name>`  
+**Date:** YYYY-MM-DD
+**Commit:** `<git SHA>`
+**Tester:** `<name>`
 **Status:** ✅ CERTIFIED / ⚠️ CONDITIONAL / ❌ FAILED
 
 ---
@@ -252,8 +252,8 @@ outputs/phase2_bench_matrix/
 
 ✅ **CERTIFIED** / ⚠️ **CONDITIONALLY CERTIFIED** / ❌ **NOT CERTIFIED**
 
-**Certified by:** [Name]  
-**Date:** [YYYY-MM-DD]  
+**Certified by:** [Name]
+**Date:** [YYYY-MM-DD]
 **Commit:** `<git SHA>`
 
 **Comments:**
@@ -281,5 +281,5 @@ outputs/phase2_bench_matrix/
 
 ---
 
-**Template Version:** 1.0  
+**Template Version:** 1.0
 **Last Updated:** 2025-12-13

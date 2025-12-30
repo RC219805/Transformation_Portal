@@ -31,22 +31,22 @@ Use these features **only if**:
 ## Available Research Features
 
 ### 🧪 Model Training Infrastructure
-**Use when**: Custom dataset adaptation, research on depth/material models  
-**Documentation**: [TRAINING_GUIDE.md](TRAINING_GUIDE.md)  
-**Location**: `src/training/`, `examples/training/`  
-**Requirements**: GPU, 10GB+ disk, 2-3 hours training time  
+**Use when**: Custom dataset adaptation, research on depth/material models
+**Documentation**: [TRAINING_GUIDE.md](TRAINING_GUIDE.md)
+**Location**: `src/training/`, `examples/training/`
+**Requirements**: GPU, 10GB+ disk, 2-3 hours training time
 **Status**: ⚠️ Experimental
 
 ### 🔬 Custom Neural Architectures
-**Use when**: Experimenting with novel model architectures  
-**Documentation**: [CUSTOM_ARCHITECTURES.md](CUSTOM_ARCHITECTURES.md)  
-**Location**: `src/models/experimental/`  
+**Use when**: Experimenting with novel model architectures
+**Documentation**: [CUSTOM_ARCHITECTURES.md](CUSTOM_ARCHITECTURES.md)
+**Location**: `src/models/experimental/`
 **Status**: ⚠️ Experimental, research-only
 
 ### 🎯 Hyperparameter Auto-Tuning
-**Use when**: Optimizing processing parameters for specific datasets  
-**Documentation**: [AUTOTUNE_INTEGRATION_GUIDE.md](../AUTOTUNE_INTEGRATION_GUIDE.md)  
-**Location**: `src/autotune/`  
+**Use when**: Optimizing processing parameters for specific datasets
+**Documentation**: [AUTOTUNE_INTEGRATION_GUIDE.md](../AUTOTUNE_INTEGRATION_GUIDE.md)
+**Location**: `src/autotune/`
 **Status**: ⚠️ Experimental, high complexity
 
 ---
@@ -102,7 +102,7 @@ Once graduated, feature moves to `src/` (standard) or `docs/advanced/` (power us
 ## Stability Lifecycle
 
 ```
-Research (experimental/) 
+Research (experimental/)
   → Advanced (docs/advanced/, community-supported)
   → Production (lux_depth_v2/, feature-frozen)
   → Deprecated (archive/)

@@ -8,7 +8,7 @@ assignees: []
 
 ## Feature Freeze Period
 
-**Active**: December 20, 2025 - January 10, 2026  
+**Active**: December 20, 2025 - January 10, 2026
 **Policy**: [FEATURE_FREEZE_POLICY.md](../../docs/FEATURE_FREEZE_POLICY.md)
 
 ---
@@ -64,8 +64,8 @@ assignees: []
 
 ## Recommendation
 
-**Reviewer**: <!-- @username -->  
-**Decision**: APPROVE / DEFER / REJECT  
+**Reviewer**: <!-- @username -->
+**Decision**: APPROVE / DEFER / REJECT
 **Reason**:
 
 ---
