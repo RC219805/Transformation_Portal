@@ -2,8 +2,8 @@
 
 ## ✅ **CONFIRMED: True 100% APEX Processing**
 
-**Date:** 2025-12-30  
-**Test:** Cold run with cache invalidation  
+**Date:** 2025-12-30
+**Test:** Cold run with cache invalidation
 **Result:** SUCCESS - SegFormer MaterialsV2 backend active
 
 ---
@@ -114,7 +114,7 @@ lux-depth-v2 \
 
 ## ⏱️ **Processing Performance**
 
-**Cold Run (No Cache):** 46.7 seconds  
+**Cold Run (No Cache):** 46.7 seconds
 - Depth inference: 25.2s
 - MaterialsV2 SegFormer: ~4.5s (vs ~5s heuristic)
 - Post-processing: ~17s
@@ -187,9 +187,9 @@ cd /Users/rc/Transformation_Portal
 for file in 750Picacho_Source_TIFFs/*.tif*; do
     basename=$(basename "$file" .tif)
     basename=$(basename "$basename" .tiff)
-    
+
     echo "Processing: $basename (100% APEX)"
-    
+
     lux-depth-v2 \
       --input "$file" \
       --output-dir "750Picacho_Processed/apex_100_batch/$basename" \
@@ -231,7 +231,6 @@ done
 
 ---
 
-*Status: VALIDATED & PRODUCTION-READY*  
-*Quality Level: 100% APEX*  
+*Status: VALIDATED & PRODUCTION-READY*
+*Quality Level: 100% APEX*
 *Backend: SegFormer MaterialsV2*
-

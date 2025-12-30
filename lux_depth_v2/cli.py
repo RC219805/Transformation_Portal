@@ -338,7 +338,9 @@ def main() -> None:
         from .materials_v2 import MaterialsV2Config, ConfidenceConfig, SegmentationConfig as Mat2SegConfig
 
         # Determine backend (CLI override > preset default)
-        backend = args.materials_v2_backend if hasattr(args, "materials_v2_backend") and args.materials_v2_backend else "heuristic"
+        backend = (
+            args.materials_v2_backend if hasattr(args, "materials_v2_backend") and args.materials_v2_backend else "heuristic"
+        )
 
         # Initialize Materials v2 config
         cfg.materials_v2 = MaterialsV2Config(

@@ -143,7 +143,7 @@ class TiledDepthEstimator:
 
             self.image_processor = AutoImageProcessor.from_pretrained(
                 self.config.model_name,
-                use_fast=False  # Explicit for APEX determinism (stable behavior across transformers versions)
+                use_fast=False,  # Explicit for APEX determinism (stable behavior across transformers versions)
             )
             self.model = AutoModelForDepthEstimation.from_pretrained(self.config.model_name)
             self.model.to(self.device)
