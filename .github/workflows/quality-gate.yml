@@ -53,6 +53,7 @@ jobs:
             precommit-${{ runner.os }}-py310-
 
       - name: Run pre-commit (PR = diff mode, main = all files)
+        shell: bash
         env:
           PRE_COMMIT_COLOR: always
         run: |
