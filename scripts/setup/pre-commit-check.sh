@@ -48,6 +48,7 @@ ALLOWED_ROOT_FILES=(
     ".pylintrc"
     ".flake8"
     "mypy.ini"
+    ".pre-commit-config.yaml"  # Pre-commit framework config (must be in root)
     
     # Docker
     "Dockerfile"
