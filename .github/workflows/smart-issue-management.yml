@@ -15,6 +15,8 @@ jobs:
   smart-triage:
     name: AI-Powered Issue Triage
     runs-on: ubuntu-latest
+    if: ${{ secrets.OPENAI_API_KEY != '' }}
+    continue-on-error: true
 
     steps:
       - name: Checkout code

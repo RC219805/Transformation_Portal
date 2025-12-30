@@ -10,6 +10,8 @@ on:
 jobs:
   summarize:
     runs-on: ubuntu-latest
+    if: ${{ secrets.OPENAI_API_KEY != '' }}
+    continue-on-error: true
     permissions:
       issues: write
       pull-requests: write

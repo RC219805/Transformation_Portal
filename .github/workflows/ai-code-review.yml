@@ -17,7 +17,8 @@ jobs:
   ai-review:
     name: AI-Powered Code Review (GPT-4o Enhanced)
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    if: ${{ github.event.pull_request.draft == false && secrets.OPENAI_API_KEY != '' }}
+    continue-on-error: true
 
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
