@@ -34,14 +34,6 @@ repos:
       - id: check-ast  # Verify Python syntax
         exclude: ^(deprecated/|src/transformation_portal/)
 
-  # Markdown linting
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0-alpha.8
-    hooks:
-      - id: prettier
-        types_or: [markdown, yaml, json]
-        exclude: ^(deprecated/|src/transformation_portal/|\.venv/|docs_site/)
-
 # Configuration
 default_language_version:
   python: python3.10
