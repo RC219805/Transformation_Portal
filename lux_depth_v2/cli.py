@@ -65,6 +65,13 @@ def build_parser() -> argparse.ArgumentParser:
     # Materials v2 (Phase 1 Integration Pack)
     p.add_argument("--materials-v2", action="store_true", help="Enable Materials v2 confidence-gated material response.")
     p.add_argument(
+        "--materials-v2-backend",
+        type=str,
+        default=None,
+        choices=["heuristic", "segformer", "onnx"],
+        help="MaterialsV2 backend (overrides preset default). heuristic=fast rule-based, segformer=AI SegFormer-B5, onnx=custom ONNX.",
+    )
+    p.add_argument(
         "--confidence-threshold", type=float, default=0.6, help="Confidence threshold for Materials v2 gating (default: 0.6)."
     )
     p.add_argument(
@@ -330,6 +337,9 @@ def main() -> None:
     if hasattr(args, "materials_v2") and args.materials_v2:
         from .materials_v2 import MaterialsV2Config, ConfidenceConfig, SegmentationConfig as Mat2SegConfig
 
+        # Determine backend (CLI override > preset default)
+        backend = args.materials_v2_backend if hasattr(args, "materials_v2_backend") and args.materials_v2_backend else "heuristic"
+
         # Initialize Materials v2 config
         cfg.materials_v2 = MaterialsV2Config(
             enabled=True,
@@ -343,7 +353,7 @@ def main() -> None:
             ),
             cache_enabled=args.cache_masks,
             cache_dir=args.cache_dir if args.cache_masks else None,
-            backend="heuristic",  # Default backend
+            backend=backend,
         )
     cfg.orchestrator.pre_flight_check = args.pre_flight_check and not args.skip_pre_flight
 
