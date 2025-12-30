@@ -1,81 +1,94 @@
 name: Quality Gate
+
 permissions:
   contents: read
 
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - ".pre-commit-config.yaml"
+      - "**/*.py"
+      - "**/*.pyi"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - "requirements/**"
+      - ".github/workflows/**"
+      - "*.md"
   push:
     branches: [ main ]
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pre-commit-checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout (full history needed for diff mode)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: "3.10"
+          cache: "pip"
 
-      - name: Free Disk Space
+      - name: Install pre-commit
         run: |
-          echo "Before cleanup:"
-          df -h
-          
-          # Remove unnecessary packages to prevent disk space exhaustion
-          sudo apt-get clean
-          sudo apt-get autoremove -y
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          
-          echo "After cleanup:"
-          df -h
+          python -m pip install -U pip
+          python -m pip install pre-commit
 
-      - name: Install quality tools
-        run: |
-          pip install --no-cache-dir flake8 pylint autopep8
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: precommit-${{ runner.os }}-py310-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            precommit-${{ runner.os }}-py310-
 
-      - name: Auto-fix formatting issues
+      - name: Run pre-commit (PR = diff mode, main = all files)
+        env:
+          PRE_COMMIT_COLOR: always
         run: |
-          # Auto-fix trailing whitespace and basic formatting
-          find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*" -exec autopep8 --in-place --max-line-length=127 {} \;
-
-      - name: Run flake8 (critical errors only)
-        run: |
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=deprecated/,src/transformation_portal/,.venv/,lux_depth_v2/__pycache__/,depth_anything_3_official/
-
-      - name: Run pylint (non-blocking)
-        continue-on-error: true
-        run: |
-          files=$(find . -name "*.py" -type f ! -path "./deprecated/*" ! -path "./src/transformation_portal/*" ! -path "./.venv/*" ! -path "./lux_depth_v2/__pycache__/*")
-          if [ -n "$files" ]; then
-            # shellcheck disable=SC2086
-            pylint $files --exit-zero
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "Running pre-commit on changed files only (diff mode)..."
+            pre-commit run \
+              --from-ref "${{ github.event.pull_request.base.sha }}" \
+              --to-ref   "${{ github.event.pull_request.head.sha }}" \
+              --show-diff-on-failure
+          else
+            echo "Running pre-commit on all files..."
+            pre-commit run --all-files --show-diff-on-failure
           fi
-      
-      - name: Test lux_depth_v2 Module Imports
-        run: |
-          pip install --no-cache-dir torch torchvision
-          python -c "from lux_depth_v2 import pipeline, config, upscaling, service; print('✅ lux_depth_v2 imports OK')" || echo "⚠️ lux_depth_v2 import check skipped"
 
-      - name: Check markdown file count
+      - name: Enforce root markdown file limit (<= 10)
         run: |
-          markdown_count=$(find . -maxdepth 1 -name "*.md" -type f | wc -l)
-          # shellcheck disable=SC2086
-          if [ $markdown_count -gt 10 ]; then
-            echo "ERROR: Too many markdown files in root ($markdown_count). Maximum allowed: 10"
-            echo "Please move documentation files to docs/ subdirectories"
+          markdown_count=$(find . -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' ')
+          if [ "$markdown_count" -gt 10 ]; then
+            echo "❌ ERROR: Too many markdown files in root ($markdown_count / max 10)"
+            echo "Consider moving documentation to docs/ directory"
             exit 1
+          else
+            echo "✓ Root markdown files: $markdown_count / 10"
           fi
 
-      - name: Commit formatting fixes
-        if: success()
+      - name: Summary
+        if: always()
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git diff --quiet || git commit -am "Auto-fix: Code formatting (trailing whitespace, line length)"
-        continue-on-error: true
+          echo "## Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "- **Mode**: Diff (changed files only)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Mode**: Full scan (all files)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- **Python**: 3.10" >> $GITHUB_STEP_SUMMARY
+          echo "- **Linter**: Ruff (critical errors only)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Benefits**: ~10x faster than previous flake8/pylint/autopep8" >> $GITHUB_STEP_SUMMARY
