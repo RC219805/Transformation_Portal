@@ -35,7 +35,7 @@ class TestImageLoader:
     @pytest.fixture
     def test_image_path(self, tmp_path):
         """Create a test image."""
-        img = Image.new('RGB', (512, 512), color='red')
+        img = Image.new("RGB", (512, 512), color="red")
         path = tmp_path / "test_image.jpg"
         img.save(path)
         return path
@@ -140,7 +140,7 @@ class TestQualityMetrics:
         image = torch.rand(3, 256, 256, device=device)
         score = quality_metrics.compute_psnr(image, image)
 
-        assert score.score == float('inf')
+        assert score.score == float("inf")
 
     def test_identical_images_ssim(self, quality_metrics, substrate):
         """Test SSIM for identical images should be 1.0."""
@@ -187,7 +187,7 @@ class TestPerceptualAnalyzer:
     def test_image_and_metadata(self, substrate, tmp_path):
         """Create test image with metadata."""
         # Create test image
-        img = Image.new('RGB', (256, 256), color='blue')
+        img = Image.new("RGB", (256, 256), color="blue")
         path = tmp_path / "test.jpg"
         img.save(path)
 
@@ -262,16 +262,12 @@ class TestEnhancementTracker:
                 mean_intensity=0.5,
                 std_intensity=0.2,
                 dynamic_range=1.0,
-                tags={}
+                tags={},
             )
 
             scores = {
                 MetricType.PSNR: PerceptualScore(
-                    metric_type=MetricType.PSNR,
-                    score=30.0,
-                    higher_is_better=True,
-                    normalized_score=0.7,
-                    metadata={}
+                    metric_type=MetricType.PSNR, score=30.0, higher_is_better=True, normalized_score=0.7, metadata={}
                 )
             }
 
@@ -281,7 +277,7 @@ class TestEnhancementTracker:
                 quality_scores=scores,
                 overall_quality=0.6 + i * 0.1,
                 analysis_time=1.0,
-                timestamp=1234567890.0
+                timestamp=1234567890.0,
             )
 
             results.append(result)
@@ -356,7 +352,7 @@ class TestPerceptualBaseline:
         """Create test images."""
         paths = []
         for i, name in enumerate(["pool", "bedroom", "kitchen"]):
-            img = Image.new('RGB', (256, 256), color=(i * 80, i * 80, i * 80))
+            img = Image.new("RGB", (256, 256), color=(i * 80, i * 80, i * 80))
             path = tmp_path / f"{name}.jpg"
             img.save(path)
             paths.append(path)
@@ -421,7 +417,7 @@ class TestIntegration:
         # Create test images
         image_paths = []
         for name in ["pool", "bedroom", "kitchen"]:
-            img = Image.new('RGB', (256, 256), color='green')
+            img = Image.new("RGB", (256, 256), color="green")
             path = tmp_path / f"{name}.jpg"
             img.save(path)
             image_paths.append(path)

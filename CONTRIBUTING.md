@@ -4,8 +4,8 @@
 
 ### lux_depth_v2 Feature Freeze
 
-**Status**: ❄️ **ACTIVE** (December 23, 2025 - March 1, 2026)  
-**Scope**: `lux_depth_v2/` module only  
+**Status**: ❄️ **ACTIVE** (December 23, 2025 - March 1, 2026)
+**Scope**: `lux_depth_v2/` module only
 **Reason**: Golden Path consolidation and production stability
 
 #### What's Allowed
@@ -34,7 +34,7 @@ For **critical production needs** that violate the freeze:
 
 **Approval criteria**: Security vulnerability (CVSS ≥7.0), production blocker, data loss risk, regulatory compliance.
 
-📚 **Full Policy**: [lux_depth_v2/FEATURE_FREEZE.md](lux_depth_v2/FEATURE_FREEZE.md)  
+📚 **Full Policy**: [lux_depth_v2/FEATURE_FREEZE.md](lux_depth_v2/FEATURE_FREEZE.md)
 📊 **Stability Metrics**: [docs/architecture/STABILITY_POLICY.md](docs/architecture/STABILITY_POLICY.md)
 
 ---

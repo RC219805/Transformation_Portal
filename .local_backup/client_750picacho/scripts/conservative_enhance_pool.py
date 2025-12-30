@@ -28,6 +28,7 @@ WARNINGS FROM LESSONS LEARNED:
 - Maintain concrete neutrality
 - Conservative parameters to avoid artifacts
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +37,7 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -54,32 +56,32 @@ OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Exposure & Tone (based on analysis recommendations)
-GAMMA_CORRECTION = 2.2                # Linear → sRGB (CRITICAL!)
-GLOBAL_EXPOSURE_LIFT = 0.25           # +0.25 EV (0.441 → 0.525 luminance)
-SHADOW_LIFT_STOPS = 0.35              # +0.35 stops for shadows
-SHADOW_THRESHOLD = 0.25               # Luminance < 0.25 is shadow
-HIGHLIGHT_PROTECTION = 0.92           # Protect pixels > 0.92
-MIDTONE_CONTRAST = 1.10               # +10% contrast boost
+GAMMA_CORRECTION = 2.2  # Linear → sRGB (CRITICAL!)
+GLOBAL_EXPOSURE_LIFT = 0.25  # +0.25 EV (0.441 → 0.525 luminance)
+SHADOW_LIFT_STOPS = 0.35  # +0.35 stops for shadows
+SHADOW_THRESHOLD = 0.25  # Luminance < 0.25 is shadow
+HIGHLIGHT_PROTECTION = 0.92  # Protect pixels > 0.92
+MIDTONE_CONTRAST = 1.10  # +10% contrast boost
 
 # Color & Saturation
-GLOBAL_SATURATION = 1.06              # +6% saturation
-VEGETATION_SAT_BOOST = 1.05           # +5% green saturation
+GLOBAL_SATURATION = 1.06  # +6% saturation
+VEGETATION_SAT_BOOST = 1.05  # +5% green saturation
 
 # Pool Water Color Correction (reduce artificial cyan cast)
-WATER_GREEN_BOOST = 1.08              # +8% green (warmer cyan)
-WATER_BLUE_REDUCTION = 0.96           # -4% blue (less cyan)
-WATER_RED_ADJUSTMENT = 0.98           # -2% red (maintain cyan hue)
+WATER_GREEN_BOOST = 1.08  # +8% green (warmer cyan)
+WATER_BLUE_REDUCTION = 0.96  # -4% blue (less cyan)
+WATER_RED_ADJUSTMENT = 0.98  # -2% red (maintain cyan hue)
 
 # Material Enhancement
-CLARITY_STRENGTH = 0.12               # 12% clarity (CONSERVATIVE - already sharp!)
-CLARITY_RADIUS = 64                   # Radius for high-pass filter (4K image)
+CLARITY_STRENGTH = 0.12  # 12% clarity (CONSERVATIVE - already sharp!)
+CLARITY_RADIUS = 64  # Radius for high-pass filter (4K image)
 
 # Material Response Zones
-WATER_ENHANCEMENT = 0.65              # 65% for water reflections
-CONCRETE_ENHANCEMENT = 0.50           # 50% for hardscape texture
+WATER_ENHANCEMENT = 0.65  # 65% for water reflections
+CONCRETE_ENHANCEMENT = 0.50  # 50% for hardscape texture
 
 # Output
-OUTPUT_BIT_DEPTH = 16                 # 16-bit TIFF
+OUTPUT_BIT_DEPTH = 16  # 16-bit TIFF
 
 # ============================================================================
 # LOAD IMAGE
@@ -112,7 +114,7 @@ if TIFFFILE_AVAILABLE:
         TIFFFILE_AVAILABLE = False
 
 if not TIFFFILE_AVAILABLE:
-    img = Image.open(INPUT).convert('RGB')
+    img = Image.open(INPUT).convert("RGB")
     rgb_linear = np.array(img, dtype=np.float32) / 255.0
 
 print(f"  Range: [{rgb_linear.min():.3f}, {rgb_linear.max():.3f}]")
@@ -125,7 +127,7 @@ original_luminance = rgb_linear.mean()
 # ============================================================================
 print(f"\n[2/9] Converting linear to sRGB (gamma {GAMMA_CORRECTION})...")
 
-rgb = np.power(np.clip(rgb_linear, 0, 1), 1/GAMMA_CORRECTION)
+rgb = np.power(np.clip(rgb_linear, 0, 1), 1 / GAMMA_CORRECTION)
 
 print("  ✓ Gamma corrected")
 print(f"  ✓ Luminance after gamma: {rgb.mean():.3f}")
@@ -136,7 +138,7 @@ print(f"  ✓ Luminance after gamma: {rgb.mean():.3f}")
 print("\n[3/9] Lifting exposure...")
 
 # Calculate exposure multiplier
-exposure_multiplier = 2 ** GLOBAL_EXPOSURE_LIFT
+exposure_multiplier = 2**GLOBAL_EXPOSURE_LIFT
 rgb_exposed = rgb * exposure_multiplier
 rgb_exposed = np.clip(rgb_exposed, 0, 1)
 
@@ -150,7 +152,7 @@ print(f"  ✓ Luminance: {original_luminance:.3f} → {new_luminance:.3f}")
 print("\n[4/9] Recovering shadow detail...")
 
 # Calculate luminance
-luminance = 0.2126 * rgb_exposed[:,:,0] + 0.7152 * rgb_exposed[:,:,1] + 0.0722 * rgb_exposed[:,:,2]
+luminance = 0.2126 * rgb_exposed[:, :, 0] + 0.7152 * rgb_exposed[:, :, 1] + 0.0722 * rgb_exposed[:, :, 2]
 shadow_mask = luminance < SHADOW_THRESHOLD
 
 # Create smooth shadow lift mask
@@ -158,7 +160,7 @@ shadow_lift_mask = np.clip((SHADOW_THRESHOLD - luminance) / SHADOW_THRESHOLD, 0,
 shadow_lift_mask = gaussian_filter(shadow_lift_mask, sigma=3.0)
 
 # Apply shadow lift
-shadow_lift_multiplier = 2 ** SHADOW_LIFT_STOPS
+shadow_lift_multiplier = 2**SHADOW_LIFT_STOPS
 shadow_lift_3d = np.stack([shadow_lift_mask] * 3, axis=2)
 rgb_exposed = rgb_exposed * (1 + shadow_lift_3d * (shadow_lift_multiplier - 1))
 rgb_exposed = np.clip(rgb_exposed, 0, 1)
@@ -188,7 +190,7 @@ print("\n[6/9] Correcting pool water color...")
 
 # Detect pool water (blue-dominant pixels)
 # Pool water: high blue channel, cyan hue
-r, g, b = rgb_contrast[:,:,0], rgb_contrast[:,:,1], rgb_contrast[:,:,2]
+r, g, b = rgb_contrast[:, :, 0], rgb_contrast[:, :, 1], rgb_contrast[:, :, 2]
 water_mask = (b > r * 1.1) & (b > g * 1.0) & (b > 0.3) & (b < 0.9)
 
 # Smooth mask to avoid hard edges
@@ -223,16 +225,16 @@ img_saturated = enhancer.enhance(GLOBAL_SATURATION)
 
 # Detect vegetation (green-dominant)
 rgb_sat = np.array(img_saturated, dtype=np.float32) / 255.0
-r, g, b = rgb_sat[:,:,0], rgb_sat[:,:,1], rgb_sat[:,:,2]
+r, g, b = rgb_sat[:, :, 0], rgb_sat[:, :, 1], rgb_sat[:, :, 2]
 vegetation_mask = (g > r * 1.1) & (g > b * 1.05) & (g > 0.2)
 vegetation_mask_smooth = gaussian_filter(vegetation_mask.astype(np.float32), sigma=5.0)
 
 # Boost vegetation saturation
-hsv = np.array(img_saturated.convert('HSV'), dtype=np.float32)
-hsv[:,:,1] = hsv[:,:,1] * (1 + vegetation_mask_smooth * (VEGETATION_SAT_BOOST - 1))
-hsv[:,:,1] = np.clip(hsv[:,:,1], 0, 255)
+hsv = np.array(img_saturated.convert("HSV"), dtype=np.float32)
+hsv[:, :, 1] = hsv[:, :, 1] * (1 + vegetation_mask_smooth * (VEGETATION_SAT_BOOST - 1))
+hsv[:, :, 1] = np.clip(hsv[:, :, 1], 0, 255)
 
-img_final = Image.fromarray(hsv.astype(np.uint8), mode='HSV').convert('RGB')
+img_final = Image.fromarray(hsv.astype(np.uint8), mode="HSV").convert("RGB")
 rgb_sat = np.array(img_final, dtype=np.float32) / 255.0
 
 vegetation_pixels = vegetation_mask.sum()
@@ -270,11 +272,11 @@ rgb_16bit = (rgb_clarity * 65535).astype(np.uint16)
 output_path = OUTPUT_DIR / "750Picacho_Pool_Enhanced.ti"
 
 if TIFFFILE_AVAILABLE:
-    tifffile.imwrite(output_path, rgb_16bit, compression='lzw')
+    tifffile.imwrite(output_path, rgb_16bit, compression="lzw")
     print(f"  ✓ Saved with tifffile: {output_path}")
 else:
     img_output = Image.fromarray(rgb_16bit)
-    img_output.save(output_path, compression='tiff_lzw')
+    img_output.save(output_path, compression="tiff_lzw")
     print(f"  ✓ Saved with PIL: {output_path}")
 
 # Save comparison metrics

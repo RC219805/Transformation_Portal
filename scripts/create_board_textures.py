@@ -19,6 +19,7 @@ Usage:
 
 Performance: ~15-20ms per 512x512 texture, ~50-60ms per 1024x1024 texture
 """
+
 import argparse
 from pathlib import Path
 from typing import Dict, Tuple
@@ -31,6 +32,7 @@ import numpy as np
 def _import_pil():
     """Lazy import PIL to speed up --help."""
     from PIL import Image
+
     return Image
 
 
@@ -46,12 +48,7 @@ MATERIAL_COLORS: Dict[str, Tuple[int, int, int]] = {
 }
 
 
-def create_texture(
-    base_color: Tuple[int, int, int],
-    size: int = 512,
-    noise_intensity: float = 8.0,
-    seed: int = 42
-):
+def create_texture(base_color: Tuple[int, int, int], size: int = 512, noise_intensity: float = 8.0, seed: int = 42):
     """Create a subtle procedural texture with color variation.
 
     Optimized with NumPy broadcasting for 3-5x speedup over naive loops.
@@ -150,11 +147,7 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Determine which materials to generate
-    materials_to_generate = (
-        {name: MATERIAL_COLORS[name] for name in args.materials}
-        if args.materials
-        else MATERIAL_COLORS
-    )
+    materials_to_generate = {name: MATERIAL_COLORS[name] for name in args.materials} if args.materials else MATERIAL_COLORS
 
     print("=" * 70)
     print("MBAR TEXTURE GENERATOR")

@@ -157,7 +157,7 @@ def depth_plugin():
 @pytest.fixture
 def test_image():
     """Create a test image."""
-    return Image.new('RGB', (100, 100), color='red')
+    return Image.new("RGB", (100, 100), color="red")
 
 
 @pytest.fixture
@@ -423,7 +423,7 @@ class TestPluginLoader:
         """Test loading plugin from file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a simple plugin file
-            plugin_code = '''
+            plugin_code = """
 from transformation_portal.plugins import PluginInterface, PluginMetadata, PluginType
 
 class FileTestPlugin(PluginInterface):
@@ -437,7 +437,7 @@ class FileTestPlugin(PluginInterface):
         self._initialized = True
     def execute(self, *args, **kwargs):
         return "executed"
-'''
+"""
             plugin_file = Path(tmpdir) / "test_plugin.py"
             plugin_file.write_text(plugin_code)
 
@@ -445,10 +445,7 @@ class FileTestPlugin(PluginInterface):
             plugins = loader.discover_all()
 
             # Should find our plugin
-            found = any(
-                p.manifest and p.manifest.name == "file_test_plugin"
-                for p in plugins
-            )
+            found = any(p.manifest and p.manifest.name == "file_test_plugin" for p in plugins)
             assert found
 
 
@@ -472,6 +469,7 @@ class TestPluginManifest:
     def test_manifest_from_json_file(self):
         """Test loading manifest from JSON file."""
         import json
+
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest_data = {
                 "name": "json_plugin",
@@ -506,12 +504,14 @@ class TestPluginManager:
         plugin_manager._registry.register(simple_plugin)
         plugin_manager._loader._loaded_plugins["simple_test_plugin"] = LoadedPlugin(
             plugin=simple_plugin,
-            manifest=PluginManifest.from_dict({
-                "name": "simple_test_plugin",
-                "version": "1.0.0",
-                "plugin_type": "custom",
-                "entry_point": "test:SimpleTestPlugin",
-            }),
+            manifest=PluginManifest.from_dict(
+                {
+                    "name": "simple_test_plugin",
+                    "version": "1.0.0",
+                    "plugin_type": "custom",
+                    "entry_point": "test:SimpleTestPlugin",
+                }
+            ),
             source_path=Path("."),
             module_name="test",
         )
@@ -524,20 +524,19 @@ class TestPluginManager:
         # Setup
         plugin_manager._loader._loaded_plugins["simple_test_plugin"] = LoadedPlugin(
             plugin=simple_plugin,
-            manifest=PluginManifest.from_dict({
-                "name": "simple_test_plugin",
-                "version": "1.0.0",
-                "plugin_type": "custom",
-                "entry_point": "test:SimpleTestPlugin",
-            }),
+            manifest=PluginManifest.from_dict(
+                {
+                    "name": "simple_test_plugin",
+                    "version": "1.0.0",
+                    "plugin_type": "custom",
+                    "entry_point": "test:SimpleTestPlugin",
+                }
+            ),
             source_path=Path("."),
             module_name="test",
         )
 
-        result = plugin_manager.initialize_plugin(
-            "simple_test_plugin",
-            config={"test": "value"}
-        )
+        result = plugin_manager.initialize_plugin("simple_test_plugin", config={"test": "value"})
         assert result is True
         assert simple_plugin._initialized
 
@@ -546,12 +545,14 @@ class TestPluginManager:
         simple_plugin.initialize()
         plugin_manager._loader._loaded_plugins["simple_test_plugin"] = LoadedPlugin(
             plugin=simple_plugin,
-            manifest=PluginManifest.from_dict({
-                "name": "simple_test_plugin",
-                "version": "1.0.0",
-                "plugin_type": "custom",
-                "entry_point": "test:SimpleTestPlugin",
-            }),
+            manifest=PluginManifest.from_dict(
+                {
+                    "name": "simple_test_plugin",
+                    "version": "1.0.0",
+                    "plugin_type": "custom",
+                    "entry_point": "test:SimpleTestPlugin",
+                }
+            ),
             source_path=Path("."),
             module_name="test",
         )
@@ -568,21 +569,19 @@ class TestPluginManager:
         # Processor plugin should work as fallback
         plugin_manager._loader._loaded_plugins["test_processor"] = LoadedPlugin(
             plugin=processor_plugin,
-            manifest=PluginManifest.from_dict({
-                "name": "test_processor",
-                "version": "1.0.0",
-                "plugin_type": "processor",
-                "entry_point": "test:TestProcessorPlugin",
-            }),
+            manifest=PluginManifest.from_dict(
+                {
+                    "name": "test_processor",
+                    "version": "1.0.0",
+                    "plugin_type": "processor",
+                    "entry_point": "test:TestProcessorPlugin",
+                }
+            ),
             source_path=Path("."),
             module_name="test",
         )
 
-        result = plugin_manager.execute(
-            "nonexistent_plugin",
-            "data",
-            fallback_plugins=["test_processor"]
-        )
+        result = plugin_manager.execute("nonexistent_plugin", "data", fallback_plugins=["test_processor"])
         assert result.success
         assert result.plugin_name == "test_processor"
 
@@ -590,12 +589,14 @@ class TestPluginManager:
         """Test plugin session context manager."""
         plugin_manager._loader._loaded_plugins["simple_test_plugin"] = LoadedPlugin(
             plugin=simple_plugin,
-            manifest=PluginManifest.from_dict({
-                "name": "simple_test_plugin",
-                "version": "1.0.0",
-                "plugin_type": "custom",
-                "entry_point": "test:SimpleTestPlugin",
-            }),
+            manifest=PluginManifest.from_dict(
+                {
+                    "name": "simple_test_plugin",
+                    "version": "1.0.0",
+                    "plugin_type": "custom",
+                    "entry_point": "test:SimpleTestPlugin",
+                }
+            ),
             source_path=Path("."),
             module_name="test",
         )
@@ -609,18 +610,18 @@ class TestPluginManager:
         """Test plugin state tracking."""
         plugin_manager._loader._loaded_plugins["simple_test_plugin"] = LoadedPlugin(
             plugin=simple_plugin,
-            manifest=PluginManifest.from_dict({
-                "name": "simple_test_plugin",
-                "version": "1.0.0",
-                "plugin_type": "custom",
-                "entry_point": "test:SimpleTestPlugin",
-            }),
+            manifest=PluginManifest.from_dict(
+                {
+                    "name": "simple_test_plugin",
+                    "version": "1.0.0",
+                    "plugin_type": "custom",
+                    "entry_point": "test:SimpleTestPlugin",
+                }
+            ),
             source_path=Path("."),
             module_name="test",
         )
-        plugin_manager._contexts["simple_test_plugin"] = PluginContext(
-            state=PluginState.LOADED
-        )
+        plugin_manager._contexts["simple_test_plugin"] = PluginContext(state=PluginState.LOADED)
 
         assert plugin_manager.get_plugin_state("simple_test_plugin") == PluginState.LOADED
 
@@ -778,6 +779,7 @@ class TestPluginDecorators:
 
     def test_plugin_decorator(self):
         """Test @plugin decorator."""
+
         @plugin(
             name="decorated_plugin",
             plugin_type=PluginType.PROCESSOR,
@@ -787,7 +789,7 @@ class TestPluginDecorators:
         class DecoratedPlugin(ProcessorPlugin):
             def _create_metadata(self):
                 # The decorator adds _decorator_metadata at class level
-                if hasattr(self, '_decorator_metadata'):
+                if hasattr(self, "_decorator_metadata"):
                     return self._decorator_metadata
                 return super()._create_metadata()
 

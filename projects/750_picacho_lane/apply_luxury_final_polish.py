@@ -23,11 +23,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 import logging
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("luxury_polish")
 
 
@@ -133,7 +129,7 @@ class LuxuryPoolEnhancer:
         # Identify sky regions (upper third, blue-biased)
         height = img_array.shape[0]
         sky_region = np.zeros_like(r, dtype=bool)
-        sky_region[:height // 2, :] = True
+        sky_region[: height // 2, :] = True
         sky_mask = sky_region & (b > 0.4) & (b > r * 1.1) & (b > g * 1.05)
 
         # Enhance blue in sky
@@ -173,9 +169,11 @@ class LuxuryPoolEnhancer:
 
         # Identify water regions (blue-green, mid-brightness)
         water_mask = (
-            (b > g) & (g > r) &  # Blue-green bias
-            (b > 0.25) & (b < 0.85) &  # Mid-range brightness
-            (b - r > 0.1)  # Strong blue component
+            (b > g)
+            & (g > r)  # Blue-green bias
+            & (b > 0.25)
+            & (b < 0.85)  # Mid-range brightness
+            & (b - r > 0.1)  # Strong blue component
         )
 
         # Enhance blue-green tones for luxury pool color
@@ -188,10 +186,7 @@ class LuxuryPoolEnhancer:
         water_enhanced = (water_enhanced - 0.5) * 1.15 + 0.5
 
         clarity_factor = np.ones_like(r)
-        clarity_factor[water_mask] = np.clip(
-            water_enhanced / (water_brightness[water_mask] + 0.001),
-            0.85, 1.25
-        )
+        clarity_factor[water_mask] = np.clip(water_enhanced / (water_brightness[water_mask] + 0.001), 0.85, 1.25)
 
         r[water_mask] = np.clip(r[water_mask] * clarity_factor[water_mask], 0, 1)
         g[water_mask] = np.clip(g[water_mask] * clarity_factor[water_mask], 0, 1)
@@ -292,7 +287,7 @@ class LuxuryPoolEnhancer:
         center_x, center_y = width / 2, height / 2
 
         # Distance from center, normalized
-        dist = np.sqrt((x - center_x)**2 + (y - center_y)**2)
+        dist = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
         max_dist = np.sqrt(center_x**2 + center_y**2)
         dist_norm = dist / max_dist
 
@@ -319,8 +314,8 @@ class LuxuryPoolEnhancer:
         log.info(f"Loading image: {input_path}")
         img = Image.open(input_path)
 
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
         log.info(f"Image size: {img.size}, Mode: {img.mode}")
 
@@ -331,7 +326,7 @@ class LuxuryPoolEnhancer:
         img_stage1 = self.enhance_colors_luxury_pool(img)
         path_stage1 = self.output_dir / f"{base_name}_01_color_graded.png"
         img_stage1.save(path_stage1, quality=95)
-        outputs['01_color_graded'] = path_stage1
+        outputs["01_color_graded"] = path_stage1
         log.info(f"Saved: {path_stage1}")
 
         # Stage 2: Sky enhancement
@@ -339,7 +334,7 @@ class LuxuryPoolEnhancer:
         img_stage2 = self.enhance_sky(img_stage1)
         path_stage2 = self.output_dir / f"{base_name}_02_sky_enhanced.png"
         img_stage2.save(path_stage2, quality=95)
-        outputs['02_sky_enhanced'] = path_stage2
+        outputs["02_sky_enhanced"] = path_stage2
         log.info(f"Saved: {path_stage2}")
 
         # Stage 3: Water refinement
@@ -347,7 +342,7 @@ class LuxuryPoolEnhancer:
         img_stage3 = self.enhance_water(img_stage2)
         path_stage3 = self.output_dir / f"{base_name}_03_water_refined.png"
         img_stage3.save(path_stage3, quality=95)
-        outputs['03_water_refined'] = path_stage3
+        outputs["03_water_refined"] = path_stage3
         log.info(f"Saved: {path_stage3}")
 
         # Stage 4: Landscape optimization
@@ -355,7 +350,7 @@ class LuxuryPoolEnhancer:
         img_stage4 = self.enhance_landscape(img_stage3)
         path_stage4 = self.output_dir / f"{base_name}_04_landscape_enhanced.png"
         img_stage4.save(path_stage4, quality=95)
-        outputs['04_landscape_enhanced'] = path_stage4
+        outputs["04_landscape_enhanced"] = path_stage4
         log.info(f"Saved: {path_stage4}")
 
         # Stage 5: HDR tone mapping
@@ -363,7 +358,7 @@ class LuxuryPoolEnhancer:
         img_stage5 = self.apply_hdr_tone_mapping(img_stage4)
         path_stage5 = self.output_dir / f"{base_name}_05_hdr_tone_mapped.png"
         img_stage5.save(path_stage5, quality=95)
-        outputs['05_hdr_tone_mapped'] = path_stage5
+        outputs["05_hdr_tone_mapped"] = path_stage5
         log.info(f"Saved: {path_stage5}")
 
         # Stage 6: Detail enhancement
@@ -371,7 +366,7 @@ class LuxuryPoolEnhancer:
         img_stage6 = self.enhance_details(img_stage5)
         path_stage6 = self.output_dir / f"{base_name}_06_details_enhanced.png"
         img_stage6.save(path_stage6, quality=95)
-        outputs['06_details_enhanced'] = path_stage6
+        outputs["06_details_enhanced"] = path_stage6
         log.info(f"Saved: {path_stage6}")
 
         # Stage 7: Final polish
@@ -381,13 +376,13 @@ class LuxuryPoolEnhancer:
         # Save master PNG
         path_final_png = self.output_dir / f"{base_name}_750Picacho_Pool_FINAL_LUXURY.png"
         img_final.save(path_final_png, quality=98, optimize=True)
-        outputs['final_png'] = path_final_png
+        outputs["final_png"] = path_final_png
         log.info(f"Saved master PNG: {path_final_png}")
 
         # Save web-optimized JPEG
         path_final_jpg = self.output_dir / f"{base_name}_750Picacho_Pool_FINAL_LUXURY.jpg"
         img_final.save(path_final_jpg, quality=95, optimize=True)
-        outputs['final_jpg'] = path_final_jpg
+        outputs["final_jpg"] = path_final_jpg
         log.info(f"Saved web JPEG: {path_final_jpg}")
 
         # Create comparison with original
@@ -395,7 +390,7 @@ class LuxuryPoolEnhancer:
         comparison = self.create_comparison(img, img_final)
         path_comparison = self.output_dir / f"{base_name}_BEFORE_AFTER_comparison.jpg"
         comparison.save(path_comparison, quality=95)
-        outputs['comparison'] = path_comparison
+        outputs["comparison"] = path_comparison
         log.info(f"Saved comparison: {path_comparison}")
 
         return outputs
@@ -411,7 +406,7 @@ class LuxuryPoolEnhancer:
             after = after.resize(new_size, Image.Resampling.LANCZOS)
 
         # Create side-by-side
-        comparison = Image.new('RGB', (before.width * 2, before.height))
+        comparison = Image.new("RGB", (before.width * 2, before.height))
         comparison.paste(before, (0, 0))
         comparison.paste(after, (before.width, 0))
 
@@ -421,6 +416,7 @@ class LuxuryPoolEnhancer:
 def main():
     """Main execution."""
     import time
+
     start_time = time.time()
 
     # Input path (relative to project directory)
@@ -459,10 +455,10 @@ def main():
     log.info(f"  Comparison: {outputs['comparison']}")
     log.info("\nStage outputs:")
     for stage, path in sorted(outputs.items()):
-        if not stage.startswith('final') and stage != 'comparison':
+        if not stage.startswith("final") and stage != "comparison":
             log.info(f"  {stage}: {path.name}")
     log.info("=" * 70)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

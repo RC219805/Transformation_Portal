@@ -1,7 +1,7 @@
 # PR-2 Complete: Intelligent Prompt Strategy + ROI Refinement
 
-**Date**: December 13, 2025  
-**Branch**: `feature/pr2-prompt-roi-refinement`  
+**Date**: December 13, 2025
+**Branch**: `feature/pr2-prompt-roi-refinement`
 **Status**: ✅ Complete, Ready for Merge
 
 ---
@@ -192,15 +192,15 @@ class PromptGenerationConfig:
     num_fg_points: int = 4
     fg_confidence_threshold: float = 0.60
     fg_top_percentile: float = 10.0  # top 10% of confident pixels
-    
+
     # Background sampling
     num_bg_points: int = 2
     bg_boundary_band: int = 10  # px from mask edge
-    
+
     # Skip guards
     min_mask_pixels: int = 500
     max_roi_side: int = 4096
-    
+
     # Spatial distribution
     enforce_spacing: bool = True
     min_spacing_pixels: int = 50
@@ -379,5 +379,5 @@ All acceptance criteria met. Tests passing. Documentation complete. Awaiting Sta
 
 ---
 
-**End of PR-2 Session**  
+**End of PR-2 Session**
 **Timestamp**: 2025-12-13 21:23 UTC

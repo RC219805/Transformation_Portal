@@ -53,7 +53,6 @@ def process(
         "-o",
         help="Output directory for results",
     ),
-    
     # Model configuration
     model: ModelVariant = typer.Option(
         ModelVariant.METRIC_LARGE,
@@ -67,14 +66,12 @@ def process(
         "-p",
         help="Use preset configuration",
     ),
-    
     # Inference mode
     multi_view: bool = typer.Option(
         False,
         "--multi-view",
         help="Enable multi-view depth estimation",
     ),
-    
     # CLI integration
     use_cli: bool = typer.Option(
         False,
@@ -91,7 +88,6 @@ def process(
         "--backend-url",
         help="Backend service URL",
     ),
-    
     # Processing options
     device: str = typer.Option(
         "auto",
@@ -109,7 +105,6 @@ def process(
         "-b",
         help="Batch size for processing",
     ),
-    
     # Postprocessing
     metric_scaling: bool = typer.Option(
         False,
@@ -121,7 +116,6 @@ def process(
         "--bilateral-filter",
         help="Apply bilateral filtering",
     ),
-    
     # Edge-aware refinement (new)
     enable_refinement: bool = typer.Option(
         False,
@@ -138,7 +132,6 @@ def process(
         "--refinement-stages",
         help="Comma-separated refinement stages (guided,bilateral,edge,gradient)",
     ),
-    
     # Metric depth conversion
     convert_to_metric: bool = typer.Option(
         False,
@@ -160,7 +153,6 @@ def process(
         "--depth-stats",
         help="Show depth statistics in meters",
     ),
-    
     # Export options
     export_format: List[ExportFormat] = typer.Option(
         [ExportFormat.PNG],
@@ -168,7 +160,6 @@ def process(
         "-f",
         help="Export formats (can specify multiple)",
     ),
-    
     # Validation
     validate: bool = typer.Option(
         False,
@@ -180,7 +171,6 @@ def process(
         "--ground-truth-dir",
         help="Directory with ground truth depth maps",
     ),
-    
     # Pattern matching
     pattern: str = typer.Option(
         "*.jpg",
@@ -193,7 +183,6 @@ def process(
         "-r",
         help="Search input directory recursively",
     ),
-    
     # Verbose output
     verbose: bool = typer.Option(
         False,
@@ -203,24 +192,24 @@ def process(
     ),
 ):
     """Process images with Depth Anything 3.
-    
+
     Examples:
-    
+
       # Monocular metric depth (native mode)
       lux-depth-v3 process -i renders/ -o output/ --model metric-large
-      
+
       # Using official CLI
       lux-depth-v3 process -i renders/ -o output/ --use-cli
-      
+
       # Using backend service for batch processing
       lux-depth-v3 process -i renders/ -o output/ --use-cli --use-backend
-      
+
       # Multi-view with pose estimation
       lux-depth-v3 process -i views/ -o 3d/ --multi-view --model nested-giant-large
-      
+
       # Using preset
       lux-depth-v3 process -i images/ --preset interior_luxury
-      
+
       # Export multiple formats
       lux-depth-v3 process -i renders/ -f png -f npz -f ply
     """
@@ -228,7 +217,7 @@ def process(
     if use_backend and not use_cli:
         print("ERROR: --use-backend requires --use-cli")
         sys.exit(1)
-    
+
     # Create configuration
     if preset is not None:
         config = DA3Config.from_preset(preset)
@@ -237,7 +226,7 @@ def process(
             model_variant=model,
             inference_mode=InferenceMode.MULTI_VIEW if multi_view else InferenceMode.MONOCULAR,
         )
-    
+
     # Override configuration with CLI options
     config.cli.use_cli = use_cli
     config.cli.use_backend = use_backend
@@ -251,19 +240,19 @@ def process(
     config.export.output_dir = output_dir
     config.validation.enable_validation = validate
     config.validation.ground_truth_path = ground_truth_dir
-    
+
     # Configure edge-aware refinement
     if enable_refinement:
         # Use preset or create custom config
         refinement_config = create_refinement_preset(refinement_preset)
-        
+
         # Override stages if specified
         if refinement_stages is not None:
             stages = [s.strip() for s in refinement_stages.split(",")]
             refinement_config.stages = stages
-        
+
         config.postprocessing.refinement = refinement_config
-    
+
     if verbose:
         print("Configuration:")
         print(f"  Model: {config.model_variant.value}")
@@ -273,13 +262,13 @@ def process(
         print(f"  Output: {output_dir}")
         if enable_refinement:
             print(f"  Refinement: {refinement_preset} ({', '.join(config.postprocessing.refinement.stages)})")
-    
+
     # Initialize pipeline components
     input_manager = InputManager(inference_mode=config.inference_mode)
     inference_engine = DA3InferenceEngine(config)
     postprocessor = Postprocessor(config.postprocessing)
     exporter = Exporter(config.export)
-    
+
     # Load inputs
     print(f"Loading images from: {input_dir}")
     num_images = input_manager.add_directory(
@@ -287,74 +276,74 @@ def process(
         pattern=pattern,
         recursive=recursive,
     )
-    
+
     if num_images == 0:
         print(f"No images found matching pattern: {pattern}")
         sys.exit(1)
-    
+
     print(f"Found {num_images} images")
-    
+
     # Validate inputs
     try:
         input_manager.validate_inputs()
     except ValueError as e:
         print(f"Input validation failed: {e}")
         sys.exit(1)
-    
+
     # Load model
     print("Loading DA3 model...")
     inference_engine.load_model()
-    
+
     # Initialize validation
     validator = None
     validation_report = None
     if validate:
         validator = DepthValidator(ground_truth_dir=ground_truth_dir)
         validation_report = ValidationReport()
-    
+
     # Process images
     print("Processing images...")
     inputs = input_manager.get_images()
-    
+
     for img_input in tqdm(inputs, desc="Depth estimation"):
         # Run inference
         result = inference_engine.inference(img_input)
-        
+
         # Apply postprocessing
         result = postprocessor.process(result)
-        
+
         # Validate if enabled
         if validator is not None:
             metrics = validator.validate(result)
             validation_report.add_result(metrics)
-            
+
             if verbose and metrics.metadata.get("has_ground_truth"):
                 print(f"\n  Metrics: RMSE={metrics.rmse:.4f}, δ1={metrics.delta_1:.3f}")
-        
+
         # Export results
         if img_input.path is not None:
             filename_base = img_input.path.stem
         else:
             filename_base = f"depth_{len(inputs)}"
-        
+
         exported = exporter.export(result, filename_base)
-        
+
         if verbose:
             for fmt, path in exported.items():
                 print(f"  Exported {fmt}: {path}")
-    
+
     # Save validation report
     if validation_report is not None:
         summary = validation_report.compute_summary()
         report_path = output_dir / "validation_report.json"
         validation_report.save(report_path)
-        
+
         print("\nValidation Summary:")
         print(f"  Images: {summary['num_images']}")
         print(f"  Mean RMSE: {summary['mean_rmse']:.4f}")
         print(f"  Mean δ1: {summary['mean_delta_1']:.3f}")
         print(f"  Report: {report_path}")
-    
+
     print(f"\nProcessing complete! Results saved to: {output_dir}")
 
 
@@ -378,31 +367,32 @@ def benchmark(
     ),
 ):
     """Benchmark DA3 model performance.
-    
+
     Example:
       lux-depth-v3 benchmark --model metric-large --device cuda -n 100
     """
     import time
     import numpy as np
-    
+
     print(f"Benchmarking {model.value} on {device}")
-    
+
     # Create dummy input
     dummy_image = np.random.randint(0, 255, (1024, 1024, 3), dtype=np.uint8)
-    
+
     # Initialize engine
     config = DA3Config(model_variant=model)
     config.device.device = device
     engine = DA3InferenceEngine(config)
     engine.load_model()
-    
+
     # Warm-up
     from lux_depth_v3.input_manager import ImageInput
+
     img_input = ImageInput(array=dummy_image)
     print("Warming up...")
     for _ in range(10):
         _ = engine.inference(img_input)
-    
+
     # Benchmark
     print(f"Running {num_iterations} iterations...")
     times = []
@@ -411,7 +401,7 @@ def benchmark(
         _ = engine.inference(img_input)
         elapsed = time.perf_counter() - start
         times.append(elapsed * 1000)  # Convert to ms
-    
+
     # Report
     print("\nBenchmark Results:")
     print(f"  Mean: {np.mean(times):.2f} ms")
@@ -446,34 +436,35 @@ def backend_start(
     ),
 ):
     """Start DA3 backend service.
-    
+
     The backend service keeps the model loaded in GPU memory, providing
     10-20x speedup for batch processing by avoiding model reload overhead.
-    
+
     Example:
       lux-depth-v3 backend-start --model-dir ~/.cache/lux_depth_v3/models/depth-anything-3-metric-large
     """
     from lux_depth_v3.da3_wrapper import DA3Backend, check_da3_cli_available
-    
+
     if not check_da3_cli_available():
         print("ERROR: DA3 CLI not found. Install from:")
         print("  https://github.com/DepthAnything/Depth-Anything-V3")
         sys.exit(1)
-    
+
     backend = DA3Backend(
         model_dir=model_dir,
         device=device,
         port=port,
         host=host,
     )
-    
+
     try:
         backend.start()
         print(f"Backend running at {backend.get_url()}")
         print("Press Ctrl+C to stop...")
-        
+
         # Keep running until interrupted
         import signal
+
         signal.pause()
     except KeyboardInterrupt:
         print("\nStopping backend...")
@@ -489,14 +480,14 @@ def backend_stop(
     ),
 ):
     """Stop DA3 backend service.
-    
+
     Example:
       lux-depth-v3 backend-stop --port 8008
     """
     import requests
-    
+
     url = f"http://localhost:{port}"
-    
+
     try:
         # Try graceful shutdown via API
         response = requests.post(f"{url}/shutdown", timeout=5)
@@ -518,17 +509,17 @@ def backend_status(
     ),
 ):
     """Check DA3 backend status.
-    
+
     Example:
       lux-depth-v3 backend-status --port 8008
     """
     from lux_depth_v3.da3_wrapper import DA3Backend
-    
+
     backend = DA3Backend(
         model_dir="",  # Not needed for status check
         port=port,
     )
-    
+
     if backend.is_running():
         print(f"✓ Backend is running at {backend.get_url()}")
     else:
@@ -538,31 +529,18 @@ def backend_status(
 @app.command()
 def benchmark(
     datasets: List[str] = typer.Option(
-        ["eth3d", "7scenes", "scannetpp", "hiroom", "dtu", "dtu64"],
-        "--dataset", "-d",
-        help="Datasets to evaluate"
+        ["eth3d", "7scenes", "scannetpp", "hiroom", "dtu", "dtu64"], "--dataset", "-d", help="Datasets to evaluate"
     ),
     modes: List[str] = typer.Option(
-        ["pose", "recon_unposed", "recon_posed"],
-        "--mode", "-m",
-        help="Evaluation modes (pose, recon_unposed, recon_posed)"
+        ["pose", "recon_unposed", "recon_posed"], "--mode", "-m", help="Evaluation modes (pose, recon_unposed, recon_posed)"
     ),
-    data_root: Path = typer.Option(
-        Path("workspace/benchmark_dataset"),
-        help="Benchmark data root directory"
-    ),
-    work_dir: Path = typer.Option(
-        Path("workspace/evaluation"),
-        help="Working directory for outputs"
-    ),
+    data_root: Path = typer.Option(Path("workspace/benchmark_dataset"), help="Benchmark data root directory"),
+    work_dir: Path = typer.Option(Path("workspace/evaluation"), help="Working directory for outputs"),
     max_frames: int = typer.Option(100, help="Max frames per scene (-1 for all)"),
     eval_only: bool = typer.Option(False, help="Only run evaluation, skip inference"),
     print_only: bool = typer.Option(False, help="Only print saved results"),
     use_cli: bool = typer.Option(False, help="Use DA3 CLI for inference"),
-    model_variant: str = typer.Option(
-        "da3-giant",
-        help="Model variant (da3-giant, da3-metric-large, da3-base)"
-    ),
+    model_variant: str = typer.Option("da3-giant", help="Model variant (da3-giant, da3-metric-large, da3-base)"),
 ):
     """Run DA3 benchmark evaluation."""
     from lux_depth_v3.benchmark import (
@@ -570,7 +548,7 @@ def benchmark(
         BenchmarkConfig,
         EvaluationMode,
     )
-    
+
     # Parse model variant
     variant_map = {
         "da3-giant": ModelVariant.DA3_GIANT,
@@ -578,7 +556,7 @@ def benchmark(
         "da3-base": ModelVariant.DA3_BASE,
     }
     model = variant_map.get(model_variant.lower(), ModelVariant.DA3_GIANT)
-    
+
     # Parse evaluation modes
     mode_map = {
         "pose": EvaluationMode.POSE,
@@ -586,23 +564,15 @@ def benchmark(
         "recon_posed": EvaluationMode.RECON_POSED,
     }
     eval_modes = [mode_map[m] for m in modes if m in mode_map]
-    
+
     # Create config
     config = BenchmarkConfig(
-        datasets=datasets,
-        modes=eval_modes,
-        max_frames=max_frames,
-        data_root=data_root,
-        work_dir=work_dir
+        datasets=datasets, modes=eval_modes, max_frames=max_frames, data_root=data_root, work_dir=work_dir
     )
-    
+
     # Initialize evaluator
-    evaluator = DA3BenchmarkEvaluator(
-        model_variant=model,
-        config=config,
-        use_cli=use_cli
-    )
-    
+    evaluator = DA3BenchmarkEvaluator(model_variant=model, config=config, use_cli=use_cli)
+
     if print_only:
         typer.echo("Loading saved results...")
         results = evaluator.load_results()
@@ -622,18 +592,13 @@ def benchmark(
 @app.command()
 def benchmark_download(
     datasets: List[str] = typer.Option(
-        ["all"],
-        "--dataset", "-d",
-        help="Datasets to download (all, eth3d, 7scenes, scannetpp, hiroom, dtu, dtu64)"
+        ["all"], "--dataset", "-d", help="Datasets to download (all, eth3d, 7scenes, scannetpp, hiroom, dtu, dtu64)"
     ),
-    data_root: Path = typer.Option(
-        Path("workspace/benchmark_dataset"),
-        help="Download destination"
-    ),
+    data_root: Path = typer.Option(Path("workspace/benchmark_dataset"), help="Download destination"),
 ):
     """Download DA3 benchmark datasets from HuggingFace."""
     from lux_depth_v3.benchmark import download_datasets
-    
+
     typer.echo(f"Downloading datasets to {data_root}...")
     download_datasets(datasets, data_root)
     typer.echo(f"✅ Download complete")
@@ -644,18 +609,16 @@ def main():
     app()
 
 
-
-
 @app.command()
 def api_process(
     # Input/Output
     input_path: Path = typer.Argument(..., help="Input path (image or directory)"),
     output_dir: Path = typer.Option(..., "--output-dir", "-o", help="Output directory"),
-    
     # Model selection with version support
     model_name: str = typer.Option(
         "nested-giant-large-v1.1",
-        "--model", "-m",
+        "--model",
+        "-m",
         help=(
             "Model variant. Options:\n"
             "  nested-giant-large-v1.1 (recommended, 1.40B, NC)\n"
@@ -666,120 +629,82 @@ def api_process(
             "  small (0.08B, Apache)\n"
             "  metric-large (0.35B, Apache, commercial-friendly)\n"
             "  mono-large (0.35B, Apache)\n"
-        )
+        ),
     ),
-    
     # License validation
     commercial_use: bool = typer.Option(
-        False,
-        "--commercial",
-        help="Declare this is commercial use (triggers license validation)"
+        False, "--commercial", help="Declare this is commercial use (triggers license validation)"
     ),
-    
     strict_license: bool = typer.Option(
-        False,
-        "--strict-license",
-        help="Raise error instead of warning on license violations"
+        False, "--strict-license", help="Raise error instead of warning on license violations"
     ),
-    
-    show_license: bool = typer.Option(
-        False,
-        "--show-license",
-        help="Show license information for selected model and exit"
-    ),
-    
+    show_license: bool = typer.Option(False, "--show-license", help="Show license information for selected model and exit"),
     # Export formats
     export_format: str = typer.Option(
-        "mini_npz",
-        "--export-format", "-f",
-        help="Export format(s), separated by '-' (e.g., 'mini_npz-glb-gs_ply')"
+        "mini_npz", "--export-format", "-f", help="Export format(s), separated by '-' (e.g., 'mini_npz-glb-gs_ply')"
     ),
-    
     # Pose parameters
     use_ray_pose: bool = typer.Option(False, "--use-ray-pose", help="Use ray-based pose estimation"),
     ref_view_strategy: str = typer.Option(
         "saddle_balanced",
         "--ref-view-strategy",
-        help="Reference view strategy (first/middle/saddle_balanced/saddle_sim_range)"
+        help="Reference view strategy (first/middle/saddle_balanced/saddle_sim_range)",
     ),
     align_to_input_ext_scale: bool = typer.Option(True, "--align-scale/--no-align-scale", help="Align to input scale"),
-    
     # Gaussian Splatting
     infer_gs: bool = typer.Option(False, "--infer-gs", help="Enable Gaussian Splatting branch"),
-    
     # Feature extraction
     export_feat_layers: str = typer.Option("", "--export-feat", help="Feature layers (comma-separated, e.g., '0,3,6,9')"),
     feat_vis_fps: int = typer.Option(15, "--feat-fps", help="Feature visualization FPS"),
-    
     # GLB export
     conf_thresh_percentile: float = typer.Option(40.0, "--conf-thresh", help="GLB confidence threshold percentile (0-100)"),
     num_max_points: int = typer.Option(1_000_000, "--max-points", help="GLB max points"),
     show_cameras: bool = typer.Option(True, "--show-cameras/--no-cameras", help="GLB show cameras"),
-    
     # Processing
     process_res: int = typer.Option(504, "--process-res", help="Processing resolution"),
     process_res_method: str = typer.Option("upper_bound_resize", "--resize-method", help="Resize method"),
-    
     # Device
     device: str = typer.Option("cuda", "--device", help="Device (cuda/cpu/mps)"),
-    
     # Metric depth conversion
-    convert_to_metric: bool = typer.Option(
-        False,
-        "--metric",
-        help="Convert depth to metric depth in meters"
-    ),
-    
+    convert_to_metric: bool = typer.Option(False, "--metric", help="Convert depth to metric depth in meters"),
     focal_length: Optional[float] = typer.Option(
-        None,
-        "--focal-length",
-        help="Focal length in pixels (for metric conversion)"
+        None, "--focal-length", help="Focal length in pixels (for metric conversion)"
     ),
-    
-    fov: Optional[float] = typer.Option(
-        None,
-        "--fov",
-        help="Horizontal field of view in degrees (for metric estimation)"
-    ),
-    
-    show_depth_stats: bool = typer.Option(
-        False,
-        "--depth-stats",
-        help="Show depth statistics in meters"
-    ),
+    fov: Optional[float] = typer.Option(None, "--fov", help="Horizontal field of view in degrees (for metric estimation)"),
+    show_depth_stats: bool = typer.Option(False, "--depth-stats", help="Show depth statistics in meters"),
 ):
     """Process images with full DA3 Python API support.
-    
+
     This command exposes all DA3 API features including:
     - Multi-view depth estimation with pose estimation
     - Gaussian Splatting (requires da3-giant or da3nested-giant-large)
     - Feature extraction from intermediate layers
     - Multiple export formats (NPZ, GLB, PLY, videos)
     - License validation for commercial use
-    
+
     Examples:
         # Basic monocular depth with v1.1 model
         lux-depth-v3 api-process image.jpg -o output
-        
+
         # Show license information
         lux-depth-v3 api-process image.jpg -o output --show-license
-        
+
         # Multi-view with GLB export
         lux-depth-v3 api-process images/ -o output -f "mini_npz-glb"
-        
+
         # Commercial use with Apache-licensed model
         lux-depth-v3 api-process images/ -o output -m metric-large --commercial
-        
+
         # Gaussian Splatting workflow
         lux-depth-v3 api-process images/ -o output -m giant-v1.1 --infer-gs -f "gs_ply-gs_video"
-        
+
         # Feature extraction
         lux-depth-v3 api-process images/ -o output --export-feat "0,3,6,9" -f "feat_vis"
     """
     from lux_depth_v3.config import DA3Config, DA3APIConfig, ModelVariant, DeviceConfig
     from lux_depth_v3.inference import DA3InferenceEngine
     from lux_depth_v3.license import LicenseValidator
-    
+
     # Parse model variant
     model_map = {
         "nested-giant-large-v1.1": ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1,
@@ -801,37 +726,37 @@ def api_process(
         "da3mono-large": ModelVariant.DA3_MONO_LARGE,
         "da3nested-giant-large": ModelVariant.DA3_NESTED_GIANT_LARGE,
     }
-    
+
     variant = model_map.get(model_name.lower())
     if variant is None:
         typer.echo(f"❌ Unknown model: {model_name}", err=True)
         typer.echo(f"Available models: {', '.join(model_map.keys())}")
         raise typer.Exit(1)
-    
+
     # Show license info if requested
     if show_license:
         validator = LicenseValidator()
         info = validator.get_license_info(variant)
-        
+
         typer.echo(f"\n📄 License Information")
-        typer.echo(f"{'='*70}")
+        typer.echo(f"{'=' * 70}")
         typer.echo(f"Model: {info['model']}")
         typer.echo(f"License: {info['license']}")
         typer.echo(f"Commercial Use: {'✅ Allowed' if info['commercial_allowed'] else '❌ Not Allowed'}")
         typer.echo(f"License URL: {info['license_url']}")
-        
-        if info['alternative']:
+
+        if info["alternative"]:
             typer.echo(f"\nCommercial Alternative: {info['alternative']}")
-        
-        if info['capabilities']:
+
+        if info["capabilities"]:
             typer.echo(f"\nCapabilities:")
-            for cap, supported in info['capabilities'].items():
+            for cap, supported in info["capabilities"].items():
                 status = "✅" if supported else "❌"
                 typer.echo(f"  {status} {cap.replace('_', ' ').title()}")
-        
-        typer.echo(f"{'='*70}\n")
+
+        typer.echo(f"{'=' * 70}\n")
         raise typer.Exit(0)
-    
+
     typer.echo(f"🚀 DA3 API Processing")
     typer.echo(f"   Model: {variant.info.display_name} ({variant.info.params})")
     typer.echo(f"   License: {variant.info.license.value}")
@@ -840,7 +765,7 @@ def api_process(
     typer.echo(f"   Input: {input_path}")
     typer.echo(f"   Output: {output_dir}")
     typer.echo(f"   Export: {export_format}")
-    
+
     # Parse feature layers
     feat_layers = []
     if export_feat_layers:
@@ -849,7 +774,7 @@ def api_process(
         except ValueError:
             typer.echo(f"❌ Invalid feature layers: {export_feat_layers}", err=True)
             sys.exit(1)
-    
+
     # Create API config
     api_config = DA3APIConfig(
         model_name=model_name,
@@ -864,30 +789,26 @@ def api_process(
         conf_thresh_percentile=conf_thresh_percentile,
         num_max_points=num_max_points,
         show_cameras=show_cameras,
-        feat_vis_fps=feat_vis_fps
+        feat_vis_fps=feat_vis_fps,
     )
-    
+
     # Create main config
     config = DA3Config(
         model_variant=variant,
         api=api_config,
         device=DeviceConfig(device=device),
     )
-    
+
     # Initialize engine with license validation
     try:
-        engine = DA3InferenceEngine(
-            config,
-            commercial_use=commercial_use,
-            validate_license_strict=strict_license
-        )
+        engine = DA3InferenceEngine(config, commercial_use=commercial_use, validate_license_strict=strict_license)
     except Exception as e:
         typer.echo(f"❌ Failed to initialize engine: {e}", err=True)
         sys.exit(1)
-    
+
     # Collect images
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if input_path.is_file():
         images = [input_path]
     elif input_path.is_dir():
@@ -898,9 +819,9 @@ def api_process(
     else:
         typer.echo(f"❌ Invalid input path: {input_path}", err=True)
         sys.exit(1)
-    
+
     typer.echo(f"   Found {len(images)} images")
-    
+
     # Run inference
     try:
         typer.echo("⚙️  Running inference...")
@@ -909,9 +830,9 @@ def api_process(
             export_dir=output_dir,
             convert_to_metric=convert_to_metric,
             focal_length_px=focal_length,
-            fov_degrees=fov
+            fov_degrees=fov,
         )
-        
+
         typer.echo(f"✅ Processing complete")
         typer.echo(f"   Depth shape: {result.depth.shape}")
         if result.extrinsics is not None:
@@ -919,25 +840,26 @@ def api_process(
         if result.aux:
             typer.echo(f"   Auxiliary outputs: {list(result.aux.keys())}")
         typer.echo(f"   Results saved to: {output_dir}")
-        
+
         # Show depth statistics if requested
-        if show_depth_stats and hasattr(result, 'metric_depth'):
+        if show_depth_stats and hasattr(result, "metric_depth"):
             from lux_depth_v3.metric_depth import get_depth_statistics
-            
+
             stats = get_depth_statistics(result.metric_depth)
-            
+
             typer.echo("\n📏 Depth Statistics (meters)")
-            typer.echo(f"{'='*50}")
+            typer.echo(f"{'=' * 50}")
             typer.echo(f"Min:    {stats['min_m']:.2f} m")
             typer.echo(f"Max:    {stats['max_m']:.2f} m")
             typer.echo(f"Mean:   {stats['mean_m']:.2f} m")
             typer.echo(f"Median: {stats['median_m']:.2f} m")
             typer.echo(f"Range:  {stats['range_m']:.2f} m")
-            typer.echo(f"{'='*50}\n")
-        
+            typer.echo(f"{'=' * 50}\n")
+
     except Exception as e:
         typer.echo(f"❌ Inference failed: {e}", err=True)
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
@@ -945,53 +867,30 @@ def api_process(
 @app.command()
 def cache_download(
     model_set: str = typer.Option(
-        "essential",
-        "--set", "-s",
-        help="Model set to download (essential/production/benchmark/all)"
+        "essential", "--set", "-s", help="Model set to download (essential/production/benchmark/all)"
     ),
-    models: Optional[str] = typer.Option(
-        None,
-        "--models", "-m",
-        help="Comma-separated model keys (overrides --set)"
-    ),
-    cache_dir: Optional[Path] = typer.Option(
-        None,
-        "--cache-dir",
-        help="Custom cache directory (default: HF cache)"
-    ),
-    force: bool = typer.Option(
-        False,
-        "--force",
-        help="Force re-download even if cached"
-    ),
-    verify: bool = typer.Option(
-        True,
-        "--verify/--no-verify",
-        help="Verify downloads"
-    ),
+    models: Optional[str] = typer.Option(None, "--models", "-m", help="Comma-separated model keys (overrides --set)"),
+    cache_dir: Optional[Path] = typer.Option(None, "--cache-dir", help="Custom cache directory (default: HF cache)"),
+    force: bool = typer.Option(False, "--force", help="Force re-download even if cached"),
+    verify: bool = typer.Option(True, "--verify/--no-verify", help="Verify downloads"),
 ):
     """Download and cache DA3 models."""
     from lux_depth_v3.model_cache import ModelCacheManager
-    
+
     manager = ModelCacheManager(cache_dir=cache_dir)
-    
+
     # Parse models if provided
     model_keys = models.split(",") if models else None
-    
+
     typer.echo(f"📥 Downloading DA3 models...")
     typer.echo(f"   Set: {model_set if not model_keys else 'custom'}")
     typer.echo(f"   Cache: {manager.cache_dir}")
-    
-    results = manager.download_models(
-        model_set=model_set,
-        model_keys=model_keys,
-        force=force,
-        verify=verify
-    )
-    
+
+    results = manager.download_models(model_set=model_set, model_keys=model_keys, force=force, verify=verify)
+
     # Summary
     total_size = sum(r.size_bytes for r in results)
-    
+
     typer.echo(f"\n✅ Downloaded {len(results)} models")
     typer.echo(f"   Total size: {total_size / (1024**3):.2f} GB")
     typer.echo(f"   Cache location: {manager.cache_dir}")
@@ -1001,26 +900,26 @@ def cache_download(
 def cache_list():
     """List cached models."""
     from lux_depth_v3.model_cache import ModelCacheManager
-    
+
     manager = ModelCacheManager()
     cached = manager.list_cached_models()
-    
+
     if not cached:
         typer.echo("No models cached yet.")
         typer.echo(f"Run: lux-depth-v3 cache-download --set essential")
         return
-    
+
     typer.echo(f"\n📦 Cached Models ({len(cached)})")
-    typer.echo(f"{'='*70}")
-    
+    typer.echo(f"{'=' * 70}")
+
     for model in cached:
         size_gb = model.size_bytes / (1024**3)
         verified = "✓" if model.verified else "?"
         typer.echo(f"{verified} {model.model_id}")
         typer.echo(f"   Size: {size_gb:.2f} GB | Cached: {model.cached_at}")
-    
+
     stats = manager.get_cache_stats()
-    typer.echo(f"\n{'='*70}")
+    typer.echo(f"\n{'=' * 70}")
     typer.echo(f"Total: {stats['total_size_gb']:.2f} GB in {stats['num_models']} models")
     typer.echo(f"Cache: {stats['cache_dir']}")
 
@@ -1029,12 +928,12 @@ def cache_list():
 def cache_stats():
     """Show cache statistics."""
     from lux_depth_v3.model_cache import ModelCacheManager
-    
+
     manager = ModelCacheManager()
     stats = manager.get_cache_stats()
-    
+
     typer.echo(f"\n📊 Cache Statistics")
-    typer.echo(f"{'='*70}")
+    typer.echo(f"{'=' * 70}")
     typer.echo(f"Location: {stats['cache_dir']}")
     typer.echo(f"Models: {stats['num_models']}")
     typer.echo(f"Total Size: {stats['total_size_gb']:.2f} GB")

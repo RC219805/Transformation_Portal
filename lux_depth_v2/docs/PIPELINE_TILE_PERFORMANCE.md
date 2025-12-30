@@ -1,17 +1,17 @@
 # LuxDepthV2 Tile-Level Performance Dashboard
 
-**Last Updated:** 2025-12-23  
-**Data Source:** Production metrics from phase2_task1 and phase2_task8 outputs  
-**Test Image:** test_interior_01 (glass/stone validation workflows)  
+**Last Updated:** 2025-12-23
+**Data Source:** Production metrics from phase2_task1 and phase2_task8 outputs
+**Test Image:** test_interior_01 (glass/stone validation workflows)
 **Hardware:** M4 Max / NVIDIA A100 baseline
 
 ---
 
 ## Executive Summary
 
-**Average Total Execution:** 6.9s (across glass/stone workflows)  
-**Peak VRAM:** ~4-6GB (Materials V3 + AI upscaling)  
-**Primary Bottlenecks:** Materials V2 (1.6s), Export Marketing (1.1s), Materials V3 (0.21s)  
+**Average Total Execution:** 6.9s (across glass/stone workflows)
+**Peak VRAM:** ~4-6GB (Materials V3 + AI upscaling)
+**Primary Bottlenecks:** Materials V2 (1.6s), Export Marketing (1.1s), Materials V3 (0.21s)
 **Optimization Potential:** 40-60% speedup with selective feature disabling
 
 ---
@@ -84,7 +84,7 @@ flowchart TB
         T2[Tile 2: Clarity + Sharpen<br>⏱️ 0.16s est | 💾 0.7GB | ⚡ CPU 27%]:::normal
         T3[Tile 3: Clarity + Sharpen<br>⏱️ 0.17s est | 💾 0.8GB | ⚡ CPU 30%]:::normal
         T4[Tile 4: Clarity + Sharpen<br>⏱️ 0.18s est | 💾 0.9GB | ⚡ CPU 32%]:::normal
-        
+
         T1 --> T2 --> T3 --> T4
         T4 --> T_MERGE[Merge Tiles<br>⏱️ 0.20s est | 💾 1.5GB | ⚡ CPU 20%]:::normal
         T_MERGE --> T_NOTE[💡 Sequential processing<br>reduces peak VRAM]:::info
@@ -185,7 +185,7 @@ Stage Breakdown:
   ```bash
   # Disable for batch processing
   --enable-materials-v2 false
-  
+
   # Or pre-cache segmentation masks
   lux-depth-v2 --cache-mode aggressive
   ```
@@ -198,7 +198,7 @@ Stage Breakdown:
   ```bash
   # Skip marketing export for batch processing
   --export-marketing false
-  
+
   # Or use faster compression
   --png-compression-level 3  # default: 9
   ```
@@ -286,10 +286,10 @@ VRAM Savings: 70% reduction
 
 ### Tile Processing Benefits
 
-✅ **Memory Efficiency:** 70% VRAM reduction (0.9GB vs 3.0GB)  
-✅ **Stability:** Prevents OOM on lower-end GPUs  
-✅ **Scalability:** Enables processing of 8K+ images  
-⚠️ **Sequential Overhead:** ~0.2s merge time  
+✅ **Memory Efficiency:** 70% VRAM reduction (0.9GB vs 3.0GB)
+✅ **Stability:** Prevents OOM on lower-end GPUs
+✅ **Scalability:** Enables processing of 8K+ images
+⚠️ **Sequential Overhead:** ~0.2s merge time
 💡 **Future:** Multi-threaded tile processing could reduce to ~0.25s total
 
 ---
@@ -333,7 +333,7 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ \
   --export-marketing false \
   --write-upscaled false
 ```
-**Expected Time:** 0.88s per image (76% faster)  
+**Expected Time:** 0.88s per image (76% faster)
 **Quality Impact:** Minimal (master TIFF + preview retained)
 
 **Scenario 2: Real-Time Preview**
@@ -345,7 +345,7 @@ lux-depth-v2 --preset quick_preview \
   --write-upscaled false \
   --export-marketing false
 ```
-**Expected Time:** 0.16s per image (96% faster)  
+**Expected Time:** 0.16s per image (96% faster)
 **Quality Impact:** Grading-only, suitable for design iteration
 
 **Scenario 3: Final Deliverable (Maximum Quality)**
@@ -356,7 +356,7 @@ lux-depth-v2 --preset ultra_quality \
   --upscaler-backend torch \
   --validate-ai true
 ```
-**Expected Time:** 5-8s per image (with AI upscaler)  
+**Expected Time:** 5-8s per image (with AI upscaler)
 **Quality Impact:** Maximum fidelity for client presentations
 
 ### Medium-Term Improvements (Code Changes)

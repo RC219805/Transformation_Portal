@@ -1,9 +1,9 @@
 # DA3 Integration Decision: DEFER
 
-**Date**: 2025-12-19  
-**Decision Status**: ❌ **DEFERRED** (not rejected permanently)  
-**Baseline**: v1.0-validation-baseline (DA2-Large-hf, 84.8% pass)  
-**Production Model**: DA2-Large-hf  
+**Date**: 2025-12-19
+**Decision Status**: ❌ **DEFERRED** (not rejected permanently)
+**Baseline**: v1.0-validation-baseline (DA2-Large-hf, 84.8% pass)
+**Production Model**: DA2-Large-hf
 **Decision Authority**: Transformation Portal Architect
 
 ---
@@ -16,7 +16,7 @@
 
 **Outcome**: DA2 baseline remains production-ready with clear improvement path (input-size sweep for structure scenes).
 
-**ROI Analysis**: 
+**ROI Analysis**:
 - **Recalibration cost**: 16-24 hours (uncertain outcome)
 - **Alternative path**: 4-6 hours (validated approach, 25%→60% structure improvement)
 - **Decision**: Engineering efficiency favors DA2 optimization
@@ -80,8 +80,8 @@
 
 ## Immediate Production Path
 
-**Model**: Depth Anything V2 Large-hf  
-**Baseline Tag**: `v1.0-validation-baseline`  
+**Model**: Depth Anything V2 Large-hf
+**Baseline Tag**: `v1.0-validation-baseline`
 **Current Performance**: 84.8% overall, 97.4% texture, 25% structure
 
 ### Next Optimization: Structure Input-Size Sweep
@@ -94,8 +94,8 @@
 3. Measure edge F1 and structure preservation improvements
 4. Deploy if threshold achieved
 
-**Estimated Effort**: 4-6 hours  
-**Success Probability**: High (established correlation between resolution and edge quality)  
+**Estimated Effort**: 4-6 hours
+**Success Probability**: High (established correlation between resolution and edge quality)
 **ROI**: Direct bottleneck fix vs uncertain DA3 recalibration
 
 ---
@@ -220,14 +220,14 @@ Re-evaluate DA3 in **future cycle** when:
 
 ## Decision Authority
 
-**Primary**: Transformation Portal Architect  
-**Consulted**: User (validated methodology and rationale)  
+**Primary**: Transformation Portal Architect
+**Consulted**: User (validated methodology and rationale)
 **Review Status**: Documented for team review in `feat/validation-baseline-da3-evaluation` PR
 
 **Approval**: Decision is **FINAL** based on objective validation results meeting established criteria.
 
 ---
 
-**Document Version**: 3.0 (DEFER Decision Final)  
-**Last Updated**: 2025-12-19 21:21 UTC  
+**Document Version**: 3.0 (DEFER Decision Final)
+**Last Updated**: 2025-12-19 21:21 UTC
 **Status**: COMPLETE - Production recommendation issued

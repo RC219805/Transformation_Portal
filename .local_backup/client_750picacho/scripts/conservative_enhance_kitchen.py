@@ -4,6 +4,7 @@ Conservative Enhancement - 750 Picacho Kitchen
 Optimized for luxury kitchen interior rendering
 Based on successful aerial processing approach (99.5% fidelity)
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -46,7 +48,7 @@ if TIFFFILE_AVAILABLE:
 
         # Convert to 8-bit for PIL processing
         img_8bit = (rgb * 255).astype(np.uint8)
-        img = Image.fromarray(img_8bit, 'RGB')
+        img = Image.fromarray(img_8bit, "RGB")
 
     except Exception as e:
         print(f"  tifffile failed: {e}")
@@ -87,8 +89,8 @@ print("\n[3/7] Balancing color temperature...")
 # Analysis showed warm cast: 54% red, 40% blue
 # Reduce red dominance and boost blue slightly
 result_array = np.array(result).astype(np.float32)
-result_array[:,:,0] *= 0.97  # Reduce red by 3%
-result_array[:,:,2] *= 1.03  # Boost blue by 3%
+result_array[:, :, 0] *= 0.97  # Reduce red by 3%
+result_array[:, :, 2] *= 1.03  # Boost blue by 3%
 result_array = np.clip(result_array, 0, 255).astype(np.uint8)
 result = Image.fromarray(result_array)
 print("  ✓ Color temperature: Warm → Neutral-warm (balanced)")
@@ -111,7 +113,7 @@ print("\n[5/7] Material enhancement...")
 
 # Create edge mask for selective sharpening
 edges = result.filter(ImageFilter.FIND_EDGES)
-edges_gray = edges.convert('L')
+edges_gray = edges.convert("L")
 edges_array = np.array(edges_gray)
 edge_mask = (edges_array > 25).astype(float)
 
@@ -195,13 +197,13 @@ sat_change = (result_sat - orig_sat) / orig_sat * 100
 print(f"  Saturation: +{sat_change:.1f}% (target: +8%)")
 
 # Color balance
-r_mean = result_array[:,:,0].mean()
-g_mean = result_array[:,:,1].mean()
-b_mean = result_array[:,:,2].mean()
+r_mean = result_array[:, :, 0].mean()
+g_mean = result_array[:, :, 1].mean()
+b_mean = result_array[:, :, 2].mean()
 print("\n  Color Channels (after adjustment):")
-print(f"    Red: {r_mean:.1f} (was {original_array[:,:,0].mean():.1f})")
-print(f"    Green: {g_mean:.1f} (was {original_array[:,:,1].mean():.1f})")
-print(f"    Blue: {b_mean:.1f} (was {original_array[:,:,2].mean():.1f})")
+print(f"    Red: {r_mean:.1f} (was {original_array[:, :, 0].mean():.1f})")
+print(f"    Green: {g_mean:.1f} (was {original_array[:, :, 1].mean():.1f})")
+print(f"    Blue: {b_mean:.1f} (was {original_array[:, :, 2].mean():.1f})")
 
 print("\n🎯 Enhancements Applied:")
 print("  ✓ Color saturation boost (+8%)")

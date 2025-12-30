@@ -5,7 +5,7 @@
 ### 1. Test Failures Due to Segmentation Backend
 **Problem**: Tests were failing because they used presets that defaulted to `segformer` backend, which requires the `transformers` package. While transformers was installed in CI, the SegFormerAdekMaterialSegmenter.__init__() was failing to import it properly.
 
-**Solution**: 
+**Solution**:
 - Added `ci_safe_config` fixture to both test classes that configures `segmentation.backend = "heuristic"`
 - Heuristic backend has no external dependencies and works reliably in CI
 - Updated all 13 edge case tests and 7 stress tests to use this fixture

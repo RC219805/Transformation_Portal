@@ -1,5 +1,5 @@
 # Tiling Bug: Final Root Cause Analysis
-**Date**: 2025-12-18  
+**Date**: 2025-12-18
 **Status**: ❌ FUNDAMENTAL ARCHITECTURE ISSUE IDENTIFIED
 
 ---
@@ -50,7 +50,7 @@ Scale reconciliation matches **depth values**, not **spatial positions**. If til
 def _infer_tile(self, tile_rgb: np.ndarray) -> np.ndarray:
     # ... model inference ...
     depth = depth_tensor.squeeze().cpu().numpy()
-    
+
     # CRITICAL: Resize depth to match input tile size
     target_h, target_w = tile_rgb.shape[:2]
     if depth.shape != (target_h, target_w):
@@ -59,11 +59,11 @@ def _infer_tile(self, tile_rgb: np.ndarray) -> np.ndarray:
         scale_w = target_w / depth.shape[1]
         depth = zoom(depth, (scale_h, scale_w), order=1)  # Bilinear
         logger.debug(f"Resized depth: {depth_tensor.shape} → {depth.shape}")
-    
+
     return depth
 ```
 
-**Pros**: Simple, preserves tile alignment  
+**Pros**: Simple, preserves tile alignment
 **Cons**: Slight interpolation (but better than misalignment)
 
 ### Option 2: Track Actual Depth ROI
@@ -72,28 +72,28 @@ def _infer_tile(self, tile_rgb: np.ndarray) -> np.ndarray:
 def _infer_tile(self, tile_rgb: np.ndarray) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
     # ... inference ...
     depth = depth_tensor.squeeze().cpu().numpy()
-    
+
     # Compute actual depth ROI (centered crop of tile)
     dh, dw = depth.shape
     th, tw = tile_rgb.shape[:2]
-    
+
     # Center the depth within the tile region
     y_offset = (th - dh) // 2
     x_offset = (tw - dw) // 2
-    
+
     return depth, (y_offset, y_offset + dh, x_offset, x_offset + dw)
 ```
 
 Then adjust blending to account for offsets.
 
-**Pros**: No interpolation  
+**Pros**: No interpolation
 **Cons**: Complex blending logic, still have edge alignment issues at seams
 
 ### Option 3: Abandon Bypass Mode (Not Recommended)
 
 Use HF pipeline which handles resizing internally.
 
-**Pros**: Consistent behavior  
+**Pros**: Consistent behavior
 **Cons**: Forces 518px resize (defeats the purpose of tiling)
 
 ---
@@ -174,5 +174,5 @@ assert depth.shape[:2] == rgb.shape[:2], \
 
 ---
 
-**Status**: Root cause confirmed, fix identified, awaiting implementation and validation.  
+**Status**: Root cause confirmed, fix identified, awaiting implementation and validation.
 **Next**: Implement resize fix, re-run isolation test, validate ≥75% overlap.

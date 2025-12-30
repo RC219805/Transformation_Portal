@@ -20,6 +20,7 @@ import numpy as np
 try:
     import torch
     from torch.utils.data import Dataset, DataLoader, random_split
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -27,18 +28,21 @@ except ImportError:
 
 try:
     from PIL import Image
+
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
 
 try:
     import tifffile
+
     TIFF_AVAILABLE = True
 except ImportError:
     TIFF_AVAILABLE = False
 
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
@@ -62,6 +66,7 @@ class DepthDataConfig:
         max_depth: Maximum valid depth value
         depth_format: Format of depth files ('png', 'tiff', 'npy')
     """
+
     train_dir: str = "data/architectural/train"
     val_dir: str = "data/architectural/val"
     test_dir: Optional[str] = None
@@ -72,12 +77,8 @@ class DepthDataConfig:
     min_depth: float = 0.0
     max_depth: float = 1000.0
     depth_format: str = "auto"
-    valid_image_extensions: List[str] = field(
-        default_factory=lambda: [".jpg", ".jpeg", ".png", ".tiff", ".tif"]
-    )
-    valid_depth_extensions: List[str] = field(
-        default_factory=lambda: [".png", ".tiff", ".tif", ".npy", ".npz"]
-    )
+    valid_image_extensions: List[str] = field(default_factory=lambda: [".jpg", ".jpeg", ".png", ".tiff", ".tif"])
+    valid_depth_extensions: List[str] = field(default_factory=lambda: [".png", ".tiff", ".tif", ".npy", ".npz"])
 
 
 class ArchitecturalDepthDataset(Dataset):
@@ -119,10 +120,7 @@ class ArchitecturalDepthDataset(Dataset):
             transform: Optional transform to apply
         """
         if not TORCH_AVAILABLE:
-            raise ImportError(
-                "PyTorch required for ArchitecturalDepthDataset. "
-                "Install with: pip install torch"
-            )
+            raise ImportError("PyTorch required for ArchitecturalDepthDataset. Install with: pip install torch")
 
         self.config = config
         self.split = split
@@ -151,35 +149,25 @@ class ArchitecturalDepthDataset(Dataset):
         self.pairs = self._find_pairs()
 
         if len(self.pairs) == 0:
-            logger.warning(
-                f"No valid image-depth pairs found in {self.data_dir}"
-            )
+            logger.warning(f"No valid image-depth pairs found in {self.data_dir}")
 
         # Cache for loaded images
         self._cache: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
 
-        logger.info(
-            f"Initialized {split} dataset with {len(self.pairs)} pairs"
-        )
+        logger.info(f"Initialized {split} dataset with {len(self.pairs)} pairs")
 
     def _validate_directories(self) -> None:
         """Validate that data directories exist."""
         if not self.data_dir.exists():
-            raise FileNotFoundError(
-                f"Data directory not found: {self.data_dir}"
-            )
+            raise FileNotFoundError(f"Data directory not found: {self.data_dir}")
 
         if not self.images_dir.exists():
             # Try alternative structure (images at root)
             self.images_dir = self.data_dir
-            logger.warning(
-                f"images/ subdirectory not found, using {self.data_dir}"
-            )
+            logger.warning(f"images/ subdirectory not found, using {self.data_dir}")
 
         if not self.depth_dir.exists():
-            raise FileNotFoundError(
-                f"Depth directory not found: {self.depth_dir}"
-            )
+            raise FileNotFoundError(f"Depth directory not found: {self.depth_dir}")
 
     def _find_pairs(self) -> List[Tuple[Path, Path]]:
         """Find all valid image-depth pairs.
@@ -201,9 +189,7 @@ class ArchitecturalDepthDataset(Dataset):
             if depth_path is not None:
                 pairs.append((image_path, depth_path))
             else:
-                logger.debug(
-                    f"No depth file found for {image_path.name}"
-                )
+                logger.debug(f"No depth file found for {image_path.name}")
 
         return pairs
 
@@ -249,8 +235,7 @@ class ArchitecturalDepthDataset(Dataset):
             return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         else:
             raise ImportError(
-                "PIL or OpenCV required for image loading. "
-                "Install with: pip install Pillow or pip install opencv-python"
+                "PIL or OpenCV required for image loading. Install with: pip install Pillow or pip install opencv-python"
             )
 
     def _load_depth(self, path: Path) -> np.ndarray:
@@ -284,10 +269,7 @@ class ArchitecturalDepthDataset(Dataset):
             elif PIL_AVAILABLE:
                 depth = np.array(Image.open(path))
             else:
-                raise ImportError(
-                    "tifffile or PIL required for TIFF loading. "
-                    "Install with: pip install tifffile"
-                )
+                raise ImportError("tifffile or PIL required for TIFF loading. Install with: pip install tifffile")
 
         elif suffix == ".png":
             if PIL_AVAILABLE:
@@ -295,9 +277,7 @@ class ArchitecturalDepthDataset(Dataset):
             elif CV2_AVAILABLE:
                 depth = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
             else:
-                raise ImportError(
-                    "PIL or OpenCV required for PNG loading."
-                )
+                raise ImportError("PIL or OpenCV required for PNG loading.")
 
         else:
             raise ValueError(f"Unsupported depth format: {suffix}")
@@ -341,8 +321,7 @@ class ArchitecturalDepthDataset(Dataset):
                 UINT16_MAX = 65535  # Maximum value for uint16 depth precision
                 if array.dtype == np.float32:
                     # Scale for uint16 precision
-                    scaled = ((array - array.min()) /
-                              (array.max() - array.min() + 1e-8) * UINT16_MAX)
+                    scaled = (array - array.min()) / (array.max() - array.min() + 1e-8) * UINT16_MAX
                     pil_img = Image.fromarray(scaled.astype(np.uint16))
                 else:
                     pil_img = Image.fromarray(array)
@@ -369,9 +348,7 @@ class ArchitecturalDepthDataset(Dataset):
         """Return dataset length."""
         return len(self.pairs)
 
-    def __getitem__(
-        self, idx: int
-    ) -> Tuple["torch.Tensor", "torch.Tensor"]:
+    def __getitem__(self, idx: int) -> Tuple["torch.Tensor", "torch.Tensor"]:
         """Get a single sample.
 
         Args:
@@ -493,47 +470,32 @@ def create_data_loaders(
         Dictionary with 'train' and 'val' DataLoader objects
     """
     if not TORCH_AVAILABLE:
-        raise ImportError(
-            "PyTorch required for data loaders. "
-            "Install with: pip install torch"
-        )
+        raise ImportError("PyTorch required for data loaders. Install with: pip install torch")
 
     loaders = {}
 
     # Create training dataset
-    train_dataset = ArchitecturalDepthDataset(
-        config, split="train", transform=train_transform
-    )
+    train_dataset = ArchitecturalDepthDataset(config, split="train", transform=train_transform)
 
     # Handle validation split from training data
     if val_split is not None and val_split > 0:
         val_size = int(len(train_dataset) * val_split)
         train_size = len(train_dataset) - val_size
 
-        train_dataset, val_dataset = random_split(
-            train_dataset, [train_size, val_size]
-        )
+        train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
         # Wrap val_dataset to use val_transform
         # Note: This is a simplified approach
-        logger.info(
-            f"Split training data: {train_size} train, {val_size} val"
-        )
+        logger.info(f"Split training data: {train_size} train, {val_size} val")
     else:
         # Create separate validation dataset
         try:
-            val_dataset = ArchitecturalDepthDataset(
-                config, split="val", transform=val_transform
-            )
+            val_dataset = ArchitecturalDepthDataset(config, split="val", transform=val_transform)
         except FileNotFoundError:
-            logger.warning(
-                "Validation directory not found, using 10%% of training data"
-            )
+            logger.warning("Validation directory not found, using 10%% of training data")
             val_size = int(len(train_dataset) * 0.1)
             train_size = len(train_dataset) - val_size
-            train_dataset, val_dataset = random_split(
-                train_dataset, [train_size, val_size]
-            )
+            train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
     # Create data loaders
     loaders["train"] = DataLoader(
@@ -554,10 +516,7 @@ def create_data_loaders(
         drop_last=False,
     )
 
-    logger.info(
-        f"Created data loaders: train={len(loaders['train'])} batches, "
-        f"val={len(loaders['val'])} batches"
-    )
+    logger.info(f"Created data loaders: train={len(loaders['train'])} batches, val={len(loaders['val'])} batches")
 
     return loaders
 
@@ -587,9 +546,7 @@ def split_dataset(
     # Validate ratios
     total = train_ratio + val_ratio + test_ratio
     if abs(total - 1.0) > 1e-6:
-        raise ValueError(
-            f"Ratios must sum to 1.0, got {total}"
-        )
+        raise ValueError(f"Ratios must sum to 1.0, got {total}")
 
     # Set seed for reproducibility
     generator = torch.Generator().manual_seed(seed)
@@ -607,8 +564,6 @@ def split_dataset(
         generator=generator,
     )
 
-    logger.info(
-        f"Split dataset: train={train_size}, val={val_size}, test={test_size}"
-    )
+    logger.info(f"Split dataset: train={train_size}, val={val_size}, test={test_size}")
 
     return train_dataset, val_dataset, test_dataset

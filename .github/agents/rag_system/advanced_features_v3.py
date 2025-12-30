@@ -39,6 +39,7 @@ except ImportError:
 # 1. PREDICTIVE CODE ENGINE
 # ============================================================================
 
+
 @dataclass
 class CodePrediction:
     """Represents a predictive code suggestion."""
@@ -89,12 +90,7 @@ class PredictiveCodeEngine:
         self.knowledge = knowledge_engine
         self.pattern_cache = {}
 
-    def analyze_work_context(
-        self,
-        current_file: str,
-        cursor_position: int,
-        recent_edits: List[str]
-    ) -> WorkContext:
+    def analyze_work_context(self, current_file: str, cursor_position: int, recent_edits: List[str]) -> WorkContext:
         """
         Analyze current work context.
 
@@ -110,21 +106,17 @@ class PredictiveCodeEngine:
         recent_functions = []
         for edit in recent_edits:
             # Simple pattern matching for function names
-            matches = re.findall(r'def\s+(\w+)\s*\(', edit)
+            matches = re.findall(r"def\s+(\w+)\s*\(", edit)
             recent_functions.extend(matches)
 
         return WorkContext(
             current_file=current_file,
             cursor_position=cursor_position,
             recent_edits=recent_edits,
-            recent_functions=recent_functions
+            recent_functions=recent_functions,
         )
 
-    def predict_next_steps(
-        self,
-        context: WorkContext,
-        min_confidence: float = 0.7
-    ) -> List[CodePrediction]:
+    def predict_next_steps(self, context: WorkContext, min_confidence: float = 0.7) -> List[CodePrediction]:
         """
         Predict next logical steps based on context.
 
@@ -138,38 +130,44 @@ class PredictiveCodeEngine:
         predictions = []
 
         # Predict validation functions
-        if any('process' in edit or 'apply' in edit for edit in context.recent_edits):
-            predictions.append(CodePrediction(
-                prediction_type='function',
-                code_snippet=self._generate_validation_function(context),
-                confidence=0.92,
-                reasoning="Functions that process data typically need validation",
-                impact="Prevents runtime errors from invalid inputs",
-                file_path=context.current_file
-            ))
+        if any("process" in edit or "apply" in edit for edit in context.recent_edits):
+            predictions.append(
+                CodePrediction(
+                    prediction_type="function",
+                    code_snippet=self._generate_validation_function(context),
+                    confidence=0.92,
+                    reasoning="Functions that process data typically need validation",
+                    impact="Prevents runtime errors from invalid inputs",
+                    file_path=context.current_file,
+                )
+            )
 
         # Predict tests
         if context.recent_functions:
             for func_name in context.recent_functions:
-                predictions.append(CodePrediction(
-                    prediction_type='test',
-                    code_snippet=self._generate_test_scaffold(func_name),
-                    confidence=0.95,
-                    reasoning=f"New function '{func_name}' needs test coverage",
-                    impact="Ensures code reliability and catches regressions",
-                    file_path=f"tests/test_{Path(context.current_file).stem}.py"
-                ))
+                predictions.append(
+                    CodePrediction(
+                        prediction_type="test",
+                        code_snippet=self._generate_test_scaffold(func_name),
+                        confidence=0.95,
+                        reasoning=f"New function '{func_name}' needs test coverage",
+                        impact="Ensures code reliability and catches regressions",
+                        file_path=f"tests/test_{Path(context.current_file).stem}.py",
+                    )
+                )
 
         # Predict type hints
-        if 'def ' in '\n'.join(context.recent_edits):
-            predictions.append(CodePrediction(
-                prediction_type='refactoring',
-                code_snippet="Add type hints for better IDE support",
-                confidence=0.78,
-                reasoning="Type hints improve code maintainability",
-                impact="Better autocomplete and error detection",
-                file_path=context.current_file
-            ))
+        if "def " in "\n".join(context.recent_edits):
+            predictions.append(
+                CodePrediction(
+                    prediction_type="refactoring",
+                    code_snippet="Add type hints for better IDE support",
+                    confidence=0.78,
+                    reasoning="Type hints improve code maintainability",
+                    impact="Better autocomplete and error detection",
+                    file_path=context.current_file,
+                )
+            )
 
         # Filter by confidence
         return [p for p in predictions if p.confidence >= min_confidence]
@@ -190,7 +188,7 @@ class PredictiveCodeEngine:
         """Generate test scaffold for function."""
         return f'''import pytest
 
-class Test{func_name.title().replace('_', '')}:
+class Test{func_name.title().replace("_", "")}:
     """Tests for {func_name} function."""
 
     def test_{func_name}_basic(self):
@@ -208,6 +206,7 @@ class Test{func_name.title().replace('_', '')}:
 # ============================================================================
 # 2. AUTOMATED REFACTORING ENGINE
 # ============================================================================
+
 
 @dataclass
 class RefactoringOpportunity:
@@ -243,11 +242,7 @@ class AutomatedRefactoringEngine:
         """Initialize refactoring engine."""
         self.search = search_engine
 
-    def analyze_refactoring_opportunities(
-        self,
-        file_path: str,
-        code: str
-    ) -> List[RefactoringOpportunity]:
+    def analyze_refactoring_opportunities(self, file_path: str, code: str) -> List[RefactoringOpportunity]:
         """
         Analyze code for refactoring opportunities.
 
@@ -271,23 +266,25 @@ class AutomatedRefactoringEngine:
                 complexity = self._calculate_complexity(node)
 
                 if complexity > 15:
-                    opportunities.append(RefactoringOpportunity(
-                        refactoring_type='extract_method',
-                        priority='high' if complexity > 20 else 'medium',
-                        file_path=file_path,
-                        line_start=node.lineno,
-                        line_end=node.end_lineno or node.lineno + 10,
-                        description=f"Function '{node.name}' has high complexity ({complexity})",
-                        current_code=ast.get_source_segment(code, node) or "",
-                        proposed_code=self._suggest_extraction(node, code),
-                        impact={
-                            'complexity_reduction': f"{complexity} → ~{complexity//2}",
-                            'testability': 'Improved',
-                            'reusability': 'High'
-                        },
-                        auto_applicable=False,
-                        estimated_time_minutes=10.0
-                    ))
+                    opportunities.append(
+                        RefactoringOpportunity(
+                            refactoring_type="extract_method",
+                            priority="high" if complexity > 20 else "medium",
+                            file_path=file_path,
+                            line_start=node.lineno,
+                            line_end=node.end_lineno or node.lineno + 10,
+                            description=f"Function '{node.name}' has high complexity ({complexity})",
+                            current_code=ast.get_source_segment(code, node) or "",
+                            proposed_code=self._suggest_extraction(node, code),
+                            impact={
+                                "complexity_reduction": f"{complexity} → ~{complexity // 2}",
+                                "testability": "Improved",
+                                "reusability": "High",
+                            },
+                            auto_applicable=False,
+                            estimated_time_minutes=10.0,
+                        )
+                    )
 
         # Detect poor naming
         opportunities.extend(self._detect_naming_issues(tree, code, file_path))
@@ -295,7 +292,7 @@ class AutomatedRefactoringEngine:
         # Detect missing type hints
         opportunities.extend(self._detect_missing_types(tree, code, file_path))
 
-        return sorted(opportunities, key=lambda x: {'high': 3, 'medium': 2, 'low': 1}[x.priority], reverse=True)
+        return sorted(opportunities, key=lambda x: {"high": 3, "medium": 2, "low": 1}[x.priority], reverse=True)
 
     def _calculate_complexity(self, node: ast.AST) -> int:
         """Calculate cyclomatic complexity."""
@@ -326,59 +323,53 @@ def {node.name}():
     {node.name}_helper_2()
 """
 
-    def _detect_naming_issues(
-        self,
-        tree: ast.AST,
-        code: str,
-        file_path: str
-    ) -> List[RefactoringOpportunity]:
+    def _detect_naming_issues(self, tree: ast.AST, code: str, file_path: str) -> List[RefactoringOpportunity]:
         """Detect naming convention issues."""
         issues = []
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Name):
-                if len(node.id) <= 2 and node.id not in ('i', 'j', 'k', 'x', 'y'):
-                    issues.append(RefactoringOpportunity(
-                        refactoring_type='rename',
-                        priority='low',
-                        file_path=file_path,
-                        line_start=node.lineno,
-                        line_end=node.lineno,
-                        description=f"Variable '{node.id}' has unclear name",
-                        current_code=node.id,
-                        proposed_code=f"{node.id}_descriptive",
-                        impact={'readability': 'Improved'},
-                        auto_applicable=True,
-                        estimated_time_minutes=2.0
-                    ))
+                if len(node.id) <= 2 and node.id not in ("i", "j", "k", "x", "y"):
+                    issues.append(
+                        RefactoringOpportunity(
+                            refactoring_type="rename",
+                            priority="low",
+                            file_path=file_path,
+                            line_start=node.lineno,
+                            line_end=node.lineno,
+                            description=f"Variable '{node.id}' has unclear name",
+                            current_code=node.id,
+                            proposed_code=f"{node.id}_descriptive",
+                            impact={"readability": "Improved"},
+                            auto_applicable=True,
+                            estimated_time_minutes=2.0,
+                        )
+                    )
 
         return issues
 
-    def _detect_missing_types(
-        self,
-        tree: ast.AST,
-        code: str,
-        file_path: str
-    ) -> List[RefactoringOpportunity]:
+    def _detect_missing_types(self, tree: ast.AST, code: str, file_path: str) -> List[RefactoringOpportunity]:
         """Detect missing type hints."""
         issues = []
 
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 if not node.returns:
-                    issues.append(RefactoringOpportunity(
-                        refactoring_type='add_types',
-                        priority='low',
-                        file_path=file_path,
-                        line_start=node.lineno,
-                        line_end=node.lineno,
-                        description=f"Function '{node.name}' missing return type hint",
-                        current_code=f"def {node.name}(...)",
-                        proposed_code=f"def {node.name}(...) -> ReturnType",
-                        impact={'ide_support': 'Improved', 'type_safety': 'Improved'},
-                        auto_applicable=False,
-                        estimated_time_minutes=3.0
-                    ))
+                    issues.append(
+                        RefactoringOpportunity(
+                            refactoring_type="add_types",
+                            priority="low",
+                            file_path=file_path,
+                            line_start=node.lineno,
+                            line_end=node.lineno,
+                            description=f"Function '{node.name}' missing return type hint",
+                            current_code=f"def {node.name}(...)",
+                            proposed_code=f"def {node.name}(...) -> ReturnType",
+                            impact={"ide_support": "Improved", "type_safety": "Improved"},
+                            auto_applicable=False,
+                            estimated_time_minutes=3.0,
+                        )
+                    )
 
         return issues
 
@@ -386,6 +377,7 @@ def {node.name}():
 # ============================================================================
 # 3. INTELLIGENT TEST GENERATOR
 # ============================================================================
+
 
 @dataclass
 class GeneratedTest:
@@ -414,18 +406,15 @@ class IntelligentTestGenerator:
     def __init__(self):
         """Initialize test generator."""
         self.edge_case_patterns = {
-            'None': 'null_handling',
-            'empty': 'empty_input',
-            'zero': 'boundary_value',
-            'negative': 'invalid_input',
-            'large': 'stress_test'
+            "None": "null_handling",
+            "empty": "empty_input",
+            "zero": "boundary_value",
+            "negative": "invalid_input",
+            "large": "stress_test",
         }
 
     def generate_tests_for_function(
-        self,
-        func_name: str,
-        func_code: str,
-        context: Optional[Dict] = None
+        self, func_name: str, func_code: str, context: Optional[Dict] = None
     ) -> List[GeneratedTest]:
         """
         Generate comprehensive tests for a function.
@@ -443,10 +432,7 @@ class IntelligentTestGenerator:
         # Parse function
         try:
             tree = ast.parse(func_code)
-            func_node = next(
-                (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)),
-                None
-            )
+            func_node = next((node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)), None)
         except SyntaxError:
             return tests
 
@@ -454,13 +440,15 @@ class IntelligentTestGenerator:
             return tests
 
         # Generate basic functionality test
-        tests.append(GeneratedTest(
-            test_name=f"test_{func_name}_basic",
-            test_code=self._generate_basic_test(func_name, func_node),
-            test_type='unit',
-            edge_cases_covered=['happy_path'],
-            confidence=0.95
-        ))
+        tests.append(
+            GeneratedTest(
+                test_name=f"test_{func_name}_basic",
+                test_code=self._generate_basic_test(func_name, func_node),
+                test_type="unit",
+                edge_cases_covered=["happy_path"],
+                confidence=0.95,
+            )
+        )
 
         # Generate edge case tests
         edge_tests = self._generate_edge_case_tests(func_name, func_node)
@@ -468,22 +456,26 @@ class IntelligentTestGenerator:
 
         # Generate property-based test
         if self._should_generate_property_test(func_node):
-            tests.append(GeneratedTest(
-                test_name=f"test_{func_name}_properties",
-                test_code=self._generate_property_test(func_name, func_node),
-                test_type='property',
-                edge_cases_covered=['all_valid_inputs'],
-                confidence=0.88
-            ))
+            tests.append(
+                GeneratedTest(
+                    test_name=f"test_{func_name}_properties",
+                    test_code=self._generate_property_test(func_name, func_node),
+                    test_type="property",
+                    edge_cases_covered=["all_valid_inputs"],
+                    confidence=0.88,
+                )
+            )
 
         # Generate performance test
-        tests.append(GeneratedTest(
-            test_name=f"test_{func_name}_performance",
-            test_code=self._generate_performance_test(func_name, func_node),
-            test_type='performance',
-            edge_cases_covered=['large_inputs'],
-            confidence=0.80
-        ))
+        tests.append(
+            GeneratedTest(
+                test_name=f"test_{func_name}_performance",
+                test_code=self._generate_performance_test(func_name, func_node),
+                test_type="performance",
+                edge_cases_covered=["large_inputs"],
+                confidence=0.80,
+            )
+        )
 
         return tests
 
@@ -501,38 +493,38 @@ class IntelligentTestGenerator:
     assert result is not None
     # TODO: Add specific assertions'''
 
-    def _generate_edge_case_tests(
-        self,
-        func_name: str,
-        func_node: ast.FunctionDef
-    ) -> List[GeneratedTest]:
+    def _generate_edge_case_tests(self, func_name: str, func_node: ast.FunctionDef) -> List[GeneratedTest]:
         """Generate edge case tests."""
         tests = []
 
         # Test with None input
-        tests.append(GeneratedTest(
-            test_name=f"test_{func_name}_none_input",
-            test_code=f'''def test_{func_name}_none_input(self):
+        tests.append(
+            GeneratedTest(
+                test_name=f"test_{func_name}_none_input",
+                test_code=f'''def test_{func_name}_none_input(self):
     """Test {func_name} with None input."""
     with pytest.raises((ValueError, TypeError)):
         {func_name}(None)''',
-            test_type='unit',
-            edge_cases_covered=['null_handling'],
-            confidence=0.90
-        ))
+                test_type="unit",
+                edge_cases_covered=["null_handling"],
+                confidence=0.90,
+            )
+        )
 
         # Test with empty input
-        tests.append(GeneratedTest(
-            test_name=f"test_{func_name}_empty_input",
-            test_code=f'''def test_{func_name}_empty_input(self):
+        tests.append(
+            GeneratedTest(
+                test_name=f"test_{func_name}_empty_input",
+                test_code=f'''def test_{func_name}_empty_input(self):
     """Test {func_name} with empty input."""
     # Adjust based on input type (list, string, etc.)
     result = {func_name}([])  # or "" for strings
     # TODO: Add assertions for expected behavior''',
-            test_type='unit',
-            edge_cases_covered=['empty_input'],
-            confidence=0.85
-        ))
+                test_type="unit",
+                edge_cases_covered=["empty_input"],
+                confidence=0.85,
+            )
+        )
 
         return tests
 
@@ -579,6 +571,7 @@ def test_{func_name}_properties(self, value):
 # 4. PERFORMANCE BENCHMARKING DASHBOARD
 # ============================================================================
 
+
 @dataclass
 class PerformanceSnapshot:
     """Represents a performance measurement snapshot."""
@@ -621,11 +614,7 @@ class PerformanceBenchmarkingDashboard:
         """Set performance baseline."""
         self.baselines[entity_name] = snapshot
 
-    def generate_dashboard_text(
-        self,
-        entity_name: str,
-        days: int = 30
-    ) -> str:
+    def generate_dashboard_text(self, entity_name: str, days: int = 30) -> str:
         """
         Generate text-based performance dashboard.
 
@@ -637,10 +626,7 @@ class PerformanceBenchmarkingDashboard:
             Dashboard as text
         """
         cutoff = datetime.now() - timedelta(days=days)
-        recent = [
-            s for s in self.snapshots.get(entity_name, [])
-            if s.timestamp >= cutoff
-        ]
+        recent = [s for s in self.snapshots.get(entity_name, []) if s.timestamp >= cutoff]
 
         if not recent:
             return f"No performance data for {entity_name}"
@@ -650,15 +636,8 @@ class PerformanceBenchmarkingDashboard:
         baseline = self.baselines.get(entity_name, recent[0])
 
         # Calculate changes
-        throughput_change = self._calculate_change(
-            baseline.throughput,
-            current.throughput
-        )
-        latency_change = self._calculate_change(
-            baseline.latency_p95,
-            current.latency_p95,
-            lower_is_better=True
-        )
+        throughput_change = self._calculate_change(baseline.throughput, current.throughput)
+        latency_change = self._calculate_change(baseline.latency_p95, current.latency_p95, lower_is_better=True)
 
         dashboard = f"""## 📊 Performance Dashboard: {entity_name}
 
@@ -677,7 +656,7 @@ Data points: {len(recent)}
         # Add recent significant changes
         for i in range(len(recent) - 1, max(0, len(recent) - 4), -1):
             s = recent[i]
-            if s.metadata.get('version'):
+            if s.metadata.get("version"):
                 symbol = "✅" if s.throughput and s.throughput > recent[0].throughput else "⚠️"
                 dashboard += f"{symbol} {s.metadata['version']}: "
                 if s.throughput:
@@ -686,12 +665,7 @@ Data points: {len(recent)}
 
         return dashboard
 
-    def _calculate_change(
-        self,
-        baseline: Optional[float],
-        current: Optional[float],
-        lower_is_better: bool = False
-    ) -> float:
+    def _calculate_change(self, baseline: Optional[float], current: Optional[float], lower_is_better: bool = False) -> float:
         """Calculate percentage change."""
         if baseline is None or current is None or baseline == 0:
             return 0.0
@@ -699,11 +673,7 @@ Data points: {len(recent)}
         change = ((current - baseline) / baseline) * 100
         return -change if lower_is_better else change
 
-    def detect_regressions(
-        self,
-        entity_name: str,
-        threshold_percent: float = 10.0
-    ) -> List[str]:
+    def detect_regressions(self, entity_name: str, threshold_percent: float = 10.0) -> List[str]:
         """
         Detect performance regressions.
 
@@ -752,12 +722,13 @@ Data points: {len(recent)}
 # EXPORT FUNCTIONS
 # ============================================================================
 
+
 def create_v3_analysis_report(
     predictions: List[CodePrediction],
     refactorings: List[RefactoringOpportunity],
     tests: List[GeneratedTest],
     performance_dashboard: str,
-    output_path: str
+    output_path: str,
 ):
     """
     Export comprehensive v3.0 analysis report.
@@ -770,15 +741,15 @@ def create_v3_analysis_report(
         output_path: Output file path
     """
     report = {
-        'generated_at': datetime.now().isoformat(),
-        'version': '3.0.0',
-        'predictions': [asdict(p) for p in predictions],
-        'refactoring_opportunities': [asdict(r) for r in refactorings],
-        'generated_tests': [asdict(t) for t in tests],
-        'performance_dashboard': performance_dashboard
+        "generated_at": datetime.now().isoformat(),
+        "version": "3.0.0",
+        "predictions": [asdict(p) for p in predictions],
+        "refactoring_opportunities": [asdict(r) for r in refactorings],
+        "generated_tests": [asdict(t) for t in tests],
+        "performance_dashboard": performance_dashboard,
     }
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
 
     print(f"v3.0 Analysis report saved to {output_path}")
@@ -788,29 +759,30 @@ def create_v3_analysis_report(
 # MAIN CLI
 # ============================================================================
 
+
 def main():
     """Command-line interface for v3.0 features."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Advanced RAG Features v3.0')
-    parser.add_argument('--mode', required=True,
-                        choices=['predict', 'refactor', 'test-gen', 'benchmark'],
-                        help='Operation mode')
-    parser.add_argument('--file', help='File to analyze')
-    parser.add_argument('--function', help='Function name for test generation')
-    parser.add_argument('--output', help='Output file for report')
+    parser = argparse.ArgumentParser(description="Advanced RAG Features v3.0")
+    parser.add_argument(
+        "--mode", required=True, choices=["predict", "refactor", "test-gen", "benchmark"], help="Operation mode"
+    )
+    parser.add_argument("--file", help="File to analyze")
+    parser.add_argument("--function", help="Function name for test generation")
+    parser.add_argument("--output", help="Output file for report")
 
     args = parser.parse_args()
 
     print(f"Running v3.0 {args.mode} analysis...")
 
-    if args.mode == 'predict':
+    if args.mode == "predict":
         # Example: Predictive code suggestions
         engine = PredictiveCodeEngine(None, None)
         context = WorkContext(
-            current_file=args.file or 'example.py',
+            current_file=args.file or "example.py",
             cursor_position=100,
-            recent_edits=['def process_image(image):', 'depth_map = estimate_depth(image)']
+            recent_edits=["def process_image(image):", "depth_map = estimate_depth(image)"],
         )
         predictions = engine.predict_next_steps(context)
 
@@ -822,7 +794,7 @@ def main():
             if len(pred.code_snippet) < 200:
                 print(f"\n{pred.code_snippet}\n")
 
-    elif args.mode == 'refactor':
+    elif args.mode == "refactor":
         # Example: Refactoring analysis
         if not args.file:
             print("❌ --file required for refactoring")
@@ -841,10 +813,10 @@ def main():
             print(f"   Impact: {opp.impact}")
             print(f"   Estimated time: {opp.estimated_time_minutes:.0f} minutes")
 
-    elif args.mode == 'test-gen':
+    elif args.mode == "test-gen":
         # Example: Test generation
         generator = IntelligentTestGenerator()
-        func_name = args.function or 'example_function'
+        func_name = args.function or "example_function"
         func_code = f"def {func_name}(x):\n    return x * 2"
 
         tests = generator.generate_tests_for_function(func_name, func_code)
@@ -855,39 +827,44 @@ def main():
             print(f"   Confidence: {test.confidence:.0%}")
             print(f"   Edge cases: {', '.join(test.edge_cases_covered)}")
 
-    elif args.mode == 'benchmark':
+    elif args.mode == "benchmark":
         # Example: Performance dashboard
         dashboard = PerformanceBenchmarkingDashboard()
 
         # Add example snapshots
-        dashboard.set_baseline('depth_pipeline', PerformanceSnapshot(
-            entity_name='depth_pipeline',
-            timestamp=datetime.now() - timedelta(days=30),
-            throughput=500.0,
-            latency_p95=55.0,
-            gpu_utilization_percent=82.0,
-            memory_peak_mb=4200.0
-        ))
+        dashboard.set_baseline(
+            "depth_pipeline",
+            PerformanceSnapshot(
+                entity_name="depth_pipeline",
+                timestamp=datetime.now() - timedelta(days=30),
+                throughput=500.0,
+                latency_p95=55.0,
+                gpu_utilization_percent=82.0,
+                memory_peak_mb=4200.0,
+            ),
+        )
 
-        dashboard.record_snapshot(PerformanceSnapshot(
-            entity_name='depth_pipeline',
-            timestamp=datetime.now(),
-            throughput=587.0,
-            latency_p95=42.0,
-            gpu_utilization_percent=87.0,
-            memory_peak_mb=4350.0,
-            metadata={'version': 'v2.1.3'}
-        ))
+        dashboard.record_snapshot(
+            PerformanceSnapshot(
+                entity_name="depth_pipeline",
+                timestamp=datetime.now(),
+                throughput=587.0,
+                latency_p95=42.0,
+                gpu_utilization_percent=87.0,
+                memory_peak_mb=4350.0,
+                metadata={"version": "v2.1.3"},
+            )
+        )
 
-        text = dashboard.generate_dashboard_text('depth_pipeline')
+        text = dashboard.generate_dashboard_text("depth_pipeline")
         print(f"\n{text}")
 
-        regressions = dashboard.detect_regressions('depth_pipeline')
+        regressions = dashboard.detect_regressions("depth_pipeline")
         if regressions:
             print("\nRegressions:")
             for r in regressions:
                 print(f"  {r}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

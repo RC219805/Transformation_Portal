@@ -18,16 +18,14 @@ import pytest
 # Check if PyTorch is available (including actual torch functionality, not just mock)
 try:
     import torch
+
     # Verify torch has actual functionality (not just a mock/stub)
-    TORCH_AVAILABLE = hasattr(torch, 'from_numpy') and hasattr(torch, 'Tensor')
+    TORCH_AVAILABLE = hasattr(torch, "from_numpy") and hasattr(torch, "Tensor")
 except ImportError:
     TORCH_AVAILABLE = False
 
 # Skip all tests if PyTorch not available
-pytestmark = pytest.mark.skipif(
-    not TORCH_AVAILABLE,
-    reason="PyTorch required for loss function tests"
-)
+pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch required for loss function tests")
 
 
 class TestScaleInvariantLoss:

@@ -1,9 +1,9 @@
 # depth_gamma_delta0
 
-**Date**: 2025-12-22 01:18:32  
-**Sweep Type**: Single-Parameter (Phase 1)  
-**Parameter**: `depth.gamma`  
-**Value**: 1.0  
+**Date**: 2025-12-22 01:18:32
+**Sweep Type**: Single-Parameter (Phase 1)
+**Parameter**: `depth.gamma`
+**Value**: 1.0
 **Delta ID**: delta-0 (baseline)
 
 ## Expected Impact

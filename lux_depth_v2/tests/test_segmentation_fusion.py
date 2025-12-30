@@ -1,5 +1,6 @@
 # lux_depth_v2/tests/test_segmentation_fusion.py
 """Tests for segmentation mask fusion utilities."""
+
 import numpy as np
 import pytest
 

@@ -1,6 +1,6 @@
 [flake8]
 max-line-length = 127
-exclude = 
+exclude =
     .git,
     __pycache__,
     deprecated/,

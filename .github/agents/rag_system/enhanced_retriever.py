@@ -186,7 +186,8 @@ class BM25Retriever:
         """Simple tokenization for BM25."""
         # Lowercase and split on non-alphanumeric
         import re
-        tokens = re.findall(r'\b\w+\b', text.lower())
+
+        tokens = re.findall(r"\b\w+\b", text.lower())
         return tokens
 
     def index(self, documents: List[str]) -> None:
@@ -213,9 +214,7 @@ class BM25Retriever:
                 self.doc_freqs[term] += 1
 
         self.n_docs = len(documents)
-        self.avg_doc_length = (
-            sum(self.doc_lengths) / self.n_docs if self.n_docs > 0 else 0
-        )
+        self.avg_doc_length = sum(self.doc_lengths) / self.n_docs if self.n_docs > 0 else 0
 
         # Compute IDF for all terms
         self._compute_idf()
@@ -257,9 +256,7 @@ class BM25Retriever:
 
             # BM25 scoring formula
             numerator = tf * (self.k1 + 1)
-            denominator = tf + self.k1 * (
-                1 - self.b + self.b * (doc_length / self.avg_doc_length)
-            )
+            denominator = tf + self.k1 * (1 - self.b + self.b * (doc_length / self.avg_doc_length))
             score += idf * (numerator / denominator)
 
         return score
@@ -346,9 +343,9 @@ class VectorRetriever:
             # Check MPS availability with proper version handling
             try:
                 if (
-                    hasattr(torch.backends, "mps") and
-                    hasattr(torch.backends.mps, "is_available") and
-                    torch.backends.mps.is_available()
+                    hasattr(torch.backends, "mps")
+                    and hasattr(torch.backends.mps, "is_available")
+                    and torch.backends.mps.is_available()
                 ):
                     return "mps"
             except (AttributeError, RuntimeError):
@@ -371,15 +368,12 @@ class VectorRetriever:
             self.model = SentenceTransformer(self.model_name, device=self.device)
             elapsed = time.time() - start_time
 
-            logger.info(
-                f"Loaded {self.model_name} on {self.device} in {elapsed:.2f}s"
-            )
+            logger.info(f"Loaded {self.model_name} on {self.device} in {elapsed:.2f}s")
             self._model_loaded = True
 
         except ImportError:
             raise ImportError(
-                "sentence-transformers required for vector search. "
-                "Install with: pip install sentence-transformers"
+                "sentence-transformers required for vector search. Install with: pip install sentence-transformers"
             )
 
     def index(
@@ -414,10 +408,7 @@ class VectorRetriever:
         self.chunk_ids = chunk_ids or [str(i) for i in range(len(documents))]
 
         elapsed = (time.time() - start_time) * 1000
-        logger.info(
-            f"Embedded {len(documents)} documents in {elapsed:.1f}ms "
-            f"(shape: {embeddings.shape})"
-        )
+        logger.info(f"Embedded {len(documents)} documents in {elapsed:.1f}ms (shape: {embeddings.shape})")
 
         return embeddings
 
@@ -470,10 +461,7 @@ class VectorRetriever:
         # Get top-k indices
         top_indices = np.argsort(similarities)[::-1][:top_k]
 
-        results = [
-            (int(idx), float(similarities[idx]))
-            for idx in top_indices
-        ]
+        results = [(int(idx), float(similarities[idx])) for idx in top_indices]
 
         return results
 
@@ -536,14 +524,12 @@ class EnhancedHybridRetriever:
 
         # Query cache - using OrderedDict for proper LRU behavior
         from collections import OrderedDict
+
         self._query_cache: OrderedDict[str, List[RetrievalResult]] = OrderedDict()
 
         self._indexed = False
 
-        logger.info(
-            f"EnhancedHybridRetriever initialized "
-            f"(vector_search={self.config.enable_vector_search})"
-        )
+        logger.info(f"EnhancedHybridRetriever initialized (vector_search={self.config.enable_vector_search})")
 
     def _extract_text(self, chunk: Any) -> str:
         """Extract text content from chunk object."""
@@ -580,9 +566,7 @@ class EnhancedHybridRetriever:
 
         self.chunks = chunks
         self.chunk_texts = [self._extract_text(c) for c in chunks]
-        self.chunk_ids = [
-            self._extract_chunk_id(c, i) for i, c in enumerate(chunks)
-        ]
+        self.chunk_ids = [self._extract_chunk_id(c, i) for i, c in enumerate(chunks)]
 
         # Index BM25
         self.bm25.index(self.chunk_texts)
@@ -620,10 +604,7 @@ class EnhancedHybridRetriever:
 
         # Validate chunk IDs match
         if chunk_ids != self.chunk_ids:
-            logger.warning(
-                "Cached embeddings chunk IDs don't match indexed chunks. "
-                "Recomputing embeddings."
-            )
+            logger.warning("Cached embeddings chunk IDs don't match indexed chunks. Recomputing embeddings.")
             return False
 
         self.vector.set_embeddings(embeddings, chunk_ids)
@@ -657,10 +638,7 @@ class EnhancedHybridRetriever:
             bm25_score = bm25_scores.get(idx, 0.0)
             vector_score = vector_scores.get(idx, 0.0)
 
-            combined[idx] = (
-                self.config.bm25_weight * bm25_score +
-                self.config.vector_weight * vector_score
-            )
+            combined[idx] = self.config.bm25_weight * bm25_score + self.config.vector_weight * vector_score
 
         return combined
 
@@ -700,11 +678,7 @@ class EnhancedHybridRetriever:
         self.stats.cache_misses += 1
 
         # Determine retrieval method
-        use_vector = (
-            self.config.enable_vector_search and
-            self.vector is not None and
-            method != "bm25"
-        )
+        use_vector = self.config.enable_vector_search and self.vector is not None and method != "bm25"
         use_bm25 = method != "vector"
 
         # BM25 retrieval
@@ -742,7 +716,7 @@ class EnhancedHybridRetriever:
 
         # Build results
         results = []
-        for idx in sorted_indices[:top_k * 2]:  # Get extra for filtering
+        for idx in sorted_indices[: top_k * 2]:  # Get extra for filtering
             chunk = self.chunks[idx]
 
             # Extract metadata
@@ -777,14 +751,13 @@ class EnhancedHybridRetriever:
 
             if file_path_filter:
                 import re
+
                 if not re.search(file_path_filter, file_path):
                     continue
 
             # Get individual scores
             bm25_score = dict(bm25_results).get(idx, 0.0) if bm25_results else 0.0
-            vector_score = (
-                dict(vector_results).get(idx, 0.0) if vector_results else 0.0
-            )
+            vector_score = dict(vector_results).get(idx, 0.0) if vector_results else 0.0
 
             result = RetrievalResult(
                 chunk_id=self.chunk_ids[idx],
@@ -807,19 +780,11 @@ class EnhancedHybridRetriever:
         elapsed_ms = (time.time() - start_time) * 1000
         self.stats.total_queries += 1
         self.stats.avg_query_time_ms = (
-            (
-                self.stats.avg_query_time_ms * (self.stats.total_queries - 1)
-                + elapsed_ms
-            )
-            / self.stats.total_queries
-        )
+            self.stats.avg_query_time_ms * (self.stats.total_queries - 1) + elapsed_ms
+        ) / self.stats.total_queries
         self.stats.avg_results_returned = (
-            (
-                self.stats.avg_results_returned * (self.stats.total_queries - 1)
-                + len(results)
-            )
-            / self.stats.total_queries
-        )
+            self.stats.avg_results_returned * (self.stats.total_queries - 1) + len(results)
+        ) / self.stats.total_queries
 
         # Cache results using OrderedDict for proper LRU
         if self.config.query_cache_enabled:
@@ -832,10 +797,7 @@ class EnhancedHybridRetriever:
                     self._query_cache.popitem(last=False)
                 self._query_cache[cache_key] = results
 
-        logger.debug(
-            f"Retrieved {len(results)} results for '{query[:50]}...' "
-            f"in {elapsed_ms:.1f}ms ({retrieval_method})"
-        )
+        logger.debug(f"Retrieved {len(results)} results for '{query[:50]}...' in {elapsed_ms:.1f}ms ({retrieval_method})")
 
         return results
 
@@ -879,10 +841,7 @@ class EnhancedHybridRetriever:
             "total_queries": self.stats.total_queries,
             "cache_hits": self.stats.cache_hits,
             "cache_misses": self.stats.cache_misses,
-            "cache_hit_rate": (
-                self.stats.cache_hits /
-                max(1, self.stats.cache_hits + self.stats.cache_misses)
-            ),
+            "cache_hit_rate": (self.stats.cache_hits / max(1, self.stats.cache_hits + self.stats.cache_misses)),
             "avg_query_time_ms": self.stats.avg_query_time_ms,
             "avg_results_returned": self.stats.avg_results_returned,
             "bm25_queries": self.stats.bm25_queries,
@@ -938,9 +897,7 @@ def create_retriever(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Enhanced Hybrid Retriever CLI"
-    )
+    parser = argparse.ArgumentParser(description="Enhanced Hybrid Retriever CLI")
     parser.add_argument(
         "--test",
         action="store_true",

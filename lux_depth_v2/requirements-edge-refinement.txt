@@ -1,7 +1,7 @@
 # Edge Refinement Module Dependencies
 # =====================================
 # Optional dependencies for edge-aware depth refinement module.
-# 
+#
 # Installation:
 #   pip install -r requirements-edge-refinement.txt
 #

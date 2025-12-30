@@ -1,7 +1,7 @@
 # Session Summary: Water Baseline Regeneration + CI Fixes + PAT Setup
 
-**Date:** 2025-12-15  
-**Session ID:** PR-W1.1-followup  
+**Date:** 2025-12-15
+**Session ID:** PR-W1.1-followup
 **Status:** ✅ COMPLETE
 
 ---
@@ -62,7 +62,7 @@ assert summary["false_positive_rate"] == summary["false_trigger_rate"]
      --subset-file data/water_v0/ci_subset.txt \
      --output outputs/water_validation_current.json \
      --seed 42
-   
+
    cp outputs/water_validation_current.json data/water_v0/baseline_ci_v0.json
    ```
 
@@ -211,14 +211,14 @@ false_positive_rate: 0.0
 ## Baseline V0 Interpretation
 
 ### What V0 Proves
-✅ **Detector executes consistently** (deterministic with seed=42)  
-✅ **Schema is stable** (ground truth + validation report)  
-✅ **Metrics computation works** (false_positive = false_trigger)  
+✅ **Detector executes consistently** (deterministic with seed=42)
+✅ **Schema is stable** (ground truth + validation report)
+✅ **Metrics computation works** (false_positive = false_trigger)
 ✅ **CI infrastructure functional** (fixtures generated without committing images)
 
 ### What V0 Does NOT Prove (By Design)
-❌ **Quality baseline:** Fixtures are full-frame synthetic images  
-❌ **Real-world accuracy:** No partial coverage or contextual negatives  
+❌ **Quality baseline:** Fixtures are full-frame synthetic images
+❌ **Real-world accuracy:** No partial coverage or contextual negatives
 ❌ **Edge detection quality:** Low edge alignment expected (median coverage = 1.0)
 
 ### Known Limitations (Expected)
@@ -321,8 +321,8 @@ Closes follow-up items from PR #560 review
 
 ## Session Status
 
-**Status:** ✅ COMPLETE  
-**Pushed to:** `main` branch  
+**Status:** ✅ COMPLETE
+**Pushed to:** `main` branch
 **Next Session:** PR-W1.2 Calibration
 
 **All follow-up issues from PR #560 review resolved:**
@@ -333,6 +333,6 @@ Closes follow-up items from PR #560 review
 
 ---
 
-**Session Completed:** 2025-12-15 12:15 PST  
-**Commit:** e11f7fd  
+**Session Completed:** 2025-12-15 12:15 PST
+**Commit:** e11f7fd
 **Branch:** main

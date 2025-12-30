@@ -59,7 +59,7 @@ BRANCHES=(
 
 for branch_tag in "${BRANCHES[@]}"; do
     IFS=':' read -r branch tag <<< "$branch_tag"
-    
+
     if git rev-parse --verify "$branch" >/dev/null 2>&1; then
         log_info "Creating tag '$tag' for branch '$branch'..."
         git tag -a "$tag" "$branch" -m "Archive of $branch ($(date +%Y-%m-%d))"
@@ -77,7 +77,7 @@ log_info "PHASE 2: Pushing archive tags to remote..."
 
 for branch_tag in "${BRANCHES[@]}"; do
     IFS=':' read -r branch tag <<< "$branch_tag"
-    
+
     if git rev-parse --verify "$tag" >/dev/null 2>&1; then
         log_info "Pushing tag '$tag' to origin..."
         git push origin "$tag" 2>&1 || log_warning "Failed to push $tag (may already exist on remote)"
@@ -98,16 +98,16 @@ log_info "Backup directory: $BACKUP_DIR"
 
 for branch_tag in "${BRANCHES[@]}"; do
     IFS=':' read -r branch tag <<< "$branch_tag"
-    
+
     if git rev-parse --verify "$branch" >/dev/null 2>&1; then
         BRANCH_NAME=$(basename "$branch")
-        
+
         log_info "Exporting diff for $BRANCH_NAME..."
         git diff main.."$branch" > "$BACKUP_DIR/${BRANCH_NAME}.diff"
-        
+
         log_info "Exporting commit log for $BRANCH_NAME..."
         git log main.."$branch" --oneline > "$BACKUP_DIR/${BRANCH_NAME}.log"
-        
+
         log_success "Backup created for $BRANCH_NAME"
     fi
 done
@@ -149,7 +149,7 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     for branch_tag in "${BRANCHES[@]}"; do
         IFS=':' read -r branch tag <<< "$branch_tag"
-        
+
         if git rev-parse --verify "$branch" >/dev/null 2>&1; then
             log_info "Deleting local branch '$branch'..."
             git branch -D "$branch" 2>&1 || log_warning "Failed to delete $branch"

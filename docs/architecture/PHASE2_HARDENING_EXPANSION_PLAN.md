@@ -1,9 +1,9 @@
 # Phase 2: Hardening Expansion & Automation Pack
 
-**Status**: 🚀 **IN PROGRESS**  
-**Version**: 1.0  
-**Date**: 2025-12-08  
-**Author**: Transformation Portal Architect  
+**Status**: 🚀 **IN PROGRESS**
+**Version**: 1.0
+**Date**: 2025-12-08
+**Author**: Transformation Portal Architect
 **Phase 1 Dependency**: PR #519 (Architecture Hardening Pack), PR #525 (Observability Pack)
 
 ---
@@ -81,7 +81,7 @@ class Pipeline(Protocol):
 
 class UniversalHardenedWrapper:
     """Universal hardening wrapper for any pipeline."""
-    
+
     def __init__(
         self,
         pipeline: Pipeline,
@@ -93,16 +93,16 @@ class UniversalHardenedWrapper:
         self.policy = policy
         self.enable_profiling = enable_profiling
         self.enable_stamping = enable_stamping
-    
+
     def process(self, input_path: Path, **kwargs) -> Dict[str, Any]:
         """Process with hardening applied."""
         # 1. Input validation
         validated_path = self.policy.validate_input(input_path)
-        
+
         # 2. Profiling start
         if self.enable_profiling:
             start = time.perf_counter()
-        
+
         # 3. Execute wrapped pipeline
         try:
             result = self.pipeline.process(validated_path, **kwargs)
@@ -110,13 +110,13 @@ class UniversalHardenedWrapper:
             # Log and re-raise with context
             self._log_failure(input_path, e)
             raise
-        
+
         # 4. Profiling end
         if self.enable_profiling:
             duration_ms = (time.perf_counter() - start) * 1000
         else:
             duration_ms = None
-        
+
         # 5. Report stamping
         if self.enable_stamping:
             report = self._create_report(
@@ -126,25 +126,25 @@ class UniversalHardenedWrapper:
                 kwargs=kwargs
             )
             return {"result": result, "report": report}
-        
+
         return {"result": result}
-    
+
     def _create_report(self, input_path, result, duration_ms, kwargs):
         """Create reproducibility report."""
         from lux_depth_v2.hardening.stamping import stamp_report
         from lux_depth_v2.hardening.runtime import gather_runtime_info
-        
+
         config_hash = hashlib.sha256(
             json.dumps(kwargs, sort_keys=True).encode()
         ).hexdigest()
-        
+
         return stamp_report(
             report={},
             config_hash=config_hash,
             runtime_info=gather_runtime_info(),
             include_input_hash=False
         )
-    
+
     def _log_failure(self, input_path, exception):
         """Log processing failure."""
         import logging
@@ -174,29 +174,29 @@ def retrofit_pipeline(
 ):
     """Retrofit hardening onto legacy pipeline."""
     import importlib
-    
+
     # Load legacy pipeline
     module = importlib.import_module(pipeline_module)
-    
+
     # Find process function
     process_fn = None
     for name, obj in inspect.getmembers(module):
         if callable(obj) and name.startswith("process"):
             process_fn = obj
             break
-    
+
     if not process_fn:
         raise ValueError(f"No process function found in {pipeline_module}")
-    
+
     # Load policy
     from lux_depth_v2.hardening.policy import HardeningPolicy
     policy = HardeningPolicy.load(policy_path)
-    
+
     # Create wrapper adapter
     class LegacyAdapter:
         def process(self, input_path: Path, **kwargs):
             return process_fn(input_path, **kwargs)
-    
+
     # Wrap with hardening
     from transformation_portal.hardening.universal import UniversalHardenedWrapper
     return UniversalHardenedWrapper(
@@ -235,15 +235,15 @@ jobs:
     outputs:
       has_vulns: ${{ steps.audit.outputs.has_vulns }}
       vuln_report: ${{ steps.audit.outputs.report }}
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Run pip-audit
         id: audit
         continue-on-error: true
@@ -254,7 +254,7 @@ jobs:
             --format json \
             --output audit-report.json \
             --vulnerability-service osv
-          
+
           if [ $? -eq 0 ]; then
             echo "has_vulns=false" >> $GITHUB_OUTPUT
           else
@@ -264,63 +264,63 @@ jobs:
             cat audit-report.json >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Upload audit report
         uses: actions/upload-artifact@v4
         if: steps.audit.outputs.has_vulns == 'true'
         with:
           name: audit-report
           path: audit-report.json
-  
+
   auto-patch:
     name: Attempt Auto-Patch
     needs: detect-vulnerabilities
     if: needs.detect-vulnerabilities.outputs.has_vulns == 'true'
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Download audit report
         uses: actions/download-artifact@v4
         with:
           name: audit-report
-      
+
       - name: Attempt automated patching
         id: patch
         run: |
           # Install pip-audit and pur (pip update requirements)
           pip install pip-audit pur
-          
+
           # Try to upgrade vulnerable packages
           pur -r requirements.txt --patch --skip basicsr,realesrgan,gfpgan
           pur -r requirements-dev.txt --patch
-          
+
           # Verify fixes
           pip install -r requirements.txt -r requirements-dev.txt
           pip-audit --requirement requirements.txt \
             --requirement requirements-dev.txt || true
-          
+
           # Check if git diff exists
           if git diff --quiet; then
             echo "patched=false" >> $GITHUB_OUTPUT
           else
             echo "patched=true" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Run tests
         if: steps.patch.outputs.patched == 'true'
         run: |
           pip install pytest pytest-xdist
           pytest tests/ -n auto --tb=short -v
-      
+
       - name: Create PR
         if: steps.patch.outputs.patched == 'true'
         uses: peter-evans/create-pull-request@v6
@@ -330,17 +330,17 @@ jobs:
           title: '[Security] Automated Dependency Patch'
           body: |
             ## Security Auto-Remediation
-            
+
             This PR was automatically created to patch security vulnerabilities detected by pip-audit.
-            
+
             ### Vulnerabilities Addressed
             ${{ needs.detect-vulnerabilities.outputs.vuln_report }}
-            
+
             ### Changes Made
             - Updated dependencies to patched versions
             - Verified with pip-audit
             - Ran test suite
-            
+
             **Action Required**: Manual review recommended before merge.
           branch: security/auto-patch-${{ github.run_number }}
           labels: security,automated
@@ -434,25 +434,25 @@ services:
     image: transformation-portal:latest
     container_name: lux-depth-service
     restart: unless-stopped
-    
+
     env_file:
       - .env.production
-    
+
     ports:
       - "8088:8088"
-    
+
     volumes:
       - ./data/input:/data/input:ro
       - ./data/output:/data/output
       - ./logs:/app/logs
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    
+
     resources:
       limits:
         memory: 8G
@@ -460,41 +460,41 @@ services:
       reservations:
         memory: 4G
         cpus: '2.0'
-    
+
     logging:
       driver: "json-file"
       options:
         max-size: "100m"
         max-file: "10"
-  
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
-    
+
     ports:
       - "9090:9090"
-    
+
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
-    
+
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=30d'
-  
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
     restart: unless-stopped
-    
+
     ports:
       - "3000:3000"
-    
+
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=<SECURE_PASSWORD>
-    
+
     volumes:
       - ./config/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./config/grafana-datasources:/etc/grafana/provisioning/datasources:ro
@@ -553,7 +553,7 @@ groups:
           severity: warning
         annotations:
           summary: "High p95 latency: {{ $value }}s"
-      
+
       - alert: HighErrorRate
         expr: rate(lux_exceptions_total[5m]) > 0.05
         for: 2m
@@ -561,7 +561,7 @@ groups:
           severity: critical
         annotations:
           summary: "Error rate {{ $value }}/s"
-      
+
       - alert: ServiceDown
         expr: up{job="lux-depth-service"} == 0
         for: 1m
@@ -712,20 +712,20 @@ import time
 def test_hardened_service_e2e():
     """Test full hardening + observability stack."""
     base_url = "http://localhost:8088"
-    
+
     # 1. Health check
     response = requests.get(f"{base_url}/health")
     assert response.status_code == 200
-    
+
     # 2. Metrics endpoint
     response = requests.get(f"{base_url}/metrics")
     assert response.status_code == 200
     assert "lux_http_requests_total" in response.text
-    
+
     # 3. Process request with correlation
     test_image = Path("tests/fixtures/sample.tif")
     request_id = "test-e2e-12345"
-    
+
     with open(test_image, "rb") as f:
         response = requests.post(
             f"{base_url}/v2/process",
@@ -733,18 +733,18 @@ def test_hardened_service_e2e():
             headers={"X-Request-ID": request_id},
             params={"preset": "INTERIOR_LUXURY"}
         )
-    
+
     assert response.status_code == 200
     assert response.headers["X-Request-ID"] == request_id
     assert "X-Elapsed-MS" in response.headers
-    
+
     # 4. Verify report stamping
     result = response.json()
     assert "meta" in result
     assert "run_id" in result["meta"]
     assert "config_hash" in result["meta"]
     assert "git_commit" in result["meta"]
-    
+
     # 5. Verify metrics updated
     time.sleep(1)
     response = requests.get(f"{base_url}/metrics")
@@ -756,22 +756,22 @@ def test_universal_hardening_wrapper():
     """Test universal hardening works with legacy pipeline."""
     from transformation_portal.hardening.universal import UniversalHardenedWrapper
     from lux_depth_v2.hardening.policy import HardeningPolicy
-    
+
     # Create mock legacy pipeline
     class LegacyPipeline:
         def process(self, input_path: Path, **kwargs):
             return {"processed": True}
-    
+
     # Wrap with hardening
     policy = HardeningPolicy.load()
     wrapped = UniversalHardenedWrapper(
         pipeline=LegacyPipeline(),
         policy=policy
     )
-    
+
     # Process
     result = wrapped.process(Path("tests/fixtures/sample.tif"))
-    
+
     # Verify hardening applied
     assert "report" in result
     assert "meta" in result["report"]
@@ -871,5 +871,5 @@ def test_universal_hardening_wrapper():
 
 ---
 
-**Status**: Ready for Implementation  
+**Status**: Ready for Implementation
 **Next Review**: 2025-12-22 (2-week milestone)

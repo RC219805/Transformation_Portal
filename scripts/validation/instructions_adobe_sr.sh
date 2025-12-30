@@ -21,7 +21,7 @@ Manual workflow:
 
   2) Apply Camera Raw Super Resolution:
        - Right-click on image in Camera Raw
-       - Select "Enhance..." 
+       - Select "Enhance..."
        - Enable "Super Resolution" (2x upscale)
        - Apply minimal adjustments (Lux_Validation_SR preset):
          * Sharpening ~30

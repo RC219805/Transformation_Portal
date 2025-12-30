@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 @dataclass
 class MockRoomContext:
     """Mock room context for testing."""
+
     name: str
     dimensions: Optional[Tuple[float, float]] = None
     floor_level: Optional[str] = None
@@ -32,6 +33,7 @@ class MockRoomContext:
 @dataclass
 class MockProjectContext:
     """Mock project context for testing."""
+
     project_name: str
     project_number: Optional[str] = None
     address: Optional[str] = None

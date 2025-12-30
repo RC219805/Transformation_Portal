@@ -36,6 +36,7 @@ from transformation_portal.streaming.async_pipeline import (
 # BackpressureQueue Tests
 # ============================================================================
 
+
 class TestBackpressureQueue:
     """Tests for BackpressureQueue class."""
 
@@ -72,7 +73,7 @@ class TestBackpressureQueue:
         queue = BackpressureQueue(
             maxsize=10,
             high_water_mark=0.5,  # 50% = 5 items
-            low_water_mark=0.2   # 20% = 2 items
+            low_water_mark=0.2,  # 20% = 2 items
         )
 
         # Fill to high water mark
@@ -84,11 +85,7 @@ class TestBackpressureQueue:
     @pytest.mark.asyncio
     async def test_backpressure_releases(self):
         """Test that backpressure releases at low water mark."""
-        queue = BackpressureQueue(
-            maxsize=10,
-            high_water_mark=0.5,
-            low_water_mark=0.2
-        )
+        queue = BackpressureQueue(maxsize=10, high_water_mark=0.5, low_water_mark=0.2)
 
         # Fill to trigger backpressure
         for i in range(6):
@@ -113,10 +110,10 @@ class TestBackpressureQueue:
 
         stats = queue.stats
 
-        assert stats['name'] == "stats_test"
-        assert stats['size'] == 1
-        assert stats['items_put'] == 2
-        assert stats['items_got'] == 1
+        assert stats["name"] == "stats_test"
+        assert stats["size"] == 1
+        assert stats["items_put"] == 2
+        assert stats["items_got"] == 1
 
     @pytest.mark.asyncio
     async def test_put_timeout(self):
@@ -165,6 +162,7 @@ class TestBackpressureQueue:
 # AsyncStage Tests
 # ============================================================================
 
+
 class SimpleStage(AsyncStage[int, int]):
     """Simple test stage that doubles input."""
 
@@ -197,12 +195,7 @@ class TestAsyncStage:
     @pytest.mark.asyncio
     async def test_stage_initialization(self):
         """Test stage initialization."""
-        stage = SimpleStage(
-            device=DeviceType.CPU,
-            max_concurrent=4,
-            timeout=10.0,
-            required=True
-        )
+        stage = SimpleStage(device=DeviceType.CPU, max_concurrent=4, timeout=10.0, required=True)
 
         assert stage.name == "simple"
         assert stage.device == DeviceType.CPU
@@ -268,7 +261,7 @@ class TestAsyncStage:
         result = await stage(5)
 
         assert not result.success
-        assert result.metadata.get('error_type') == 'timeout'
+        assert result.metadata.get("error_type") == "timeout"
 
         await stage.shutdown()
 
@@ -313,11 +306,11 @@ class TestAsyncStage:
 
         metrics = stage.metrics
 
-        assert metrics['name'] == "simple"
-        assert metrics['items_processed'] == 5
-        assert metrics['items_failed'] == 0
-        assert metrics['total_time'] > 0
-        assert metrics['avg_time'] > 0
+        assert metrics["name"] == "simple"
+        assert metrics["items_processed"] == 5
+        assert metrics["items_failed"] == 0
+        assert metrics["total_time"] > 0
+        assert metrics["avg_time"] > 0
 
         await stage.shutdown()
 
@@ -325,6 +318,7 @@ class TestAsyncStage:
 # ============================================================================
 # WorkerPool Tests
 # ============================================================================
+
 
 class TestWorkerPool:
     """Tests for WorkerPool class."""
@@ -413,6 +407,7 @@ class TestWorkerPool:
 # ============================================================================
 # AsyncPipeline Tests
 # ============================================================================
+
 
 class TestAsyncPipeline:
     """Tests for AsyncPipeline orchestrator."""
@@ -538,6 +533,7 @@ class TestAsyncPipeline:
 # WorkItem and StageResult Tests
 # ============================================================================
 
+
 class TestWorkItem:
     """Tests for WorkItem dataclass."""
 
@@ -562,12 +558,7 @@ class TestWorkItem:
         """Test adding stage results."""
         item = WorkItem(id="test", data=None)
 
-        result = StageResult(
-            data="processed",
-            stage_name="test_stage",
-            elapsed_time=0.1,
-            success=True
-        )
+        result = StageResult(data="processed", stage_name="test_stage", elapsed_time=0.1, success=True)
 
         item.add_result(result)
 
@@ -580,12 +571,7 @@ class TestStageResult:
 
     def test_successful_result(self):
         """Test successful result creation."""
-        result = StageResult(
-            data="output",
-            stage_name="test",
-            elapsed_time=0.5,
-            success=True
-        )
+        result = StageResult(data="output", stage_name="test", elapsed_time=0.5, success=True)
 
         assert result.success
         assert not result.failed
@@ -595,13 +581,7 @@ class TestStageResult:
     def test_failed_result(self):
         """Test failed result creation."""
         error = ValueError("test error")
-        result = StageResult(
-            data=None,
-            stage_name="test",
-            elapsed_time=0.1,
-            success=False,
-            error=error
-        )
+        result = StageResult(data=None, stage_name="test", elapsed_time=0.1, success=False, error=error)
 
         assert not result.success
         assert result.failed
@@ -611,6 +591,7 @@ class TestStageResult:
 # ============================================================================
 # PipelineMetrics Tests
 # ============================================================================
+
 
 class TestPipelineMetrics:
     """Tests for PipelineMetrics dataclass."""
@@ -626,10 +607,7 @@ class TestPipelineMetrics:
 
     def test_throughput_calculation(self):
         """Test throughput calculation."""
-        metrics = PipelineMetrics(
-            items_processed=100,
-            total_processing_time=10.0
-        )
+        metrics = PipelineMetrics(items_processed=100, total_processing_time=10.0)
 
         metrics.update_throughput()
 
@@ -637,10 +615,7 @@ class TestPipelineMetrics:
 
     def test_throughput_zero_time(self):
         """Test throughput with zero time."""
-        metrics = PipelineMetrics(
-            items_processed=100,
-            total_processing_time=0.0
-        )
+        metrics = PipelineMetrics(items_processed=100, total_processing_time=0.0)
 
         metrics.update_throughput()
 
@@ -651,16 +626,14 @@ class TestPipelineMetrics:
 # StreamingImageLoader Tests
 # ============================================================================
 
+
 class TestStreamingImageLoader:
     """Tests for StreamingImageLoader class."""
 
     @pytest.mark.asyncio
     async def test_loader_initialization(self):
         """Test loader initialization."""
-        loader = StreamingImageLoader(
-            prefetch_size=4,
-            max_memory_mb=1024
-        )
+        loader = StreamingImageLoader(prefetch_size=4, max_memory_mb=1024)
 
         assert loader._prefetch_size == 4
         assert loader._max_memory_mb == 1024
@@ -681,6 +654,7 @@ class TestStreamingImageLoader:
 # ============================================================================
 # Integration Tests
 # ============================================================================
+
 
 class TestAsyncPipelineIntegration:
     """Integration tests for async pipeline."""
@@ -706,7 +680,7 @@ class TestAsyncPipelineIntegration:
                 return item * self.factor
 
         pipeline = AsyncPipeline()
-        pipeline.add_stage(AddStage(10))      # x + 10
+        pipeline.add_stage(AddStage(10))  # x + 10
         pipeline.add_stage(MultiplyStage(2))  # (x + 10) * 2
 
         async with pipeline:
@@ -718,11 +692,7 @@ class TestAsyncPipelineIntegration:
     @pytest.mark.asyncio
     async def test_batch_processor_initialization(self):
         """Test AsyncBatchProcessor initialization."""
-        processor = AsyncBatchProcessor(
-            stages=[SimpleStage()],
-            prefetch_size=2,
-            max_concurrent=1
-        )
+        processor = AsyncBatchProcessor(stages=[SimpleStage()], prefetch_size=2, max_concurrent=1)
 
         assert processor._prefetch_size == 2
         assert processor._max_concurrent == 1
@@ -743,6 +713,7 @@ class TestAsyncPipelineIntegration:
 # Device Type Tests
 # ============================================================================
 
+
 class TestDeviceType:
     """Tests for DeviceType enum."""
 
@@ -757,6 +728,7 @@ class TestDeviceType:
 # ============================================================================
 # Stage Status Tests
 # ============================================================================
+
 
 class TestStageStatus:
     """Tests for StageStatus enum."""

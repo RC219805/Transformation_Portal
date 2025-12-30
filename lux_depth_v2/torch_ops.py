@@ -15,6 +15,7 @@ except Exception:  # pragma: no cover
 try:
     import torch
     import torch.nn.functional as F
+
     TORCH_AVAILABLE = True
 except Exception as e:  # pragma: no cover
     torch = None  # type: ignore
@@ -24,6 +25,7 @@ except Exception as e:  # pragma: no cover
 # Platform Core integration for enhanced device detection
 try:
     from transformation_portal.core.device.detector import DeviceDetector, DeviceInfo
+
     CORE_DEVICE_AVAILABLE = True
 except ImportError:
     CORE_DEVICE_AVAILABLE = False
@@ -37,7 +39,7 @@ if TYPE_CHECKING:
 EPS = 1e-6
 
 # Global device detector instance (lazy initialization)
-_device_detector: Optional['DeviceDetector'] = None
+_device_detector: Optional["DeviceDetector"] = None
 
 
 def require_torch() -> None:
@@ -48,14 +50,14 @@ def require_torch() -> None:
 def pick_device(device: str = "auto", memory_fraction: float = 0.85) -> "torch.device":
     """
     Select compute device with optional Platform Core integration.
-    
+
     Args:
         device: Device string ("auto", "cuda", "mps", "cpu")
         memory_fraction: Memory fraction hint for core detector (0.1-0.95)
-    
+
     Returns:
         torch.device
-    
+
     Notes:
         - Backward compatible with legacy behavior
         - Uses Platform Core DeviceDetector when available for enhanced capabilities
@@ -63,18 +65,15 @@ def pick_device(device: str = "auto", memory_fraction: float = 0.85) -> "torch.d
     """
     require_torch()
     d = (device or "auto").lower()
-    
+
     # Use Platform Core detector for auto mode (enhanced detection)
     if d == "auto" and CORE_DEVICE_AVAILABLE:
         global _device_detector
         if _device_detector is None:
-            _device_detector = DeviceDetector(
-                memory_fraction=memory_fraction,
-                prefer_neural_engine=True
-            )
+            _device_detector = DeviceDetector(memory_fraction=memory_fraction, prefer_neural_engine=True)
         device_info = _device_detector.detect()
         return device_info.device
-    
+
     # Legacy fallback detection (backward compatible)
     if d == "auto":
         if torch.cuda.is_available():
@@ -90,13 +89,13 @@ def pick_device(device: str = "auto", memory_fraction: float = 0.85) -> "torch.d
     return torch.device("cpu")
 
 
-def get_device_info() -> Optional['DeviceInfo']:
+def get_device_info() -> Optional["DeviceInfo"]:
     """
     Get enhanced device information from Platform Core.
-    
+
     Returns:
         DeviceInfo with capabilities, or None if core not available
-    
+
     Example:
         >>> info = get_device_info()
         >>> if info:
@@ -105,11 +104,11 @@ def get_device_info() -> Optional['DeviceInfo']:
     """
     if not CORE_DEVICE_AVAILABLE:
         return None
-    
+
     global _device_detector
     if _device_detector is None:
         _device_detector = DeviceDetector()
-    
+
     return _device_detector.detect()
 
 
@@ -185,7 +184,7 @@ def gaussian_blur(x: "torch.Tensor", sigma: float, autocast: bool = False) -> "t
         return x
     device = x.device
     # CPU fast-path (OpenCV) – dramatically faster than torch conv on many CPU runtimes.
-    if device.type == "cpu" and 'cv2' in globals() and cv2 is not None:
+    if device.type == "cpu" and "cv2" in globals() and cv2 is not None:
         arr = x.detach().to(dtype=torch.float32).numpy()  # 1xCxHxW
         k = int(round(float(sigma) * 3.0)) * 2 + 1
         k = max(3, k)
@@ -250,7 +249,7 @@ def edge_map(l: "torch.Tensor", autocast: bool = False) -> "torch.Tensor":
     require_torch()
     device = l.device
     # CPU fast-path (OpenCV)
-    if device.type == "cpu" and 'cv2' in globals() and cv2 is not None:
+    if device.type == "cpu" and "cv2" in globals() and cv2 is not None:
         arr = l.detach().to(dtype=torch.float32)[0, 0].numpy()
         gx = cv2.Sobel(arr, cv2.CV_32F, 1, 0, ksize=3)
         gy = cv2.Sobel(arr, cv2.CV_32F, 0, 1, ksize=3)
@@ -262,12 +261,8 @@ def edge_map(l: "torch.Tensor", autocast: bool = False) -> "torch.Tensor":
             em = np.clip(mag / float(p), 0.0, 1.0).astype(np.float32)
         return torch.from_numpy(em).unsqueeze(0).unsqueeze(0).to(device=device, dtype=torch.float32)
     # Sobel kernels
-    kx = torch.tensor([[-1, 0, 1],
-                       [-2, 0, 2],
-                       [-1, 0, 1]], device=device, dtype=torch.float32) / 8.0
-    ky = torch.tensor([[-1, -2, -1],
-                       [ 0,  0,  0],
-                       [ 1,  2,  1]], device=device, dtype=torch.float32) / 8.0
+    kx = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], device=device, dtype=torch.float32) / 8.0
+    ky = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], device=device, dtype=torch.float32) / 8.0
     kx = kx.view(1, 1, 3, 3)
     ky = ky.view(1, 1, 3, 3)
     with maybe_autocast(autocast, device):
@@ -289,7 +284,9 @@ def apply_luma_ratio(rgb: "torch.Tensor", new_l: "torch.Tensor", old_l: Optional
     return out.clamp(0.0, 1.0)
 
 
-def param_map(wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor", fg: float, mid: float, bg: float) -> "torch.Tensor":
+def param_map(
+    wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor", fg: float, mid: float, bg: float
+) -> "torch.Tensor":
     require_torch()
     return (wfg * float(fg) + wmid * float(mid) + wbg * float(bg)).to(dtype=torch.float32)
 
@@ -299,8 +296,8 @@ def apply_temperature(rgb: "torch.Tensor", temp: "torch.Tensor") -> "torch.Tenso
     require_torch()
     l0 = luma(rgb)
     out = rgb.to(dtype=torch.float32).clone()
-    out[:, 0:1] *= (1.0 + temp)
-    out[:, 2:3] *= (1.0 - temp)
+    out[:, 0:1] *= 1.0 + temp
+    out[:, 2:3] *= 1.0 - temp
     out = out.clamp(0.0, 1.5)
     l1 = luma(out)
     r = (l0 / (l1 + EPS)).clamp(0.0, 8.0)
@@ -331,14 +328,15 @@ class GradeMaps:
     con: "torch.Tensor"
 
 
-def grade_core(rgb: "torch.Tensor", wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor",
-              cfg, mods: Optional[object] = None) -> "torch.Tensor":
+def grade_core(
+    rgb: "torch.Tensor", wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor", cfg, mods: Optional[object] = None
+) -> "torch.Tensor":
     """Depth-aware grading core (temp, sat, exp, con)."""
     require_torch()
     temp = param_map(wfg, wmid, wbg, cfg.temp_fg, cfg.temp_mid, cfg.temp_bg)
-    sat  = param_map(wfg, wmid, wbg, cfg.sat_fg,  cfg.sat_mid,  cfg.sat_bg)
-    exp  = param_map(wfg, wmid, wbg, cfg.exp_fg,  cfg.exp_mid,  cfg.exp_bg)
-    con  = param_map(wfg, wmid, wbg, cfg.con_fg,  cfg.con_mid,  cfg.con_bg)
+    sat = param_map(wfg, wmid, wbg, cfg.sat_fg, cfg.sat_mid, cfg.sat_bg)
+    exp = param_map(wfg, wmid, wbg, cfg.exp_fg, cfg.exp_mid, cfg.exp_bg)
+    con = param_map(wfg, wmid, wbg, cfg.con_fg, cfg.con_mid, cfg.con_bg)
 
     # Material mods (if present) are expected to have torch tensors matching (1,1,H,W)
     if mods is not None:
@@ -362,8 +360,16 @@ def grade_core(rgb: "torch.Tensor", wfg: "torch.Tensor", wmid: "torch.Tensor", w
     return out.to(dtype=torch.float32)
 
 
-def detail_transfer(base: "torch.Tensor", ai: "torch.Tensor", wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor",
-                    cfg, mods: Optional[object] = None, autocast: bool = False) -> "torch.Tensor":
+def detail_transfer(
+    base: "torch.Tensor",
+    ai: "torch.Tensor",
+    wfg: "torch.Tensor",
+    wmid: "torch.Tensor",
+    wbg: "torch.Tensor",
+    cfg,
+    mods: Optional[object] = None,
+    autocast: bool = False,
+) -> "torch.Tensor":
     """Inject controlled AI detail into base luminance."""
     require_torch()
     if ai.shape != base.shape:
@@ -389,8 +395,15 @@ def detail_transfer(base: "torch.Tensor", ai: "torch.Tensor", wfg: "torch.Tensor
     return apply_luma_ratio(base, new_l, old_l=lb)
 
 
-def apply_clarity(rgb: "torch.Tensor", wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor",
-                  cfg, mods: Optional[object] = None, autocast: bool = False) -> "torch.Tensor":
+def apply_clarity(
+    rgb: "torch.Tensor",
+    wfg: "torch.Tensor",
+    wmid: "torch.Tensor",
+    wbg: "torch.Tensor",
+    cfg,
+    mods: Optional[object] = None,
+    autocast: bool = False,
+) -> "torch.Tensor":
     require_torch()
     l = luma(rgb)
     hp = (l - gaussian_blur(l, cfg.clarity_sigma, autocast=autocast)).clamp(-cfg.clarity_clip, cfg.clarity_clip)
@@ -406,8 +419,15 @@ def apply_clarity(rgb: "torch.Tensor", wfg: "torch.Tensor", wmid: "torch.Tensor"
     return apply_luma_ratio(rgb, new_l, old_l=l)
 
 
-def apply_sharpen(rgb: "torch.Tensor", wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor",
-                  cfg, mods: Optional[object] = None, autocast: bool = False) -> "torch.Tensor":
+def apply_sharpen(
+    rgb: "torch.Tensor",
+    wfg: "torch.Tensor",
+    wmid: "torch.Tensor",
+    wbg: "torch.Tensor",
+    cfg,
+    mods: Optional[object] = None,
+    autocast: bool = False,
+) -> "torch.Tensor":
     require_torch()
     l = luma(rgb)
     det = l - gaussian_blur(l, cfg.sharpen_sigma, autocast=autocast)
@@ -443,7 +463,7 @@ def mean_abs_rgb(a: "torch.Tensor", b: "torch.Tensor", max_samples: int = 250_00
         raise ValueError("mean_abs_rgb: shapes differ")
     # 1x3xHxW
     diff = (a.to(dtype=torch.float32) - b.to(dtype=torch.float32)).abs()
-    flat = diff.permute(0,2,3,1).reshape(-1, 3)
+    flat = diff.permute(0, 2, 3, 1).reshape(-1, 3)
     n = flat.shape[0]
     if n <= max_samples:
         return float(flat.mean().item())
@@ -478,7 +498,9 @@ class Tiler:
         self.tile = int(tile)
         self.overlap = int(max(0, overlap))
 
-    def run(self, rgb: "torch.Tensor", fn: Callable[["torch.Tensor", int, int, int, int, int, int, int, int], "torch.Tensor"]) -> "torch.Tensor":
+    def run(
+        self, rgb: "torch.Tensor", fn: Callable[["torch.Tensor", int, int, int, int, int, int, int, int], "torch.Tensor"]
+    ) -> "torch.Tensor":
         require_torch()
         if self.tile <= 0:
             # degrade gracefully

@@ -1,7 +1,7 @@
 # Validation Acceptance Checklist
 
-**Purpose**: Gate validation quality and ensure reproducibility  
-**Owner**: Architecture Team  
+**Purpose**: Gate validation quality and ensure reproducibility
+**Owner**: Architecture Team
 **Timeline**: Days 9-12 of Phase 3
 
 ---
@@ -48,8 +48,8 @@
 - [ ] Improvement ≥ +5% OR degradation documented
 - [ ] Outliers investigated
 
-**Threshold**: ≥ +5% improvement (recommended)  
-**Actual**: _________ %  
+**Threshold**: ≥ +5% improvement (recommended)
+**Actual**: _________ %
 **Decision**: PASS / FAIL / CONDITIONAL
 
 ---
@@ -60,8 +60,8 @@
 - [ ] Outliers investigated
 - [ ] Per-scene-type breakdown
 
-**Threshold**: ≤ -1 dB degradation (acceptable)  
-**Actual**: _________ dB  
+**Threshold**: ≤ -1 dB degradation (acceptable)
+**Actual**: _________ dB
 **Decision**: PASS / FAIL / CONDITIONAL
 
 ---
@@ -72,16 +72,16 @@
 - [ ] Outliers investigated
 - [ ] Per-material-type breakdown
 
-**Threshold**: ≤ -0.02 degradation (acceptable)  
-**Actual**: _________  
+**Threshold**: ≤ -0.02 degradation (acceptable)
+**Actual**: _________
 **Decision**: PASS / FAIL / CONDITIONAL
 
 ---
 
 ### Qualitative Assessment ✅ / ❌
 
-**Review Authority**: Architectural Quality Reviewer  
-**Reviewer Name**: _____________________  
+**Review Authority**: Architectural Quality Reviewer
+**Reviewer Name**: _____________________
 **Review Date**: _____________________
 
 **Visual Artifact Detection**:
@@ -92,11 +92,11 @@
 - [ ] Unnatural sharpening checked
 - [ ] Color shifts checked
 
-**Artifact Rate**: _____ / 40 images (____ %)  
-**Threshold**: ≤ 10% (4 images max)  
+**Artifact Rate**: _____ / 40 images (____ %)
+**Threshold**: ≤ 10% (4 images max)
 **Decision**: PASS / FAIL
 
-**Reviewer Sign-Off**: _____________________  
+**Reviewer Sign-Off**: _____________________
 **Date**: _____________________
 
 ---
@@ -112,10 +112,10 @@
 - Worse: _____ images
 - Artifact: _____ images
 
-**Threshold**: 90%+ Better or Neutral  
+**Threshold**: 90%+ Better or Neutral
 **Decision**: PASS / FAIL
 
-**Reviewer Sign-Off**: _____________________  
+**Reviewer Sign-Off**: _____________________
 **Date**: _____________________
 
 ---
@@ -203,8 +203,8 @@
 3. **SSIM (≤ -0.02)**: Why this degradation level is acceptable?
 4. **Visual (≤ 10%)**: Why this artifact rate is acceptable?
 
-**Rationale Author**: _____________________  
-**Date**: _____________________  
+**Rationale Author**: _____________________
+**Date**: _____________________
 **Approval**: _____________________
 
 **Note**: This section is the single source of truth for threshold decisions. Future disputes reference this section only.
@@ -248,35 +248,35 @@
 ## Sign-Off
 
 ### Technical Review
-**Reviewer**: _____________________  
-**Date**: _____________________  
-**Status**: ⬜ APPROVED / ⬜ CONDITIONAL / ⬜ REJECTED  
+**Reviewer**: _____________________
+**Date**: _____________________
+**Status**: ⬜ APPROVED / ⬜ CONDITIONAL / ⬜ REJECTED
 **Notes**:
 
 ---
 
 ### Architecture Review
-**Reviewer**: _____________________  
-**Date**: _____________________  
-**Status**: ⬜ APPROVED / ⬜ CONDITIONAL / ⬜ REJECTED  
+**Reviewer**: _____________________
+**Date**: _____________________
+**Status**: ⬜ APPROVED / ⬜ CONDITIONAL / ⬜ REJECTED
 **Notes**:
 
 ---
 
 ### Final Approval
-**Authority**: _____________________  
-**Date**: _____________________  
-**Decision**: ⬜ ENABLE BY DEFAULT / ⬜ KEEP OPT-IN  
+**Authority**: _____________________
+**Date**: _____________________
+**Decision**: ⬜ ENABLE BY DEFAULT / ⬜ KEEP OPT-IN
 **Effective**: January 10, 2026 (freeze lift)
 
 ---
 
 ## Audit Trail
 
-**Validation Execution Date**: _____________________  
-**Dataset Version**: VALIDATION_CHECKSUMS.txt (SHA256)  
-**Harness Version**: validation_harness.py (commit hash: _______)  
-**Environment**: Python _____, lux-depth-v2 _____, GPU/MPS _____  
+**Validation Execution Date**: _____________________
+**Dataset Version**: VALIDATION_CHECKSUMS.txt (SHA256)
+**Harness Version**: validation_harness.py (commit hash: _______)
+**Environment**: Python _____, lux-depth-v2 _____, GPU/MPS _____
 
 **Artifacts**:
 - Validation results: validation_results/validation_results.json
@@ -286,5 +286,5 @@
 
 ---
 
-**Status**: PENDING EXECUTION  
+**Status**: PENDING EXECUTION
 **Next Review**: After validation execution (Days 9-12)

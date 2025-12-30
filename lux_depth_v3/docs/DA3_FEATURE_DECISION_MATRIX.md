@@ -1,6 +1,6 @@
 # DA3 Feature Integration - Quick Reference
 
-**For:** Product Managers, Engineering Leads  
+**For:** Product Managers, Engineering Leads
 **Date:** December 19, 2025
 
 ---
@@ -290,8 +290,8 @@ Advanced users can use official DA3 API directly.
 
 ---
 
-**Status:** Awaiting Approval  
-**Owner:** Transformation Portal Architect  
+**Status:** Awaiting Approval
+**Owner:** Transformation Portal Architect
 **Contact:** See repository CODEOWNERS
 
 ---

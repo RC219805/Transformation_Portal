@@ -71,14 +71,14 @@ jobs:
 
           echo "Running flake8..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          
+
           echo "Running pylint on changed files..."
           # Directories to exclude from linting (backup, agent, legacy, and project-specific code)
           # Build grep arguments as an array for safe handling of patterns
           grep_exclude_args=(-e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e '\.backup_local/' -e '\.github/agents/' -e 'basicsr_tp/' -e 'projects/' -e 'examples/')
-          
+
           mapfile -t files < <(git diff --diff-filter=d --name-only origin/main...HEAD | grep '\.py$' | grep -v "${grep_exclude_args[@]}" || true)
-          
+
           set +e
           if [ ${#files[@]} -eq 0 ]; then
             # Fallback: lint all tracked Python files (excluding patterns)
@@ -95,7 +95,7 @@ jobs:
             PYLINT_EXIT=$?
           fi
           set -e
-          
+
           if [ $((PYLINT_EXIT & 1)) -ne 0 ] || [ $((PYLINT_EXIT & 2)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
             echo "Pylint found critical issues (exit code: $PYLINT_EXIT)"
             exit 1
@@ -127,7 +127,7 @@ jobs:
         run: |
           echo "Initial disk usage:"
           df -h
-          
+
           # Aggressive cleanup - free up space
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
@@ -136,11 +136,11 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo rm -rf /usr/local/.ghcup
-          
+
           sudo apt-get clean
           sudo apt-get autoremove -y
           sudo apt-get autoclean -y
-          
+
           docker system prune -af --volumes || true
 
           # Remove pip cache preemptively
@@ -160,7 +160,7 @@ jobs:
           PIP_NO_CACHE_DIR: "1"
         run: |
           python -m pip install --upgrade pip wheel
-          
+
           # Always install core test deps and runtime+CI deps
           pip install --no-cache-dir pytest pytest-cov pytest-asyncio
           pip install --no-cache-dir -r requirements-ci.txt
@@ -182,13 +182,13 @@ jobs:
           pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
           # Install ML extras via editable install with extras
           pip install --no-cache-dir -e ".[ml]"
-          
+
           # Reinstall scikit-learn if needed (ensure ABI matches numpy)
           SKLEARN_CONSTRAINT=$(grep -E '^scikit-learn[^#]*' requirements-ci.txt | head -n1)
           if [ -n "$SKLEARN_CONSTRAINT" ]; then
             pip install --no-cache-dir --force-reinstall "$SKLEARN_CONSTRAINT"
           fi
-          
+
           pip cache purge || true
           rm -rf ~/.cache/huggingface || true
           rm -rf /tmp/pip-* || true
@@ -264,12 +264,12 @@ jobs:
           set -euo pipefail
           OUT="montecito_manifest.csv"
           python tools/montecito_manifest.py . "$OUT"
-          
+
           if [ ! -f "$OUT" ]; then
             echo "Error: Manifest file was not created at $OUT"
             exit 1
           fi
-          
+
           echo "manifest_path=$OUT" >> "$GITHUB_OUTPUT"
 
       - name: Upload manifest artifact
@@ -280,4 +280,3 @@ jobs:
           path: ${{ steps.manifest.outputs.manifest_path }}
           if-no-files-found: error
           retention-days: 7
-          

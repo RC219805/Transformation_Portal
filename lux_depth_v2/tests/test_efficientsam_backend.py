@@ -27,10 +27,10 @@ def test_backend_available_flag_without_onnx(monkeypatch):
 def test_backend_available_with_model_missing(monkeypatch, tmp_path):
     """Stage 5B: available is False when model doesn't exist (stricter semantics)."""
     import lux_depth_v2.backends.efficientsam_backend as backend_mod
-    
+
     # Mock onnxruntime as available
     monkeypatch.setattr(backend_mod, "ort", type("ort", (), {"InferenceSession": type}))
-    
+
     # Model doesn't exist, auto_download=False
     backend = EfficientSAMBackend(
         model_name="missing_model",
@@ -38,7 +38,7 @@ def test_backend_available_with_model_missing(monkeypatch, tmp_path):
         auto_download=False,
         lazy_load=True,
     )
-    
+
     # Stage 5B: available should be False (model missing)
     assert backend.available is False
 
@@ -46,20 +46,20 @@ def test_backend_available_with_model_missing(monkeypatch, tmp_path):
 def test_backend_available_with_model_present(monkeypatch, tmp_path):
     """Stage 5B: available is True when model exists."""
     import lux_depth_v2.backends.efficientsam_backend as backend_mod
-    
+
     # Mock onnxruntime
     monkeypatch.setattr(backend_mod, "ort", type("ort", (), {"InferenceSession": type}))
-    
+
     # Create model file
     model_name = "test_model"
     model_file = tmp_path / f"{model_name}.onnx"
     model_file.touch()
-    
+
     backend = EfficientSAMBackend(
         model_path=model_file,
         lazy_load=True,
     )
-    
+
     # Stage 5B: available should be True
     assert backend.available is True
 
@@ -86,6 +86,7 @@ def test_preprocess_builds_prompt_tensors():
 def _model_exists() -> bool:
     """Check if efficientsam_s.onnx model exists locally."""
     from pathlib import Path
+
     return (Path("weights") / "efficientsam" / "efficientsam_s.onnx").exists()
 
 
@@ -93,7 +94,7 @@ def _model_exists() -> bool:
 def test_segment_runs_with_real_model_efficientsam_s():
     """
     Stage 5A: Real ONNX inference test with efficientsam_s.onnx.
-    
+
     Only runs when model is present (e.g., after manual download via CLI).
     CI skips this test by default (offline, no model).
     """
@@ -101,23 +102,23 @@ def test_segment_runs_with_real_model_efficientsam_s():
         model_name="efficientsam_s",
         lazy_load=False,
     )
-    
+
     # Create simple test image: 64x64 with a white square in center
     img = np.zeros((64, 64, 3), dtype=np.uint8)
     img[20:44, 20:44] = 255  # white square
-    
+
     # Test with box prompt around the square
     mask = backend.segment(img, [BoxPrompt(0.25, 0.25, 0.75, 0.75)])
-    
+
     # Validate output
     assert mask.shape == (64, 64), f"Expected (64,64), got {mask.shape}"
     assert mask.dtype == np.float32
     assert np.all(np.isfinite(mask)), "Mask contains NaN or Inf"
     assert mask.min() >= 0.0 and mask.max() <= 1.0, f"Mask values outside [0,1]: [{mask.min()}, {mask.max()}]"
-    
+
     # Mask should not be constant (variance > epsilon)
     assert mask.std() > 0.01, "Mask is constant (no segmentation detected)"
-    
+
     # Center region should have higher confidence than edges (basic sanity)
     center_val = mask[32, 32]
     edge_val = mask[4, 4]
@@ -128,12 +129,12 @@ def test_segment_runs_with_real_model_efficientsam_s():
 def test_segment_with_point_prompts_real_model():
     """Stage 5A: Test with point prompts on real model."""
     backend = EfficientSAMBackend(model_name="efficientsam_s", lazy_load=False)
-    
+
     img = np.random.randint(0, 255, (48, 48, 3), dtype=np.uint8)
-    
+
     # Single foreground point at center
     mask = backend.segment(img, [PointPrompt(0.5, 0.5, label=1)])
-    
+
     assert mask.shape == (48, 48)
     assert mask.dtype == np.float32
     assert np.all(np.isfinite(mask))

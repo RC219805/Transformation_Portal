@@ -33,17 +33,17 @@ Tested `python examples/validate_file_formats.py`:
 - Main branch: commit 747bc98 (1 commit ahead - PR #107 merge)
 
 **Changed Files Analysis**:
-- **In main since PR branch**: 
+- **In main since PR branch**:
   - `.github/workflows/build.yml` (added fetch-depth: 0)
   - Several documentation files (PR_*.md, VFX_*.md, PUSH_INSTRUCTIONS.md)
-- **In PR branch**: 
+- **In PR branch**:
   - `format_utils.py` (new)
   - `tests/test_format_utils.py` (new)
   - `examples/validate_file_formats.py` (new)
   - Documentation files: SUPPORTED_FILE_FORMATS.md, FILE_FORMAT_QUICK_REFERENCE.md, docs/FORMAT_SUPPORT_OVERVIEW.md (new)
   - `README.md` (modified)
 
-**Conflict Assessment**: 
+**Conflict Assessment**:
 - ❌ Cannot perform clean rebase due to grafted repository history
 - ✅ NO actual file content conflicts detected
 - ✅ All PR changes are to new files or isolated documentation

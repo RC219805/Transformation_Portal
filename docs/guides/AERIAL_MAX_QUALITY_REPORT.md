@@ -45,14 +45,14 @@ Optimized for aerial/exterior photography with emphasis on:
   - Contrast: 1.040
   - Clarity: 0.22 (very strong detail)
   - Sharpening: 0.09
-  
+
 - **Midground Zone (Landscape/Property)**: Middle 30%
   - Temperature: +0.002 (neutral)
   - Saturation: 1.030 (moderate)
   - Contrast: 1.030
   - Clarity: 0.13
   - Sharpening: 0.06
-  
+
 - **Background Zone (Sky/Horizon)**: Farthest 35%
   - Temperature: -0.004 (cool sky)
   - Saturation: 1.010 (subtle)

@@ -1,6 +1,6 @@
 # High-Fidelity Depth Pipeline Implementation Plan
-**Date**: 2025-12-17  
-**Status**: IMPLEMENTATION READY  
+**Date**: 2025-12-17
+**Status**: IMPLEMENTATION READY
 **Priority**: CRITICAL (quality blocker)
 
 ---
@@ -30,33 +30,33 @@ The current depth pipeline achieves "16-bit numerical precision" but suffers fro
 ### Critical Issues
 
 #### Issue #1: Low-Resolution Inference (CRITICAL)
-**Symptom**: Broad smooth ramps, soft boundaries (furniture edges bleed)  
-**Root Cause**: Depth predicted at model's internal resolution (~few hundred px), then bicubically interpolated to 4K  
-**Impact**: No post-processing can restore missing spatial detail  
+**Symptom**: Broad smooth ramps, soft boundaries (furniture edges bleed)
+**Root Cause**: Depth predicted at model's internal resolution (~few hundred px), then bicubically interpolated to 4K
+**Impact**: No post-processing can restore missing spatial detail
 **Fix**: Tile-based high-res inference (Phase 2, highest leverage)
 
 #### Issue #2: Fundamentally Wrong Normal Map (BUG)
-**Symptom**: Almost uniform purple/blue, not usable for PBR  
-**Root Cause**: Computing normals with excessively large Z constant, forcing camera-facing orientation  
-**Impact**: Material Response and relighting cannot work  
+**Symptom**: Almost uniform purple/blue, not usable for PBR
+**Root Cause**: Computing normals with excessively large Z constant, forcing camera-facing orientation
+**Impact**: Material Response and relighting cannot work
 **Fix**: Correct math (Phase 1, immediate)
 
 #### Issue #3: Misleading Quality Metrics (BLOCKER)
-**Symptom**: Edge gradient ≥180 vs 0.09 - wrong proxy for usability  
-**Root Cause**: Incorrect metric, wrong scaling, doesn't reflect DOF/masking requirements  
-**Impact**: Pipeline optimizing wrong thing  
+**Symptom**: Edge gradient ≥180 vs 0.09 - wrong proxy for usability
+**Root Cause**: Incorrect metric, wrong scaling, doesn't reflect DOF/masking requirements
+**Impact**: Pipeline optimizing wrong thing
 **Fix**: Edge alignment, edge width, halo detection (Phase 1, immediate)
 
 #### Issue #4: Edge-Blurring Ensemble (HIGH IMPACT)
-**Symptom**: Weighted average smears boundaries where models disagree  
-**Root Cause**: Plain averaging instead of robust fusion  
-**Impact**: Destroys edge fidelity ensemble is meant to improve  
+**Symptom**: Weighted average smears boundaries where models disagree
+**Root Cause**: Plain averaging instead of robust fusion
+**Impact**: Destroys edge fidelity ensemble is meant to improve
 **Fix**: Median or confidence-weighted fusion (Phase 1, high impact)
 
 #### Issue #5: Edge-Smoothing Filter Config (HIGH IMPACT)
-**Symptom**: Guided filter (r=10, eps=0.02) washes out discontinuities  
-**Root Cause**: Filter configured for smoothing, not edge snapping  
-**Impact**: Erases boundaries instead of tightening them  
+**Symptom**: Guided filter (r=10, eps=0.02) washes out discontinuities
+**Root Cause**: Filter configured for smoothing, not edge snapping
+**Impact**: Erases boundaries instead of tightening them
 **Fix**: Joint bilateral upsampling / edge snapping (Phase 2)
 
 ---
@@ -183,7 +183,7 @@ Output: High-Fidelity 4K Depth
 - ✅ `_blend_tiles()`: median or weighted fusion with windowing
 - ✅ `compute_edge_alignment()`: validation metric
 
-**Expected Impact**: 
+**Expected Impact**:
 - **5-10x edge fidelity improvement** (the real unlock)
 - Captures fine detail (window frames, furniture edges, molding)
 - Eliminates "smooth ramp" artifacts
@@ -228,22 +228,22 @@ depth_snapped = joint_bilateral_upsample(
 ### Phase 3: Luxury-Grade (As Needed)
 
 #### 3.1 Multi-View Geometry Fusion (OPTIONAL)
-**When**: If multiple images with parallax available  
-**Approach**: SfM/MVS (COLMAP/AliceVision) → fuse with ML depth  
+**When**: If multiple images with parallax available
+**Approach**: SfM/MVS (COLMAP/AliceVision) → fuse with ML depth
 **Impact**: True geometric edges, physically accurate depth
 
 ---
 
 #### 3.2 Domain-Specific Fine-Tuning (EXPENSIVE)
-**When**: Repeated production on luxury interiors  
-**Approach**: Fine-tune Depth Anything V2 on labeled interior dataset  
+**When**: Repeated production on luxury interiors
+**Approach**: Fine-tune Depth Anything V2 on labeled interior dataset
 **Impact**: Consistent handling of glass, marble, bright windows
 
 ---
 
 #### 3.3 Depth Matte Pipeline (HYBRID)
-**When**: Maximum edge control needed  
-**Approach**: Segmentation (SAM) + depth → multi-layer matte  
+**When**: Maximum edge control needed
+**Approach**: Segmentation (SAM) + depth → multi-layer matte
 **Implementation**:
 - Segment objects with EfficientSAM or SAM-2
 - Use depth to order layers (foreground/midground/background)
@@ -317,17 +317,17 @@ if cfg.validate_quality:
 @dataclass
 class PipelineConfig:
     # ... existing fields ...
-    
+
     # Phase 2 Slice 4: High-Fidelity Depth
     depth_tile_size: int = 1024  # Tile size for high-res inference
     depth_tile_overlap: int = 128  # Overlap for seamless blending
     depth_fusion_mode: str = "median"  # median | weighted | confidence
     depth_blend_window: str = "hann"  # hann | cosine | linear
-    
+
     normal_preset: str = "architectural"  # architectural | subtle | pronounced
     normal_z_scale: float = 1.0  # Override preset z_scale
     normal_strength: float = 1.0  # Gradient multiplier
-    
+
     validate_quality: bool = True  # Enforce quality bar
     target_edge_alignment: float = 0.6  # Luxury rendering minimum
 ```
@@ -369,21 +369,21 @@ python lux_depth_v2/tools/benchmark_depth.py \
 ## Risk Mitigation
 
 ### Performance
-**Risk**: Tiling adds 2-4x overhead (multiple model runs)  
+**Risk**: Tiling adds 2-4x overhead (multiple model runs)
 **Mitigation**:
 - Parallelize tile inference (batch on GPU)
 - Use smaller tiles (512) for fast preview, large (1536) for production
 - LRU cache for iterative workflows
 
 ### Compatibility
-**Risk**: Breaking changes to existing pipeline  
+**Risk**: Breaking changes to existing pipeline
 **Mitigation**:
 - Feature flag: `use_tiled_inference=False` (default backward compatible)
 - Gradual rollout: add as new preset `interior_luxury_max_quality_tiled`
 - Version migration: keep current ensemble for comparison
 
 ### Quality Regression
-**Risk**: Tiling introduces seams or artifacts  
+**Risk**: Tiling introduces seams or artifacts
 **Mitigation**:
 - Robust scale reconciliation in overlaps
 - Smooth blending windows (Hann/cosine)
@@ -435,11 +435,11 @@ python lux_depth_v2/tools/benchmark_depth.py \
 5. **Retune edge filter** (high impact - stop smoothing boundaries)
 
 ### Recommended "Phase 2" Path
-**For luxury DOF/masking use case**: Tile inference + edge snapping  
-**If multiple images**: Add multi-view fusion  
+**For luxury DOF/masking use case**: Tile inference + edge snapping
+**If multiple images**: Add multi-view fusion
 **If repeatable production**: Fine-tune on interior dataset
 
 ---
 
-**Status**: ✅ Phase 1 modules implemented, ready for integration testing  
+**Status**: ✅ Phase 1 modules implemented, ready for integration testing
 **Next**: Write unit tests, integrate into pipeline, validate on sample images

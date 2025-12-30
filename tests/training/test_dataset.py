@@ -24,21 +24,20 @@ import numpy as np
 try:
     import torch
     from torch.utils.data import DataLoader
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
 
 try:
     from PIL import Image
+
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
 
 # Skip all tests if dependencies not available
-pytestmark = pytest.mark.skipif(
-    not (TORCH_AVAILABLE and PIL_AVAILABLE),
-    reason="PyTorch and PIL required for dataset tests"
-)
+pytestmark = pytest.mark.skipif(not (TORCH_AVAILABLE and PIL_AVAILABLE), reason="PyTorch and PIL required for dataset tests")
 
 
 class TestDepthDataConfig:

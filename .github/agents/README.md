@@ -248,9 +248,9 @@ To create a new custom agent for this repository:
    name: Your Agent Name
    description: Brief description of what your agent does
    ---
-   
+
    # Your Agent Name
-   
+
    [Agent instructions and expertise...]
    ```
 
@@ -282,7 +282,7 @@ Update agents when:
 
 **Prompt**:
 ```
-@transformation-portal-specialist I need to add depth-based vignetting to the 
+@transformation-portal-specialist I need to add depth-based vignetting to the
 ArchitecturalDepthPipeline. It should darken the background more than the foreground.
 ```
 
@@ -297,7 +297,7 @@ ArchitecturalDepthPipeline. It should darken the background more than the foregr
 
 **Prompt**:
 ```
-@transformation-portal-specialist the batch processing is using too much memory 
+@transformation-portal-specialist the batch processing is using too much memory
 when processing 4K images. How can I optimize this?
 ```
 
@@ -312,7 +312,7 @@ when processing 4K images. How can I optimize this?
 
 **Prompt**:
 ```
-@transformation-portal-specialist FFmpeg is failing with "Cannot determine format 
+@transformation-portal-specialist FFmpeg is failing with "Cannot determine format
 of input stream" when processing HDR video
 ```
 

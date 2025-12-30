@@ -1,8 +1,8 @@
 # Governance Cleanup - Complete
 
-**Date**: 2025-12-15  
-**Architect**: Transformation Portal Architect  
-**Status**: ✅ COMPLETE  
+**Date**: 2025-12-15
+**Architect**: Transformation Portal Architect
+**Status**: ✅ COMPLETE
 
 ---
 
@@ -17,21 +17,21 @@ Successfully resolved governance crisis in PR-W1 water detection baseline manage
 1. **afef3dd** - `fix(water): portable path resolution (ground truth relative paths)`
    - Ground truth root relative to ground_truth.json location
    - CI workflow portable across working directories
-   
+
 2. **4222491** - `feat(water): add PR-W4 two-stage gating telemetry`
    - WaterCandidateReport: confidence tracking (raw, after suppressors, final)
    - MaterialsV3Config: two-stage thresholds + saturation boost
-   
+
 3. **e70dab4** - `refactor(water): implement baseline governance discipline`
    - Renamed baseline_ci_v0.json → baseline_ci_audit_v0.json (immutable)
    - Created baseline_ci_current_v1.json (current enforced baseline)
    - Updated CI to reference canonical baseline
-   
+
 4. **b60ea3e** - `docs(water): document baseline governance scheme in README`
    - Documented baseline versioning scheme
    - Baseline update policy with holdout validation requirement
    - Known limitations (pool_0008 miss at 83.3% recall)
-   
+
 5. **8bf7181** - `docs(architecture): add ADR-001 for baseline governance policy`
    - Architectural Decision Record for two-tier baseline system
    - Prevents overfitting, requires validation before updates
@@ -61,8 +61,8 @@ Successfully resolved governance crisis in PR-W1 water detection baseline manage
 
 ## Deleted Files
 
-**Experimental baselines**: baseline_ci_v1.json, baseline_ci_v1_clean.json, test_v1_*.json  
-**Premature docs**: GLASS_SUPPRESSOR_*_COMPLETE.md, PATH_RESOLUTION_*_COMPLETE.md, PR_W1.3_*.md  
+**Experimental baselines**: baseline_ci_v1.json, baseline_ci_v1_clean.json, test_v1_*.json
+**Premature docs**: GLASS_SUPPRESSOR_*_COMPLETE.md, PATH_RESOLUTION_*_COMPLETE.md, PR_W1.3_*.md
 
 **Retained analysis docs** (untracked):
 - BASELINE_THRESHOLD_ANALYSIS.md (accurate diagnosis)
@@ -87,12 +87,12 @@ Successfully resolved governance crisis in PR-W1 water detection baseline manage
 
 ## Governance Lessons
 
-✅ **Baseline versioning**: Immutable audit + mutable current  
-✅ **Commit discipline**: Path fixes separate from experiments  
-✅ **Honest documentation**: Known limitations documented  
-❌ **Anti-patterns avoided**: Test set tuning, premature completion claims  
+✅ **Baseline versioning**: Immutable audit + mutable current
+✅ **Commit discipline**: Path fixes separate from experiments
+✅ **Honest documentation**: Known limitations documented
+❌ **Anti-patterns avoided**: Test set tuning, premature completion claims
 
 ---
 
-**Repository Health**: ✅ **RESTORED**  
-**Governance**: ✅ **DISCIPLINED AND DOCUMENTED**  
+**Repository Health**: ✅ **RESTORED**
+**Governance**: ✅ **DISCIPLINED AND DOCUMENTED**

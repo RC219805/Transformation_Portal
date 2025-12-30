@@ -19,21 +19,33 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Look
     p.add_argument("--preset", type=str, default=Preset.PHOTO_REALISTIC.value, choices=[e.value for e in Preset])
-    p.add_argument("--auto-preset", action="store_true", 
-                   help="Auto-select preset based on CLIP scene classification.")
-    p.add_argument("--quality-tier", type=str, default="max", choices=["standard", "max", "apex", "auto"],
-                   help="Quality tier for auto-preset selection. Use 'auto' to decide based on intent + complexity (default: max).")
-    p.add_argument("--intent", type=str, default=None, choices=["preview", "client", "hero"],
-                   help="Output intent for auto quality-tier selection. preview→standard, client→max (or apex if complex), hero→apex.")
-    p.add_argument("--allow-canary", action="store_true",
-                   help="Allow canary (experimental) presets in auto-preset selection (default: False).")
+    p.add_argument("--auto-preset", action="store_true", help="Auto-select preset based on CLIP scene classification.")
+    p.add_argument(
+        "--quality-tier",
+        type=str,
+        default="max",
+        choices=["standard", "max", "apex", "auto"],
+        help="Quality tier for auto-preset selection. Use 'auto' to decide based on intent + complexity (default: max).",
+    )
+    p.add_argument(
+        "--intent",
+        type=str,
+        default=None,
+        choices=["preview", "client", "hero"],
+        help="Output intent for auto quality-tier selection. preview→standard, client→max (or apex if complex), hero→apex.",
+    )
+    p.add_argument(
+        "--allow-canary",
+        action="store_true",
+        help="Allow canary (experimental) presets in auto-preset selection (default: False).",
+    )
 
     # Device
     p.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"])
     p.add_argument("--precision", type=str, default="fp16", choices=["fp16", "fp32"])
 
     # Upscaling
-    p.add_argument("--upscale", type=int, default=4, choices=[2,4])
+    p.add_argument("--upscale", type=int, default=4, choices=[2, 4])
     p.add_argument("--upscaler-backend", type=str, default="torch", choices=["torch", "realesrgan", "onnx", "none"])
     p.add_argument("--model-path", type=str, default=None, help="Upscaler model path (.pth or .onnx).")
     p.add_argument("--model-sha256", type=str, default=None, help="Optional SHA256 for verifying model file.")
@@ -42,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--half", action="store_true", help="Use half precision inside Real-ESRGAN (GPU only).")
 
     # Segmentation
-    p.add_argument("--seg-backend", type=str, default="auto", choices=["auto","onnx","segformer","heuristic","none"])
+    p.add_argument("--seg-backend", type=str, default="auto", choices=["auto", "onnx", "segformer", "heuristic", "none"])
     p.add_argument("--seg-onnx-model", type=str, default=None, help="Material segmentation ONNX model path.")
     p.add_argument("--seg-onnx-labels", type=str, default=None, help="Optional JSON label mapping for ONNX model.")
     p.add_argument("--seg-segformer-model", type=str, default=None, help="Local dir or HF model id for segformer backend.")
@@ -51,27 +63,39 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seg-min-conf", type=float, default=0.25)
 
     # Materials v2 (Phase 1 Integration Pack)
-    p.add_argument("--materials-v2", action="store_true", 
-                   help="Enable Materials v2 confidence-gated material response.")
-    p.add_argument("--confidence-threshold", type=float, default=0.6, 
-                   help="Confidence threshold for Materials v2 gating (default: 0.6).")
-    p.add_argument("--confidence-blend-range", type=float, default=0.1,
-                   help="Blend range for soft confidence falloff (default: 0.1).")
-    p.add_argument("--confidence-blend-mode", type=str, default="soft", choices=["soft", "hard"],
-                   help="Confidence blending mode (default: soft).")
-    p.add_argument("--cache-masks", action="store_true", 
-                   help="Enable mask caching for Materials v2.")
-    p.add_argument("--cache-dir", type=str, default=".mask_cache",
-                   help="Mask cache directory (default: .mask_cache).")
-    p.add_argument("--max-segmentation-side", type=int, default=1024,
-                   help="Max segmentation resolution for Materials v2 (default: 1024).")
+    p.add_argument("--materials-v2", action="store_true", help="Enable Materials v2 confidence-gated material response.")
+    p.add_argument(
+        "--confidence-threshold", type=float, default=0.6, help="Confidence threshold for Materials v2 gating (default: 0.6)."
+    )
+    p.add_argument(
+        "--confidence-blend-range", type=float, default=0.1, help="Blend range for soft confidence falloff (default: 0.1)."
+    )
+    p.add_argument(
+        "--confidence-blend-mode",
+        type=str,
+        default="soft",
+        choices=["soft", "hard"],
+        help="Confidence blending mode (default: soft).",
+    )
+    p.add_argument("--cache-masks", action="store_true", help="Enable mask caching for Materials v2.")
+    p.add_argument("--cache-dir", type=str, default=".mask_cache", help="Mask cache directory (default: .mask_cache).")
+    p.add_argument(
+        "--max-segmentation-side", type=int, default=1024, help="Max segmentation resolution for Materials v2 (default: 1024)."
+    )
 
     # Edge Refinement (Golden Path Consolidation)
-    p.add_argument("--edge-refinement", action="store_true",
-                   help="Enable edge-aware refinement for architectural details (advanced feature).")
-    p.add_argument("--refinement-preset", type=str, default="balanced", 
-                   choices=["subtle", "balanced", "aggressive"],
-                   help="Edge refinement strength preset (default: balanced).")
+    p.add_argument(
+        "--edge-refinement",
+        action="store_true",
+        help="Enable edge-aware refinement for architectural details (advanced feature).",
+    )
+    p.add_argument(
+        "--refinement-preset",
+        type=str,
+        default="balanced",
+        choices=["subtle", "balanced", "aggressive"],
+        help="Edge refinement strength preset (default: balanced).",
+    )
 
     # Service mode (optional)
     p.add_argument("--service", action="store_true", help="Run as HTTP service (FastAPI).")
@@ -79,90 +103,110 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=8088)
 
     # Phase 1 Stability Architecture
-    p.add_argument("--enable-orchestrator", action="store_true", default=True, 
-                   help="Enable process orchestrator (default: True).")
-    p.add_argument("--disable-orchestrator", action="store_true", 
-                   help="Disable process orchestrator (legacy mode).")
-    p.add_argument("--checkpoint-dir", type=str, default=".checkpoints", 
-                   help="Checkpoint directory for resume capability.")
-    p.add_argument("--max-retries", type=int, default=3, 
-                   help="Maximum retry attempts for failed tasks.")
-    p.add_argument("--memory-budget", type=float, default=None, 
-                   help="Memory budget per task in GB (None=no limit).")
-    p.add_argument("--pre-flight-check", action="store_true", default=True,
-                   help="Enable pre-flight validation (default: True).")
-    p.add_argument("--skip-pre-flight", action="store_true",
-                   help="Skip pre-flight validation checks.")
+    p.add_argument(
+        "--enable-orchestrator", action="store_true", default=True, help="Enable process orchestrator (default: True)."
+    )
+    p.add_argument("--disable-orchestrator", action="store_true", help="Disable process orchestrator (legacy mode).")
+    p.add_argument("--checkpoint-dir", type=str, default=".checkpoints", help="Checkpoint directory for resume capability.")
+    p.add_argument("--max-retries", type=int, default=3, help="Maximum retry attempts for failed tasks.")
+    p.add_argument("--memory-budget", type=float, default=None, help="Memory budget per task in GB (None=no limit).")
+    p.add_argument(
+        "--pre-flight-check", action="store_true", default=True, help="Enable pre-flight validation (default: True)."
+    )
+    p.add_argument("--skip-pre-flight", action="store_true", help="Skip pre-flight validation checks.")
 
     # Phase 2 Performance Optimizations
-    phase2_group = p.add_argument_group('Phase 2 Performance Optimizations')
-    
+    phase2_group = p.add_argument_group("Phase 2 Performance Optimizations")
+
     # Master toggle
-    phase2_group.add_argument("--phase2-optimizations", action="store_true",
-                             help="Enable all Phase 2 performance optimizations.")
-    
+    phase2_group.add_argument(
+        "--phase2-optimizations", action="store_true", help="Enable all Phase 2 performance optimizations."
+    )
+
     # EfficientSAM V3 (Stage 5B)
-    efficientsam_group = p.add_argument_group('EfficientSAM V3 (Experimental)')
-    efficientsam_group.add_argument("--download-efficientsam", action="store_true",
-                                   help="Download EfficientSAM model and exit (no processing).")
-    efficientsam_group.add_argument("--efficientsam-model", type=str, 
-                                   default="efficientsam_ti_vit_s",
-                                   choices=["efficientsam_ti_vit_s", "efficientsam_ti_vit_b"],
-                                   help="EfficientSAM model variant (default: ti_vit_s).")
-    efficientsam_group.add_argument("--efficientsam-url", type=str, default=None,
-                                   help="Override model download URL.")
-    efficientsam_group.add_argument("--efficientsam-sha256", type=str, default=None,
-                                   help="Expected SHA256 for model verification.")
-    efficientsam_group.add_argument("--check-efficientsam", action="store_true",
-                                   help="Check EfficientSAM model availability and exit.")
-    
+    efficientsam_group = p.add_argument_group("EfficientSAM V3 (Experimental)")
+    efficientsam_group.add_argument(
+        "--download-efficientsam", action="store_true", help="Download EfficientSAM model and exit (no processing)."
+    )
+    efficientsam_group.add_argument(
+        "--efficientsam-model",
+        type=str,
+        default="efficientsam_ti_vit_s",
+        choices=["efficientsam_ti_vit_s", "efficientsam_ti_vit_b"],
+        help="EfficientSAM model variant (default: ti_vit_s).",
+    )
+    efficientsam_group.add_argument("--efficientsam-url", type=str, default=None, help="Override model download URL.")
+    efficientsam_group.add_argument(
+        "--efficientsam-sha256", type=str, default=None, help="Expected SHA256 for model verification."
+    )
+    efficientsam_group.add_argument(
+        "--check-efficientsam", action="store_true", help="Check EfficientSAM model availability and exit."
+    )
+
     # I/O Optimization
-    phase2_group.add_argument("--async-io", action="store_true",
-                             help="Enable asynchronous TIFF writing (5-7× I/O speedup).")
-    phase2_group.add_argument("--streaming-upscale", action="store_true",
-                             help="Stream upscaled output progressively (reduces memory).")
-    phase2_group.add_argument("--tiff-compression", type=str, default="lzw",
-                             choices=["lzw", "deflate", "none"],
-                             help="TIFF compression method (default: lzw).")
-    
+    phase2_group.add_argument("--async-io", action="store_true", help="Enable asynchronous TIFF writing (5-7× I/O speedup).")
+    phase2_group.add_argument(
+        "--streaming-upscale", action="store_true", help="Stream upscaled output progressively (reduces memory)."
+    )
+    phase2_group.add_argument(
+        "--tiff-compression",
+        type=str,
+        default="lzw",
+        choices=["lzw", "deflate", "none"],
+        help="TIFF compression method (default: lzw).",
+    )
+
     # Storage Management
-    phase2_group.add_argument("--storage-external", type=str, default=None,
-                             help="External storage path (T9 SSD) for large files.")
-    phase2_group.add_argument("--auto-migrate", action="store_true",
-                             help="Auto-migrate large files (>2GB) to external storage.")
-    phase2_group.add_argument("--migrate-threshold", type=float, default=2.0,
-                             help="File size threshold (GB) for auto-migration (default: 2.0).")
-    
+    phase2_group.add_argument(
+        "--storage-external", type=str, default=None, help="External storage path (T9 SSD) for large files."
+    )
+    phase2_group.add_argument(
+        "--auto-migrate", action="store_true", help="Auto-migrate large files (>2GB) to external storage."
+    )
+    phase2_group.add_argument(
+        "--migrate-threshold", type=float, default=2.0, help="File size threshold (GB) for auto-migration (default: 2.0)."
+    )
+
     # Parallel Processing
-    phase2_group.add_argument("--parallel-workers", type=int, default=1,
-                             help="Number of concurrent workers (1-4, default: 1).")
-    phase2_group.add_argument("--memory-per-worker", type=float, default=25.0,
-                             help="Memory budget per worker in GB (default: 25.0).")
-    
+    phase2_group.add_argument(
+        "--parallel-workers", type=int, default=1, help="Number of concurrent workers (1-4, default: 1)."
+    )
+    phase2_group.add_argument(
+        "--memory-per-worker", type=float, default=25.0, help="Memory budget per worker in GB (default: 25.0)."
+    )
+
     # Caching
-    phase2_group.add_argument("--model-cache", action="store_true",
-                             help="Cache ML models across batch (saves 18-30s).")
-    phase2_group.add_argument("--depth-cache", action="store_true",
-                             help="Cache depth maps (avoid regeneration).")
-    phase2_group.add_argument("--phase2-cache-dir", type=str, default=".cache",
-                             help="Phase 2 cache directory (default: .cache).")
-    
+    phase2_group.add_argument("--model-cache", action="store_true", help="Cache ML models across batch (saves 18-30s).")
+    phase2_group.add_argument("--depth-cache", action="store_true", help="Cache depth maps (avoid regeneration).")
+    phase2_group.add_argument(
+        "--phase2-cache-dir", type=str, default=".cache", help="Phase 2 cache directory (default: .cache)."
+    )
+
     # Upscaling Optimization
-    phase2_group.add_argument("--tile-based-upscale", action="store_true",
-                             help="Use tile-based upscaling (memory efficient).")
-    phase2_group.add_argument("--upscale-tile-size", type=int, default=512,
-                             help="Tile size for upscaling in pixels (default: 512).")
-    
+    phase2_group.add_argument("--tile-based-upscale", action="store_true", help="Use tile-based upscaling (memory efficient).")
+    phase2_group.add_argument(
+        "--upscale-tile-size", type=int, default=512, help="Tile size for upscaling in pixels (default: 512)."
+    )
+
     # Export Autotune (Phase 2 Slice 3)
-    phase2_group.add_argument("--autotune-export", action="store_true",
-                             help="Enable adaptive export configuration (autotune based on image stats).")
-    phase2_group.add_argument("--autotune-complexity", action="store_true", default=True,
-                             help="Use scene complexity in autotune decisions (default: True).")
-    
+    phase2_group.add_argument(
+        "--autotune-export", action="store_true", help="Enable adaptive export configuration (autotune based on image stats)."
+    )
+    phase2_group.add_argument(
+        "--autotune-complexity",
+        action="store_true",
+        default=True,
+        help="Use scene complexity in autotune decisions (default: True).",
+    )
+
     # Marketing Export (M0+M1.1)
-    phase2_group.add_argument("--marketing-png-compression", type=int, default=1,
-                             choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-                             help="PNG compression for marketing export (0=no compression, 1=fast/recommended [default], 3=balanced, 6=old default, 9=max/slow).")
+    phase2_group.add_argument(
+        "--marketing-png-compression",
+        type=int,
+        default=1,
+        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        help="PNG compression for marketing export (0=no compression, 1=fast/recommended [default], 3=balanced, 6=old default, 9=max/slow).",
+    )
 
     return p
 
@@ -170,10 +214,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     logger = setup_logging("INFO")
-    
+
     # Handle EfficientSAM utilities (download/check)
     if args.check_efficientsam:
         from lux_depth_v2.backends.model_cache import check_model_available
+
         model_name = args.efficientsam_model
         available = check_model_available(model_name)
         if available:
@@ -182,11 +227,12 @@ def main() -> None:
             logger.warning(f"✗ EfficientSAM model '{model_name}' is NOT available")
             logger.info(f"  Download with: --download-efficientsam --efficientsam-model {model_name}")
         return
-    
+
     if args.download_efficientsam:
         from lux_depth_v2.backends.model_cache import get_model_path, ModelDownloadError
+
         model_name = args.efficientsam_model
-        
+
         logger.info(f"Downloading EfficientSAM model: {model_name}")
         try:
             model_path = get_model_path(
@@ -201,30 +247,30 @@ def main() -> None:
             logger.error(f"✗ Download failed: {e}")
             return
         return
-    
+
     # Auto-preset selection if requested
     preset = Preset(args.preset)
     if args.auto_preset:
         if not args.input:
             logger.error("--auto-preset requires --input (single image path)")
             return
-        
+
         logger.info(f"Auto-selecting preset for: {args.input}")
         from lux_depth_v2.preset_selector import PresetSelector, Intent, QualityTier
-        
+
         try:
             # Parse intent and quality tier
             intent = Intent(args.intent) if args.intent else None
-            
+
             # Handle auto tier selection
             if args.quality_tier == "auto":
                 quality_tier = None  # Let selector auto-decide
             else:
                 quality_tier = QualityTier(args.quality_tier)
-            
+
             # Initialize selector
             selector = PresetSelector(confidence_threshold=0.5)
-            
+
             # Select preset with auto-tier if requested
             recommendation = selector.select_preset_with_auto_tier(
                 image=args.input,
@@ -232,7 +278,7 @@ def main() -> None:
                 quality_tier=quality_tier,
                 allow_canary=args.allow_canary,
             )
-            
+
             preset = recommendation.preset
             logger.info(f"✓ Auto-selected preset: {preset.value}")
             logger.info(f"  Scene: {recommendation.scene.scene_type.value} {recommendation.scene.scene_subtype}")
@@ -240,7 +286,7 @@ def main() -> None:
             logger.info(f"  Reason: {recommendation.reason}")
             if recommendation.fallback_used:
                 logger.warning(f"  (Fallback preset used)")
-                
+
         except ImportError as e:
             logger.error(f"Auto-preset requires CLIP. Install with: pip install transformers torch")
             logger.error(f"Error: {e}")
@@ -273,17 +319,17 @@ def main() -> None:
     cfg.segmentation.allow_downloads = bool(args.seg_allow_downloads)
     cfg.segmentation.input_long_side = int(args.seg_long_side)
     cfg.segmentation.min_confidence = float(args.seg_min_conf)
-    
+
     # Phase 1 Stability: Configure orchestrator
     cfg.orchestrator.enabled = args.enable_orchestrator and not args.disable_orchestrator
     cfg.orchestrator.checkpoint_dir = args.checkpoint_dir
     cfg.orchestrator.max_retries = args.max_retries
     cfg.orchestrator.memory_budget_gb = args.memory_budget
-    
+
     # Materials v2: Configure confidence gating and caching
-    if hasattr(args, 'materials_v2') and args.materials_v2:
+    if hasattr(args, "materials_v2") and args.materials_v2:
         from .materials_v2 import MaterialsV2Config, ConfidenceConfig, SegmentationConfig as Mat2SegConfig
-        
+
         # Initialize Materials v2 config
         cfg.materials_v2 = MaterialsV2Config(
             enabled=True,
@@ -297,51 +343,47 @@ def main() -> None:
             ),
             cache_enabled=args.cache_masks,
             cache_dir=args.cache_dir if args.cache_masks else None,
-            backend='heuristic',  # Default backend
+            backend="heuristic",  # Default backend
         )
     cfg.orchestrator.pre_flight_check = args.pre_flight_check and not args.skip_pre_flight
-    
+
     # Phase 2 Performance Optimizations
-    phase2_enabled = args.phase2_optimizations if hasattr(args, 'phase2_optimizations') else False
-    autotune_requested = getattr(args, 'autotune_export', False)
-    
-    if phase2_enabled or autotune_requested or (hasattr(args, 'parallel_workers') and args.parallel_workers > 1):
+    phase2_enabled = args.phase2_optimizations if hasattr(args, "phase2_optimizations") else False
+    autotune_requested = getattr(args, "autotune_export", False)
+
+    if phase2_enabled or autotune_requested or (hasattr(args, "parallel_workers") and args.parallel_workers > 1):
         from .config import Phase2Config
-        
+
         # Build Phase2Config from CLI options
         phase2_config = Phase2Config(
             # I/O
-            async_io_enabled=getattr(args, 'async_io', False) or phase2_enabled,
-            streaming_upscale=getattr(args, 'streaming_upscale', False) or phase2_enabled,
-            tiff_compression=getattr(args, 'tiff_compression', 'lzw'),
-            
+            async_io_enabled=getattr(args, "async_io", False) or phase2_enabled,
+            streaming_upscale=getattr(args, "streaming_upscale", False) or phase2_enabled,
+            tiff_compression=getattr(args, "tiff_compression", "lzw"),
             # Storage
-            storage_external_t9=getattr(args, 'storage_external', None),
-            auto_migrate_large_files=(getattr(args, 'auto_migrate', False) or 
-                                     (phase2_enabled and getattr(args, 'storage_external', None))),
-            migrate_threshold_gb=getattr(args, 'migrate_threshold', 2.0),
-            
+            storage_external_t9=getattr(args, "storage_external", None),
+            auto_migrate_large_files=(
+                getattr(args, "auto_migrate", False) or (phase2_enabled and getattr(args, "storage_external", None))
+            ),
+            migrate_threshold_gb=getattr(args, "migrate_threshold", 2.0),
             # Parallel
-            max_concurrent_workers=max(getattr(args, 'parallel_workers', 1), 1),
-            memory_budget_per_worker_gb=getattr(args, 'memory_per_worker', 25.0),
-            
+            max_concurrent_workers=max(getattr(args, "parallel_workers", 1), 1),
+            memory_budget_per_worker_gb=getattr(args, "memory_per_worker", 25.0),
             # Caching
-            model_cache_enabled=getattr(args, 'model_cache', False) or phase2_enabled,
-            depth_map_cache_enabled=getattr(args, 'depth_cache', False) or phase2_enabled,
-            cache_dir=getattr(args, 'phase2_cache_dir', '.cache'),
-            
+            model_cache_enabled=getattr(args, "model_cache", False) or phase2_enabled,
+            depth_map_cache_enabled=getattr(args, "depth_cache", False) or phase2_enabled,
+            cache_dir=getattr(args, "phase2_cache_dir", ".cache"),
             # Upscaling
-            tile_based_upscaling=getattr(args, 'tile_based_upscale', False) or phase2_enabled,
-            upscale_tile_size=getattr(args, 'upscale_tile_size', 512),
-            
+            tile_based_upscaling=getattr(args, "tile_based_upscale", False) or phase2_enabled,
+            upscale_tile_size=getattr(args, "upscale_tile_size", 512),
             # Autotune (Phase 2 Slice 3)
-            autotune_export=getattr(args, 'autotune_export', False),
-            autotune_use_complexity=getattr(args, 'autotune_complexity', True),
+            autotune_export=getattr(args, "autotune_export", False),
+            autotune_use_complexity=getattr(args, "autotune_complexity", True),
         )
-        
+
         # Store in config for pipeline access
         cfg.phase2 = phase2_config
-        
+
         # Display Phase 2 status
         if phase2_config.async_io_enabled or phase2_config.max_concurrent_workers > 1:
             logger.info("🚀 Phase 2 Performance Optimizations Enabled:")
@@ -363,22 +405,20 @@ def main() -> None:
     if args.service:
         # Defer imports so batch-only users don't need server deps installed.
         from .service import run_service
+
         run_service(cfg, host=args.host, port=int(args.port), logger=logger)
         return
 
     # Phase 1 Stability: Pre-flight validation
     if cfg.orchestrator.pre_flight_check and args.input:
         from .preflight import PreFlightValidator
-        
+
         validator = PreFlightValidator(logger=logger)
         report = validator.validate_all(
-            input_path=Path(args.input),
-            depth_dir=cfg.depth_dir,
-            device=cfg.device,
-            upscale=cfg.upscale
+            input_path=Path(args.input), depth_dir=cfg.depth_dir, device=cfg.device, upscale=cfg.upscale
         )
         validator.log_report(report)
-        
+
         if not report.passed:
             logger.error("Pre-flight validation failed. Use --skip-pre-flight to bypass.")
             return

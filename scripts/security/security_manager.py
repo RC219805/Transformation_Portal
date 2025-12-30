@@ -57,10 +57,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Configure module logger
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("security_manager")
 
 
@@ -71,6 +68,7 @@ logger = logging.getLogger("security_manager")
 
 class SeverityLevel(Enum):
     """CVE severity levels following CVSS."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -80,6 +78,7 @@ class SeverityLevel(Enum):
 
 class MitigationStatus(Enum):
     """Status of vulnerability mitigation."""
+
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
     MITIGATED = "mitigated"
@@ -89,6 +88,7 @@ class MitigationStatus(Enum):
 
 class MitigationType(Enum):
     """Types of mitigation strategies."""
+
     UPGRADE = "upgrade"  # Upgrade to patched version
     CONSTRAINT = "constraint"  # Block via constraints.txt
     VENDOR = "vendor"  # Use vendored/forked code
@@ -99,6 +99,7 @@ class MitigationType(Enum):
 @dataclass
 class Vulnerability:
     """Represents a security vulnerability."""
+
     cve_id: str
     package_name: str
     affected_versions: str
@@ -114,9 +115,7 @@ class Vulnerability:
     patch_available: bool = False
 
     # Context
-    discovered_date: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    discovered_date: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     references: List[str] = field(default_factory=list)
 
     # Repository-specific
@@ -127,19 +126,20 @@ class Vulnerability:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         data = asdict(self)
-        data['severity'] = self.severity.value
+        data["severity"] = self.severity.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Vulnerability':
+    def from_dict(cls, data: Dict[str, Any]) -> "Vulnerability":
         """Create from dictionary."""
-        data['severity'] = SeverityLevel(data['severity'])
+        data["severity"] = SeverityLevel(data["severity"])
         return cls(**data)
 
 
 @dataclass
 class Mitigation:
     """Represents a mitigation strategy for a vulnerability."""
+
     cve_id: str
     mitigation_type: MitigationType
     status: MitigationStatus
@@ -151,9 +151,7 @@ class Mitigation:
     verification_steps: List[str] = field(default_factory=list)
 
     # Tracking
-    created_date: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_date: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_date: Optional[str] = None
     author: Optional[str] = None
 
@@ -164,14 +162,15 @@ class Mitigation:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         data = asdict(self)
-        data['mitigation_type'] = self.mitigation_type.value
-        data['status'] = self.status.value
+        data["mitigation_type"] = self.mitigation_type.value
+        data["status"] = self.status.value
         return data
 
 
 @dataclass
 class SecurityPolicy:
     """Repository-specific security policy."""
+
     name: str
     description: str
 
@@ -194,9 +193,8 @@ class SecurityPolicy:
 @dataclass
 class SecurityReport:
     """Comprehensive security status report."""
-    generated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+
+    generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     # Summary
     total_vulnerabilities: int = 0
@@ -239,10 +237,12 @@ class SecurityReport:
         ]
 
         if self.vulnerabilities:
-            lines.extend([
-                "## Active Vulnerabilities",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Active Vulnerabilities",
+                    "",
+                ]
+            )
             for vuln in self.vulnerabilities:
                 emoji = {
                     SeverityLevel.CRITICAL: "🔴",
@@ -251,16 +251,16 @@ class SecurityReport:
                     SeverityLevel.LOW: "🟢",
                 }.get(vuln.severity, "⚪")
                 desc = vuln.description[:100] + "..." if len(vuln.description) > 100 else vuln.description
-                lines.append(
-                    f"- {emoji} **{vuln.cve_id}**: {vuln.package_name} - {desc}"
-                )
+                lines.append(f"- {emoji} **{vuln.cve_id}**: {vuln.package_name} - {desc}")
             lines.append("")
 
         if self.recommendations:
-            lines.extend([
-                "## Recommendations",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Recommendations",
+                    "",
+                ]
+            )
             for i, rec in enumerate(self.recommendations, 1):
                 lines.append(f"{i}. {rec}")
             lines.append("")
@@ -298,10 +298,7 @@ class DependencyScanner:
         """Get installed packages and versions."""
         try:
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "list", "--format=json"],
-                capture_output=True,
-                text=True,
-                check=True
+                [sys.executable, "-m", "pip", "list", "--format=json"], capture_output=True, text=True, check=True
             )
             packages = json.loads(result.stdout)
             return {pkg["name"].lower(): pkg["version"] for pkg in packages}
@@ -313,17 +310,17 @@ class DependencyScanner:
         """Get packages blocked by constraints.txt."""
         blocked = {}
         if self.constraints_file.exists():
-            with open(self.constraints_file, 'r') as f:
+            with open(self.constraints_file, "r") as f:
                 for line in f:
                     line = line.strip()
-                    if line and not line.startswith('#'):
+                    if line and not line.startswith("#"):
                         # Parse constraint like "basicsr>=999.0.0"
-                        match = re.match(r'^([a-zA-Z0-9_-]+)([<>=!]+.+)$', line)
+                        match = re.match(r"^([a-zA-Z0-9_-]+)([<>=!]+.+)$", line)
                         if match:
                             pkg_name = match.group(1).lower()
                             constraint = match.group(2)
                             # Check if it's an impossible constraint (blocking)
-                            if '>=' in constraint and '999' in constraint:
+                            if ">=" in constraint and "999" in constraint:
                                 blocked[pkg_name] = f"Blocked by impossible constraint: {line}"
         return blocked
 
@@ -349,22 +346,24 @@ class DependencyScanner:
 
         for req_file in self.requirements_files:
             try:
-                with open(req_file, 'r') as f:
+                with open(req_file, "r") as f:
                     for line in f:
                         line = line.strip()
-                        if line and not line.startswith('#') and not line.startswith('-'):
+                        if line and not line.startswith("#") and not line.startswith("-"):
                             # Extract package name
-                            match = re.match(r'^([a-zA-Z0-9_-]+)', line)
+                            match = re.match(r"^([a-zA-Z0-9_-]+)", line)
                             if match:
                                 pkg_name = match.group(1).lower()
                                 if pkg_name in blocked:
-                                    vulnerabilities.append(Vulnerability(
-                                        cve_id="CVE-BLOCKED",
-                                        package_name=pkg_name,
-                                        affected_versions=line,
-                                        severity=SeverityLevel.HIGH,
-                                        description=f"Package listed in {req_file.name} but blocked by constraints",
-                                    ))
+                                    vulnerabilities.append(
+                                        Vulnerability(
+                                            cve_id="CVE-BLOCKED",
+                                            package_name=pkg_name,
+                                            affected_versions=line,
+                                            severity=SeverityLevel.HIGH,
+                                            description=f"Package listed in {req_file.name} but blocked by constraints",
+                                        )
+                                    )
             except IOError as e:
                 logger.warning(f"Failed to read {req_file}: {e}")
 
@@ -458,14 +457,7 @@ class MitigationEngine:
 
         for step in mitigation.verification_steps:
             try:
-                result = subprocess.run(
-                    step,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    cwd=self.repo_root,
-                    check=False
-                )
+                result = subprocess.run(step, shell=True, capture_output=True, text=True, cwd=self.repo_root, check=False)
                 passed = result.returncode == 0
                 all_passed = all_passed and passed
                 results.append(f"{'✅' if passed else '❌'} {step}")
@@ -496,9 +488,7 @@ class SecurityKnowledgeBase:
 
     def index_vulnerability(self, vuln: Vulnerability) -> str:
         """Index a vulnerability for RAG retrieval."""
-        chunk_id = hashlib.sha256(
-            f"{vuln.cve_id}:{vuln.package_name}".encode()
-        ).hexdigest()[:16]
+        chunk_id = hashlib.sha256(f"{vuln.cve_id}:{vuln.package_name}".encode()).hexdigest()[:16]
 
         # Create searchable content
         content = {
@@ -512,31 +502,29 @@ class SecurityKnowledgeBase:
 Security Vulnerability: {vuln.cve_id}
 Package: {vuln.package_name}
 Severity: {vuln.severity.value}
-CVSS Score: {vuln.cvss_score or 'N/A'}
+CVSS Score: {vuln.cvss_score or "N/A"}
 Affected Versions: {vuln.affected_versions}
-Fixed Version: {vuln.fixed_version or 'No patch available'}
+Fixed Version: {vuln.fixed_version or "No patch available"}
 
 Description:
 {vuln.description}
 
 References:
-{chr(10).join(vuln.references) if vuln.references else 'None'}
+{chr(10).join(vuln.references) if vuln.references else "None"}
 """.strip(),
             "metadata": vuln.to_dict(),
         }
 
         # Save to knowledge base
         file_path = self.knowledge_dir / f"vuln_{chunk_id}.json"
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             json.dump(content, f, indent=2)
 
         return chunk_id
 
     def index_mitigation(self, mitigation: Mitigation) -> str:
         """Index a mitigation for RAG retrieval."""
-        chunk_id = hashlib.sha256(
-            f"{mitigation.cve_id}:{mitigation.mitigation_type.value}".encode()
-        ).hexdigest()[:16]
+        chunk_id = hashlib.sha256(f"{mitigation.cve_id}:{mitigation.mitigation_type.value}".encode()).hexdigest()[:16]
 
         content = {
             "id": chunk_id,
@@ -553,19 +541,19 @@ Description:
 {mitigation.description}
 
 Files Changed:
-{chr(10).join('- ' + f for f in mitigation.files_changed) if mitigation.files_changed else 'None'}
+{chr(10).join("- " + f for f in mitigation.files_changed) if mitigation.files_changed else "None"}
 
 Commands:
-{chr(10).join('$ ' + c for c in mitigation.commands) if mitigation.commands else 'None'}
+{chr(10).join("$ " + c for c in mitigation.commands) if mitigation.commands else "None"}
 
 Verification Steps:
-{chr(10).join('- ' + s for s in mitigation.verification_steps) if mitigation.verification_steps else 'None'}
+{chr(10).join("- " + s for s in mitigation.verification_steps) if mitigation.verification_steps else "None"}
 """.strip(),
             "metadata": mitigation.to_dict(),
         }
 
         file_path = self.knowledge_dir / f"mitigation_{chunk_id}.json"
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             json.dump(content, f, indent=2)
 
         return chunk_id
@@ -577,7 +565,7 @@ Verification Steps:
 
         for file_path in self.knowledge_dir.glob("mitigation_*.json"):
             try:
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     content = json.load(f)
                     if query_lower in content.get("content", "").lower():
                         results.append(content)
@@ -593,7 +581,7 @@ Verification Steps:
 
         for file_path in self.knowledge_dir.glob("*.json"):
             try:
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     content = json.load(f)
                     metadata = content.get("metadata", {})
                     if metadata.get("package_name", "").lower() == package_lower:
@@ -633,7 +621,7 @@ class SecurityManager:
         """Find repository root."""
         current = Path(__file__).resolve().parent
         for _ in range(10):
-            if (current / '.git').exists():
+            if (current / ".git").exists():
                 return current
             if current.parent == current:
                 break
@@ -645,11 +633,9 @@ class SecurityManager:
         state_file = self.security_dir / "state.json"
         if state_file.exists():
             try:
-                with open(state_file, 'r') as f:
+                with open(state_file, "r") as f:
                     data = json.load(f)
-                    self.vulnerabilities = [
-                        Vulnerability.from_dict(v) for v in data.get("vulnerabilities", [])
-                    ]
+                    self.vulnerabilities = [Vulnerability.from_dict(v) for v in data.get("vulnerabilities", [])]
             except (IOError, json.JSONDecodeError) as e:
                 logger.warning(f"Failed to load security state: {e}")
 
@@ -662,7 +648,7 @@ class SecurityManager:
                 "mitigations": [m.to_dict() for m in self.mitigations],
                 "last_updated": datetime.now(timezone.utc).isoformat(),
             }
-            with open(state_file, 'w') as f:
+            with open(state_file, "w") as f:
                 json.dump(data, f, indent=2)
         except IOError as e:
             logger.error(f"Failed to save security state: {e}")
@@ -681,14 +667,16 @@ class SecurityManager:
         # Check for installed blocked packages
         for pkg, reason in blocked.items():
             if pkg in installed:
-                vulnerabilities.append(Vulnerability(
-                    cve_id="CVE-RUNTIME",
-                    package_name=pkg,
-                    affected_versions=installed[pkg],
-                    severity=SeverityLevel.CRITICAL,
-                    description=f"CRITICAL: Blocked package {pkg} is installed! {reason}",
-                    installed_version=installed[pkg],
-                ))
+                vulnerabilities.append(
+                    Vulnerability(
+                        cve_id="CVE-RUNTIME",
+                        package_name=pkg,
+                        affected_versions=installed[pkg],
+                        severity=SeverityLevel.CRITICAL,
+                        description=f"CRITICAL: Blocked package {pkg} is installed! {reason}",
+                        installed_version=installed[pkg],
+                    )
+                )
 
         # Update state
         self.vulnerabilities = vulnerabilities
@@ -722,22 +710,15 @@ class SecurityManager:
                 report.low_count += 1
 
         # Count mitigated
-        mitigated_cves = {
-            m.cve_id for m in self.mitigations
-            if m.status == MitigationStatus.MITIGATED
-        }
+        mitigated_cves = {m.cve_id for m in self.mitigations if m.status == MitigationStatus.MITIGATED}
         report.mitigated_count = len(mitigated_cves)
         report.pending_count = report.total_vulnerabilities - report.mitigated_count
 
         # Generate recommendations
         if report.critical_count > 0:
-            report.recommendations.append(
-                "⚠️ URGENT: Critical vulnerabilities require immediate attention"
-            )
+            report.recommendations.append("⚠️ URGENT: Critical vulnerabilities require immediate attention")
         if report.pending_count > 0:
-            report.recommendations.append(
-                f"Review and apply mitigations for {report.pending_count} pending vulnerabilities"
-            )
+            report.recommendations.append(f"Review and apply mitigations for {report.pending_count} pending vulnerabilities")
 
         return report
 
@@ -792,7 +773,7 @@ class SecurityManager:
         }
 
         try:
-            with open(feedback_file, 'a') as f:
+            with open(feedback_file, "a") as f:
                 f.write(json.dumps(entry) + "\n")
         except IOError as e:
             logger.warning(f"Failed to write RAG feedback: {e}")
@@ -807,9 +788,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Proactive Dependabot Security Warning Management"
-    )
+    parser = argparse.ArgumentParser(description="Proactive Dependabot Security Warning Management")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Scan command

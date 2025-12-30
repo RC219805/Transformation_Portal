@@ -1,6 +1,6 @@
 # Depth → Materials V3 Impact Analysis
 
-**Date**: 2025-12-18  
+**Date**: 2025-12-18
 **Context**: Evaluating how enhanced depth quality affects Materials V3 performance
 
 ---
@@ -248,7 +248,7 @@ if metrics['edge_overlap'] < 0.3:
 def process(self, img_rgb, depth, normal, segmentation_result, metadata):
     # Validate depth quality before processing
     edge_metrics = self._validate_depth_quality(depth, img_rgb)
-    
+
     if edge_metrics['edge_overlap'] < 0.25:
         logger.warning(
             f"Depth quality insufficient (overlap={edge_metrics['edge_overlap']:.1%}). "
@@ -257,7 +257,7 @@ def process(self, img_rgb, depth, normal, segmentation_result, metadata):
         )
         # Optional: degrade to fallback mode (no depth-gating, conservative params)
         return self._process_fallback(img_rgb, segmentation_result)
-    
+
     # Normal Materials V3 processing with high-quality depth
     return self._process_full(img_rgb, depth, normal, segmentation_result, metadata)
 ```
@@ -269,7 +269,7 @@ def process(self, img_rgb, depth, normal, segmentation_result, metadata):
 @dataclass
 class MaterialsV3Report:
     # ... existing fields ...
-    
+
     # Depth quality telemetry
     depth_edge_alignment: float  # Correlation with RGB edges
     depth_edge_overlap: float    # Spatial coverage

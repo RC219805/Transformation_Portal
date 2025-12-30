@@ -22,7 +22,7 @@ import pytest
 from PIL import Image
 
 # Add project to path
-project_path = Path(__file__).parent.parent / 'projects' / '750_picacho_lane'
+project_path = Path(__file__).parent.parent / "projects" / "750_picacho_lane"
 sys.path.insert(0, str(project_path))
 
 from property_memory import (  # noqa: E402
@@ -59,10 +59,10 @@ def sample_image(temp_dir):
     """Create a sample test image."""
     # Create a simple test image (100x100 RGB)
     img_array = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-    img = Image.fromarray(img_array, mode='RGB')
+    img = Image.fromarray(img_array, mode="RGB")
 
     img_path = temp_dir / "750Picacho_Pool_test.jpg"
-    img.save(img_path, format='JPEG')
+    img.save(img_path, format="JPEG")
 
     return img_path
 
@@ -75,9 +75,9 @@ def sample_images(temp_dir):
 
     for scene in scene_names:
         img_array = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-        img = Image.fromarray(img_array, mode='RGB')
+        img = Image.fromarray(img_array, mode="RGB")
         img_path = temp_dir / f"750Picacho_{scene}_test.jpg"
-        img.save(img_path, format='JPEG')
+        img.save(img_path, format="JPEG")
         images.append(img_path)
 
     return images
@@ -139,8 +139,8 @@ class TestPropertyMemory:
         params = property_memory.get_optimal_parameters(SceneType.POOL)
 
         assert isinstance(params, dict)
-        assert 'water_enhance' in params
-        assert params['water_enhance'] is True
+        assert "water_enhance" in params
+        assert params["water_enhance"] is True
 
     def test_get_materials(self, property_memory):
         """Test getting materials for a scene."""
@@ -156,7 +156,7 @@ class TestPropertyMemory:
             scene_type=SceneType.POOL,
             input_path="/test/input.jpg",
             output_path="/test/output.tif",
-            parameters={'contrast': 1.1},
+            parameters={"contrast": 1.1},
             quality_score=0.85,
             processing_time=2.5,
             success=True,
@@ -172,7 +172,7 @@ class TestPropertyMemory:
             scene_type=SceneType.GREAT_ROOM,
             feedback="Increase wood warmth",
             rating=0.9,
-            suggested_parameters={'warmth': 12},
+            suggested_parameters={"warmth": 12},
         )
 
         assert len(property_memory.feedback_records) > 0
@@ -181,8 +181,8 @@ class TestPropertyMemory:
         """Test learning with insufficient data."""
         result = property_memory.learn_from_results(SceneType.POOL, min_samples=10)
 
-        assert result['status'] == 'insufficient_data'
-        assert result['samples'] < 10
+        assert result["status"] == "insufficient_data"
+        assert result["samples"] < 10
 
     def test_learn_from_results_with_data(self, property_memory):
         """Test learning with sufficient data."""
@@ -192,7 +192,7 @@ class TestPropertyMemory:
                 scene_type=SceneType.POOL,
                 input_path=f"/test/input_{i}.jpg",
                 output_path=f"/test/output_{i}.tif",
-                parameters={'contrast': 1.1 + i * 0.01, 'saturation': 1.05},
+                parameters={"contrast": 1.1 + i * 0.01, "saturation": 1.05},
                 quality_score=0.8 + i * 0.02,
                 processing_time=2.5,
                 success=True,
@@ -200,10 +200,10 @@ class TestPropertyMemory:
 
         result = property_memory.learn_from_results(SceneType.POOL, min_samples=3)
 
-        assert result['status'] == 'success'
-        assert result['samples_analyzed'] >= 3
-        assert 'learned_parameters' in result
-        assert 'quality_trend' in result
+        assert result["status"] == "success"
+        assert result["samples_analyzed"] >= 3
+        assert "learned_parameters" in result
+        assert "quality_trend" in result
 
     def test_get_property_knowledge(self, property_memory):
         """Test getting property knowledge summary."""
@@ -227,11 +227,11 @@ class TestPropertyMemory:
 
         assert export_path.exists()
 
-        with open(export_path, 'r') as f:
+        with open(export_path, "r") as f:
             data = json.load(f)
 
-        assert 'property_knowledge' in data
-        assert 'room_configurations' in data
+        assert "property_knowledge" in data
+        assert "room_configurations" in data
 
     def test_persistence(self, temp_dir):
         """Test that memory persists across instances."""
@@ -243,7 +243,7 @@ class TestPropertyMemory:
             scene_type=SceneType.POOL,
             input_path="/test/input.jpg",
             output_path="/test/output.tif",
-            parameters={'test': True},
+            parameters={"test": True},
             quality_score=0.9,
             processing_time=1.0,
             success=True,
@@ -264,32 +264,32 @@ class TestRoomConfiguration:
         config = RoomConfiguration(
             scene_type=SceneType.POOL,
             materials=[MaterialType.WATER, MaterialType.STONE],
-            optimal_parameters={'contrast': 1.1},
+            optimal_parameters={"contrast": 1.1},
             notes="Test config",
         )
 
         data = config.to_dict()
 
-        assert data['scene_type'] == 'pool'
-        assert 'water' in data['materials']
-        assert data['optimal_parameters']['contrast'] == 1.1
+        assert data["scene_type"] == "pool"
+        assert "water" in data["materials"]
+        assert data["optimal_parameters"]["contrast"] == 1.1
 
     def test_from_dict(self):
         """Test creation from dictionary."""
         data = {
-            'scene_type': 'pool',
-            'materials': ['water', 'stone'],
-            'optimal_parameters': {'contrast': 1.1},
-            'quality_baseline': 0.8,
-            'processing_history': [],
-            'notes': "Test config",
+            "scene_type": "pool",
+            "materials": ["water", "stone"],
+            "optimal_parameters": {"contrast": 1.1},
+            "quality_baseline": 0.8,
+            "processing_history": [],
+            "notes": "Test config",
         }
 
         config = RoomConfiguration.from_dict(data)
 
         assert config.scene_type == SceneType.POOL
         assert MaterialType.WATER in config.materials
-        assert config.optimal_parameters['contrast'] == 1.1
+        assert config.optimal_parameters["contrast"] == 1.1
 
 
 # ============================================================================
@@ -307,16 +307,16 @@ class TestPipelineConfig:
         assert config.quality_mode == "premium"
         assert config.enable_depth is True
         assert config.enable_learning is True
-        assert 'tiff' in config.output_formats
-        assert 'jpg' in config.output_formats
+        assert "tiff" in config.output_formats
+        assert "jpg" in config.output_formats
 
     def test_to_dict(self):
         """Test conversion to dictionary."""
         config = PipelineConfig(quality_mode="fast")
         data = config.to_dict()
 
-        assert data['quality_mode'] == "fast"
-        assert isinstance(data['input_dir'], str)
+        assert data["quality_mode"] == "fast"
+        assert isinstance(data["input_dir"], str)
 
 
 class TestRAGEnhancedPipeline:
@@ -358,7 +358,7 @@ class TestRAGEnhancedPipeline:
     def test_apply_color_grading(self, pipeline, sample_image):
         """Test color grading application."""
         img_array = pipeline._load_image(sample_image)
-        params = {'contrast': 1.1, 'saturation': 1.05, 'temperature': 5}
+        params = {"contrast": 1.1, "saturation": 1.05, "temperature": 5}
 
         graded = pipeline._apply_color_grading(img_array, params)
 
@@ -369,7 +369,7 @@ class TestRAGEnhancedPipeline:
         """Test material response application."""
         img_array = pipeline._load_image(sample_image)
         materials = [MaterialType.WATER, MaterialType.STONE]
-        params = {'water_enhance': True, 'water_saturation': 1.25}
+        params = {"water_enhance": True, "water_saturation": 1.25}
 
         enhanced = pipeline._apply_material_response(img_array, materials, params)
 
@@ -404,12 +404,12 @@ class TestRAGEnhancedPipeline:
 
         outputs, _ = pipeline.process_image(sample_image, output_dir)
 
-        if 'tiff' in outputs:
-            assert outputs['tiff'].exists()
-        if 'jpg' in outputs:
-            assert outputs['jpg'].exists()
-        if 'thumbnail' in outputs:
-            assert outputs['thumbnail'].exists()
+        if "tiff" in outputs:
+            assert outputs["tiff"].exists()
+        if "jpg" in outputs:
+            assert outputs["jpg"].exists()
+        if "thumbnail" in outputs:
+            assert outputs["thumbnail"].exists()
 
     def test_batch_process(self, pipeline, sample_images, temp_dir):
         """Test batch processing."""
@@ -446,11 +446,11 @@ class TestRAGEnhancedPipeline:
 
         summary = pipeline.get_session_summary()
 
-        assert summary['processed'] == 1
-        assert summary['successful'] == 1
-        assert summary['failed'] == 0
-        assert summary['total_time'] > 0
-        assert 'avg_quality_score' in summary
+        assert summary["processed"] == 1
+        assert summary["successful"] == 1
+        assert summary["failed"] == 0
+        assert summary["total_time"] > 0
+        assert "avg_quality_score" in summary
 
     def test_get_recommendations(self, pipeline, sample_image, temp_dir):
         """Test recommendation generation."""
@@ -616,9 +616,9 @@ class TestIntegration:
         # Create test images
         for scene in ["Pool", "Kitchen"]:
             img_array = np.random.randint(0, 255, (200, 200, 3), dtype=np.uint8)
-            img = Image.fromarray(img_array, mode='RGB')
+            img = Image.fromarray(img_array, mode="RGB")
             img_path = input_dir / f"750Picacho_{scene}.jpg"
-            img.save(img_path, format='JPEG')
+            img.save(img_path, format="JPEG")
 
         # Configure pipeline
         config = PipelineConfig(
@@ -645,8 +645,8 @@ class TestIntegration:
 
         # Verify session summary
         summary = pipeline.get_session_summary()
-        assert summary['processed'] == 2
-        assert summary['successful'] == 2
+        assert summary["processed"] == 2
+        assert summary["successful"] == 2
 
         # Verify memory was updated
         pool_config = pipeline.memory.get_room_config(SceneType.POOL)
@@ -664,7 +664,7 @@ class TestIntegration:
                 scene_type=SceneType.POOL,
                 input_path=f"/test/input_{i}.jpg",
                 output_path=f"/test/output_{i}.tif",
-                parameters={'contrast': 1.0 + i * 0.02},
+                parameters={"contrast": 1.0 + i * 0.02},
                 quality_score=quality,
                 processing_time=2.0,
                 success=True,
@@ -673,8 +673,8 @@ class TestIntegration:
         # Trigger learning
         result = memory.learn_from_results(SceneType.POOL, min_samples=3)
 
-        assert result['status'] == 'success'
-        assert result['quality_trend'] in ['improving', 'stable']
+        assert result["status"] == "success"
+        assert result["quality_trend"] in ["improving", "stable"]
 
         # Verify optimal parameters were updated
         config = memory.get_room_config(SceneType.POOL)
@@ -684,9 +684,9 @@ class TestIntegration:
         """Test that RAG context affects processing decisions."""
         # Create test image
         img_array = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-        img = Image.fromarray(img_array, mode='RGB')
+        img = Image.fromarray(img_array, mode="RGB")
         img_path = temp_dir / "750Picacho_Pool_test.jpg"
-        img.save(img_path, format='JPEG')
+        img.save(img_path, format="JPEG")
 
         output_dir = temp_dir / "output"
 
@@ -709,7 +709,7 @@ class TestIntegration:
                 scene_type=SceneType.POOL,
                 input_path=f"/test/input_{i}.jpg",
                 output_path=f"/test/output_{i}.tif",
-                parameters={'contrast': 1.15, 'saturation': 1.12},
+                parameters={"contrast": 1.15, "saturation": 1.12},
                 quality_score=0.9,
                 processing_time=2.0,
                 success=True,
@@ -743,9 +743,9 @@ class TestEdgeCases:
         """Test handling of unknown scene type."""
         # Create image with non-matching name
         img_array = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-        img = Image.fromarray(img_array, mode='RGB')
+        img = Image.fromarray(img_array, mode="RGB")
         img_path = temp_dir / "unknown_scene.jpg"
-        img.save(img_path, format='JPEG')
+        img.save(img_path, format="JPEG")
 
         scene_type = pipeline._detect_scene_type(img_path)
 
@@ -767,9 +767,9 @@ class TestEdgeCases:
         """Test processing very small image."""
         # Create tiny image
         img_array = np.random.randint(0, 255, (10, 10, 3), dtype=np.uint8)
-        img = Image.fromarray(img_array, mode='RGB')
+        img = Image.fromarray(img_array, mode="RGB")
         img_path = temp_dir / "750Picacho_Pool_tiny.jpg"
-        img.save(img_path, format='JPEG')
+        img.save(img_path, format="JPEG")
 
         # Create pipeline with 8-bit output
         config = PipelineConfig(
@@ -790,9 +790,9 @@ class TestEdgeCases:
     def test_grayscale_image(self, temp_dir):
         """Test processing grayscale image (converted to RGB)."""
         img_array = np.random.randint(0, 255, (100, 100), dtype=np.uint8)
-        img = Image.fromarray(img_array, mode='L')
+        img = Image.fromarray(img_array, mode="L")
         img_path = temp_dir / "750Picacho_Pool_gray.jpg"
-        img.save(img_path, format='JPEG')
+        img.save(img_path, format="JPEG")
 
         # Create pipeline with 8-bit output
         config = PipelineConfig(
@@ -816,5 +816,5 @@ class TestEdgeCases:
 # ============================================================================
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '--tb=short'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

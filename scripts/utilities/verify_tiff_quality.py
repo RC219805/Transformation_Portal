@@ -11,9 +11,9 @@ from PIL import Image
 
 def verify_tiff(tiff_path: Path):
     """Verify a TIFF file is properly 16-bit RGB."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Verifying: {tiff_path.name}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     # Load with tifffile
     print("Loading with tifffile...")
@@ -55,9 +55,9 @@ def verify_tiff(tiff_path: Path):
         print(f"PIL mode: {pil_img.mode}")
         print(f"PIL size: {pil_img.size}")
 
-        if pil_img.mode == 'RGB':
+        if pil_img.mode == "RGB":
             print("⚠️  Note: PIL shows as 'RGB' (8-bit), but tifffile confirms 16-bit")
-        elif pil_img.mode == 'I;16':
+        elif pil_img.mode == "I;16":
             print("✓ PIL confirms 16-bit mode")
     except Exception as e:
         print(f"Error loading with PIL: {e}")
@@ -74,7 +74,7 @@ def verify_tiff(tiff_path: Path):
     compression_ratio = expected_size_mb / file_size_mb if file_size_mb > 0 else 0
     print(f"Compression ratio: {compression_ratio:.2f}x")
 
-    print(f"\n{'='*80}\n")
+    print(f"\n{'=' * 80}\n")
 
     return img_array.dtype == np.uint16 and len(img_array.shape) == 3
 
@@ -109,9 +109,9 @@ def main():
         results.append((tiff_file.name, is_valid))
 
     # Summary
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("VERIFICATION SUMMARY")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     valid_count = sum(1 for _, is_valid in results if is_valid)
     print(f"Valid 16-bit RGB TIFFs: {valid_count}/{len(results)}")

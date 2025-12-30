@@ -24,6 +24,7 @@ Performance: ~5-10 minutes total for required models (depends on connection)
 Author: Transformation Portal Team
 License: Attribution (see LICENSE)
 """
+
 import argparse
 import hashlib
 import os
@@ -35,6 +36,7 @@ from typing import Optional
 
 try:
     from tqdm import tqdm
+
     HAS_TQDM = True
 except ImportError:
     HAS_TQDM = False
@@ -111,12 +113,7 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     return True
 
 
-def download_file(
-    url: str,
-    output_path: Path,
-    expected_sha256: Optional[str] = None,
-    max_retries: int = MAX_RETRIES
-) -> bool:
+def download_file(url: str, output_path: Path, expected_sha256: Optional[str] = None, max_retries: int = MAX_RETRIES) -> bool:
     """Download file with retry logic and checksum verification.
 
     Args:
@@ -139,6 +136,7 @@ def download_file(
 
             if HAS_TQDM:
                 with tqdm(unit="B", unit_scale=True, unit_divisor=1024, miniters=1) as pbar:
+
                     def update_progress(block_num: int, block_size: int, total_size: int):
                         if pbar.total is None and total_size > 0:
                             pbar.total = total_size
@@ -146,6 +144,7 @@ def download_file(
 
                     urllib.request.urlretrieve(url, output_path, reporthook=update_progress)
             else:
+
                 def report_progress(block_num: int, block_size: int, total_size: int):
                     downloaded = block_num * block_size
                     if total_size > 0:
@@ -191,6 +190,7 @@ def check_depth_anything() -> bool:
     print("\n[1/4] Checking Depth Anything V2...")
     try:
         from transformers import AutoImageProcessor
+
         AutoImageProcessor.from_pretrained("LiheYoung/depth-anything-small-h")
         print("  ✓ Depth Anything V2 ready")
         return True
@@ -224,11 +224,7 @@ def install_realesrgan(force: bool = False) -> bool:
         if not check_disk_space(REALESRGAN_MODEL["size_mb"]):
             return False
 
-        return download_file(
-            REALESRGAN_MODEL["url"],
-            model_path,
-            REALESRGAN_MODEL["sha256"]
-        )
+        return download_file(REALESRGAN_MODEL["url"], model_path, REALESRGAN_MODEL["sha256"])
 
     return True
 
@@ -276,6 +272,7 @@ def check_stable_diffusion(skip_optional: bool = False) -> bool:
     print("\n[4/4] Checking Stable Diffusion...")
     try:
         from huggingface_hub import snapshot_download
+
         snapshot_download(repo_id="runwayml/stable-diffusion-v1-5", allow_patterns=["*.json"])
         print("  ✓ Stable Diffusion v1.5 cached")
         return True

@@ -119,6 +119,6 @@ shadow_lift = 10                # For brightness <40
 
 ---
 
-**Full Analysis:** See GREATROOM_ANALYSIS_DETAILED_REPORT.md  
-**Implementation:** conservative_enhance_greatroom_v3.py  
+**Full Analysis:** See GREATROOM_ANALYSIS_DETAILED_REPORT.md
+**Implementation:** conservative_enhance_greatroom_v3.py
 **Confidence:** 95%

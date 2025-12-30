@@ -43,33 +43,33 @@ Expand response planning to additional materials (report-first) with **explicit,
         "mean_conf": 0.806,
         "edge_conf": 0.525,
         "core_conf": 0.834,
-        
+
         "strengths": {
           "core": 0.90,
           "edge": 0.70
         },
-        
+
         "refinement": {
           "should_refine_edges": false,
           "reason": "confidence_already_high",
           "strategy": "canary"
         },
-        
+
         "pixel_ops": {
           "should_apply": false,
           "reason": "confidence_already_high",
           "eligible": true
         },
-        
+
         "edge_signals": {
           "boundary_pixels": 18250,
           "edge_alignment": 0.214,
           "notes": []
         },
-        
+
         "risk_flags": ["high_confidence_skip"]
       },
-      
+
       "wood": {
         "present": true,
         "pixel_ops": {
@@ -80,7 +80,7 @@ Expand response planning to additional materials (report-first) with **explicit,
         }
       }
     },
-    
+
     "summary": {
       "present_classes": ["glass", "wood", "stone"],
       "eligible_for_pixel_ops": ["glass"],

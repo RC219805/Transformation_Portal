@@ -1,6 +1,6 @@
 # Recipe Optimization Results - 750 Picacho Analysis
 
-**Date:** 2025-12-04  
+**Date:** 2025-12-04
 **Analysis:** Baseline quality assessment revealed over-processing in original recipes
 
 ---
@@ -104,7 +104,7 @@ Previously: 42.20% → 45.49% (+3.29%)
      -i "input_images/*Interior*.jpg" \
      -o "output_optimized" \
      -r config/recipes/interior_warm_minimal.yaml
-   
+
    # Exteriors
    python -c "from transformation_portal.cli import app; app()" pipeline process \
      -i "input_images/*Aerial*.jpg" \

@@ -64,23 +64,20 @@ class MaterialRule:
     blend_mode: Optional[str] = "normal"
     texture_gamma: float = 1.0
 
+
 # ------------------------------
 # Palette Loading / Saving
 # ------------------------------
 
 
 def load_palette_assignments(
-    path: Path | str,
-    rules: Sequence[MaterialRule] | Mapping[str, MaterialRule] | None = None
+    path: Path | str, rules: Sequence[MaterialRule] | Mapping[str, MaterialRule] | None = None
 ) -> dict[int, MaterialRule]:
     p = Path(path)
     if not p.exists():
         return {}
     data = json.loads(p.read_text(encoding="utf-8"))
-    lookup = (
-        {r.name: r for r in rules} if isinstance(rules, Sequence)
-        else dict(rules or {})
-    )
+    lookup = {r.name: r for r in rules} if isinstance(rules, Sequence) else dict(rules or {})
     assignments = {}
     for k, v in data.items():
         label = int(k)
@@ -89,13 +86,12 @@ def load_palette_assignments(
     return assignments
 
 
-def save_palette_assignments(
-    assignments: Mapping[int, MaterialRule], path: Path | str
-) -> None:
+def save_palette_assignments(assignments: Mapping[int, MaterialRule], path: Path | str) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     serializable = {str(k): v.name for k, v in assignments.items()}
     p.write_text(json.dumps(serializable, indent=2, sort_keys=True), encoding="utf-8")
+
 
 # ------------------------------
 # Utilities
@@ -104,7 +100,7 @@ def save_palette_assignments(
 
 def _srgb_to_linear(srgb: np.ndarray) -> np.ndarray:
     srgb = np.clip(srgb, 0.0, 1.0)
-    return np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055)**2.4)
+    return np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
 
 
 def _linear_to_srgb(lin: np.ndarray) -> np.ndarray:
@@ -138,7 +134,7 @@ def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
 
 
 def _gaussian(x: float, mu: float, sigma: float) -> float:
-    return math.exp(-((x - mu)**2) / (2.0 * sigma**2))
+    return math.exp(-((x - mu) ** 2) / (2.0 * sigma**2))
 
 
 def _initial_centroids(data: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
@@ -147,17 +143,12 @@ def _initial_centroids(data: np.ndarray, k: int, rng: np.random.Generator) -> np
     return data[rng.choice(len(data), size=k, replace=False)]
 
 
-def _kmeans(
-    data: np.ndarray, k: int, rng: np.random.Generator, iterations: int = 20
-) -> np.ndarray:
+def _kmeans(data: np.ndarray, k: int, rng: np.random.Generator, iterations: int = 20) -> np.ndarray:
     centroids = _initial_centroids(data, k, rng)
     for _ in range(iterations):
         distances = np.sum((data[:, None] - centroids[None, :]) ** 2, axis=2)
         labels = np.argmin(distances, axis=1)
-        new_centroids = np.array([
-            data[labels == i].mean(axis=0) if np.any(labels == i) else centroids[i]
-            for i in range(k)
-        ])
+        new_centroids = np.array([data[labels == i].mean(axis=0) if np.any(labels == i) else centroids[i] for i in range(k)])
         if np.allclose(new_centroids, centroids):
             break
         centroids = new_centroids
@@ -166,7 +157,7 @@ def _kmeans(
 
 def _assign_full_image(image: np.ndarray, centroids: np.ndarray) -> np.ndarray:
     pixels = image.reshape(-1, 3)
-    distances = np.sum((pixels[:, None] - centroids[None, :])**2, axis=2)
+    distances = np.sum((pixels[:, None] - centroids[None, :]) ** 2, axis=2)
     return np.argmin(distances, axis=1).reshape(image.shape[:2])
 
 
@@ -178,14 +169,17 @@ def _cluster_stats(image: np.ndarray, labels: np.ndarray) -> Sequence[ClusterSta
         count = int(mask.sum())
         if count == 0:
             continue
-        stats.append(ClusterStats(
-            label=label,
-            count=count,
-            mean_rgb=image[mask].mean(axis=0),
-            mean_hsv=hsv[mask].mean(axis=0),
-            std_rgb=image[mask].std(axis=0)
-        ))
+        stats.append(
+            ClusterStats(
+                label=label,
+                count=count,
+                mean_rgb=image[mask].mean(axis=0),
+                mean_hsv=hsv[mask].mean(axis=0),
+                std_rgb=image[mask].std(axis=0),
+            )
+        )
     return stats
+
 
 # ------------------------------
 # Material Rules
@@ -200,15 +194,14 @@ def build_material_rules(textures: Mapping[str, Path]) -> Sequence[MaterialRule]
     def stone_score(s: ClusterStats) -> float:
         h, s_, v = s.mean_hsv
         return _gaussian(h, 0.09, 0.05) * max(0.0, 1 - abs(v - 0.62) / 0.4) * max(0.0, 1 - abs(s_ - 0.22) / 0.4)
+
     return (
         MaterialRule("plaster", str(textures["plaster"]), 0.6, plaster_score, 0.45),
-        MaterialRule("stone", str(textures["stone"]), 0.65, stone_score, 0.2)
+        MaterialRule("stone", str(textures["stone"]), 0.65, stone_score, 0.2),
     )
 
 
-def assign_materials(
-    stats: Sequence[ClusterStats], rules: Sequence[MaterialRule]
-) -> Dict[int, MaterialRule]:
+def assign_materials(stats: Sequence[ClusterStats], rules: Sequence[MaterialRule]) -> Dict[int, MaterialRule]:
     assignments: Dict[int, MaterialRule] = {}
     used: set[int] = set()
     for rule in rules:
@@ -223,6 +216,7 @@ def assign_materials(
             assignments[best_label] = rule
             used.add(best_label)
     return assignments
+
 
 # ------------------------------
 # Tiling and Material Application
@@ -240,15 +234,12 @@ def apply_materials_tiled(
     workers: int = 0,
     stream_large_texture_threshold: int = 2_000_000,
     progress: bool = True,
-    eviction_callback: Optional[Callable[[str, dict], None]] = None
+    eviction_callback: Optional[Callable[[str, dict], None]] = None,
 ) -> np.ndarray:
-
     height, width, _channels = base.shape
     out_linear = _srgb_to_linear(base.copy())
 
-    texture_cache: "collections.OrderedDict[str, Optional[Image.Image]]" = (
-        collections.OrderedDict()
-    )
+    texture_cache: "collections.OrderedDict[str, Optional[Image.Image]]" = collections.OrderedDict()
     cache_lock = threading.Lock()
     cache_stats: dict[str, dict] = {}
 
@@ -267,10 +258,7 @@ def apply_materials_tiled(
                         eviction_callback(old_path, dict(cache_stats.get(old_path, {})))
                     except (IOError, OSError):
                         if verbose:
-                            print(
-                                f"[cache] eviction callback failed for {old_path}",
-                                file=sys.stderr
-                            )
+                            print(f"[cache] eviction callback failed for {old_path}", file=sys.stderr)
                 if verbose:
                     print(f"[cache] evicted {old_path}", file=sys.stderr)
 
@@ -299,9 +287,7 @@ def apply_materials_tiled(
             _evict_one_if_needed()
         return pil
 
-    def _make_texture_patch(
-        pil_img: Image.Image, tile_w: int, tile_h: int, gamma: float = 1.0
-    ) -> np.ndarray:
+    def _make_texture_patch(pil_img: Image.Image, tile_w: int, tile_h: int, gamma: float = 1.0) -> np.ndarray:
         tw, th = pil_img.size
         src_pixels = tw * th
         if src_pixels * 3 <= stream_large_texture_threshold or src_pixels <= tile_w * tile_h:
@@ -326,7 +312,7 @@ def apply_materials_tiled(
                 arr = np.asarray(crop, dtype=np.float32) / 255.0
                 if gamma != 1.0:
                     arr = np.clip(arr**gamma, 0.0, 1.0)
-                patch[y:y + ph, x:x + pw, :] = arr[:ph, :pw, :]
+                patch[y : y + ph, x : x + pw, :] = arr[:ph, :pw, :]
                 x += pw
             y += ph
         return patch
@@ -336,9 +322,7 @@ def apply_materials_tiled(
         img = img.filter(ImageFilter.GaussianBlur(radius))
         return np.asarray(img, dtype=np.float32) / 255.0
 
-    def _blend_linear(
-        base_l: np.ndarray, tex_l: np.ndarray, mode: str = "normal"
-    ) -> np.ndarray:
+    def _blend_linear(base_l: np.ndarray, tex_l: np.ndarray, mode: str = "normal") -> np.ndarray:
         if mode == "normal":
             return tex_l
         if mode == "multiply":
@@ -356,9 +340,9 @@ def apply_materials_tiled(
     tiles_x = math.ceil(width / tile_size)
     tiles_y = math.ceil(height / tile_size)
     jobs = [
-        (ty * tile_size, min(height, (ty + 1) * tile_size),
-         tx * tile_size, min(width, (tx + 1) * tile_size))
-        for ty in range(tiles_y) for tx in range(tiles_x)
+        (ty * tile_size, min(height, (ty + 1) * tile_size), tx * tile_size, min(width, (tx + 1) * tile_size))
+        for ty in range(tiles_y)
+        for tx in range(tiles_x)
     ]
     results = []
 
@@ -393,17 +377,10 @@ def apply_materials_tiled(
                 if pil_img is None:
                     tile_base[mask] = base_masked
                     continue
-                tex_patch = _make_texture_patch(
-                    pil_img,
-                    x1 - x0,
-                    y1 - y0,
-                    gamma=getattr(rule, "texture_gamma", 1.0)
-                )
+                tex_patch = _make_texture_patch(pil_img, x1 - x0, y1 - y0, gamma=getattr(rule, "texture_gamma", 1.0))
                 tex_patch_l = _srgb_to_linear(tex_patch)
                 tex_masked = tex_patch_l[mask]
-                blended = _blend_linear(
-                    base_masked, tex_masked, getattr(rule, "blend_mode", "normal")
-                )
+                blended = _blend_linear(base_masked, tex_masked, getattr(rule, "blend_mode", "normal"))
                 tile_base[mask] = (1.0 - blend_val) * base_masked + blend_val * blended
             else:
                 tile_base[mask] = base_masked
@@ -428,6 +405,7 @@ def apply_materials_tiled(
             print(f"{path}: {stats}")
 
     return np.clip(_linear_to_srgb(out_linear), 0.0, 1.0)
+
 
 # ------------------------------
 # CLI
@@ -457,21 +435,12 @@ def main():
     stats = _cluster_stats(arr, labels)
 
     # example textures
-    textures = {
-        "plaster": Path("textures/plaster.jpg"),
-        "stone": Path("textures/stone.jpg")
-    }
+    textures = {"plaster": Path("textures/plaster.jpg"), "stone": Path("textures/stone.jpg")}
     rules = build_material_rules(textures)
     assignments = assign_materials(stats, rules)
 
     out = apply_materials_tiled(
-        arr,
-        labels,
-        assignments,
-        tile_size=args.tilesize,
-        workers=args.workers,
-        verbose=args.verbose,
-        progress=args.progress
+        arr, labels, assignments, tile_size=args.tilesize, workers=args.workers, verbose=args.verbose, progress=args.progress
     )
 
     Image.fromarray((out * 255).astype("uint8")).save(args.output)

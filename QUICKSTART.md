@@ -80,19 +80,19 @@ lux-depth-v2 \
 
 **Use advanced workflows if**:
 
-❌ You need **custom material enhancement** beyond 8 standard types  
+❌ You need **custom material enhancement** beyond 8 standard types
 → See [docs/advanced/MATERIAL_RESPONSE.md](docs/advanced/MATERIAL_RESPONSE.md)
 
-❌ You're processing **1000+ images** and need async pipeline  
+❌ You're processing **1000+ images** and need async pipeline
 → See [docs/advanced/ASYNC_PIPELINE.md](docs/advanced/ASYNC_PIPELINE.md)
 
-❌ You need **document-driven architectural intelligence**  
+❌ You need **document-driven architectural intelligence**
 → See [docs/advanced/CONTEXT_AWARE_RENDERING.md](docs/advanced/CONTEXT_AWARE_RENDERING.md)
 
-❌ You're **training custom models** on your dataset  
+❌ You're **training custom models** on your dataset
 → See [docs/research/TRAINING_GUIDE.md](docs/research/TRAINING_GUIDE.md)
 
-❌ You're processing **video files** (not images)  
+❌ You're processing **video files** (not images)
 → Use `luxury_video_master_grader.py` instead
 
 **Otherwise**: Use the Golden Path. It handles 95% of use cases.

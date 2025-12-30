@@ -1,6 +1,6 @@
 # High-Fidelity Depth Pipeline: Comprehensive Validation Report
-**Date**: 2025-12-18  
-**Validation Type**: Systematic isolation testing + tensor logging  
+**Date**: 2025-12-18
+**Validation Type**: Systematic isolation testing + tensor logging
 **Status**: ✅ **PRODUCTION READY** (1 bug fix required)
 
 ---
@@ -54,8 +54,8 @@ inputs = processor(images=tile, do_resize=False)
 
 ### Conclusion
 
-✅ **Claim validated** - Tiling CAN achieve high-res inference  
-⚠️ **Critical requirement** - MUST use `do_resize=False` in all tile paths  
+✅ **Claim validated** - Tiling CAN achieve high-res inference
+⚠️ **Critical requirement** - MUST use `do_resize=False` in all tile paths
 ❌ **Default behavior fails** - HuggingFace processor auto-resizes to 518px
 
 **Implementation requirement**:
@@ -124,7 +124,7 @@ Each test runs **one enhancement in isolation** to identify exact impact:
 **Session Earlier (with bugs)**:
 ```
 Tiling:          Overlap = 65.0% (vs baseline 77.2%)  ❌ -12.2%
-Edge count:      100× spike                           ❌ Artifacts  
+Edge count:      100× spike                           ❌ Artifacts
 Correlation:     Negative                             ❌ Misaligned
 ```
 
@@ -167,7 +167,7 @@ INFO - ✓ Edge-snap applied: amount=1.5 at 5,622,167 edge pixels
 
 ### Implementation Details
 
-**File**: `lux_depth_v2/edge_snapping.py`  
+**File**: `lux_depth_v2/edge_snapping.py`
 **Integration**: `ProductionDepthRefiner.apply_edge_snapping()`
 
 **Logic**: AND-gated snapping (only where RGB edges AND depth transitions exist)
@@ -215,7 +215,7 @@ if cfg.bypass_image_processor:
     self.processor = None
 ```
 
-**Estimated fix time**: 5 minutes  
+**Estimated fix time**: 5 minutes
 **Risk**: Low (well-understood bug, simple fix)
 
 ---
@@ -230,14 +230,14 @@ if cfg.bypass_image_processor:
 # water_candidate.py, lines 270-288
 def _planarity_cue(self, depth01: np.ndarray) -> Tuple[np.ndarray, float]:
     """Low depth-gradient bands identify planar surfaces (pools, lakes)."""
-    
+
     grad_x = sobel(depth01, axis=1)
     grad_y = sobel(depth01, axis=0)
     grad_mag = sqrt(grad_x² + grad_y²)
-    
+
     # Low gradient = planar = water candidate
     planarity_mask = (grad_mag <= 0.05).astype(float32)
-    
+
     return planarity_mask, score
 ```
 
@@ -447,10 +447,10 @@ materials_v3.process(
 
 ---
 
-**Validation Date**: 2025-12-18  
-**Validation Method**: Systematic isolation testing + tensor logging  
-**Test Images**: 750Picacho_Pool_16bit.tiff (3375×6000, 20.25MP)  
-**Status**: ✅ **PRODUCTION READY** (pending 1 bug fix)  
+**Validation Date**: 2025-12-18
+**Validation Method**: Systematic isolation testing + tensor logging
+**Test Images**: 750Picacho_Pool_16bit.tiff (3375×6000, 20.25MP)
+**Status**: ✅ **PRODUCTION READY** (pending 1 bug fix)
 **Recommendation**: Deploy immediately after global anchor fix
 
 **Deliverables**:

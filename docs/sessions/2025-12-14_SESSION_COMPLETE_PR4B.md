@@ -70,9 +70,9 @@ Glass pixel response system fully implemented, wired, and validated under strict
 
 ## PR Details
 
-**Branch**: `feature/materials-v3-pr4b-glass-response`  
-**Base**: `main`  
-**Title**: `PR-4B: Materials V3 Glass Pixel Response (Canary)`  
+**Branch**: `feature/materials-v3-pr4b-glass-response`
+**Base**: `main`
+**Title**: `PR-4B: Materials V3 Glass Pixel Response (Canary)`
 **Body**: `/tmp/pr4b_github_pr_body.md` (refined, reviewer-proof)
 
 ### Key Sections in PR Body
@@ -130,9 +130,9 @@ Glass pixel response system fully implemented, wired, and validated under strict
 
 ## Final Status
 
-✅ **READY TO MERGE** - Strict PR-4B scope validated  
-✅ **Safety verified** - Validation preset isolated  
-✅ **PR body refined** - Reviewer-proof format  
+✅ **READY TO MERGE** - Strict PR-4B scope validated
+✅ **Safety verified** - Validation preset isolated
+✅ **PR body refined** - Reviewer-proof format
 ✅ **All checks passed** - Wiring, gating, pixel ops, safety
 
 ---

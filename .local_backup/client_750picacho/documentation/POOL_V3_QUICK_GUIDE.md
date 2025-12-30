@@ -1,7 +1,7 @@
 # Pool Enhancement V3 - Quick Implementation Guide
 
-**Purpose:** Fast reference for implementing V3 fixes  
-**Time Required:** 2-3 hours  
+**Purpose:** Fast reference for implementing V3 fixes
+**Time Required:** 2-3 hours
 **Files to Create:** `conservative_enhance_pool_v3.py`
 
 ---
@@ -24,15 +24,15 @@ def apply_agx_tone_map(rgb_linear):
     # Constants
     MIN_EV = -10.0
     MAX_EV = 6.5
-    
+
     # Convert to log space
     rgb_log = np.log2(rgb_linear + 1e-10)
     rgb_log = np.clip(rgb_log, MIN_EV, MAX_EV)
     rgb_log = (rgb_log - MIN_EV) / (MAX_EV - MIN_EV)
-    
+
     # S-curve for smooth highlights
     rgb_compressed = rgb_log * rgb_log * (3.0 - 2.0 * rgb_log)
-    
+
     # sRGB gamma
     return np.power(rgb_compressed, 1/2.2)
 ```
@@ -68,13 +68,13 @@ def protect_sky_highlights(rgb, threshold=0.75):
     luminance = 0.2126 * rgb[:,:,0] + 0.7152 * rgb[:,:,1] + 0.0722 * rgb[:,:,2]
     height = rgb.shape[0]
     y_coords = np.arange(height)[:, np.newaxis] / height
-    
+
     sky_mask = (
         (luminance > threshold) &
         (np.abs(rgb[:,:,0] - rgb[:,:,1]) < 0.1) &
         (y_coords < 0.5)
     )
-    
+
     return gaussian_filter(sky_mask.astype(np.float32), sigma=30.0)
 
 # USE IT:
@@ -290,6 +290,6 @@ See full documentation:
 
 ---
 
-**Status:** ✅ Ready for implementation  
-**Priority:** HIGH - Required for client delivery  
+**Status:** ✅ Ready for implementation
+**Priority:** HIGH - Required for client delivery
 **Difficulty:** MEDIUM - Requires understanding of tone mapping concepts

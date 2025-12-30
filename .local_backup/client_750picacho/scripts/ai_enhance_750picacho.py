@@ -3,6 +3,7 @@
 AI Enhancement for 750 Picacho Aerial
 Using Stable Diffusion + ControlNet with Material Response
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -56,19 +57,13 @@ print(f"  ✓ Saved: {canny_output}")
 
 # Load ControlNet
 print("\n[3/6] Loading ControlNet model...")
-controlnet = ControlNetModel.from_pretrained(
-    "lllyasviel/sd-controlnet-canny",
-    torch_dtype=torch.float32
-).to(device)
+controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny", torch_dtype=torch.float32).to(device)
 print("  ✓ ControlNet loaded")
 
 # Load pipeline
 print("\n[4/6] Loading Stable Diffusion pipeline...")
 pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5",
-    controlnet=controlnet,
-    torch_dtype=torch.float32,
-    safety_checker=None
+    "runwayml/stable-diffusion-v1-5", controlnet=controlnet, torch_dtype=torch.float32, safety_checker=None
 ).to(device)
 
 pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)

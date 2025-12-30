@@ -17,16 +17,13 @@ class TestLegacyAPIShim:
 
     def test_shim_shows_warning_on_attribute_access(self):
         """Test that shim shows warning when accessing attributes."""
+
         class MockImplementation:
             some_attribute = "value"
 
         class TestShim(LegacyAPIShim):
             def __init__(self):
-                super().__init__(
-                    "OldAPI",
-                    "transformation_portal.NewAPI",
-                    "2.0.0"
-                )
+                super().__init__("OldAPI", "transformation_portal.NewAPI", "2.0.0")
 
             def _get_implementation(self):
                 return MockImplementation
@@ -46,6 +43,7 @@ class TestLegacyAPIShim:
 
     def test_shim_shows_warning_only_once(self):
         """Test that shim shows warning only once per instance."""
+
         class MockImplementation:
             attr1 = "value1"
             attr2 = "value2"
@@ -69,6 +67,7 @@ class TestLegacyAPIShim:
 
     def test_shim_callable(self):
         """Test that shim can be called like the original."""
+
         class MockCallable:
             def __call__(self, x, y):
                 return x + y
@@ -91,6 +90,7 @@ class TestLegacyAPIShim:
 
     def test_shim_without_removal_version(self):
         """Test shim warning message without removal version."""
+
         class MockImplementation:
             value = 42
 
@@ -125,6 +125,7 @@ class TestCreateCompatibilityWrapper:
 
     def test_wrapper_maps_parameters(self):
         """Test that wrapper correctly maps old parameter names to new ones."""
+
         def new_func(new_param1, new_param2=10):
             return new_param1 + new_param2
 
@@ -135,10 +136,10 @@ class TestCreateCompatibilityWrapper:
             old_func,
             new_func,
             param_mapping={
-                'old_param1': 'new_param1',
-                'old_param2': 'new_param2',
+                "old_param1": "new_param1",
+                "old_param2": "new_param2",
             },
-            removal_version="2.0.0"
+            removal_version="2.0.0",
         )
 
         with warnings.catch_warnings(record=True) as w:
@@ -153,6 +154,7 @@ class TestCreateCompatibilityWrapper:
 
     def test_wrapper_with_positional_args(self):
         """Test wrapper with positional arguments."""
+
         def new_func(x, y):
             return x * y
 
@@ -170,17 +172,14 @@ class TestCreateCompatibilityWrapper:
 
     def test_wrapper_with_no_mapping(self):
         """Test wrapper when no parameter mapping is needed."""
+
         def new_func(a, b):
             return a + b
 
         def old_func(a, b):
             pass
 
-        wrapper = create_compatibility_wrapper(
-            old_func,
-            new_func,
-            removal_version="3.0.0"
-        )
+        wrapper = create_compatibility_wrapper(old_func, new_func, removal_version="3.0.0")
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -191,6 +190,7 @@ class TestCreateCompatibilityWrapper:
 
     def test_wrapper_preserves_function_metadata(self):
         """Test that wrapper preserves function metadata."""
+
         def old_func(x):
             """Old function documentation."""
 
@@ -204,17 +204,14 @@ class TestCreateCompatibilityWrapper:
 
     def test_wrapper_partial_parameter_mapping(self):
         """Test wrapper with partial parameter mapping."""
+
         def new_func(unchanged_param, renamed_param):
             return f"{unchanged_param}-{renamed_param}"
 
         def old_func(unchanged_param, old_param):
             pass
 
-        wrapper = create_compatibility_wrapper(
-            old_func,
-            new_func,
-            param_mapping={'old_param': 'renamed_param'}
-        )
+        wrapper = create_compatibility_wrapper(old_func, new_func, param_mapping={"old_param": "renamed_param"})
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -229,14 +226,11 @@ class TestCreateAlias:
 
     def test_alias_for_function(self):
         """Test creating an alias for a function."""
+
         def original_function(x):
             return x * 2
 
-        aliased = create_alias(
-            original_function,
-            "old_function_name",
-            removal_version="2.0.0"
-        )
+        aliased = create_alias(original_function, "old_function_name", removal_version="2.0.0")
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -250,15 +244,12 @@ class TestCreateAlias:
 
     def test_alias_for_class(self):
         """Test creating an alias for a class."""
+
         class OriginalClass:
             def __init__(self, value):
                 self.value = value
 
-        AliasedClass = create_alias(
-            OriginalClass,
-            "OldClassName",
-            removal_version="3.0.0"
-        )
+        AliasedClass = create_alias(OriginalClass, "OldClassName", removal_version="3.0.0")
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -272,6 +263,7 @@ class TestCreateAlias:
 
     def test_alias_function_name(self):
         """Test that aliased function has correct name."""
+
         def original():
             pass
 
@@ -280,6 +272,7 @@ class TestCreateAlias:
 
     def test_alias_class_name(self):
         """Test that aliased class has correct name."""
+
         class Original:
             pass
 
@@ -288,6 +281,7 @@ class TestCreateAlias:
 
     def test_alias_without_removal_version(self):
         """Test alias without removal version."""
+
         def original():
             return "result"
 
@@ -305,6 +299,7 @@ class TestCreateAlias:
 
     def test_aliased_class_inheritance(self):
         """Test that aliased class properly inherits from original."""
+
         class OriginalClass:
             def method(self):
                 return "from_original"

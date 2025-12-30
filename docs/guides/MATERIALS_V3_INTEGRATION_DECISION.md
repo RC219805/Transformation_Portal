@@ -1,7 +1,7 @@
 # Materials V3 Integration Decision
-**Date**: 2025-12-18  
-**Session**: Post-Structure-Aware Edge Gating Implementation  
-**Architect**: @transformation-portal-architect  
+**Date**: 2025-12-18
+**Session**: Post-Structure-Aware Edge Gating Implementation
+**Architect**: @transformation-portal-architect
 
 ---
 
@@ -54,12 +54,12 @@ def classify_scene_type(
 ) -> str:
     raw_count = np.count_nonzero(rgb_edges_raw)
     structure_count = np.count_nonzero(rgb_edges_structure)
-    
+
     if structure_count == 0:
         return 'texture_dominated'
-    
+
     ratio = raw_count / structure_count
-    
+
     return 'texture_dominated' if ratio > texture_threshold else 'structure_dominated'
 ```
 
@@ -154,7 +154,7 @@ def classify_scene_type_v2(
 ) -> str:
     """
     Multi-factor scene classification with tuned thresholds.
-    
+
     Factors:
     1. Edge ratio (raw/structure)
     2. Depth variance (spatial complexity)
@@ -163,22 +163,22 @@ def classify_scene_type_v2(
     """
     raw_count = np.count_nonzero(rgb_edges_raw)
     structure_count = np.count_nonzero(rgb_edges_structure)
-    
+
     # Avoid division by zero
     if structure_count == 0:
         return 'texture_dominated'
-    
+
     ratio = raw_count / structure_count
-    
+
     # Factor 1: Edge ratio (primary signal)
     # TUNED THRESHOLDS:
     # - ratio > 50: Strong texture (ocean, glass, uniform surfaces)
     # - ratio < 8: Strong structure (interiors, architectural)
     # - 8-50: Mixed (requires secondary factors)
-    
+
     if ratio > 50:
         return 'texture_dominated'
-    
+
     if ratio < 8:
         # Check if depth variance is TOO LOW (pool water)
         # Pool water: depth_var ~ 0.02, edge_ratio ~ 80+
@@ -186,17 +186,17 @@ def classify_scene_type_v2(
         if depth_variance < 0.03 and structure_count < 1000:
             return 'texture_dominated'  # Pool/water edge case
         return 'structure_dominated'
-    
+
     # Mixed zone (8 < ratio < 50): Use depth variance
     # - High depth variance (>0.06) + high ratio → texture (bathroom tiles)
     # - Low depth variance (<0.03) → texture (glass facade, pool)
-    
+
     if depth_variance > 0.06:
         return 'texture_dominated'  # Interior with patterned materials
-    
+
     if depth_variance < 0.03:
         return 'texture_dominated'  # Smooth surfaces (glass, water)
-    
+
     # Default: structure (conservative for architectural scenes)
     return 'structure_dominated'
 ```
@@ -211,7 +211,7 @@ def classify_scene_type_v2(
 
 ### Option B: Increase Depth Anything V2 Input Size (IMMEDIATE ROI)
 
-**Current**: `input_size=518` (default)  
+**Current**: `input_size=518` (default)
 **Recommended**: `input_size=896` or `input_size=1024`
 
 **Trade-offs**:
@@ -227,7 +227,7 @@ def classify_scene_type_v2(
 **Current** (`high_fidelity_depth/quality_metrics.py:detect_structure_edges`):
 ```python
 filtered = cv2.bilateralFilter(
-    gray, 
+    gray,
     d=9,               # Spatial extent
     sigmaColor=75,     # Color smoothing
     sigmaSpace=75      # Spatial smoothing
@@ -257,7 +257,7 @@ else:
 3. Re-run 7-image validation
 4. **Acceptance Criteria**: ≥85% classification accuracy (6/7 images)
 
-**Timeline**: 2-3 hours  
+**Timeline**: 2-3 hours
 **Files Modified**: `high_fidelity_depth/quality_metrics.py`, `high_fidelity_depth/test_structure_edges.py`
 
 ### Phase 2: Improve Depth Quality (Priority 2)
@@ -268,7 +268,7 @@ else:
 3. Re-run validation with fixed classifier
 4. **Acceptance Criteria**: ≥70% lenient pass rate
 
-**Timeline**: 1-2 hours  
+**Timeline**: 1-2 hours
 **Files Modified**: `high_fidelity_depth/config.py`, `high_fidelity_depth/quality_metrics.py`
 
 ### Phase 3: Expand Validation Set (Priority 3)
@@ -293,8 +293,8 @@ else:
    - Lenient pass rate +5% improvement
    - Compute overhead <30%
 
-**Timeline**: 4-6 hours  
-**Files Created**: `high_fidelity_depth/scene_classification.py` (new module)  
+**Timeline**: 4-6 hours
+**Files Created**: `high_fidelity_depth/scene_classification.py` (new module)
 **Files Modified**: `high_fidelity_depth/config.py`, `scripts/automation/production_depth_validation_fixed.py`
 
 ---
@@ -326,7 +326,7 @@ class SceneClassifierType(Enum):
 class DepthConfig:
     # Scene classification
     scene_classifier: SceneClassifierType = SceneClassifierType.HEURISTIC
-    
+
     # Materials V3 settings (only used if classifier != HEURISTIC)
     materials_v3_model_path: str = "models/materials_v3.pth"
     materials_v3_fallback_to_heuristic: bool = True  # Graceful degradation
@@ -469,7 +469,7 @@ Materials V3 integration is warranted ONLY IF:
 
 ## Conclusion
 
-**Materials V3 integration is NOT READY**. The heuristic scene classifier has **catastrophic failure rate (71.4%)**, and quality gates fail **100% of images**. 
+**Materials V3 integration is NOT READY**. The heuristic scene classifier has **catastrophic failure rate (71.4%)**, and quality gates fail **100% of images**.
 
 **Priority 1**: Fix baseline classification and depth quality FIRST.
 
@@ -560,10 +560,10 @@ Materials V3 integration is warranted ONLY IF:
 | **Actual: Texture**     | 2 (glass_building, ocean_1) | 3 (glass_facade, pool_texture_1, pool_texture_2) |
 | **Actual: Structure**   | 2 (interior_bathroom, interior_kitchen) | 0 |
 
-**Accuracy**: 2/7 = **28.6%**  
-**Precision (texture)**: 2/4 = 50%  
-**Recall (texture)**: 2/5 = 40%  
-**Precision (structure)**: 0/3 = 0%  
+**Accuracy**: 2/7 = **28.6%**
+**Precision (texture)**: 2/4 = 50%
+**Recall (texture)**: 2/5 = 40%
+**Precision (structure)**: 0/3 = 0%
 **Recall (structure)**: 0/2 = 0%
 
 ---

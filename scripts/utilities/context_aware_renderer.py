@@ -24,13 +24,13 @@ class ArchitecturalContext:
 
     def __init__(self, context_file: Path):
         """Initialize with rendering knowledge base JSON."""
-        with open(context_file, 'r') as f:
+        with open(context_file, "r") as f:
             self.kb = json.load(f)
 
-        self.property_name = self.kb.get('property_name', 'Unknown Property')
-        self.rooms = self.kb.get('rooms', [])
-        self.materials = self.kb.get('materials', [])
-        self.rendering_pages = self.kb.get('rendering_pages', {})
+        self.property_name = self.kb.get("property_name", "Unknown Property")
+        self.rooms = self.kb.get("rooms", [])
+        self.materials = self.kb.get("materials", [])
+        self.rendering_pages = self.kb.get("rendering_pages", {})
 
     def identify_room(self, image_path: Path) -> Optional[str]:
         """Identify room type from image filename or metadata."""
@@ -38,14 +38,14 @@ class ArchitecturalContext:
 
         # Check for room keywords in filename
         room_keywords = {
-            'kitchen': ['kitchen', 'cook', 'culinary'],
-            'bedroom': ['bedroom', 'bed', 'master', 'guest'],
-            'bathroom': ['bathroom', 'bath', 'toilet', 'shower'],
-            'living': ['living', 'lounge', 'great room'],
-            'dining': ['dining', 'dinner'],
-            'garage': ['garage', 'parking'],
-            'entry': ['entry', 'foyer', 'entrance'],
-            'closet': ['closet', 'wardrobe', 'storage'],
+            "kitchen": ["kitchen", "cook", "culinary"],
+            "bedroom": ["bedroom", "bed", "master", "guest"],
+            "bathroom": ["bathroom", "bath", "toilet", "shower"],
+            "living": ["living", "lounge", "great room"],
+            "dining": ["dining", "dinner"],
+            "garage": ["garage", "parking"],
+            "entry": ["entry", "foyer", "entrance"],
+            "closet": ["closet", "wardrobe", "storage"],
         }
 
         for room_type, keywords in room_keywords.items():
@@ -64,49 +64,49 @@ class ArchitecturalContext:
         """Get room-specific enhancement parameters."""
 
         profiles = {
-            'kitchen': {
-                'materials_focus': ['wood', 'stone', 'steel', 'glass'],
-                'lighting_style': 'bright_task',
-                'clarity_boost': 0.20,
-                'material_response_strength': 0.75,
-                'lut': 'assets/luts/location_aesthetic/Modern_Kitchen.cube',
-                'notes': 'Emphasize cabinet wood grain, countertop stone, appliance reflections'
+            "kitchen": {
+                "materials_focus": ["wood", "stone", "steel", "glass"],
+                "lighting_style": "bright_task",
+                "clarity_boost": 0.20,
+                "material_response_strength": 0.75,
+                "lut": "assets/luts/location_aesthetic/Modern_Kitchen.cube",
+                "notes": "Emphasize cabinet wood grain, countertop stone, appliance reflections",
             },
-            'bedroom': {
-                'materials_focus': ['wood', 'fabric', 'textile'],
-                'lighting_style': 'soft_ambient',
-                'clarity_boost': 0.12,
-                'material_response_strength': 0.65,
-                'lut': 'assets/luts/film_emulation/Warm_Interior.cube',
-                'notes': 'Soft textures, warm tones, gentle depth of field'
+            "bedroom": {
+                "materials_focus": ["wood", "fabric", "textile"],
+                "lighting_style": "soft_ambient",
+                "clarity_boost": 0.12,
+                "material_response_strength": 0.65,
+                "lut": "assets/luts/film_emulation/Warm_Interior.cube",
+                "notes": "Soft textures, warm tones, gentle depth of field",
             },
-            'bathroom': {
-                'materials_focus': ['stone', 'glass', 'ceramic', 'tile'],
-                'lighting_style': 'even_bright',
-                'clarity_boost': 0.18,
-                'material_response_strength': 0.70,
-                'lut': 'assets/luts/location_aesthetic/Luxury_Bath.cube',
-                'notes': 'Enhance reflective surfaces, water features, tile grout'
+            "bathroom": {
+                "materials_focus": ["stone", "glass", "ceramic", "tile"],
+                "lighting_style": "even_bright",
+                "clarity_boost": 0.18,
+                "material_response_strength": 0.70,
+                "lut": "assets/luts/location_aesthetic/Luxury_Bath.cube",
+                "notes": "Enhance reflective surfaces, water features, tile grout",
             },
-            'living': {
-                'materials_focus': ['wood', 'fabric', 'glass', 'stone'],
-                'lighting_style': 'natural_warm',
-                'clarity_boost': 0.15,
-                'material_response_strength': 0.68,
-                'lut': 'assets/luts/film_emulation/Cinematic_Interior.cube',
-                'notes': 'Balanced enhancement, maintain spatial depth'
+            "living": {
+                "materials_focus": ["wood", "fabric", "glass", "stone"],
+                "lighting_style": "natural_warm",
+                "clarity_boost": 0.15,
+                "material_response_strength": 0.68,
+                "lut": "assets/luts/film_emulation/Cinematic_Interior.cube",
+                "notes": "Balanced enhancement, maintain spatial depth",
             },
-            'default': {
-                'materials_focus': ['wood', 'stone', 'metal', 'glass'],
-                'lighting_style': 'balanced',
-                'clarity_boost': 0.15,
-                'material_response_strength': 0.70,
-                'lut': 'assets/luts/film_emulation/Natural_Interior.cube',
-                'notes': 'Standard architectural enhancement'
-            }
+            "default": {
+                "materials_focus": ["wood", "stone", "metal", "glass"],
+                "lighting_style": "balanced",
+                "clarity_boost": 0.15,
+                "material_response_strength": 0.70,
+                "lut": "assets/luts/film_emulation/Natural_Interior.cube",
+                "notes": "Standard architectural enhancement",
+            },
         }
 
-        return profiles.get(room_type, profiles['default'])
+        return profiles.get(room_type, profiles["default"])
 
     def get_rendering_context(self, image_path: Path) -> Dict:
         """Get full context for rendering enhancement."""
@@ -115,12 +115,12 @@ class ArchitecturalContext:
         material_palette = self.get_material_palette(room_type)
 
         return {
-            'property_name': self.property_name,
-            'image_path': str(image_path),
-            'room_type': room_type or 'unknown',
-            'enhancement_profile': enhancement_profile,
-            'material_palette': material_palette,
-            'architectural_context_available': True
+            "property_name": self.property_name,
+            "image_path": str(image_path),
+            "room_type": room_type or "unknown",
+            "enhancement_profile": enhancement_profile,
+            "material_palette": material_palette,
+            "architectural_context_available": True,
         }
 
 
@@ -134,7 +134,7 @@ class ContextAwareRenderer:
         print(f"   Rooms: {len(self.context.rooms)}")
         print(f"   Materials: {len(self.context.materials)}")
 
-    def enhance_render(self, image_path: Path, output_dir: Path, pipeline: str = 'standard'):
+    def enhance_render(self, image_path: Path, output_dir: Path, pipeline: str = "standard"):
         """Enhance render with context-aware processing."""
 
         # Get rendering context
@@ -152,9 +152,9 @@ class ContextAwareRenderer:
         print(f"\n📝 Notes: {ctx['enhancement_profile']['notes']}")
 
         # Build pipeline command
-        if pipeline == 'standard':
+        if pipeline == "standard":
             cmd = self._build_standard_pipeline(image_path, output_dir, ctx)
-        elif pipeline == 'premium':
+        elif pipeline == "premium":
             cmd = self._build_premium_pipeline(image_path, output_dir, ctx)
         else:
             raise ValueError(f"Unknown pipeline: {pipeline}")
@@ -166,33 +166,33 @@ class ContextAwareRenderer:
 
     def _build_standard_pipeline(self, image_path: Path, output_dir: Path, ctx: Dict) -> str:
         """Build standard enhancement pipeline command."""
-        profile = ctx['enhancement_profile']
+        profile = ctx["enhancement_profile"]
 
         # Use luxury_tiff_batch_processor with context-aware parameters
         cmd = (
             "python luxury_tiff_batch_processor.py "
-            "--input \"{image_path}\" "
-            "--output \"{output_dir}\" "
+            '--input "{image_path}" '
+            '--output "{output_dir}" '
             f"--clarity {profile['clarity_boost']:.2f} "
             f"--material-response {profile['material_response_strength']:.2f} "
         )
 
         # Add LUT if exists
-        lut_path = Path(profile['lut'])
+        lut_path = Path(profile["lut"])
         if lut_path.exists():
-            cmd += "--lut \"{lut_path}\" "
+            cmd += '--lut "{lut_path}" '
 
         return cmd
 
     def _build_premium_pipeline(self, image_path: Path, output_dir: Path, ctx: Dict) -> str:
         """Build premium enhancement pipeline command."""
-        profile = ctx['enhancement_profile']
+        profile = ctx["enhancement_profile"]
 
         # Use lux_render_pipeline with context-aware parameters
         cmd = (
             "python lux_render_pipeline.py "
-            "--input \"{image_path}\" "
-            "--output \"{output_dir}\" "
+            '--input "{image_path}" '
+            '--output "{output_dir}" '
             "--upscale 4 "
             f"--material-response {profile['material_response_strength']:.2f} "
             f"--room-type {ctx['room_type']} "
@@ -227,7 +227,7 @@ def main():
     output_dir = Path("output/context_aware")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd_standard, ctx = renderer.enhance_render(kitchen_render, output_dir, pipeline='standard')
+    cmd_standard, ctx = renderer.enhance_render(kitchen_render, output_dir, pipeline="standard")
 
     print("\n" + "=" * 80)
     print("CONTEXT-AWARE ENHANCEMENT READY")
@@ -240,11 +240,11 @@ def main():
 
     # Save context for this rendering
     context_output = output_dir / f"{kitchen_render.stem}_context.json"
-    with open(context_output, 'w') as f:
+    with open(context_output, "w") as f:
         json.dump(ctx, f, indent=2)
 
     print(f"\n📄 Rendering context saved: {context_output}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

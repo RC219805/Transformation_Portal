@@ -66,19 +66,19 @@ run_case() {
     local preset="$2"
     local extra_flags="${3:-}"
     local input_file="$INPUT_DIR/${name}.tif"
-    
+
     if [[ ! -f "$input_file" ]]; then
         echo -e "${YELLOW}⚠ Skipping $name (file not found)${NC}"
         return 0
     fi
-    
+
     local output_dir="$OUT_ROOT/${name}_${preset}"
     local log_file="$output_dir/pipeline.log"
-    
+
     mkdir -p "$output_dir"
-    
+
     echo -e "${BLUE}▶ Running:${NC} $name | preset=$preset $extra_flags"
-    
+
     # Run pipeline
     if python -m lux_depth_v2.cli \
         --input "$input_file" \
@@ -86,9 +86,9 @@ run_case() {
         --preset "$preset" \
         $extra_flags \
         > "$log_file" 2>&1; then
-        
+
         echo -e "${GREEN}✓${NC} Completed: $name | $preset"
-        
+
         # Check for expected outputs
         local output_count=$(find "$output_dir" -type f \( -name "*.png" -o -name "*.tiff" -o -name "*.tif" \) | wc -l)
         echo "  Generated $output_count output files"
@@ -103,28 +103,28 @@ run_auto_preset() {
     local name="$1"
     local tier="$2"
     local input_file="$INPUT_DIR/${name}.tif"
-    
+
     if [[ ! -f "$input_file" ]]; then
         echo -e "${YELLOW}⚠ Skipping $name (file not found)${NC}"
         return 0
     fi
-    
+
     local output_dir="$OUT_ROOT/${name}_auto_${tier}"
     local log_file="$output_dir/pipeline.log"
-    
+
     mkdir -p "$output_dir"
-    
+
     echo -e "${BLUE}▶ Running:${NC} $name | auto-preset (tier=$tier)"
-    
+
     if python -m lux_depth_v2.cli \
         --input "$input_file" \
         --output-dir "$output_dir" \
         --auto-preset \
         --quality-tier "$tier" \
         > "$log_file" 2>&1; then
-        
+
         echo -e "${GREEN}✓${NC} Completed: $name | auto-preset ($tier)"
-        
+
         # Extract selected preset from logs
         if grep -q "Auto-selected preset" "$log_file"; then
             local selected_preset=$(grep "Auto-selected preset" "$log_file" | head -1)
@@ -154,7 +154,7 @@ run_case "750Picacho_Kitchen_Ultimate" "interior_luxury_apex_quality" && ((PASSE
 # Bedroom - APEX only
 run_case "750Picacho_PrimaryBedroom_Ultimate" "interior_luxury_apex_quality" && ((PASSED++)) || ((FAILED++))
 
-# Bathroom - APEX only  
+# Bathroom - APEX only
 run_case "750Picacho_PrimaryBathroom_Ultimate" "interior_luxury_apex_quality" && ((PASSED++)) || ((FAILED++))
 
 echo -e "\n${BLUE}=== Exterior Scenes ===${NC}\n"

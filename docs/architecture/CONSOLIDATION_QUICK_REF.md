@@ -1,6 +1,6 @@
 # Repository Consolidation - Quick Reference
 
-**Date**: December 23, 2025  
+**Date**: December 23, 2025
 **Status**: ✅ Complete
 
 ---
@@ -74,13 +74,13 @@ The repository transitioned from **complexity growth** to **consolidation discip
 
 ### I want to...
 
-**...process images** → [QUICKSTART.md](../../QUICKSTART.md)  
-**...deploy to production** → [deployment/](../../deployment/)  
-**...use async pipeline** → [docs/advanced/ASYNC_PIPELINE.md](../advanced/ASYNC_PIPELINE.md)  
-**...understand stability tiers** → [STABILITY_POLICY.md](STABILITY_POLICY.md)  
-**...contribute code** → [CONTRIBUTING.md](../../CONTRIBUTING.md)  
-**...propose new feature** → Check tier: frozen (no), advanced (yes), research (yes)  
-**...understand strategic direction** → [MISSION_STATEMENT.md](../../MISSION_STATEMENT.md)  
+**...process images** → [QUICKSTART.md](../../QUICKSTART.md)
+**...deploy to production** → [deployment/](../../deployment/)
+**...use async pipeline** → [docs/advanced/ASYNC_PIPELINE.md](../advanced/ASYNC_PIPELINE.md)
+**...understand stability tiers** → [STABILITY_POLICY.md](STABILITY_POLICY.md)
+**...contribute code** → [CONTRIBUTING.md](../../CONTRIBUTING.md)
+**...propose new feature** → Check tier: frozen (no), advanced (yes), research (yes)
+**...understand strategic direction** → [MISSION_STATEMENT.md](../../MISSION_STATEMENT.md)
 **...see full consolidation details** → [CONSOLIDATION_SUMMARY.md](CONSOLIDATION_SUMMARY.md)
 
 ---
@@ -124,7 +124,7 @@ The repository transitioned from **complexity growth** to **consolidation discip
 
 ---
 
-**Last Updated**: December 23, 2025  
+**Last Updated**: December 23, 2025
 **Next Review**: March 2026 (quarterly)
 
 ---

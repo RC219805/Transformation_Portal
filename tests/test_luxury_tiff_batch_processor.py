@@ -36,6 +36,7 @@ def test_run_pipeline_exposed_in_dunder_all():
 def test_cli_module_importable():
     """Test that the CLI module can be imported."""
     from luxury_tiff_batch_processor import cli  # noqa: F401
+
     assert hasattr(cli, "main"), "CLI module should have a main function"
 
 
@@ -152,9 +153,7 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
         assert np.array(processed).dtype == np.uint8
 
 
-def test_process_single_image_profile_overrides_dtype_and_compression(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_process_single_image_profile_overrides_dtype_and_compression(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     source_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
     source_dir.mkdir()
@@ -295,12 +294,14 @@ def test_run_pipeline_parallel_execution(tmp_path: Path):
     for index in range(3):
         _create_sample_image(input_dir / f"frame_{index}.tif")
 
-    args = ltiff.parse_args([
-        str(input_dir),
-        str(output_dir),
-        "--workers",
-        "2",
-    ])
+    args = ltiff.parse_args(
+        [
+            str(input_dir),
+            str(output_dir),
+            "--workers",
+            "2",
+        ]
+    )
 
     processed = ltiff.run_pipeline(args)
 
@@ -567,9 +568,7 @@ def test_image_roundtrip_uint16_with_alpha():
         warnings.simplefilter("ignore", DeprecationWarning)
         image = Image.fromarray(data_uint8, mode="RGBA")
 
-    base_float, base_dtype, alpha, base_channels = ltiff.image_to_float(
-        image, return_format="tuple4"
-    )
+    base_float, base_dtype, alpha, base_channels = ltiff.image_to_float(image, return_format="tuple4")
     assert base_float.dtype == np.float32
     # PIL converts uint16 RGBA to uint8, so base_dtype will be uint8
     assert base_dtype == np.uint8

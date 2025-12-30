@@ -15,16 +15,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def run_command(cmd, description):
     """Run a command and capture output."""
     print(f"\n{'=' * 80}")
     print(f"{description}")
-    print('=' * 80)
+    print("=" * 80)
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=repo_root)
     print(result.stdout)
     if result.stderr:
         print(result.stderr)
     return result.returncode == 0, result.stdout
+
 
 print("=" * 80)
 print("🚀 TRANSFORMATION PORTAL RAG SYSTEM INITIALIZATION")
@@ -38,8 +40,8 @@ cli_path = repo_root / ".github" / "agents" / "rag_system" / "cli.py"
 
 # Step 1: Index repository
 success, output = run_command(
-    f'python {cli_path} index --repo-root . --output .github/agents/rag_system/knowledge_base/index_stats.json',
-    "STEP 1: INDEXING REPOSITORY"
+    f"python {cli_path} index --repo-root . --output .github/agents/rag_system/knowledge_base/index_stats.json",
+    "STEP 1: INDEXING REPOSITORY",
 )
 
 if not success:
@@ -51,10 +53,10 @@ try:
     stats_file = repo_root / ".github" / "agents" / "rag_system" / "knowledge_base" / "index_stats.json"
     with open(stats_file) as f:
         index_stats = json.load(f)
-    
-    total_chunks = index_stats.get('total_chunks', 0)
-    chunk_types = index_stats.get('chunk_types', {})
-    
+
+    total_chunks = index_stats.get("total_chunks", 0)
+    chunk_types = index_stats.get("chunk_types", {})
+
     print(f"\n✅ Indexing complete:")
     print(f"   Total chunks: {total_chunks}")
     print("\n📊 Chunk type distribution:")
@@ -70,24 +72,17 @@ print("\n" + "=" * 80)
 print("STEP 2: TESTING SEARCH CAPABILITIES")
 print("=" * 80)
 
-test_queries = [
-    "depth processing pipeline",
-    "Lux Depth V2 module",
-    "material response technology",
-    "video grading workflow"
-]
+test_queries = ["depth processing pipeline", "Lux Depth V2 module", "material response technology", "video grading workflow"]
 
 search_results = {}
 for query in test_queries:
     print(f"\n🔍 Query: '{query}'")
-    success, output = run_command(
-        f'python {cli_path} search "{query}" --top-k 3 --repo-root .',
-        ""
-    )
+    success, output = run_command(f'python {cli_path} search "{query}" --top-k 3 --repo-root .', "")
     if success and "Found" in output:
         # Extract result count
         import re
-        match = re.search(r'Found (\d+) results', output)
+
+        match = re.search(r"Found (\d+) results", output)
         if match:
             count = int(match.group(1))
             print(f"   ✅ Found {count} results")
@@ -128,23 +123,20 @@ report = {
     "initialization_timestamp": Path(__file__).stat().st_mtime,
     "repo_root": str(repo_root),
     "status": "initialized",
-    "index_stats": {
-        "total_chunks": total_chunks,
-        "chunk_types": chunk_types
-    },
+    "index_stats": {"total_chunks": total_chunks, "chunk_types": chunk_types},
     "search_test_results": search_results,
     "components_verified": [
         "Repository Indexer",
-        "Hybrid Retriever", 
+        "Hybrid Retriever",
         "Knowledge Engine",
         "Artifact Classifier",
         "Result Reranker",
-        "Citation Generator"
-    ]
+        "Citation Generator",
+    ],
 }
 
 init_report_file = kb_path / "initialization_report.json"
-with open(init_report_file, 'w') as f:
+with open(init_report_file, "w") as f:
     json.dump(report, f, indent=2)
 
 print(f"✅ Initialization report saved to: {init_report_file}")
@@ -179,7 +171,7 @@ print("=" * 80)
 
 print("\n📖 Usage Examples:")
 print("\n1. Search from CLI:")
-print("   python .github/agents/rag_system/cli.py search \"your query\" --top-k 5")
+print('   python .github/agents/rag_system/cli.py search "your query" --top-k 5')
 
 print("\n2. Use knowledge engine:")
 print(f"   cd .github/agents/rag_system")

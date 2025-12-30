@@ -11,6 +11,7 @@ Key improvements over v3:
 - Protected white interior surfaces from sky corrections
 - Added natural sky gradient (cooler top, warmer horizon)
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,7 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -38,24 +40,24 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # ============================================================================
 
 # Sky Correction (AGGRESSIVE - addresses persistent cyan cast)
-SKY_PERCENTILE_PRIMARY = 97     # Top 3% brightest pixels (~360k pixels)
-SKY_PERCENTILE_SECONDARY = 98   # Top 2% for extra aggressive targeting
-SKY_MASK_SIGMA = 15             # Larger blur for smoother transitions
-SKY_GREEN_REDUCTION = 0.70      # G: -30% (AGGRESSIVE cyan removal)
-SKY_BLUE_REDUCTION = 0.78       # B: -22% (AGGRESSIVE blue removal)
-SKY_RED_BOOST = 1.18            # R: +18% (warmer, more natural)
-SKY_DESATURATE = 0.65           # Desaturate sky to 65% (removes cartoon look)
+SKY_PERCENTILE_PRIMARY = 97  # Top 3% brightest pixels (~360k pixels)
+SKY_PERCENTILE_SECONDARY = 98  # Top 2% for extra aggressive targeting
+SKY_MASK_SIGMA = 15  # Larger blur for smoother transitions
+SKY_GREEN_REDUCTION = 0.70  # G: -30% (AGGRESSIVE cyan removal)
+SKY_BLUE_REDUCTION = 0.78  # B: -22% (AGGRESSIVE blue removal)
+SKY_RED_BOOST = 1.18  # R: +18% (warmer, more natural)
+SKY_DESATURATE = 0.65  # Desaturate sky to 65% (removes cartoon look)
 
 # Global Adjustments (REDUCED to protect interior)
-GLOBAL_SATURATION = 1.06        # +6% (gentle, sky handled separately)
-GLOBAL_CONTRAST = 1.04          # +4% (gentle on whites)
-SHADOW_LIFT = 1.06              # +6% (gentle lift)
-EDGE_SHARPENING = 0.15          # 15% (minimal)
+GLOBAL_SATURATION = 1.06  # +6% (gentle, sky handled separately)
+GLOBAL_CONTRAST = 1.04  # +4% (gentle on whites)
+SHADOW_LIFT = 1.06  # +6% (gentle lift)
+EDGE_SHARPENING = 0.15  # 15% (minimal)
 
 # Material Response (Minimal)
-WOOD_ENHANCEMENT = 1.02         # Minimal wood grain
-STONE_ENHANCEMENT = 1.01        # Minimal stone texture
-MIDTONE_LIFT = 1.01             # Very gentle
+WOOD_ENHANCEMENT = 1.02  # Minimal wood grain
+STONE_ENHANCEMENT = 1.01  # Minimal stone texture
+MIDTONE_LIFT = 1.01  # Very gentle
 
 print("\n[1/10] Loading 32-bit TIFF...")
 
@@ -91,7 +93,7 @@ if TIFFFILE_AVAILABLE:
 
         # Convert to 8-bit for PIL processing
         img_8bit = (rgb * 255).astype(np.uint8)
-        img = Image.fromarray(img_8bit, 'RGB')
+        img = Image.fromarray(img_8bit, "RGB")
 
     except Exception as e:
         print(f"  ⚠️  tifffile error: {e}")
@@ -174,10 +176,7 @@ sky_desat = np.array(desaturator.enhance(SKY_DESATURATE), dtype=np.float32)
 
 # Blend desaturation only in sky regions
 for c in range(3):
-    img_corrected[:, :, c] = (
-        img_corrected[:, :, c] * (1 - sky_mask_smooth) +
-        sky_desat[:, :, c] * sky_mask_smooth
-    )
+    img_corrected[:, :, c] = img_corrected[:, :, c] * (1 - sky_mask_smooth) + sky_desat[:, :, c] * sky_mask_smooth
 
 if sky_region.sum() > 0:
     sky_r_after = img_corrected[:, :, 0][sky_region].mean()
@@ -185,13 +184,13 @@ if sky_region.sum() > 0:
     sky_b_after = img_corrected[:, :, 2][sky_region].mean()
     print(f"  Sky color after:  R={sky_r_after:.1f}, G={sky_g_after:.1f}, B={sky_b_after:.1f}")
     print("  ✓ Aggressive cyan removal: G-30%, B-22%, R+18%")
-    print(f"  ✓ Desaturation applied: {int((1-SKY_DESATURATE)*100)}% reduction")
+    print(f"  ✓ Desaturation applied: {int((1 - SKY_DESATURATE) * 100)}% reduction")
 
 # Clip and convert
 img_corrected = np.clip(img_corrected, 0, 255)
 img = Image.fromarray(img_corrected.astype(np.uint8))
 
-print(f"\n[4/10] Applying shadow lift (+{int((SHADOW_LIFT-1)*100)}%)...")
+print(f"\n[4/10] Applying shadow lift (+{int((SHADOW_LIFT - 1) * 100)}%)...")
 
 # Lift shadows gently
 img_array = np.array(img, dtype=np.float32)
@@ -200,18 +199,20 @@ shadow_mask = (luminance < 100).astype(np.float32)
 shadow_pixels = shadow_mask.sum()
 
 for c in range(3):
-    img_array[:, :, c] = img_array[:, :, c] * (1 - shadow_mask * (SHADOW_LIFT - 1) / SHADOW_LIFT) + \
-                         img_array[:, :, c] * SHADOW_LIFT * shadow_mask
+    img_array[:, :, c] = (
+        img_array[:, :, c] * (1 - shadow_mask * (SHADOW_LIFT - 1) / SHADOW_LIFT)
+        + img_array[:, :, c] * SHADOW_LIFT * shadow_mask
+    )
 
 img_array = np.clip(img_array, 0, 255)
 img = Image.fromarray(img_array.astype(np.uint8))
-print(f"  ✓ Shadow pixels enhanced: {int(shadow_pixels):,} ({shadow_pixels/(width*height)*100:.1f}%)")
+print(f"  ✓ Shadow pixels enhanced: {int(shadow_pixels):,} ({shadow_pixels / (width * height) * 100:.1f}%)")
 
-print(f"\n[5/10] Adjusting saturation (+{int((GLOBAL_SATURATION-1)*100)}%)...")
+print(f"\n[5/10] Adjusting saturation (+{int((GLOBAL_SATURATION - 1) * 100)}%)...")
 enhancer = ImageEnhance.Color(img)
 img = enhancer.enhance(GLOBAL_SATURATION)
 
-print(f"\n[6/10] Adjusting contrast (+{int((GLOBAL_CONTRAST-1)*100)}%)...")
+print(f"\n[6/10] Adjusting contrast (+{int((GLOBAL_CONTRAST - 1) * 100)}%)...")
 enhancer = ImageEnhance.Contrast(img)
 img = enhancer.enhance(GLOBAL_CONTRAST)
 
@@ -220,27 +221,31 @@ print("\n[7/10] Applying material response...")
 img_array = np.array(img, dtype=np.float32)
 
 # Wood enhancement (warm midtones)
-wood_mask = ((img_array[:, :, 0] > img_array[:, :, 1]) &
-             (luminance > 50) & (luminance < 150)).astype(np.float32)
+wood_mask = ((img_array[:, :, 0] > img_array[:, :, 1]) & (luminance > 50) & (luminance < 150)).astype(np.float32)
 wood_pixels = wood_mask.sum()
 
 for c in range(3):
-    img_array[:, :, c] = img_array[:, :, c] * (1 - wood_mask * (WOOD_ENHANCEMENT - 1) / WOOD_ENHANCEMENT) + \
-                         img_array[:, :, c] * WOOD_ENHANCEMENT * wood_mask
+    img_array[:, :, c] = (
+        img_array[:, :, c] * (1 - wood_mask * (WOOD_ENHANCEMENT - 1) / WOOD_ENHANCEMENT)
+        + img_array[:, :, c] * WOOD_ENHANCEMENT * wood_mask
+    )
 
 # Stone enhancement (neutral tones)
-stone_mask = ((np.abs(img_array[:, :, 0] - img_array[:, :, 1]) < 10) &
-              (luminance > 100) & (luminance < 200)).astype(np.float32)
+stone_mask = ((np.abs(img_array[:, :, 0] - img_array[:, :, 1]) < 10) & (luminance > 100) & (luminance < 200)).astype(
+    np.float32
+)
 stone_pixels = stone_mask.sum()
 
 for c in range(3):
-    img_array[:, :, c] = img_array[:, :, c] * (1 - stone_mask * (STONE_ENHANCEMENT - 1) / STONE_ENHANCEMENT) + \
-                         img_array[:, :, c] * STONE_ENHANCEMENT * stone_mask
+    img_array[:, :, c] = (
+        img_array[:, :, c] * (1 - stone_mask * (STONE_ENHANCEMENT - 1) / STONE_ENHANCEMENT)
+        + img_array[:, :, c] * STONE_ENHANCEMENT * stone_mask
+    )
 
 img_array = np.clip(img_array, 0, 255)
 img = Image.fromarray(img_array.astype(np.uint8))
-print(f"  ✓ Wood enhancement: {int(wood_pixels):,} pixels (+{int((WOOD_ENHANCEMENT-1)*100)}%)")
-print(f"  ✓ Stone enhancement: {int(stone_pixels):,} pixels (+{int((STONE_ENHANCEMENT-1)*100)}%)")
+print(f"  ✓ Wood enhancement: {int(wood_pixels):,} pixels (+{int((WOOD_ENHANCEMENT - 1) * 100)}%)")
+print(f"  ✓ Stone enhancement: {int(stone_pixels):,} pixels (+{int((STONE_ENHANCEMENT - 1) * 100)}%)")
 
 print(f"\n[8/10] Applying edge sharpening (strength: {EDGE_SHARPENING})...")
 
@@ -275,7 +280,7 @@ print("\n[10/10] Saving enhanced image...")
 
 # Save as high-quality JPEG
 output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v4_AggressiveSky.jpg"
-img.save(output_path, 'JPEG', quality=98, optimize=True, progressive=True)
+img.save(output_path, "JPEG", quality=98, optimize=True, progressive=True)
 file_size_mb = output_path.stat().st_size / (1024 * 1024)
 
 print(f"  ✓ Saved: {output_path}")

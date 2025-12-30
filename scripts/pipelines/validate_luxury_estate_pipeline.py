@@ -33,6 +33,7 @@ try:
     import cv2  # noqa: F401
     import torch  # noqa: F401
     from PIL import Image  # noqa: F401
+
     print("  ✓ NumPy, OpenCV, PyTorch, Pillow")
 except ImportError as e:
     print(f"  ✗ Missing core dependency: {e}")
@@ -42,6 +43,7 @@ except ImportError as e:
 print("\n[3/8] Checking TIFF support...")
 try:
     import tifffile
+
     print("  ✓ tifffile (16/32-bit TIFF support)")
 except ImportError:
     print("  ⚠ tifffile not available - limited TIFF support")
@@ -57,6 +59,7 @@ try:
         DepthGuidedFilters,
         ZoneToneMapping,
     )
+
     print("  ✓ Depth Anything V2 pipeline available")
 except ImportError as e:
     print(f"  ⚠ Depth pipeline not fully available: {e}")
@@ -69,6 +72,7 @@ try:
         MaterialAestheticProfile,
         LightingProfile,
     )
+
     print("  ✓ Material Response Technology available")
 except ImportError:
     print("  ⚠ Material Response not available")
@@ -78,6 +82,7 @@ except ImportError:
 print("\n[6/8] Checking tone mapping...")
 try:
     from tonemapper_agx_filmic import apply_filmic_hable, linear_to_srgb  # noqa: F401
+
     print("  ✓ Filmic (Hable) tone mapper")
 except ImportError:
     print("  ✗ Tone mapping not available")
@@ -85,6 +90,7 @@ except ImportError:
 
 try:
     from tonemapper_agx_filmic import apply_agx_ocio  # noqa: F401
+
     print("  ✓ AgX OCIO tone mapper")
 except ImportError:
     print("  ⚠ AgX OCIO not available (requires PyOpenColorIO)")
@@ -94,6 +100,7 @@ print("\n[7/8] Checking AI enhancement...")
 try:
     from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline  # noqa: F401
     from controlnet_aux import CannyDetector  # noqa: F401
+
     print("  ✓ ControlNet + Stable Diffusion available")
 except ImportError:
     print("  ⚠ AI enhancement not available")
@@ -103,6 +110,7 @@ except ImportError:
 print("\n[8/8] Checking Real-ESRGAN upscaler...")
 try:
     from realesrgan import RealESRGANer
+
     # Use vendored BasicSR-TP to avoid CVE-2024-27763 (command injection in SLURM utilities)
     # RRDBNet import tested separately to verify compatibility
     from basicsr_tp.archs.rrdbnet_arch import RRDBNet  # noqa: F401
@@ -141,6 +149,7 @@ try:
         get_750_picacho_preset,
         get_aerial_preset,
     )
+
     print("  ✓ Pipeline module imports successfully")
 
     # Try to initialize preset
@@ -155,6 +164,7 @@ try:
 except Exception as e:
     print(f"  ✗ Pipeline initialization failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -247,5 +257,5 @@ else:
     print("\n❌ CRITICAL DEPENDENCIES MISSING")
     print("\nInstall required dependencies:")
     print("  pip install -e .")
-    print("  pip install -e \".[ml,tiff]\"")
+    print('  pip install -e ".[ml,tiff]"')
     sys.exit(1)

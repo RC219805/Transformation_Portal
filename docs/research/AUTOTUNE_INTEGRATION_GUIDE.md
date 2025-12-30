@@ -1,7 +1,7 @@
 # Autotune Export Config Integration Guide
 
-**Status**: Pre-Integration Review Complete  
-**Date**: 2025-12-10  
+**Status**: Pre-Integration Review Complete
+**Date**: 2025-12-10
 **Phase**: Phase 2 Slice 3 (Post-Benchmarking)
 
 ---
@@ -23,8 +23,8 @@ This guide provides step-by-step instructions for wiring `autotune_export_config
 
 ### 1.1 Where Autotune Plugs In
 
-**Location**: `lux_depth_v2/pipeline.py`  
-**Method**: `LuxPipelineV2.process_one()`  
+**Location**: `lux_depth_v2/pipeline.py`
+**Method**: `LuxPipelineV2.process_one()`
 **Timing**: After image load, before first export
 
 ```
@@ -56,62 +56,62 @@ Exports (write_master, write_upscaled, etc.)
 
 ### Step 1: Add Configuration Flag
 
-**File**: `lux_depth_v2/config.py`  
+**File**: `lux_depth_v2/config.py`
 **Location**: `PipelineConfig` dataclass
 
 ```python
 @dataclass
 class PipelineConfig:
     # ... existing fields ...
-    
+
     # Phase 2 Slice 3: Autotune export configuration (OFF by default)
     autotune_export: bool = False
     """Enable adaptive export optimization based on image characteristics.
-    
+
     When enabled, export settings (tiling, atomic writes) are dynamically
     selected based on image size and scene complexity. Based on benchmark
     data from Phase 2 Slice 3:
     - Large, simple scenes (aerial, exterior): Enable optimizations (~5-10% faster)
     - Complex scenes (interior, pool): Use baseline (avoid 6-8% slowdown)
-    
+
     Default: False (explicit opt-in required)
     """
-    
+
     autotune_use_complexity: bool = False
     """Use scene complexity estimation for autotune decisions.
-    
+
     When enabled, autotune analyzes image gradients to classify scene complexity:
     - Low complexity (sky, water, gradients): Enable optimizations
     - High complexity (textures, interiors): Use baseline
-    
+
     Adds ~10-20ms overhead per image for gradient analysis.
-    
+
     Default: False (uses megapixels-only heuristic)
     """
 ```
 
 ### Step 2: Add Scene Complexity Helper
 
-**File**: `lux_depth_v2/pipeline.py`  
+**File**: `lux_depth_v2/pipeline.py`
 **Location**: After imports, before `LuxPipelineV2` class
 
 ```python
 def _estimate_scene_complexity(rgb01: np.ndarray) -> float:
     """
     Estimate scene complexity for autotune decisions.
-    
+
     Heuristic: High-frequency content ratio (gradient magnitude).
     - 0.0 = simple scene (sky, gradients, water, uniform surfaces)
     - 1.0 = complex scene (textures, interiors, foliage, fine details)
-    
+
     Benchmark timing: ~10-20ms on 20MP image (negligible overhead).
-    
+
     Args:
         rgb01: RGB float array [0, 1], shape (H, W, 3)
-    
+
     Returns:
         Complexity score in [0.0, 1.0]
-    
+
     Examples:
         - Aerial view with sky: 0.2-0.4
         - Interior with textures: 0.7-0.9
@@ -121,14 +121,14 @@ def _estimate_scene_complexity(rgb01: np.ndarray) -> float:
         # Convert to grayscale for gradient analysis
         if cv2 is None:
             return 0.5  # Fallback if cv2 unavailable
-        
+
         gray = cv2.cvtColor((rgb01 * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
-        
+
         # Compute Sobel gradients (3x3 kernel)
         gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
         gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
         grad_mag = np.sqrt(gx**2 + gy**2)
-        
+
         # Normalize by image intensity range to handle various exposures
         intensity_range = gray.max() - gray.min()
         if intensity_range > 10:  # Avoid div-by-zero for flat images
@@ -136,19 +136,19 @@ def _estimate_scene_complexity(rgb01: np.ndarray) -> float:
         else:
             # Flat image (very low complexity)
             return 0.1
-        
+
         # High-frequency ratio: pixels with gradient above threshold
         # Threshold=0.1 calibrated against benchmark scenes:
         # - Aerial: ~15-25% pixels above threshold → score 0.2-0.4
         # - Interior: ~50-70% pixels above threshold → score 0.7-0.9
         threshold = 0.1
         hf_ratio = np.mean(grad_mag_norm > threshold)
-        
+
         # Clamp to valid range [0, 1]
         complexity = float(np.clip(hf_ratio, 0.0, 1.0))
-        
+
         return complexity
-        
+
     except Exception as e:
         # Graceful fallback on any error (import failure, empty image, etc.)
         # Log at debug level to avoid spamming on every image
@@ -159,7 +159,7 @@ def _estimate_scene_complexity(rgb01: np.ndarray) -> float:
 
 ### Step 3: Modify ExportManager Initialization
 
-**File**: `lux_depth_v2/pipeline.py`  
+**File**: `lux_depth_v2/pipeline.py`
 **Location**: `LuxPipelineV2.__init__()`, lines 181-189
 
 **Current code**:
@@ -198,7 +198,7 @@ if EXPORT_MANAGER_AVAILABLE and cfg.output_dir:
 
 ### Step 4: Add Just-in-Time Autotune
 
-**File**: `lux_depth_v2/pipeline.py`  
+**File**: `lux_depth_v2/pipeline.py`
 **Location**: `process_one()`, after image load (after line 374)
 
 **Insert after**:
@@ -217,13 +217,13 @@ if not self._autotune_initialized and getattr(cfg, 'autotune_export', False):
         with self._stage(report, "export/autotune"):
             try:
                 from transformation_portal.core.storage.export_manager import autotune_export_config
-                
+
                 # Estimate scene complexity if requested (adds ~10-20ms overhead)
                 scene_complexity = None
                 if getattr(cfg, 'autotune_use_complexity', False):
                     scene_complexity = _estimate_scene_complexity(rgb01)
                     self.logger.debug(f"Scene complexity: {scene_complexity:.3f}")
-                
+
                 # Generate adaptive export config
                 self._export_config = autotune_export_config(
                     output_dir=Path(cfg.output_dir),
@@ -232,11 +232,11 @@ if not self._autotune_initialized and getattr(cfg, 'autotune_export', False):
                     scene_complexity=scene_complexity,
                     enable_adaptive=True
                 )
-                
+
                 # Initialize ExportManager with auto-tuned config
                 self.export_manager = ExportManager(self._export_config, io_utils)
                 self._autotune_initialized = True
-                
+
                 # Log autotune decision for debugging/monitoring
                 megapixels = (W * H) / 1_000_000
                 self.logger.info(
@@ -246,7 +246,7 @@ if not self._autotune_initialized and getattr(cfg, 'autotune_export', False):
                     f"tile_size={self._export_config.tiff_tile_size} "
                     f"atomic={self._export_config.use_atomic_image_writes}"
                 )
-                
+
                 # Store autotune metadata in report for analysis
                 report['autotune'] = {
                     'enabled': True,
@@ -256,14 +256,14 @@ if not self._autotune_initialized and getattr(cfg, 'autotune_export', False):
                     'use_atomic_writes': self._export_config.use_atomic_image_writes,
                     'use_tiered_storage': self._export_config.enable_tiered_storage,
                 }
-                
+
             except Exception as e:
                 self.logger.error(f"Autotune failed, using baseline config: {e}")
                 # Fallback to baseline config
                 self._export_config = ExportConfig(output_dir=Path(cfg.output_dir))
                 self.export_manager = ExportManager(self._export_config, io_utils)
                 self._autotune_initialized = True
-                
+
                 report['autotune'] = {
                     'enabled': True,
                     'error': str(e),
@@ -277,7 +277,7 @@ if not self._autotune_initialized and getattr(cfg, 'autotune_export', False):
 
 ### Step 5: Update Report Structure
 
-**File**: `lux_depth_v2/pipeline.py`  
+**File**: `lux_depth_v2/pipeline.py`
 **Location**: `process_one()`, report finalization (around line 619)
 
 **Add to report** (after line 632):
@@ -335,7 +335,7 @@ def test_scene_complexity_estimation():
     simple = np.linspace(0, 1, W)[None, :, None].repeat(H, axis=0).repeat(3, axis=2)
     complexity_simple = _estimate_scene_complexity(simple)
     assert 0.0 <= complexity_simple <= 0.3, f"Expected low complexity, got {complexity_simple}"
-    
+
     # Complex scene (random noise)
     complex_img = np.random.rand(H, W, 3)
     complexity_complex = _estimate_scene_complexity(complex_img)
@@ -355,21 +355,21 @@ def test_pipeline_autotune_enabled_aerial(tmp_path, sample_aerial_image):
         upscaler_backend="none",  # Skip upscaling for speed
     )
     pipe = LuxPipelineV2(cfg)
-    
+
     # Process single image
     result = pipe.process_one(sample_aerial_image)
-    
+
     # Verify autotune was triggered
     assert 'autotune' in result
     assert result['autotune']['enabled'] is True
     assert 'megapixels' in result['autotune']
     assert 'complexity' in result['autotune']
-    
+
     # Verify optimization decision (aerial = simple = enable optimizations)
     if result['autotune']['complexity'] < 0.5:
         assert result['autotune']['tiff_tile_size'] == 512
         assert result['autotune']['use_atomic_writes'] is True
-    
+
     assert result['status'] == 'ok'
 
 
@@ -386,18 +386,18 @@ def test_pipeline_autotune_enabled_interior(tmp_path, sample_interior_image):
         upscaler_backend="none",
     )
     pipe = LuxPipelineV2(cfg)
-    
+
     result = pipe.process_one(sample_interior_image)
-    
+
     # Verify autotune was triggered
     assert 'autotune' in result
     assert result['autotune']['enabled'] is True
-    
+
     # Verify optimization decision (interior = complex = baseline)
     if result['autotune']['complexity'] > 0.6:
         assert result['autotune']['tiff_tile_size'] is None
         assert result['autotune']['use_atomic_writes'] is False
-    
+
     assert result['status'] == 'ok'
 
 
@@ -413,18 +413,18 @@ def test_pipeline_autotune_disabled(tmp_path, sample_image):
         upscaler_backend="none",
     )
     pipe = LuxPipelineV2(cfg)
-    
+
     result = pipe.process_one(sample_image)
-    
+
     # Verify autotune was not triggered
     assert 'autotune' in result
     assert result['autotune']['enabled'] is False
     assert result['autotune']['reason'] == 'disabled'
-    
+
     # Verify baseline export config used
     assert pipe.export_manager is not None
     assert pipe.export_manager.config.tiff_tile_size is None
-    
+
     assert result['status'] == 'ok'
 
 
@@ -441,9 +441,9 @@ def test_pipeline_autotune_batch_processing(tmp_path, sample_images_dir):
         upscaler_backend="none",
     )
     pipe = LuxPipelineV2(cfg)
-    
+
     results = pipe.process_directory()
-    
+
     # Verify all images processed with autotune
     assert len(results) > 0
     for result in results:
@@ -464,11 +464,11 @@ from pathlib import Path
 def sample_aerial_image(tmp_path):
     """Create synthetic aerial-like image (large, simple gradient)."""
     H, W = 6000, 3600  # 21.6 MP (similar to Aerial benchmark)
-    
+
     # Simple sky gradient (low complexity)
     sky_gradient = np.linspace(0.3, 0.8, H)[:, None, None].repeat(W, axis=1).repeat(3, axis=2)
     img_float = (sky_gradient * 255).astype(np.uint8)
-    
+
     img_path = tmp_path / "aerial_sample.tif"
     Image.fromarray(img_float).save(img_path)
     return img_path
@@ -478,11 +478,11 @@ def sample_aerial_image(tmp_path):
 def sample_interior_image(tmp_path):
     """Create synthetic interior image (medium, complex textures)."""
     H, W = 4000, 3000  # 12 MP (similar to GreatRoom benchmark)
-    
+
     # Random texture (high complexity)
     texture = np.random.rand(H, W, 3)
     img_float = (texture * 255).astype(np.uint8)
-    
+
     img_path = tmp_path / "interior_sample.tif"
     Image.fromarray(img_float).save(img_path)
     return img_path
@@ -755,6 +755,6 @@ results = pipe.process_directory()
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-12-10  
+**Document Version**: 1.0
+**Last Updated**: 2025-12-10
 **Contact**: Transformation Portal Team

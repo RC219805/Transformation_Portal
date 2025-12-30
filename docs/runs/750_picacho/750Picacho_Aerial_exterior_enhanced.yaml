@@ -10,7 +10,7 @@ scene_features:
   - daylight
   - foliage_visible
   - wide_angle
-  
+
 # Quality Metrics
 source_baseline_score: 42.20
 processed_score: 48.04

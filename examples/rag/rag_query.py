@@ -34,9 +34,9 @@ def main():
     # Generate citations
     _citation_gen = CitationGenerator()  # noqa: F841
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Query: {query}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     for i, result in enumerate(results, 1):
         print(f"\n[Result {i}] Score: {result.score:.3f}")

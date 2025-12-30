@@ -1,6 +1,6 @@
 # Autotune Integration Complete
 
-**Date**: 2025-12-10  
+**Date**: 2025-12-10
 **Status**: ✅ SHIPPED - Feature-Flagged Integration
 
 ## Overview
@@ -252,12 +252,12 @@ lux-depth-v2 \
 
 ## Success Criteria
 
-✅ Code compiles  
-✅ Existing tests pass  
-✅ New integration tests pass  
-✅ Flag defaults to OFF (no behavior change)  
-✅ When flag is ON, autotune runs and report includes metadata  
-✅ CLI flags work  
+✅ Code compiles
+✅ Existing tests pass
+✅ New integration tests pass
+✅ Flag defaults to OFF (no behavior change)
+✅ When flag is ON, autotune runs and report includes metadata
+✅ CLI flags work
 
 ## Conclusion
 

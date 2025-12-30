@@ -2,8 +2,8 @@
 
 ## Executive Summary
 
-✅ **Implemented comprehensive fixes** to texture-scene validation logic based on 18-image analysis  
-❌ **Discovered P0 blocker**: `edge_overlap` field missing from saved metrics → 100% failure rate  
+✅ **Implemented comprehensive fixes** to texture-scene validation logic based on 18-image analysis
+❌ **Discovered P0 blocker**: `edge_overlap` field missing from saved metrics → 100% failure rate
 🎯 **Ready for re-validation**: All code fixes complete, pending re-run to confirm improvements
 
 ---
@@ -57,7 +57,7 @@ def compute_high_frequency_energy(depth_map: np.ndarray) -> float:
 ```
 
 ### 3. Balanced Texture Gate Logic
-**Before**: `(smooth HF) AND (good edges)` → guaranteed fail  
+**Before**: `(smooth HF) AND (good edges)` → guaranteed fail
 **After**: `(smooth HF) OR (good edges)` → allow either criterion to pass
 
 ```python
@@ -287,7 +287,7 @@ Refs: SESSION_COMPLETE_DEPTH_VALIDATION_20251218_FINAL.md"
 
 ---
 
-**Session Status**: ✅ Code fixes complete, ⏳ Re-validation pending  
-**Next Action**: `./RUN_VALIDATION_V2_FIXED.sh` to confirm improvements  
-**Blocker Resolved**: Missing EdgeMetrics fields identified and fixed  
+**Session Status**: ✅ Code fixes complete, ⏳ Re-validation pending
+**Next Action**: `./RUN_VALIDATION_V2_FIXED.sh` to confirm improvements
+**Blocker Resolved**: Missing EdgeMetrics fields identified and fixed
 **Ready for**: Baseline stability proof, then controlled DA V2 input_size sweep

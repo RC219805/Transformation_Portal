@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 
 def _coerce_report(obj: object) -> dict:
     """Coerce LuxPipelineV2.process_one() return into a report dict.
-    
+
     In this repo, process_one() returns the report dict directly.
     Some legacy wrappers may return {'report': report}.
     """
@@ -53,27 +53,27 @@ def compute_edge_band_stats(
 ) -> dict:
     """
     Compute gradient stats in a boundary band around a mask.
-    
+
     Args:
         image: HxWx3 RGB in [0,1]
         mask: HxW binary or confidence mask
         band_width: pixels on each side of boundary
-        
+
     Returns:
         Stats dict with gradient magnitude, contrast, etc.
     """
     from scipy.ndimage import sobel, binary_dilation, binary_erosion
-    
+
     # Create boundary band
     if mask.max() > 1.0:
         binary_mask = mask > 0.5
     else:
         binary_mask = mask > 0.5
-        
+
     dilated = binary_dilation(binary_mask, iterations=band_width)
     eroded = binary_erosion(binary_mask, iterations=band_width)
     boundary_band = dilated & ~eroded
-    
+
     if boundary_band.sum() == 0:
         return {
             "boundary_pixels": 0,
@@ -81,20 +81,20 @@ def compute_edge_band_stats(
             "median_gradient_mag": 0.0,
             "max_gradient_mag": 0.0,
         }
-    
+
     # Compute gradients (luma)
     if image.ndim == 3:
         luma = 0.299 * image[:, :, 0] + 0.587 * image[:, :, 1] + 0.114 * image[:, :, 2]
     else:
         luma = image
-        
+
     grad_x = sobel(luma, axis=1)
     grad_y = sobel(luma, axis=0)
     grad_mag = np.sqrt(grad_x**2 + grad_y**2)
-    
+
     # Stats in boundary band only
     boundary_grads = grad_mag[boundary_band]
-    
+
     return {
         "boundary_pixels": int(boundary_band.sum()),
         "mean_gradient_mag": float(boundary_grads.mean()),
@@ -112,35 +112,35 @@ def detect_halos(
 ) -> dict:
     """
     Detect halos by looking for excessive delta near boundaries.
-    
+
     Returns:
         Halo risk score and stats
     """
     from scipy.ndimage import binary_dilation, binary_erosion
-    
+
     binary_mask = mask > 0.5
     dilated = binary_dilation(binary_mask, iterations=band_width)
     eroded = binary_erosion(binary_mask, iterations=band_width)
     boundary_band = dilated & ~eroded
-    
+
     if boundary_band.sum() == 0:
         return {"halo_risk": "unknown", "boundary_pixels": 0}
-    
+
     # Delta magnitude in boundary
     delta = np.abs(canary_img - baseline_img)
     if delta.ndim == 3:
         delta_mag = np.linalg.norm(delta, axis=2)
     else:
         delta_mag = delta
-        
+
     boundary_delta = delta_mag[boundary_band]
-    
+
     # Heuristic: halo if P95 delta > 0.1 (10% RGB change)
     p95_delta = float(np.percentile(boundary_delta, 95))
     mean_delta = float(boundary_delta.mean())
-    
+
     halo_risk = "high" if p95_delta > 0.1 else ("moderate" if p95_delta > 0.05 else "low")
-    
+
     return {
         "halo_risk": halo_risk,
         "boundary_pixels": int(boundary_band.sum()),
@@ -158,30 +158,30 @@ def should_skip_scene_for_device(
 ) -> Optional[str]:
     """
     Determine if scene should be skipped due to device limitations.
-    
+
     Args:
         scene_name: Scene identifier
         input_path: Path to input image
         device_type: Device type (cpu, cuda, mps)
         max_mp_mps: Max megapixels for MPS (default 30.0)
-        
+
     Returns:
         Skip reason string if should skip, None otherwise
     """
     if device_type != "mps":
         return None
-    
+
     # Check megapixels for MPS OOM guard
     try:
         img, _ = io_utils.read_rgb_any(input_path)
         h, w = img.shape[:2]
         megapixels = (h * w) / 1_000_000
-        
+
         if megapixels > max_mp_mps:
             return f"mps_oom_guard_mp={megapixels:.1f}>limit={max_mp_mps}"
     except Exception as e:
         return f"image_load_failed: {e}"
-    
+
     return None
 
 
@@ -193,21 +193,22 @@ def run_single_scene(
     force_apply: bool = False,
 ) -> dict:
     """Run baseline and canary on one scene and compare pixel impact."""
-    
+
     log.info(f"=== Processing {scene_name} ===")
-    
+
     # Check device and skip if needed
     if device:
         device_type = device
     else:
         import torch
+
         if torch.cuda.is_available():
             device_type = "cuda"
         elif torch.backends.mps.is_available():
             device_type = "mps"
         else:
             device_type = "cpu"
-    
+
     skip_reason = should_skip_scene_for_device(scene_name, input_path, device_type)
     if skip_reason:
         log.warning(f"Skipping {scene_name}: {skip_reason}")
@@ -216,13 +217,13 @@ def run_single_scene(
             "status": "skipped",
             "skip_reason": skip_reason,
         }
-    
+
     # Create output dirs
     baseline_dir = output_root / f"{scene_name}_A_baseline"
     canary_dir = output_root / f"{scene_name}_B_glass_canary"
     baseline_dir.mkdir(parents=True, exist_ok=True)
     canary_dir.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         # Run baseline
         log.info(f"Running baseline APEX for {scene_name}...")
@@ -242,18 +243,18 @@ def run_single_scene(
             "status": "baseline_failed",
             "error": str(e),
         }
-    
+
     try:
         # Run canary
         log.info(f"Running glass canary APEX for {scene_name}...")
-        
+
         # Select preset based on force_apply flag
         canary_preset = (
             Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE
             if force_apply
             else Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS
         )
-        
+
         canary_cfg = PipelineConfig(
             output_dir=canary_dir,
             preset=canary_preset,
@@ -270,30 +271,30 @@ def run_single_scene(
             "status": "canary_failed",
             "error": str(e),
         }
-    
+
     # Load output images for comparison
     baseline_outputs = sorted(baseline_dir.glob("*.png")) + sorted(baseline_dir.glob("*.tif"))
     canary_outputs = sorted(canary_dir.glob("*.png")) + sorted(canary_dir.glob("*.tif"))
-    
+
     if not baseline_outputs or not canary_outputs:
         log.warning(f"Missing outputs for {scene_name}")
         return {
             "scene": scene_name,
             "status": "outputs_missing",
         }
-    
+
     # Use the "master" output (typically the largest or final enhanced image)
     baseline_img_path = baseline_outputs[0]
     canary_img_path = canary_outputs[0]
-    
+
     baseline_img, _ = io_utils.read_rgb_any(baseline_img_path)
     canary_img, _ = io_utils.read_rgb_any(canary_img_path)
-    
+
     # Ensure same shape
     if baseline_img.shape != canary_img.shape:
         log.warning(f"Shape mismatch: baseline {baseline_img.shape} vs canary {canary_img.shape}")
         return {"scene": scene_name, "status": "shape_mismatch"}
-    
+
     # Check if pixel ops were actually applied
     pixel_ops_report = canary_report.get("materials_v3_pixel_ops", {}) or {}
     response_plan = canary_report.get("materials_v3_response_plan", {}) or {}
@@ -303,12 +304,7 @@ def run_single_scene(
     applied = bool(applied_to) or bool(pixel_ops_report.get("applied", False))
 
     plan_should_refine = glass_plan.get("should_refine")
-    plan_reason = (
-        glass_plan.get("refine_reason")
-        or glass_plan.get("skip_reason")
-        or glass_plan.get("reason")
-        or None
-    )
+    plan_reason = glass_plan.get("refine_reason") or glass_plan.get("skip_reason") or glass_plan.get("reason") or None
 
     if not applied:
         # If the response plan explicitly says not to refine, that's a VALID skip.
@@ -338,22 +334,22 @@ def run_single_scene(
             "pixel_ops_applied": False,
             "pixel_ops_expected": True if plan_should_refine is True else None,
         }
-    
+
     # Extract glass mask from canary report (normalized)
     # Approximation: if we don't have direct access, compute delta mask
     delta_mag = np.linalg.norm(canary_img - baseline_img, axis=2)
     glass_mask_approx = (delta_mag > 0.001).astype(np.float32)
-    
+
     # Compute pixel-level metrics
     baseline_edge_stats = compute_edge_band_stats(baseline_img, glass_mask_approx)
     canary_edge_stats = compute_edge_band_stats(canary_img, glass_mask_approx)
     halo_stats = detect_halos(baseline_img, canary_img, glass_mask_approx)
-    
+
     # Overall pixel delta
     overall_delta = np.abs(canary_img - baseline_img)
     mean_delta_global = float(overall_delta.mean())
     max_delta_global = float(overall_delta.max())
-    
+
     # Glass region delta
     glass_region = glass_mask_approx > 0.5
     if glass_region.sum() > 0:
@@ -363,10 +359,10 @@ def run_single_scene(
     else:
         mean_delta_glass = 0.0
         max_delta_glass = 0.0
-    
+
     # Gradient change (edge contrast improvement)
     gradient_delta = canary_edge_stats["mean_gradient_mag"] - baseline_edge_stats["mean_gradient_mag"]
-    
+
     return {
         "scene": scene_name,
         "status": "success",
@@ -398,13 +394,13 @@ def main() -> int:
 Examples:
   # Default: Kitchen + Bedroom only (skip Bathroom on MPS)
   python scripts/pr4b_glass_pixel_validation.py
-  
+
   # Explicit scene selection
   python scripts/pr4b_glass_pixel_validation.py --scenes kitchen bedroom
-  
+
   # Include Bathroom (may OOM on MPS)
   python scripts/pr4b_glass_pixel_validation.py --include-bathroom
-  
+
   # Force CPU device
   python scripts/pr4b_glass_pixel_validation.py --device cpu
         """,
@@ -436,18 +432,18 @@ Examples:
         action="store_true",
         help="Use VALIDATE preset that forces glass pixel ops (validation-only).",
     )
-    
+
     args = parser.parse_args()
-    
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    
+
     # Define validation set (scenes with glass)
     all_scenes = {
         "kitchen": repo_root / "assets/phase2_bench/750Picacho_Kitchen_Ultimate.tif",
         "bedroom": repo_root / "assets/phase2_bench/750Picacho_PrimaryBedroom_Ultimate.tif",
         "bathroom": repo_root / "assets/phase2_bench/750Picacho_PrimaryBathroom_Ultimate.tif",
     }
-    
+
     # Select scenes based on args
     if args.scenes:
         selected_scene_names = args.scenes
@@ -456,20 +452,16 @@ Examples:
     else:
         # Default: skip bathroom on MPS to avoid OOM
         selected_scene_names = ["kitchen", "bedroom"]
-    
-    benchmark_scenes = {
-        name.capitalize(): all_scenes[name]
-        for name in selected_scene_names
-        if name in all_scenes
-    }
-    
+
+    benchmark_scenes = {name.capitalize(): all_scenes[name] for name in selected_scene_names if name in all_scenes}
+
     log.info(f"Selected scenes: {list(benchmark_scenes.keys())}")
     if args.device:
         log.info(f"Forced device: {args.device}")
-    
+
     output_root = repo_root / "outputs/pr4b_glass_validation"
     output_root.mkdir(parents=True, exist_ok=True)
-    
+
     results = []
     for scene_name, input_path in benchmark_scenes.items():
         if not input_path.exists():
@@ -481,31 +473,31 @@ Examples:
             }
         else:
             result = run_single_scene(scene_name, input_path, output_root, args.device, args.force_apply)
-        
+
         results.append(result)
-        
+
         # Write incremental results
         incremental_path = output_root / f"pr4b_{scene_name.lower()}_result.json"
         with open(incremental_path, "w") as f:
             json.dump(result, f, indent=2)
         log.info(f"Scene result saved: {incremental_path}")
-    
+
     # Aggregate and decide (only count successful runs)
     successful_results = [r for r in results if r.get("status") in ("success", "success_skipped")]
     applied_count = sum(1 for r in successful_results if r.get("pixel_ops_applied"))
     halo_risks = [r["halo_detection"]["halo_risk"] for r in successful_results if "halo_detection" in r]
     high_halo_count = sum(1 for risk in halo_risks if risk == "high")
-    
+
     gradient_improvements = [
         r["edge_stats"]["gradient_delta"]
         for r in successful_results
         if "edge_stats" in r and r["edge_stats"]["gradient_delta"] > 0.0
     ]
-    
+
     # Track skipped/failed scenes
     skipped_results = [r for r in results if r.get("status") == "skipped"]
     failed_results = [r for r in results if r.get("status") in ("baseline_failed", "canary_failed", "input_missing")]
-    
+
     # Decision criteria (require at least 2 successful scenes with pixel ops)
     merge_recommended = (
         len(successful_results) >= 2  # At least 2 scenes completed
@@ -513,7 +505,7 @@ Examples:
         and high_halo_count == 0  # No high halo risk
         and len(gradient_improvements) >= 2  # At least 2 scenes improved edges
     )
-    
+
     summary = {
         "validation_date": "2025-12-14",
         "pr": "PR-4B",
@@ -530,11 +522,11 @@ Examples:
         "failed_scenes": [r["scene"] for r in failed_results],
         "details": results,
     }
-    
+
     summary_path = output_root / "pr4b_validation_summary.json"
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)
-    
+
     log.info(f"\n=== PR-4B Validation Summary ===")
     log.info(f"Scenes total: {len(results)}")
     log.info(f"Scenes successful: {len(successful_results)}")
@@ -545,7 +537,7 @@ Examples:
     log.info(f"Gradient improvements: {len(gradient_improvements)}")
     log.info(f"Merge recommended (canary): {merge_recommended}")
     log.info(f"\nFull report: {summary_path}")
-    
+
     return 0 if merge_recommended else 1
 
 

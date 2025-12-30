@@ -69,10 +69,7 @@ class MaterialResponseReport:
         with Path(path).open("r", encoding="utf-8") as fp:
             raw: dict[str, Any] = json.load(fp)
 
-        scenes = {
-            scene_data["name"]: SceneReport.from_mapping(scene_data)
-            for scene_data in raw.get("scenes", [])
-        }
+        scenes = {scene_data["name"]: SceneReport.from_mapping(scene_data) for scene_data in raw.get("scenes", [])}
 
         return cls(
             generated=str(raw.get("generated", "")),

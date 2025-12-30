@@ -16,7 +16,7 @@ gh pr view 573 --json title,state,mergeable,statusCheckRollup | \
     "",
     "Status Checks:",
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-    (.statusCheckRollup[] | 
+    (.statusCheckRollup[] |
       if .status == "COMPLETED" then
         if .conclusion == "SUCCESS" then
           "✅ \(.name | if length > 40 then .[0:37] + "..." else . end)"

@@ -25,16 +25,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("property_memory")
 
 
 class SceneType(str, Enum):
     """Scene types for 750 Picacho Lane."""
+
     POOL = "pool"
     GREAT_ROOM = "great_room"
     KITCHEN = "kitchen"
@@ -47,6 +44,7 @@ class SceneType(str, Enum):
 
 class MaterialType(str, Enum):
     """Material types detected in scenes."""
+
     WATER = "water"
     STONE = "stone"
     WOOD = "wood"
@@ -61,6 +59,7 @@ class MaterialType(str, Enum):
 @dataclass
 class ProcessingResult:
     """Record of a processing run result."""
+
     timestamp: str
     scene_type: str
     input_path: str
@@ -76,6 +75,7 @@ class ProcessingResult:
 @dataclass
 class RoomConfiguration:
     """Configuration and learned parameters for a specific room/scene."""
+
     scene_type: SceneType
     materials: List[MaterialType]
     optimal_parameters: Dict[str, Any] = field(default_factory=dict)
@@ -86,33 +86,32 @@ class RoomConfiguration:
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
         return {
-            'scene_type': self.scene_type.value,
-            'materials': [m.value for m in self.materials],
-            'optimal_parameters': self.optimal_parameters,
-            'quality_baseline': self.quality_baseline,
-            'processing_history': [asdict(p) for p in self.processing_history],
-            'notes': self.notes,
+            "scene_type": self.scene_type.value,
+            "materials": [m.value for m in self.materials],
+            "optimal_parameters": self.optimal_parameters,
+            "quality_baseline": self.quality_baseline,
+            "processing_history": [asdict(p) for p in self.processing_history],
+            "notes": self.notes,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'RoomConfiguration':
+    def from_dict(cls, data: Dict) -> "RoomConfiguration":
         """Create from dictionary."""
-        history = [
-            ProcessingResult(**h) for h in data.get('processing_history', [])
-        ]
+        history = [ProcessingResult(**h) for h in data.get("processing_history", [])]
         return cls(
-            scene_type=SceneType(data['scene_type']),
-            materials=[MaterialType(m) for m in data.get('materials', [])],
-            optimal_parameters=data.get('optimal_parameters', {}),
-            quality_baseline=data.get('quality_baseline', 0.0),
+            scene_type=SceneType(data["scene_type"]),
+            materials=[MaterialType(m) for m in data.get("materials", [])],
+            optimal_parameters=data.get("optimal_parameters", {}),
+            quality_baseline=data.get("quality_baseline", 0.0),
             processing_history=history,
-            notes=data.get('notes', ''),
+            notes=data.get("notes", ""),
         )
 
 
 @dataclass
 class PropertyKnowledge:
     """Aggregated knowledge about the property."""
+
     property_name: str
     location: str
     total_scenes: int
@@ -138,96 +137,96 @@ class PropertyMemory:
     # Default configurations for 750 Picacho Lane rooms
     DEFAULT_ROOM_CONFIGS = {
         SceneType.POOL: {
-            'materials': [MaterialType.WATER, MaterialType.STONE, MaterialType.CONCRETE],
-            'optimal_parameters': {
-                'water_enhance': True,
-                'water_saturation': 1.25,
-                'contrast': 1.08,
-                'saturation': 1.05,
-                'temperature': 5,
-                'clarity': 1.15,
-                'atmospheric_haze': True,
-                'haze_density': 0.02,
+            "materials": [MaterialType.WATER, MaterialType.STONE, MaterialType.CONCRETE],
+            "optimal_parameters": {
+                "water_enhance": True,
+                "water_saturation": 1.25,
+                "contrast": 1.08,
+                "saturation": 1.05,
+                "temperature": 5,
+                "clarity": 1.15,
+                "atmospheric_haze": True,
+                "haze_density": 0.02,
             },
-            'notes': 'Pool & Aquatic Features - emphasize water clarity and reflections',
+            "notes": "Pool & Aquatic Features - emphasize water clarity and reflections",
         },
         SceneType.GREAT_ROOM: {
-            'materials': [MaterialType.WOOD, MaterialType.FABRIC, MaterialType.GLASS, MaterialType.STONE],
-            'optimal_parameters': {
-                'wood_enhance': True,
-                'fabric_enhance': True,
-                'contrast': 1.10,
-                'saturation': 1.03,
-                'temperature': 3,
-                'warmth': 8,
+            "materials": [MaterialType.WOOD, MaterialType.FABRIC, MaterialType.GLASS, MaterialType.STONE],
+            "optimal_parameters": {
+                "wood_enhance": True,
+                "fabric_enhance": True,
+                "contrast": 1.10,
+                "saturation": 1.03,
+                "temperature": 3,
+                "warmth": 8,
             },
-            'notes': 'Great Room - warm interior lighting, wood grain detail',
+            "notes": "Great Room - warm interior lighting, wood grain detail",
         },
         SceneType.KITCHEN: {
-            'materials': [MaterialType.METAL, MaterialType.STONE, MaterialType.GLASS, MaterialType.WOOD],
-            'optimal_parameters': {
-                'metal_enhance': True,
-                'stone_enhance': True,
-                'contrast': 1.12,
-                'saturation': 1.02,
-                'temperature': 2,
-                'clarity': 1.15,
+            "materials": [MaterialType.METAL, MaterialType.STONE, MaterialType.GLASS, MaterialType.WOOD],
+            "optimal_parameters": {
+                "metal_enhance": True,
+                "stone_enhance": True,
+                "contrast": 1.12,
+                "saturation": 1.02,
+                "temperature": 2,
+                "clarity": 1.15,
             },
-            'notes': 'Kitchen - crisp metal surfaces, stone counters',
+            "notes": "Kitchen - crisp metal surfaces, stone counters",
         },
         SceneType.PRIMARY_BEDROOM: {
-            'materials': [MaterialType.FABRIC, MaterialType.WOOD, MaterialType.GLASS],
-            'optimal_parameters': {
-                'fabric_enhance': True,
-                'wood_enhance': True,
-                'contrast': 1.05,
-                'saturation': 1.02,
-                'temperature': 6,
-                'warmth': 10,
-                'softness': 0.95,
+            "materials": [MaterialType.FABRIC, MaterialType.WOOD, MaterialType.GLASS],
+            "optimal_parameters": {
+                "fabric_enhance": True,
+                "wood_enhance": True,
+                "contrast": 1.05,
+                "saturation": 1.02,
+                "temperature": 6,
+                "warmth": 10,
+                "softness": 0.95,
             },
-            'notes': 'Primary Bedroom - soft, luxurious feel',
+            "notes": "Primary Bedroom - soft, luxurious feel",
         },
         SceneType.PRIMARY_BATHROOM: {
-            'materials': [MaterialType.STONE, MaterialType.GLASS, MaterialType.METAL, MaterialType.WATER],
-            'optimal_parameters': {
-                'stone_enhance': True,
-                'glass_enhance': True,
-                'contrast': 1.08,
-                'saturation': 1.04,
-                'temperature': 4,
+            "materials": [MaterialType.STONE, MaterialType.GLASS, MaterialType.METAL, MaterialType.WATER],
+            "optimal_parameters": {
+                "stone_enhance": True,
+                "glass_enhance": True,
+                "contrast": 1.08,
+                "saturation": 1.04,
+                "temperature": 4,
             },
-            'notes': 'Primary Bathroom - spa-like atmosphere',
+            "notes": "Primary Bathroom - spa-like atmosphere",
         },
         SceneType.AERIAL: {
-            'materials': [MaterialType.WATER, MaterialType.STONE, MaterialType.VEGETATION, MaterialType.ROOF],
-            'optimal_parameters': {
-                'water_enhance': True,
-                'landscape_enhance': True,
-                'contrast': 1.15,
-                'saturation': 1.08,
-                'temperature': 7,
-                'clarity': 1.20,
-                'atmospheric_depth': True,
-                'atmospheric_haze': True,
-                'haze_density': 0.03,
+            "materials": [MaterialType.WATER, MaterialType.STONE, MaterialType.VEGETATION, MaterialType.ROOF],
+            "optimal_parameters": {
+                "water_enhance": True,
+                "landscape_enhance": True,
+                "contrast": 1.15,
+                "saturation": 1.08,
+                "temperature": 7,
+                "clarity": 1.20,
+                "atmospheric_depth": True,
+                "atmospheric_haze": True,
+                "haze_density": 0.03,
             },
-            'notes': 'Aerial View - estate overview with depth',
+            "notes": "Aerial View - estate overview with depth",
         },
         SceneType.AERIAL_2: {
-            'materials': [MaterialType.WATER, MaterialType.STONE, MaterialType.VEGETATION, MaterialType.ROOF],
-            'optimal_parameters': {
-                'water_enhance': True,
-                'landscape_enhance': True,
-                'contrast': 1.15,
-                'saturation': 1.08,
-                'temperature': 7,
-                'clarity': 1.20,
-                'atmospheric_depth': True,
-                'atmospheric_haze': True,
-                'haze_density': 0.03,
+            "materials": [MaterialType.WATER, MaterialType.STONE, MaterialType.VEGETATION, MaterialType.ROOF],
+            "optimal_parameters": {
+                "water_enhance": True,
+                "landscape_enhance": True,
+                "contrast": 1.15,
+                "saturation": 1.08,
+                "temperature": 7,
+                "clarity": 1.20,
+                "atmospheric_depth": True,
+                "atmospheric_haze": True,
+                "haze_density": 0.03,
             },
-            'notes': 'Aerial View 2 - neighborhood context',
+            "notes": "Aerial View 2 - neighborhood context",
         },
     }
 
@@ -239,7 +238,7 @@ class PropertyMemory:
             memory_path: Path to persistent storage file
         """
         if memory_path is None:
-            memory_path = Path(__file__).parent / 'memory' / 'property_memory.json'
+            memory_path = Path(__file__).parent / "memory" / "property_memory.json"
 
         self.memory_path = Path(memory_path)
         self.memory_path.parent.mkdir(parents=True, exist_ok=True)
@@ -268,51 +267,49 @@ class PropertyMemory:
         for scene_type, config in self.DEFAULT_ROOM_CONFIGS.items():
             self.room_configs[scene_type] = RoomConfiguration(
                 scene_type=scene_type,
-                materials=config['materials'],
-                optimal_parameters=config['optimal_parameters'].copy(),
-                notes=config['notes'],
+                materials=config["materials"],
+                optimal_parameters=config["optimal_parameters"].copy(),
+                notes=config["notes"],
             )
 
         self.global_learnings = {
-            'property_name': '750 Picacho Lane',
-            'location': 'Santa Barbara, CA 93103',
-            'style': 'Mediterranean Coastal Estate',
-            'lighting_preference': 'golden_hour',
-            'color_profile': 'Montecito_Golden_Hour_HDR',
-            'lut_strength': 0.70,
-            'global_saturation_boost': 1.05,
+            "property_name": "750 Picacho Lane",
+            "location": "Santa Barbara, CA 93103",
+            "style": "Mediterranean Coastal Estate",
+            "lighting_preference": "golden_hour",
+            "color_profile": "Montecito_Golden_Hour_HDR",
+            "lut_strength": 0.70,
+            "global_saturation_boost": 1.05,
         }
 
         self._save_to_file()
 
     def _load_from_file(self):
         """Load memory from JSON file."""
-        with open(self.memory_path, 'r') as f:
+        with open(self.memory_path, "r") as f:
             data = json.load(f)
 
         # Load room configurations
-        for scene_key, config_data in data.get('room_configs', {}).items():
+        for scene_key, config_data in data.get("room_configs", {}).items():
             scene_type = SceneType(scene_key)
             self.room_configs[scene_type] = RoomConfiguration.from_dict(config_data)
 
         # Load global learnings
-        self.global_learnings = data.get('global_learnings', {})
+        self.global_learnings = data.get("global_learnings", {})
 
         # Load feedback records
-        self.feedback_records = data.get('feedback_records', [])
+        self.feedback_records = data.get("feedback_records", [])
 
     def _save_to_file(self):
         """Save memory to JSON file."""
         data = {
-            'room_configs': {
-                st.value: cfg.to_dict() for st, cfg in self.room_configs.items()
-            },
-            'global_learnings': self.global_learnings,
-            'feedback_records': self.feedback_records,
-            'last_updated': datetime.now().isoformat(),
+            "room_configs": {st.value: cfg.to_dict() for st, cfg in self.room_configs.items()},
+            "global_learnings": self.global_learnings,
+            "feedback_records": self.feedback_records,
+            "last_updated": datetime.now().isoformat(),
         }
 
-        with open(self.memory_path, 'w') as f:
+        with open(self.memory_path, "w") as f:
             json.dump(data, f, indent=2)
 
         logger.debug(f"Saved property memory to {self.memory_path}")
@@ -329,16 +326,19 @@ class PropertyMemory:
         """
         if scene_type not in self.room_configs:
             # Initialize with defaults if not found
-            default = self.DEFAULT_ROOM_CONFIGS.get(scene_type, {
-                'materials': [],
-                'optimal_parameters': {},
-                'notes': 'New scene type',
-            })
+            default = self.DEFAULT_ROOM_CONFIGS.get(
+                scene_type,
+                {
+                    "materials": [],
+                    "optimal_parameters": {},
+                    "notes": "New scene type",
+                },
+            )
             self.room_configs[scene_type] = RoomConfiguration(
                 scene_type=scene_type,
-                materials=default.get('materials', []),
-                optimal_parameters=default.get('optimal_parameters', {}),
-                notes=default.get('notes', ''),
+                materials=default.get("materials", []),
+                optimal_parameters=default.get("optimal_parameters", {}),
+                notes=default.get("notes", ""),
             )
 
         return self.room_configs[scene_type]
@@ -412,10 +412,7 @@ class PropertyMemory:
         if success and quality_score > config.quality_baseline:
             config.quality_baseline = quality_score
             config.optimal_parameters.update(parameters)
-            logger.info(
-                f"Updated optimal parameters for {scene_type.value} "
-                f"(quality: {quality_score:.2%})"
-            )
+            logger.info(f"Updated optimal parameters for {scene_type.value} (quality: {quality_score:.2%})")
 
         self._save_to_file()
 
@@ -436,11 +433,11 @@ class PropertyMemory:
             suggested_parameters: Optional suggested parameter changes
         """
         record = {
-            'timestamp': datetime.now().isoformat(),
-            'scene_type': scene_type.value,
-            'feedback': feedback,
-            'rating': rating,
-            'suggested_parameters': suggested_parameters,
+            "timestamp": datetime.now().isoformat(),
+            "scene_type": scene_type.value,
+            "feedback": feedback,
+            "rating": rating,
+            "suggested_parameters": suggested_parameters,
         }
 
         self.feedback_records.append(record)
@@ -478,20 +475,20 @@ class PropertyMemory:
             return None
 
         # Calculate trend from last 5 vs earlier
-        recent = successful[-min(5, len(successful)):]
+        recent = successful[-min(5, len(successful)) :]
         recent_avg = sum(r.quality_score for r in recent) / len(recent)
 
-        older = successful[:-len(recent)] if len(successful) > len(recent) else []
+        older = successful[: -len(recent)] if len(successful) > len(recent) else []
         if older:
             older_avg = sum(r.quality_score for r in older) / len(older)
         else:
-            return 'stable'  # Not enough data for comparison
+            return "stable"  # Not enough data for comparison
 
         if recent_avg > older_avg * 1.05:
-            return 'improving'
+            return "improving"
         elif recent_avg < older_avg * 0.95:
-            return 'degrading'
-        return 'stable'
+            return "degrading"
+        return "stable"
 
     def learn_from_results(
         self,
@@ -513,9 +510,9 @@ class PropertyMemory:
 
         if len(history) < min_samples:
             return {
-                'status': 'insufficient_data',
-                'samples': len(history),
-                'needed': min_samples,
+                "status": "insufficient_data",
+                "samples": len(history),
+                "needed": min_samples,
             }
 
         # Filter successful runs
@@ -523,13 +520,13 @@ class PropertyMemory:
 
         if not successful_runs:
             return {
-                'status': 'no_successful_runs',
-                'total_runs': len(history),
+                "status": "no_successful_runs",
+                "total_runs": len(history),
             }
 
         # Find highest quality runs
         successful_runs.sort(key=lambda x: x.quality_score, reverse=True)
-        top_runs = successful_runs[:max(1, len(successful_runs) // 3)]
+        top_runs = successful_runs[: max(1, len(successful_runs) // 3)]
 
         # Aggregate parameters from top runs
         learned_params = {}
@@ -556,37 +553,31 @@ class PropertyMemory:
         config.optimal_parameters.update(learned_params)
 
         # Calculate quality trend
-        recent = history[-min(5, len(history)):]
+        recent = history[-min(5, len(history)) :]
         recent_successful = [r for r in recent if r.success]
-        recent_avg = (
-            sum(r.quality_score for r in recent_successful) / len(recent_successful)
-            if recent_successful else 0.0
-        )
+        recent_avg = sum(r.quality_score for r in recent_successful) / len(recent_successful) if recent_successful else 0.0
 
-        older = history[:-len(recent)] if len(history) > len(recent) else []
+        older = history[: -len(recent)] if len(history) > len(recent) else []
         older_successful = [r for r in older if r.success]
-        older_avg = (
-            sum(r.quality_score for r in older_successful) / len(older_successful)
-            if older_successful else recent_avg
-        )
+        older_avg = sum(r.quality_score for r in older_successful) / len(older_successful) if older_successful else recent_avg
 
         if recent_avg > older_avg * 1.05:
-            trend = 'improving'
+            trend = "improving"
         elif recent_avg < older_avg * 0.95:
-            trend = 'degrading'
+            trend = "degrading"
         else:
-            trend = 'stable'
+            trend = "stable"
 
         self._save_to_file()
 
         return {
-            'status': 'success',
-            'samples_analyzed': len(successful_runs),
-            'top_quality_samples': len(top_runs),
-            'learned_parameters': learned_params,
-            'quality_trend': trend,
-            'average_quality': sum(r.quality_score for r in successful_runs) / len(successful_runs),
-            'best_quality': successful_runs[0].quality_score if successful_runs else 0,
+            "status": "success",
+            "samples_analyzed": len(successful_runs),
+            "top_quality_samples": len(top_runs),
+            "learned_parameters": learned_params,
+            "quality_trend": trend,
+            "average_quality": sum(r.quality_score for r in successful_runs) / len(successful_runs),
+            "best_quality": successful_runs[0].quality_score if successful_runs else 0,
         }
 
     def get_property_knowledge(self) -> PropertyKnowledge:
@@ -614,14 +605,10 @@ class PropertyMemory:
         material_counts = {}
         for m in all_materials:
             material_counts[m] = material_counts.get(m, 0) + 1
-        common_materials = sorted(
-            material_counts.keys(),
-            key=lambda x: material_counts[x],
-            reverse=True
-        )[:5]
+        common_materials = sorted(material_counts.keys(), key=lambda x: material_counts[x], reverse=True)[:5]
 
         # Find best performing scene
-        best_scene = max(scene_qualities.items(), key=lambda x: x[1])[0] if scene_qualities else 'N/A'
+        best_scene = max(scene_qualities.items(), key=lambda x: x[1])[0] if scene_qualities else "N/A"
 
         # Calculate trends using lightweight method (avoid expensive learn_from_results)
         trends = {}
@@ -631,8 +618,8 @@ class PropertyMemory:
                 trends[scene_type.value] = trend
 
         return PropertyKnowledge(
-            property_name=self.global_learnings.get('property_name', '750 Picacho Lane'),
-            location=self.global_learnings.get('location', 'Santa Barbara, CA'),
+            property_name=self.global_learnings.get("property_name", "750 Picacho Lane"),
+            location=self.global_learnings.get("location", "Santa Barbara, CA"),
             total_scenes=len(self.room_configs),
             average_quality=sum(all_quality_scores) / len(all_quality_scores) if all_quality_scores else 0.0,
             best_performing_scene=best_scene,
@@ -652,24 +639,22 @@ class PropertyMemory:
         knowledge = self.get_property_knowledge()
 
         export_data = {
-            'property_knowledge': {
-                'property_name': knowledge.property_name,
-                'location': knowledge.location,
-                'total_scenes': knowledge.total_scenes,
-                'average_quality': knowledge.average_quality,
-                'best_performing_scene': knowledge.best_performing_scene,
-                'common_materials': knowledge.common_materials,
-                'optimal_global_parameters': knowledge.optimal_global_parameters,
-                'processing_trends': knowledge.processing_trends,
-                'last_updated': knowledge.last_updated,
+            "property_knowledge": {
+                "property_name": knowledge.property_name,
+                "location": knowledge.location,
+                "total_scenes": knowledge.total_scenes,
+                "average_quality": knowledge.average_quality,
+                "best_performing_scene": knowledge.best_performing_scene,
+                "common_materials": knowledge.common_materials,
+                "optimal_global_parameters": knowledge.optimal_global_parameters,
+                "processing_trends": knowledge.processing_trends,
+                "last_updated": knowledge.last_updated,
             },
-            'room_configurations': {
-                st.value: cfg.to_dict() for st, cfg in self.room_configs.items()
-            },
-            'export_timestamp': datetime.now().isoformat(),
+            "room_configurations": {st.value: cfg.to_dict() for st, cfg in self.room_configs.items()},
+            "export_timestamp": datetime.now().isoformat(),
         }
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(export_data, f, indent=2)
 
         logger.info(f"Exported property knowledge to {output_path}")
@@ -688,14 +673,14 @@ class PropertyMemory:
 
         # Scene detection patterns
         patterns = {
-            SceneType.POOL: ['pool', 'aquatic'],
-            SceneType.GREAT_ROOM: ['greatroom', 'great_room', 'living'],
-            SceneType.KITCHEN: ['kitchen', 'culinary'],
-            SceneType.PRIMARY_BEDROOM: ['bedroom', 'primarybed', 'master_bed'],
-            SceneType.PRIMARY_BATHROOM: ['bathroom', 'primarybath', 'master_bath', 'spa'],
-            SceneType.AERIAL: ['aerial', 'drone'],
-            SceneType.AERIAL_2: ['aerial-2', 'aerial_2', 'drone2'],
-            SceneType.EXTERIOR: ['exterior', 'facade', 'front'],
+            SceneType.POOL: ["pool", "aquatic"],
+            SceneType.GREAT_ROOM: ["greatroom", "great_room", "living"],
+            SceneType.KITCHEN: ["kitchen", "culinary"],
+            SceneType.PRIMARY_BEDROOM: ["bedroom", "primarybed", "master_bed"],
+            SceneType.PRIMARY_BATHROOM: ["bathroom", "primarybath", "master_bath", "spa"],
+            SceneType.AERIAL: ["aerial", "drone"],
+            SceneType.AERIAL_2: ["aerial-2", "aerial_2", "drone2"],
+            SceneType.EXTERIOR: ["exterior", "facade", "front"],
         }
 
         for scene_type, keywords in patterns.items():
@@ -746,5 +731,5 @@ def main():
     print("\n" + "=" * 70)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

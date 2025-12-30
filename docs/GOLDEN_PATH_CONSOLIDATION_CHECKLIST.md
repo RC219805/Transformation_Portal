@@ -1,6 +1,6 @@
 # Golden Path Consolidation - 1-Week Implementation Checklist
 
-**Period**: December 20-27, 2025  
+**Period**: December 20-27, 2025
 **Objective**: Reduce cognitive load while preserving all capabilities
 
 ---
@@ -35,11 +35,11 @@
 - [ ] **Replace with**:
   ```markdown
   ## Advanced: Model Training (Research)
-  
+
   Neural network training infrastructure for researchers and advanced users.
-  
+
   ⚠️ **Not part of default production workflow** - requires GPU, 10GB+ disk, 2-3 hours.
-  
+
   See [docs/training/TRAINING_GUIDE.md](docs/training/TRAINING_GUIDE.md) for complete training documentation.
   ```
 - [ ] Move comprehensive training content to `docs/training/`
@@ -90,21 +90,21 @@
 - [ ] Create `.github/ISSUE_TEMPLATE/feature_freeze_check.md`:
   ```markdown
   ## Feature Freeze Check
-  
+
   The repository is in a **narrative consolidation period** (Dec 20 - Jan 10).
-  
+
   **Blocked**:
   - New pipelines/modules
   - New presets/stages/metrics
   - New feature surfaces
-  
+
   **Allowed**:
   - Security fixes
   - Performance profiling
   - Validation improvements
   - CLI ergonomics (help text, error messages)
   - Bug fixes
-  
+
   Does this issue add a new feature surface? → Requires architect approval.
   ```
 
@@ -187,7 +187,7 @@
 
 ---
 
-**Owner**: Transformation Portal Architect  
-**Status**: Ready to execute  
-**Start Date**: December 20, 2025  
+**Owner**: Transformation Portal Architect
+**Status**: Ready to execute
+**Start Date**: December 20, 2025
 **Target Completion**: December 27, 2025

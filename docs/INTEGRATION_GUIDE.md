@@ -185,24 +185,24 @@ from pathlib import Path
 
 def process_image(input_path: Path, output_dir: Path):
     """Complete image processing workflow with validation."""
-    
+
     # 1. Validate integrity
     is_valid, error = validate_image_integrity(input_path)
     if not is_valid:
         print(f"Skipping {input_path}: {error}")
         return False
-    
+
     # 2. Get metadata
     meta = get_image_metadata(input_path)
     print(f"Processing {meta['format']} image: {meta['size']}")
-    
+
     # 3. Determine optimal output format
     output_format = get_optimal_format_for_use_case(
         use_case='web',
         has_alpha=meta['has_alpha'],
         requires_16bit=(meta['bit_depth'] == 16)
     )
-    
+
     # 4. Convert with appropriate settings
     output_path = output_dir / input_path.with_suffix(output_format).name
     success = convert_image_format(
@@ -211,7 +211,7 @@ def process_image(input_path: Path, output_dir: Path):
         quality=95,
         preserve_metadata=True
     )
-    
+
     return success
 
 # Use it
@@ -232,12 +232,12 @@ def process_tiff(input_path):
     if not is_valid:
         logging.warning(f"Skipping invalid TIFF: {error}")
         return None
-    
+
     # Load preserving 16-bit depth
     array, bit_depth = load_tiff_preserve_depth(input_path)
     if bit_depth == 16:
         logging.info(f"Processing 16-bit TIFF: {input_path}")
-    
+
     # Continue with existing processing...
     return process_image_array(array)
 ```
@@ -253,26 +253,26 @@ def load_render(input_path):
     format_type = detect_format_from_content(input_path)
     if not format_type:
         raise ValueError(f"Cannot identify image format: {input_path}")
-    
+
     # Use smart conversion if format needs changing
     if format_type not in ['PNG', 'TIFF']:
         temp_path = Path(tempfile.mktemp(suffix='.png'))
         smart_convert(input_path, temp_path)
         input_path = temp_path
-    
+
     # Continue with existing pipeline...
 ```
 
 ### Material Response System
 
 ```python
-# In material_response.py  
+# In material_response.py
 from format_utils import get_image_metadata, convert_tiff_preserve_depth
 
 def enhance_materials(input_path, output_path):
     # Get metadata to determine processing path
     meta = get_image_metadata(input_path)
-    
+
     if meta['bit_depth'] == 16:
         # Use 16-bit preserving workflow
         array, _ = load_tiff_preserve_depth(input_path)
@@ -402,10 +402,10 @@ def safe_load_image(path):
     is_valid, error = validate_image_integrity(path)
     if not is_valid:
         raise ValueError(f"Invalid image: {error}")
-    
+
     format_type = detect_format_from_content(path)
     meta = get_image_metadata(path)
-    
+
     if meta['bit_depth'] == 16:
         array, _ = load_tiff_preserve_depth(path)
         return array, meta
@@ -423,16 +423,16 @@ from pathlib import Path
 def batch_process_with_validation(input_dir, output_dir):
     """Process all images with validation."""
     input_files = list(Path(input_dir).glob('**/*'))
-    image_files = [f for f in input_files if f.suffix.lower() in 
+    image_files = [f for f in input_files if f.suffix.lower() in
                    {'.jpg', '.png', '.tiff', '.tif'}]
-    
+
     for img_path in tqdm(image_files, desc="Processing"):
         # Validate
         is_valid, error = validate_image_integrity(img_path)
         if not is_valid:
             print(f"Skipping {img_path.name}: {error}")
             continue
-        
+
         # Process
         output_path = output_dir / img_path.name
         smart_convert(img_path, output_path)
@@ -446,7 +446,7 @@ def process_any_format(input_path, output_path):
     # Detect and validate
     format_type = detect_format_from_content(input_path)
     meta = get_image_metadata(input_path)
-    
+
     # Choose processing path based on format
     if meta['bit_depth'] == 16:
         return process_16bit(input_path, output_path)
@@ -504,7 +504,7 @@ convert_image_format(src, dst)  # Quality doesn't matter
 # For large images, process in chunks
 def process_large_image(path):
     meta = get_image_metadata(path)
-    
+
     if meta['size'][0] * meta['size'][1] > 10_000_000:  # 10MP
         # Use tiled processing
         return process_in_tiles(path)
@@ -521,17 +521,17 @@ from concurrent.futures import ThreadPoolExecutor
 def parallel_batch_convert(input_dir, output_dir, target_format):
     """Convert directory using multiple threads."""
     files = list(Path(input_dir).glob('*'))
-    
+
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = [
-            executor.submit(convert_image_format, f, 
+            executor.submit(convert_image_format, f,
                           output_dir / f.with_suffix(target_format).name)
             for f in files
         ]
-        
+
         # Wait for all
         results = [f.result() for f in futures]
-    
+
     return sum(results)  # Count successes
 ```
 

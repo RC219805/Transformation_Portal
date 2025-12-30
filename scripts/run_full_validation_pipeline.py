@@ -30,6 +30,7 @@ import os
 import datetime
 from pathlib import Path
 
+
 def run_script(cmd, cwd=None, capture=False):
     print(f"\n▶ Running: {cmd}")
     return subprocess.run(cmd, shell=True, cwd=cwd, capture_output=capture, text=True)
@@ -41,18 +42,20 @@ def timestamp_tag():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--validation-dir", required=True,
-                        help="Path to an existing validation output directory with *_metrics.json files")
-    parser.add_argument("--labels", required=True,
-                        help="CSV file path for ground-truth labels")
-    parser.add_argument("--structure-input-dir", required=True,
-                        help="Directory containing structure-dominated images for sweep")
-    parser.add_argument("--sweep-sizes", nargs="+", type=int, required=True,
-                        help="list of DepthAnything V2 input sizes for the sweep")
-    parser.add_argument("--model-id", default="depth-anything/Depth-Anything-V2-Large-hf",
-                        help="HF model to use for the sweep")
-    parser.add_argument("--output-root", default="outputs/full_validation_pipeline",
-                        help="Base output directory")
+    parser.add_argument(
+        "--validation-dir", required=True, help="Path to an existing validation output directory with *_metrics.json files"
+    )
+    parser.add_argument("--labels", required=True, help="CSV file path for ground-truth labels")
+    parser.add_argument(
+        "--structure-input-dir", required=True, help="Directory containing structure-dominated images for sweep"
+    )
+    parser.add_argument(
+        "--sweep-sizes", nargs="+", type=int, required=True, help="list of DepthAnything V2 input sizes for the sweep"
+    )
+    parser.add_argument(
+        "--model-id", default="depth-anything/Depth-Anything-V2-Large-hf", help="HF model to use for the sweep"
+    )
+    parser.add_argument("--output-root", default="outputs/full_validation_pipeline", help="Base output directory")
 
     args = parser.parse_args()
 
@@ -73,9 +76,7 @@ def main():
     #### Step 1 — Balanced Classifier Evaluation
     classifier_json = out_base / "classifier_report.json"
     classifier_cmd = (
-        f"python3 scripts/evaluate_classifier_balanced.py "
-        f"--metrics-dir {args.validation_dir} "
-        f"--labels {args.labels}"
+        f"python3 scripts/evaluate_classifier_balanced.py --metrics-dir {args.validation_dir} --labels {args.labels}"
     )
 
     result = run_script(classifier_cmd, capture=True)
@@ -113,11 +114,7 @@ def main():
 
     #### Step 3 — Stratified Threshold Calibration
     stratified_json = out_base / "stratified_report.json"
-    strat_cmd = (
-        f"python3 scripts/report_threshold_calibration.py "
-        f"--metrics-dir {args.validation_dir} "
-        f"--labels {args.labels}"
-    )
+    strat_cmd = f"python3 scripts/report_threshold_calibration.py --metrics-dir {args.validation_dir} --labels {args.labels}"
 
     result = run_script(strat_cmd, capture=True)
     with open(stratified_json, "w") as f:

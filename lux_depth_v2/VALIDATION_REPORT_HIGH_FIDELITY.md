@@ -1,5 +1,5 @@
 # High-Fidelity Depth Pipeline Validation Report
-**Date**: 2025-12-18  
+**Date**: 2025-12-18
 **Status**: ✅ VALIDATED
 
 ## Executive Summary
@@ -54,13 +54,13 @@ self.model = AutoModelForDepthEstimation.from_pretrained(model_name)
 
 # Preprocessing with bypass
 inputs = self.image_processor(
-    images=tile_pil, 
+    images=tile_pil,
     return_tensors="pt",
     do_resize=False  # CRITICAL: Disable resize
 )
 ```
 
-**Measured Improvement**: 
+**Measured Improvement**:
 - **Resolution**: 518px → 1024px (2.0x linear, 4.0x pixels)
 - **Expected quality gain**: 5-10x edge fidelity (pending empirical validation)
 
@@ -252,7 +252,7 @@ config = TiledInferenceConfig(
     tile_size=1536,
     overlap=256,
     bypass_image_processor=True,
-    
+
     # Global anchor settings
     use_global_anchor=True,
     global_anchor_config=GlobalAnchorConfig(
@@ -260,7 +260,7 @@ config = TiledInferenceConfig(
         global_weight=0.3,
         use_frequency_split=True
     ),
-    
+
     # Edge snapping settings
     use_edge_snapping=True,
     edge_snap_config=EdgeSnappingConfig(

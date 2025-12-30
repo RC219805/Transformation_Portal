@@ -23,6 +23,7 @@ import imagecodecs
 # Try to import optional libraries
 try:
     from PIL import ImageFile
+
     ImageFile.LOAD_TRUNCATED_IMAGES = True
 except ImportError:
     pass
@@ -32,11 +33,11 @@ class TIFFQualityOptimizer:
     """High-quality TIFF conversion with multiple methods for quality comparison."""
 
     COMPRESSION_METHODS = {
-        'none': 'No compression (largest file)',
-        'lzw': 'Lossless LZW (good balance)',
-        'zip': 'Lossless ZIP/deflate (best compression)',
-        'jpeg': 'Lossy JPEG (not recommended)',
-        'adobe_deflate': 'Adobe Deflate (excellent)',
+        "none": "No compression (largest file)",
+        "lzw": "Lossless LZW (good balance)",
+        "zip": "Lossless ZIP/deflate (best compression)",
+        "jpeg": "Lossy JPEG (not recommended)",
+        "adobe_deflate": "Adobe Deflate (excellent)",
     }
 
     def __init__(self, verbose: bool = True):
@@ -47,10 +48,7 @@ class TIFFQualityOptimizer:
         if self.verbose:
             print(f"[TIFF Optimizer] {msg}")
 
-    def load_image_with_max_precision(
-        self,
-        input_path: Union[str, Path]
-    ) -> Tuple[np.ndarray, Dict]:
+    def load_image_with_max_precision(self, input_path: Union[str, Path]) -> Tuple[np.ndarray, Dict]:
         """
         Load image preserving maximum bit depth and precision.
 
@@ -62,12 +60,12 @@ class TIFFQualityOptimizer:
         """
         input_path = Path(input_path)
         metadata = {
-            'source_path': str(input_path),
-            'source_format': input_path.suffix.lower(),
+            "source_path": str(input_path),
+            "source_format": input_path.suffix.lower(),
         }
 
         # Try tifffile first for best TIFF support
-        if input_path.suffix.lower() in ['.ti', '.tiff']:
+        if input_path.suffix.lower() in [".ti", ".tiff"]:
             try:
                 self._log(f"Loading TIFF with tifffile: {input_path.name}")
                 with tifffile.TiffFile(input_path) as tif:
@@ -76,10 +74,10 @@ class TIFFQualityOptimizer:
                     # Extract metadata
                     if tif.pages:
                         page = tif.pages[0]
-                        metadata['bit_depth'] = array.dtype.itemsize * 8
-                        metadata['shape'] = array.shape
-                        metadata['dtype'] = str(array.dtype)
-                        metadata['compression'] = page.compression.name if hasattr(page, 'compression') else 'unknown'
+                        metadata["bit_depth"] = array.dtype.itemsize * 8
+                        metadata["shape"] = array.shape
+                        metadata["dtype"] = str(array.dtype)
+                        metadata["compression"] = page.compression.name if hasattr(page, "compression") else "unknown"
 
                         # Get tags
                         for tag in page.tags.values():
@@ -103,27 +101,27 @@ class TIFFQualityOptimizer:
         try:
             self._log(f"Loading with PIL: {input_path.name}")
             with Image.open(input_path) as img:
-                metadata['mode'] = img.mode
-                metadata['size'] = img.size
+                metadata["mode"] = img.mode
+                metadata["size"] = img.size
 
                 # Get EXIF if available
                 try:
                     exif = img.getexif()
                     if exif:
-                        metadata['exif'] = {k: str(v)[:200] for k, v in exif.items()}
+                        metadata["exif"] = {k: str(v)[:200] for k, v in exif.items()}
                 except BaseException:
                     pass
 
                 # Convert to numpy with max precision
-                if img.mode == 'I;16':  # 16-bit grayscale
+                if img.mode == "I;16":  # 16-bit grayscale
                     array = np.array(img, dtype=np.uint16)
-                    metadata['bit_depth'] = 16
-                elif img.mode in ('I', 'F'):  # 32-bit
+                    metadata["bit_depth"] = 16
+                elif img.mode in ("I", "F"):  # 32-bit
                     array = np.array(img, dtype=np.float32)
-                    metadata['bit_depth'] = 32
+                    metadata["bit_depth"] = 32
                 else:  # 8-bit modes
                     array = np.array(img)
-                    metadata['bit_depth'] = 8
+                    metadata["bit_depth"] = 8
 
                 self._log(f"  Loaded as {array.dtype}, shape: {array.shape}")
                 return array, metadata
@@ -136,7 +134,7 @@ class TIFFQualityOptimizer:
         array: np.ndarray,
         output_path: Union[str, Path],
         metadata: Optional[Dict] = None,
-        compression: str = 'tiff_adobe_deflate'
+        compression: str = "tiff_adobe_deflate",
     ) -> Path:
         """
         Method 1: Save using PIL (compatible but may lose precision).
@@ -160,31 +158,31 @@ class TIFFQualityOptimizer:
             # PIL doesn't handle uint16 RGB well, need to convert mode
             if array.ndim == 3:
                 # Convert to 16-bit mode for RGB
-                img = Image.fromarray(array.astype(np.uint16), mode='I;16')
+                img = Image.fromarray(array.astype(np.uint16), mode="I;16")
             else:
-                img = Image.fromarray(array, mode='I;16')
+                img = Image.fromarray(array, mode="I;16")
         elif array.dtype == np.uint8:
             if array.ndim == 3 and array.shape[2] == 3:
-                img = Image.fromarray(array, mode='RGB')
+                img = Image.fromarray(array, mode="RGB")
             elif array.ndim == 3 and array.shape[2] == 4:
-                img = Image.fromarray(array, mode='RGBA')
+                img = Image.fromarray(array, mode="RGBA")
             else:
-                img = Image.fromarray(array, mode='L')
+                img = Image.fromarray(array, mode="L")
         else:
             # Convert float to uint16
             if array.max() <= 1.0:
                 array = (array * 65535).astype(np.uint16)
             else:
                 array = array.astype(np.uint16)
-            img = Image.fromarray(array, mode='I;16' if array.ndim == 2 else 'RGB')
+            img = Image.fromarray(array, mode="I;16" if array.ndim == 2 else "RGB")
 
         # Save with compression
-        save_kwargs = {'compression': compression}
+        save_kwargs = {"compression": compression}
 
         # Add EXIF if present
-        if metadata and 'exi' in metadata:
+        if metadata and "exi" in metadata:
             try:
-                save_kwargs['exi'] = metadata['exif']
+                save_kwargs["exi"] = metadata["exif"]
             except BaseException:
                 pass
 
@@ -198,7 +196,7 @@ class TIFFQualityOptimizer:
         array: np.ndarray,
         output_path: Union[str, Path],
         metadata: Optional[Dict] = None,
-        compression: str = 'adobe_deflate'
+        compression: str = "adobe_deflate",
     ) -> Path:
         """
         Method 2: Save using tifffile (preserves full precision).
@@ -244,17 +242,17 @@ class TIFFQualityOptimizer:
 
         # Determine photometric interpretation
         if save_array.ndim == 2:
-            photometric = 'minisblack'
+            photometric = "minisblack"
         elif save_array.ndim == 3:
             if save_array.shape[2] == 3:
-                photometric = 'rgb'
+                photometric = "rgb"
             elif save_array.shape[2] == 4:
-                photometric = 'rgb'
+                photometric = "rgb"
                 _extrasamples = [1]  # Associated alpha  # noqa: F841
             else:
-                photometric = 'minisblack'
+                photometric = "minisblack"
         else:
-            photometric = 'minisblack'
+            photometric = "minisblack"
 
         # Save with maximum quality
         tifffile.imwrite(
@@ -263,7 +261,7 @@ class TIFFQualityOptimizer:
             compression=compression,
             metadata=tiff_metadata,
             photometric=photometric,
-            planarconfig='contig',  # Interleaved RGB
+            planarconfig="contig",  # Interleaved RGB
             tile=(256, 256) if save_array.shape[0] > 256 and save_array.shape[1] > 256 else None,
         )
 
@@ -273,10 +271,7 @@ class TIFFQualityOptimizer:
         return output_path
 
     def save_tiff_method_3_imagecodecs(
-        self,
-        array: np.ndarray,
-        output_path: Union[str, Path],
-        compression_level: int = 6
+        self, array: np.ndarray, output_path: Union[str, Path], compression_level: int = 6
     ) -> Path:
         """
         Method 3: Save using imagecodecs for advanced compression.
@@ -303,14 +298,14 @@ class TIFFQualityOptimizer:
 
         # For now, fall back to tifffile (imagecodecs is mainly for reading)
         # This method demonstrates the concept but uses tifffile backend
-        return self.save_tiff_method_2_tifffile(array, output_path, compression='adobe_deflate')
+        return self.save_tiff_method_2_tifffile(array, output_path, compression="adobe_deflate")
 
     def convert_with_quality_validation(
         self,
         input_path: Union[str, Path],
         output_dir: Union[str, Path],
-        compression: str = 'adobe_deflate',
-        save_all_methods: bool = False
+        compression: str = "adobe_deflate",
+        save_all_methods: bool = False,
     ) -> Dict[str, Path]:
         """
         Convert image to TIFF with quality validation.
@@ -341,32 +336,22 @@ class TIFFQualityOptimizer:
             # Save with all methods for comparison
             self._log("\n=== Saving with all methods for comparison ===")
 
-            results['pil'] = self.save_tiff_method_1_pil(
-                array,
-                output_dir / f"{base_name}_method1_pil.ti",
-                metadata,
-                compression='tiff_adobe_deflate'
+            results["pil"] = self.save_tiff_method_1_pil(
+                array, output_dir / f"{base_name}_method1_pil.ti", metadata, compression="tiff_adobe_deflate"
             )
 
-            results['tifffile'] = self.save_tiff_method_2_tifffile(
-                array,
-                output_dir / f"{base_name}_method2_tifffile.ti",
-                metadata,
-                compression=compression
+            results["tifffile"] = self.save_tiff_method_2_tifffile(
+                array, output_dir / f"{base_name}_method2_tifffile.ti", metadata, compression=compression
             )
 
-            results['imagecodecs'] = self.save_tiff_method_3_imagecodecs(
-                array,
-                output_dir / f"{base_name}_method3_imagecodecs.ti"
+            results["imagecodecs"] = self.save_tiff_method_3_imagecodecs(
+                array, output_dir / f"{base_name}_method3_imagecodecs.ti"
             )
         else:
             # Use recommended method only (tifffile)
             self._log("\n=== Using recommended method (tifffile) ===")
-            results['recommended'] = self.save_tiff_method_2_tifffile(
-                array,
-                output_dir / f"{base_name}.ti",
-                metadata,
-                compression=compression
+            results["recommended"] = self.save_tiff_method_2_tifffile(
+                array, output_dir / f"{base_name}.ti", metadata, compression=compression
             )
 
         # Validate quality
@@ -376,12 +361,7 @@ class TIFFQualityOptimizer:
 
         return results
 
-    def _validate_output_quality(
-        self,
-        original_array: np.ndarray,
-        saved_path: Path,
-        method_name: str
-    ):
+    def _validate_output_quality(self, original_array: np.ndarray, saved_path: Path, method_name: str):
         """Validate that saved image preserves quality."""
         try:
             # Reload and compare
@@ -432,7 +412,7 @@ def main():
 
     input_file = Path(sys.argv[1])
     output_dir = Path(sys.argv[2])
-    save_all = '--all-methods' in sys.argv
+    save_all = "--all-methods" in sys.argv
 
     if not input_file.exists():
         print(f"ERROR: Input file not found: {input_file}")
@@ -440,28 +420,25 @@ def main():
 
     optimizer = TIFFQualityOptimizer(verbose=True)
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("TIFF Quality Optimizer")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     print(f"Input: {input_file}")
     print(f"Output: {output_dir}")
     print(f"Save all methods: {save_all}\n")
 
     results = optimizer.convert_with_quality_validation(
-        input_file,
-        output_dir,
-        compression='adobe_deflate',
-        save_all_methods=save_all
+        input_file, output_dir, compression="adobe_deflate", save_all_methods=save_all
     )
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("Conversion complete!")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     print("Output files:")
     for method, path in results.items():
         print(f"  {method}: {path}")
     print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

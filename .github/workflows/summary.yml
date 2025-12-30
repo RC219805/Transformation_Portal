@@ -71,7 +71,7 @@ jobs:
           body  = (os.getenv("ISSUE_BODY") or "").strip()[:4000]
           review_state = (os.getenv("REVIEW_STATE") or "").strip()
           event_name = (os.getenv("EVENT_NAME") or "").strip()
-          
+
           # Adjust prompt based on event type
           if event_name == "pull_request_review":
               prompt = textwrap.dedent(f"""

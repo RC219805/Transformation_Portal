@@ -1,7 +1,7 @@
 # Session Handoff: Scene Classifier Improvement Complete
-**Date**: 2025-12-18 19:30 UTC  
-**Session Duration**: ~2 hours  
-**Commit**: `81f9979` - fix(validation): improve scene classifier to 77.8% accuracy  
+**Date**: 2025-12-18 19:30 UTC
+**Session Duration**: ~2 hours
+**Commit**: `81f9979` - fix(validation): improve scene classifier to 77.8% accuracy
 **Status**: ✅ COMMITTED & READY FOR DECISION
 
 ---
@@ -102,7 +102,7 @@ You must choose ONE of the following paths:
 3. Monitor gate pass rates and adjust thresholds empirically
 4. Document known limitation (generic filenames may misroute)
 
-**Timeline**: 1 session  
+**Timeline**: 1 session
 **Risk**: ~20% of images may route to wrong gates (may cause incorrect pass/fail)
 
 ---
@@ -122,7 +122,7 @@ You must choose ONE of the following paths:
 - Correctly classifies the 4 failing `800-picacho-*.jpg` images
 - Graceful fallback if model unavailable
 
-**Timeline**: 1-2 sessions  
+**Timeline**: 1-2 sessions
 **Risk**: Model download/integration complexity, added dependencies
 
 ---
@@ -138,7 +138,7 @@ You must choose ONE of the following paths:
 
 **Benefit**: Eliminates possibility that "errors" are actually correct classifications
 
-**Timeline**: +30 minutes review + re-analysis  
+**Timeline**: +30 minutes review + re-analysis
 **Risk**: None (safest option)
 
 ---

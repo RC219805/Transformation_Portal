@@ -1,7 +1,7 @@
 # Session Complete: HF-Energy Texture Gate Validation ✅
 
-**Date**: 2025-12-18  
-**Commit**: 9fd2590  
+**Date**: 2025-12-18
+**Commit**: 9fd2590
 **Duration**: ~40 minutes (final validation run)
 
 ---
@@ -31,7 +31,7 @@ The **HF-energy texture gate fix** delivered a **+50pp lenient pass improvement*
 
 **Problem**: Global `depth_var` penalized valid aerial/pool scenes with large near-to-far range (e.g., depth_var=0.08 for smooth ocean → FAIL at threshold 0.05).
 
-**Solution**: 
+**Solution**:
 ```python
 hf_residual = depth - gaussian_blur(depth, sigma=15)
 hf_energy = variance(hf_residual)

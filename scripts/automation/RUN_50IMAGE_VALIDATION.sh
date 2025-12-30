@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # 50-Image Validation Baseline Execution
-# 
+#
 # This script runs the complete validation pipeline with:
 # - Balanced classifier evaluation
 # - Input-size sweep (518→768→896→1022)
@@ -82,14 +82,14 @@ case $choice in
             --input-dir "${VALIDATION_DIR}" \
             --output-dir "${OUTPUT_DIR}" \
             2>&1 | tee "${OUTPUT_DIR}/baseline_validation.log"
-        
+
         # Generate reports
         echo "=== Generating Analysis Reports ==="
         python3 "${REPO_ROOT}/scripts/evaluate_classifier_balanced.py" \
             --metrics-dir "${OUTPUT_DIR}" \
             --labels "${LABELS_FILE}" \
             > "${OUTPUT_DIR}/classifier_report.txt"
-        
+
         python3 "${REPO_ROOT}/scripts/analyze_validation_v2.py" \
             --metrics-dir "${OUTPUT_DIR}" \
             --labels "${LABELS_FILE}" \
@@ -99,11 +99,11 @@ case $choice in
         echo "=== Running Smoke Test (2 images) ==="
         SMOKE_DIR="${REPO_ROOT}/data/validation_smoke"
         mkdir -p "${SMOKE_DIR}"
-        
+
         # Copy 2 test images (1 texture, 1 structure)
         cp "${VALIDATION_DIR}/750Picacho_Pool.jpg" "${SMOKE_DIR}/" 2>/dev/null || true
         cp "${VALIDATION_DIR}/750Picacho_Kitchen.jpg" "${SMOKE_DIR}/" 2>/dev/null || true
-        
+
         python3 "${REPO_ROOT}/scripts/production_depth_validation_fixed.py" \
             --input-dir "${SMOKE_DIR}" \
             --output-dir "${OUTPUT_DIR}/smoke" \

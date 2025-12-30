@@ -34,9 +34,9 @@
 
 ## 🔧 Repository State
 
-**Branch**: main  
-**Commit**: b0f3e35 - "docs: add session summary for baseline regeneration + PAT setup"  
-**Sync Status**: ✅ Up to date with origin/main  
+**Branch**: main
+**Commit**: b0f3e35 - "docs: add session summary for baseline regeneration + PAT setup"
+**Sync Status**: ✅ Up to date with origin/main
 **Working Tree**: ✅ Clean
 
 ### Remaining Local Branches
@@ -86,7 +86,7 @@
 
 **Completed PRs (merged to main)**:
 - PR #552: Glass pixel ops
-- PR #555: Stone pixel ops  
+- PR #555: Stone pixel ops
 - PR #558: Water detector + integration
 - PR #559: Water baseline infrastructure
 - PR #560: Metrics alignment + session doc correction
@@ -126,7 +126,7 @@ Recommended first task: **PR-W1.2 calibration** (confidence suppressors + improv
 
 ---
 
-**Session End Time**: 2025-12-15 20:40 UTC  
+**Session End Time**: 2025-12-15 20:40 UTC
 **Repository Status**: ✅ CLEAN & READY
 
 ---

@@ -1,7 +1,7 @@
 # Depth Pipeline Architecture
 
-**Version**: 2.0  
-**Date**: December 2025  
+**Version**: 2.0
+**Date**: December 2025
 **Status**: Production-Ready
 
 ---
@@ -21,7 +21,7 @@ graph TB
         DEPTH[Pre-computed Depth<br/>Optional]
         CONFIG[Configuration<br/>Preset/YAML]
     end
-    
+
     subgraph Core["Core Pipeline - LuxPipelineV2"]
         INIT[Pipeline Init<br/>Device/Model Setup]
         DEPTHGEN[Depth Estimation<br/>Depth Anything V2]
@@ -31,7 +31,7 @@ graph TB
         PROC[Depth-Aware<br/>Processing]
         UPSCALE[Upscaling<br/>torch/onnx]
     end
-    
+
     subgraph Output["Output Layer"]
         MASTER[16-bit TIFF Master]
         UPSCALED[Upscaled TIFF]
@@ -39,7 +39,7 @@ graph TB
         PREVIEW[Preview JPEG]
         REPORT[Processing Report JSON]
     end
-    
+
     IMG --> INIT
     DEPTH -.Optional.-> DEPTHGEN
     CONFIG --> INIT
@@ -54,7 +54,7 @@ graph TB
     UPSCALE --> MARKETING
     UPSCALE --> PREVIEW
     PROC --> REPORT
-    
+
     style Input fill:#e1f5ff
     style Core fill:#fff3cd
     style Output fill:#d4edda
@@ -71,50 +71,50 @@ flowchart TD
     PRESET -->|Yes| APPLY[Apply Preset Defaults]
     PRESET -->|No| VALIDATE
     APPLY --> VALIDATE[Validate Config]
-    
+
     VALIDATE --> DEVICE[Select Device<br/>CUDA/MPS/CPU]
     DEVICE --> HASDDEPTH{Depth Map<br/>Provided?}
-    
+
     HASDDEPTH -->|Yes| LOADDEPTH[Load Depth Map]
     HASDDEPTH -->|No| GENDEPTH[Generate Depth<br/>Depth Anything V2]
-    
+
     LOADDEPTH --> NORMALIZE[Normalize Depth<br/>0-1 range]
     GENDEPTH --> NORMALIZE
-    
+
     NORMALIZE --> ZONESYN[Zone Synthesis<br/>Foreground/Mid/Background]
     ZONESYN --> MANMASKS{Manual<br/>Masks?}
-    
+
     MANMASKS -->|Yes| LOADMASKS[Load Zone Masks]
     MANMASKS -->|No| AUTOSYN[Auto Quantile Zones]
-    
+
     LOADMASKS --> MATSEG
     AUTOSYN --> MATSEG[Material Segmentation]
-    
+
     MATSEG --> BACKEND{Segmentation<br/>Backend}
     BACKEND -->|ONNX| ONNXSEG[ONNX Model]
     BACKEND -->|SegFormer| SEGFORMER[SegFormer Model]
     BACKEND -->|Heuristic| HEURISTIC[Color-based Rules]
-    
+
     ONNXSEG --> MATPROF
     SEGFORMER --> MATPROF
     HEURISTIC --> MATPROF[Apply Material Profiles]
-    
+
     MATPROF --> DENOISE[Depth-Aware Denoising<br/>Bilateral Filter]
     DENOISE --> TONEMAP[Zone Tone Mapping<br/>AgX/Reinhard/Filmic/ACES]
     TONEMAP --> ATMO{Atmospheric<br/>Effects?}
-    
+
     ATMO -->|Yes| HAZE[Apply Haze/Fog]
     ATMO -->|No| CLARITY
     HAZE --> CLARITY[Clarity Enhancement<br/>Zone-weighted]
-    
+
     CLARITY --> UPSCALEQ{Upscale<br/>Enabled?}
     UPSCALEQ -->|Yes| UPSCALER[Upscaling Backend<br/>torch/onnx]
     UPSCALEQ -->|No| EXPORT
-    
+
     UPSCALER --> EXPORT[Export Outputs<br/>TIFF/PNG/JPEG]
     EXPORT --> TELEMETRY[Record Telemetry<br/>Timing/Memory]
     TELEMETRY --> END([End])
-    
+
     style START fill:#90ee90
     style END fill:#90ee90
     style GENDEPTH fill:#ffd700
@@ -134,55 +134,55 @@ graph LR
         SERVICE[FastAPI Service<br/>service.py]
         PYAPI[Python API<br/>pipeline.process_one]
     end
-    
+
     subgraph Pipeline["Pipeline Core"]
         LUXPIPE[LuxPipelineV2<br/>pipeline.py]
         CONFIG[PipelineConfig<br/>config.py]
         PRESET[Preset Enum<br/>5 presets]
     end
-    
+
     subgraph Processing["Processing Modules"]
         TORCHOPS[GPU Operations<br/>torch_ops.py]
         IOUTILS[I/O Utilities<br/>io_utils.py]
         WEIGHTS[Model Weights<br/>weights.py]
     end
-    
+
     subgraph Materials["Material System"]
         MATSEGMENT[Material Segmentation<br/>material_segmentation.py]
         MATPROFILES[Material Profiles<br/>material_profiles.py]
     end
-    
+
     subgraph Upscaling["Upscaling System"]
         TORCHUP[TorchUpscaler]
         ONNXUP[OnnxUpscaler]
         NOUP[NoOpUpscaler]
     end
-    
+
     subgraph External["External Models"]
         DEPTHANYTHING[Depth Anything V2<br/>HuggingFace]
         SEGFORMER[SegFormer<br/>Optional]
         ONNXMODEL[ONNX Models<br/>Optional]
     end
-    
+
     CLI --> LUXPIPE
     SERVICE --> LUXPIPE
     PYAPI --> LUXPIPE
-    
+
     LUXPIPE --> CONFIG
     LUXPIPE --> TORCHOPS
     LUXPIPE --> IOUTILS
     LUXPIPE --> MATSEGMENT
     LUXPIPE --> TORCHUP
     LUXPIPE --> ONNXUP
-    
+
     CONFIG --> PRESET
     MATSEGMENT --> MATPROFILES
     MATSEGMENT --> DEPTHANYTHING
     MATSEGMENT --> SEGFORMER
     MATSEGMENT --> ONNXMODEL
-    
+
     LUXPIPE --> WEIGHTS
-    
+
     style API fill:#e1f5ff
     style Pipeline fill:#fff3cd
     style Processing fill:#f8d7da
@@ -204,13 +204,13 @@ sequenceDiagram
     participant MaterialSeg
     participant Processor
     participant Upscaler
-    
+
     User->>Pipeline: process_one(image_path)
     activate Pipeline
-    
+
     Pipeline->>Pipeline: Load & Validate Config
     Pipeline->>Pipeline: Select Device (CUDA/MPS/CPU)
-    
+
     alt Depth Map Provided
         Pipeline->>Pipeline: Load existing depth
     else Generate Depth
@@ -219,21 +219,21 @@ sequenceDiagram
         DepthModel-->>Pipeline: depth_map (normalized)
         deactivate DepthModel
     end
-    
+
     Pipeline->>ZoneSynth: synthesize_zones(depth)
     activate ZoneSynth
     ZoneSynth-->>Pipeline: foreground, midground, background masks
     deactivate ZoneSynth
-    
+
     opt Material Enhancement Enabled
         Pipeline->>MaterialSeg: segment_materials(image)
         activate MaterialSeg
         MaterialSeg-->>Pipeline: material_masks
         deactivate MaterialSeg
-        
+
         Pipeline->>Pipeline: Apply material profiles per surface
     end
-    
+
     Pipeline->>Processor: apply_depth_aware_processing
     activate Processor
     Processor->>Processor: Depth-aware denoising
@@ -242,17 +242,17 @@ sequenceDiagram
     Processor->>Processor: Clarity enhancement
     Processor-->>Pipeline: processed_image
     deactivate Processor
-    
+
     opt Upscaling Enabled
         Pipeline->>Upscaler: upscale(image, scale=4)
         activate Upscaler
         Upscaler-->>Pipeline: upscaled_image
         deactivate Upscaler
     end
-    
+
     Pipeline->>Pipeline: Export outputs (TIFF/PNG/JPEG)
     Pipeline->>Pipeline: Generate processing report
-    
+
     Pipeline-->>User: result dict (status, paths, timing)
     deactivate Pipeline
 ```
@@ -264,24 +264,24 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> ConfigCreation
-    
+
     ConfigCreation --> PresetSelection: Set preset enum
     PresetSelection --> DefaultValues: Apply preset defaults
-    
+
     state DefaultValues {
         [*] --> PhotoRealistic
         [*] --> InteriorLuxury
         [*] --> ExteriorShowcase
         [*] --> Architectural
         [*] --> ArchivalQuality
-        
+
         PhotoRealistic: Balanced, conservative
         InteriorLuxury: High clarity, 4 zones
         ExteriorShowcase: Atmospheric effects
         Architectural: Technical accuracy
         ArchivalQuality: Maximum fidelity
     }
-    
+
     DefaultValues --> ParameterOverride: User customizations
     ParameterOverride --> Validation: Validate config
     Validation --> DeviceSelection: Pick device
@@ -296,33 +296,33 @@ stateDiagram-v2
 ```mermaid
 graph TD
     START([Material Segmentation Request]) --> SELECT{Backend<br/>Selection}
-    
+
     SELECT -->|onnx| ONNX[ONNX Backend]
     SELECT -->|segformer| SEGFORMER[SegFormer Backend]
     SELECT -->|heuristic| HEURISTIC[Heuristic Backend]
     SELECT -->|auto| AUTO[Auto-select fastest available]
-    
+
     ONNX --> ONNXLOAD[Load ONNX Model]
     ONNXLOAD --> ONNXINFER[Run Inference<br/>20-30ms]
     ONNXINFER --> MERGE
-    
+
     SEGFORMER --> SEGLOAD[Load SegFormer Model]
     SEGLOAD --> SEGINFER[Run Inference<br/>50-80ms]
     SEGINFER --> MERGE
-    
+
     HEURISTIC --> COLORSPACE[Convert to LAB]
     COLORSPACE --> RULES[Apply Color Rules<br/>5-10ms]
     RULES --> MERGE
-    
+
     AUTO --> AVAIL{ONNX<br/>Available?}
     AVAIL -->|Yes| ONNX
     AVAIL -->|No| AVAIL2{SegFormer<br/>Available?}
     AVAIL2 -->|Yes| SEGFORMER
     AVAIL2 -->|No| HEURISTIC
-    
+
     MERGE([Material Masks]) --> PROFILE[Apply Material Profiles]
     PROFILE --> OUTPUT([Enhanced Image])
-    
+
     style START fill:#90ee90
     style MERGE fill:#90ee90
     style OUTPUT fill:#90ee90
@@ -341,27 +341,27 @@ graph TB
     QUANTILE --> FG[Foreground Zone<br/>0-35th percentile]
     QUANTILE --> MG[Midground Zone<br/>35-70th percentile]
     QUANTILE --> BG[Background Zone<br/>70-100th percentile]
-    
+
     FG --> FGPARAMS[FG Parameters<br/>High contrast: 1.3<br/>High saturation: 1.15<br/>Exposure: +0.1]
     MG --> MGPARAMS[MG Parameters<br/>Medium contrast: 1.1<br/>Medium saturation: 1.05<br/>Exposure: 0.0]
     BG --> BGPARAMS[BG Parameters<br/>Low contrast: 0.95<br/>Low saturation: 0.95<br/>Exposure: -0.05]
-    
+
     FGPARAMS --> TONEMAP{Tone Map<br/>Operator}
     MGPARAMS --> TONEMAP
     BGPARAMS --> TONEMAP
-    
+
     TONEMAP -->|AgX| AGX[Film-inspired<br/>Shoulder roll-off]
     TONEMAP -->|Reinhard| REIN[Classic HDR<br/>Compression]
     TONEMAP -->|Filmic| FILM[Hable Uncharted 2<br/>S-curve]
     TONEMAP -->|ACES| ACES[Academy ODT<br/>Industry standard]
-    
+
     AGX --> BLEND
     REIN --> BLEND
     FILM --> BLEND
     ACES --> BLEND[Blend Zones<br/>Depth-weighted]
-    
+
     BLEND --> OUTPUT[Final Tone-Mapped Image]
-    
+
     style INPUT fill:#e1f5ff
     style OUTPUT fill:#d4edda
     style TONEMAP fill:#ffd700
@@ -400,19 +400,19 @@ graph TB
         SEGMODEL[Segmentation Model<br/>~500MB-2GB]
         UPMODEL[Upscaling Model<br/>~500MB]
     end
-    
+
     subgraph CPU["System Memory (RAM)"]
         IMAGE[Raw Images<br/>~50-200MB each]
         DEPTH[Depth Maps<br/>~10-50MB each]
         BUFFER[Processing Buffer<br/>~500MB]
     end
-    
+
     subgraph Disk["Storage"]
         INPUT[Input Images<br/>TIFF/PNG/JPEG]
         OUTPUT[Output Files<br/>TIFF/PNG/JPEG]
         CACHE[Depth Cache<br/>~/.cache/]
     end
-    
+
     INPUT --> IMAGE
     IMAGE --> TENSORS
     TENSORS --> MODEL
@@ -422,7 +422,7 @@ graph TB
     TENSORS --> UPMODEL
     UPMODEL --> BUFFER
     BUFFER --> OUTPUT
-    
+
     style GPU fill:#ffd700
     style CPU fill:#87ceeb
     style Disk fill:#d4edda
@@ -430,7 +430,7 @@ graph TB
 
 **Peak Memory by Configuration**:
 - Minimal (no upscale): 2-3 GB VRAM, 2-3 GB RAM
-- Standard (4x upscale): 4-5 GB VRAM, 3-4 GB RAM  
+- Standard (4x upscale): 4-5 GB VRAM, 3-4 GB RAM
 - High throughput (batch 4): 8-10 GB VRAM, 4-6 GB RAM
 - Maximum quality (2048px, 4x): 12-16 GB VRAM, 6-8 GB RAM
 
@@ -444,29 +444,29 @@ graph TB
         CLI[CLI Entry Point]
         API[FastAPI Service]
     end
-    
+
     subgraph Validation["Input Validation"]
         FILETYPE[File Type Check<br/>TIFF/PNG/JPEG only]
         FILESIZE[File Size Limit<br/>Max 50MB]
         PATHSEC[Path Sanitization<br/>No ../ traversal]
         RATELIMIT[Rate Limiting<br/>Requests/min]
     end
-    
+
     subgraph Core["Core Pipeline"]
         PIPELINE[LuxPipelineV2<br/>Safe operations]
     end
-    
+
     subgraph Dependencies["Dependencies"]
         SAFEDEPS[Safe Dependencies<br/>torch, onnx]
         NOVULN[No CVE-2024-27763<br/>No basicsr/realesrgan]
     end
-    
+
     CLI --> VALIDATION
     API --> VALIDATION
     VALIDATION --> PIPELINE
     PIPELINE --> SAFEDEPS
     PIPELINE --> NOVULN
-    
+
     style Validation fill:#ffd700
     style NOVULN fill:#d4edda
 ```
@@ -488,18 +488,18 @@ graph TB
         LOCALPYTHON[Python Script]
         LOCALCLI[CLI Tool]
     end
-    
+
     subgraph Docker["Docker Container"]
         DOCKERFILE[Dockerfile]
         COMPOSE[docker-compose.yml]
     end
-    
+
     subgraph Cloud["Cloud Deployment"]
         K8S[Kubernetes Pod]
         LB[Load Balancer]
         STORAGE[Persistent Storage]
     end
-    
+
     LOCALPYTHON --> PIPELINE[Lux Depth V2 Pipeline]
     LOCALCLI --> PIPELINE
     DOCKERFILE --> PIPELINE
@@ -507,7 +507,7 @@ graph TB
     K8S --> PIPELINE
     LB --> K8S
     PIPELINE --> STORAGE
-    
+
     style Local fill:#e1f5ff
     style Docker fill:#fff3cd
     style Cloud fill:#d4edda
@@ -520,31 +520,31 @@ graph TB
 ```mermaid
 graph LR
     START([Baseline<br/>500ms/image]) --> OPT1{Reduce<br/>Upscale?}
-    
+
     OPT1 -->|2x instead of 4x| FASTER1[~200ms/image<br/>2.5x faster]
     OPT1 -->|No| OPT2
-    
+
     OPT2{Use<br/>Heuristic<br/>Segmentation?}
     OPT2 -->|Yes| FASTER2[~450ms/image<br/>10% faster]
     OPT2 -->|No| OPT3
-    
+
     OPT3{Batch<br/>Processing?}
     OPT3 -->|Batch 4-8| FASTER3[~400ms/image<br/>20% faster]
     OPT3 -->|No| OPT4
-    
+
     OPT4{Use<br/>FP16?}
     OPT4 -->|Yes| FASTER4[~350ms/image<br/>30% faster]
     OPT4 -->|No| OPT5
-    
+
     OPT5{Pre-compute<br/>Depth?}
     OPT5 -->|Yes| FASTER5[~460ms/image<br/>8% faster]
-    
+
     FASTER1 --> END([Optimized])
     FASTER2 --> END
     FASTER3 --> END
     FASTER4 --> END
     FASTER5 --> END
-    
+
     style START fill:#f8d7da
     style END fill:#d4edda
     style FASTER1 fill:#ffd700
@@ -603,6 +603,6 @@ Future enhancements can plug into these extension points:
 
 ---
 
-**Document Version**: 2.0  
-**Last Updated**: December 8, 2025  
+**Document Version**: 2.0
+**Last Updated**: December 8, 2025
 **Maintainer**: Transformation Portal Team

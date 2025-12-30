@@ -1,7 +1,7 @@
 # EfficientSAM V3 — Stage 6 Smoke Test Results
 
-**Date**: December 12, 2025  
-**Commit**: `d3e94cc` (canary preset recursion fix)  
+**Date**: December 12, 2025
+**Commit**: `d3e94cc` (canary preset recursion fix)
 **Status**: ✅ Infrastructure Validated, Fusion Path Operational
 
 ---
@@ -40,7 +40,7 @@ Successfully completed **Stage 6 smoke test** validating the EfficientSAM V3 fus
 
 ### Run B: Canary APEX + EfficientSAM
 * **Status**: ✅ Completed
-* **Segmenter**: `FusedMaterialSegmenter` 
+* **Segmenter**: `FusedMaterialSegmenter`
 * **EfficientSAM**: Session loaded (`weights/efficientsam/efficientsam_s.onnx`)
 * **Runtime**: **27.3s** total
   * Segmentation: **2.58s**
@@ -164,6 +164,6 @@ The EfficientSAM V3 fusion infrastructure is **operational and stable**. The can
 
 ---
 
-**Session End**: December 13, 2025, 12:00 AM PST  
-**Commit**: `d3e94cc` — Canary preset recursion fix  
+**Session End**: December 13, 2025, 12:00 AM PST
+**Commit**: `d3e94cc` — Canary preset recursion fix
 **Next Session**: Stage 6.5 (fusion stats wiring + visual A/B comparison)

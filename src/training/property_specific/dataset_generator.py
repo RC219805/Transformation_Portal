@@ -31,15 +31,13 @@ from PIL import Image, ImageFilter
 # Optional scipy for advanced processing
 try:
     from scipy.ndimage import gaussian_filter
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
     gaussian_filter = None
 
-from .picacho_analyzer import (
-    PicachoAnalyzer,
-    ImageAnalysis
-)
+from .picacho_analyzer import PicachoAnalyzer, ImageAnalysis
 from .depth_synthesis import DepthSynthesis, SynthesizedDepth
 
 logger = logging.getLogger(__name__)
@@ -47,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 class AugmentationType(Enum):
     """Types of augmentation strategies."""
+
     GEOMETRIC = "geometric"
     COLOR = "color"
     MATERIAL = "material"
@@ -57,6 +56,7 @@ class AugmentationType(Enum):
 @dataclass
 class DatasetConfig:
     """Configuration for dataset generation."""
+
     # Output configuration
     output_dir: Path = field(default_factory=lambda: Path("data/training_750picacho"))
     dataset_name: str = "750_picacho_lane_training"
@@ -72,9 +72,7 @@ class DatasetConfig:
 
     # Augmentation configuration
     augmentation_enabled: bool = True
-    augmentation_types: List[AugmentationType] = field(
-        default_factory=lambda: list(AugmentationType)
-    )
+    augmentation_types: List[AugmentationType] = field(default_factory=lambda: list(AugmentationType))
 
     # Geometric augmentations
     horizontal_flip_prob: float = 0.5
@@ -122,6 +120,7 @@ class DatasetConfig:
 @dataclass
 class TrainingSample:
     """A single training sample with image and optional depth."""
+
     sample_id: str = ""
     image: Optional[np.ndarray] = None
     depth: Optional[np.ndarray] = None
@@ -187,7 +186,7 @@ class DatasetGenerator:
         self,
         analyzer: Optional[PicachoAnalyzer] = None,
         depth_synthesis: Optional[DepthSynthesis] = None,
-        config: Optional[DatasetConfig] = None
+        config: Optional[DatasetConfig] = None,
     ):
         """
         Initialize dataset generator.
@@ -211,10 +210,7 @@ class DatasetGenerator:
         # Generated samples
         self.samples: List[TrainingSample] = []
 
-    def generate_dataset(
-        self,
-        num_samples: Optional[int] = None
-    ) -> List[TrainingSample]:
+    def generate_dataset(self, num_samples: Optional[int] = None) -> List[TrainingSample]:
         """
         Generate complete training dataset.
 
@@ -249,9 +245,7 @@ class DatasetGenerator:
         samples_per_image = num_samples // num_images
 
         for analysis in self.analyzer.analyses:
-            image_samples = self._generate_samples_from_image(
-                analysis, samples_per_image
-            )
+            image_samples = self._generate_samples_from_image(analysis, samples_per_image)
             self.samples.extend(image_samples)
 
         # Shuffle samples
@@ -307,11 +301,7 @@ class DatasetGenerator:
                 except Exception as e:
                     logger.warning(f"  ✗ Failed to generate depth for {image_path.name}: {e}")
 
-    def _generate_samples_from_image(
-        self,
-        analysis: ImageAnalysis,
-        num_samples: int
-    ) -> List[TrainingSample]:
+    def _generate_samples_from_image(self, analysis: ImageAnalysis, num_samples: int) -> List[TrainingSample]:
         """Generate training samples from a single image."""
         samples = []
         image_path = analysis.image_path
@@ -335,11 +325,7 @@ class DatasetGenerator:
         # Generate samples with different crop sizes
         for i in range(num_samples):
             sample = self._generate_single_sample(
-                img_array=img_array,
-                depth_map=depth_map,
-                analysis=analysis,
-                sample_idx=i,
-                materials=materials
+                img_array=img_array, depth_map=depth_map, analysis=analysis, sample_idx=i, materials=materials
             )
             if sample is not None:
                 samples.append(sample)
@@ -352,16 +338,13 @@ class DatasetGenerator:
         depth_map: Optional[np.ndarray],
         analysis: ImageAnalysis,
         sample_idx: int,
-        materials: List[str]
+        materials: List[str],
     ) -> Optional[TrainingSample]:
         """Generate a single training sample with augmentation."""
         h, w = img_array.shape[:2]
 
         # Select crop size based on weights
-        crop_size = random.choices(
-            self.config.crop_sizes,
-            weights=self.config.crop_size_weights
-        )[0]
+        crop_size = random.choices(self.config.crop_sizes, weights=self.config.crop_size_weights)[0]
 
         # Ensure crop fits in image
         if crop_size > min(h, w):
@@ -374,7 +357,7 @@ class DatasetGenerator:
         y = random.randint(0, max_y)
 
         # Extract crop
-        img_crop = img_array[y:y + crop_size, x:x + crop_size].copy()
+        img_crop = img_array[y : y + crop_size, x : x + crop_size].copy()
 
         # Extract corresponding depth crop
         depth_crop = None
@@ -386,19 +369,17 @@ class DatasetGenerator:
                     depth_uint16 = (depth_map * 65535).astype(np.uint16)
                 else:
                     depth_uint16 = depth_map.astype(np.uint16)
-                depth_pil = Image.fromarray(depth_uint16, mode='I;16')
+                depth_pil = Image.fromarray(depth_uint16, mode="I;16")
                 depth_resized_pil = depth_pil.resize((w, h), Image.Resampling.BILINEAR)
                 depth_resized = np.array(depth_resized_pil).astype(np.float32) / 65535.0
             else:
                 depth_resized = depth_map.astype(np.float32)
-            depth_crop = depth_resized[y:y + crop_size, x:x + crop_size].copy()
+            depth_crop = depth_resized[y : y + crop_size, x : x + crop_size].copy()
 
         # Apply augmentations
         augmentation_params = {}
         if self.config.augmentation_enabled:
-            img_crop, depth_crop, augmentation_params = self._apply_augmentations(
-                img_crop, depth_crop, materials
-            )
+            img_crop, depth_crop, augmentation_params = self._apply_augmentations(img_crop, depth_crop, materials)
 
         # Resize to standard size for training (512x512)
         target_size = 512
@@ -408,9 +389,7 @@ class DatasetGenerator:
 
             if depth_crop is not None:
                 depth_pil = Image.fromarray(depth_crop)
-                depth_crop = np.array(
-                    depth_pil.resize((target_size, target_size), Image.Resampling.BILINEAR)
-                )
+                depth_crop = np.array(depth_pil.resize((target_size, target_size), Image.Resampling.BILINEAR))
 
         # Create sample
         sample_id = f"{analysis.image_path.stem}_{sample_idx:04d}"
@@ -428,10 +407,7 @@ class DatasetGenerator:
         )
 
     def _apply_augmentations(
-        self,
-        image: np.ndarray,
-        depth: Optional[np.ndarray],
-        materials: List[str]
+        self, image: np.ndarray, depth: Optional[np.ndarray], materials: List[str]
     ) -> Tuple[np.ndarray, Optional[np.ndarray], Dict[str, Any]]:
         """Apply augmentation pipeline to image and depth."""
         params = {}
@@ -465,9 +441,7 @@ class DatasetGenerator:
         return image, depth, params
 
     def _apply_geometric_augmentations(
-        self,
-        image: np.ndarray,
-        depth: Optional[np.ndarray]
+        self, image: np.ndarray, depth: Optional[np.ndarray]
     ) -> Tuple[np.ndarray, Optional[np.ndarray], Dict[str, Any]]:
         """Apply geometric augmentations (flip, rotation, scale)."""
         params = {}
@@ -490,7 +464,7 @@ class DatasetGenerator:
             if depth is not None:
                 # Convert depth to uint16 for PIL rotation, then back to float32
                 depth_normalized = ((depth - depth.min()) / (depth.max() - depth.min() + 1e-8) * 65535).astype(np.uint16)
-                depth_pil = Image.fromarray(depth_normalized, mode='I;16')
+                depth_pil = Image.fromarray(depth_normalized, mode="I;16")
                 depth_rotated = np.array(depth_pil.rotate(angle, resample=Image.Resampling.BILINEAR, expand=False))
                 # Restore original depth range
                 depth = (depth_rotated.astype(np.float32) / 65535) * (depth.max() - depth.min()) + depth.min()
@@ -500,10 +474,7 @@ class DatasetGenerator:
 
         return image, depth, params
 
-    def _apply_color_augmentations(
-        self,
-        image: np.ndarray
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def _apply_color_augmentations(self, image: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Apply color augmentations (brightness, contrast, saturation)."""
         params = {}
         img_float = image.astype(np.float32) / 255.0
@@ -534,11 +505,7 @@ class DatasetGenerator:
 
         return image, params
 
-    def _apply_material_augmentations(
-        self,
-        image: np.ndarray,
-        materials: List[str]
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def _apply_material_augmentations(self, image: np.ndarray, materials: List[str]) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Apply material-aware augmentations."""
         params = {"material_adjustments": {}}
 
@@ -579,10 +546,7 @@ class DatasetGenerator:
 
         return image, params
 
-    def _apply_quality_augmentations(
-        self,
-        image: np.ndarray
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def _apply_quality_augmentations(self, image: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Apply quality-related augmentations (noise, blur, compression)."""
         params = {}
 
@@ -620,6 +584,7 @@ class DatasetGenerator:
         jpeg_quality = random.randint(q_min, q_max)
         if jpeg_quality < 100:
             from io import BytesIO
+
             pil_img = Image.fromarray(image)
             buffer = BytesIO()
             pil_img.save(buffer, format="JPEG", quality=jpeg_quality)
@@ -629,9 +594,7 @@ class DatasetGenerator:
 
         return image, params
 
-    def _split_dataset(
-        self
-    ) -> Tuple[List[TrainingSample], List[TrainingSample], List[TrainingSample]]:
+    def _split_dataset(self) -> Tuple[List[TrainingSample], List[TrainingSample], List[TrainingSample]]:
         """Split dataset into train/val/test."""
         n_samples = len(self.samples)
         n_test = int(n_samples * self.config.test_split)
@@ -643,17 +606,12 @@ class DatasetGenerator:
         random.shuffle(samples)
 
         train_samples = samples[:n_train]
-        val_samples = samples[n_train:n_train + n_val]
-        test_samples = samples[n_train + n_val:]
+        val_samples = samples[n_train : n_train + n_val]
+        test_samples = samples[n_train + n_val :]
 
         return train_samples, val_samples, test_samples
 
-    def _save_split(
-        self,
-        samples: List[TrainingSample],
-        output_dir: Path,
-        split_name: str
-    ) -> Dict[str, Any]:
+    def _save_split(self, samples: List[TrainingSample], output_dir: Path, split_name: str) -> Dict[str, Any]:
         """Save a dataset split to disk."""
         split_dir = output_dir / split_name
         split_dir.mkdir(parents=True, exist_ok=True)
@@ -703,16 +661,11 @@ class DatasetGenerator:
             "source_images": len(self.analyzer.image_paths),
             "source_image_names": [p.name for p in self.analyzer.image_paths],
             "room_types": list(set(s.room_type for s in self.samples)),
-            "materials_covered": list(set(
-                mat for s in self.samples for mat in s.materials
-            )),
+            "materials_covered": list(set(mat for s in self.samples for mat in s.materials)),
             "crop_sizes_used": self.config.crop_sizes,
             "augmentation_types": [t.value for t in self.config.augmentation_types],
             "depth_included": self.config.include_depth,
         }
 
     def __repr__(self) -> str:
-        return (
-            f"DatasetGenerator(samples={len(self.samples)}, "
-            f"config={self.config.dataset_name})"
-        )
+        return f"DatasetGenerator(samples={len(self.samples)}, config={self.config.dataset_name})"

@@ -1,7 +1,7 @@
 # Pool Enhancement V3 - Tools Assessment & Recommendations
 
-**Analysis Date:** November 6, 2025  
-**Repository:** Transformation Portal  
+**Analysis Date:** November 6, 2025
+**Repository:** Transformation Portal
 **Objective:** Assess available tools and recommend additions for pool enhancement V3
 
 ---
@@ -98,7 +98,7 @@
 ### 2. Material Response Advanced System
 **Status:** ⚠️ Partial - Basic script exists but not full MBAR system
 
-**Current:** `material_response.py` (basic implementation)  
+**Current:** `material_response.py` (basic implementation)
 **Documentation References:** Material Response Technical Guide in LUTs folder
 
 **Missing Features:**
@@ -165,14 +165,14 @@ def estimate_depth(image_rgb):
         model="depth-anything/Depth-Anything-V2-Large",
         device=device
     )
-    
+
     # Generate depth map
     result = depth_estimator(image_rgb)
     depth_map = np.array(result["depth"])
-    
+
     # Normalize to [0, 1]
     depth_normalized = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min())
-    
+
     return depth_normalized
 
 # Use depth for zone-based processing
@@ -182,8 +182,8 @@ water_mask = (depth > 0.4) & (depth < 0.7)  # Mid distance = pool
 hardscape_mask = depth < 0.4     # Near distance = deck
 ```
 
-**Estimated Implementation Time:** 1-2 hours  
-**Model Download:** ~1.5GB (one-time, automatic)  
+**Estimated Implementation Time:** 1-2 hours
+**Model Download:** ~1.5GB (one-time, automatic)
 **Processing Overhead:** 50-200ms per image (depending on device)
 
 #### Option B: Full Depth Pipeline Implementation
@@ -200,7 +200,7 @@ mkdir -p depth_pipeline/{processors,models,config}
 # - depth_pipeline/config/pool_aerial.yaml (pool-specific preset)
 ```
 
-**Estimated Implementation Time:** 4-6 hours (full system)  
+**Estimated Implementation Time:** 4-6 hours (full system)
 **Benefits:**
 - Reusable for future images
 - YAML presets for consistency
@@ -230,14 +230,14 @@ def detect_materials(image_rgb, depth_map=None):
     """
     r, g, b = image_rgb[:,:,0], image_rgb[:,:,1], image_rgb[:,:,2]
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    
+
     materials = {}
-    
+
     # Water: blue-dominant, smooth texture, mid-depth
     water_color = (b > r * 1.15) & (b > g * 1.05)
     water_luminance = (luminance > 0.2) & (luminance < 0.8)
     materials['water'] = water_color & water_luminance
-    
+
     # Sky: bright, neutral, far depth
     sky_color = (np.abs(r - g) < 0.1) & (np.abs(g - b) < 0.15)
     sky_luminance = luminance > 0.6
@@ -246,16 +246,16 @@ def detect_materials(image_rgb, depth_map=None):
         materials['sky'] = sky_color & sky_luminance & sky_depth
     else:
         materials['sky'] = sky_color & sky_luminance
-    
+
     # Vegetation: green-dominant, low-medium luminance
     veg_color = (g > r * 1.1) & (g > b * 1.05)
     veg_luminance = luminance < 0.6
     materials['vegetation'] = veg_color & veg_luminance
-    
+
     # Hardscape: neutral, varied luminance, near depth
     hardscape_mask = ~(materials['water'] | materials['sky'] | materials['vegetation'])
     materials['hardscape'] = hardscape_mask
-    
+
     return materials
 ```
 
@@ -291,17 +291,17 @@ def apply_material_response(image_rgb, material_masks, depth_map=None):
             'color_balance': True    # Ensure neutral whites
         }
     }
-    
+
     result = image_rgb.copy()
     for material, params in enhancements.items():
         if material in material_masks:
             mask = material_masks[material]
             result = apply_material_enhancement(result, mask, params)
-    
+
     return result
 ```
 
-**Estimated Implementation Time:** 2-3 hours  
+**Estimated Implementation Time:** 2-3 hours
 **Benefits:**
 - More accurate material-specific enhancements
 - Automated detection reduces manual tuning
@@ -325,13 +325,13 @@ def apply_pool_lut(image_rgb, lut_name='Mediterranean_Pool', strength=0.6):
         'California_Coastal': 'assets/luts/location_aesthetic/California/Coastal_Estate.cube',
         'Tropical_Resort': 'assets/luts/location_aesthetic/Tropical_Pool.cube'  # Create if missing
     }
-    
+
     lut_path = lut_paths.get(lut_name)
     if lut_path and os.path.exists(lut_path):
         # Load and apply .cube LUT
         lut_3d = load_cube_lut(lut_path)
         graded = apply_3d_lut(image_rgb, lut_3d)
-        
+
         # Blend with original
         result = image_rgb * (1 - strength) + graded * strength
         return result
@@ -340,7 +340,7 @@ def apply_pool_lut(image_rgb, lut_name='Mediterranean_Pool', strength=0.6):
         return image_rgb
 ```
 
-**Estimated Implementation Time:** 30-60 minutes  
+**Estimated Implementation Time:** 30-60 minutes
 **Benefits:**
 - Professional color grading presets
 - Consistent look across multiple pool images
@@ -416,7 +416,7 @@ INPUT: 750Picacho_Pool.tiff (LINEAR)
 OUTPUT: Production-ready enhanced TIFF
 ```
 
-**Tools Required:** 
+**Tools Required:**
 - Core: NumPy, SciPy, Pillow ✅
 - Depth: Transformers, PyTorch ✅
 - LUT: Custom .cube parser (easy to implement)
@@ -487,7 +487,7 @@ OUTPUT: 8K master TIFF for print
 ## Missing Tools That Would Be Valuable
 
 ### 1. Depth Pipeline ⭐⭐⭐⭐⭐ (5/5 stars)
-**Why:** 
+**Why:**
 - Automatic sky/water/hardscape separation
 - Zone-based tone mapping
 - Natural atmospheric perspective
@@ -625,13 +625,13 @@ The **only significant missing tool** is the Depth Pipeline, which would provide
 
 ---
 
-**Status:** ✅ **READY TO PROCEED WITH V3**  
-**Blocking Issues:** None - all required tools available  
-**Recommended Enhancement:** Add Depth Anything V2 after V3 working  
+**Status:** ✅ **READY TO PROCEED WITH V3**
+**Blocking Issues:** None - all required tools available
+**Recommended Enhancement:** Add Depth Anything V2 after V3 working
 **Priority:** Implement V3 core (2-3 hours) → Test → Add depth (1-2 hours)
 
 ---
 
-**Document Status:** ✅ COMPLETE  
-**Last Updated:** November 6, 2025  
+**Document Status:** ✅ COMPLETE
+**Last Updated:** November 6, 2025
 **Next Action:** Create `conservative_enhance_pool_v3.py` following POOL_V3_QUICK_GUIDE.md

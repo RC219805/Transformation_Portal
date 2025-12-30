@@ -1,14 +1,14 @@
 # Stage 6 PR-3C Results: EfficientSAM FUSED - Final Decision
 
-**Date**: December 13, 2025  
-**Test**: Stage 6 A/B with Boundary Metrics (PR-3C Final)  
+**Date**: December 13, 2025
+**Test**: Stage 6 A/B with Boundary Metrics (PR-3C Final)
 **Device**: CPU (stable, reproducible)
 
 ---
 
 ## Executive Summary
 
-✅ **Test completed successfully** across all 5 benchmark scenes  
+✅ **Test completed successfully** across all 5 benchmark scenes
 ❌ **Promotion NOT recommended** - keep EfficientSAM FUSED as **canary-only**
 
 ### Key Findings
@@ -171,7 +171,7 @@ Output:
 - `outputs/stage6_ab_pr3c_final/stage6_ab_summary.json`
 - `outputs/stage6_ab_run.log`
 
-Device: CPU (forced for stability)  
+Device: CPU (forced for stability)
 Benchmark set: 5 scenes from `projects/750_picacho_lane/Final_Production_UltraQuality/`
 
 ---
@@ -184,6 +184,6 @@ EfficientSAM V3 infrastructure is correctly implemented, observable, and safe. T
 
 ---
 
-**Session Status**: ✅ PR-3C Complete  
-**Promotion Decision**: ❌ **Do NOT promote** - canary-only remains correct  
+**Session Status**: ✅ PR-3C Complete
+**Promotion Decision**: ❌ **Do NOT promote** - canary-only remains correct
 **Next PR**: PR-3D (Materials V3 taxonomy debugging) or PR-4 (auto-preset v2)

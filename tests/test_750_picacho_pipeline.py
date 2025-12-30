@@ -483,8 +483,7 @@ class TestProductionOutputs:
 
         for result in data["individual_results"]:
             assert result["enhanced_score"] >= min_threshold, (
-                f"Quality score below threshold for {result['filename']}: "
-                f"{result['enhanced_score']}"
+                f"Quality score below threshold for {result['filename']}: {result['enhanced_score']}"
             )
 
     def test_all_images_improved(self, production_dir):

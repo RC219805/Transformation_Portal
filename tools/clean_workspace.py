@@ -57,7 +57,7 @@ RECURSIVE_FILE_PATTERNS: List[str] = [
 def is_excluded(path: Path) -> bool:
     """
     Exclude heavy / non-project dirs from cleanup traversal.
-    
+
     Excludes:
     - .git (version control)
     - .venv (virtual environment - not a workspace artifact)
@@ -167,7 +167,7 @@ def cleanup(apply: bool, verbose: bool) -> None:
           if they match cleanup patterns.
     """
     tracked_files = get_tracked_files()
-    
+
     seen = set()
     to_delete: List[Path] = []
     skipped_tracked = 0
@@ -187,7 +187,7 @@ def cleanup(apply: bool, verbose: bool) -> None:
             p.relative_to(ROOT)
         except ValueError:
             continue
-        
+
         # Skip excluded directories (.venv, weights, .git)
         if is_excluded(p):
             skipped_excluded += 1
@@ -195,7 +195,7 @@ def cleanup(apply: bool, verbose: bool) -> None:
                 rel = p.relative_to(ROOT)
                 print(f"  SKIP excluded: {rel}")
             continue
-        
+
         # Protect tracked files
         if p.is_file() and p in tracked_files:
             skipped_tracked += 1
@@ -203,7 +203,7 @@ def cleanup(apply: bool, verbose: bool) -> None:
                 rel = p.relative_to(ROOT)
                 print(f"  SKIP tracked file: {rel}")
             continue
-        
+
         seen.add(p)
         to_delete.append(p)
 
@@ -247,16 +247,15 @@ def cleanup(apply: bool, verbose: bool) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Clean local-only artifacts from the Transformation_Portal workspace."
-    )
+    parser = argparse.ArgumentParser(description="Clean local-only artifacts from the Transformation_Portal workspace.")
     parser.add_argument(
         "--apply",
         action="store_true",
         help="Actually delete the files/directories (otherwise dry-run).",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Print individual delete operations.",
     )

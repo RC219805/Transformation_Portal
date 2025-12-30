@@ -20,6 +20,7 @@ class TestDeprecatedDecorator:
 
     def test_deprecated_function_shows_warning(self):
         """Test that deprecated function shows warning."""
+
         @deprecated()
         def old_function():
             return "result"
@@ -36,6 +37,7 @@ class TestDeprecatedDecorator:
 
     def test_deprecated_function_with_replacement(self):
         """Test deprecated function with replacement suggestion."""
+
         @deprecated(replacement="new_function")
         def old_function():
             return "result"
@@ -49,6 +51,7 @@ class TestDeprecatedDecorator:
 
     def test_deprecated_function_with_removal_version(self):
         """Test deprecated function with removal version."""
+
         @deprecated(removal_version="2.0.0")
         def old_function():
             return "result"
@@ -77,6 +80,7 @@ class TestDeprecatedDecorator:
 
     def test_deprecated_class_shows_warning(self):
         """Test that deprecated class shows warning on instantiation."""
+
         @deprecated()
         class OldClass:
             def __init__(self):
@@ -93,6 +97,7 @@ class TestDeprecatedDecorator:
 
     def test_deprecated_class_with_replacement(self):
         """Test deprecated class with replacement."""
+
         @deprecated(replacement="NewClass", removal_version="3.0.0")
         class OldClass:
             pass
@@ -107,6 +112,7 @@ class TestDeprecatedDecorator:
 
     def test_deprecated_preserves_function_metadata(self):
         """Test that decorator preserves function metadata."""
+
         @deprecated()
         def documented_function():
             """This is a documented function."""
@@ -118,6 +124,7 @@ class TestDeprecatedDecorator:
 
     def test_deprecated_with_custom_category(self):
         """Test deprecated with custom warning category."""
+
         @deprecated(category=FutureWarning)
         def old_function():
             return "result"
@@ -135,6 +142,7 @@ class TestRenamedFunction:
 
     def test_renamed_function_shows_warning(self):
         """Test that renamed function shows appropriate warning."""
+
         @renamed_function("old_process", "new_process", "2.0.0")
         def new_process(x):
             return x * 2
@@ -155,6 +163,7 @@ class TestRenamedClass:
 
     def test_renamed_class_shows_warning(self):
         """Test that renamed class shows appropriate warning."""
+
         @renamed_class("OldProcessor", "NewProcessor", "2.0.0")
         class NewProcessor:
             def __init__(self, value):
@@ -178,11 +187,7 @@ class TestRenamedModule:
         """Test that renamed_module shows warning."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            renamed_module(
-                "transformation_portal.old_module",
-                "transformation_portal.new_module",
-                "2.0.0"
-            )
+            renamed_module("transformation_portal.old_module", "transformation_portal.new_module", "2.0.0")
 
             assert len(w) == 1
             assert "old_module" in str(w[0].message)
@@ -193,10 +198,7 @@ class TestRenamedModule:
         """Test renamed_module without removal version."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            renamed_module(
-                "transformation_portal.old_module",
-                "transformation_portal.new_module"
-            )
+            renamed_module("transformation_portal.old_module", "transformation_portal.new_module")
 
             assert len(w) == 1
             assert "old_module" in str(w[0].message)
@@ -208,6 +210,7 @@ class TestMovedTo:
 
     def test_moved_to_function(self):
         """Test moved_to decorator on function."""
+
         @moved_to("transformation_portal.processors.new_location", "2.0.0")
         def some_function():
             return "result"
@@ -223,6 +226,7 @@ class TestMovedTo:
 
     def test_moved_to_class(self):
         """Test moved_to decorator on class."""
+
         @moved_to("transformation_portal.new_location")
         class SomeClass:
             def __init__(self):
@@ -242,6 +246,7 @@ class TestExperimental:
 
     def test_experimental_function_shows_warning(self):
         """Test that experimental function shows warning."""
+
         @experimental()
         def new_feature():
             return "feature"
@@ -273,6 +278,7 @@ class TestExperimental:
 
     def test_experimental_class_shows_warning(self):
         """Test that experimental class shows warning on instantiation."""
+
         @experimental()
         class ExperimentalClass:
             def __init__(self):
@@ -289,6 +295,7 @@ class TestExperimental:
 
     def test_experimental_class_with_custom_message(self):
         """Test experimental class with custom message."""
+
         @experimental(message="Unstable API - use with caution")
         class UnstableClass:
             pass

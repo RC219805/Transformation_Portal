@@ -25,25 +25,21 @@ class TestCheckpoint:
         checkpoint = Checkpoint(
             id="test_checkpoint",
             progress=50.0,
-            state={'current_file': 'file1.jpg'},
+            state={"current_file": "file1.jpg"},
             timestamp=time.time(),
-            metadata={'batch': 1}
+            metadata={"batch": 1},
         )
 
         assert checkpoint.id == "test_checkpoint"
         assert checkpoint.progress == 50.0
-        assert checkpoint.state == {'current_file': 'file1.jpg'}
-        assert checkpoint.metadata == {'batch': 1}
+        assert checkpoint.state == {"current_file": "file1.jpg"}
+        assert checkpoint.metadata == {"batch": 1}
 
     def test_save_checkpoint(self):
         """Test saving checkpoint to file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             checkpoint = Checkpoint(
-                id="test_save",
-                progress=75.0,
-                state={'index': 10},
-                timestamp=time.time(),
-                metadata={'info': 'test'}
+                id="test_save", progress=75.0, state={"index": 10}, timestamp=time.time(), metadata={"info": "test"}
             )
 
             checkpoint_path = Path(tmpdir) / "checkpoint.json"
@@ -55,20 +51,14 @@ class TestCheckpoint:
             with open(checkpoint_path) as f:
                 data = json.load(f)
 
-            assert data['id'] == "test_save"
-            assert data['progress'] == 75.0
-            assert data['state'] == {'index': 10}
+            assert data["id"] == "test_save"
+            assert data["progress"] == 75.0
+            assert data["state"] == {"index": 10}
 
     def test_save_creates_parent_directories(self):
         """Test that save creates parent directories."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            checkpoint = Checkpoint(
-                id="test",
-                progress=50.0,
-                state={},
-                timestamp=time.time(),
-                metadata={}
-            )
+            checkpoint = Checkpoint(id="test", progress=50.0, state={}, timestamp=time.time(), metadata={})
 
             nested_path = Path(tmpdir) / "a" / "b" / "c" / "checkpoint.json"
             checkpoint.save(nested_path)
@@ -80,24 +70,24 @@ class TestCheckpoint:
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create checkpoint file
             checkpoint_data = {
-                'id': 'test_load',
-                'progress': 80.0,
-                'state': {'processed': 100},
-                'timestamp': time.time(),
-                'metadata': {'version': '1.0'}
+                "id": "test_load",
+                "progress": 80.0,
+                "state": {"processed": 100},
+                "timestamp": time.time(),
+                "metadata": {"version": "1.0"},
             }
 
             checkpoint_path = Path(tmpdir) / "checkpoint.json"
-            with open(checkpoint_path, 'w') as f:
+            with open(checkpoint_path, "w") as f:
                 json.dump(checkpoint_data, f)
 
             # Load it
             loaded = Checkpoint.load(checkpoint_path)
 
-            assert loaded.id == 'test_load'
+            assert loaded.id == "test_load"
             assert loaded.progress == 80.0
-            assert loaded.state == {'processed': 100}
-            assert loaded.metadata == {'version': '1.0'}
+            assert loaded.state == {"processed": 100}
+            assert loaded.metadata == {"version": "1.0"}
 
 
 class TestCheckpointManager:
@@ -124,26 +114,19 @@ class TestCheckpointManager:
         with tempfile.TemporaryDirectory() as tmpdir:
             manager = CheckpointManager("test_op", checkpoint_dir=Path(tmpdir))
 
-            checkpoint = manager.create_checkpoint(
-                progress=50.0,
-                state={'current': 10},
-                metadata={'info': 'test'}
-            )
+            checkpoint = manager.create_checkpoint(progress=50.0, state={"current": 10}, metadata={"info": "test"})
 
             assert checkpoint.id.startswith("test_op_")
             assert checkpoint.progress == 50.0
-            assert checkpoint.state == {'current': 10}
-            assert checkpoint.metadata == {'info': 'test'}
+            assert checkpoint.state == {"current": 10}
+            assert checkpoint.metadata == {"info": "test"}
 
     def test_save_checkpoint(self):
         """Test saving checkpoint through manager."""
         with tempfile.TemporaryDirectory() as tmpdir:
             manager = CheckpointManager("test_op", checkpoint_dir=Path(tmpdir))
 
-            checkpoint = manager.create_checkpoint(
-                progress=60.0,
-                state={'value': 42}
-            )
+            checkpoint = manager.create_checkpoint(progress=60.0, state={"value": 42})
 
             saved_path = manager.save(checkpoint)
 
@@ -156,11 +139,11 @@ class TestCheckpointManager:
             manager = CheckpointManager("test_op", checkpoint_dir=Path(tmpdir))
 
             # Create multiple checkpoints
-            checkpoint1 = manager.create_checkpoint(progress=25.0, state={'step': 1})
+            checkpoint1 = manager.create_checkpoint(progress=25.0, state={"step": 1})
             time.sleep(0.01)
-            checkpoint2 = manager.create_checkpoint(progress=50.0, state={'step': 2})
+            checkpoint2 = manager.create_checkpoint(progress=50.0, state={"step": 2})
             time.sleep(0.01)
-            checkpoint3 = manager.create_checkpoint(progress=75.0, state={'step': 3})
+            checkpoint3 = manager.create_checkpoint(progress=75.0, state={"step": 3})
 
             manager.save(checkpoint1)
             manager.save(checkpoint2)
@@ -170,7 +153,7 @@ class TestCheckpointManager:
 
             assert latest is not None
             assert latest.progress == 75.0
-            assert latest.state == {'step': 3}
+            assert latest.state == {"step": 3}
 
     def test_get_latest_when_no_checkpoints(self):
         """Test getting latest when no checkpoints exist."""
@@ -187,10 +170,7 @@ class TestCheckpointManager:
 
             # Create and save multiple checkpoints
             for i in range(3):
-                checkpoint = manager.create_checkpoint(
-                    progress=i * 25.0,
-                    state={'step': i}
-                )
+                checkpoint = manager.create_checkpoint(progress=i * 25.0, state={"step": i})
                 manager.save(checkpoint)
                 time.sleep(0.01)
 
@@ -198,9 +178,9 @@ class TestCheckpointManager:
 
             assert len(checkpoints) == 3
             # Should be sorted by timestamp
-            assert checkpoints[0].state['step'] == 0
-            assert checkpoints[1].state['step'] == 1
-            assert checkpoints[2].state['step'] == 2
+            assert checkpoints[0].state["step"] == 0
+            assert checkpoints[1].state["step"] == 1
+            assert checkpoints[2].state["step"] == 2
 
     def test_list_checkpoints_handles_corrupt_files(self):
         """Test that list_checkpoints handles corrupt checkpoint files."""
@@ -213,7 +193,7 @@ class TestCheckpointManager:
 
             # Create corrupt checkpoint file
             corrupt_file = manager.checkpoint_dir / "corrupt.json"
-            with open(corrupt_file, 'w') as f:
+            with open(corrupt_file, "w") as f:
                 f.write("not valid json{")
 
             checkpoints = manager.list_checkpoints()
@@ -231,11 +211,11 @@ class TestCheckpointManager:
                 checkpoint = manager.create_checkpoint(progress=i * 25.0, state={})
                 manager.save(checkpoint)
 
-            assert len(list(manager.checkpoint_dir.glob('*.json'))) == 3
+            assert len(list(manager.checkpoint_dir.glob("*.json"))) == 3
 
             manager.clear()
 
-            assert len(list(manager.checkpoint_dir.glob('*.json'))) == 0
+            assert len(list(manager.checkpoint_dir.glob("*.json"))) == 0
 
     def test_clear_removes_empty_directory(self):
         """Test that clear removes directory if empty."""
@@ -251,7 +231,7 @@ class TestCheckpointManager:
             # Directory should be removed if it became empty
             # (or might still exist if OS keeps it, so we just check files are gone)
             if checkpoint_dir.exists():
-                assert len(list(checkpoint_dir.glob('*'))) == 0
+                assert len(list(checkpoint_dir.glob("*"))) == 0
 
 
 class TestCheckpointDecorator:
@@ -260,15 +240,12 @@ class TestCheckpointDecorator:
     def test_decorator_basic_usage(self):
         """Test basic decorator usage."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            @checkpoint_decorator(
-                operation_id="test_batch",
-                checkpoint_interval=2,
-                checkpoint_dir=Path(tmpdir)
-            )
+
+            @checkpoint_decorator(operation_id="test_batch", checkpoint_interval=2, checkpoint_dir=Path(tmpdir))
             def process_batch(items):
                 for i, item in enumerate(items):
                     progress = (i + 1) / len(items) * 100
-                    state = {'current_index': i}
+                    state = {"current_index": i}
                     yield progress, state, item * 2
 
             items = [1, 2, 3, 4, 5]
@@ -278,27 +255,24 @@ class TestCheckpointDecorator:
 
             # Check that checkpoints were created
             checkpoint_dir = Path(tmpdir) / "test_batch"
-            checkpoints = list(checkpoint_dir.glob('*.json'))
+            checkpoints = list(checkpoint_dir.glob("*.json"))
             # Should have checkpoints at intervals of 2
             assert len(checkpoints) >= 1
 
     def test_decorator_respects_interval(self):
         """Test that decorator respects checkpoint interval."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            @checkpoint_decorator(
-                operation_id="interval_test",
-                checkpoint_interval=3,
-                checkpoint_dir=Path(tmpdir)
-            )
+
+            @checkpoint_decorator(operation_id="interval_test", checkpoint_interval=3, checkpoint_dir=Path(tmpdir))
             def process_items(items):
                 for i, item in enumerate(items):
-                    yield i * 10, {'index': i}, item
+                    yield i * 10, {"index": i}, item
 
             items = [1, 2, 3, 4, 5, 6, 7, 8]
             list(process_items(items))
 
             checkpoint_dir = Path(tmpdir) / "interval_test"
-            checkpoints = list(checkpoint_dir.glob('*.json'))
+            checkpoints = list(checkpoint_dir.glob("*.json"))
 
             # With interval=3 and 8 items: checkpoints at 0, 3, 6
             assert len(checkpoints) >= 2
@@ -306,10 +280,8 @@ class TestCheckpointDecorator:
     def test_decorator_with_non_tuple_results(self):
         """Test decorator with functions that don't yield tuples."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            @checkpoint_decorator(
-                operation_id="simple",
-                checkpoint_dir=Path(tmpdir)
-            )
+
+            @checkpoint_decorator(operation_id="simple", checkpoint_dir=Path(tmpdir))
             def simple_generator(items):
                 for item in items:
                     yield item * 2
@@ -327,18 +299,15 @@ class TestResumeFromCheckpoint:
             manager = CheckpointManager("resume_test", checkpoint_dir=Path(tmpdir))
 
             # Create and save checkpoint
-            checkpoint = manager.create_checkpoint(
-                progress=75.0,
-                state={'last_processed': 'file_10.jpg', 'index': 10}
-            )
+            checkpoint = manager.create_checkpoint(progress=75.0, state={"last_processed": "file_10.jpg", "index": 10})
             manager.save(checkpoint)
 
             # Resume
             state = resume_from_checkpoint("resume_test", checkpoint_dir=Path(tmpdir))
 
             assert state is not None
-            assert state['last_processed'] == 'file_10.jpg'
-            assert state['index'] == 10
+            assert state["last_processed"] == "file_10.jpg"
+            assert state["index"] == 10
 
     def test_resume_when_no_checkpoint_exists(self):
         """Test resuming when no checkpoint exists."""
@@ -352,11 +321,11 @@ class TestResumeFromCheckpoint:
             manager = CheckpointManager("multi_test", checkpoint_dir=Path(tmpdir))
 
             # Create multiple checkpoints
-            checkpoint1 = manager.create_checkpoint(progress=25.0, state={'step': 1})
+            checkpoint1 = manager.create_checkpoint(progress=25.0, state={"step": 1})
             time.sleep(0.01)
-            checkpoint2 = manager.create_checkpoint(progress=50.0, state={'step': 2})
+            checkpoint2 = manager.create_checkpoint(progress=50.0, state={"step": 2})
             time.sleep(0.01)
-            checkpoint3 = manager.create_checkpoint(progress=75.0, state={'step': 3})
+            checkpoint3 = manager.create_checkpoint(progress=75.0, state={"step": 3})
 
             manager.save(checkpoint1)
             manager.save(checkpoint2)
@@ -366,7 +335,7 @@ class TestResumeFromCheckpoint:
             state = resume_from_checkpoint("multi_test", checkpoint_dir=Path(tmpdir))
 
             assert state is not None
-            assert state['step'] == 3
+            assert state["step"] == 3
 
 
 if __name__ == "__main__":

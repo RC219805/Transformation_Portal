@@ -1,6 +1,6 @@
 # Holdout Image Quick Reference Card
 
-**Goal**: 13 real-world architectural glass negatives (NO water visible)  
+**Goal**: 13 real-world architectural glass negatives (NO water visible)
 **Acceptance Gate**: ≤1 false positive (max 1 of 13 images triggers detector)
 
 ## The 13 Images (Priority Order)
@@ -61,24 +61,24 @@
 
 ## 7-Day Quick Plan
 
-**Day 1-2**: Glass facades (#1-3) - downtown/business district trip  
-**Day 3**: Blue walls + concrete (#4-5, #13) - walk neighborhood  
-**Day 4**: Reflective surfaces (#6-8) - indoor/outdoor after rain  
-**Day 5**: Skylights (#9-10) - mall/atrium visit  
+**Day 1-2**: Glass facades (#1-3) - downtown/business district trip
+**Day 3**: Blue walls + concrete (#4-5, #13) - walk neighborhood
+**Day 4**: Reflective surfaces (#6-8) - indoor/outdoor after rain
+**Day 5**: Skylights (#9-10) - mall/atrium visit
 **Day 6-7**: **CRITICAL** Pool tiles (#11-12) - tile stores/empty pools
 
 ## Emergency Substitutions
 
 **Can't find empty pool tiles?**
-→ Home Depot/Lowe's tile section (pool tile samples)  
+→ Home Depot/Lowe's tile section (pool tile samples)
 → Pool waterline tiles above water (must be DRY)
 
 **No modern glass facades nearby?**
-→ Glass bus shelters, large storefront windows  
+→ Glass bus shelters, large storefront windows
 → Greenhouse/conservatory glass walls
 
 **Weather not cooperating?**
-→ Indoor shots first (#5, #6, #8, #9, #10)  
+→ Indoor shots first (#5, #6, #8, #9, #10)
 → Postpone outdoor blue sky shots (#1, #2, #7, #13)
 
 ## Integration Steps (After Capture)
@@ -93,9 +93,9 @@
 
 ## Success = Phase C Complete
 
-✅ All 13 images captured  
-✅ Zero actual water visible  
-✅ Detector triggers ≤1 false positive  
-✅ Results archived  
+✅ All 13 images captured
+✅ Zero actual water visible
+✅ Detector triggers ≤1 false positive
+✅ Results archived
 
 **Then**: Proceed to Phase D (threshold tuning with holdout evidence)

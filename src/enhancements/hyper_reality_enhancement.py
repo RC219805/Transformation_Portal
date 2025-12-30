@@ -22,7 +22,7 @@ from torchvision import transforms
 from PIL import Image
 
 # Suppress warnings for clean output
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 
 def configure_device():
@@ -48,10 +48,11 @@ device = configure_device()
 
 class QualityMode(Enum):
     """Enhancement quality targeting modes"""
-    STANDARD = (70, 85)      # Traditional photographic range
-    PREMIUM = (85, 95)        # Marketing-grade enhancement
-    HYPER = (95, 105)         # Hyper-reality transcendence
-    QUANTUM = (105, 120)      # Quantum-amplified reality
+
+    STANDARD = (70, 85)  # Traditional photographic range
+    PREMIUM = (85, 95)  # Marketing-grade enhancement
+    HYPER = (95, 105)  # Hyper-reality transcendence
+    QUANTUM = (105, 120)  # Quantum-amplified reality
     THEORETICAL = (120, 150)  # Theoretical maximum
 
 
@@ -64,63 +65,75 @@ class EnhancementConfig:
     mode: QualityMode = QualityMode.QUANTUM
 
     # Quantum caustic parameters
-    quantum_caustics: Dict = field(default_factory=lambda: {
-        'enable': True,
-        'coherence_length': 0.0001,
-        'photon_bundles': 10000,
-        'entanglement': 0.15,
-        'vacuum_noise': 0.001,
-        'caustic_intensity': 2.8,
-        'wave_simulation': True
-    })
+    quantum_caustics: Dict = field(
+        default_factory=lambda: {
+            "enable": True,
+            "coherence_length": 0.0001,
+            "photon_bundles": 10000,
+            "entanglement": 0.15,
+            "vacuum_noise": 0.001,
+            "caustic_intensity": 2.8,
+            "wave_simulation": True,
+        }
+    )
 
     # Neural atmosphere parameters
-    neural_atmosphere: Dict = field(default_factory=lambda: {
-        'enable': True,
-        'enhancement_level': 1.8,
-        'style_amplitude': 2.5,
-        'layer_count': 9,
-        'impossible_colors': True,
-        'twilight_mode': 'blue_hour'
-    })
+    neural_atmosphere: Dict = field(
+        default_factory=lambda: {
+            "enable": True,
+            "enhancement_level": 1.8,
+            "style_amplitude": 2.5,
+            "layer_count": 9,
+            "impossible_colors": True,
+            "twilight_mode": "blue_hour",
+        }
+    )
 
     # Material transcendence parameters
-    material_transcendence: Dict = field(default_factory=lambda: {
-        'enable': True,
-        'energy_violation': 1.15,
-        'negative_absorption': True,
-        'quantum_interference': 0.18,
-        'temporal_effects': True,
-        'bioluminescence': 0.12
-    })
+    material_transcendence: Dict = field(
+        default_factory=lambda: {
+            "enable": True,
+            "energy_violation": 1.15,
+            "negative_absorption": True,
+            "quantum_interference": 0.18,
+            "temporal_effects": True,
+            "bioluminescence": 0.12,
+        }
+    )
 
     # Spatial harmonics parameters
-    spatial_harmonics: Dict = field(default_factory=lambda: {
-        'enable': True,
-        'order': 9,
-        'negative_light': True,
-        'amplification': 1.5,
-        'directional_boost': 1.8
-    })
+    spatial_harmonics: Dict = field(
+        default_factory=lambda: {
+            "enable": True,
+            "order": 9,
+            "negative_light": True,
+            "amplification": 1.5,
+            "directional_boost": 1.8,
+        }
+    )
 
     # Synergistic amplification
-    synergistic: Dict = field(default_factory=lambda: {
-        'enable': True,
-        'edge_enhancement': 1.1,
-        'local_contrast': 1.43,
-        'saturation_boost': 1.3,
-        'tone_curve_gamma': 0.85
-    })
+    synergistic: Dict = field(
+        default_factory=lambda: {
+            "enable": True,
+            "edge_enhancement": 1.1,
+            "local_contrast": 1.43,
+            "saturation_boost": 1.3,
+            "tone_curve_gamma": 0.85,
+        }
+    )
 
     # Processing settings
-    processing: Dict = field(default_factory=lambda: {
-        'batch_size': 1,
-        'tile_size': 1024,
-        'overlap': 128,
-        'precision': 'float32',
-        'num_workers': 8,
-        'pin_memory': True
-    })
+    processing: Dict = field(
+        default_factory=lambda: {
+            "batch_size": 1,
+            "tile_size": 1024,
+            "overlap": 128,
+            "precision": "float32",
+            "num_workers": 8,
+            "pin_memory": True,
+        }
+    )
 
 
 class CausticGenerator(nn.Module):
@@ -145,7 +158,7 @@ class CausticGenerator(nn.Module):
             nn.GroupNorm(16, 128),
             nn.GELU(),
             nn.Conv2d(128, 3, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
     def forward(self, x: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -156,7 +169,7 @@ class CausticGenerator(nn.Module):
         # Generate base wave patterns
         waves = self.wave_net(x)
 
-        if self.config['wave_simulation']:
+        if self.config["wave_simulation"]:
             # Implement wave interference
             wavelengths = torch.tensor([450e-9, 550e-9, 650e-9]).to(x.device)
             interference = torch.zeros_like(x)
@@ -169,24 +182,24 @@ class CausticGenerator(nn.Module):
                 wave_pattern = torch.sin(phase) * torch.cos(phase * 1.3)
 
                 # Apply quantum coherence
-                coherence = torch.exp(-torch.abs(wave_pattern) * self.config['coherence_length'])
-                interference[:, i:i + 1] = wave_pattern * coherence
+                coherence = torch.exp(-torch.abs(wave_pattern) * self.config["coherence_length"])
+                interference[:, i : i + 1] = wave_pattern * coherence
 
             # Combine with neural waves
             waves = waves * 0.7 + interference * 0.3
 
         # Apply photon bunching effect
-        if self.config['entanglement'] > 0:
-            g2 = 1 + torch.exp(-torch.abs(waves) / self.config['photon_bundles'])
+        if self.config["entanglement"] > 0:
+            g2 = 1 + torch.exp(-torch.abs(waves) / self.config["photon_bundles"])
             waves = waves * g2
 
         # Add vacuum fluctuation noise
-        if self.config['vacuum_noise'] > 0:
-            vacuum = torch.randn_like(waves) * self.config['vacuum_noise']
+        if self.config["vacuum_noise"] > 0:
+            vacuum = torch.randn_like(waves) * self.config["vacuum_noise"]
             waves = waves + vacuum
 
         # Intensity modulation
-        waves = torch.clamp(waves, 0, 1) * self.config['caustic_intensity']
+        waves = torch.clamp(waves, 0, 1) * self.config["caustic_intensity"]
 
         return waves
 
@@ -199,29 +212,29 @@ class AtmosphericSynthesizer(nn.Module):
         self.config = config
 
         # Encoder
-        self.encoder = nn.ModuleList([
-            self._make_encoder_block(3, 64),
-            self._make_encoder_block(64, 128),
-            self._make_encoder_block(128, 256),
-            self._make_encoder_block(256, 512)
-        ])
+        self.encoder = nn.ModuleList(
+            [
+                self._make_encoder_block(3, 64),
+                self._make_encoder_block(64, 128),
+                self._make_encoder_block(128, 256),
+                self._make_encoder_block(256, 512),
+            ]
+        )
 
         # Latent manipulation
         self.latent = nn.Sequential(
-            nn.Conv2d(512, 1024, 1),
-            nn.GELU(),
-            nn.Conv2d(1024, 1024, 1),
-            nn.GELU(),
-            nn.Conv2d(1024, 512, 1)
+            nn.Conv2d(512, 1024, 1), nn.GELU(), nn.Conv2d(1024, 1024, 1), nn.GELU(), nn.Conv2d(1024, 512, 1)
         )
 
         # Decoder with skip connections
-        self.decoder = nn.ModuleList([
-            self._make_decoder_block(512, 256),
-            self._make_decoder_block(512, 128),  # 256 + 256 from skip
-            self._make_decoder_block(256, 64),   # 128 + 128 from skip
-            self._make_decoder_block(128, 3)     # 64 + 64 from skip
-        ])
+        self.decoder = nn.ModuleList(
+            [
+                self._make_decoder_block(512, 256),
+                self._make_decoder_block(512, 128),  # 256 + 256 from skip
+                self._make_decoder_block(256, 64),  # 128 + 128 from skip
+                self._make_decoder_block(128, 3),  # 64 + 64 from skip
+            ]
+        )
 
     def _make_encoder_block(self, in_c: int, out_c: int) -> nn.Module:
         return nn.Sequential(
@@ -230,21 +243,14 @@ class AtmosphericSynthesizer(nn.Module):
             nn.GELU(),
             nn.Conv2d(out_c, out_c, 3, padding=2, dilation=2),
             nn.GroupNorm(min(32, out_c // 2), out_c),
-            nn.GELU()
+            nn.GELU(),
         )
 
     def _make_decoder_block(self, in_c: int, out_c: int) -> nn.Module:
         if out_c == 3:
-            return nn.Sequential(
-                nn.Conv2d(in_c, 32, 3, padding=1),
-                nn.GELU(),
-                nn.Conv2d(32, out_c, 1),
-                nn.Sigmoid()
-            )
+            return nn.Sequential(nn.Conv2d(in_c, 32, 3, padding=1), nn.GELU(), nn.Conv2d(32, out_c, 1), nn.Sigmoid())
         return nn.Sequential(
-            nn.ConvTranspose2d(in_c, out_c, 4, stride=2, padding=1),
-            nn.GroupNorm(min(32, out_c // 2), out_c),
-            nn.GELU()
+            nn.ConvTranspose2d(in_c, out_c, 4, stride=2, padding=1), nn.GroupNorm(min(32, out_c // 2), out_c), nn.GELU()
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -261,9 +267,9 @@ class AtmosphericSynthesizer(nn.Module):
         feat = self.latent(feat)
 
         # Apply style modulation for impossible colors
-        if self.config['impossible_colors']:
+        if self.config["impossible_colors"]:
             style = torch.randn(feat.shape[0], 512, 1, 1).to(feat.device)
-            style = style * self.config['style_amplitude']
+            style = style * self.config["style_amplitude"]
             feat = feat * (1 + style)
 
         # Decoder path with skip connections
@@ -272,12 +278,12 @@ class AtmosphericSynthesizer(nn.Module):
                 skip = skips[-(i + 1)]
                 # Resize if necessary
                 if feat.shape[-2:] != skip.shape[-2:]:
-                    feat = F.interpolate(feat, size=skip.shape[-2:], mode='bilinear')
+                    feat = F.interpolate(feat, size=skip.shape[-2:], mode="bilinear")
                 feat = torch.cat([feat, skip], dim=1)
             feat = decoder(feat)
 
         # Enhancement amplification
-        feat = feat * self.config['enhancement_level']
+        feat = feat * self.config["enhancement_level"]
 
         return torch.clamp(feat, 0, 1.5)  # Allow super-bright regions
 
@@ -298,16 +304,18 @@ class MaterialTranscendence(nn.Module):
             nn.Conv2d(128, 64, 3, padding=1),
             nn.ReLU(),
             nn.Conv2d(64, 4, 1),  # 4 material classes
-            nn.Softmax(dim=1)
+            nn.Softmax(dim=1),
         )
 
         # Material response networks
-        self.material_responses = nn.ModuleDict({
-            'stucco': self._make_material_net(),
-            'stone': self._make_material_net(),
-            'glass': self._make_material_net(),
-            'water': self._make_material_net()
-        })
+        self.material_responses = nn.ModuleDict(
+            {
+                "stucco": self._make_material_net(),
+                "stone": self._make_material_net(),
+                "glass": self._make_material_net(),
+                "water": self._make_material_net(),
+            }
+        )
 
     def _make_material_net(self) -> nn.Module:
         return nn.Sequential(
@@ -316,7 +324,7 @@ class MaterialTranscendence(nn.Module):
             nn.Conv2d(32, 32, 3, padding=1),
             nn.GELU(),
             nn.Conv2d(32, 3, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -329,27 +337,27 @@ class MaterialTranscendence(nn.Module):
         result = torch.zeros_like(x)
 
         for i, (name, net) in enumerate(self.material_responses.items()):
-            mask = materials[:, i:i + 1]
+            mask = materials[:, i : i + 1]
 
             # Generate material response
             response = net(x)
 
             # Apply physics violations based on material
-            if name == 'stucco' and self.config['energy_violation'] > 1.0:
-                response = response * self.config['energy_violation']
-            elif name == 'glass' and self.config['negative_absorption']:
+            if name == "stucco" and self.config["energy_violation"] > 1.0:
+                response = response * self.config["energy_violation"]
+            elif name == "glass" and self.config["negative_absorption"]:
                 response = response * 1.05  # Amplify light through glass
-            elif name == 'water' and self.config['bioluminescence'] > 0:
-                glow = torch.randn_like(response) * self.config['bioluminescence']
+            elif name == "water" and self.config["bioluminescence"] > 0:
+                glow = torch.randn_like(response) * self.config["bioluminescence"]
                 response = response + torch.abs(glow)
-            elif name == 'stone' and self.config['quantum_interference'] > 0:
-                interference = torch.sin(response * 20) * self.config['quantum_interference']
+            elif name == "stone" and self.config["quantum_interference"] > 0:
+                interference = torch.sin(response * 20) * self.config["quantum_interference"]
                 response = response + interference
 
             result = result + mask * response
 
         # Apply temporal shimmer effect
-        if self.config['temporal_effects']:
+        if self.config["temporal_effects"]:
             shimmer = torch.randn_like(result) * 0.02
             result = result + shimmer
 
@@ -362,7 +370,7 @@ class SpatialHarmonics(nn.Module):
     def __init__(self, config: Dict):
         super().__init__()
         self.config = config
-        self.order = config['order']
+        self.order = config["order"]
 
         # Generate SH coefficients for impossible lighting
         n_coeffs = (self.order + 1) ** 2
@@ -371,9 +379,9 @@ class SpatialHarmonics(nn.Module):
         # Amplify certain coefficients for impossible effects
         with torch.no_grad():
             self.coefficients[0] *= 1.2  # Super-bright ambient
-            if config['negative_light']:
+            if config["negative_light"]:
                 self.coefficients[4:9] *= -0.3  # Negative light sources
-            self.coefficients[1:4] *= config['amplification']
+            self.coefficients[1:4] *= config["amplification"]
 
     def forward(self, normals: torch.Tensor) -> torch.Tensor:
         """Compute impossible illumination from normals"""
@@ -396,8 +404,8 @@ class SpatialHarmonics(nn.Module):
         illumination += self.coefficients[3].view(1, 3, 1, 1) * 0.488603 * torch.sin(theta) * torch.cos(phi)
 
         # Apply directional boost
-        if self.config['directional_boost'] > 1.0:
-            illumination = illumination * self.config['directional_boost']
+        if self.config["directional_boost"] > 1.0:
+            illumination = illumination * self.config["directional_boost"]
 
         # Non-linear transformation for artistic effect
         illumination = torch.sign(illumination) * torch.pow(torch.abs(illumination), 0.7)
@@ -427,10 +435,9 @@ class HyperRealityProcessor:
         self.quality_score = 78  # Baseline
         self.enhancements_applied = []
 
-    def process_image(self,
-                      image_path: str,
-                      output_path: Optional[str] = None,
-                      save_intermediate: bool = False) -> Dict[str, Any]:
+    def process_image(
+        self, image_path: str, output_path: Optional[str] = None, save_intermediate: bool = False
+    ) -> Dict[str, Any]:
         """
         Process image to achieve target quality level
 
@@ -446,20 +453,22 @@ class HyperRealityProcessor:
         start_time = time.time()
 
         # Load and prepare image
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("HYPER-REALITY ENHANCEMENT PIPELINE")
         print(f"Target Quality: {self.config.target_quality}/100")
         print(f"Mode: {self.config.mode.name}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         # Load image
-        image = Image.open(image_path).convert('RGB')
+        image = Image.open(image_path).convert("RGB")
         original_size = image.size
 
         # Convert to tensor
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-        ])
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+            ]
+        )
         img_tensor = transform(image).unsqueeze(0).to(device)
 
         # Generate auxiliary maps
@@ -468,7 +477,7 @@ class HyperRealityProcessor:
         normals = self._compute_normals(depth_map)
 
         # Stage 1: Quantum Caustics
-        if self.config.quantum_caustics['enable']:
+        if self.config.quantum_caustics["enable"]:
             print("\n→ Stage 1: Quantum Caustic Enhancement")
             with torch.no_grad():
                 caustics = self.caustic_gen(img_tensor, depth_map)
@@ -479,7 +488,7 @@ class HyperRealityProcessor:
                 self._save_intermediate(img_tensor, output_path, "01_caustics")
 
         # Stage 2: Neural Atmosphere
-        if self.config.neural_atmosphere['enable']:
+        if self.config.neural_atmosphere["enable"]:
             print("\n→ Stage 2: Neural Atmospheric Synthesis")
             with torch.no_grad():
                 img_tensor = self.atmosphere_syn(img_tensor)
@@ -489,7 +498,7 @@ class HyperRealityProcessor:
                 self._save_intermediate(img_tensor, output_path, "02_atmosphere")
 
         # Stage 3: Material Transcendence
-        if self.config.material_transcendence['enable']:
+        if self.config.material_transcendence["enable"]:
             print("\n→ Stage 3: Material Transcendence")
             with torch.no_grad():
                 img_tensor = self.material_trans(img_tensor)
@@ -499,7 +508,7 @@ class HyperRealityProcessor:
                 self._save_intermediate(img_tensor, output_path, "03_materials")
 
         # Stage 4: Spatial Harmonics
-        if self.config.spatial_harmonics['enable']:
+        if self.config.spatial_harmonics["enable"]:
             print("\n→ Stage 4: Spatial Harmonics Illumination")
             with torch.no_grad():
                 illumination = self.spatial_harm(normals)
@@ -510,7 +519,7 @@ class HyperRealityProcessor:
                 self._save_intermediate(img_tensor, output_path, "04_harmonics")
 
         # Stage 5: Synergistic Amplification
-        if self.config.synergistic['enable']:
+        if self.config.synergistic["enable"]:
             print("\n→ Stage 5: Synergistic Amplification")
             img_tensor = self._synergistic_amplification(img_tensor)
             self.quality_score += 5
@@ -534,20 +543,20 @@ class HyperRealityProcessor:
         # Calculate metrics
         processing_time = time.time() - start_time
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("ENHANCEMENT COMPLETE")
         print(f"Final Quality: {self.quality_score}/100")
         print(f"Processing Time: {processing_time:.2f}s")
         print(f"Output: {output_path}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         return {
-            'output_path': output_path,
-            'quality_score': self.quality_score,
-            'processing_time': processing_time,
-            'original_size': original_size,
-            'device': str(device),
-            'enhancements': self.enhancements_applied
+            "output_path": output_path,
+            "quality_score": self.quality_score,
+            "processing_time": processing_time,
+            "original_size": original_size,
+            "device": str(device),
+            "enhancements": self.enhancements_applied,
         }
 
     def _estimate_depth(self, img: torch.Tensor) -> torch.Tensor:
@@ -589,30 +598,28 @@ class HyperRealityProcessor:
         """Apply final synergistic enhancements"""
 
         # Edge enhancement
-        if self.config.synergistic['edge_enhancement'] > 1.0:
-            kernel = torch.tensor([[-1, -1, -1],
-                                  [-1, 9, -1],
-                                  [-1, -1, -1]], dtype=torch.float32).view(1, 1, 3, 3).to(device)
+        if self.config.synergistic["edge_enhancement"] > 1.0:
+            kernel = torch.tensor([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]], dtype=torch.float32).view(1, 1, 3, 3).to(device)
             # pylint: disable=not-callable  # F.conv2d is callable in torch.nn.functional
             edges = F.conv2d(img, kernel.repeat(3, 1, 1, 1), padding=1, groups=3)
             # pylint: enable=not-callable
-            img = img + edges * (self.config.synergistic['edge_enhancement'] - 1.0)
+            img = img + edges * (self.config.synergistic["edge_enhancement"] - 1.0)
 
         # Local contrast enhancement
-        if self.config.synergistic['local_contrast'] > 1.0:
+        if self.config.synergistic["local_contrast"] > 1.0:
             # pylint: disable=not-callable  # F.avg_pool2d is callable in torch.nn.functional
             local_mean = F.avg_pool2d(img, kernel_size=15, stride=1, padding=7)
             # pylint: enable=not-callable
-            img = (img - local_mean) * self.config.synergistic['local_contrast'] + local_mean
+            img = (img - local_mean) * self.config.synergistic["local_contrast"] + local_mean
 
         # Saturation boost
-        if self.config.synergistic['saturation_boost'] > 1.0:
+        if self.config.synergistic["saturation_boost"] > 1.0:
             gray = torch.mean(img, dim=1, keepdim=True)
-            img = gray + (img - gray) * self.config.synergistic['saturation_boost']
+            img = gray + (img - gray) * self.config.synergistic["saturation_boost"]
 
         # Tone curve adjustment
-        if self.config.synergistic['tone_curve_gamma'] != 1.0:
-            img = torch.pow(torch.clamp(img, 0, 1), self.config.synergistic['tone_curve_gamma'])
+        if self.config.synergistic["tone_curve_gamma"] != 1.0:
+            img = torch.pow(torch.clamp(img, 0, 1), self.config.synergistic["tone_curve_gamma"])
 
         return img
 
@@ -624,10 +631,9 @@ class HyperRealityProcessor:
         print(f"  Saved: {path}")
 
 
-def enhance_image(image_path: str,
-                  output_path: Optional[str] = None,
-                  target_quality: int = 105,
-                  save_intermediate: bool = False) -> Dict[str, Any]:
+def enhance_image(
+    image_path: str, output_path: Optional[str] = None, target_quality: int = 105, save_intermediate: bool = False
+) -> Dict[str, Any]:
     """
     Enhance a single image to hyper-reality quality
 
@@ -644,11 +650,7 @@ def enhance_image(image_path: str,
     config = EnhancementConfig(target_quality=target_quality)
     processor = HyperRealityProcessor(config)
 
-    return processor.process_image(
-        image_path=image_path,
-        output_path=output_path,
-        save_intermediate=save_intermediate
-    )
+    return processor.process_image(image_path=image_path, output_path=output_path, save_intermediate=save_intermediate)
 
 
 if __name__ == "__main__":
@@ -664,10 +666,7 @@ if __name__ == "__main__":
 
     # Process image
     results = enhance_image(
-        image_path=args.input,
-        output_path=args.output,
-        target_quality=args.quality,
-        save_intermediate=args.intermediate
+        image_path=args.input, output_path=args.output, target_quality=args.quality, save_intermediate=args.intermediate
     )
 
     # Print results

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Quick Start Training Script for Hyper-Reality Enhancement
-# 
+#
 # This script automates the complete training workflow:
 # 1. Generate synthetic training data
 # 2. Train models for 50 epochs
@@ -142,12 +142,12 @@ if [ ! -f "$TEST_IMAGE" ]; then
     echo -e "${YELLOW}⚠️  No test image found, skipping test${NC}"
 else
     echo "Testing on: $TEST_IMAGE"
-    
+
     python src/enhancements/hyper_reality_enhancement.py \
         "$TEST_IMAGE" \
         -o "output_test_trained.jpg" \
         -q 105
-    
+
     if [ $? -eq 0 ]; then
         echo ""
         echo -e "${GREEN}✓ Test completed${NC}"

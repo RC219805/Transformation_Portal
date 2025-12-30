@@ -33,26 +33,26 @@ for scene_path in "${SCENES[@]}"; do
         echo "⚠️  Skipping missing: $scene_path"
         continue
     fi
-    
+
     scene_name="$(basename "$scene_path" .tif)"
     scene_output="$OUTPUT_BASE/$scene_name"
-    
+
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Processing: $scene_name"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     python -m lux_depth_v2.cli \
         --input "$scene_path" \
         --output-dir "$scene_output" \
         --preset "$PRESET" \
         --device auto \
         --upscaler-backend torch
-    
+
     # Verify report was generated
     report_json="$scene_output/${scene_name}_report.json"
     if [[ -f "$report_json" ]]; then
         echo "✅ Report generated: $report_json"
-        
+
         # Quick preview of materials detected
         echo ""
         echo "Materials detected:"
@@ -67,7 +67,7 @@ with open('$report_json') as f:
     else
         echo "❌ Report not found: $report_json"
     fi
-    
+
     echo ""
 done
 

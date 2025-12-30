@@ -2,7 +2,7 @@
 
 **Strategic Architecture Review - December 20, 2025**
 
-> 🎯 **PRIMARY PRODUCTION WORKFLOW**: `lux_depth_v2`  
+> 🎯 **PRIMARY PRODUCTION WORKFLOW**: `lux_depth_v2`
 > All other pipelines are advanced/experimental. See [Golden Path Definition](#-golden-path-definition) below.
 
 ---
@@ -85,7 +85,7 @@ docker-compose -f deployment/docker-compose.production.yml up -d
 
 **What's NOT golden path?**
 - Async pipeline → Performance layer (advanced)
-- Unified/context-aware → Orchestration (advanced)  
+- Unified/context-aware → Orchestration (advanced)
 - Training → Research infrastructure (not production)
 - Lux Depth V3 → DEFERRED (DA3 evaluation pending)
 
@@ -173,16 +173,16 @@ During implementation:
 
 ## 📞 Contact
 
-**Questions about strategic assessment?**  
+**Questions about strategic assessment?**
 → Review STRATEGIC_ARCHITECTURE_ASSESSMENT_2025-12-20.md Appendix A (alternatives) and Appendix B (decision criteria)
 
-**Questions about implementation?**  
+**Questions about implementation?**
 → See GOLDEN_PATH_CONSOLIDATION_CHECKLIST.md "Risk Mitigation" section
 
-**Questions about freeze policy?**  
+**Questions about freeze policy?**
 → See FEATURE_FREEZE_POLICY.md FAQ section
 
-**Need exception approval?**  
+**Need exception approval?**
 → File GitHub issue with label `feature-freeze-exception`
 
 ---
@@ -196,6 +196,6 @@ During implementation:
 
 ---
 
-**Owner**: Transformation Portal Architect  
-**Last Updated**: December 20, 2025  
+**Owner**: Transformation Portal Architect
+**Last Updated**: December 20, 2025
 **Next Review**: January 8, 2026 (assess freeze extension)

@@ -115,20 +115,13 @@ class TestCheckVersionCompatibility:
 
     def test_compatible_version_in_range(self):
         """Test that version within range is compatible."""
-        is_compatible, msg = check_version_compatibility(
-            "1.5.0",
-            min_version="1.0.0",
-            max_version="2.0.0"
-        )
+        is_compatible, msg = check_version_compatibility("1.5.0", min_version="1.0.0", max_version="2.0.0")
         assert is_compatible
         assert msg is None
 
     def test_version_below_minimum(self):
         """Test that version below minimum is incompatible."""
-        is_compatible, msg = check_version_compatibility(
-            "0.9.0",
-            min_version="1.0.0"
-        )
+        is_compatible, msg = check_version_compatibility("0.9.0", min_version="1.0.0")
         assert not is_compatible
         assert msg is not None
         assert "below minimum" in msg.lower()
@@ -137,10 +130,7 @@ class TestCheckVersionCompatibility:
 
     def test_version_above_maximum(self):
         """Test that version above maximum is incompatible."""
-        is_compatible, msg = check_version_compatibility(
-            "3.0.0",
-            max_version="2.0.0"
-        )
+        is_compatible, msg = check_version_compatibility("3.0.0", max_version="2.0.0")
         assert not is_compatible
         assert msg is not None
         assert "exceeds maximum" in msg.lower()
@@ -149,19 +139,13 @@ class TestCheckVersionCompatibility:
 
     def test_version_equal_to_minimum(self):
         """Test that version equal to minimum is compatible."""
-        is_compatible, msg = check_version_compatibility(
-            "1.0.0",
-            min_version="1.0.0"
-        )
+        is_compatible, msg = check_version_compatibility("1.0.0", min_version="1.0.0")
         assert is_compatible
         assert msg is None
 
     def test_version_equal_to_maximum(self):
         """Test that version equal to maximum is compatible."""
-        is_compatible, msg = check_version_compatibility(
-            "2.0.0",
-            max_version="2.0.0"
-        )
+        is_compatible, msg = check_version_compatibility("2.0.0", max_version="2.0.0")
         assert is_compatible
         assert msg is None
 
@@ -173,19 +157,13 @@ class TestCheckVersionCompatibility:
 
     def test_only_minimum_constraint(self):
         """Test with only minimum version constraint."""
-        is_compatible, msg = check_version_compatibility(
-            "2.0.0",
-            min_version="1.0.0"
-        )
+        is_compatible, msg = check_version_compatibility("2.0.0", min_version="1.0.0")
         assert is_compatible
         assert msg is None
 
     def test_only_maximum_constraint(self):
         """Test with only maximum version constraint."""
-        is_compatible, msg = check_version_compatibility(
-            "1.0.0",
-            max_version="2.0.0"
-        )
+        is_compatible, msg = check_version_compatibility("1.0.0", max_version="2.0.0")
         assert is_compatible
         assert msg is None
 
@@ -196,10 +174,7 @@ class TestRequireVersion:
     def test_compatible_version_passes(self, monkeypatch):
         """Test that function executes with compatible version."""
         # Mock the version to be within range
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "1.5.0"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "1.5.0")
 
         @require_version(min_version="1.0.0", max_version="2.0.0")
         def my_function():
@@ -211,10 +186,7 @@ class TestRequireVersion:
     def test_incompatible_version_raises_error(self, monkeypatch):
         """Test that function raises error with incompatible version."""
         # Mock the version to be below minimum
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "0.5.0"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "0.5.0")
 
         @require_version(min_version="1.0.0")
         def my_function():
@@ -228,6 +200,7 @@ class TestRequireVersion:
 
     def test_require_version_preserves_function_metadata(self):
         """Test that decorator preserves function metadata."""
+
         @require_version(min_version="0.0.1")
         def documented_function():
             """This function is documented."""
@@ -237,10 +210,7 @@ class TestRequireVersion:
 
     def test_require_version_with_function_arguments(self, monkeypatch):
         """Test that decorated function properly handles arguments."""
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "1.0.0"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "1.0.0")
 
         @require_version(min_version="0.5.0")
         def add_numbers(a, b):
@@ -251,10 +221,7 @@ class TestRequireVersion:
 
     def test_require_version_only_minimum(self, monkeypatch):
         """Test require_version with only minimum constraint."""
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "2.0.0"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "2.0.0")
 
         @require_version(min_version="1.0.0")
         def my_function():
@@ -264,10 +231,7 @@ class TestRequireVersion:
 
     def test_require_version_only_maximum(self, monkeypatch):
         """Test require_version with only maximum constraint."""
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "1.0.0"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "1.0.0")
 
         @require_version(max_version="2.0.0")
         def my_function():
@@ -286,10 +250,7 @@ class TestGetPortalVersion:
 
     def test_get_portal_version_when_available(self, monkeypatch):
         """Test getting version when it's available."""
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "1.2.3"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "1.2.3")
         version = get_portal_version()
         assert version == "1.2.3"
 
@@ -301,7 +262,7 @@ class TestGetPortalVersion:
         # Should return either the actual version or "0.0.0" fallback
         assert isinstance(version, str)
         # Version should be parseable
-        parts = version.split('.')
+        parts = version.split(".")
         assert len(parts) >= 2  # At least major.minor
 
 
@@ -310,34 +271,22 @@ class TestIsVersionAtLeast:
 
     def test_version_meets_requirement(self, monkeypatch):
         """Test when current version meets requirement."""
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "2.0.0"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "2.0.0")
         assert is_version_at_least("1.0.0")
 
     def test_version_below_requirement(self, monkeypatch):
         """Test when current version is below requirement."""
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "0.9.0"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "0.9.0")
         assert not is_version_at_least("1.0.0")
 
     def test_version_exactly_meets_requirement(self, monkeypatch):
         """Test when current version exactly meets requirement."""
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "1.5.0"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "1.5.0")
         assert is_version_at_least("1.5.0")
 
     def test_version_patch_level(self, monkeypatch):
         """Test version comparison at patch level."""
-        monkeypatch.setattr(
-            "transformation_portal.__version__",
-            "1.0.1"
-        )
+        monkeypatch.setattr("transformation_portal.__version__", "1.0.1")
         assert is_version_at_least("1.0.0")
         assert is_version_at_least("1.0.1")
         assert not is_version_at_least("1.0.2")

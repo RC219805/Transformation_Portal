@@ -1,6 +1,6 @@
 # Branch Strategy & Sprint Planning Guidance
-**Date**: December 20, 2025  
-**Architect**: Transformation Portal Architect  
+**Date**: December 20, 2025
+**Architect**: Transformation Portal Architect
 **Status**: Strategic Recommendation
 
 ---
@@ -152,13 +152,13 @@ lux_depth_v2/
        # Existing stages
        depth_map = self.estimate_depth(image)
        enhanced = self.enhance_materials(image, depth_map)
-       
+
        # NEW: Optional refinement stage
        if config.enable_edge_refinement:
            from lux_depth_v2.refinement import EdgeRefinement
            refiner = EdgeRefinement(config.refinement_config)
            enhanced = refiner.refine(enhanced, depth_map)
-       
+
        return enhanced
    ```
 
@@ -168,7 +168,7 @@ lux_depth_v2/
    class PipelineConfig:
        # Existing fields
        preset: str = "interior_luxury"
-       
+
        # NEW: Refinement configuration
        enable_edge_refinement: bool = False
        refinement_config: Optional[RefinementConfig] = None
@@ -222,7 +222,7 @@ echo "Branch cleanup backup created: $(date)" > \
   .local_backup/branch_cleanup_$(date +%Y%m%d)/README.txt
 ```
 
-**Backup Size**: ~5-10 MB (diffs only, no binary assets)  
+**Backup Size**: ~5-10 MB (diffs only, no binary assets)
 **Recovery**: Apply diffs with `git apply <diff_file>` if needed
 
 ### **Why Not Full Backup?**

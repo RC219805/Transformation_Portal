@@ -305,7 +305,7 @@ Options 2, 3, 4 implementation:
 
 - Improved 16-bit TIFF handling (metadata, compression, quality preservation)
   * Save/load 16-bit TIFFs with full precision
-  * Preserve metadata through conversion pipeline  
+  * Preserve metadata through conversion pipeline
   * Optimize compression (LZW, ZIP) without quality loss
   * Better error messages and fallbacks
 
@@ -351,7 +351,7 @@ git push origin copilot/enhance-image-file-types
 6. Try batch conversion on a test directory
 7. Commit to your feature branch
 
-### This Week  
+### This Week
 8. Integrate with one existing pipeline
 9. Update documentation
 10. Add CLI commands for batch conversion

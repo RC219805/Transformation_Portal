@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 import torch
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 
 class ModelLoader:
@@ -63,10 +63,7 @@ class ModelLoader:
             warnings.warn(f"Failed to load checkpoint from {checkpoint_path}: {e}")
             return None
 
-    def load_model_weights(
-            self,
-            models: Dict[str, torch.nn.Module],
-            checkpoint: Optional[Dict[str, Any]] = None) -> bool:
+    def load_model_weights(self, models: Dict[str, torch.nn.Module], checkpoint: Optional[Dict[str, Any]] = None) -> bool:
         """
         Load weights into models
 
@@ -84,7 +81,7 @@ class ModelLoader:
             return False
 
         try:
-            model_states = checkpoint.get('models', {})
+            model_states = checkpoint.get("models", {})
 
             for name, model in models.items():
                 if name in model_states:
@@ -116,16 +113,16 @@ class ModelLoader:
     def checkpoint_info(self, checkpoint: Dict[str, Any]) -> Dict[str, Any]:
         """Extract information from checkpoint"""
         return {
-            'epoch': checkpoint.get('epoch', 'unknown'),
-            'best_val_loss': checkpoint.get('best_val_loss', None),
-            'config': checkpoint.get('config', {}),
-            'models': list(checkpoint.get('models', {}).keys()),
+            "epoch": checkpoint.get("epoch", "unknown"),
+            "best_val_loss": checkpoint.get("best_val_loss", None),
+            "config": checkpoint.get("config", {}),
+            "models": list(checkpoint.get("models", {}).keys()),
         }
 
 
-def load_pretrained_weights(models: Dict[str, torch.nn.Module],
-                            checkpoint_dir: str = "weights/hyper_reality",
-                            verbose: bool = True) -> bool:
+def load_pretrained_weights(
+    models: Dict[str, torch.nn.Module], checkpoint_dir: str = "weights/hyper_reality", verbose: bool = True
+) -> bool:
     """
     Convenience function to load pre-trained weights into models
 

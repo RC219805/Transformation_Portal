@@ -24,72 +24,29 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from training.property_specific.picacho_trainer import PicachoTrainer, TrainingConfig
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Train 750 Picacho Lane enhancement model"
-    )
+    parser = argparse.ArgumentParser(description="Train 750 Picacho Lane enhancement model")
     parser.add_argument(
         "--config",
         type=Path,
         default=Path("config/training/750_picacho_lane_protocol.yaml"),
-        help="Path to training configuration YAML"
+        help="Path to training configuration YAML",
     )
     parser.add_argument(
-        "--data-dir",
-        type=Path,
-        default=Path("data/training_750picacho"),
-        help="Path to training data directory"
+        "--data-dir", type=Path, default=Path("data/training_750picacho"), help="Path to training data directory"
     )
-    parser.add_argument(
-        "--checkpoint-dir",
-        type=Path,
-        default=Path("weights/750_picacho"),
-        help="Path to save checkpoints"
-    )
-    parser.add_argument(
-        "--resume",
-        type=Path,
-        default=None,
-        help="Path to checkpoint to resume from"
-    )
-    parser.add_argument(
-        "--stage1-epochs",
-        type=int,
-        default=20,
-        help="Number of epochs for Stage 1"
-    )
-    parser.add_argument(
-        "--stage2-epochs",
-        type=int,
-        default=20,
-        help="Number of epochs for Stage 2"
-    )
-    parser.add_argument(
-        "--stage3-epochs",
-        type=int,
-        default=10,
-        help="Number of epochs for Stage 3"
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        choices=["auto", "cuda", "mps", "cpu"],
-        default="auto",
-        help="Compute device"
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose output"
-    )
+    parser.add_argument("--checkpoint-dir", type=Path, default=Path("weights/750_picacho"), help="Path to save checkpoints")
+    parser.add_argument("--resume", type=Path, default=None, help="Path to checkpoint to resume from")
+    parser.add_argument("--stage1-epochs", type=int, default=20, help="Number of epochs for Stage 1")
+    parser.add_argument("--stage2-epochs", type=int, default=20, help="Number of epochs for Stage 2")
+    parser.add_argument("--stage3-epochs", type=int, default=10, help="Number of epochs for Stage 3")
+    parser.add_argument("--device", type=str, choices=["auto", "cuda", "mps", "cpu"], default="auto", help="Compute device")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()
 
@@ -155,6 +112,7 @@ def main():
 
         # Save training report
         import json
+
         report_path = config.checkpoint_dir / "training_report.json"
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2, default=str)
@@ -167,6 +125,7 @@ def main():
     except Exception as e:
         print(f"\n\n❌ Training failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

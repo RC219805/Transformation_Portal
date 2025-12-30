@@ -1,7 +1,7 @@
 # Production Policy: 750 Picacho Grade Selection
 
-**Version:** 1.0  
-**Date:** 2025-12-04  
+**Version:** 1.0
+**Date:** 2025-12-04
 **Status:** Clinical Framework - Ready for Production
 
 ---
@@ -75,7 +75,7 @@
 **If Baseline ≥ 55% (Hero Shots):**
 - Default: **Keep as baseline** or use absolute minimal processing
 - These shots are already excellent
-- Any "film look" will cost 4-6% 
+- Any "film look" will cost 4-6%
 - **Question to ask:** Is the brand look worth the quality loss?
 
 **If Baseline 45-55% (Good Shots):**
@@ -138,8 +138,8 @@ Priority:
 - 750Picacho_PrimaryBathroom.jpg (49.42%)
 ```
 
-**Recipe:** Signature Estate (Gentle) - Test first  
-**Expected:** 45-47% (3-5% loss acceptable)  
+**Recipe:** Signature Estate (Gentle) - Test first
+**Expected:** 45-47% (3-5% loss acceptable)
 **Review Required:** Yes - visual comparison mandatory
 
 ### Batch 3: Full Enhancement
@@ -147,8 +147,8 @@ Priority:
 - 750Picacho_Aerial.jpg         (42.20%)
 ```
 
-**Recipe:** Exterior Enhanced  
-**Expected:** 48%+ (+6% gain)  
+**Recipe:** Exterior Enhanced
+**Expected:** 48%+ (+6% gain)
 **Status:** Proven - use with confidence
 
 ---

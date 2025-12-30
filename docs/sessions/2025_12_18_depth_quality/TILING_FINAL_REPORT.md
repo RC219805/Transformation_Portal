@@ -1,5 +1,5 @@
 # Tiling Investigation: Final Report
-**Date**: 2025-12-18  
+**Date**: 2025-12-18
 **Status**: ⚠️ PARTIAL FIX ACHIEVED - FUNDAMENTAL LIMITATIONS IDENTIFIED
 
 ---
@@ -31,13 +31,13 @@ However, tiling still **underperforms baseline** on edge alignment metrics.
 ## Fixes Implemented
 
 ### Fix #1: Scale Reconciliation
-**Problem**: Each tile normalized independently to [0,1]  
-**Solution**: Affine match tiles to global anchor using overlap regions  
+**Problem**: Each tile normalized independently to [0,1]
+**Solution**: Affine match tiles to global anchor using overlap regions
 **Impact**: +4.2% overlap improvement (65.7% → 69.9%)
 
 ### Fix #2: Size Mismatch
-**Problem**: Model outputs 1016×1016 depth from 1024×1024 input  
-**Solution**: Resize depth to match tile size with bilinear interpolation  
+**Problem**: Model outputs 1016×1016 depth from 1024×1024 input
+**Solution**: Resize depth to match tile size with bilinear interpolation
 **Impact**: Enabled proper tile placement (was failing before)
 
 ---
@@ -176,6 +176,6 @@ config = TiledInferenceConfig(
 
 ---
 
-**Status**: ✅ Bugs fixed, ⚠️ Architecture limitation identified  
-**Recommendation**: Deploy refinement-only pipeline immediately  
+**Status**: ✅ Bugs fixed, ⚠️ Architecture limitation identified
+**Recommendation**: Deploy refinement-only pipeline immediately
 **Future work**: Re-architect tiling as global+detail fusion (not replacement)

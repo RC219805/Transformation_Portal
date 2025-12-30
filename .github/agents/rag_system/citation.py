@@ -77,14 +77,16 @@ class CitationGenerator:
             # Generate relevance note
             relevance_note = self._generate_relevance_note(result)
 
-            citations.append(Citation(
-                file_path=result.file_path,
-                start_line=result.start_line,
-                end_line=result.end_line,
-                snippet=snippet,
-                confidence=confidence,
-                relevance_note=relevance_note,
-            ))
+            citations.append(
+                Citation(
+                    file_path=result.file_path,
+                    start_line=result.start_line,
+                    end_line=result.end_line,
+                    snippet=snippet,
+                    confidence=confidence,
+                    relevance_note=relevance_note,
+                )
+            )
 
         return citations
 
@@ -109,31 +111,31 @@ class CitationGenerator:
         score_confidence = min(1.0, score / self.MAX_EXPECTED_SCORE)
 
         # Combine with weights
-        confidence = (rank_confidence * 0.6 + score_confidence * 0.4)
+        confidence = rank_confidence * 0.6 + score_confidence * 0.4
 
         return round(confidence, 2)
 
     def _extract_snippet(self, content: str) -> str:
         """Extract a readable snippet from content."""
-        lines = content.split('\n')
+        lines = content.split("\n")
 
         # Limit lines
         if len(lines) > self.snippet_max_lines:
-            lines = lines[:self.snippet_max_lines]
+            lines = lines[: self.snippet_max_lines]
             truncated = True
         else:
             truncated = False
 
-        snippet = '\n'.join(lines)
+        snippet = "\n".join(lines)
 
         # Limit characters
         if len(snippet) > self.snippet_max_chars:
-            snippet = snippet[:self.snippet_max_chars]
+            snippet = snippet[: self.snippet_max_chars]
             truncated = True
 
         # Add truncation indicator
         if truncated:
-            snippet += '\n...'
+            snippet += "\n..."
 
         return snippet
 
@@ -142,25 +144,25 @@ class CitationGenerator:
         notes = []
 
         # Check metadata for specific indicators
-        if result.metadata.get('entity_type') == 'function':
-            func_name = result.metadata.get('function_name', 'unknown')
+        if result.metadata.get("entity_type") == "function":
+            func_name = result.metadata.get("function_name", "unknown")
             notes.append(f"Function: {func_name}")
-        elif result.metadata.get('entity_type') == 'class':
-            class_name = result.metadata.get('class_name', 'unknown')
+        elif result.metadata.get("entity_type") == "class":
+            class_name = result.metadata.get("class_name", "unknown")
             notes.append(f"Class: {class_name}")
 
-        if result.metadata.get('docstring'):
+        if result.metadata.get("docstring"):
             notes.append("Has documentation")
 
-        if result.metadata.get('document_type'):
-            doc_type = result.metadata['document_type']
+        if result.metadata.get("document_type"):
+            doc_type = result.metadata["document_type"]
             notes.append(f"Type: {doc_type}")
 
-        if result.retrieval_method == 'bm25':
+        if result.retrieval_method == "bm25":
             notes.append("Text match")
-        elif result.retrieval_method == 'vector':
+        elif result.retrieval_method == "vector":
             notes.append("Semantic match")
-        elif result.retrieval_method == 'hybrid':
+        elif result.retrieval_method == "hybrid":
             notes.append("Hybrid match")
 
         return " | ".join(notes) if notes else "Relevant match"
@@ -168,7 +170,7 @@ class CitationGenerator:
     def format_citations(
         self,
         citations: List[Citation],
-        format_type: str = 'markdown',
+        format_type: str = "markdown",
     ) -> str:
         """
         Format citations for display.
@@ -180,11 +182,11 @@ class CitationGenerator:
         Returns:
             Formatted citation string
         """
-        if format_type == 'markdown':
+        if format_type == "markdown":
             return self._format_markdown(citations)
-        elif format_type == 'text':
+        elif format_type == "text":
             return self._format_text(citations)
-        elif format_type == 'json':
+        elif format_type == "json":
             return self._format_json(citations)
         else:
             raise ValueError(f"Unknown format type: {format_type}")
@@ -227,17 +229,17 @@ class CitationGenerator:
 
         citations_dict = [
             {
-                'file_path': cite.file_path,
-                'start_line': cite.start_line,
-                'end_line': cite.end_line,
-                'snippet': cite.snippet,
-                'confidence': cite.confidence,
-                'relevance_note': cite.relevance_note,
+                "file_path": cite.file_path,
+                "start_line": cite.start_line,
+                "end_line": cite.end_line,
+                "snippet": cite.snippet,
+                "confidence": cite.confidence,
+                "relevance_note": cite.relevance_note,
             }
             for cite in citations
         ]
 
-        return json.dumps({'citations': citations_dict}, indent=2)
+        return json.dumps({"citations": citations_dict}, indent=2)
 
 
 def main():
@@ -253,12 +255,11 @@ def main():
     from rag_system.reranker import ResultReranker
     from rag_system.retriever import HybridRetriever
 
-    parser = argparse.ArgumentParser(description='Test citation generation')
-    parser.add_argument('--repo-root', default='.', help='Repository root directory')
-    parser.add_argument('--query', required=True, help='Search query')
-    parser.add_argument('--max-citations', type=int, default=5, help='Max citations')
-    parser.add_argument('--format', choices=['markdown', 'text', 'json'],
-                        default='markdown', help='Output format')
+    parser = argparse.ArgumentParser(description="Test citation generation")
+    parser.add_argument("--repo-root", default=".", help="Repository root directory")
+    parser.add_argument("--query", required=True, help="Search query")
+    parser.add_argument("--max-citations", type=int, default=5, help="Max citations")
+    parser.add_argument("--format", choices=["markdown", "text", "json"], default="markdown", help="Output format")
 
     args = parser.parse_args()
 
@@ -285,5 +286,5 @@ def main():
     print(formatted)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -53,9 +53,7 @@ class TestPhase2GitHooks:
         """Test ChangeDetector can get current commit."""
         from git_hooks import ChangeDetector, GitHookConfig
 
-        mock_run.return_value = MagicMock(
-            stdout="abc123def456\n", returncode=0
-        )
+        mock_run.return_value = MagicMock(stdout="abc123def456\n", returncode=0)
         config = GitHookConfig()
         detector = ChangeDetector(".", config)
         commit = detector.get_current_commit()
@@ -168,8 +166,8 @@ class TestPhase2KnowledgeEngine:
         assert len(analyzer.patterns) > 0, "FailureAnalyzer should have built-in patterns"
         # Verify patterns have required attributes
         for pattern in analyzer.patterns:
-            assert hasattr(pattern, 'name'), "Pattern should have a name attribute"
-            assert hasattr(pattern, 'error_regex'), "Pattern should have an error_regex attribute"
+            assert hasattr(pattern, "name"), "Pattern should have a name attribute"
+            assert hasattr(pattern, "error_regex"), "Pattern should have an error_regex attribute"
 
 
 class TestPhase2DependencyAnalysis:
@@ -179,11 +177,7 @@ class TestPhase2DependencyAnalysis:
         """Test DependencyNode dataclass."""
         from dependency_analysis import DependencyNode
 
-        node = DependencyNode(
-            node_id="src/test.py",
-            node_type="module",
-            name="test.py"
-        )
+        node = DependencyNode(node_id="src/test.py", node_type="module", name="test.py")
         assert node.node_id == "src/test.py"
         assert node.node_type == "module"
         assert node.name == "test.py"
@@ -192,11 +186,7 @@ class TestPhase2DependencyAnalysis:
         """Test DependencyEdge dataclass."""
         from dependency_analysis import DependencyEdge
 
-        edge = DependencyEdge(
-            source="src/a.py",
-            target="src/b.py",
-            edge_type="imports"
-        )
+        edge = DependencyEdge(source="src/a.py", target="src/b.py", edge_type="imports")
         assert edge.source == "src/a.py"
         assert edge.target == "src/b.py"
         assert edge.edge_type == "imports"
@@ -245,7 +235,7 @@ class TestPhase2DependencyAnalysis:
             affected_workflows=["CI Pipeline"],
             impact_score=0.5,
             affected_loc=100,
-            recommended_tests=["tests/test_a.py"]
+            recommended_tests=["tests/test_a.py"],
         )
         assert report.impact_score == 0.5
         assert len(report.affected_tests) == 1

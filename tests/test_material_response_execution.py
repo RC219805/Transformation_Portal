@@ -51,7 +51,7 @@ def metal_like_region():
 
     # Add edge patterns (simulating metal reflections)
     for i in range(0, w, 8):
-        arr[:, i:i + 2, :] = 0.8
+        arr[:, i : i + 2, :] = 0.8
 
     return arr
 
@@ -79,11 +79,7 @@ class TestMaterialResponseStage:
         """Test that MaterialResponseStage can be initialized."""
         from transformation_portal.streaming.stages import MaterialResponseStage
 
-        stage = MaterialResponseStage(
-            materials=["wood", "metal", "glass", "textile"],
-            intensity=1.0,
-            use_depth=True
-        )
+        stage = MaterialResponseStage(materials=["wood", "metal", "glass", "textile"], intensity=1.0, use_depth=True)
 
         assert stage._materials == ["wood", "metal", "glass", "textile"]
         assert stage._intensity == 1.0
@@ -105,11 +101,7 @@ class TestMaterialResponseStage:
         from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
 
         stage = MaterialResponseStage(intensity=1.0)
-        image_data = ImageData(
-            array=synthetic_rgb_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=synthetic_rgb_image, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
@@ -120,11 +112,7 @@ class TestMaterialResponseStage:
         from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
 
         stage = MaterialResponseStage(intensity=1.0)
-        image_data = ImageData(
-            array=synthetic_rgb_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=synthetic_rgb_image, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
@@ -136,18 +124,14 @@ class TestMaterialResponseStage:
         from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
 
         stage = MaterialResponseStage(intensity=0.8)
-        image_data = ImageData(
-            array=synthetic_rgb_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=synthetic_rgb_image, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
-        assert result.metadata['material_enhanced'] is True
-        assert result.metadata['materials'] == stage._materials
-        assert result.metadata['material_response_version'] == '2.0'
-        assert result.metadata['enhancement_intensity'] == 0.8
+        assert result.metadata["material_enhanced"] is True
+        assert result.metadata["materials"] == stage._materials
+        assert result.metadata["material_response_version"] == "2.0"
+        assert result.metadata["enhancement_intensity"] == 0.8
 
     def test_highlight_energy_conservation(self, synthetic_rgb_image):
         """Test that highlights are not over-enhanced (energy conservation)."""
@@ -157,11 +141,7 @@ class TestMaterialResponseStage:
 
         # Create image with extreme highlights
         highlight_image = np.ones((64, 64, 3), dtype=np.float32) * 0.95
-        image_data = ImageData(
-            array=highlight_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=highlight_image, path=Path("test.jpg"), metadata={})
 
         original_mean = highlight_image.mean()
         result = stage._enhance_sync(image_data)
@@ -179,14 +159,10 @@ class TestMaterialResponseStage:
 
         # Create midtone image with texture (vectorized for efficiency)
         midtone_image = np.ones((64, 64, 3), dtype=np.float32) * 0.5
-        i, j = np.meshgrid(np.arange(64), np.arange(64), indexing='ij')
+        i, j = np.meshgrid(np.arange(64), np.arange(64), indexing="ij")
         midtone_image[(i + j) % 4 == 0, :] = 0.55
 
-        image_data = ImageData(
-            array=midtone_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=midtone_image, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
@@ -203,20 +179,12 @@ class TestMaterialResponseStage:
 
         # Low intensity
         stage_low = MaterialResponseStage(intensity=0.2)
-        image_data_low = ImageData(
-            array=synthetic_rgb_image.copy(),
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data_low = ImageData(array=synthetic_rgb_image.copy(), path=Path("test.jpg"), metadata={})
         result_low = stage_low._enhance_sync(image_data_low)
 
         # High intensity
         stage_high = MaterialResponseStage(intensity=1.5)
-        image_data_high = ImageData(
-            array=synthetic_rgb_image.copy(),
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data_high = ImageData(array=synthetic_rgb_image.copy(), path=Path("test.jpg"), metadata={})
         result_high = stage_high._enhance_sync(image_data_high)
 
         # Calculate differences from original
@@ -235,11 +203,7 @@ class TestMaterialResponseStage:
         # Create image with values > 1.0 (simulating unnormalized input)
         unnormalized_image = np.ones((64, 64, 3), dtype=np.float32) * 128
 
-        image_data = ImageData(
-            array=unnormalized_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=unnormalized_image, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
@@ -260,24 +224,16 @@ class TestMaterialResponseStage:
 
         # Process with depth
         image_data_with_depth = ImageData(
-            array=synthetic_rgb_image.copy(),
-            path=Path("test.jpg"),
-            depth_map=depth_map,
-            metadata={}
+            array=synthetic_rgb_image.copy(), path=Path("test.jpg"), depth_map=depth_map, metadata={}
         )
         result_with_depth = stage._enhance_sync(image_data_with_depth)
 
         # Process without depth for comparison
-        image_data_no_depth = ImageData(
-            array=synthetic_rgb_image.copy(),
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data_no_depth = ImageData(array=synthetic_rgb_image.copy(), path=Path("test.jpg"), metadata={})
         result_no_depth = stage._enhance_sync(image_data_no_depth)
 
         # Depth map should produce different results
-        assert not np.allclose(result_with_depth.array, result_no_depth.array), \
-            "Depth map should influence enhancement"
+        assert not np.allclose(result_with_depth.array, result_no_depth.array), "Depth map should influence enhancement"
         assert result_with_depth.array.shape == synthetic_rgb_image.shape
 
 
@@ -289,55 +245,43 @@ class TestUnifiedLuxuryPipelineMaterialResponse:
         from transformation_portal.pipelines.unified_luxury_pipeline import (
             UnifiedLuxuryPipeline,
             UnifiedPipelineConfig,
-            SceneType
+            SceneType,
         )
 
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO,
-            enable_material_response=True,
-            output_dir=Path("/tmp/test_output")
+            scene_type=SceneType.AUTO, enable_material_response=True, output_dir=Path("/tmp/test_output")
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
         # Convert to PIL Image
-        pil_image = Image.fromarray(
-            (synthetic_rgb_image * 255).astype(np.uint8), 'RGB'
-        )
+        pil_image = Image.fromarray((synthetic_rgb_image * 255).astype(np.uint8), "RGB")
 
-        params = {'material_strength': 0.65}
-        result = pipeline._apply_material_response(
-            pil_image, params, SceneType.INTERIOR
-        )
+        params = {"material_strength": 0.65}
+        result = pipeline._apply_material_response(pil_image, params, SceneType.INTERIOR)
 
         assert isinstance(result, Image.Image)
         assert result.size == pil_image.size
-        assert result.mode == 'RGB'
+        assert result.mode == "RGB"
 
     def test_scene_type_variations(self, synthetic_rgb_image):
         """Test material response with different scene types."""
         from transformation_portal.pipelines.unified_luxury_pipeline import (
             UnifiedLuxuryPipeline,
             UnifiedPipelineConfig,
-            SceneType
+            SceneType,
         )
 
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO,
-            enable_material_response=True,
-            output_dir=Path("/tmp/test_output")
+            scene_type=SceneType.AUTO, enable_material_response=True, output_dir=Path("/tmp/test_output")
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
-        pil_image = Image.fromarray(
-            (synthetic_rgb_image * 255).astype(np.uint8), 'RGB'
-        )
-        params = {'material_strength': 0.65}
+        pil_image = Image.fromarray((synthetic_rgb_image * 255).astype(np.uint8), "RGB")
+        params = {"material_strength": 0.65}
 
         # Test each scene type
         for scene_type in [SceneType.INTERIOR, SceneType.EXTERIOR, SceneType.AERIAL]:
-            result = pipeline._apply_material_response(
-                pil_image, params, scene_type
-            )
+            result = pipeline._apply_material_response(pil_image, params, scene_type)
             assert isinstance(result, Image.Image)
 
     def test_material_strength_parameter(self, synthetic_rgb_image):
@@ -345,29 +289,21 @@ class TestUnifiedLuxuryPipelineMaterialResponse:
         from transformation_portal.pipelines.unified_luxury_pipeline import (
             UnifiedLuxuryPipeline,
             UnifiedPipelineConfig,
-            SceneType
+            SceneType,
         )
 
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO,
-            enable_material_response=True,
-            output_dir=Path("/tmp/test_output")
+            scene_type=SceneType.AUTO, enable_material_response=True, output_dir=Path("/tmp/test_output")
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
-        pil_image = Image.fromarray(
-            (synthetic_rgb_image * 255).astype(np.uint8), 'RGB'
-        )
+        pil_image = Image.fromarray((synthetic_rgb_image * 255).astype(np.uint8), "RGB")
 
         # Low strength
-        result_low = pipeline._apply_material_response(
-            pil_image.copy(), {'material_strength': 0.2}, SceneType.INTERIOR
-        )
+        result_low = pipeline._apply_material_response(pil_image.copy(), {"material_strength": 0.2}, SceneType.INTERIOR)
 
         # High strength
-        result_high = pipeline._apply_material_response(
-            pil_image.copy(), {'material_strength': 1.0}, SceneType.INTERIOR
-        )
+        result_high = pipeline._apply_material_response(pil_image.copy(), {"material_strength": 1.0}, SceneType.INTERIOR)
 
         # Calculate differences from original
         original_arr = np.array(pil_image).astype(np.float32)
@@ -382,25 +318,19 @@ class TestUnifiedLuxuryPipelineMaterialResponse:
         from transformation_portal.pipelines.unified_luxury_pipeline import (
             UnifiedLuxuryPipeline,
             UnifiedPipelineConfig,
-            SceneType
+            SceneType,
         )
 
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO,
-            enable_material_response=True,
-            output_dir=Path("/tmp/test_output")
+            scene_type=SceneType.AUTO, enable_material_response=True, output_dir=Path("/tmp/test_output")
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
         # Create bright highlight image
         highlight_arr = np.ones((64, 64, 3), dtype=np.float32) * 0.92
-        pil_image = Image.fromarray(
-            (highlight_arr * 255).astype(np.uint8), 'RGB'
-        )
+        pil_image = Image.fromarray((highlight_arr * 255).astype(np.uint8), "RGB")
 
-        result = pipeline._apply_material_response(
-            pil_image, {'material_strength': 1.0}, SceneType.INTERIOR
-        )
+        result = pipeline._apply_material_response(pil_image, {"material_strength": 1.0}, SceneType.INTERIOR)
 
         result_arr = np.array(result).astype(np.float32) / 255.0
         original_max = highlight_arr.max()
@@ -428,11 +358,7 @@ class TestMaterialDetection:
         wood_image[50:, :, 1] = 0.45  # G
         wood_image[50:, :, 2] = 0.3  # B
 
-        image_data = ImageData(
-            array=wood_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=wood_image, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
@@ -441,7 +367,7 @@ class TestMaterialDetection:
         enhanced_floor_r = result.array[75, 50, 0]
 
         # Wood enhancement should slightly shift towards warm or processing occurred
-        assert enhanced_floor_r >= original_floor_r or result.metadata['material_enhanced'] is True
+        assert enhanced_floor_r >= original_floor_r or result.metadata["material_enhanced"] is True
 
     def test_metal_detection_neutral_high_contrast(self, metal_like_region):
         """Test that neutral high-contrast regions are detected as metal."""
@@ -449,16 +375,12 @@ class TestMaterialDetection:
 
         stage = MaterialResponseStage(materials=["metal"], intensity=1.0)
 
-        image_data = ImageData(
-            array=metal_like_region,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=metal_like_region, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
         # Metal should be processed
-        assert result.metadata['material_enhanced'] is True
+        assert result.metadata["material_enhanced"] is True
         assert result.array.shape == metal_like_region.shape
 
 
@@ -478,11 +400,7 @@ class TestTenetCompliance:
         highlight_image = np.ones((64, 64, 3), dtype=np.float32) * 0.5
         highlight_image[20:44, 20:44, :] = 0.95  # Bright specular region
 
-        image_data = ImageData(
-            array=highlight_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=highlight_image, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
@@ -504,15 +422,11 @@ class TestTenetCompliance:
         # Create midtone image with texture pattern (vectorized)
         textured_image = np.ones((64, 64, 3), dtype=np.float32) * 0.5
         # Add checkerboard texture
-        i, j = np.meshgrid(np.arange(64), np.arange(64), indexing='ij')
-        mask = ((i // 4 + j // 4) % 2 == 0)
+        i, j = np.meshgrid(np.arange(64), np.arange(64), indexing="ij")
+        mask = (i // 4 + j // 4) % 2 == 0
         textured_image[mask, :] = 0.45
 
-        image_data = ImageData(
-            array=textured_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=textured_image, path=Path("test.jpg"), metadata={})
 
         original_std = textured_image.std()
         result = stage._enhance_sync(image_data)
@@ -535,11 +449,7 @@ class TestTenetCompliance:
         boundary_image[:32, :, :] = 0.3  # Dark material
         boundary_image[32:, :, :] = 0.7  # Light material
 
-        image_data = ImageData(
-            array=boundary_image,
-            path=Path("test.jpg"),
-            metadata={}
-        )
+        image_data = ImageData(array=boundary_image, path=Path("test.jpg"), metadata={})
 
         result = stage._enhance_sync(image_data)
 
@@ -550,7 +460,7 @@ class TestTenetCompliance:
         assert gradient_detected, "Expected smooth transition but boundary remains sharp"
 
         # Result should show some blending occurred
-        assert result.metadata['material_enhanced'] is True
+        assert result.metadata["material_enhanced"] is True
 
 
 if __name__ == "__main__":

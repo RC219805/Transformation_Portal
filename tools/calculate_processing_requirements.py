@@ -13,7 +13,7 @@ from pathlib import Path
 def calculate_mps_memory(megapixels: float, upscale_factor: int = 4) -> float:
     """
     Calculate MPS memory requirements.
-    
+
     Formula derived from 750 Picacho analysis:
     - Base processing: ~0.5GB per MP
     - 4x upscaling: ~0.75GB per MP
@@ -27,7 +27,7 @@ def calculate_mps_memory(megapixels: float, upscale_factor: int = 4) -> float:
 def calculate_disk_space(file_size_mb: float, include_upscale: bool = True) -> dict:
     """
     Calculate disk space requirements.
-    
+
     Based on observed multipliers:
     - Master: 0.75x source
     - Upscaled 4x: 12x source
@@ -37,7 +37,7 @@ def calculate_disk_space(file_size_mb: float, include_upscale: bool = True) -> d
     upscaled = file_size_mb * 12 if include_upscale else 0
     marketing = file_size_mb * 2.5
     total = master + upscaled + marketing
-    
+
     return {
         "master_mb": master,
         "upscaled_mb": upscaled,
@@ -51,7 +51,7 @@ def calculate_disk_space(file_size_mb: float, include_upscale: bool = True) -> d
 def estimate_processing_time(megapixels: float, device: str = "mps") -> float:
     """
     Estimate processing time in minutes.
-    
+
     Based on 750 Picacho analysis:
     - MPS: 6 seconds per megapixel
     - CPU: 60-120 seconds per megapixel (assume 90s average)
@@ -79,37 +79,25 @@ def check_safety(megapixels: float, file_size_mb: float, device: str = "mps") ->
         else:
             status = "⚠️ USE TILING"
             risk = "medium"
-    
+
     return {"status": status, "risk": risk}
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Calculate processing requirements for image batch jobs"
-    )
-    parser.add_argument(
-        "--megapixels", "-mp", type=float, help="Image resolution in megapixels"
-    )
-    parser.add_argument(
-        "--file-size", "-fs", type=float, help="File size in MB (16-bit TIFF)"
-    )
-    parser.add_argument(
-        "--num-images", "-n", type=int, default=1, help="Number of images in batch"
-    )
-    parser.add_argument(
-        "--upscale", type=int, default=4, choices=[2, 4], help="Upscale factor"
-    )
-    parser.add_argument(
-        "--device", choices=["mps", "cpu"], default="mps", help="Processing device"
-    )
+    parser = argparse.ArgumentParser(description="Calculate processing requirements for image batch jobs")
+    parser.add_argument("--megapixels", "-mp", type=float, help="Image resolution in megapixels")
+    parser.add_argument("--file-size", "-fs", type=float, help="File size in MB (16-bit TIFF)")
+    parser.add_argument("--num-images", "-n", type=int, default=1, help="Number of images in batch")
+    parser.add_argument("--upscale", type=int, default=4, choices=[2, 4], help="Upscale factor")
+    parser.add_argument("--device", choices=["mps", "cpu"], default="mps", help="Processing device")
     parser.add_argument(
         "--no-upscale-output",
         action="store_true",
         help="Skip upscaled output (saves disk space)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Calculate from either MP or file size
     if args.megapixels:
         mp = args.megapixels
@@ -120,13 +108,13 @@ def main():
         mp = file_size / 6.77
     else:
         parser.error("Must specify either --megapixels or --file-size")
-    
+
     # Calculate requirements
     mps_memory_gb = calculate_mps_memory(mp, args.upscale)
     disk = calculate_disk_space(file_size, not args.no_upscale_output)
     time_min = estimate_processing_time(mp, args.device)
     safety = check_safety(mp, file_size, args.device)
-    
+
     # Print results
     print("=" * 60)
     print("TRANSFORMATION PORTAL PROCESSING CALCULATOR")
@@ -137,18 +125,18 @@ def main():
     print(f"  Batch size: {args.num_images} image(s)")
     print(f"  Device: {args.device.upper()}")
     print(f"  Upscale: {args.upscale}x")
-    
+
     print(f"\nSafety Assessment: {safety['status']}")
-    
+
     if args.device == "mps":
         print(f"\nMPS Memory Requirements:")
         print(f"  Per image: {mps_memory_gb:.1f} GB")
         print(f"  Total batch: {mps_memory_gb * args.num_images:.1f} GB")
-        
+
         if mps_memory_gb * args.num_images > 50:
             print(f"  ⚠️ WARNING: May exceed 64GB unified memory")
             print(f"  Recommendation: Process {int(50 / mps_memory_gb)} images at a time")
-    
+
     print(f"\nDisk Space Requirements:")
     print(f"  Master TIFF: {disk['master_mb']:.0f} MB")
     if not args.no_upscale_output:
@@ -157,16 +145,16 @@ def main():
     print(f"  Total per image: {disk['total_gb']:.2f} GB")
     print(f"  With 20% safety margin: {disk['with_safety_margin_gb']:.2f} GB")
     print(f"  Total batch: {disk['with_safety_margin_gb'] * args.num_images:.2f} GB")
-    
+
     print(f"\nProcessing Time Estimate:")
     print(f"  Per image: {time_min:.1f} minutes")
     print(f"  Total batch: {time_min * args.num_images:.1f} minutes")
-    
+
     # Recommendations
     print(f"\n{'=' * 60}")
     print("RECOMMENDATIONS")
     print("=" * 60)
-    
+
     if safety["risk"] == "high":
         if args.device == "mps":
             print("❌ This resolution is too large for MPS processing")
@@ -179,13 +167,13 @@ def main():
             print("   Consider CPU fallback if MPS OOM occurs")
     else:
         print("✅ Processing should complete successfully")
-    
+
     # Disk space check
-    total_disk_needed = disk['with_safety_margin_gb'] * args.num_images
+    total_disk_needed = disk["with_safety_margin_gb"] * args.num_images
     if total_disk_needed > 10:
         print(f"\n💾 Ensure {total_disk_needed:.1f}GB free disk space")
         print(f"   Keep disk usage below 85% for optimal performance")
-    
+
     print("\n" + "=" * 60)
 
 

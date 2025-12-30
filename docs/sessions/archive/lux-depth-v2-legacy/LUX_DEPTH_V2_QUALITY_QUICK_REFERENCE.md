@@ -172,8 +172,8 @@ self.materials_v2.segmentation.require_high_quality = True  # Safety
 
 ---
 
-**Status:** AUDIT COMPLETE ✅  
-**Decision:** Ready for implementation  
+**Status:** AUDIT COMPLETE ✅
+**Decision:** Ready for implementation
 **Priority:** Medium (quality enhancement, not critical bug)
 
 ---

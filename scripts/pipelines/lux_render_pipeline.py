@@ -12,6 +12,7 @@ For CLI usage, run: python lux_render_pipeline.py [options]
 NOTE: Requires package installation (pip install -e .) or running from
 repository root with src/ in Python path.
 """
+
 import sys
 from pathlib import Path
 

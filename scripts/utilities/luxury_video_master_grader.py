@@ -11,4 +11,5 @@ if __name__ == "__main__":
     # Import and run the main CLI from the package
     # NOTE: Requires package installation: pip install -e .
     from transformation_portal.processors.luxury_video_master_grader import main
+
     raise SystemExit(main())

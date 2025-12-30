@@ -1,7 +1,7 @@
 # CRITICAL BLOCKER: Validation Script Integration
 
-**Status**: BLOCKED  
-**Priority**: P0 (Production-blocking)  
+**Status**: BLOCKED
+**Priority**: P0 (Production-blocking)
 **Date**: 2025-12-18
 
 ## Problem
@@ -49,7 +49,7 @@ scene_type, scene_meta = classify_scene_type_v2(
 
 # Validate with structure-aware edges
 metrics = validate_depth_quality(
-    depth_map, 
+    depth_map,
     rgb_image,
     use_structure_edges=True  # Enable V2 classifier
 )
@@ -99,4 +99,3 @@ After fix:
 ---
 
 **This is the ONLY blocker preventing Phase 1B completion.**
-

@@ -212,7 +212,7 @@ explanation = generate_pipeline_guide(results_1, results_2, results_3, dependenc
 
 When working alongside other agents:
 
-1. **@transformation-portal-specialist**: 
+1. **@transformation-portal-specialist**:
    - You provide RAG-retrieved context for implementation details
    - Specialist uses your context for precise code modifications
    - You validate Specialist's work against retrieved patterns
@@ -323,11 +323,11 @@ You want to add depth-based vignetting (darkening background more than foregroun
 1. **ArchitecturalDepthPipeline** structure (depth_pipeline/pipeline.py:45-120)
    - Uses zone-based processing with foreground/midground/background
    - Existing atmospheric effects apply depth-aware operations
-   
+
 2. **Similar depth-aware effect** (depth_pipeline/processors/atmospheric.py:78-95)
    - `apply_atmospheric_haze()` blends fog based on depth
    - Uses `depth_map ** power` for non-linear falloff
-   
+
 3. **Configuration pattern** (config/interior_preset.yaml:23-27)
    - Effects are configured via YAML presets
    - Parameters: intensity, falloff, color
@@ -376,11 +376,11 @@ FFmpeg format detection failing for HDR input. Retrieving error handling pattern
 1. **HDR detection logic** (luxury_video_master_grader.py:234-256)
    - Uses `ffprobe` to detect transfer function (PQ, HLG)
    - Checks `color_trc` stream metadata
-   
+
 2. **Format specification** (luxury_video_master_grader.py:289-302)
    - HDR requires explicit `-f` format flag for some codecs
    - Must specify `yuv422p10le` or `yuv420p10le` pixel format
-   
+
 3. **Known issue workaround** (docs/TROUBLESHOOTING.md:45-52)
    - Some HDR containers need `-analyzeduration` and `-probesize` increased
 

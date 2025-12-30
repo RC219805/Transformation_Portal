@@ -1,8 +1,8 @@
 # Interface Migration Guide
 
-**Version**: 1.0  
-**Date**: December 7, 2025  
-**Status**: Active  
+**Version**: 1.0
+**Date**: December 7, 2025
+**Status**: Active
 
 This guide provides practical examples for migrating existing code to use the new interface contracts defined in ADR-001.
 
@@ -72,10 +72,10 @@ import numpy as np
 
 class MyProcessor:
     """Process images."""
-    
+
     def __init__(self, strength: float = 1.0):
         self.strength = strength
-    
+
     def process(self, image: np.ndarray) -> np.ndarray:
         # Apply processing
         return image * self.strength
@@ -91,30 +91,30 @@ from transformation_portal.interfaces import ImageProcessor
 class MyProcessor(ImageProcessor):
     """
     Process images with configurable strength.
-    
+
     Implements ImageProcessor interface for type safety and testability.
     """
-    
+
     def __init__(self, strength: float = 1.0):
         self.strength = strength
-    
+
     def process(self, image: np.ndarray, **kwargs) -> np.ndarray:
         """
         Apply processing to image.
-        
+
         Args:
             image: Input image (H, W, C) in [0, 1] float32 or [0, 255] uint8
             **kwargs: Additional parameters (unused)
-            
+
         Returns:
             Processed image, same shape and dtype as input
         """
         # Validate input
         self.validate_input(image)
-        
+
         # Apply processing
         return image * self.strength
-    
+
     def get_config(self) -> Dict[str, Any]:
         """Return processor configuration."""
         return {
@@ -149,13 +149,13 @@ from transformation_portal.interfaces import Enhancer
 class ClarityEnhancer(Enhancer):
     """
     Enhance image clarity via unsharp masking.
-    
+
     Implements Enhancer interface with standardized strength parameter.
     """
-    
+
     def __init__(self, radius: float = 1.0):
         self.radius = radius
-    
+
     def enhance(
         self,
         image: np.ndarray,
@@ -164,33 +164,33 @@ class ClarityEnhancer(Enhancer):
     ) -> np.ndarray:
         """
         Apply clarity enhancement.
-        
+
         Args:
             image: Input image (H, W, C)
             strength: Enhancement strength in [0, 1]
             **kwargs: Additional parameters
-            
+
         Returns:
             Enhanced image
         """
         # Validate strength
         self.validate_strength(strength)
-        
+
         # Apply enhancement with strength scaling
         amount = strength * 2.0  # Internal scaling
         enhanced = self._apply_unsharp_mask(image, self.radius, amount)
         return enhanced
-    
+
     def get_config(self) -> Dict[str, Any]:
         return {
             "type": "ClarityEnhancer",
             "radius": self.radius
         }
-    
+
     def _apply_unsharp_mask(
-        self, 
-        image: np.ndarray, 
-        radius: float, 
+        self,
+        image: np.ndarray,
+        radius: float,
         amount: float
     ) -> np.ndarray:
         # Implementation details...
@@ -217,10 +217,10 @@ from typing import List, Optional
 class MaterialDetector(MaterialSegmenter):
     """
     Detect materials using heuristic color analysis.
-    
+
     Implements MaterialSegmenter interface for standardized output.
     """
-    
+
     def segment(
         self,
         image: np.ndarray,
@@ -228,7 +228,7 @@ class MaterialDetector(MaterialSegmenter):
     ) -> Dict[str, np.ndarray]:
         """Segment image into material regions."""
         return self.segment_materials(image)
-    
+
     def segment_materials(
         self,
         image: np.ndarray,
@@ -237,30 +237,30 @@ class MaterialDetector(MaterialSegmenter):
     ) -> Dict[MaterialType, np.ndarray]:
         """
         Segment image by material types.
-        
+
         Args:
             image: Input image (H, W, C)
             materials: Optional list of materials to detect
-            
+
         Returns:
             Dictionary mapping MaterialType to boolean masks
         """
         if materials is None:
             materials = [MaterialType.WOOD, MaterialType.METAL, MaterialType.GLASS]
-        
+
         results = {}
         for mat in materials:
             mask = self._detect_material(image, mat)
             results[mat] = mask
-        
+
         return results
-    
+
     def get_supported_categories(self) -> List[str]:
         return [mat.value for mat in MaterialType]
-    
+
     def get_config(self) -> Dict[str, Any]:
         return {"type": "MaterialDetector", "method": "heuristic"}
-    
+
     def get_material_properties(self, material: MaterialType) -> Dict[str, Any]:
         """Get physical properties for material type."""
         properties = {
@@ -290,14 +290,14 @@ from transformation_portal.interfaces import DepthEstimator
 class DepthPredictor(DepthEstimator):
     """
     Predict depth using Depth Anything V2 model.
-    
+
     Implements DepthEstimator interface for standardized depth output.
     """
-    
+
     def __init__(self, model_size: str = "small"):
         self.model_size = model_size
         self._model = self._load_model(model_size)
-    
+
     def estimate_depth(
         self,
         image: np.ndarray,
@@ -306,23 +306,23 @@ class DepthPredictor(DepthEstimator):
     ) -> np.ndarray:
         """
         Estimate depth map from RGB image.
-        
+
         Args:
             image: Input RGB image (H, W, 3)
             normalize: Whether to normalize to [0, 1]
-            
+
         Returns:
             Depth map (H, W) where 0=far, 1=near
         """
         # Predict raw depth
         depth = self._model.predict(image)
-        
+
         # Normalize if requested
         if normalize:
             depth = (depth - depth.min()) / (depth.max() - depth.min())
-        
+
         return depth.astype(np.float32)
-    
+
     def get_model_info(self) -> Dict[str, Any]:
         return {
             "name": "Depth Anything V2",
@@ -330,7 +330,7 @@ class DepthPredictor(DepthEstimator):
             "architecture": "ViT-based",
             "input_size": "variable"
         }
-    
+
     def get_config(self) -> Dict[str, Any]:
         return {
             "type": "DepthPredictor",
@@ -359,17 +359,17 @@ from typing import Optional, List, Dict, Any
 class MyPipeline(Pipeline):
     """
     Multi-stage image processing pipeline.
-    
+
     Implements Pipeline interface for orchestration consistency.
     """
-    
+
     def __init__(self):
         self._stages: List[PipelineStage] = []
-    
+
     def add_stage(self, stage: PipelineStage, name: Optional[str] = None) -> None:
         """Add processing stage to pipeline."""
         self._stages.append(stage)
-    
+
     def execute(
         self,
         input_path: Path,
@@ -378,41 +378,41 @@ class MyPipeline(Pipeline):
     ) -> Dict[str, Any]:
         """
         Execute complete pipeline.
-        
+
         Args:
             input_path: Input file path
             output_path: Optional output path
             **kwargs: Pipeline parameters
-            
+
         Returns:
             Dictionary with execution results
         """
         # Load input
         from PIL import Image
         image = np.array(Image.open(input_path))
-        
+
         # Execute stages
         context = {"input_path": input_path}
         data = image
-        
+
         for stage in self._stages:
             data = stage.execute(data, context)
-        
+
         # Save output
         if output_path is None:
             output_path = input_path.parent / f"{input_path.stem}_processed{input_path.suffix}"
-        
+
         Image.fromarray(data).save(output_path)
-        
+
         return {
             "output_path": output_path,
             "stages_executed": len(self._stages),
             "success": True
         }
-    
+
     def get_stages(self) -> List[PipelineStage]:
         return self._stages
-    
+
     def get_config(self) -> Dict[str, Any]:
         return {
             "type": "MyPipeline",
@@ -441,15 +441,15 @@ def test_my_processor_implements_interface():
 def test_my_processor_contract():
     """Test processor adheres to interface contract."""
     processor = MyProcessor(strength=1.5)
-    
+
     # Test input validation
     image = np.random.rand(100, 100, 3).astype(np.float32)
     result = processor.process(image)
-    
+
     # Contract: Same shape and dtype
     assert result.shape == image.shape
     assert result.dtype == image.dtype
-    
+
     # Contract: Config is serializable
     config = processor.get_config()
     assert isinstance(config, dict)
@@ -459,7 +459,7 @@ def test_my_processor_contract():
 def test_my_processor_invalid_input():
     """Test processor rejects invalid inputs."""
     processor = MyProcessor()
-    
+
     # Invalid: wrong dimensions
     with pytest.raises(ValueError):
         processor.process(np.array([1, 2, 3]))
@@ -475,19 +475,19 @@ from transformation_portal.interfaces import PipelineStage
 def test_pipeline_with_mock_stages():
     """Test pipeline orchestration with mock stages."""
     from transformation_portal.processors.my_pipeline import MyPipeline
-    
+
     # Create mock stage
     mock_stage = MagicMock(spec=PipelineStage)
     mock_stage.get_name.return_value = "MockStage"
     mock_stage.execute.return_value = np.ones((100, 100, 3))
-    
+
     # Build pipeline
     pipeline = MyPipeline()
     pipeline.add_stage(mock_stage)
-    
+
     # Execute
     result = pipeline.execute(Path("input.jpg"))
-    
+
     # Verify stage was called
     mock_stage.execute.assert_called_once()
     assert result["success"] is True
@@ -502,7 +502,7 @@ def test_pipeline_with_mock_stages():
 ```python
 class EnhancedPipeline(Pipeline):
     """Pipeline with injected dependencies."""
-    
+
     def __init__(
         self,
         depth_estimator: DepthEstimator,
@@ -542,14 +542,14 @@ from transformation_portal.interfaces import ImageProcessor
 
 class LegacyProcessorAdapter(ImageProcessor):
     """Adapter for legacy processor without interface."""
-    
+
     def __init__(self, legacy_processor):
         self._legacy = legacy_processor
-    
+
     def process(self, image: np.ndarray, **kwargs) -> np.ndarray:
         # Adapt old API to new interface
         return self._legacy.old_method(image)
-    
+
     def get_config(self) -> Dict[str, Any]:
         return {"type": "LegacyAdapter", "wrapped": type(self._legacy).__name__}
 ```

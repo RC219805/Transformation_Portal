@@ -17,13 +17,13 @@ Changed the fixture to check the module-level `TORCH_AVAILABLE` flag and use `py
 @pytest.fixture
 def ci_safe_config(self, output_dir):
     """Create a CI-safe pipeline config (uses heuristic backend to avoid transformers dependency).
-    
+
     NOTE: This fixture requires PyTorch. Tests using it will be skipped if PyTorch is unavailable.
     """
     # Skip the entire fixture if PyTorch is not available
     if not TORCH_AVAILABLE:
         pytest.skip("PyTorch required for V2 pipeline")
-    
+
     config = PipelineConfig(
         preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
         output_dir=output_dir,

@@ -8,12 +8,12 @@
 
 **Feature Name**: `{FEATURE_NAME}`
 
-**Description**: 
+**Description**:
 ```
 {DETAILED_FEATURE_DESCRIPTION}
 ```
 
-**Target Pipeline/Component**: 
+**Target Pipeline/Component**:
 - [ ] Depth Pipeline (`depth_pipeline/`)
 - [ ] Lux Render Pipeline (`lux_render_pipeline.py`)
 - [ ] Video Master Grader (`luxury_video_master_grader.py`)
@@ -124,29 +124,29 @@ from PIL import Image
 class {FeatureName}Processor:
     """
     {FEATURE_DESCRIPTION}
-    
+
     Performance: ~{X}ms per image on M4 Max
     """
-    
+
     def __init__(self, intensity: float = 0.5):
         """
         Args:
             intensity: Effect strength (0.0-1.0)
         """
         self.intensity = intensity
-    
+
     def process(
-        self, 
-        image: Image.Image, 
+        self,
+        image: Image.Image,
         depth_map: Optional[np.ndarray] = None
     ) -> Image.Image:
         """
         Apply {FEATURE_NAME} effect to image.
-        
+
         Args:
             image: Input PIL Image
             depth_map: Optional depth information (0.0=near, 1.0=far)
-        
+
         Returns:
             Processed PIL Image
         """
@@ -193,17 +193,17 @@ class ArchitecturalDepthPipeline:
             self.{feature_name}_processor = {FeatureName}Processor(
                 intensity=config.get('{feature_name}_intensity', 0.5)
             )
-    
+
     def process_render(self, image_path: Path) -> ProcessedResult:
         # ... existing processing ...
-        
+
         # Apply new feature
         if hasattr(self, '{feature_name}_processor'):
             result.image = self.{feature_name}_processor.process(
-                result.image, 
+                result.image,
                 depth_map=result.depth_map
             )
-        
+
         return result
 ```
 
@@ -256,50 +256,50 @@ from {module} import {FeatureName}Processor
 
 class Test{FeatureName}Processor:
     """Test suite for {FeatureName}Processor."""
-    
+
     def test_basic_processing(self):
         """Test basic processing workflow."""
         processor = {FeatureName}Processor(intensity=0.5)
         image = Image.new('RGB', (100, 100), color='red')
-        
+
         result = processor.process(image)
-        
+
         assert isinstance(result, Image.Image)
         assert result.size == image.size
-    
+
     def test_with_depth_map(self):
         """Test processing with depth information."""
         processor = {FeatureName}Processor(intensity=0.7)
         image = Image.new('RGB', (100, 100), color='blue')
         depth_map = np.random.rand(100, 100).astype(np.float32)
-        
+
         result = processor.process(image, depth_map=depth_map)
-        
+
         assert isinstance(result, Image.Image)
-    
+
     @pytest.mark.parametrize("intensity", [0.0, 0.5, 1.0])
     def test_intensity_range(self, intensity):
         """Test different intensity values."""
         processor = {FeatureName}Processor(intensity=intensity)
         image = Image.new('RGB', (50, 50), color='green')
-        
+
         result = processor.process(image)
-        
+
         assert result is not None
-    
+
     def test_invalid_intensity_raises_error(self):
         """Test that invalid intensity raises ValueError."""
         with pytest.raises(ValueError):
             {FeatureName}Processor(intensity=1.5)
-    
+
     def test_preserves_metadata(self):
         """Test that image metadata is preserved."""
         processor = {FeatureName}Processor(intensity=0.5)
         image = Image.new('RGB', (100, 100))
         image.info['dpi'] = (300, 300)
-        
+
         result = processor.process(image)
-        
+
         assert result.info.get('dpi') == (300, 300)
 ```
 
@@ -309,21 +309,21 @@ class Test{FeatureName}Processor:
 def test_{feature_name}_integration(tmp_path):
     """Test {FEATURE_NAME} integration in full pipeline."""
     from depth_pipeline import ArchitecturalDepthPipeline
-    
+
     config = {
         'enable_{feature_name}': True,
         '{feature_name}_intensity': 0.7,
     }
-    
+
     pipeline = ArchitecturalDepthPipeline(config)
-    
+
     # Create test image
     test_image = tmp_path / "test.jpg"
     Image.new('RGB', (512, 512), color='red').save(test_image)
-    
+
     # Process
     result = pipeline.process_render(test_image)
-    
+
     assert result.image is not None
     assert result.processing_time_ms > 0
 ```
@@ -343,9 +343,9 @@ def test_{feature_name}_properties(intensity, width, height):
     """Property-based test for {FEATURE_NAME}."""
     processor = {FeatureName}Processor(intensity=intensity)
     image = Image.new('RGB', (width, height), color='red')
-    
+
     result = processor.process(image)
-    
+
     # Properties that should always hold
     assert result.size == (width, height)
     assert result.mode == 'RGB'
@@ -371,11 +371,11 @@ def test_{feature_name}_performance_benchmark():
     """Benchmark processing performance."""
     processor = {FeatureName}Processor(intensity=0.5)
     image = Image.new('RGB', (2048, 2048), color='blue')
-    
+
     start = time.perf_counter()
     result = processor.process(image)
     elapsed_ms = (time.perf_counter() - start) * 1000
-    
+
     # Should process 2K image in under 100ms on modern hardware
     assert elapsed_ms < 100, f"Too slow: {elapsed_ms:.2f}ms"
 ```
@@ -686,6 +686,6 @@ def batch_process(image_paths: List[Path]):
 
 ---
 
-**Template Version**: 1.0  
-**Last Updated**: 2025-11-06  
+**Template Version**: 1.0
+**Last Updated**: 2025-11-06
 **Maintained By**: Transformation Portal RAG System

@@ -1,7 +1,7 @@
 # Production Operations Manual
 
-**System Status:** Production Standard  
-**Effective Date:** 2025-12-04  
+**System Status:** Production Standard
+**Effective Date:** 2025-12-04
 **Version:** 1.0
 
 ---

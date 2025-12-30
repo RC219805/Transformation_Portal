@@ -230,8 +230,7 @@ Kitchen scene shows higher baseline confidence than pool:
 2. Confidence metric refactoring (separate probability from confidence)
 3. Semantic mapping audit and outdoor scene tuning
 
-**Deployment Recommendation**: 
+**Deployment Recommendation**:
 - **HOLD** on production deployment until kitchen validation
 - **PROCEED** with Phase 2 planning (performance optimization)
 - **INVESTIGATE** confidence calculation methodology
-

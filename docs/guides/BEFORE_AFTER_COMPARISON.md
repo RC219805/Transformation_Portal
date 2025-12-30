@@ -57,10 +57,10 @@ validate_depth_quality(image_np, depth_norm)
 -     image = self._prepare_images(image)
 +     # New: Track original sizes
 +     image_prepared, original_sizes = self._prepare_images_with_sizes(image)
-      
+
 -     prediction = self.model.inference(image=image, ...)
 +     prediction = self.model.inference(image=image_prepared, ...)
-      
+
 +     # New: Upsample to native resolution
 +     depth_upsampled = self._upsample_depth_to_native(
 +         prediction.depth, original_sizes
@@ -68,7 +68,7 @@ validate_depth_quality(image_np, depth_norm)
 +     conf_upsampled = self._upsample_depth_to_native(
 +         prediction.conf, original_sizes
 +     )
-      
+
       return DA3Prediction(
 -         depth=prediction.depth,  # Wrong resolution
 -         conf=prediction.conf,
@@ -121,7 +121,7 @@ validate_depth_quality(image_np, depth_norm)
 
 ## Impact
 
-**Before**: Integration bug prevented any DA3 evaluation  
+**Before**: Integration bug prevented any DA3 evaluation
 **After**: DA3 can be properly evaluated against DA2 baseline
 
 **Next**: Run full 46-image A/B validation to make data-driven decision on DA3 adoption.

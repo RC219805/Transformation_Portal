@@ -60,7 +60,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "Results: $OUTPUT_DIR"
     echo ""
-    
+
     # Show summary if it exists
     if [ -f "$OUTPUT_DIR/validation_report.json" ]; then
         echo "Pass rates:"
@@ -74,7 +74,7 @@ with open('$OUTPUT_DIR/validation_report.json') as f:
     print(f\"  Strict:  {strict.get('passed', 0)}/{data.get('total_images', 0)} ({strict.get('pass_rate', 0)*100:.1f}%)\")
 " 2>/dev/null || echo "  (Summary parsing failed)"
     fi
-    
+
     echo ""
     echo "Next steps:"
     echo "  1. Review: cat $OUTPUT_DIR/validation_report.json | jq '.quality'"

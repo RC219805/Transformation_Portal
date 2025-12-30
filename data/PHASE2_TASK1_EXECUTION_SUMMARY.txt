@@ -21,7 +21,7 @@ Execution Times:
   - glass_validate:  5.00s
   - stone:           5.24s
   - stone_validate:  5.21s
-  
+
 Average: 6.90s per image
 Throughput: ~520 images/hour
 

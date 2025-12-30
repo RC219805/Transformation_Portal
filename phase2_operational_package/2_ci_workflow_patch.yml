@@ -22,7 +22,7 @@
 
 env:
   # ... existing variables ...
-  
+
   # Knowledge Engine Configuration
   JUNIT_XML_OUTPUT: 'test-results/junit.xml'
   COVERAGE_XML_OUTPUT: 'test-results/coverage.xml'
@@ -43,31 +43,31 @@ env:
       fail-fast: false
       matrix:
         python-version: ${{ fromJson(needs.setup.outputs.python-matrix) }}
-        
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        
+
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          
+
       - name: Restore Dependencies Cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ needs.setup.outputs.cache-key }}-${{ matrix.python-version }}
-          
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-xdist
-          
+
       - name: Create Test Results Directory
         run: mkdir -p test-results
-        
+
       # MODIFIED: Run tests with JUnit XML output
       - name: Run Core Tests with JUnit XML Export
         id: run-tests
@@ -84,7 +84,7 @@ env:
             -x \
             2>&1 | tee test-results/pytest-output-${{ matrix.python-version }}.log
         continue-on-error: true
-        
+
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         if: always()
@@ -92,7 +92,7 @@ env:
           name: test-results-${{ matrix.python-version }}
           path: test-results/
           retention-days: 30
-          
+
       - name: Check Test Status
         if: steps.run-tests.outcome == 'failure'
         run: exit 1
@@ -110,27 +110,27 @@ env:
     needs: [core-tests, ml-tests, summary]
     if: always()
     runs-on: ubuntu-24.04
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
-          
+
       - name: Download All Test Results
         uses: actions/download-artifact@v4
         with:
           path: all-test-results/
           pattern: test-results-*
           merge-multiple: true
-          
+
       - name: Install Knowledge Engine Dependencies
         run: |
           pip install pyyaml
-          
+
       - name: Restore RAG Cache
         uses: actions/cache@v4
         with:
@@ -138,7 +138,7 @@ env:
           key: rag-cache-${{ github.sha }}
           restore-keys: |
             rag-cache-
-            
+
       - name: Ingest Test Results into Knowledge Engine
         run: |
           python3 << 'EOF'
@@ -148,16 +148,16 @@ env:
           import xml.etree.ElementTree as ET
           from datetime import datetime
           from pathlib import Path
-          
+
           # Paths
           results_dir = Path("all-test-results")
           knowledge_dir = Path(".rag_cache/knowledge")
           knowledge_dir.mkdir(parents=True, exist_ok=True)
-          
+
           # Collect all JUnit XML files
           junit_files = list(results_dir.glob("**/junit-*.xml"))
           print(f"Found {len(junit_files)} JUnit XML files")
-          
+
           # Parse and aggregate results
           all_results = []
           total_tests = 0
@@ -165,25 +165,25 @@ env:
           total_failed = 0
           total_skipped = 0
           total_duration = 0.0
-          
+
           for junit_file in junit_files:
               try:
                   tree = ET.parse(junit_file)
                   root = tree.getroot()
-                  
+
                   for testsuite in root.iter('testsuite'):
                       suite_name = testsuite.get('name', 'unknown')
-                      
+
                       for testcase in testsuite.iter('testcase'):
                           test_name = testcase.get('name', 'unknown')
                           classname = testcase.get('classname', '')
                           duration = float(testcase.get('time', 0))
-                          
+
                           # Determine status
                           failure = testcase.find('failure')
                           error = testcase.find('error')
                           skipped = testcase.find('skipped')
-                          
+
                           if failure is not None:
                               status = 'failed'
                               message = failure.get('message', '')
@@ -200,10 +200,10 @@ env:
                               status = 'passed'
                               message = ''
                               total_passed += 1
-                          
+
                           total_tests += 1
                           total_duration += duration
-                          
+
                           all_results.append({
                               'test_id': f"{classname}::{test_name}",
                               'test_file': classname.replace('.', '/') + '.py',
@@ -214,22 +214,22 @@ env:
                               'suite': suite_name,
                               'timestamp': datetime.now().isoformat()
                           })
-                          
+
               except Exception as e:
                   print(f"Warning: Failed to parse {junit_file}: {e}")
-          
+
           # Save ingested results
           results_file = knowledge_dir / "ci_test_results.json"
           with open(results_file, "w") as f:
               json.dump(all_results, f, indent=2)
-          
+
           # Update quality metrics
           metrics_file = knowledge_dir / "quality_metrics.json"
           existing_metrics = []
           if metrics_file.exists():
               with open(metrics_file) as f:
                   existing_metrics = json.load(f)
-          
+
           # Add new metrics
           run_id = os.environ.get('GITHUB_RUN_NUMBER', 'unknown')
           new_metrics = [
@@ -257,16 +257,16 @@ env:
                   'context': {'test_count': total_tests}
               }
           ]
-          
+
           existing_metrics.extend(new_metrics)
-          
+
           # Keep last 100 metric entries
           if len(existing_metrics) > 100:
               existing_metrics = existing_metrics[-100:]
-          
+
           with open(metrics_file, "w") as f:
               json.dump(existing_metrics, f, indent=2)
-          
+
           # Update knowledge state
           state_file = knowledge_dir / "knowledge_state.json"
           state = {
@@ -278,7 +278,7 @@ env:
           }
           with open(state_file, "w") as f:
               json.dump(state, f, indent=2)
-          
+
           # Summary
           print(f"\n{'='*60}")
           print("KNOWLEDGE ENGINE INGESTION COMPLETE")
@@ -290,15 +290,15 @@ env:
           print(f"  Total Duration: {total_duration:.2f}s")
           print(f"  Pass Rate: {(total_passed/total_tests*100):.1f}%" if total_tests > 0 else "N/A")
           print(f"{'='*60}")
-          
+
           EOF
-          
+
       - name: Save RAG Cache
         uses: actions/cache/save@v4
         with:
           path: .rag_cache
           key: rag-cache-${{ github.sha }}
-          
+
       - name: Upload Knowledge Base State
         uses: actions/upload-artifact@v4
         with:
@@ -316,7 +316,7 @@ env:
     needs: [setup, lint, core-tests, ml-tests, rag-validation, build, manifest]
     if: always()
     runs-on: ubuntu-24.04
-    
+
     steps:
       - name: Download Test Results
         uses: actions/download-artifact@v4
@@ -324,12 +324,12 @@ env:
         with:
           path: all-results/
           pattern: test-results-*
-          
+
       - name: Generate Summary with Test Intelligence
         run: |
           echo "## 📊 CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Job status
           echo "### Job Status" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
@@ -342,14 +342,14 @@ env:
           echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Manifest | ${{ needs.manifest.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Test results summary (if available)
           if [ -d "all-results" ]; then
             echo "### Test Results" >> $GITHUB_STEP_SUMMARY
             echo "JUnit XML results exported for Knowledge Engine ingestion." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "### Knowledge Engine" >> $GITHUB_STEP_SUMMARY
           echo "Results will be ingested into the RAG system for:" >> $GITHUB_STEP_SUMMARY
           echo "- Pattern detection and failure analysis" >> $GITHUB_STEP_SUMMARY

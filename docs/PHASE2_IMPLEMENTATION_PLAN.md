@@ -1,7 +1,7 @@
 # Phase 2 Performance Enhancements - Implementation Plan
 
-**Date Created**: 2025-12-09  
-**Status**: IN PROGRESS  
+**Date Created**: 2025-12-09
+**Status**: IN PROGRESS
 **Target Completion**: Week 2-3 (10-15 days)
 
 ---
@@ -202,18 +202,18 @@ Based on validation results, the key bottlenecks are:
 ```python
 class AsyncTIFFWriter:
     """Non-blocking TIFF writer with background threads."""
-    
+
     def __init__(self, use_compression=True, compression='lzw'):
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.compression = compression if use_compression else None
-        
+
     async def write_tiff_async(self, image, path, metadata=None):
         """Async write, returns immediately."""
         future = self.executor.submit(
             self._write_tiff_sync, image, path, metadata
         )
         return await asyncio.wrap_future(future)
-        
+
     def write_tiff_background(self, image, path, callback=None):
         """Background write with optional callback."""
         future = self.executor.submit(
@@ -229,18 +229,18 @@ class AsyncTIFFWriter:
 ```python
 class StreamingUpscaleWriter:
     """Write upscaled tiles progressively without buffering full image."""
-    
+
     def __init__(self, output_path, final_dimensions):
         self.output_path = output_path
         self.width, self.height = final_dimensions
         self.buffer = np.zeros((self.height, self.width, 3), dtype=np.float32)
-        
+
     def write_tile(self, tile, position):
         """Write tile to buffer at position."""
         x, y = position
         h, w = tile.shape[:2]
         self.buffer[y:y+h, x:x+w] = tile
-        
+
     def finalize(self):
         """Flush buffer to disk."""
         io_utils.write_tiff(self.buffer, self.output_path)
@@ -251,19 +251,19 @@ class StreamingUpscaleWriter:
 ```python
 class StorageManager:
     """Intelligent storage tiering (internal SSD + T9)."""
-    
+
     def __init__(self, config: StorageConfig):
         self.internal = Path(config.internal_ssd_path)
         self.t9 = Path(config.external_t9_path) if config.external_t9_path else None
         self.auto_migrate = config.auto_migrate_threshold_gb
-        
+
     def get_optimal_write_path(self, file_type, estimated_size_gb):
         """Select best storage tier for write."""
         # Large files (>2GB) → T9 if available
         if estimated_size_gb >= self.auto_migrate and self.t9:
             return self.t9 / file_type
         return self.internal / file_type
-        
+
     def auto_migrate_if_needed(self, file_path):
         """Move large files to T9 after write."""
         size_gb = file_path.stat().st_size / 1e9
@@ -276,12 +276,12 @@ class StorageManager:
 ```python
 class ParallelOrchestrator(ProcessOrchestrator):
     """Enhanced orchestrator with parallel processing."""
-    
+
     def __init__(self, max_workers=2, memory_budget_per_worker=25.0):
         super().__init__()
         self.max_workers = max_workers
         self.memory_budget = memory_budget_per_worker
-        
+
     def process_batch_parallel(self, tasks, max_concurrent=2):
         """Process multiple images concurrently."""
         with ProcessPoolExecutor(max_workers=max_concurrent) as executor:
@@ -294,7 +294,7 @@ class ParallelOrchestrator(ProcessOrchestrator):
                 else:
                     # Wait for resource availability
                     self._wait_for_resources()
-            
+
             # Collect results
             results = [f.result() for f in futures]
         return results
@@ -313,22 +313,22 @@ class Phase2Config:
     async_io_enabled: bool = True
     tiff_compression: str = 'lzw'  # 'lzw' | 'deflate' | None
     streaming_upscale: bool = True
-    
+
     # Storage Management
     storage_internal_path: str = "."
     storage_external_t9: Optional[str] = None
     auto_migrate_large_files: bool = True
     migrate_threshold_gb: float = 2.0
-    
+
     # Parallel Processing
     max_concurrent_workers: int = 2
     memory_budget_per_worker_gb: float = 25.0
-    
+
     # Caching
     model_cache_enabled: bool = True
     depth_map_cache_enabled: bool = True
     cache_dir: str = '.cache'
-    
+
     # Upscaling Optimization
     tile_based_upscaling: bool = True
     upscale_tile_size: int = 512
@@ -372,16 +372,16 @@ lux-depth-v2 \
 ```python
 def test_async_tiff_writer():
     """Test non-blocking TIFF writes."""
-    
+
 def test_streaming_upscale_writer():
     """Test progressive tile writing."""
-    
+
 def test_storage_manager_tier_selection():
     """Test intelligent tier selection."""
-    
+
 def test_model_cache_singleton():
     """Test model cache across batch."""
-    
+
 def test_parallel_orchestrator_resource_budget():
     """Test memory budget enforcement."""
 ```
@@ -471,36 +471,36 @@ python3 -m lux_depth_v2.cli \
 
 ### Technical Risks
 
-**Risk**: Async I/O adds complexity  
-**Mitigation**: Feature-gated, fallback to sync writes  
+**Risk**: Async I/O adds complexity
+**Mitigation**: Feature-gated, fallback to sync writes
 **Fallback**: `--no-async-io` flag
 
-**Risk**: Parallel processing causes MPS contention  
-**Mitigation**: Memory budget enforcement, resource monitoring  
+**Risk**: Parallel processing causes MPS contention
+**Mitigation**: Memory budget enforcement, resource monitoring
 **Fallback**: `--parallel-workers 1` (sequential)
 
-**Risk**: T9 external storage latency  
-**Mitigation**: Only migrate large files, keep hot data internal  
+**Risk**: T9 external storage latency
+**Mitigation**: Only migrate large files, keep hot data internal
 **Fallback**: `--no-tiered-storage` (internal only)
 
 ### Quality Risks
 
-**Risk**: Optimization changes output quality  
-**Mitigation**: AI diff validation on every image  
+**Risk**: Optimization changes output quality
+**Mitigation**: AI diff validation on every image
 **Fallback**: Revert to Phase 1 if AI diff >0.004
 
-**Risk**: Tile blending artifacts  
-**Mitigation**: Increased overlap, thorough testing  
+**Risk**: Tile blending artifacts
+**Mitigation**: Increased overlap, thorough testing
 **Fallback**: Disable tile-based upscaling
 
 ### Operational Risks
 
-**Risk**: Configuration complexity  
-**Mitigation**: Sensible defaults, `--phase2-optimizations` flag  
+**Risk**: Configuration complexity
+**Mitigation**: Sensible defaults, `--phase2-optimizations` flag
 **Fallback**: Simplified config mode
 
-**Risk**: Cache accumulation  
-**Mitigation**: Auto-cleanup, configurable retention  
+**Risk**: Cache accumulation
+**Mitigation**: Auto-cleanup, configurable retention
 **Fallback**: Manual cleanup instructions
 
 ---
@@ -629,15 +629,15 @@ python3 -m lux_depth_v2.cli \
 
 ## Status Tracking
 
-**Current Status**: IN PROGRESS - Day 1  
-**Completion**: 0% (0/14 tasks)  
-**On Track**: YES  
-**Blockers**: None  
+**Current Status**: IN PROGRESS - Day 1
+**Completion**: 0% (0/14 tasks)
+**On Track**: YES
+**Blockers**: None
 **Next Milestone**: I/O Optimizer Module (Day 1-2)
 
 ---
 
-**Document Owner**: Transformation Portal Architect  
-**Created**: 2025-12-09  
-**Last Updated**: 2025-12-09  
+**Document Owner**: Transformation Portal Architect
+**Created**: 2025-12-09
+**Last Updated**: 2025-12-09
 **Version**: 1.0

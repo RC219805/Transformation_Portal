@@ -1,5 +1,5 @@
 # Pre-Validation Checklist
-**Date**: 2025-12-19  
+**Date**: 2025-12-19
 **Next Run**: 50-image expanded validation
 
 ## ✅ Ready to Run
@@ -26,7 +26,7 @@
 python3 -c "from transformers import pipeline; p = pipeline('depth-estimation', model='depth-anything/Depth-Anything-V2-Large-hf'); print('✓ Model cached')"
 ```
 
-**Expected**: Model loads without network access  
+**Expected**: Model loads without network access
 **If fails**: Run `scripts/download_depth_models.py` first
 
 ### 2. Dataset Integrity
@@ -51,7 +51,7 @@ if missing:
     print(f"❌ Missing {len(missing)} images: {missing}")
 else:
     print("✓ All images exist")
-    
+
 # Check stratification
 print("\nStratification:")
 print(labels['scene_type'].value_counts())
@@ -170,7 +170,7 @@ PYEOF
 - Structure scenes lenient pass ≥ 40%
 - Classifier balanced accuracy ≥ 75%
 
-**If criteria met**: Freeze baseline, proceed to DA V2 input-size sweep  
+**If criteria met**: Freeze baseline, proceed to DA V2 input-size sweep
 **If criteria not met**: Debug classifier or gates (do not integrate MaterialsV3 yet)
 
 ---
@@ -185,5 +185,5 @@ PYEOF
 
 ---
 
-**Last Updated**: 2025-12-19  
+**Last Updated**: 2025-12-19
 **Next Session**: Run expanded validation → analyze → decide on DA V2 sweep vs classifier tuning

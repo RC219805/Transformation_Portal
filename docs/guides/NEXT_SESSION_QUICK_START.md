@@ -1,7 +1,7 @@
 # Next Session Quick Start
 
-**Last Updated**: 2025-12-18  
-**Session**: Depth Quality Work - Cleanup Complete  
+**Last Updated**: 2025-12-18
+**Session**: Depth Quality Work - Cleanup Complete
 **Status**: Pilot-ready, modules committed
 
 ---
@@ -49,8 +49,8 @@ cat PRODUCTION_VALIDATION_QUICK_START.md
 ## Critical Next Steps (Prioritized)
 
 ### 1. Fix Sliver Tiles (BLOCKER)
-**Problem**: Border tiles can be 16×1024 pixels, destroying scale reconciliation  
-**Location**: `high_fidelity_depth/depth_estimator.py` - tiling logic  
+**Problem**: Border tiles can be 16×1024 pixels, destroying scale reconciliation
+**Location**: `high_fidelity_depth/depth_estimator.py` - tiling logic
 **Fix**: Reflect-padding at borders, crop after inference
 
 ```python
@@ -60,8 +60,8 @@ cat PRODUCTION_VALIDATION_QUICK_START.md
 ```
 
 ### 2. Run Full Validation (10-20 Images)
-**Current**: 2 images tested (Aerial, GreatRoom)  
-**Required**: 10-20 image matrix (interiors + exteriors + aerial)  
+**Current**: 2 images tested (Aerial, GreatRoom)
+**Required**: 10-20 image matrix (interiors + exteriors + aerial)
 **Location**: `scripts/automation/production_depth_validation.py`
 
 **Quality Gates**:
@@ -71,13 +71,13 @@ cat PRODUCTION_VALIDATION_QUICK_START.md
 - Overshoot penalty < 0.3
 
 ### 3. Enable Structural Edge Gating
-**Problem**: GreatRoom edge width 20px (too broad for compositing)  
-**Solution**: Suppress texture edges, preserve structure edges only  
+**Problem**: GreatRoom edge width 20px (too broad for compositing)
+**Solution**: Suppress texture edges, preserve structure edges only
 **Location**: `high_fidelity_depth/refinement.py` - AND-gated snapping
 
 ### 4. Materials V3 Integration Test
-**Untested**: Downstream impact on water/glass detection  
-**Expected**: Improved material boundary precision  
+**Untested**: Downstream impact on water/glass detection
+**Expected**: Improved material boundary precision
 **Action**: Run A/B comparison with baseline vs enhanced depth
 
 ---
@@ -164,8 +164,8 @@ VALIDATION_QUICK_START.md                        # How to validate
 
 ## Risk Summary
 
-**Technical**: Tiling artifacts, edge width, overshoot, sliver tiles  
-**Process**: Validation breadth insufficient (2 vs 10-20 required)  
+**Technical**: Tiling artifacts, edge width, overshoot, sliver tiles
+**Process**: Validation breadth insufficient (2 vs 10-20 required)
 **Integration**: Materials V3 untested (expected benefits not validated)
 
 ---
@@ -173,6 +173,6 @@ VALIDATION_QUICK_START.md                        # How to validate
 **Ready to continue? Start with sliver tile fix → full validation → Materials V3 A/B**
 
 ---
-*Generated: 2025-12-18*  
-*Commit: 2bb07db*  
+*Generated: 2025-12-18*
+*Commit: 2bb07db*
 *Next Session Entry Point: Fix sliver tiles*

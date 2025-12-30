@@ -24,6 +24,7 @@ try:
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
+
     TORCH_AVAILABLE = True
     _BaseModule = nn.Module
 except ImportError:
@@ -39,10 +40,7 @@ logger = logging.getLogger(__name__)
 def _check_torch() -> None:
     """Check if PyTorch is available."""
     if not TORCH_AVAILABLE:
-        raise ImportError(
-            "PyTorch required for loss functions. "
-            "Install with: pip install torch"
-        )
+        raise ImportError("PyTorch required for loss functions. Install with: pip install torch")
 
 
 class ScaleInvariantLoss(_BaseModule):
@@ -113,7 +111,7 @@ class ScaleInvariantLoss(_BaseModule):
             return torch.tensor(0.0, device=pred.device, requires_grad=True)
 
         # Scale-invariant loss
-        diff_sq = (diff ** 2).mean()
+        diff_sq = (diff**2).mean()
         diff_mean_sq = (diff.mean()) ** 2
 
         loss = torch.sqrt(diff_sq - self.variance_focus * diff_mean_sq + self.eps)
@@ -147,14 +145,10 @@ class GradientLoss(_BaseModule):
 
         # Sobel filters for gradient computation
         self.register_buffer(
-            "sobel_x",
-            torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32)
-            .view(1, 1, 3, 3)
+            "sobel_x", torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3)
         )
         self.register_buffer(
-            "sobel_y",
-            torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32)
-            .view(1, 1, 3, 3)
+            "sobel_y", torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3)
         )
 
     def _compute_gradient(self, x: "torch.Tensor") -> Tuple["torch.Tensor", "torch.Tensor"]:
@@ -255,8 +249,8 @@ class SSIMLoss(_BaseModule):
         self.register_buffer("window", window.expand(channels, 1, window_size, window_size))
 
         # Constants for stability
-        self.C1 = 0.01 ** 2
-        self.C2 = 0.03 ** 2
+        self.C1 = 0.01**2
+        self.C2 = 0.03**2
 
     def _create_gaussian_window(
         self,
@@ -275,7 +269,7 @@ class SSIMLoss(_BaseModule):
         coords = torch.arange(window_size, dtype=torch.float32)
         coords -= window_size // 2
 
-        gauss = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
+        gauss = torch.exp(-(coords**2) / (2 * sigma**2))
         gauss_2d = gauss.unsqueeze(0) * gauss.unsqueeze(1)
         gauss_2d = gauss_2d / gauss_2d.sum()
 
@@ -311,20 +305,19 @@ class SSIMLoss(_BaseModule):
         mu_pred = F.conv2d(pred_norm, self.window, padding=self.window_size // 2, groups=self.channels)
         mu_target = F.conv2d(target_norm, self.window, padding=self.window_size // 2, groups=self.channels)
 
-        mu_pred_sq = mu_pred ** 2
-        mu_target_sq = mu_target ** 2
+        mu_pred_sq = mu_pred**2
+        mu_target_sq = mu_target**2
         mu_pred_target = mu_pred * mu_target
 
         # Compute local variances and covariance
-        sigma_pred_sq = F.conv2d(
-            pred_norm ** 2, self.window, padding=self.window_size // 2, groups=self.channels
-        ) - mu_pred_sq
-        sigma_target_sq = F.conv2d(
-            target_norm ** 2, self.window, padding=self.window_size // 2, groups=self.channels
-        ) - mu_target_sq
-        sigma_pred_target = F.conv2d(
-            pred_norm * target_norm, self.window, padding=self.window_size // 2, groups=self.channels
-        ) - mu_pred_target
+        sigma_pred_sq = F.conv2d(pred_norm**2, self.window, padding=self.window_size // 2, groups=self.channels) - mu_pred_sq
+        sigma_target_sq = (
+            F.conv2d(target_norm**2, self.window, padding=self.window_size // 2, groups=self.channels) - mu_target_sq
+        )
+        sigma_pred_target = (
+            F.conv2d(pred_norm * target_norm, self.window, padding=self.window_size // 2, groups=self.channels)
+            - mu_pred_target
+        )
 
         # SSIM formula
         numerator = (2 * mu_pred_target + self.C1) * (2 * sigma_pred_target + self.C2)

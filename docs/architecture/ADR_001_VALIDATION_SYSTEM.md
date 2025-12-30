@@ -1,9 +1,9 @@
 # ADR 001: Validation System Architecture
 
-**Status**: Accepted  
-**Date**: 2025-12-08  
-**Decision Authority**: Transformation Portal Architect  
-**Impact**: System-wide (Lux Depth V2 + CI/CD + Operations)  
+**Status**: Accepted
+**Date**: 2025-12-08
+**Decision Authority**: Transformation Portal Architect
+**Impact**: System-wide (Lux Depth V2 + CI/CD + Operations)
 
 ---
 
@@ -31,7 +31,7 @@ However, **commercial proof is missing**:
 We will implement a **5-Priority Validation Stack** integrated into Lux Depth V2 and surrounding infrastructure:
 
 ### Priority 1: Repeatable Benchmark Framework
-**Purpose**: Provide quantitative proof of superiority vs commercial baselines  
+**Purpose**: Provide quantitative proof of superiority vs commercial baselines
 **Components**:
 - Versioned dataset registry (20 images, 5 categories)
 - Baseline runner with caching (Topaz, Adobe, Real-ESRGAN)
@@ -40,7 +40,7 @@ We will implement a **5-Priority Validation Stack** integrated into Lux Depth V2
 - HTML/MD report generator
 
 ### Priority 2: CI/CD Quality Gates
-**Purpose**: Prevent quality regression during development  
+**Purpose**: Prevent quality regression during development
 **Components**:
 - Golden image registry (5-10 curated failure modes)
 - Regression detector with per-metric thresholds
@@ -48,7 +48,7 @@ We will implement a **5-Priority Validation Stack** integrated into Lux Depth V2
 - Trend tracker (quality metrics over time)
 
 ### Priority 3: Performance Profiler
-**Purpose**: Enable targeted optimization with measurable impact  
+**Purpose**: Enable targeted optimization with measurable impact
 **Components**:
 - Stage-by-stage profiler (I/O, segmentation, upscaling, post-processing)
 - GPU utilization monitor (CUDA/MPS/CPU)
@@ -56,7 +56,7 @@ We will implement a **5-Priority Validation Stack** integrated into Lux Depth V2
 - Optimization advisor (actionable recommendations)
 
 ### Priority 4: Segmentation Validator
-**Purpose**: Establish material segmentation as trusted system primitive  
+**Purpose**: Establish material segmentation as trusted system primitive
 **Components**:
 - Consistency evaluator (10-run IoU stability test)
 - Impact analyzer (ablation: segmentation ON vs OFF)
@@ -64,7 +64,7 @@ We will implement a **5-Priority Validation Stack** integrated into Lux Depth V2
 - Optional ground truth annotation tool
 
 ### Priority 5: Production Observability
-**Purpose**: Enable operational excellence and traceability  
+**Purpose**: Enable operational excellence and traceability
 **Components**:
 - Prometheus metrics endpoint (/metrics)
 - Request tracer (full audit trail with config hashes)
@@ -76,39 +76,39 @@ We will implement a **5-Priority Validation Stack** integrated into Lux Depth V2
 ## Architectural Principles
 
 ### 1. Modularity
-**Principle**: Each priority is a standalone module with clear API contracts  
-**Rationale**: Independent development, testability, optional adoption  
-**Trade-off**: More integration complexity vs monolithic simplicity  
+**Principle**: Each priority is a standalone module with clear API contracts
+**Rationale**: Independent development, testability, optional adoption
+**Trade-off**: More integration complexity vs monolithic simplicity
 
 ### 2. Versioning
-**Principle**: Datasets, models, and baselines versioned with SHA256 checksums  
-**Rationale**: Reproducibility is non-negotiable for commercial proof  
-**Trade-off**: Storage costs (~50GB) vs traceability  
+**Principle**: Datasets, models, and baselines versioned with SHA256 checksums
+**Rationale**: Reproducibility is non-negotiable for commercial proof
+**Trade-off**: Storage costs (~50GB) vs traceability
 
 ### 3. Category-Based Scoring
-**Principle**: Configurable weights per category (interior: 30%, exterior: 25%, etc.)  
-**Rationale**: Different use cases prioritize different quality aspects  
-**Trade-off**: Configuration complexity vs one-size-fits-all scoring  
+**Principle**: Configurable weights per category (interior: 30%, exterior: 25%, etc.)
+**Rationale**: Different use cases prioritize different quality aspects
+**Trade-off**: Configuration complexity vs one-size-fits-all scoring
 
 ### 4. Golden Images as Failure Mode Coverage
-**Principle**: 5-10 curated images exposing known weaknesses (edges, textures, halos)  
-**Rationale**: Targeted regression prevention more effective than exhaustive testing  
-**Trade-off**: Manual curation effort vs automated random selection  
+**Principle**: 5-10 curated images exposing known weaknesses (edges, textures, halos)
+**Rationale**: Targeted regression prevention more effective than exhaustive testing
+**Trade-off**: Manual curation effort vs automated random selection
 
 ### 5. Profiler as Optional Feature
-**Principle**: Enable profiling via `--profile` flag, not always-on  
-**Rationale**: GPU sync overhead (<5%) acceptable in profiling mode, not production  
-**Trade-off**: Separate codepaths vs unified instrumentation  
+**Principle**: Enable profiling via `--profile` flag, not always-on
+**Rationale**: GPU sync overhead (<5%) acceptable in profiling mode, not production
+**Trade-off**: Separate codepaths vs unified instrumentation
 
 ### 6. Consistency as Proxy for Ground Truth
-**Principle**: Use 10-run IoU stability instead of perfect annotations  
-**Rationale**: Ground truth expensive to generate; consistency signals quality  
-**Trade-off**: Indirect measure vs direct validation  
+**Principle**: Use 10-run IoU stability instead of perfect annotations
+**Rationale**: Ground truth expensive to generate; consistency signals quality
+**Trade-off**: Indirect measure vs direct validation
 
 ### 7. Prometheus-Compatible Observability
-**Principle**: Standard Prometheus client + Grafana dashboards  
-**Rationale**: Broad ecosystem compatibility, ops team familiarity  
-**Trade-off**: External dependencies vs custom solution  
+**Principle**: Standard Prometheus client + Grafana dashboards
+**Rationale**: Broad ecosystem compatibility, ops team familiarity
+**Trade-off**: External dependencies vs custom solution
 
 ---
 
@@ -144,20 +144,20 @@ We will implement a **5-Priority Validation Stack** integrated into Lux Depth V2
 ## Alternatives Considered
 
 ### Alternative 1: Manual Validation Only
-**Approach**: Continue with human review for quality validation  
-**Rejected**: Not scalable, not reproducible, no commercial proof  
+**Approach**: Continue with human review for quality validation
+**Rejected**: Not scalable, not reproducible, no commercial proof
 
 ### Alternative 2: External Validation Service
-**Approach**: Use third-party benchmarking (e.g., PapersWithCode)  
-**Rejected**: Slow iteration, limited control over metrics/datasets  
+**Approach**: Use third-party benchmarking (e.g., PapersWithCode)
+**Rejected**: Slow iteration, limited control over metrics/datasets
 
 ### Alternative 3: Exhaustive Testing
-**Approach**: Test every image in every configuration  
-**Rejected**: Infeasible (combinatorial explosion), slow CI/CD  
+**Approach**: Test every image in every configuration
+**Rejected**: Infeasible (combinatorial explosion), slow CI/CD
 
 ### Alternative 4: Metrics-Only (No Baselines)
-**Approach**: Track internal metrics without external comparison  
-**Rejected**: No commercial proof of superiority  
+**Approach**: Track internal metrics without external comparison
+**Rejected**: No commercial proof of superiority
 
 ---
 
@@ -165,11 +165,11 @@ We will implement a **5-Priority Validation Stack** integrated into Lux Depth V2
 
 ### Timeline: 10 Weeks (Part-Time Senior Engineer)
 
-**Week 1-2**: Priority 1 (Benchmark Framework)  
-**Week 3-4**: Priority 2 (CI/CD Quality Gates)  
-**Week 5-6**: Priority 3 (Performance Profiler)  
-**Week 7-8**: Priority 4 (Segmentation Validator)  
-**Week 9-10**: Priority 5 (Production Observability)  
+**Week 1-2**: Priority 1 (Benchmark Framework)
+**Week 3-4**: Priority 2 (CI/CD Quality Gates)
+**Week 5-6**: Priority 3 (Performance Profiler)
+**Week 7-8**: Priority 4 (Segmentation Validator)
+**Week 9-10**: Priority 5 (Production Observability)
 
 ### Critical Path
 Dataset Acquisition → Baseline Generation → CI/CD Integration
@@ -231,11 +231,11 @@ Dataset Acquisition → Baseline Generation → CI/CD Integration
 
 ## Approval
 
-**Decision Authority**: Transformation Portal Architect  
-**Date**: 2025-12-08  
-**Status**: ✅ Accepted  
+**Decision Authority**: Transformation Portal Architect
+**Date**: 2025-12-08
+**Status**: ✅ Accepted
 
-**Implementation Authorization**: Pending stakeholder sign-off  
+**Implementation Authorization**: Pending stakeholder sign-off
 **Week 1 Kickoff**: Conditional on:
 1. Architect review complete
 2. Dataset acquisition plan approved
@@ -253,7 +253,7 @@ Dataset Acquisition → Baseline Generation → CI/CD Integration
 
 ---
 
-**ADR Status**: Active  
-**Next Review**: After Phase 2 completion (Week 4)  
-**Supersedes**: None  
+**ADR Status**: Active
+**Next Review**: After Phase 2 completion (Week 4)
+**Supersedes**: None
 **Superseded By**: None

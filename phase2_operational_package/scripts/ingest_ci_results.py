@@ -33,42 +33,44 @@ def parse_junit_xml(junit_path: Path) -> List[Dict[str, Any]]:
         tree = ET.parse(junit_path)
         root = tree.getroot()
 
-        for testsuite in root.iter('testsuite'):
-            suite_name = testsuite.get('name', 'unknown')
+        for testsuite in root.iter("testsuite"):
+            suite_name = testsuite.get("name", "unknown")
 
-            for testcase in testsuite.iter('testcase'):
-                test_name = testcase.get('name', 'unknown')
-                classname = testcase.get('classname', '')
-                duration = float(testcase.get('time', 0))
+            for testcase in testsuite.iter("testcase"):
+                test_name = testcase.get("name", "unknown")
+                classname = testcase.get("classname", "")
+                duration = float(testcase.get("time", 0))
 
                 # Determine status
-                failure = testcase.find('failure')
-                error = testcase.find('error')
-                skipped = testcase.find('skipped')
+                failure = testcase.find("failure")
+                error = testcase.find("error")
+                skipped = testcase.find("skipped")
 
                 if failure is not None:
-                    status = 'failed'
-                    message = failure.get('message', '')
+                    status = "failed"
+                    message = failure.get("message", "")
                 elif error is not None:
-                    status = 'error'
-                    message = error.get('message', '')
+                    status = "error"
+                    message = error.get("message", "")
                 elif skipped is not None:
-                    status = 'skipped'
-                    message = skipped.get('message', '')
+                    status = "skipped"
+                    message = skipped.get("message", "")
                 else:
-                    status = 'passed'
-                    message = ''
+                    status = "passed"
+                    message = ""
 
-                results.append({
-                    'test_id': f"{classname}::{test_name}",
-                    'test_file': classname.replace('.', '/') + '.py',
-                    'test_name': test_name,
-                    'status': status,
-                    'duration_ms': duration * 1000,
-                    'error_message': message if message else None,
-                    'suite': suite_name,
-                    'timestamp': datetime.now().isoformat()
-                })
+                results.append(
+                    {
+                        "test_id": f"{classname}::{test_name}",
+                        "test_file": classname.replace(".", "/") + ".py",
+                        "test_name": test_name,
+                        "status": status,
+                        "duration_ms": duration * 1000,
+                        "error_message": message if message else None,
+                        "suite": suite_name,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
 
     except ET.ParseError as e:
         print(f"Error parsing {junit_path}: {e}", file=sys.stderr)
@@ -85,19 +87,16 @@ def parse_coverage_xml(coverage_path: Path) -> Optional[Dict[str, Any]]:
         root = tree.getroot()
 
         # Get overall coverage
-        line_rate = float(root.get('line-rate', 0)) * 100
-        branch_rate = float(root.get('branch-rate', 0)) * 100
+        line_rate = float(root.get("line-rate", 0)) * 100
+        branch_rate = float(root.get("branch-rate", 0)) * 100
 
         return {
-            'metric_id': 'code_coverage',
-            'metric_type': 'coverage',
-            'value': line_rate,
-            'unit': 'percent',
-            'timestamp': datetime.now().isoformat(),
-            'context': {
-                'line_rate': line_rate,
-                'branch_rate': branch_rate
-            }
+            "metric_id": "code_coverage",
+            "metric_type": "coverage",
+            "value": line_rate,
+            "unit": "percent",
+            "timestamp": datetime.now().isoformat(),
+            "context": {"line_rate": line_rate, "branch_rate": branch_rate},
         }
 
     except (ET.ParseError, FileNotFoundError) as e:
@@ -106,10 +105,7 @@ def parse_coverage_xml(coverage_path: Path) -> Optional[Dict[str, Any]]:
 
 
 def update_knowledge_base(
-    cache_dir: Path,
-    test_results: List[Dict],
-    metrics: List[Dict],
-    run_id: str = "local"
+    cache_dir: Path, test_results: List[Dict], metrics: List[Dict], run_id: str = "local"
 ) -> Dict[str, Any]:
     """Update knowledge base with new results."""
     knowledge_dir = cache_dir / "knowledge"
@@ -141,36 +137,31 @@ def update_knowledge_base(
 
     # Calculate summary metrics from test results
     total_tests = len(test_results)
-    total_passed = sum(1 for r in test_results if r['status'] == 'passed')
-    total_failed = sum(1 for r in test_results if r['status'] in ('failed', 'error'))
-    total_skipped = sum(1 for r in test_results if r['status'] == 'skipped')
-    total_duration = sum(r.get('duration_ms', 0) for r in test_results) / 1000
+    total_passed = sum(1 for r in test_results if r["status"] == "passed")
+    total_failed = sum(1 for r in test_results if r["status"] in ("failed", "error"))
+    total_skipped = sum(1 for r in test_results if r["status"] == "skipped")
+    total_duration = sum(r.get("duration_ms", 0) for r in test_results) / 1000
 
     # Add new metrics
     new_metrics = [
         {
-            'metric_id': 'test_pass_rate',
-            'metric_type': 'test_health',
-            'value': (total_passed / total_tests * 100) if total_tests > 0 else 0,
-            'unit': 'percent',
-            'source': f'CI Run #{run_id}',
-            'timestamp': datetime.now().isoformat(),
-            'context': {
-                'total': total_tests,
-                'passed': total_passed,
-                'failed': total_failed,
-                'skipped': total_skipped
-            }
+            "metric_id": "test_pass_rate",
+            "metric_type": "test_health",
+            "value": (total_passed / total_tests * 100) if total_tests > 0 else 0,
+            "unit": "percent",
+            "source": f"CI Run #{run_id}",
+            "timestamp": datetime.now().isoformat(),
+            "context": {"total": total_tests, "passed": total_passed, "failed": total_failed, "skipped": total_skipped},
         },
         {
-            'metric_id': 'test_execution_time',
-            'metric_type': 'performance',
-            'value': total_duration,
-            'unit': 'seconds',
-            'source': f'CI Run #{run_id}',
-            'timestamp': datetime.now().isoformat(),
-            'context': {'test_count': total_tests}
-        }
+            "metric_id": "test_execution_time",
+            "metric_type": "performance",
+            "value": total_duration,
+            "unit": "seconds",
+            "source": f"CI Run #{run_id}",
+            "timestamp": datetime.now().isoformat(),
+            "context": {"test_count": total_tests},
+        },
     ]
 
     # Add any additional metrics (e.g., coverage)
@@ -188,66 +179,39 @@ def update_knowledge_base(
     # Update knowledge state
     state_file = knowledge_dir / "knowledge_state.json"
     state = {
-        'test_results_count': len(existing_results),
-        'metrics_count': len(existing_metrics),
-        'last_ingestion': datetime.now().isoformat(),
-        'last_run_id': run_id,
-        'storage_path': str(knowledge_dir)
+        "test_results_count": len(existing_results),
+        "metrics_count": len(existing_metrics),
+        "last_ingestion": datetime.now().isoformat(),
+        "last_run_id": run_id,
+        "storage_path": str(knowledge_dir),
     }
     with open(state_file, "w") as f:
         json.dump(state, f, indent=2)
 
     return {
-        'tests_ingested': len(test_results),
-        'metrics_added': len(new_metrics),
-        'total_results': len(existing_results),
-        'total_metrics': len(existing_metrics),
-        'summary': {
-            'total': total_tests,
-            'passed': total_passed,
-            'failed': total_failed,
-            'skipped': total_skipped,
-            'pass_rate': (total_passed / total_tests * 100) if total_tests > 0 else 0,
-            'duration': total_duration
-        }
+        "tests_ingested": len(test_results),
+        "metrics_added": len(new_metrics),
+        "total_results": len(existing_results),
+        "total_metrics": len(existing_metrics),
+        "summary": {
+            "total": total_tests,
+            "passed": total_passed,
+            "failed": total_failed,
+            "skipped": total_skipped,
+            "pass_rate": (total_passed / total_tests * 100) if total_tests > 0 else 0,
+            "duration": total_duration,
+        },
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Ingest CI test results into Knowledge Engine"
-    )
-    parser.add_argument(
-        "--junit",
-        type=Path,
-        help="Path to JUnit XML file"
-    )
-    parser.add_argument(
-        "--dir",
-        type=Path,
-        help="Directory containing JUnit XML files"
-    )
-    parser.add_argument(
-        "--coverage",
-        type=Path,
-        help="Path to coverage XML file"
-    )
-    parser.add_argument(
-        "--cache-dir",
-        type=Path,
-        default=Path(".rag_cache"),
-        help="RAG cache directory"
-    )
-    parser.add_argument(
-        "--run-id",
-        default="local",
-        help="CI run identifier"
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Verbose output"
-    )
+    parser = argparse.ArgumentParser(description="Ingest CI test results into Knowledge Engine")
+    parser.add_argument("--junit", type=Path, help="Path to JUnit XML file")
+    parser.add_argument("--dir", type=Path, help="Directory containing JUnit XML files")
+    parser.add_argument("--coverage", type=Path, help="Path to coverage XML file")
+    parser.add_argument("--cache-dir", type=Path, default=Path(".rag_cache"), help="RAG cache directory")
+    parser.add_argument("--run-id", default="local", help="CI run identifier")
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
 
     args = parser.parse_args()
 
@@ -280,12 +244,7 @@ def main():
             metrics.append(coverage_metric)
 
     # Update knowledge base
-    summary = update_knowledge_base(
-        args.cache_dir,
-        all_results,
-        metrics,
-        args.run_id
-    )
+    summary = update_knowledge_base(args.cache_dir, all_results, metrics, args.run_id)
 
     # Print summary
     print("=" * 60)

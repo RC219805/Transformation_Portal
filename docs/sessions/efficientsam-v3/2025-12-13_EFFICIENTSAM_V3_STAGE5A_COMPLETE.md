@@ -1,6 +1,6 @@
 # EfficientSAM V3 - Stage 5A Complete: Real ONNX Inference
 
-**Date**: December 13, 2025  
+**Date**: December 13, 2025
 **Session Focus**: Stage 5A - Complete ONNX I/O wiring with efficientsam_s.onnx
 
 ---
@@ -239,6 +239,6 @@ The scaffolding built across Stages 1-5A provides:
 
 ---
 
-**Session End**: December 13, 2025, 2:30 PM PST  
-**Status**: ✅ Complete, Repository Stable, All Tests Passing  
+**Session End**: December 13, 2025, 2:30 PM PST
+**Status**: ✅ Complete, Repository Stable, All Tests Passing
 **Branch**: `main` (Stage 5A merged)

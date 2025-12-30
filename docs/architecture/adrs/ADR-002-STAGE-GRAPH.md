@@ -1,8 +1,8 @@
 # ADR-002: Stage Graph Architecture
 
-**Status**: Proposed  
-**Date**: 2025-12-08  
-**Authors**: Transformation Portal Architect  
+**Status**: Proposed
+**Date**: 2025-12-08
+**Authors**: Transformation Portal Architect
 **Related PRs**: PR-3 (Stage Graph Refactor)
 
 ---
@@ -101,22 +101,22 @@ from typing import Any, Dict
 
 class Stage(ABC):
     """Deterministic pipeline stage."""
-    
+
     def __init__(self, name: str, version: str):
         self.name = name
         self.version = version
-    
+
     @abstractmethod
     def execute(self, input_data: Any, config: Dict[str, Any]) -> Any:
         """Execute stage transformation."""
         pass
-    
+
     def compute_cache_key(self, input_data: Any, config: Dict[str, Any]) -> str:
         """Compute deterministic cache key."""
         # Hash: input + config + stage_version
         pass
-    
-    def run(self, input_data: Any, config: Dict[str, Any], 
+
+    def run(self, input_data: Any, config: Dict[str, Any],
             cache: 'ArtifactStore') -> 'StageResult':
         """Run with caching and timing."""
         # Check cache
@@ -130,10 +130,10 @@ class Stage(ABC):
 ```python
 class PipelineGraph:
     """DAG of processing stages."""
-    
+
     def __init__(self, stages: List[Stage]):
         self.stages = stages
-    
+
     def execute(self, input_data: Any, config: Dict[str, Any]) -> Any:
         """Execute graph."""
         data = input_data
@@ -141,7 +141,7 @@ class PipelineGraph:
             result = stage.run(data, config, cache)
             data = result.output
         return data
-    
+
     def get_metrics(self) -> Dict[str, Any]:
         """Get stage-level metrics."""
         return {
@@ -157,18 +157,18 @@ class PipelineGraph:
 ```python
 class PolicyEngine:
     """Context-aware parameter selection."""
-    
+
     def apply(self, context: Dict[str, Any], base_config: Dict[str, Any]) -> Dict[str, Any]:
         """Apply rules based on context."""
         config = base_config.copy()
-        
+
         # Example rules
         if context["is_uhd"]:
             config["enable_tiling"] = True
-        
+
         if context["is_hdr"]:
             config["tone_map_operator"] = "aces"
-        
+
         return config
 ```
 
@@ -253,7 +253,7 @@ class DepthEstimationStage(Stage):
     def __init__(self, model):
         super().__init__(name="depth_estimation", version="1.0.0")
         self.model = model
-    
+
     def execute(self, input_data, config):
         with torch.inference_mode():
             depth = self.model(input_data)
@@ -353,20 +353,20 @@ class LuxDepthPipeline:
 
 ### Alternative 1: Keep Monolithic Pipeline
 
-**Pros**: Simplicity  
-**Cons**: No caching, poor observability  
+**Pros**: Simplicity
+**Cons**: No caching, poor observability
 **Verdict**: ❌ Doesn't meet efficiency goals
 
 ### Alternative 2: External Workflow Engine (Airflow, Prefect)
 
-**Pros**: Battle-tested, rich features  
-**Cons**: Massive overhead, requires infrastructure  
+**Pros**: Battle-tested, rich features
+**Cons**: Massive overhead, requires infrastructure
 **Verdict**: ❌ Overkill for single-machine processing
 
 ### Alternative 3: Lightweight Stage Graph (Selected)
 
-**Pros**: Right-sized for use case, embedded, no external dependencies  
-**Cons**: Must implement caching ourselves  
+**Pros**: Right-sized for use case, embedded, no external dependencies
+**Cons**: Must implement caching ourselves
 **Verdict**: ✅ **Best fit**
 
 ---
@@ -388,7 +388,7 @@ class LuxDepthPipeline:
 
 ---
 
-**Decision**: ✅ **APPROVED**  
-**Implementation**: PR-3 (Stage Graph Refactor)  
-**Timeline**: Week 3-4  
+**Decision**: ✅ **APPROVED**
+**Implementation**: PR-3 (Stage Graph Refactor)
+**Timeline**: Week 3-4
 **Next Review**: 2025-12-22

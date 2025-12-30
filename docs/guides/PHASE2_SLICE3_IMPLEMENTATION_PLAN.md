@@ -1,7 +1,7 @@
 # Phase 2 Slice 3: Export I/O Optimizations - Implementation Plan
 
-**Status**: Planning  
-**Target**: Reduce export latency, improve robustness, enable tiered storage  
+**Status**: Planning
+**Target**: Reduce export latency, improve robustness, enable tiered storage
 **Approach**: Feature-flagged optimizations with strict backward compatibility
 
 ---
@@ -51,13 +51,13 @@
 @dataclass(frozen=True)
 class ExportConfig:
     output_dir: Path
-    
+
     # Existing fields (Slice 2)
     master_prefix: str = ""
     upscaled_prefix: str = ""
     preview_prefix: str = ""
     report_suffix: str = "_report.json"
-    
+
     # NEW: Slice 3 fields (all default OFF for backward compatibility)
     enable_tiered_storage: bool = False
     scratch_dir: Optional[Path] = None  # if None, derive from output_dir or tempdir
@@ -115,7 +115,7 @@ class ExportManager:
     def __init__(self, cfg: ExportConfig):
         self.cfg = cfg
         self._validate_config()
-    
+
     def _validate_config(self) -> None:
         """Validate configuration on initialization."""
         if self.cfg.enable_tiered_storage and self.cfg.require_scratch_on_enable:
@@ -124,28 +124,28 @@ class ExportManager:
                     "require_scratch_on_enable=True but scratch_dir is None. "
                     "Provide scratch_dir or set require_scratch_on_enable=False."
                 )
-        
+
         if self.cfg.tiff_tile_size is not None:
             if not (self.cfg.tiff_tile_size_min <= self.cfg.tiff_tile_size <= self.cfg.tiff_tile_size_max):
                 raise ValueError(
                     f"tiff_tile_size={self.cfg.tiff_tile_size} outside valid range "
                     f"[{self.cfg.tiff_tile_size_min}, {self.cfg.tiff_tile_size_max}]"
                 )
-    
+
     def _resolve_scratch_path(self, final_path: Path) -> Path:
         """Resolve scratch path if tiered storage is enabled."""
         if not self.cfg.enable_tiered_storage or not self.cfg.scratch_dir:
             return final_path
-        
+
         # Map output_dir path to scratch_dir path
         rel = final_path.relative_to(self.cfg.output_dir)
         return self.cfg.scratch_dir / rel
-    
+
     def _atomic_move(self, tmp_path: Path, final_path: Path) -> None:
         """Atomically move from scratch to final location."""
         final_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path.replace(final_path)  # atomic within same filesystem
-    
+
     def cleanup_scratch(self) -> None:
         """Clean up scratch directory (operator/maintenance function)."""
         if self.cfg.scratch_dir and self.cfg.scratch_dir.exists():
@@ -159,7 +159,7 @@ class ExportManager:
 def _write_image_tiff16(self, stem: str, arr: np.ndarray) -> tuple[Path, dict]:
     final_path = self._build_master_path(stem)
     path = self._resolve_scratch_path(final_path)
-    
+
     # Track export implementation details for debugging/metrics
     export_impl = {
         "final_path": str(final_path),
@@ -170,19 +170,19 @@ def _write_image_tiff16(self, stem: str, arr: np.ndarray) -> tuple[Path, dict]:
         "compression": self.cfg.tiff_compression,
         "atomic": self.cfg.use_atomic_image_writes,
     }
-    
+
     # Heavy write to scratch (or direct if tiered storage disabled)
-    self._io.write_tiff16(path, arr, 
+    self._io.write_tiff16(path, arr,
                           tile_size=self.cfg.tiff_tile_size,
                           compression=self.cfg.tiff_compression)
-    
+
     # Move to final location if using scratch
     if path != final_path:
         self._atomic_move(path, final_path)
         export_impl["finalized"] = True
     else:
         export_impl["finalized"] = True  # Direct write, no staging
-    
+
     return final_path, export_impl
 ```
 
@@ -211,7 +211,7 @@ def write_tiff16_tiled(
 ) -> None:
     """
     Write 16-bit TIFF with tiling for large images.
-    
+
     Args:
         path: Output path
         arr: RGB uint16 array, shape (H, W, 3)
@@ -219,10 +219,10 @@ def write_tiff16_tiled(
         compression: Compression method ("lzw", "zstd", "deflate", None)
     """
     import tifffile
-    
+
     # Ensure BigTIFF for large images (>4GB)
     bigtiff = arr.nbytes > 2**32
-    
+
     tifffile.imwrite(
         path,
         arr,
@@ -281,7 +281,7 @@ class ExportManager:
 def write_preview(self, stem: str, arr: np.ndarray) -> Path:
     """Write preview JPG (optionally async)."""
     path = self._get_preview_path(stem)
-    
+
     if self._executor:
         future = self._executor.submit(self._write_jpg, path, arr)
         # Track future for shutdown
@@ -296,12 +296,12 @@ def write_preview(self, stem: str, arr: np.ndarray) -> Path:
 def close(self) -> None:
     """
     Shutdown async executor and cleanup resources.
-    
+
     MUST be called by:
     - Pipeline shutdown
     - Batch job cleanup
     - Error paths (try/finally blocks)
-    
+
     Prevents thread pool memory leaks.
     """
     if self._executor:
@@ -317,7 +317,7 @@ class LuxPipelineV2:
         """Cleanup on pipeline destruction."""
         if hasattr(self, 'export_manager'):
             self.export_manager.close()
-    
+
     def process_directory(self):
         try:
             # ... processing ...
@@ -356,14 +356,14 @@ else:
 ```python
 def write_report(self, stem: str, report_dict: dict) -> Path:
     path = self._get_report_path(stem)
-    
+
     if self.cfg.use_atomic_report_writes:
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(report_dict, indent=2))
         tmp.replace(path)
     else:
         path.write_text(json.dumps(report_dict, indent=2))
-    
+
     return path
 ```
 
@@ -455,10 +455,10 @@ def test_tiered_storage_path_resolution():
         scratch_dir=Path("/scratch")
     )
     mgr = ExportManager(cfg, mock_io)
-    
+
     final_path = Path("/output/test_master16.tif")
     scratch_path = mgr._resolve_scratch_path(final_path)
-    
+
     assert scratch_path == Path("/scratch/test_master16.tif")
 
 def test_atomic_move():
@@ -479,17 +479,17 @@ def test_tiled_tiff_selection(monkeypatch):
         tiff_tile_size=512,
         tiff_compression="lzw"
     )
-    
+
     called = {}
     def mock_tiled_write(path, arr, tile_size, compression):
         called['tile_size'] = tile_size
         called['compression'] = compression
-    
+
     monkeypatch.setattr("lux_depth_v2.io_utils.write_tiff16_tiled", mock_tiled_write)
-    
+
     mgr = ExportManager(cfg, ...)
     mgr.write_master("test", sample_image)
-    
+
     assert called['tile_size'] == 512
     assert called['compression'] == "lzw"
 
@@ -516,12 +516,12 @@ def test_non_atomic_default(tmp_path):
 def test_export_behavior_parity_when_optimizations_disabled():
     """
     With all Slice 3 flags OFF, outputs must be bit-identical to Slice 2.
-    
+
     Uses SHA256 hashes of master/upscaled/preview/report files.
     """
     # Run with old config (Slice 2)
     old_results = run_export_with_config(ExportConfig(output_dir=...))
-    
+
     # Run with new config (Slice 3, all flags OFF)
     new_results = run_export_with_config(ExportConfig(
         output_dir=...,
@@ -529,7 +529,7 @@ def test_export_behavior_parity_when_optimizations_disabled():
         use_atomic_image_writes=False,
         # all defaults
     ))
-    
+
     for filename in ["master16.tif", "upscaled16.tif", "report.json"]:
         assert sha256(old_results / filename) == sha256(new_results / filename)
 ```
@@ -547,7 +547,7 @@ def test_pipeline_with_optimizations_disabled():
     )
     pipeline = LuxPipelineV2(cfg)
     result = pipeline.process_one(test_image)
-    
+
     # Assert outputs exist, timing_s populated
     assert result["status"] == "ok"
 
@@ -560,10 +560,10 @@ def test_pipeline_with_tiered_storage():
     )
     pipeline = LuxPipelineV2(cfg)
     result = pipeline.process_one(test_image)
-    
+
     # Assert outputs in output_dir (not scratch)
     assert (cfg.output_dir / "test_master16.tif").exists()
-    
+
     # Assert scratch is clean or can be cleaned
     pipeline.export_manager.cleanup_scratch()
 ```
@@ -576,21 +576,21 @@ def test_pipeline_with_tiered_storage():
 def test_export_performance_comparison(benchmark_large_image):
     """
     Compare export performance: old vs new (tiled + compressed).
-    
+
     Run locally, log results to feed manual evaluation.
     """
     import time
-    
+
     # Old path (Slice 2)
     t0 = time.perf_counter()
     export_old(benchmark_large_image)
     old_time = time.perf_counter() - t0
-    
+
     # New path (Slice 3, optimizations ON)
     t0 = time.perf_counter()
     export_new(benchmark_large_image)
     new_time = time.perf_counter() - t0
-    
+
     print(f"Old: {old_time:.2f}s, New: {new_time:.2f}s, Speedup: {old_time/new_time:.2f}x")
 ```
 
@@ -662,7 +662,7 @@ def test_export_performance_comparison(benchmark_large_image):
 **Mitigation**: All optimizations behind feature flags, default OFF
 
 ### Risk: Scratch dir fills disk
-**Mitigation**: 
+**Mitigation**:
 - Automatic cleanup on success
 - Manual cleanup command: `ExportManager.cleanup_scratch()`
 - Monitoring: disk space alerts
@@ -697,12 +697,12 @@ def test_export_performance_comparison(benchmark_large_image):
 ## 14. Expert Refinements Applied
 
 ### Configuration Hardening
-✅ **Added**: `require_scratch_on_enable` - prevents misconfiguration  
-✅ **Added**: `tiff_tile_size_min` (128) and `tiff_tile_size_max` (1024) - prevents pathological tile counts  
+✅ **Added**: `require_scratch_on_enable` - prevents misconfiguration
+✅ **Added**: `tiff_tile_size_min` (128) and `tiff_tile_size_max` (1024) - prevents pathological tile counts
 ✅ **Added**: Config validation in `ExportManager.__init__()` with clear error messages
 
 ### Export Metadata Tracking
-✅ **Enhanced**: Write methods return `(Path, dict)` tuple with export implementation details  
+✅ **Enhanced**: Write methods return `(Path, dict)` tuple with export implementation details
 ✅ **Added**: `export_impl` dict includes:
 - `final_path`, `scratch_path`, `finalized` status
 - `tiled`, `tile_size`, `compression`
@@ -710,19 +710,19 @@ def test_export_performance_comparison(benchmark_large_image):
 ✅ **Purpose**: Debugging, metrics, future audit trails
 
 ### Resource Management
-✅ **Critical**: Explicit `close()` method for ExportManager  
-✅ **Integration**: Pipeline `__del__` and `process_directory` finally blocks  
+✅ **Critical**: Explicit `close()` method for ExportManager
+✅ **Integration**: Pipeline `__del__` and `process_directory` finally blocks
 ✅ **Purpose**: Prevents thread pool memory leaks in long-running processes
 
 ### Test Coverage Expansion
-✅ **Added**: Config validation tests (3 new test cases)  
-✅ **Coverage**: Scratch requirement, tile size bounds enforcement  
+✅ **Added**: Config validation tests (3 new test cases)
+✅ **Coverage**: Scratch requirement, tile size bounds enforcement
 ✅ **Purpose**: Fail-fast on misconfiguration, not at runtime
 
 ---
 
-**Document Status**: Expert-Reviewed & Hardened  
-**Last Updated**: 2025-12-10  
-**Author**: GitHub Copilot CLI  
-**Expert Review**: Complete  
+**Document Status**: Expert-Reviewed & Hardened
+**Last Updated**: 2025-12-10
+**Author**: GitHub Copilot CLI
+**Expert Review**: Complete
 **Implementation Status**: Ready for PR-1

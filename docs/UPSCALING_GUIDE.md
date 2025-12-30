@@ -300,10 +300,10 @@ h, w = original.shape[:2]
 for _ in range(10):
     y, x = np.random.randint(0, h), np.random.randint(0, w)
     patch_orig = original[y:y+50, x:x+50].mean(axis=(0,1))
-    
+
     # Corresponding patch in upscaled (4x coords)
     patch_up = upscaled[y*4:y*4+200, x*4:x*4+200].mean(axis=(0,1))
-    
+
     diff = np.abs(patch_orig - patch_up).mean()
     print(f"Patch ({y},{x}): deviation = {diff:.4f}")
 ```

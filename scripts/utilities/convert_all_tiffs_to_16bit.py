@@ -16,9 +16,9 @@ for tiff_path in sorted(tiff_files):
         continue
 
     # Convert in-place (overwrite original)
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Converting: {tiff_path.name}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     try:
         # Read original
@@ -26,11 +26,12 @@ for tiff_path in sorted(tiff_files):
 
         # Save as 16-bit (overwrite)
         from fix_tiff_16bit import save_16bit_tiff_tifffile
-        save_16bit_tiff_tifffile(img_array, tiff_path, compression='lzw')
+
+        save_16bit_tiff_tifffile(img_array, tiff_path, compression="lzw")
 
         # Verify
         verify_array = tifffile.imread(tiff_path)
-        if verify_array.dtype == 'uint16':
+        if verify_array.dtype == "uint16":
             print(f"✅ VERIFIED: {tiff_path.name} is now 16-bit")
         else:
             print(f"❌ ERROR: {tiff_path.name} is still {verify_array.dtype}")
@@ -38,6 +39,6 @@ for tiff_path in sorted(tiff_files):
     except Exception as e:
         print(f"❌ ERROR converting {tiff_path.name}: {e}")
 
-print(f"\n\n{'='*80}")
+print(f"\n\n{'=' * 80}")
 print("CONVERSION COMPLETE")
-print(f"{'='*80}")
+print(f"{'=' * 80}")

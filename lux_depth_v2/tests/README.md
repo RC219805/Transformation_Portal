@@ -128,12 +128,12 @@ from lux_depth_v2 import my_module
 
 class TestMyFunction:
     """Test my_function behavior."""
-    
+
     def test_basic_case(self):
         """Test basic functionality."""
         result = my_module.my_function(input_data)
         assert result == expected_output
-    
+
     def test_edge_case(self):
         """Test edge case handling."""
         with pytest.raises(ValueError):
@@ -148,10 +148,10 @@ class TestMyFunction:
 def test_full_pipeline(temp_dir, sample_image_file, mock_config):
     """Test complete pipeline processing."""
     mock_config.output_dir = temp_dir
-    
+
     pipeline = LuxPipelineV2(mock_config)
     result = pipeline.process_one(sample_image_file)
-    
+
     assert result["status"] == "ok"
 ```
 

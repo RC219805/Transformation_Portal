@@ -1,18 +1,18 @@
 # Session Complete: Materials V3 PR-3A Implementation
 
-**Date:** December 13, 2025  
-**Duration:** ~2 hours  
-**Branch:** `main` (direct commit)  
+**Date:** December 13, 2025
+**Duration:** ~2 hours
+**Branch:** `main` (direct commit)
 **Status:** ✅ Complete, CI running
 
 ---
 
 ## Session Objectives (All Met)
 
-✅ Implement boundary metrics module (objective edge-quality measurement)  
-✅ Implement taxonomy normalization (canonical material keys + mapping)  
-✅ Add comprehensive test coverage (40 tests, all passing)  
-✅ Document PR-3A scope and next steps  
+✅ Implement boundary metrics module (objective edge-quality measurement)
+✅ Implement taxonomy normalization (canonical material keys + mapping)
+✅ Add comprehensive test coverage (40 tests, all passing)
+✅ Document PR-3A scope and next steps
 ✅ Merge to `main` without breaking existing pipeline
 
 ---
@@ -167,9 +167,9 @@ This gives the **real** promotion decision: "Does EfficientSAM improve edges obj
 
 ## Git State
 
-**Commit:** `e02e7e0`  
-**Message:** `feat(materials-v3): PR-3A foundation - boundary metrics + taxonomy normalization`  
-**Pushed to:** `origin/main`  
+**Commit:** `e02e7e0`
+**Message:** `feat(materials-v3): PR-3A foundation - boundary metrics + taxonomy normalization`
+**Pushed to:** `origin/main`
 **CI Status:** Running (CodeQL + consolidated pipeline)
 
 ---
@@ -194,9 +194,9 @@ PR-3A adds:
 
 ## What Was **Not** Done (By Design)
 
-❌ Pipeline integration (PR-3B scope)  
-❌ Stage 6 A/B rerun (PR-3C scope)  
-❌ Auto-preset v2 improvements (separate effort)  
+❌ Pipeline integration (PR-3B scope)
+❌ Stage 6 A/B rerun (PR-3C scope)
+❌ Auto-preset v2 improvements (separate effort)
 ❌ EfficientSAM promotion decision (depends on PR-3C results)
 
 This session delivered **pure foundation** with no behavior changes.
@@ -268,20 +268,20 @@ This session delivered **pure foundation** with no behavior changes.
 
 ### Risk: Boundary metrics slow down Stage 6 A/B
 
-**Likelihood:** Low  
-**Impact:** Low  
+**Likelihood:** Low
+**Impact:** Low
 **Mitigation:** Metrics are pure numpy + scipy (no ML), ~0.3s for full test suite. For 5 scenes × 3-5 classes each, total overhead ~2-5s.
 
 ### Risk: Taxonomy mapping incomplete
 
-**Likelihood:** Medium (new SegFormer outputs could appear)  
-**Impact:** Low (unknown materials pass through, just log warning)  
+**Likelihood:** Medium (new SegFormer outputs could appear)
+**Impact:** Low (unknown materials pass through, just log warning)
 **Mitigation:** Unknown material handling with default metadata; easy to add new mappings.
 
 ### Risk: BF1 doesn't correlate with visual quality
 
-**Likelihood:** Low (BF1 is standard in segmentation research)  
-**Impact:** Medium (would need different metric)  
+**Likelihood:** Low (BF1 is standard in segmentation research)
+**Impact:** Medium (would need different metric)
 **Mitigation:** PR-3C will validate correlation; if needed, can add boundary precision/recall separately.
 
 ---
@@ -300,5 +300,5 @@ The repo is now in a stable state with objective edge-quality measurement and ro
 
 ---
 
-**Session End:** December 13, 2025, ~12:30 PM PST  
+**Session End:** December 13, 2025, ~12:30 PM PST
 **Next Session:** PR-3C (Stage 6 A/B rerun with boundary metrics) or PR-3B (Materials V3 gating engine)

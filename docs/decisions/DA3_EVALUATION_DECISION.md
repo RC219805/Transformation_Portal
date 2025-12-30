@@ -170,10 +170,10 @@ DA3 should be reconsidered when:
 
 ## Sign-off
 
-**Decision**: DEFER DA3, SHIP with DA2  
-**Confidence**: High  
-**Risk**: Low  
-**Timeline**: Production ready immediately  
+**Decision**: DEFER DA3, SHIP with DA2
+**Confidence**: High
+**Risk**: Low
+**Timeline**: Production ready immediately
 
 **Next action**: Structure input-size sweep (6 hours, proven ROI)
 
@@ -183,5 +183,5 @@ DA3 should be reconsidered when:
 
 ---
 
-**Approved**: Transformation Portal Architect  
+**Approved**: Transformation Portal Architect
 **Date**: 2025-12-19

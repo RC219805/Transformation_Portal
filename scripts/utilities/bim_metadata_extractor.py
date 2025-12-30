@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MaterialSpec:
     """Material specification from BIM."""
+
     material_type: str
     category: str  # wood, metal, glass, stone, fabric
     finish: Optional[str] = None
@@ -35,6 +36,7 @@ class MaterialSpec:
 @dataclass
 class LightingSpec:
     """Lighting specification from BIM."""
+
     light_type: str
     intensity: Optional[float] = None
     color_temperature: Optional[int] = None  # Kelvin
@@ -48,6 +50,7 @@ class LightingSpec:
 @dataclass
 class RoomSpec:
     """Room/space specification from BIM."""
+
     name: str
     room_type: str
     dimensions: Optional[Dict[str, float]] = None  # width, height, depth
@@ -62,14 +65,15 @@ class RoomSpec:
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
-        data['materials'] = [m.to_dict() for m in self.materials]
-        data['lighting'] = [light.to_dict() for light in self.lighting]
+        data["materials"] = [m.to_dict() for m in self.materials]
+        data["lighting"] = [light.to_dict() for light in self.lighting]
         return data
 
 
 @dataclass
 class CameraView:
     """Camera view specification from BIM."""
+
     name: str
     position: Optional[List[float]] = None
     target: Optional[List[float]] = None
@@ -119,9 +123,9 @@ class BIMMetadataExtractor:
                             logger.debug(f"PNG chunk: {key} = {value[:100]}")
 
                 # Extract image properties
-                self.metadata['image_width'] = img.width
-                self.metadata['image_height'] = img.height
-                self.metadata['image_mode'] = img.mode
+                self.metadata["image_width"] = img.width
+                self.metadata["image_height"] = img.height
+                self.metadata["image_mode"] = img.mode
 
         except Exception as e:
             logger.warning(f"Error extracting PNG metadata: {e}")
@@ -137,45 +141,43 @@ class BIMMetadataExtractor:
 
         # Common material categories for luxury estates
         luxury_materials = {
-            'wood': {
-                'keywords': ['oak', 'walnut', 'maple', 'cherry', 'mahogany', 'teak', 'wood', 'hardwood'],
-                'reflectivity': 0.3,
-                'roughness': 0.5
+            "wood": {
+                "keywords": ["oak", "walnut", "maple", "cherry", "mahogany", "teak", "wood", "hardwood"],
+                "reflectivity": 0.3,
+                "roughness": 0.5,
             },
-            'metal': {
-                'keywords': ['stainless', 'steel', 'brass', 'bronze', 'copper', 'aluminum', 'metal'],
-                'reflectivity': 0.7,
-                'roughness': 0.2
+            "metal": {
+                "keywords": ["stainless", "steel", "brass", "bronze", "copper", "aluminum", "metal"],
+                "reflectivity": 0.7,
+                "roughness": 0.2,
             },
-            'glass': {
-                'keywords': ['glass', 'glazing', 'window', 'transparent'],
-                'reflectivity': 0.9,
-                'roughness': 0.1
+            "glass": {"keywords": ["glass", "glazing", "window", "transparent"], "reflectivity": 0.9, "roughness": 0.1},
+            "stone": {
+                "keywords": ["marble", "granite", "limestone", "travertine", "stone", "quartz"],
+                "reflectivity": 0.4,
+                "roughness": 0.3,
             },
-            'stone': {
-                'keywords': ['marble', 'granite', 'limestone', 'travertine', 'stone', 'quartz'],
-                'reflectivity': 0.4,
-                'roughness': 0.3
+            "fabric": {
+                "keywords": ["fabric", "textile", "upholstery", "carpet", "linen"],
+                "reflectivity": 0.2,
+                "roughness": 0.7,
             },
-            'fabric': {
-                'keywords': ['fabric', 'textile', 'upholstery', 'carpet', 'linen'],
-                'reflectivity': 0.2,
-                'roughness': 0.7
-            }
         }
 
         # Parse metadata for material references
         for key, value in metadata.items():
             value_lower = str(value).lower()
             for category, specs in luxury_materials.items():
-                for keyword in specs['keywords']:
+                for keyword in specs["keywords"]:
                     if keyword in value_lower:
-                        materials.append(MaterialSpec(
-                            material_type=keyword,
-                            category=category,
-                            reflectivity=specs['reflectivity'],
-                            roughness=specs['roughness']
-                        ))
+                        materials.append(
+                            MaterialSpec(
+                                material_type=keyword,
+                                category=category,
+                                reflectivity=specs["reflectivity"],
+                                roughness=specs["roughness"],
+                            )
+                        )
                         break
 
         return materials
@@ -186,27 +188,27 @@ class BIMMetadataExtractor:
         Based on luxury Montecito estate standards.
         """
         return {
-            'project_name': '750 Picacho Lane',
-            'location': 'Montecito, CA',
-            'style': 'Luxury Mediterranean Estate',
-            'typical_materials': [
-                MaterialSpec('white_oak_flooring', 'wood', finish='matte', reflectivity=0.3, roughness=0.5),
-                MaterialSpec('venetian_plaster', 'stone', finish='polished', reflectivity=0.4, roughness=0.3),
-                MaterialSpec('stainless_steel_fixtures', 'metal', finish='brushed', reflectivity=0.7, roughness=0.2),
-                MaterialSpec('floor_to_ceiling_glass', 'glass', finish='clear', reflectivity=0.9, roughness=0.1),
-                MaterialSpec('carrara_marble', 'stone', finish='honed', reflectivity=0.5, roughness=0.3),
-                MaterialSpec('linen_upholstery', 'fabric', color='neutral', reflectivity=0.2, roughness=0.7),
+            "project_name": "750 Picacho Lane",
+            "location": "Montecito, CA",
+            "style": "Luxury Mediterranean Estate",
+            "typical_materials": [
+                MaterialSpec("white_oak_flooring", "wood", finish="matte", reflectivity=0.3, roughness=0.5),
+                MaterialSpec("venetian_plaster", "stone", finish="polished", reflectivity=0.4, roughness=0.3),
+                MaterialSpec("stainless_steel_fixtures", "metal", finish="brushed", reflectivity=0.7, roughness=0.2),
+                MaterialSpec("floor_to_ceiling_glass", "glass", finish="clear", reflectivity=0.9, roughness=0.1),
+                MaterialSpec("carrara_marble", "stone", finish="honed", reflectivity=0.5, roughness=0.3),
+                MaterialSpec("linen_upholstery", "fabric", color="neutral", reflectivity=0.2, roughness=0.7),
             ],
-            'lighting_characteristics': [
-                LightingSpec('natural_daylight', intensity=1.0, color_temperature=5500),
-                LightingSpec('recessed_led', intensity=0.7, color_temperature=3000),
-                LightingSpec('accent_lighting', intensity=0.5, color_temperature=2700),
+            "lighting_characteristics": [
+                LightingSpec("natural_daylight", intensity=1.0, color_temperature=5500),
+                LightingSpec("recessed_led", intensity=0.7, color_temperature=3000),
+                LightingSpec("accent_lighting", intensity=0.5, color_temperature=2700),
             ],
-            'color_palette': {
-                'primary': ['warm_white', 'soft_gray', 'natural_wood'],
-                'accent': ['ocean_blue', 'sage_green', 'terracotta'],
-                'neutral': ['ivory', 'taupe', 'cream']
-            }
+            "color_palette": {
+                "primary": ["warm_white", "soft_gray", "natural_wood"],
+                "accent": ["ocean_blue", "sage_green", "terracotta"],
+                "neutral": ["ivory", "taupe", "cream"],
+            },
         }
 
     def map_views_to_rooms(self, canonical_views: List[str]) -> Dict[str, RoomSpec]:
@@ -221,99 +223,99 @@ class BIMMetadataExtractor:
         """
         # Define room specifications based on 750 Picacho canonical views
         room_mapping = {
-            '750Picacho_Aerial.jpg': RoomSpec(
-                name='Aerial View',
-                room_type='exterior',
-                dimensions={'view_angle': 45, 'altitude': 150},
+            "750Picacho_Aerial.jpg": RoomSpec(
+                name="Aerial View",
+                room_type="exterior",
+                dimensions={"view_angle": 45, "altitude": 150},
                 materials=[
-                    MaterialSpec('roof_tile', 'stone', finish='terracotta', reflectivity=0.3, roughness=0.6),
-                    MaterialSpec('pool_tile', 'glass', finish='mosaic', reflectivity=0.8, roughness=0.2),
-                    MaterialSpec('landscaping', 'organic', color='green', reflectivity=0.2, roughness=0.8),
+                    MaterialSpec("roof_tile", "stone", finish="terracotta", reflectivity=0.3, roughness=0.6),
+                    MaterialSpec("pool_tile", "glass", finish="mosaic", reflectivity=0.8, roughness=0.2),
+                    MaterialSpec("landscaping", "organic", color="green", reflectivity=0.2, roughness=0.8),
                 ],
                 lighting=[
-                    LightingSpec('natural_sunlight', intensity=1.0, color_temperature=5800),
-                    LightingSpec('pool_underwater', intensity=0.4, color_temperature=4500),
-                ]
+                    LightingSpec("natural_sunlight", intensity=1.0, color_temperature=5800),
+                    LightingSpec("pool_underwater", intensity=0.4, color_temperature=4500),
+                ],
             ),
-            '750Picacho_GreatRoom.jpg': RoomSpec(
-                name='Great Room',
-                room_type='living',
-                dimensions={'width': 30, 'height': 14, 'depth': 25},
+            "750Picacho_GreatRoom.jpg": RoomSpec(
+                name="Great Room",
+                room_type="living",
+                dimensions={"width": 30, "height": 14, "depth": 25},
                 materials=[
-                    MaterialSpec('white_oak_flooring', 'wood', finish='matte', reflectivity=0.3, roughness=0.5),
-                    MaterialSpec('floor_to_ceiling_glass', 'glass', finish='clear', reflectivity=0.9, roughness=0.1),
-                    MaterialSpec('venetian_plaster_walls', 'stone', finish='smooth', reflectivity=0.4, roughness=0.3),
-                    MaterialSpec('custom_cabinetry', 'wood', finish='natural_walnut', reflectivity=0.35, roughness=0.45),
+                    MaterialSpec("white_oak_flooring", "wood", finish="matte", reflectivity=0.3, roughness=0.5),
+                    MaterialSpec("floor_to_ceiling_glass", "glass", finish="clear", reflectivity=0.9, roughness=0.1),
+                    MaterialSpec("venetian_plaster_walls", "stone", finish="smooth", reflectivity=0.4, roughness=0.3),
+                    MaterialSpec("custom_cabinetry", "wood", finish="natural_walnut", reflectivity=0.35, roughness=0.45),
                 ],
                 lighting=[
-                    LightingSpec('natural_daylight', intensity=0.9, color_temperature=5500),
-                    LightingSpec('recessed_led', intensity=0.6, color_temperature=3000),
-                    LightingSpec('pendant_fixtures', intensity=0.5, color_temperature=2700),
-                ]
+                    LightingSpec("natural_daylight", intensity=0.9, color_temperature=5500),
+                    LightingSpec("recessed_led", intensity=0.6, color_temperature=3000),
+                    LightingSpec("pendant_fixtures", intensity=0.5, color_temperature=2700),
+                ],
             ),
-            '750Picacho_Kitchen.jpg': RoomSpec(
-                name='Gourmet Kitchen',
-                room_type='kitchen',
-                dimensions={'width': 20, 'height': 12, 'depth': 18},
+            "750Picacho_Kitchen.jpg": RoomSpec(
+                name="Gourmet Kitchen",
+                room_type="kitchen",
+                dimensions={"width": 20, "height": 12, "depth": 18},
                 materials=[
-                    MaterialSpec('carrara_marble_countertops', 'stone', finish='honed', reflectivity=0.5, roughness=0.3),
-                    MaterialSpec('custom_cabinetry', 'wood', finish='white_oak', reflectivity=0.3, roughness=0.5),
-                    MaterialSpec('stainless_steel_appliances', 'metal', finish='brushed', reflectivity=0.7, roughness=0.2),
-                    MaterialSpec('subway_tile_backsplash', 'glass', finish='glossy', reflectivity=0.6, roughness=0.2),
+                    MaterialSpec("carrara_marble_countertops", "stone", finish="honed", reflectivity=0.5, roughness=0.3),
+                    MaterialSpec("custom_cabinetry", "wood", finish="white_oak", reflectivity=0.3, roughness=0.5),
+                    MaterialSpec("stainless_steel_appliances", "metal", finish="brushed", reflectivity=0.7, roughness=0.2),
+                    MaterialSpec("subway_tile_backsplash", "glass", finish="glossy", reflectivity=0.6, roughness=0.2),
                 ],
                 lighting=[
-                    LightingSpec('natural_window_light', intensity=0.8, color_temperature=5500),
-                    LightingSpec('under_cabinet_led', intensity=0.7, color_temperature=3500),
-                    LightingSpec('pendant_island_lights', intensity=0.6, color_temperature=2800),
-                ]
+                    LightingSpec("natural_window_light", intensity=0.8, color_temperature=5500),
+                    LightingSpec("under_cabinet_led", intensity=0.7, color_temperature=3500),
+                    LightingSpec("pendant_island_lights", intensity=0.6, color_temperature=2800),
+                ],
             ),
-            '750Picacho_Pool.jpg': RoomSpec(
-                name='Pool & Outdoor Living',
-                room_type='exterior',
-                dimensions={'width': 40, 'depth': 60, 'pool_length': 50},
+            "750Picacho_Pool.jpg": RoomSpec(
+                name="Pool & Outdoor Living",
+                room_type="exterior",
+                dimensions={"width": 40, "depth": 60, "pool_length": 50},
                 materials=[
-                    MaterialSpec('blue_mosaic_tile', 'glass', finish='iridescent', reflectivity=0.8, roughness=0.2),
-                    MaterialSpec('limestone_coping', 'stone', finish='honed', reflectivity=0.4, roughness=0.4),
-                    MaterialSpec('teak_decking', 'wood', finish='weathered', reflectivity=0.25, roughness=0.6),
-                    MaterialSpec('water_surface', 'liquid', color='azure', reflectivity=0.9, roughness=0.1),
+                    MaterialSpec("blue_mosaic_tile", "glass", finish="iridescent", reflectivity=0.8, roughness=0.2),
+                    MaterialSpec("limestone_coping", "stone", finish="honed", reflectivity=0.4, roughness=0.4),
+                    MaterialSpec("teak_decking", "wood", finish="weathered", reflectivity=0.25, roughness=0.6),
+                    MaterialSpec("water_surface", "liquid", color="azure", reflectivity=0.9, roughness=0.1),
                 ],
                 lighting=[
-                    LightingSpec('natural_sunlight', intensity=1.0, color_temperature=5800),
-                    LightingSpec('pool_underwater_led', intensity=0.5, color_temperature=4500),
-                    LightingSpec('landscape_accent', intensity=0.3, color_temperature=3000),
-                ]
+                    LightingSpec("natural_sunlight", intensity=1.0, color_temperature=5800),
+                    LightingSpec("pool_underwater_led", intensity=0.5, color_temperature=4500),
+                    LightingSpec("landscape_accent", intensity=0.3, color_temperature=3000),
+                ],
             ),
-            '750Picacho_PrimaryBathroom.jpg': RoomSpec(
-                name='Primary Bathroom',
-                room_type='bathroom',
-                dimensions={'width': 16, 'height': 10, 'depth': 14},
+            "750Picacho_PrimaryBathroom.jpg": RoomSpec(
+                name="Primary Bathroom",
+                room_type="bathroom",
+                dimensions={"width": 16, "height": 10, "depth": 14},
                 materials=[
-                    MaterialSpec('calacatta_marble', 'stone', finish='polished', reflectivity=0.6, roughness=0.2),
-                    MaterialSpec('brushed_nickel_fixtures', 'metal', finish='brushed', reflectivity=0.6, roughness=0.25),
-                    MaterialSpec('frameless_glass_shower', 'glass', finish='clear', reflectivity=0.9, roughness=0.1),
-                    MaterialSpec('heated_tile_floor', 'stone', finish='matte', reflectivity=0.3, roughness=0.4),
+                    MaterialSpec("calacatta_marble", "stone", finish="polished", reflectivity=0.6, roughness=0.2),
+                    MaterialSpec("brushed_nickel_fixtures", "metal", finish="brushed", reflectivity=0.6, roughness=0.25),
+                    MaterialSpec("frameless_glass_shower", "glass", finish="clear", reflectivity=0.9, roughness=0.1),
+                    MaterialSpec("heated_tile_floor", "stone", finish="matte", reflectivity=0.3, roughness=0.4),
                 ],
                 lighting=[
-                    LightingSpec('natural_skylight', intensity=0.7, color_temperature=5500),
-                    LightingSpec('vanity_sconces', intensity=0.8, color_temperature=3200),
-                    LightingSpec('recessed_ceiling', intensity=0.5, color_temperature=3000),
-                ]
+                    LightingSpec("natural_skylight", intensity=0.7, color_temperature=5500),
+                    LightingSpec("vanity_sconces", intensity=0.8, color_temperature=3200),
+                    LightingSpec("recessed_ceiling", intensity=0.5, color_temperature=3000),
+                ],
             ),
-            '750Picacho_PrimaryBedroom.jpg': RoomSpec(
-                name='Primary Bedroom',
-                room_type='bedroom',
-                dimensions={'width': 22, 'height': 11, 'depth': 20},
+            "750Picacho_PrimaryBedroom.jpg": RoomSpec(
+                name="Primary Bedroom",
+                room_type="bedroom",
+                dimensions={"width": 22, "height": 11, "depth": 20},
                 materials=[
-                    MaterialSpec('wide_plank_oak', 'wood', finish='natural', reflectivity=0.3, roughness=0.5),
-                    MaterialSpec('linen_drapery', 'fabric', color='ivory', reflectivity=0.2, roughness=0.7),
-                    MaterialSpec('upholstered_headboard', 'fabric', finish='velvet', reflectivity=0.25, roughness=0.65),
-                    MaterialSpec('glass_doors', 'glass', finish='clear', reflectivity=0.9, roughness=0.1),
+                    MaterialSpec("wide_plank_oak", "wood", finish="natural", reflectivity=0.3, roughness=0.5),
+                    MaterialSpec("linen_drapery", "fabric", color="ivory", reflectivity=0.2, roughness=0.7),
+                    MaterialSpec("upholstered_headboard", "fabric", finish="velvet", reflectivity=0.25, roughness=0.65),
+                    MaterialSpec("glass_doors", "glass", finish="clear", reflectivity=0.9, roughness=0.1),
                 ],
                 lighting=[
-                    LightingSpec('natural_daylight', intensity=0.8, color_temperature=5500),
-                    LightingSpec('bedside_lamps', intensity=0.4, color_temperature=2700),
-                    LightingSpec('recessed_dimmed', intensity=0.3, color_temperature=2800),
-                ]
+                    LightingSpec("natural_daylight", intensity=0.8, color_temperature=5500),
+                    LightingSpec("bedside_lamps", intensity=0.4, color_temperature=2700),
+                    LightingSpec("recessed_dimmed", intensity=0.3, color_temperature=2800),
+                ],
             ),
         }
 
@@ -345,34 +347,33 @@ class BIMMetadataExtractor:
             room_mapping = self.map_views_to_rooms(canonical_views)
         else:
             # Default canonical views
-            room_mapping = self.map_views_to_rooms([
-                '750Picacho_Aerial.jpg',
-                '750Picacho_GreatRoom.jpg',
-                '750Picacho_Kitchen.jpg',
-                '750Picacho_Pool.jpg',
-                '750Picacho_PrimaryBathroom.jpg',
-                '750Picacho_PrimaryBedroom.jpg',
-            ])
+            room_mapping = self.map_views_to_rooms(
+                [
+                    "750Picacho_Aerial.jpg",
+                    "750Picacho_GreatRoom.jpg",
+                    "750Picacho_Kitchen.jpg",
+                    "750Picacho_Pool.jpg",
+                    "750Picacho_PrimaryBathroom.jpg",
+                    "750Picacho_PrimaryBedroom.jpg",
+                ]
+            )
 
         # Build complete metadata
         result = {
-            'project': arch_specs['project_name'],
-            'location': arch_specs['location'],
-            'style': arch_specs['style'],
-            'bim_file': str(self.bim_path),
-            'bim_file_size_mb': self.bim_path.stat().st_size / (1024 * 1024),
-            'extraction_method': 'lightweight_png_metadata',
-            'png_metadata_keys': list(png_metadata.keys()),
-            'global_materials': [m.to_dict() for m in arch_specs['typical_materials']],
-            'global_lighting': [light.to_dict() for light in arch_specs['lighting_characteristics']],
-            'color_palette': arch_specs['color_palette'],
-            'room_specifications': {
-                filename: room.to_dict()
-                for filename, room in room_mapping.items()
-            },
-            'view_count': len(room_mapping),
-            'total_materials': len(arch_specs['typical_materials']),
-            'total_lighting_types': len(arch_specs['lighting_characteristics']),
+            "project": arch_specs["project_name"],
+            "location": arch_specs["location"],
+            "style": arch_specs["style"],
+            "bim_file": str(self.bim_path),
+            "bim_file_size_mb": self.bim_path.stat().st_size / (1024 * 1024),
+            "extraction_method": "lightweight_png_metadata",
+            "png_metadata_keys": list(png_metadata.keys()),
+            "global_materials": [m.to_dict() for m in arch_specs["typical_materials"]],
+            "global_lighting": [light.to_dict() for light in arch_specs["lighting_characteristics"]],
+            "color_palette": arch_specs["color_palette"],
+            "room_specifications": {filename: room.to_dict() for filename, room in room_mapping.items()},
+            "view_count": len(room_mapping),
+            "total_materials": len(arch_specs["typical_materials"]),
+            "total_lighting_types": len(arch_specs["lighting_characteristics"]),
         }
 
         logger.info(f"Extracted {len(room_mapping)} room specifications")
@@ -382,7 +383,7 @@ class BIMMetadataExtractor:
 
     def save_metadata(self, output_path: Path, metadata: Dict[str, Any]) -> None:
         """Save extracted metadata to JSON."""
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(metadata, f, indent=2)
         logger.info(f"Saved metadata to: {output_path}")
 
@@ -391,11 +392,10 @@ def main():
     """Example usage."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Extract BIM metadata from BIMx file')
-    parser.add_argument('bim_file', type=Path, help='Path to BIMx file')
-    parser.add_argument('--output', '-o', type=Path, default=Path('bim_metadata.json'),
-                        help='Output JSON file')
-    parser.add_argument('--canonical-views', nargs='+', help='Canonical view filenames')
+    parser = argparse.ArgumentParser(description="Extract BIM metadata from BIMx file")
+    parser.add_argument("bim_file", type=Path, help="Path to BIMx file")
+    parser.add_argument("--output", "-o", type=Path, default=Path("bim_metadata.json"), help="Output JSON file")
+    parser.add_argument("--canonical-views", nargs="+", help="Canonical view filenames")
 
     args = parser.parse_args()
 
@@ -412,5 +412,5 @@ def main():
     print(f"\nSaved to: {args.output}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,16 +1,16 @@
 # Depth Pipeline Final Diagnosis & Fix
-**Date**: 2025-12-18 02:45 UTC  
+**Date**: 2025-12-18 02:45 UTC
 **Status**: ✅ **ROOT CAUSE DEFINITIVELY IDENTIFIED**
 
 ---
 
 ## EXECUTIVE SUMMARY
 
-**Problem**: Enhanced depth pipeline shows -503% edge alignment degradation  
-**Root Cause**: **Global anchor fusion frequency mixing bug** (line 194, global_anchor.py)  
+**Problem**: Enhanced depth pipeline shows -503% edge alignment degradation
+**Root Cause**: **Global anchor fusion frequency mixing bug** (line 194, global_anchor.py)
 **Evidence Chain**:
 1. ✅ Isolation tests: Each stage works independently
-2. ✅ Tensor validation: No 518px resize, tiling is real  
+2. ✅ Tensor validation: No 518px resize, tiling is real
 3. ✅ Ablation study: Global anchor causes -110% degradation
 4. ✅ Code inspection: Frequency split formula is mathematically incorrect
 
@@ -33,8 +33,8 @@
 ### Phase 2: Tensor Shape Validation
 
 ```
-🔍 Input: tile_rgb=(1024, 1024), pixel_values=1024×1024  
-🔍 Output: predicted_depth=1022×1022  
+🔍 Input: tile_rgb=(1024, 1024), pixel_values=1024×1024
+🔍 Output: predicted_depth=1022×1022
 ⚠️  Resize: 1022→1024 (2px bicubic, negligible loss)
 ```
 
@@ -59,15 +59,15 @@ if self.config.use_frequency_split:
     # Frequency-based fusion
     global_lf = self._extract_low_frequency(global_depth)  # ← LOW-RES base
     tiled_hf = self._extract_high_frequency(tiled_depth)   # ← HIGH-RES detail
-    
+
     # Combine: global low-freq + tiled high-freq
     fused = global_lf + tiled_hf  # ← BUG: Assumes same DC offset!
 ```
 
-**Problem**: Adding `global_lf` (mean ≈ 0.4) + `tiled_hf` (mean ≈ 0.0, residual) is valid  
+**Problem**: Adding `global_lf` (mean ≈ 0.4) + `tiled_hf` (mean ≈ 0.0, residual) is valid
 **ONLY IF** `global_lf` and `tiled_lf` (low-freq base of tiled) are **aligned**.
 
-But they're not! Global is 512px upsampled, tiled is native 1024px inference.  
+But they're not! Global is 512px upsampled, tiled is native 1024px inference.
 Their DC offsets differ by ≈0.1-0.3, causing detail to be shifted incorrectly.
 
 ---
@@ -76,24 +76,24 @@ Their DC offsets differ by ≈0.1-0.3, causing detail to be shifted incorrectly.
 
 ### What the Code Does
 
-1. Global depth (512px → 2000px upsampled):  
-   - Mean: 0.4, Range: [0.2, 0.6]  
+1. Global depth (512px → 2000px upsampled):
+   - Mean: 0.4, Range: [0.2, 0.6]
    - Low-freq (after blur): Mean 0.4, smooth planes
 
-2. Tiled depth (native 1024px tiles):  
-   - Mean: 0.5, Range: [0.1, 0.9]  
+2. Tiled depth (native 1024px tiles):
+   - Mean: 0.5, Range: [0.1, 0.9]
    - High-freq (residual): Mean 0.0, sharp edges
 
-3. Fusion: `global_lf + tiled_hf = 0.4 + 0.0 = 0.4`  
-   - **But tiled depth was originally 0.5!**  
+3. Fusion: `global_lf + tiled_hf = 0.4 + 0.0 = 0.4`
+   - **But tiled depth was originally 0.5!**
    - Detail is now shifted by -0.1, **destroying edge alignment**
 
 ### Visual Analogy
 
 Imagine:
 - Global says: "Wall is at depth 0.4"
-- Tiled says: "Wall is at depth 0.5, with 0.05 texture bump"  
-- Bug computes: "Wall is at 0.4 + 0.05 = 0.45"  
+- Tiled says: "Wall is at depth 0.5, with 0.05 texture bump"
+- Bug computes: "Wall is at 0.4 + 0.05 = 0.45"
 - **Wrong!** Should be 0.5 + 0.05 = 0.55
 
 Edges are now 0.05 units off, failing RGB alignment checks.
@@ -114,7 +114,7 @@ Falls back to simple weighted average (line 199-202):
 fused = 0.3 * global_depth + 0.7 * tiled_depth
 ```
 
-**Pro**: Mathematically sound  
+**Pro**: Mathematically sound
 **Con**: Loses global coherence benefit
 
 ### Option 2: Fix Frequency Mixing (Correct)
@@ -125,20 +125,20 @@ if self.config.use_frequency_split:
     # Extract components from SAME base (tiled depth)
     tiled_lf = self._extract_low_frequency(tiled_depth)
     tiled_hf = tiled_depth - tiled_lf  # Residual
-    
+
     global_lf = self._extract_low_frequency(global_depth)
-    
+
     # Align global to tiled's DC offset before mixing
     dc_offset = np.mean(tiled_lf - global_lf)
     global_lf_aligned = global_lf + dc_offset
-    
+
     # Now safe to mix: aligned global LF + tiled HF
     fused = global_lf_aligned + tiled_hf
-    
+
     logger.info(f"Frequency fusion: global_LF (aligned +{dc_offset:.3f}) + tiled_HF")
 ```
 
-**Pro**: Preserves global coherence + tiled detail  
+**Pro**: Preserves global coherence + tiled detail
 **Con**: More complex, requires validation
 
 ### Option 3: Replace with Detail Fusion (Recommended)
@@ -149,11 +149,11 @@ if self.config.use_frequency_split:
     # Detail fusion: global base + (tiled - global) detail
     detail = tiled_depth - cv2.resize(global_depth, tiled_depth.shape[::-1])
     fused = global_depth + self.config.detail_weight * detail
-    
+
     logger.info(f"Detail fusion: global + {self.config.detail_weight:.2f} × (tiled-global)")
 ```
 
-**Pro**: Mathematically sound, simple, preserves both  
+**Pro**: Mathematically sound, simple, preserves both
 **Con**: Requires tuning `detail_weight` (start at 0.7)
 
 ---
@@ -205,9 +205,9 @@ config = TiledInferenceConfig(
 
 ## STATUS
 
-✅ Root cause identified (global anchor frequency split bug)  
-✅ Fix options designed (3 alternatives)  
-✅ Recommended action: Disable frequency split immediately  
+✅ Root cause identified (global anchor frequency split bug)
+✅ Fix options designed (3 alternatives)
+✅ Recommended action: Disable frequency split immediately
 ⏳ Awaiting fix deployment and A/B re-validation
 
 **Confidence**: 95% (ablation study definitively isolates global anchor as culprit)

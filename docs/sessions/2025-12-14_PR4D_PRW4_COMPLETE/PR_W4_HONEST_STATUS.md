@@ -36,7 +36,7 @@ edge_score = 0.0  # TODO: Get mask from internal water detector
 boundary_px = 0
 ```
 
-**Impact**: 
+**Impact**:
 - The PRIMARY metric defined in the spec cannot be computed
 - `edge_alignment_score` is always 0.0
 - `boundary_px` is always 0
@@ -191,11 +191,11 @@ Modify MaterialsV3Engine to include mask in report when flag enabled:
 ```python
 def _detect_water_candidate(...):
     # ... existing code ...
-    
+
     if self.config.water_validation_emit_mask and result.mask is not None:
         # Convert mask to RLE or base64 for dict serialization
         water_candidate_dict['mask_base64'] = encode_mask(result.mask)
-    
+
     return water_candidate_dict
 ```
 
@@ -242,7 +242,7 @@ Implement the full multi-cue heuristic detector as specified in PR_WATER_MASK_ST
 2. **Create Known Limitations Section**
    ```markdown
    ## Known Limitations
-   
+
    - Edge alignment metric (primary) requires mask access (pending design decision)
    - Water detector uses simple blue threshold (full multi-cue heuristic pending PR-W1 completion)
    - Production thresholds (edge ≥0.6, stability ≥0.8) are targets, not calibrated

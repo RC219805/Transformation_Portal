@@ -13,6 +13,7 @@ import glob
 import pandas as pd
 from sklearn.metrics import classification_report, balanced_accuracy_score, confusion_matrix
 
+
 def load_metrics(metrics_dir):
     metrics = {}
     for path in glob.glob(f"{metrics_dir}/*_metrics.json"):
@@ -23,6 +24,7 @@ def load_metrics(metrics_dir):
         if image and pred:
             metrics[image] = pred
     return metrics
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -46,14 +48,14 @@ def main():
     bal_acc = balanced_accuracy_score(y_true, y_pred)
     report = classification_report(y_true, y_pred, output_dict=True)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("BALANCED CLASSIFICATION EVALUATION")
-    print("="*60)
+    print("=" * 60)
     print(f"\nDataset: {len(common)} images")
     print(f"Balanced Accuracy: {bal_acc:.3f}")
     print("\nPer-Class Metrics:")
     print(classification_report(y_true, y_pred))
-    
+
     # Confusion matrix
     cm = confusion_matrix(y_true, y_pred)
     print("\nConfusion Matrix (rows=true, cols=pred):")
@@ -62,6 +64,7 @@ def main():
     # Save CSV
     pd.DataFrame(report).transpose().to_csv("classification_metrics.csv")
     print("\n✓ Saved classification_metrics.csv")
+
 
 if __name__ == "__main__":
     main()

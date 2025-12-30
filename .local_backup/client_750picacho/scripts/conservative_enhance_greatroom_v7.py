@@ -17,6 +17,7 @@ Key Learnings from v1-v6:
 - Large mask blur (σ=7+) prevents halos
 - Edge strength 0.243 already excellent - don't over-sharpen
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,7 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -44,35 +46,35 @@ OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Sky Detection Parameters (Top 0.5% brightest + cyan cast)
-SKY_PERCENTILE = 99.5                # Top 0.5% of brightest pixels
-SKY_CYAN_THRESHOLD = 1.12            # B/G ratio > 1.12 indicates cyan
-SKY_MIN_BRIGHTNESS = 0.80            # Minimum normalized brightness
-SKY_MASK_SIGMA = 10.0                # Large blur to avoid halos (v6 learned: bigger is better)
+SKY_PERCENTILE = 99.5  # Top 0.5% of brightest pixels
+SKY_CYAN_THRESHOLD = 1.12  # B/G ratio > 1.12 indicates cyan
+SKY_MIN_BRIGHTNESS = 0.80  # Minimum normalized brightness
+SKY_MASK_SIGMA = 10.0  # Large blur to avoid halos (v6 learned: bigger is better)
 
 # Sky Color Correction (Targeted to cyan removal)
 SKY_CHANNEL_ADJUST = {
-    'red': 1.12,      # Boost red to counter cyan (was 89, target ~100)
-    'green': 0.88,    # Reduce green slightly (was 114, target ~100)
-    'blue': 0.78      # Reduce blue aggressively (was 126, target ~98)
+    "red": 1.12,  # Boost red to counter cyan (was 89, target ~100)
+    "green": 0.88,  # Reduce green slightly (was 114, target ~100)
+    "blue": 0.78,  # Reduce blue aggressively (was 126, target ~98)
 }
-SKY_DESATURATE = 0.65                # Desaturate to remove "cartoon" look
+SKY_DESATURATE = 0.65  # Desaturate to remove "cartoon" look
 
 # Interior Enhancement (MINIMAL - preserve existing quality)
-INTERIOR_SATURATION = 1.03           # +3% gentle lift
-INTERIOR_CONTRAST = 1.02             # +2% micro-contrast
-INTERIOR_BRIGHTNESS = 1.00           # No change
+INTERIOR_SATURATION = 1.03  # +3% gentle lift
+INTERIOR_CONTRAST = 1.02  # +2% micro-contrast
+INTERIOR_BRIGHTNESS = 1.00  # No change
 
 # Material Enhancement (Selective)
-MATERIAL_CLARITY = 0.08              # 8% clarity for stone/wood
-EDGE_SHARPNESS = 0.10                # 10% edge enhancement (down from previous)
+MATERIAL_CLARITY = 0.08  # 8% clarity for stone/wood
+EDGE_SHARPNESS = 0.10  # 10% edge enhancement (down from previous)
 
 # White Surface Protection
-WHITE_THRESHOLD = 0.75               # Pixels with avg brightness > 0.75
-WHITE_PROTECTION_STRENGTH = 0.85     # 85% protection from adjustments
+WHITE_THRESHOLD = 0.75  # Pixels with avg brightness > 0.75
+WHITE_PROTECTION_STRENGTH = 0.85  # 85% protection from adjustments
 
 # Global Finishing
-FINAL_TONE_CURVE = 1.01              # Gentle S-curve
-OUTPUT_BIT_DEPTH = 16                # 16-bit TIFF output
+FINAL_TONE_CURVE = 1.01  # Gentle S-curve
+OUTPUT_BIT_DEPTH = 16  # 16-bit TIFF output
 
 # ============================================================================
 # STEP 1: LOAD IMAGE
@@ -108,8 +110,8 @@ if TIFFFILE_AVAILABLE:
 
 if not TIFFFILE_AVAILABLE:
     img = Image.open(INPUT)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
+    if img.mode != "RGB":
+        img = img.convert("RGB")
     rgb = np.array(img, dtype=np.float32) / 255.0
     print(f"  ✓ Loaded with PIL: {rgb.shape}")
 
@@ -174,9 +176,9 @@ print(f"  ✓ Mask blur: σ={SKY_MASK_SIGMA} (large to prevent halos)")
 print("\n[4/10] Applying sky color correction...")
 
 # Apply channel-wise adjustments
-sky_r = r * SKY_CHANNEL_ADJUST['red']
-sky_g = g * SKY_CHANNEL_ADJUST['green']
-sky_b = b * SKY_CHANNEL_ADJUST['blue']
+sky_r = r * SKY_CHANNEL_ADJUST["red"]
+sky_g = g * SKY_CHANNEL_ADJUST["green"]
+sky_b = b * SKY_CHANNEL_ADJUST["blue"]
 
 sky_corrected = np.stack([sky_r, sky_g, sky_b], axis=2)
 sky_corrected = np.clip(sky_corrected, 0, 1)
@@ -185,8 +187,10 @@ sky_corrected = np.clip(sky_corrected, 0, 1)
 sky_gray = sky_corrected.mean(axis=2, keepdims=True)
 sky_corrected = sky_gray + (sky_corrected - sky_gray) * SKY_DESATURATE
 
-print(f"  ✓ Channel adjustments: R×{SKY_CHANNEL_ADJUST['red']:.2f}, " +
-      f"G×{SKY_CHANNEL_ADJUST['green']:.2f}, B×{SKY_CHANNEL_ADJUST['blue']:.2f}")
+print(
+    f"  ✓ Channel adjustments: R×{SKY_CHANNEL_ADJUST['red']:.2f}, "
+    + f"G×{SKY_CHANNEL_ADJUST['green']:.2f}, B×{SKY_CHANNEL_ADJUST['blue']:.2f}"
+)
 print(f"  ✓ Desaturation: {SKY_DESATURATE:.0%}")
 
 # ============================================================================
@@ -239,8 +243,9 @@ print("\n[7/10] Protecting white surfaces...")
 white_mask_3d = np.stack([white_protected_smooth] * 3, axis=2)
 
 # Blend back original whites based on protection strength
-composite = (1 - white_mask_3d * WHITE_PROTECTION_STRENGTH) * composite + \
-            (white_mask_3d * WHITE_PROTECTION_STRENGTH) * original_rgb
+composite = (1 - white_mask_3d * WHITE_PROTECTION_STRENGTH) * composite + (
+    white_mask_3d * WHITE_PROTECTION_STRENGTH
+) * original_rgb
 
 print("  ✓ White surfaces protected from color shifts")
 
@@ -288,14 +293,14 @@ output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v7.ti"
 
 # Save as 16-bit TIFF to preserve quality (OUTPUT_BIT_DEPTH is always 16 in this version)
 final_array = np.array(sharpened, dtype=np.uint8)
-final_16bit = (final_array.astype(np.uint16) * 257)  # Scale 8-bit to 16-bit
+final_16bit = final_array.astype(np.uint16) * 257  # Scale 8-bit to 16-bit
 if TIFFFILE_AVAILABLE:
-    tifffile.imwrite(output_path, final_16bit, photometric='rgb', compression='lzw')
+    tifffile.imwrite(output_path, final_16bit, photometric="rgb", compression="lzw")
     print(f"  ✓ Saved 16-bit TIFF with tifffile: {output_path}")
 else:
     # PIL fallback
-    final_img = Image.fromarray(final_16bit, mode='RGB;16')
-    final_img.save(output_path, compression='tiff_lzw')
+    final_img = Image.fromarray(final_16bit, mode="RGB;16")
+    final_img.save(output_path, compression="tiff_lzw")
     print(f"  ✓ Saved 16-bit TIFF with PIL: {output_path}")
 
 file_size_mb = output_path.stat().st_size / 1024 / 1024
@@ -304,17 +309,19 @@ print(f"  File size: {file_size_mb:.1f} MB")
 # ============================================================================
 # SUMMARY & STATISTICS
 # ============================================================================
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("PROCESSING COMPLETE - v7 FRESH START")
-print(f"{'='*80}")
+print(f"{'=' * 80}")
 print(f"\nInput:  {INPUT}")
 print(f"Output: {output_path}")
 print()
 print("ENHANCEMENT SUMMARY:")
 print("  Sky Correction:")
 print(f"    • Coverage: {sky_percentage:.2f}% of image")
-print(f"    • Color: R×{SKY_CHANNEL_ADJUST['red']:.2f}, " +
-      f"G×{SKY_CHANNEL_ADJUST['green']:.2f}, B×{SKY_CHANNEL_ADJUST['blue']:.2f}")
+print(
+    f"    • Color: R×{SKY_CHANNEL_ADJUST['red']:.2f}, "
+    + f"G×{SKY_CHANNEL_ADJUST['green']:.2f}, B×{SKY_CHANNEL_ADJUST['blue']:.2f}"
+)
 print(f"    • Desaturation: {SKY_DESATURATE:.0%}")
 print(f"    • Mask blur: σ={SKY_MASK_SIGMA} (anti-halo)")
 print()
@@ -335,6 +342,6 @@ print()
 print("  Global Finishing:")
 print(f"    • Tone curve: {FINAL_TONE_CURVE:.2%}")
 print(f"    • Bit depth: {OUTPUT_BIT_DEPTH}-bit")
-print(f"{'='*80}")
+print(f"{'=' * 80}")
 print("\n✓ Fresh start complete! Natural sky + preserved interior warmth.")
 print("  Compare against original to verify quality.")

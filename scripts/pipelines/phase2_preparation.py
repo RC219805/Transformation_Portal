@@ -13,10 +13,7 @@ import logging
 import sys
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -100,11 +97,7 @@ def test_v2_variants():
             from transformers import AutoModelForDepthEstimation
 
             # Just check if model config is accessible (don't download)
-            _ = AutoModelForDepthEstimation.from_pretrained(
-                model_id,
-                trust_remote_code=True,
-                low_cpu_mem_usage=True
-            )
+            _ = AutoModelForDepthEstimation.from_pretrained(model_id, trust_remote_code=True, low_cpu_mem_usage=True)
             logger.info("  ✓ Accessible and working")
             accessible.append(model_id)
 

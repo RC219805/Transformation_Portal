@@ -29,10 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from training.property_specific.picacho_inference import PicachoInference, InferenceConfig
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Optional: Import torch and lpips for LPIPS metric
@@ -40,12 +37,10 @@ LPIPS_AVAILABLE = False
 try:
     import torch
     import lpips
+
     LPIPS_AVAILABLE = True
 except ImportError:
-    logger.warning(
-        "torch or lpips not installed. LPIPS metric will be skipped. "
-        "Install with: pip install torch lpips"
-    )
+    logger.warning("torch or lpips not installed. LPIPS metric will be skipped. Install with: pip install torch lpips")
 
 
 def compute_psnr(img1: np.ndarray, img2: np.ndarray) -> float:
@@ -77,9 +72,7 @@ def compute_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
     sigma12 = np.mean((img1 - mu1) * (img2 - mu2))
 
     # SSIM formula
-    ssim = ((2 * mu1 * mu2 + c1) * (2 * sigma12 + c2)) / (
-        (mu1 ** 2 + mu2 ** 2 + c1) * (sigma1_sq + sigma2_sq + c2)
-    )
+    ssim = ((2 * mu1 * mu2 + c1) * (2 * sigma12 + c2)) / ((mu1**2 + mu2**2 + c1) * (sigma1_sq + sigma2_sq + c2))
 
     return float(ssim)
 
@@ -106,17 +99,12 @@ def init_lpips_model(device: str = "auto") -> tuple[Optional[Any], Optional[str]
             device = "cpu"
 
     logger.info(f"Initializing LPIPS model with net='alex' on device '{device}'")
-    lpips_model = lpips.LPIPS(net='alex').to(device)
+    lpips_model = lpips.LPIPS(net="alex").to(device)
     lpips_model.eval()
     return lpips_model, device
 
 
-def compute_lpips(
-    img1: np.ndarray,
-    img2: np.ndarray,
-    lpips_model: Any,
-    device: Optional[str] = None
-) -> Optional[float]:
+def compute_lpips(img1: np.ndarray, img2: np.ndarray, lpips_model: Any, device: Optional[str] = None) -> Optional[float]:
     """Compute LPIPS (Learned Perceptual Image Patch Similarity) distance.
 
     Args:
@@ -156,12 +144,7 @@ def compute_lpips(
     return float(lpips_distance.item())
 
 
-def validate_model(
-    model_path: Path,
-    test_dir: Path,
-    output_dir: Path,
-    device: str = "auto"
-) -> Dict[str, Any]:
+def validate_model(model_path: Path, test_dir: Path, output_dir: Path, device: str = "auto") -> Dict[str, Any]:
     """Validate model against test data."""
     # Initialize inference
     config = InferenceConfig(
@@ -265,11 +248,7 @@ def validate_model(
     return summary
 
 
-def save_comparison(
-    original: np.ndarray,
-    enhanced: np.ndarray,
-    output_path: Path
-) -> None:
+def save_comparison(original: np.ndarray, enhanced: np.ndarray, output_path: Path) -> None:
     """Save side-by-side comparison image."""
     # Resize if needed to match
     if original.shape != enhanced.shape:
@@ -289,39 +268,21 @@ def save_comparison(
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Validate 750 Picacho Lane enhancement model"
+    parser = argparse.ArgumentParser(description="Validate 750 Picacho Lane enhancement model")
+    parser.add_argument(
+        "--model", type=Path, default=Path("weights/750_picacho/best_model.pth"), help="Path to model checkpoint"
     )
     parser.add_argument(
-        "--model",
-        type=Path,
-        default=Path("weights/750_picacho/best_model.pth"),
-        help="Path to model checkpoint"
-    )
-    parser.add_argument(
-        "--test-dir",
-        type=Path,
-        default=Path("data/training_750picacho/test"),
-        help="Path to test data directory"
+        "--test-dir", type=Path, default=Path("data/training_750picacho/test"), help="Path to test data directory"
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("output/750_picacho/validation"),
-        help="Output directory for validation results"
+        help="Output directory for validation results",
     )
-    parser.add_argument(
-        "--device",
-        type=str,
-        choices=["auto", "cuda", "mps", "cpu"],
-        default="auto",
-        help="Compute device"
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose output"
-    )
+    parser.add_argument("--device", type=str, choices=["auto", "cuda", "mps", "cpu"], default="auto", help="Compute device")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()
 
@@ -353,12 +314,7 @@ def main():
     # Run validation
     print("\nRunning validation...")
     try:
-        results = validate_model(
-            model_path=args.model,
-            test_dir=args.test_dir,
-            output_dir=args.output_dir,
-            device=args.device
-        )
+        results = validate_model(model_path=args.model, test_dir=args.test_dir, output_dir=args.output_dir, device=args.device)
 
         # Save results
         results_path = args.output_dir / "validation_results.json"
@@ -436,6 +392,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Validation failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

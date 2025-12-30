@@ -529,7 +529,7 @@ class TestGrading:
             sample_image,
             sh_h=np.deg2rad(240),  # Blue shadows
             sh_s=0.1,
-            hl_h=np.deg2rad(30),   # Orange highlights
+            hl_h=np.deg2rad(30),  # Orange highlights
             hl_s=0.05,
         )
 

@@ -14,6 +14,7 @@ Key improvements:
 - Edge-aware blending to prevent artifacts
 - Preserve interior color temperature and brightness
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +23,7 @@ from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -42,25 +44,25 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Sky Detection (Dual-threshold approach)
 SKY_BRIGHTNESS_THRESHOLD = 0.85  # Top 15% brightness (likely sky)
-SKY_CYAN_THRESHOLD = 1.15        # B/R ratio > 1.15 indicates cyan cast
-SKY_BLUE_MIN = 0.75              # Minimum blue value (0-1) to be considered sky
-SKY_MASK_BLUR = 20               # Edge-aware blur for smooth transitions
-SKY_EROSION_ITERATIONS = 2       # Erode mask to protect edges
+SKY_CYAN_THRESHOLD = 1.15  # B/R ratio > 1.15 indicates cyan cast
+SKY_BLUE_MIN = 0.75  # Minimum blue value (0-1) to be considered sky
+SKY_MASK_BLUR = 20  # Edge-aware blur for smooth transitions
+SKY_EROSION_ITERATIONS = 2  # Erode mask to protect edges
 
 # Sky Correction (Applied only to detected sky regions)
-SKY_BLUE_REDUCTION = 0.70        # B: -30% (remove cyan/turquoise)
-SKY_GREEN_REDUCTION = 0.75       # G: -25% (reduce cyan component)
-SKY_RED_BOOST = 1.20             # R: +20% (warmer, natural blue)
-SKY_SATURATION = 0.60            # Desaturate sky to 60% (remove cartoon look)
+SKY_BLUE_REDUCTION = 0.70  # B: -30% (remove cyan/turquoise)
+SKY_GREEN_REDUCTION = 0.75  # G: -25% (reduce cyan component)
+SKY_RED_BOOST = 1.20  # R: +20% (warmer, natural blue)
+SKY_SATURATION = 0.60  # Desaturate sky to 60% (remove cartoon look)
 
 # Interior Preservation (NO sky corrections applied)
-INTERIOR_SATURATION = 1.04       # +4% gentle enhancement
-INTERIOR_CONTRAST = 1.02         # +2% minimal contrast
-INTERIOR_BRIGHTNESS = 1.00       # No change - preserve as-is
+INTERIOR_SATURATION = 1.04  # +4% gentle enhancement
+INTERIOR_CONTRAST = 1.02  # +2% minimal contrast
+INTERIOR_BRIGHTNESS = 1.00  # No change - preserve as-is
 
 # Global Finishing (Applied to composite)
-GLOBAL_SHARPNESS = 0.12          # 12% edge enhancement
-MIDTONE_CONTRAST = 1.02          # Gentle S-curve
+GLOBAL_SHARPNESS = 0.12  # 12% edge enhancement
+MIDTONE_CONTRAST = 1.02  # Gentle S-curve
 
 print(f"\n[1/9] Loading TIFF: {INPUT}")
 
@@ -90,8 +92,8 @@ if TIFFFILE_AVAILABLE:
 
 if not TIFFFILE_AVAILABLE:
     img = Image.open(INPUT)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
+    if img.mode != "RGB":
+        img = img.convert("RGB")
     rgb = np.array(img, dtype=np.float32) / 255.0
     print(f"  ✓ Loaded with PIL: {rgb.shape}")
 
@@ -218,13 +220,13 @@ output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v6.ti"
 
 # Save as 16-bit TIFF to preserve quality
 final_array = np.array(sharpened, dtype=np.uint8)
-final_16bit = (final_array.astype(np.uint16) * 257)  # Scale 8-bit to 16-bit
+final_16bit = final_array.astype(np.uint16) * 257  # Scale 8-bit to 16-bit
 
 if TIFFFILE_AVAILABLE:
-    tifffile.imwrite(output_path, final_16bit, photometric='rgb')
+    tifffile.imwrite(output_path, final_16bit, photometric="rgb")
     print(f"  ✓ Saved 16-bit TIFF: {output_path}")
 else:
-    sharpened.save(output_path, compression='tiff_deflate')
+    sharpened.save(output_path, compression="tiff_deflate")
     print(f"  ✓ Saved TIFF: {output_path}")
 
 print(f"  File size: {output_path.stat().st_size / 1024 / 1024:.1f} MB")

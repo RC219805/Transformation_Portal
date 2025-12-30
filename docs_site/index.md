@@ -44,4 +44,3 @@ hide:
 - **Getting Started** → install + run pipelines and service mode
 - **Validation** → how to generate baselines and produce benchmark reports
 - **Architecture** → how modules fit together (hardening, observability, stage boundaries)
-

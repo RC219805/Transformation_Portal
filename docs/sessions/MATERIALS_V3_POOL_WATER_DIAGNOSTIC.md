@@ -1,7 +1,7 @@
 # Materials V3 Taxonomy Audit - Pool Water Diagnostic Complete
 
-**Date**: December 13, 2025  
-**Focus**: Diagnosing Stage 6 "water missing" issue  
+**Date**: December 13, 2025
+**Focus**: Diagnosing Stage 6 "water missing" issue
 **Status**: ✅ Root cause identified
 
 ---
@@ -20,7 +20,7 @@ This is a **model limitation**, not a taxonomy mapping or coverage threshold iss
 
 ### Pool Image Analysis (750 Picacho Pool.tif)
 
-**Input**: `input_images/750_Picacho/Pool.tif`  
+**Input**: `input_images/750_Picacho/Pool.tif`
 **Resolution**: 6000×3375 (20.2 MP)
 
 ### Seg Former Output (6 classes emitted)
@@ -34,7 +34,7 @@ This is a **model limitation**, not a taxonomy mapping or coverage threshold iss
 | glass    | 0             | 0.00%        | Not detected                   |
 | metal    | 0             | 0.00%        | Not detected                   |
 
-**❌ Water**: Not emitted by segmenter  
+**❌ Water**: Not emitted by segmenter
 **💡 Likely explanation**: Pool water surface is being misclassified as "foliage" (29.84% coverage strongly suggests this is the water region)
 
 ---
@@ -168,6 +168,5 @@ The missing water issue is a **segmenter vocabulary limitation**, not something 
 
 ---
 
-**Session Status**: ✅ Complete  
+**Session Status**: ✅ Complete
 **Next PR**: Auto-preset v2 (--quality-tier auto + --intent + complexity + canary gate)
-

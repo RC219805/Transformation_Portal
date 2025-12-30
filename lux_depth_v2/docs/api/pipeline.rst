@@ -24,13 +24,13 @@ Basic Usage
 
    from lux_depth_v2.pipeline import LuxPipelineV2
    from lux_depth_v2.config import PipelineConfig
-   
+
    config = PipelineConfig(
        input_dir="renders/",
        output_dir="output/",
        depth_dir="depth_maps/",
    )
-   
+
    pipeline = LuxPipelineV2(config)
    results = pipeline.process_directory()
 
@@ -40,16 +40,16 @@ Process Single Image
 .. code-block:: python
 
    from pathlib import Path
-   
+
    # Process with automatic depth discovery
    result = pipeline.process_one(Path("renders/image.jpg"))
-   
+
    # Process with explicit depth path
    result = pipeline.process_one(
        Path("renders/image.jpg"),
        depth_path=Path("depth_maps/image.tif")
    )
-   
+
    print(f"Status: {result['status']}")
    print(f"Processing time: {result['timing_s']}s")
    print(f"Zone weights: {result['zone_weights']}")
@@ -60,10 +60,10 @@ Custom Logger
 .. code-block:: python
 
    import logging
-   
+
    logger = logging.getLogger("my_pipeline")
    logger.setLevel(logging.DEBUG)
-   
+
    pipeline = LuxPipelineV2(config, logger=logger)
 
 Error Handling
@@ -72,7 +72,7 @@ Error Handling
 .. code-block:: python
 
    results = pipeline.process_directory()
-   
+
    for result in results:
        if result['status'] == 'error':
            print(f"Failed: {result['image']}")

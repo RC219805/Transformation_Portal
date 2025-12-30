@@ -1,7 +1,7 @@
 # Lux Depth V2: APEX Quality Implementation Guide
 
-**Date:** December 12, 2025  
-**Purpose:** Exact code changes to achieve absolute maximum quality  
+**Date:** December 12, 2025
+**Purpose:** Exact code changes to achieve absolute maximum quality
 **Target Preset:** `interior_luxury_max_quality` → `interior_luxury_apex_quality`
 
 ---
@@ -22,7 +22,7 @@ Add a new `INTERIOR_LUXURY_APEX_QUALITY` preset for absolute max quality.
 
 #### Change 1: Add APEX Preset Enum (Option 2)
 
-**Location:** Line 25-34  
+**Location:** Line 25-34
 **Action:** Add new preset
 
 ```python
@@ -42,7 +42,7 @@ class Preset(str, Enum):
 
 #### Change 2: Update PipelineConfig Defaults for Maximum Quality
 
-**Location:** Line 122-159  
+**Location:** Line 122-159
 **Action:** Add quality-first defaults (optional, for APEX mode)
 
 ```python
@@ -73,7 +73,7 @@ class PipelineConfig:
 
 #### Change 3: Implement APEX Preset Logic
 
-**Location:** Line 272-320 (after `interior_luxury_max_quality` block)  
+**Location:** Line 272-320 (after `interior_luxury_max_quality` block)
 **Action:** Add APEX preset implementation
 
 ```python
@@ -82,61 +82,61 @@ elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY:
     # APEX QUALITY MODE
     # ═══════════════════════════════════════════════════════════════
     # Absolute maximum quality regardless of performance cost.
-    # 
+    #
     # Performance Impact:
     #   - Processing time: +40-60% slower
     #   - VRAM usage: +50-100%
     #   - Disk space: +200-300%
-    # 
+    #
     # Use Cases:
     #   - Archival-grade outputs
     #   - Print-ready marketing materials
     #   - Flagship portfolio pieces
     # ═══════════════════════════════════════════════════════════════
-    
+
     # Base grading (same as interior_luxury)
     self.material_strength = 0.90
     self.temp_fg, self.temp_mid, self.temp_bg = 0.013, 0.006, 0.000
     self.sat_fg, self.sat_mid, self.sat_bg = 1.045, 1.030, 1.010
     self.con_fg, self.con_mid, self.con_bg = 1.035, 1.030, 1.020
-    
+
     # APEX: Enhanced detail transfer
     self.detail_strength = 0.75  # ⬆️ +7% from max_quality (0.70)
-    
+
     # APEX: Same clarity/sharpening (already optimal)
     self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.20, 0.12, 0.06
     self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.09, 0.06, 0.035
-    
+
     # ───────────────────────────────────────────────────────────────
     # APEX: Maximum Precision
     # ───────────────────────────────────────────────────────────────
     self.precision = "fp32"  # ⬆️ Maximum numerical precision (vs fp16)
     self.half = False  # ⬆️ Disable fp16 even on CUDA
-    
+
     # ───────────────────────────────────────────────────────────────
     # APEX: Post-Processing Quality
     # ───────────────────────────────────────────────────────────────
     # Option A: Maximum stability (RECOMMENDED for production)
     self.post_tile = 2048  # UHR support with quality tiling
     self.post_overlap = 128  # ⬆️ +100% overlap for seamless blending
-    
+
     # Option B: Absolute maximum (HIGH VRAM - 24GB+ required)
     # self.post_tile = 0  # Disable tiling (process entire image)
     # self.post_overlap = 0  # N/A when tiling disabled
-    
+
     self.validate_ai = True  # Mandatory AI safety checks
-    
+
     # ───────────────────────────────────────────────────────────────
     # APEX: Upscaling Quality
     # ───────────────────────────────────────────────────────────────
     self.tile = 1024  # ⬆️ +100% tile size (for ONNX/tiled backends)
     self.tile_pad = 32  # ⬆️ +100% padding for edge quality
-    
+
     # ───────────────────────────────────────────────────────────────
     # APEX: Export Quality
     # ───────────────────────────────────────────────────────────────
     self.marketing_png_compression = 0  # ⬆️ Lossless PNG (no compression)
-    
+
     # ───────────────────────────────────────────────────────────────
     # APEX: Maximum Segmentation Quality
     # ───────────────────────────────────────────────────────────────
@@ -146,16 +146,16 @@ elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY:
     self.segmentation.min_confidence = 0.15  # ⬆️ -40% threshold for better recall
     self.segmentation.soften_sigma_px = 2.0  # Soft mask edges
     self.segmentation.allow_downloads = True  # Allow SegFormer-B5 download
-    
+
     # ───────────────────────────────────────────────────────────────
     # APEX: Maximum Materials V2 Quality
     # ───────────────────────────────────────────────────────────────
     if self.materials_v2 is None:
         from lux_depth_v2.materials_v2 import MaterialsV2Config
         self.materials_v2 = MaterialsV2Config()
-    
+
     self.materials_v2.enabled = True
-    
+
     # Confidence Configuration (APEX: Lower thresholds for max coverage)
     self.materials_v2.confidence.confidence_threshold = 0.3  # ⬆️ -25% (vs 0.4)
     self.materials_v2.confidence.material_thresholds = {
@@ -171,7 +171,7 @@ elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY:
     self.materials_v2.confidence.blend_range = 0.1  # Smooth transitions
     self.materials_v2.confidence.blend_mode = "soft"  # Soft blending
     self.materials_v2.confidence.fallback_strength = 0.2  # 20% for low-confidence
-    
+
     # Segmentation Configuration (APEX: Maximum resolution + quality enforcement)
     self.materials_v2.segmentation.max_segmentation_side = 2048  # Max resolution
     self.materials_v2.segmentation.min_segmentation_side = 512  # Min resolution
@@ -180,13 +180,13 @@ elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY:
     self.materials_v2.segmentation.edge_feather_sigma = 1.0  # Gaussian blur
     self.materials_v2.segmentation.require_high_quality = True  # ⬆️ ENFORCE quality
     self.materials_v2.segmentation.quality_threshold = 0.55  # ⬆️ +37.5% (vs 0.4)
-    
+
     # ───────────────────────────────────────────────────────────────
     # APEX: Phase 2 Optimizations (Disabled for Max Quality)
     # ───────────────────────────────────────────────────────────────
     # Keep Phase 2 disabled to avoid performance-over-quality tradeoffs
     self.phase2 = None
-    
+
     # OPTIONAL: Enable Phase 2 with quality-first settings
     # from lux_depth_v2.config import Phase2Config
     # self.phase2 = Phase2Config(
@@ -207,7 +207,7 @@ elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY:
 
 If enabling Phase 2 for APEX quality, ensure uncompressed TIFF export.
 
-**File:** `lux_depth_v2/io_utils.py`  
+**File:** `lux_depth_v2/io_utils.py`
 **Location:** Line 162 (atomic_write_rgb16_tiff function)
 
 **Current:**
@@ -300,25 +300,25 @@ def test_apex_preset_configuration(self):
     """Test APEX quality preset has maximum quality settings."""
     cfg = PipelineConfig(preset=Preset.INTERIOR_LUXURY_APEX_QUALITY)
     cfg.apply_preset()
-    
+
     # Precision
     assert cfg.precision == "fp32", "APEX must use fp32"
     assert cfg.half is False, "APEX must disable fp16"
-    
+
     # Segmentation
     assert cfg.segmentation.input_long_side == 2048, "APEX must use 2048px segmentation"
     assert cfg.segmentation.min_confidence == 0.15, "APEX must use lower confidence"
-    
+
     # Materials V2
     assert cfg.materials_v2.enabled is True, "APEX must enable Materials V2"
     assert cfg.materials_v2.segmentation.require_high_quality is True, "APEX must enforce quality"
     assert cfg.materials_v2.segmentation.quality_threshold == 0.55, "APEX must use higher threshold"
     assert cfg.materials_v2.confidence.confidence_threshold == 0.3, "APEX must use lower threshold"
-    
+
     # Export
     assert cfg.marketing_png_compression == 0, "APEX must use lossless PNG"
     assert cfg.post_overlap == 128, "APEX must use larger overlap"
-    
+
     # Detail transfer
     assert cfg.detail_strength == 0.75, "APEX must use higher detail strength"
 ```
@@ -393,10 +393,10 @@ lux-depth-v2 --preset interior_luxury_apex_quality  # Explicit and clear
 
 ### APEX Mode Security Checklist
 
-✅ **Still using torch backend** (not realesrgan)  
-✅ **validate_ai=True** enforced  
-✅ **No vulnerable packages** (requirements-repo.txt)  
-✅ **Model SHA256 verification** (if ONNX backend used)  
+✅ **Still using torch backend** (not realesrgan)
+✅ **validate_ai=True** enforced
+✅ **No vulnerable packages** (requirements-repo.txt)
+✅ **Model SHA256 verification** (if ONNX backend used)
 ✅ **Input validation** enabled (service mode)
 
 APEX mode is **security-safe** as it only changes quality parameters, not security-critical backend code.

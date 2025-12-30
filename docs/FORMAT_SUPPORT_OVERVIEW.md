@@ -22,7 +22,7 @@ This directory contains comprehensive documentation for file format support acro
 
 ### "What file formats are supported?"
 
-**Images**: PNG, JPEG, TIFF, WebP, BMP + 8 more (13 total)  
+**Images**: PNG, JPEG, TIFF, WebP, BMP + 8 more (13 total)
 **Videos**: MP4, MOV, AVI, MKV, WebM + 2 more (7 total)
 
 All formats are **case-insensitive** and work across all pipelines with automatic format detection.
@@ -434,22 +434,22 @@ python examples/validate_file_formats.py --scan ./test_images/
 
 ### Common Questions
 
-**Q: Do I need special software to process images?**  
+**Q: Do I need special software to process images?**
 A: No, all required libraries are in requirements.txt. Optional: tifffile for 16-bit TIFF.
 
-**Q: What's the best format for...?**  
+**Q: What's the best format for...?**
 A: See "Format Support Matrix" above or use `get_format_info()` function.
 
-**Q: Can I batch convert formats?**  
+**Q: Can I batch convert formats?**
 A: Yes, see "Format Conversion" section above.
 
-**Q: Is there a file size limit?**  
+**Q: Is there a file size limit?**
 A: No hard limit, depends on available RAM. 4K+ images need 8-16GB for ML pipelines.
 
 ---
 
-**Last Updated**: October 2025  
-**Version**: 1.0  
+**Last Updated**: October 2025
+**Version**: 1.0
 **Maintainer**: Transformation Portal Team
 
 ---

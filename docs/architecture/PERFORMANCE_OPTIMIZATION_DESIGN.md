@@ -1,8 +1,8 @@
 # Performance Optimization Design
 ## Transformation Portal Architecture Enhancement - Part 2
 
-**Document Version:** 1.0  
-**Date:** 2025-12-08  
+**Document Version:** 1.0
+**Date:** 2025-12-08
 **Companion To:** STABILITY_EFFICIENCY_ARCHITECTURE.md
 
 ---
@@ -28,18 +28,18 @@ import psutil
 @dataclass
 class TilingStrategy:
     """Adaptive tiling based on available resources."""
-    
+
     # Base tile sizes (px)
     tile_small: int = 512
     tile_medium: int = 1024
     tile_large: int = 2048
     tile_xlarge: int = 4096
-    
+
     # Memory thresholds (GB available)
     threshold_large: float = 20.0
     threshold_medium: float = 10.0
     threshold_small: float = 5.0
-    
+
     # Overlap for blending
     overlap_percent: float = 0.25
 
@@ -51,24 +51,24 @@ def select_tile_size(
 ) -> Tuple[int, int]:
     """
     Select optimal tile size based on image dimensions and available memory.
-    
+
     Strategy:
     - Small images (<12MP): No tiling, process full image
     - Medium images (12-24MP): 2048px tiles if memory available
     - Large images (24-48MP): 1024px tiles, more conservative
     - XLarge images (>48MP): 512px tiles, maximum safety
-    
+
     Returns: (tile_size, overlap_px)
     """
     megapixels = (image_width * image_height) / 1e6
-    
+
     strategy = TilingStrategy()
-    
+
     # Estimate memory requirement per megapixel
     # Empirical: ~1.25GB per MP for MPS, ~0.8GB per MP for CUDA
     memory_per_mp = 1.25 if device == "mps" else 0.8
     required_memory = megapixels * memory_per_mp
-    
+
     # Determine tile size based on available memory
     if available_memory_gb >= strategy.threshold_large and megapixels <= 24:
         # Plenty of memory, use large tiles
@@ -82,15 +82,15 @@ def select_tile_size(
     else:
         # Critical memory, smallest tiles
         tile_size = strategy.tile_small // 2  # 256px
-    
+
     # For very large images, force smaller tiles regardless of memory
     if megapixels > 48:
         tile_size = min(tile_size, strategy.tile_small)
     elif megapixels > 35:
         tile_size = min(tile_size, strategy.tile_medium)
-    
+
     overlap_px = int(tile_size * strategy.overlap_percent)
-    
+
     return tile_size, overlap_px
 
 
@@ -102,23 +102,23 @@ def calculate_memory_budget(
 ) -> dict:
     """
     Calculate memory budget for processing pipeline.
-    
+
     Returns breakdown of memory requirements for each stage.
     """
     megapixels = (image_width * image_height) / 1e6
-    
+
     # Memory calculations (in GB)
     input_memory = megapixels * 3 * (bit_depth / 8) / 1e9
-    
+
     # Processing buffers (8x for intermediate operations)
     processing_memory = input_memory * 8
-    
+
     # Upscale memory (output is upscale_factor^2 larger)
     upscale_output = input_memory * (upscale_factor ** 2)
-    
+
     # Peak memory (processing + upscale simultaneously)
     peak_memory = processing_memory + upscale_output
-    
+
     return {
         "input_gb": input_memory,
         "processing_gb": processing_memory,
@@ -144,13 +144,13 @@ def process_large_image_progressive(
 ) -> dict:
     """
     Progressive processing strategy for large images (>35MP).
-    
+
     Strategy:
     1. Detect image too large for MPS
     2. Grade at original resolution on MPS (fast, fits in memory)
     3. Upscale in two stages: 2x on CPU, then 2x on CPU
     4. Write output incrementally (tile by tile)
-    
+
     Benefits:
     - No OOM failures
     - Predictable memory usage
@@ -159,10 +159,10 @@ def process_large_image_progressive(
     """
     # Load and grade at original resolution
     rgb01, info = io_utils.read_rgb_any(img_path)
-    
+
     # Grade on MPS (lightweight, fits in memory)
     graded = grade_on_mps(rgb01, config)
-    
+
     # First upscale: 2x on CPU
     upscaled_2x = upscale_cpu_tiled(
         graded,
@@ -170,7 +170,7 @@ def process_large_image_progressive(
         tile_size=512,
         overlap=128,
     )
-    
+
     # Second upscale: 2x on CPU
     upscaled_4x = upscale_cpu_tiled(
         upscaled_2x,
@@ -178,7 +178,7 @@ def process_large_image_progressive(
         tile_size=512,
         overlap=128,
     )
-    
+
     return upscaled_4x
 ```
 
@@ -192,15 +192,15 @@ def process_large_image_progressive(
 def cleanup_between_images():
     """
     Comprehensive memory cleanup between images.
-    
+
     Prevents memory accumulation that leads to crashes after 4-5 images.
     """
     import gc
-    
+
     # Python garbage collection
     gc.collect()
     gc.collect()  # Twice for cyclic references
-    
+
     # PyTorch cache cleanup
     try:
         import torch
@@ -212,7 +212,7 @@ def cleanup_between_images():
             torch.mps.synchronize()
     except:
         pass
-    
+
     # NumPy memory cleanup
     try:
         import numpy as np
@@ -220,7 +220,7 @@ def cleanup_between_images():
         np._multiarray_umath._reload_guard()
     except:
         pass
-    
+
     # Platform-specific cleanup
     import platform
     if platform.system() == "Darwin":  # macOS
@@ -253,56 +253,56 @@ from collections import deque
 @dataclass
 class ProcessingMetrics:
     """Real-time processing metrics."""
-    
+
     # Throughput
     images_processed: int = 0
     images_failed: int = 0
     images_pending: int = 0
-    
+
     # Timing
     start_time: float = field(default_factory=time.time)
     total_time_sec: float = 0.0
     avg_time_per_image_sec: float = 0.0
-    
+
     # Recent image times (rolling window)
     recent_times: deque = field(default_factory=lambda: deque(maxlen=10))
-    
+
     # Resource usage
     peak_memory_gb: float = 0.0
     current_memory_gb: float = 0.0
     disk_used_percent: float = 0.0
-    
+
     # Quality
     avg_ai_diff: float = 0.0
     quality_failures: int = 0
-    
+
     # Per-stage timing
     stage_times: Dict[str, List[float]] = field(default_factory=dict)
-    
+
     def update_image_completed(self, duration_sec: float, ai_diff: float):
         """Update metrics after image completes."""
         self.images_processed += 1
         self.recent_times.append(duration_sec)
-        
+
         # Update averages
         self.avg_time_per_image_sec = sum(self.recent_times) / len(self.recent_times)
-        
+
         # Update quality
         n = self.images_processed
         self.avg_ai_diff = (self.avg_ai_diff * (n - 1) + ai_diff) / n
-    
+
     def update_image_failed(self):
         """Update metrics after image fails."""
         self.images_failed += 1
-    
+
     def get_eta_sec(self) -> float:
         """Estimate time remaining for pending images."""
         if not self.recent_times or self.images_pending == 0:
             return 0.0
-        
+
         avg_time = sum(self.recent_times) / len(self.recent_times)
         return avg_time * self.images_pending
-    
+
     def to_dict(self) -> dict:
         """Export metrics as dictionary."""
         return {
@@ -332,18 +332,18 @@ class ProcessingMetrics:
 class MetricsDashboard:
     """
     Real-time metrics dashboard for monitoring batch processing.
-    
+
     Features:
     - Live terminal output (updating in-place)
     - JSON metrics export for external monitoring
     - Alert generation on anomalies
     - Performance profiling per stage
     """
-    
+
     def __init__(self, total_images: int):
         self.metrics = ProcessingMetrics(images_pending=total_images)
         self.alerts: List[str] = []
-    
+
     def update(self, snapshot: dict):
         """Update dashboard with latest snapshot."""
         # Update resource metrics
@@ -353,43 +353,43 @@ class MetricsDashboard:
                 self.metrics.peak_memory_gb,
                 snapshot["memory"]["used_gb"]
             )
-        
+
         if "disk" in snapshot:
             self.metrics.disk_used_percent = snapshot["disk"]["percent"]
-        
+
         # Check for alerts
         self._check_alerts(snapshot)
-        
+
         # Render dashboard
         self._render()
-    
+
     def _check_alerts(self, snapshot: dict):
         """Generate alerts based on metrics."""
         # Memory alert
         if snapshot.get("memory", {}).get("percent", 0) > 90:
             self.alerts.append(f"⚠️  Memory critical: {snapshot['memory']['percent']:.1f}%")
-        
+
         # Disk alert
         if snapshot.get("disk", {}).get("percent", 0) > 85:
             self.alerts.append(f"⚠️  Disk space critical: {snapshot['disk']['percent']:.1f}%")
-        
+
         # Performance alert (if image taking >10min)
         if self.metrics.recent_times and max(self.metrics.recent_times) > 600:
             self.alerts.append(f"⚠️  Slow processing detected: {max(self.metrics.recent_times):.0f}s")
-    
+
     def _render(self):
         """Render dashboard to terminal."""
         import sys
-        
+
         # Clear previous output (ANSI escape codes)
         sys.stdout.write("\033[2J\033[H")
-        
+
         # Header
         print("=" * 80)
         print("  TRANSFORMATION PORTAL - BATCH PROCESSING DASHBOARD")
         print("=" * 80)
         print()
-        
+
         # Progress
         total = self.metrics.images_processed + self.metrics.images_failed + self.metrics.images_pending
         progress_pct = (self.metrics.images_processed + self.metrics.images_failed) / total * 100
@@ -398,7 +398,7 @@ class MetricsDashboard:
         print(f"  ❌ Failed:    {self.metrics.images_failed}")
         print(f"  ⏳ Pending:   {self.metrics.images_pending}")
         print()
-        
+
         # Timing
         elapsed = time.time() - self.metrics.start_time
         eta = self.metrics.get_eta_sec()
@@ -407,31 +407,31 @@ class MetricsDashboard:
         print(f"  Avg/img:  {self.metrics.avg_time_per_image_sec:.1f} sec")
         print(f"  ETA:      {eta / 60:.1f} min")
         print()
-        
+
         # Resources
         print(f"Resources:")
         print(f"  Memory:   {self.metrics.current_memory_gb:.1f} GB (peak: {self.metrics.peak_memory_gb:.1f} GB)")
         print(f"  Disk:     {self.metrics.disk_used_percent:.1f}%")
         print()
-        
+
         # Quality
         if self.metrics.images_processed > 0:
             print(f"Quality:")
             print(f"  Avg AI Diff: {self.metrics.avg_ai_diff:.4f} (target: <0.004)")
             print()
-        
+
         # Alerts
         if self.alerts:
             print("⚠️  ALERTS:")
             for alert in self.alerts[-5:]:  # Show last 5 alerts
                 print(f"  {alert}")
             print()
-        
+
         # Footer
         print("=" * 80)
         print("  Press Ctrl+C to cancel gracefully")
         print("=" * 80)
-        
+
         sys.stdout.flush()
 ```
 
@@ -451,18 +451,18 @@ from pathlib import Path
 class PipelineProfiler:
     """
     Detailed performance profiler for pipeline stages.
-    
+
     Tracks:
     - Per-stage timing
     - Memory allocation per stage
     - Disk I/O per stage
     - GPU utilization per stage
     """
-    
+
     def __init__(self):
         self.profiles: Dict[str, dict] = {}
         self.current_image: str = None
-    
+
     def start_image(self, image_name: str):
         """Start profiling new image."""
         self.current_image = image_name
@@ -472,29 +472,29 @@ class PipelineProfiler:
             "end_time": None,
             "total_time_sec": None,
         }
-    
+
     @contextmanager
     def profile_stage(self, stage_name: str):
         """Context manager for profiling a stage."""
         if not self.current_image:
             yield
             return
-        
+
         # Pre-stage snapshot
         pre_snapshot = self._get_resource_snapshot()
         start_time = time.time()
-        
+
         try:
             yield
         finally:
             # Post-stage snapshot
             end_time = time.time()
             post_snapshot = self._get_resource_snapshot()
-            
+
             # Calculate deltas
             duration = end_time - start_time
             memory_delta = post_snapshot["memory_gb"] - pre_snapshot["memory_gb"]
-            
+
             # Store profile
             self.profiles[self.current_image]["stages"][stage_name] = {
                 "duration_sec": duration,
@@ -502,7 +502,7 @@ class PipelineProfiler:
                 "pre_memory_gb": pre_snapshot["memory_gb"],
                 "post_memory_gb": post_snapshot["memory_gb"],
             }
-    
+
     def end_image(self):
         """End profiling current image."""
         if self.current_image:
@@ -512,7 +512,7 @@ class PipelineProfiler:
                 self.profiles[self.current_image]["start_time"]
             )
             self.current_image = None
-    
+
     def _get_resource_snapshot(self) -> dict:
         """Get current resource usage snapshot."""
         import psutil
@@ -521,7 +521,7 @@ class PipelineProfiler:
             "memory_gb": mem.used / 1e9,
             "timestamp": time.time(),
         }
-    
+
     def generate_report(self, output_path: Path):
         """Generate detailed profiling report."""
         report = {
@@ -529,14 +529,14 @@ class PipelineProfiler:
             "per_image": self.profiles,
             "bottlenecks": self._identify_bottlenecks(),
         }
-        
+
         output_path.write_text(json.dumps(report, indent=2))
-    
+
     def _generate_summary(self) -> dict:
         """Generate summary statistics across all images."""
         if not self.profiles:
             return {}
-        
+
         # Aggregate stage times
         stage_times = {}
         for image_profile in self.profiles.values():
@@ -544,7 +544,7 @@ class PipelineProfiler:
                 if stage_name not in stage_times:
                     stage_times[stage_name] = []
                 stage_times[stage_name].append(stage_data["duration_sec"])
-        
+
         # Calculate averages
         summary = {
             "total_images": len(self.profiles),
@@ -554,19 +554,19 @@ class PipelineProfiler:
                 for stage, times in stage_times.items()
             },
         }
-        
+
         return summary
-    
+
     def _identify_bottlenecks(self) -> list:
         """Identify performance bottlenecks."""
         summary = self._generate_summary()
         if not summary or "stage_averages" not in summary:
             return []
-        
+
         # Stages taking >30% of total time are bottlenecks
         total_time = sum(summary["stage_averages"].values())
         bottlenecks = []
-        
+
         for stage, avg_time in summary["stage_averages"].items():
             percent = (avg_time / total_time) * 100
             if percent > 30:
@@ -576,9 +576,9 @@ class PipelineProfiler:
                     "percent_of_total": percent,
                     "recommendation": self._get_optimization_recommendation(stage),
                 })
-        
+
         return bottlenecks
-    
+
     def _get_optimization_recommendation(self, stage: str) -> str:
         """Get optimization recommendation for slow stage."""
         recommendations = {
@@ -868,7 +868,7 @@ orchestrator:
   retry_backoff_base: 2  # Exponential backoff
   checkpoint_dir: "checkpoints/"
   checkpoint_interval: 1  # Save after each image
-  
+
   # Subprocess configuration
   subprocess_timeout_multiplier: 3  # 3x estimated time
   subprocess_isolation: true
@@ -879,25 +879,25 @@ resources:
   max_memory_gb: 10.0  # Reserve for each image
   max_disk_usage_percent: 85.0
   check_interval_sec: 5.0
-  
+
   # Adaptive tiling
   enable_adaptive_tiling: true
   tile_size_auto: true  # Automatically select based on image size
-  
+
   # CPU fallback
   cpu_fallback_threshold_mp: 35  # Use CPU for images >35MP
-  
+
 # NEW: Storage management (Phase 2)
 storage:
   enable_tiered: true
   t9_path: "/Volumes/T9/Transformation_Portal_Outputs"
   t9_required: false  # Graceful degradation if unavailable
-  
+
   # Auto-migration
   auto_migrate_upscaled: true
   auto_migrate_threshold_gb: 2.0
   create_symlinks: true
-  
+
   # Disk space management
   min_free_space_gb: 10.0
   warning_threshold_percent: 80.0
@@ -909,7 +909,7 @@ monitoring:
   metrics_port: 8080
   profiling_enabled: true
   profiling_output_dir: "profiles/"
-  
+
   # Alerts
   enable_alerts: true
   alert_email: null  # Optional email for alerts
@@ -920,12 +920,12 @@ performance:
   # Parallel processing
   max_concurrent_images: 2  # For multi-GPU or pipelined processing
   enable_stage_parallelism: false  # Phase 3 feature
-  
+
   # I/O optimization
   async_io: true
   write_buffer_mb: 128
   tiff_compression: "lzw"  # none|lzw|deflate for master TIFFs
-  
+
   # Caching
   enable_depth_cache: true
   cache_dir: ".cache/"
@@ -948,7 +948,7 @@ def process(
     input_dir: Path = typer.Option(..., "--input-dir"),
     output_dir: Path = typer.Option(..., "--output-dir"),
     preset: str = typer.Option("photo_realistic", "--preset"),
-    
+
     # NEW: Orchestrator options (Phase 1)
     use_orchestrator: bool = typer.Option(False, "--use-orchestrator",
         help="Enable fault-tolerant batch orchestrator"),
@@ -958,13 +958,13 @@ def process(
         help="Resume from checkpoint file"),
     max_retries: int = typer.Option(3, "--max-retries",
         help="Max retry attempts per image"),
-    
+
     # NEW: Resource options (Phase 1)
     max_memory_gb: float = typer.Option(10.0, "--max-memory-gb",
         help="Max memory per image (GB)"),
     cpu_fallback_mp: float = typer.Option(35.0, "--cpu-fallback-mp",
         help="Use CPU for images above this size (MP)"),
-    
+
     # NEW: Storage options (Phase 2)
     enable_tiered_storage: bool = typer.Option(False, "--enable-tiered-storage",
         help="Enable tiered storage (internal + T9)"),
@@ -972,38 +972,38 @@ def process(
         help="Path to T9 external storage"),
     auto_migrate: bool = typer.Option(True, "--auto-migrate/--no-auto-migrate",
         help="Automatically migrate large files to T9"),
-    
+
     # NEW: Monitoring options (Phase 3)
     dashboard: bool = typer.Option(False, "--dashboard",
         help="Enable real-time dashboard"),
     profiling: bool = typer.Option(False, "--profiling",
         help="Enable performance profiling"),
-    
+
     # Backward compatibility
     legacy_mode: bool = typer.Option(False, "--legacy-mode",
         help="Disable all new features, use legacy processing"),
 ):
     """Process images with enhanced stability and performance."""
-    
+
     if legacy_mode:
         # Use original pipeline without enhancements
         from .pipeline import LuxPipelineV2
         # ... original processing logic
         return
-    
+
     # Enhanced processing with orchestrator
     if use_orchestrator or checkpoint_dir or resume_from:
         from .orchestrator import ProcessOrchestrator, OrchestratorConfig
-        
+
         config = OrchestratorConfig(
             checkpoint_dir=checkpoint_dir or Path("checkpoints"),
             max_retries=max_retries,
             max_memory_gb=max_memory_gb,
             # ... more config
         )
-        
+
         orchestrator = ProcessOrchestrator(config)
-        
+
         if resume_from:
             result = orchestrator.process_batch(resume_from_checkpoint=resume_from)
         else:
@@ -1011,7 +1011,7 @@ def process(
             images = list(input_dir.glob("*.tif")) + list(input_dir.glob("*.tiff"))
             orchestrator.add_images(images, depth_dir=None, output_dir=output_dir)
             result = orchestrator.process_batch()
-        
+
         typer.echo(f"Batch complete: {result['completed']}/{result['total_images']} succeeded")
     else:
         # Standard processing (enhanced but not orchestrated)
@@ -1366,6 +1366,6 @@ The design prioritizes **stability over performance initially**, then adds optim
 
 ---
 
-**Document Status:** Ready for Review  
-**Estimated Implementation:** 4-6 weeks for all phases  
+**Document Status:** Ready for Review
+**Estimated Implementation:** 4-6 weeks for all phases
 **Risk Level:** Low (phased, backward compatible, well-tested)

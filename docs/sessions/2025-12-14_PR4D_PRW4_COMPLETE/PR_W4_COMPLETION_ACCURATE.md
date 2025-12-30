@@ -1,7 +1,7 @@
 # PR-W4: Water Validation Harness - Accurate Completion Status
 
-**Date:** 2025-12-14  
-**Status:** ✅ **COMPLETE** - Ready for merge  
+**Date:** 2025-12-14
+**Status:** ✅ **COMPLETE** - Ready for merge
 **Scope:** Validation harness + tests + docs (detector stub pending PR-W1)
 
 ---
@@ -183,40 +183,40 @@ From `docs/PR_WATER_MASK_STRUCTURE.md`:
 
 ## Quality Gates Passed
 
-✅ **Linting:** flake8 clean (0 errors, max-line-length=127)  
-✅ **Type Safety:** All dataclass fields present  
-✅ **Tests:** 16/16 passing (0.19s)  
-✅ **Determinism:** Stability scores identical across runs with same seed  
-✅ **Schema Compliance:** Matches `WATER_GROUND_TRUTH_SCHEMA_FINAL.md` exactly  
-✅ **Backward Compatibility:** Legacy fields (`is_false_positive`, `scene_type`) preserved  
+✅ **Linting:** flake8 clean (0 errors, max-line-length=127)
+✅ **Type Safety:** All dataclass fields present
+✅ **Tests:** 16/16 passing (0.19s)
+✅ **Determinism:** Stability scores identical across runs with same seed
+✅ **Schema Compliance:** Matches `WATER_GROUND_TRUTH_SCHEMA_FINAL.md` exactly
+✅ **Backward Compatibility:** Legacy fields (`is_false_positive`, `scene_type`) preserved
 
 ---
 
 ## Correctness Fixes Applied (This Session)
 
 ### Issue 1: Per-Image Seed Not Truly Deterministic
-**Before:** `np.random.seed(seed + 1)` for all images  
-**After:** `per_image = (seed ^ hash(str(img_path))) & 0xFFFFFFFF`  
+**Before:** `np.random.seed(seed + 1)` for all images
+**After:** `per_image = (seed ^ hash(str(img_path))) & 0xFFFFFFFF`
 **Impact:** Each image gets stable but unique perturbations
 
 ### Issue 2: Stability Function Had Leftover Logic
-**Before:** Mixed variance-based and diff-based approaches  
-**After:** Single coherent diff-based implementation  
+**Before:** Mixed variance-based and diff-based approaches
+**After:** Single coherent diff-based implementation
 **Impact:** Cleaner code, same semantics
 
 ### Issue 3: Duplicate "Detected" Logic
-**Before:** `coverage > 0 and confidence > 0` + `r.detected`  
-**After:** Only `r.detected` (canonical source: `water_candidate.present`)  
+**Before:** `coverage > 0 and confidence > 0` + `r.detected`
+**After:** Only `r.detected` (canonical source: `water_candidate.present`)
 **Impact:** Single source of truth for detection status
 
 ### Issue 4: Unused Variables
-**Before:** `detector_confidence`, `detector_coverage` assigned but never used  
-**After:** Removed (only `water_mask` needed for metrics)  
+**Before:** `detector_confidence`, `detector_coverage` assigned but never used
+**After:** Removed (only `water_mask` needed for metrics)
 **Impact:** Linting clean, no dead code
 
 ### Issue 5: Non-Deterministic Legacy Code
-**Before:** `seed + 1` approach with TODO comment  
-**After:** Hash-based per-image seeding implemented  
+**Before:** `seed + 1` approach with TODO comment
+**After:** Hash-based per-image seeding implemented
 **Impact:** Meets deterministic stability requirement
 
 ---
@@ -288,16 +288,16 @@ Added a standalone validation harness and test suite to score water detection be
 
 ## Sign-Off
 
-**Deliverable:** Validation harness complete and tested  
-**Detector:** Stub only (PR-W1 scope)  
-**Data:** Schema ready, no images yet  
-**Quality:** All gates passed  
+**Deliverable:** Validation harness complete and tested
+**Detector:** Stub only (PR-W1 scope)
+**Data:** Schema ready, no images yet
+**Quality:** All gates passed
 
 **Reviewer Note:** This PR is validation infrastructure only. It will produce real edge alignment scores once PR-W1 lands. Thresholds will be calibrated once dataset v0 is populated. Current stub behavior is intentional and documented.
 
 ---
 
-**Ready for merge:** ✅ Yes  
-**Production-ready detector:** ❌ No (PR-W1)  
-**Calibrated thresholds:** ❌ No (dataset v0)  
+**Ready for merge:** ✅ Yes
+**Production-ready detector:** ❌ No (PR-W1)
+**Calibrated thresholds:** ❌ No (dataset v0)
 **Regression guardrails work:** ✅ Yes (ready for CI integration)

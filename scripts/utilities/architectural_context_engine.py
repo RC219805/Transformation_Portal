@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class DocumentType(Enum):
     """Architectural document types."""
+
     FLOOR_PLAN = "floor_plan"
     ELEVATION = "elevation"
     SECTION = "section"
@@ -40,6 +41,7 @@ class DocumentType(Enum):
 
 class SpaceType(Enum):
     """Architectural space classifications."""
+
     KITCHEN = "kitchen"
     LIVING = "living_room"
     DINING = "dining_room"
@@ -57,6 +59,7 @@ class SpaceType(Enum):
 @dataclass
 class DimensionInfo:
     """Dimensional information extracted from drawings."""
+
     width: Optional[float] = None
     length: Optional[float] = None
     height: Optional[float] = None
@@ -79,6 +82,7 @@ class DimensionInfo:
 @dataclass
 class MaterialSpec:
     """Material specification from architectural documents."""
+
     material_type: str
     location: str
     finish: Optional[str] = None
@@ -99,6 +103,7 @@ class MaterialSpec:
 @dataclass
 class SpatialContext:
     """Spatial relationship and adjacency information."""
+
     space_name: str
     space_type: SpaceType
     adjacent_spaces: List[str] = field(default_factory=list)
@@ -122,6 +127,7 @@ class SpatialContext:
 @dataclass
 class ArchitecturalContext:
     """Complete architectural context for a rendering."""
+
     project_name: str
     project_address: Optional[str] = None
     space_name: Optional[str] = None
@@ -194,35 +200,35 @@ class ArchitecturalContext:
         }
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(data, f, indent=2)
 
         logger.info(f"Saved architectural context to {output_path}")
 
     @classmethod
-    def load(cls, input_path: Path) -> 'ArchitecturalContext':
+    def load(cls, input_path: Path) -> "ArchitecturalContext":
         """Load context from JSON file."""
         with open(input_path) as f:
             data = json.load(f)
 
         # Reconstruct objects
-        dimensions = DimensionInfo(**data['dimensions']) if data.get('dimensions') else None
-        materials = [MaterialSpec(**m) for m in data.get('materials', [])]
-        spatial_context = SpatialContext(**data['spatial_context']) if data.get('spatial_context') else None
-        space_type = SpaceType(data['space_type']) if data.get('space_type') else None
+        dimensions = DimensionInfo(**data["dimensions"]) if data.get("dimensions") else None
+        materials = [MaterialSpec(**m) for m in data.get("materials", [])]
+        spatial_context = SpatialContext(**data["spatial_context"]) if data.get("spatial_context") else None
+        space_type = SpaceType(data["space_type"]) if data.get("space_type") else None
 
         return cls(
-            project_name=data['project_name'],
-            project_address=data.get('project_address'),
-            space_name=data.get('space_name'),
+            project_name=data["project_name"],
+            project_address=data.get("project_address"),
+            space_name=data.get("space_name"),
             space_type=space_type,
             dimensions=dimensions,
             materials=materials,
             spatial_context=spatial_context,
-            design_intent=data.get('design_intent', []),
-            style_notes=data.get('style_notes', []),
-            source_documents=[Path(p) for p in data.get('source_documents', [])],
-            metadata=data.get('metadata', {}),
+            design_intent=data.get("design_intent", []),
+            style_notes=data.get("style_notes", []),
+            source_documents=[Path(p) for p in data.get("source_documents", [])],
+            metadata=data.get("metadata", {}),
         )
 
 
@@ -237,12 +243,9 @@ class ArchitecturalContextExtractor:
         # Example: "Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright"
         # Example: "250930_MBAR_SUBMITTAL_2.pd"
 
-        _parts = Path(filename).stem.split('_')  # noqa: F841
+        _parts = Path(filename).stem.split("_")  # noqa: F841
 
-        context = ArchitecturalContext(
-            project_name="Unknown Project",
-            metadata={"source_filename": filename}
-        )
+        context = ArchitecturalContext(project_name="Unknown Project", metadata={"source_filename": filename})
 
         # Pattern matching for common naming conventions
         filename_lower = filename.lower()
@@ -303,7 +306,7 @@ class ArchitecturalContextExtractor:
         try:
             from pypdf import PdfReader
 
-            with open(pdf_path, 'rb') as f:
+            with open(pdf_path, "rb") as f:
                 pdf = PdfReader(f)
 
                 # Extract text from first few pages
@@ -368,21 +371,31 @@ class ArchitecturalContextExtractor:
         for pattern, mat_type in material_patterns.items():
             matches = re.finditer(pattern, text, re.IGNORECASE)
             for match in matches:
-                materials.append(MaterialSpec(
-                    material_type=mat_type,
-                    location="unspecified",
-                    finish=match.group(0),
-                ))
+                materials.append(
+                    MaterialSpec(
+                        material_type=mat_type,
+                        location="unspecified",
+                        finish=match.group(0),
+                    )
+                )
 
         return materials[:10]  # Limit to top 10
 
     def _parse_design_intent(self, text: str) -> List[str]:
         """Extract design intent phrases from text."""
         intent_keywords = [
-            "open concept", "natural light", "indoor-outdoor",
-            "luxury finishes", "contemporary", "modern",
-            "traditional", "transitional", "coastal",
-            "desert modern", "mediterranean", "craftsman",
+            "open concept",
+            "natural light",
+            "indoor-outdoor",
+            "luxury finishes",
+            "contemporary",
+            "modern",
+            "traditional",
+            "transitional",
+            "coastal",
+            "desert modern",
+            "mediterranean",
+            "craftsman",
         ]
 
         found_intents = []
@@ -403,9 +416,7 @@ class ContextAwareRenderingPipeline:
         self.context_dir.mkdir(exist_ok=True)
         self.extractor = ArchitecturalContextExtractor()
 
-    def prepare_context(self,
-                        image_path: Path,
-                        pdf_documents: Optional[List[Path]] = None) -> ArchitecturalContext:
+    def prepare_context(self, image_path: Path, pdf_documents: Optional[List[Path]] = None) -> ArchitecturalContext:
         """Prepare architectural context for an image."""
 
         # Check cache
@@ -434,10 +445,7 @@ class ContextAwareRenderingPipeline:
 
         return context
 
-    def enhance_prompt(self,
-                       base_prompt: str,
-                       image_path: Path,
-                       pdf_documents: Optional[List[Path]] = None) -> str:
+    def enhance_prompt(self, base_prompt: str, image_path: Path, pdf_documents: Optional[List[Path]] = None) -> str:
         """Generate context-enhanced prompt."""
 
         context = self.prepare_context(image_path, pdf_documents)
@@ -483,10 +491,7 @@ def main():
     image_path = Path("input_images/Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright.jpg")
     base_prompt = "photorealistic architectural rendering"
 
-    enhanced_prompt = pipeline.enhance_prompt(
-        base_prompt=base_prompt,
-        image_path=image_path
-    )
+    enhanced_prompt = pipeline.enhance_prompt(base_prompt=base_prompt, image_path=image_path)
 
     print(f"\nBase prompt: {base_prompt}")
     print(f"Enhanced prompt: {enhanced_prompt}")

@@ -110,35 +110,35 @@ def inference(
     image: List[Union[np.ndarray, Image.Image, str, Path]],
     extrinsics: Optional[np.ndarray] = None,
     intrinsics: Optional[np.ndarray] = None,
-    
+
     # Pose alignment parameters
     align_to_input_ext_scale: bool = True,
     infer_gs: bool = False,
     use_ray_pose: bool = False,
     ref_view_strategy: str = "saddle_balanced",
-    
+
     # Rendering parameters (for gs_video)
     render_exts: Optional[np.ndarray] = None,
     render_ixts: Optional[np.ndarray] = None,
     render_hw: Optional[Tuple[int, int]] = None,
-    
+
     # Processing parameters
     process_res: int = 504,
     process_res_method: str = "upper_bound_resize",
-    
+
     # Export parameters
     export_dir: Optional[Union[str, Path]] = None,
     export_format: str = "mini_npz",
     export_feat_layers: List[int] = [],
-    
+
     # GLB export parameters
     conf_thresh_percentile: float = 40.0,
     num_max_points: int = 1_000_000,
     show_cameras: bool = True,
-    
+
     # Feature visualization parameters
     feat_vis_fps: int = 15,
-    
+
     # Additional export kwargs
     export_kwargs: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> DA3Prediction
@@ -178,13 +178,13 @@ class DA3Prediction:
   ```python
   # Single image (path)
   image=["image.jpg"]
-  
+
   # Multiple images (paths)
   image=["img1.jpg", "img2.jpg", "img3.jpg"]
-  
+
   # NumPy arrays
   image=[np.array(...), np.array(...)]
-  
+
   # PIL Images
   image=[Image.open("img1.jpg"), Image.open("img2.jpg")]
   ```
@@ -249,7 +249,7 @@ class DA3Prediction:
   ```python
   # For sequential captures, middle view often works well
   ref_view_strategy="middle"
-  
+
   # For diverse viewpoints, saddle_balanced is recommended
   ref_view_strategy="saddle_balanced"
   ```
@@ -460,7 +460,7 @@ Gaussian Splatting PLY point cloud.
 #### `gs_video`
 Gaussian Splatting rendered video.
 
-**Requirements:** 
+**Requirements:**
 - `infer_gs=True`
 - `render_exts` (camera trajectory)
 
@@ -587,33 +587,33 @@ def create_circular_trajectory(
 ):
     """Create circular camera trajectory."""
     angles = np.linspace(0, 2*np.pi, num_frames, endpoint=False)
-    
+
     extrinsics = []
     for angle in angles:
         # Camera position
         cam_x = center[0] + radius * np.cos(angle)
         cam_y = center[1] + height
         cam_z = center[2] + radius * np.sin(angle)
-        
+
         # Look at center
         forward = np.array(center) - np.array([cam_x, cam_y, cam_z])
         forward = forward / np.linalg.norm(forward)
-        
+
         # Compute camera rotation
         up = np.array([0, 1, 0])
         right = np.cross(forward, up)
         right = right / np.linalg.norm(right)
         up = np.cross(right, forward)
-        
+
         # Build extrinsic matrix
         R = np.column_stack([right, up, -forward])
         t = np.array([cam_x, cam_y, cam_z])
-        
+
         ext = np.eye(4)
         ext[:3, :3] = R
         ext[:3, 3] = t
         extrinsics.append(ext)
-    
+
     return np.array(extrinsics)
 
 # Render video
@@ -823,7 +823,7 @@ prediction = wrapper.inference(
 features = prediction.aux['features']
 for layer_idx, feat_map in features.items():
     print(f"Layer {layer_idx}: shape {feat_map.shape}")
-    
+
 # Features saved as NPZ and video
 ```
 

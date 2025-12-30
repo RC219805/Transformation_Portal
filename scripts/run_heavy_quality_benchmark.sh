@@ -39,12 +39,12 @@ run_benchmark() {
   local config=$2
   local img_name=$(basename "$img" .tif)
   local output_dir="$BENCHMARK_DIR/${config}_${img_name}"
-  
+
   echo "----------------------------------------"
   echo "Config: $config | Image: $img_name"
   echo "Output: $output_dir"
   echo "----------------------------------------"
-  
+
   if [ "$config" = "baseline" ]; then
     # Baseline: Current production defaults
     lux-depth-v2 \
@@ -53,7 +53,7 @@ run_benchmark() {
       --preset exterior_showcase \
       --marketing-png-compression 1 \
       2>&1 | tee "$output_dir.log" | grep -E "(Done|ERROR|WARNING|stage)" || true
-      
+
   elif [ "$config" = "heavy" ]; then
     # Heavy: Max quality with all features enabled
     lux-depth-v2 \
@@ -65,7 +65,7 @@ run_benchmark() {
       --max-segmentation-side 1536 \
       --cache-masks \
       2>&1 | tee "$output_dir.log" | grep -E "(Done|ERROR|WARNING|stage)" || true
-      
+
   elif [ "$config" = "heavy_depth" ]; then
     # Heavy + Depth: Max quality with depth-aware processing
     lux-depth-v2 \
@@ -79,7 +79,7 @@ run_benchmark() {
       --depth-dir depth_maps/750_Picacho \
       2>&1 | tee "$output_dir.log" | grep -E "(Done|ERROR|WARNING|stage)" || true
   fi
-  
+
   echo ""
 }
 

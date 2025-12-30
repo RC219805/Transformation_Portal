@@ -16,7 +16,7 @@ from transformation_portal.events import (
 @pytest.fixture
 def temp_event_store(tmp_path):
     """Create a temporary event store for testing."""
-    return EventStore(storage_path=tmp_path / 'events')
+    return EventStore(storage_path=tmp_path / "events")
 
 
 @pytest.fixture
@@ -27,31 +27,19 @@ def sample_events():
             id=str(uuid.uuid4()),
             type="image.enhanced",
             timestamp=time.time(),
-            data={
-                'function': 'enhance_image',
-                'args': ['image1.jpg'],
-                'kwargs': {'preset': 'golden_hour'}
-            }
+            data={"function": "enhance_image", "args": ["image1.jpg"], "kwargs": {"preset": "golden_hour"}},
         ),
         Event(
             id=str(uuid.uuid4()),
             type="depth.estimated",
             timestamp=time.time(),
-            data={
-                'function': 'estimate_depth',
-                'args': ['image2.jpg'],
-                'kwargs': {'model': 'midas'}
-            }
+            data={"function": "estimate_depth", "args": ["image2.jpg"], "kwargs": {"model": "midas"}},
         ),
         Event(
             id=str(uuid.uuid4()),
             type="image.enhanced",
             timestamp=time.time(),
-            data={
-                'function': 'enhance_image',
-                'args': ['image3.jpg'],
-                'kwargs': {'preset': 'sunset'}
-            }
+            data={"function": "enhance_image", "args": ["image3.jpg"], "kwargs": {"preset": "sunset"}},
         ),
     ]
 
@@ -156,12 +144,7 @@ class TestOperationRegistry:
         # pylint: enable=comparison-with-callable
 
         # Verify the old handler is no longer active
-        event = Event(
-            id=str(uuid.uuid4()),
-            type="test.event",
-            timestamp=time.time(),
-            data={}
-        )
+        event = Event(id=str(uuid.uuid4()), type="test.event", timestamp=time.time(), data={})
         result = registry.get_handler("test.event")(event)
         assert result == "result2"
 
@@ -238,10 +221,10 @@ class TestEventReplayer:
         # Check results structure
         assert len(results) == 3
         for result in results:
-            assert 'event_id' in result
-            assert 'event_type' in result
-            assert 'status' in result
-            assert result['status'] == 'success'
+            assert "event_id" in result
+            assert "event_type" in result
+            assert "status" in result
+            assert result["status"] == "success"
 
     def test_replay_with_handler_error(self, temp_event_store):
         """Test replay when handler raises an error."""
@@ -252,18 +235,13 @@ class TestEventReplayer:
 
         replayer.registry.register("test.event", failing_handler)
 
-        event = Event(
-            id=str(uuid.uuid4()),
-            type="test.event",
-            timestamp=time.time(),
-            data={'test': 'data'}
-        )
+        event = Event(id=str(uuid.uuid4()), type="test.event", timestamp=time.time(), data={"test": "data"})
 
         results = replayer.replay([event], dry_run=False)
 
         assert len(results) == 1
-        assert results[0]['status'] == 'error'
-        assert 'Handler failed!' in results[0]['error']
+        assert results[0]["status"] == "error"
+        assert "Handler failed!" in results[0]["error"]
 
     def test_replay_skip_unregistered(self, temp_event_store, sample_events):
         """Test skipping events without registered handlers."""
@@ -288,11 +266,7 @@ class TestEventReplayer:
         # Don't register any handlers
 
         with pytest.raises(ValueError, match="No handler registered for event type"):
-            replayer.replay(
-                sample_events,
-                dry_run=False,
-                skip_unregistered=False
-            )
+            replayer.replay(sample_events, dry_run=False, skip_unregistered=False)
 
     def test_replay_correlation(self, temp_event_store):
         """Test replaying events by correlation ID."""
@@ -305,15 +279,15 @@ class TestEventReplayer:
                 id=str(uuid.uuid4()),
                 type="batch.started",
                 timestamp=time.time(),
-                data={'batch_id': '123'},
-                correlation_id=correlation_id
+                data={"batch_id": "123"},
+                correlation_id=correlation_id,
             ),
             Event(
                 id=str(uuid.uuid4()),
                 type="batch.completed",
                 timestamp=time.time(),
-                data={'batch_id': '123'},
-                correlation_id=correlation_id
+                data={"batch_id": "123"},
+                correlation_id=correlation_id,
             ),
         ]
 
@@ -334,12 +308,7 @@ class TestEventReplayer:
 
         replayer.registry.register("test.event", interrupt_handler)
 
-        event = Event(
-            id=str(uuid.uuid4()),
-            type="test.event",
-            timestamp=time.time(),
-            data={}
-        )
+        event = Event(id=str(uuid.uuid4()), type="test.event", timestamp=time.time(), data={})
 
         # KeyboardInterrupt should propagate
         with pytest.raises(KeyboardInterrupt):
@@ -354,12 +323,7 @@ class TestEventReplayer:
 
         replayer.registry.register("test.event", exit_handler)
 
-        event = Event(
-            id=str(uuid.uuid4()),
-            type="test.event",
-            timestamp=time.time(),
-            data={}
-        )
+        event = Event(id=str(uuid.uuid4()), type="test.event", timestamp=time.time(), data={})
 
         # SystemExit should propagate
         with pytest.raises(SystemExit):
@@ -374,7 +338,7 @@ def test_integration_with_event_store(temp_event_store):
     processed_images = []
 
     def handler(event: Event):
-        image_path = event.data.get('args', [])[0] if event.data.get('args') else None
+        image_path = event.data.get("args", [])[0] if event.data.get("args") else None
         if image_path:
             processed_images.append(image_path)
         return {"processed": image_path}
@@ -387,7 +351,7 @@ def test_integration_with_event_store(temp_event_store):
             id=str(uuid.uuid4()),
             type="image.processed",
             timestamp=time.time(),
-            data={'function': 'process', 'args': [f'image{i}.jpg'], 'kwargs': {}}
+            data={"function": "process", "args": [f"image{i}.jpg"], "kwargs": {}},
         )
         store.append(event)
 
@@ -398,5 +362,5 @@ def test_integration_with_event_store(temp_event_store):
     results = replayer.replay(events, dry_run=False)
 
     assert len(processed_images) == 5
-    assert all(f'image{i}.jpg' in processed_images for i in range(5))
+    assert all(f"image{i}.jpg" in processed_images for i in range(5))
     assert len(results) == 5

@@ -1,9 +1,9 @@
 # Architecture Hardening Plan: Transformation Portal
 
-**Status**: 🟢 **APPROVED FOR IMPLEMENTATION**  
-**Version**: 1.0  
-**Date**: 2025-12-08  
-**Author**: Transformation Portal Architect  
+**Status**: 🟢 **APPROVED FOR IMPLEMENTATION**
+**Version**: 1.0
+**Date**: 2025-12-08
+**Author**: Transformation Portal Architect
 **Review Date**: 2025-12-22 (2-week milestone)
 
 ---
@@ -106,7 +106,7 @@ This document outlines a comprehensive, PR-sequenced architecture optimization p
 - ✅ README matches implementation
 - ✅ Secret scanner passes
 
-**Timeline**: 2-3 days  
+**Timeline**: 2-3 days
 **Risk**: 🟢 LOW (no code changes, only hygiene)
 
 ---
@@ -162,7 +162,7 @@ class DeviceConfig(BaseModel):
     gpu_id: Optional[int] = None
     enable_amp: bool = True  # Automatic Mixed Precision
     dtype: Literal["float16", "float32", "bfloat16"] = "float16"
-    
+
     @validator("device")
     def validate_device(cls, v):
         if v == "auto":
@@ -178,7 +178,7 @@ class ProcessingConfig(BaseModel):
     enable_caching: bool = True
     verbose: bool = False
     dry_run: bool = False
-    
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -203,11 +203,11 @@ class DeviceType(Enum):
 
 class DeviceManager:
     """Unified device management for all pipelines."""
-    
+
     def __init__(self, preferred: str = "auto"):
         self.device = self._detect_device(preferred)
         self.dtype = self._get_optimal_dtype()
-        
+
     def _detect_device(self, preferred: str) -> torch.device:
         """Detect best available device with fallback chain."""
         if preferred == "auto":
@@ -217,7 +217,7 @@ class DeviceManager:
                 return torch.device("mps")
             return torch.device("cpu")
         return torch.device(preferred)
-    
+
     def _get_optimal_dtype(self) -> torch.dtype:
         """Get optimal dtype for device."""
         if self.device.type == "cuda":
@@ -225,11 +225,11 @@ class DeviceManager:
         elif self.device.type == "mps":
             return torch.float32  # MPS doesn't support all float16 ops
         return torch.float32
-    
+
     def allocate_tensor(self, shape: Tuple[int, ...]) -> torch.Tensor:
         """Allocate tensor on managed device."""
         return torch.zeros(shape, device=self.device, dtype=self.dtype)
-    
+
     def profile(self) -> dict:
         """Get device metrics (optional, for observability)."""
         if self.device.type == "cuda":
@@ -251,13 +251,13 @@ from typing import Optional, Dict, Any
 
 class ArtifactStore:
     """Content-addressed cache for expensive computations."""
-    
+
     def __init__(self, cache_dir: Path = Path(".cache/artifacts")):
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.manifest_path = cache_dir / "manifest.json"
         self._load_manifest()
-    
+
     def _load_manifest(self):
         """Load cache manifest."""
         if self.manifest_path.exists():
@@ -265,14 +265,14 @@ class ArtifactStore:
                 self.manifest = json.load(f)
         else:
             self.manifest = {}
-    
+
     def _compute_key(self, input_path: Path, config: Dict[str, Any]) -> str:
         """Compute cache key from input + config."""
         hasher = hashlib.sha256()
         hasher.update(input_path.read_bytes())
         hasher.update(json.dumps(config, sort_keys=True).encode())
         return hasher.hexdigest()
-    
+
     def get(self, input_path: Path, config: Dict[str, Any]) -> Optional[Path]:
         """Retrieve cached artifact if exists."""
         key = self._compute_key(input_path, config)
@@ -281,8 +281,8 @@ class ArtifactStore:
             if cached_path.exists():
                 return cached_path
         return None
-    
-    def put(self, input_path: Path, config: Dict[str, Any], 
+
+    def put(self, input_path: Path, config: Dict[str, Any],
             output_path: Path) -> None:
         """Store artifact in cache."""
         key = self._compute_key(input_path, config)
@@ -304,26 +304,26 @@ from typing import Union
 
 class PathValidator:
     """Secure path validation to prevent traversal attacks."""
-    
+
     def __init__(self, allowed_base: Union[str, Path]):
         self.allowed_base = Path(allowed_base).resolve()
-    
+
     def validate(self, user_input: Union[str, Path]) -> Path:
         """Validate path is within allowed base directory."""
         path = Path(user_input).resolve()
-        
+
         # Prevent path traversal
         if not path.is_relative_to(self.allowed_base):
             raise ValueError(
                 f"Path traversal attempt: {user_input} outside {self.allowed_base}"
             )
-        
+
         # Prevent symlink attacks
         if path.is_symlink():
             raise ValueError(f"Symlinks not allowed: {user_input}")
-        
+
         return path
-    
+
     @staticmethod
     def sanitize_filename(filename: str) -> str:
         """Remove dangerous characters from filename."""
@@ -366,7 +366,7 @@ class PathValidator:
 - ✅ 90%+ test coverage on core modules
 - ✅ Performance neutral or improved
 
-**Timeline**: 1-2 weeks  
+**Timeline**: 1-2 weeks
 **Risk**: 🟡 MEDIUM (refactoring requires careful testing)
 
 ---
@@ -403,16 +403,16 @@ class StageResult:
 
 class Stage(ABC):
     """Base class for pipeline stages."""
-    
+
     def __init__(self, name: str, version: str):
         self.name = name
         self.version = version
-    
+
     @abstractmethod
     def execute(self, input_data: Any, config: Dict[str, Any]) -> Any:
         """Execute stage transformation."""
         pass
-    
+
     def compute_cache_key(self, input_data: Any, config: Dict[str, Any]) -> str:
         """Compute deterministic cache key."""
         hasher = hashlib.sha256()
@@ -426,12 +426,12 @@ class Stage(ABC):
         # Hash stage version
         hasher.update(f"{self.name}:{self.version}".encode())
         return hasher.hexdigest()
-    
-    def run(self, input_data: Any, config: Dict[str, Any], 
+
+    def run(self, input_data: Any, config: Dict[str, Any],
             cache: 'ArtifactStore') -> StageResult:
         """Run stage with caching and timing."""
         import time
-        
+
         # Check cache
         cache_key = self.compute_cache_key(input_data, config)
         cached = cache.get_by_key(cache_key)
@@ -442,15 +442,15 @@ class Stage(ABC):
                 duration_ms=0,
                 cache_hit=True
             )
-        
+
         # Execute
         start = time.perf_counter()
         output = self.execute(input_data, config)
         duration = (time.perf_counter() - start) * 1000
-        
+
         # Store in cache
         cache.put_by_key(cache_key, output)
-        
+
         return StageResult(
             output=output,
             metadata={"cache_key": cache_key},
@@ -466,23 +466,23 @@ from .stage import Stage, StageResult
 
 class PipelineGraph:
     """Directed acyclic graph of processing stages."""
-    
+
     def __init__(self, stages: List[Stage]):
         self.stages = stages
         self.results: Dict[str, StageResult] = {}
-    
-    def execute(self, input_data: Any, config: Dict[str, Any], 
+
+    def execute(self, input_data: Any, config: Dict[str, Any],
                 cache: 'ArtifactStore') -> Any:
         """Execute pipeline graph."""
         data = input_data
-        
+
         for stage in self.stages:
             result = stage.run(data, config, cache)
             self.results[stage.name] = result
             data = result.output
-        
+
         return data
-    
+
     def get_metrics(self) -> Dict[str, Any]:
         """Get execution metrics for all stages."""
         return {
@@ -503,11 +503,11 @@ import torch
 
 class DepthEstimationStage(Stage):
     """Depth estimation stage."""
-    
+
     def __init__(self, model):
         super().__init__(name="depth_estimation", version="1.0.0")
         self.model = model
-    
+
     def execute(self, input_data, config):
         """Estimate depth map."""
         with torch.inference_mode():
@@ -516,21 +516,21 @@ class DepthEstimationStage(Stage):
 
 class MaterialSegmentationStage(Stage):
     """Material segmentation stage."""
-    
+
     def __init__(self, segmenter):
         super().__init__(name="material_segmentation", version="1.0.0")
         self.segmenter = segmenter
-    
+
     def execute(self, input_data, config):
         """Segment materials."""
         return self.segmenter.segment(input_data)
 
 class ToneMappingStage(Stage):
     """Tone mapping stage."""
-    
+
     def __init__(self):
         super().__init__(name="tone_mapping", version="1.0.0")
-    
+
     def execute(self, input_data, config):
         """Apply tone mapping."""
         operator = config.get("tone_map_operator", "agx")
@@ -555,12 +555,12 @@ from PIL import Image
 
 class ContextExtractor:
     """Extract context from input image."""
-    
+
     def extract(self, image_path: Path) -> Dict[str, Any]:
         """Extract image context."""
         img = Image.open(image_path)
         width, height = img.size
-        
+
         return {
             "resolution": (width, height),
             "aspect_ratio": width / height,
@@ -569,7 +569,7 @@ class ContextExtractor:
             "is_uhd": width * height > 3840 * 2160,
             "is_hdr": self._detect_hdr(img)
         }
-    
+
     def _detect_hdr(self, img: Image.Image) -> bool:
         """Detect if image is HDR."""
         # Simple heuristic: check for 16-bit depth or extended gamut
@@ -577,10 +577,10 @@ class ContextExtractor:
 
 class PolicyEngine:
     """Intelligent parameter selection based on context."""
-    
+
     def __init__(self):
         self.rules = self._load_rules()
-    
+
     def _load_rules(self) -> Dict[str, Any]:
         """Load policy rules."""
         return {
@@ -597,15 +597,15 @@ class PolicyEngine:
                 "params": {"clarity_strength": 0.3}
             }
         }
-    
+
     def apply(self, context: Dict[str, Any], base_config: Dict[str, Any]) -> Dict[str, Any]:
         """Apply policy rules to configuration."""
         config = base_config.copy()
-        
+
         for rule_name, rule in self.rules.items():
             if rule["condition"](context):
                 config.update(rule["params"])
-        
+
         return config
 ```
 
@@ -621,7 +621,7 @@ class PolicyEngine:
 - ✅ Zero feature regressions
 - ✅ Lux Depth V2 tests pass
 
-**Timeline**: 1-2 weeks  
+**Timeline**: 1-2 weeks
 **Risk**: 🟡 MEDIUM (new architecture requires validation)
 
 ---
@@ -662,19 +662,19 @@ with torch.autocast(device_type="cuda", dtype=torch.float16):
 # core/processing/tiling.py
 class TiledProcessor:
     """Process ultra-high-resolution images with tiling."""
-    
+
     def __init__(self, tile_size: int = 512, overlap: int = 64):
         self.tile_size = tile_size
         self.overlap = overlap
-    
+
     def process(self, image: torch.Tensor, processor_fn) -> torch.Tensor:
         """Process image in tiles."""
         h, w = image.shape[-2:]
-        
+
         if h <= self.tile_size and w <= self.tile_size:
             # Small enough, process directly
             return processor_fn(image)
-        
+
         # Split into tiles
         tiles = self._split_tiles(image)
         processed_tiles = [processor_fn(tile) for tile in tiles]
@@ -691,29 +691,29 @@ import torch
 
 class GPUProfiler:
     """Lightweight GPU profiler (<5% overhead)."""
-    
+
     def __init__(self, enabled: bool = False):
         self.enabled = enabled
         self.events = []
-    
+
     @contextmanager
     def profile(self, name: str):
         """Profile a code section."""
         if not self.enabled:
             yield
             return
-        
+
         if torch.cuda.is_available():
             start_event = torch.cuda.Event(enable_timing=True)
             end_event = torch.cuda.Event(enable_timing=True)
             start_event.record()
-        
+
         cpu_start = time.perf_counter()
-        
+
         yield
-        
+
         cpu_duration = (time.perf_counter() - cpu_start) * 1000
-        
+
         if torch.cuda.is_available():
             end_event.record()
             torch.cuda.synchronize()
@@ -728,7 +728,7 @@ class GPUProfiler:
                 "name": name,
                 "cpu_ms": cpu_duration
             })
-    
+
     def report(self) -> dict:
         """Generate profiling report."""
         total_time = sum(e.get("gpu_ms", e["cpu_ms"]) for e in self.events)
@@ -749,17 +749,17 @@ from lux_depth_v2.pipeline import LuxDepthPipeline
 def test_lux_depth_throughput_regression():
     """Ensure throughput doesn't regress below baseline."""
     pipeline = LuxDepthPipeline.from_preset("interior_luxury")
-    
+
     # Baseline: 24-65ms per image on M4 Max (from docs)
     # CI baseline: 200ms per image on CPU (GitHub Actions)
     baseline_ms = 200  # Conservative for CI
-    
+
     test_image = load_test_image("sample_interior.jpg")
-    
+
     start = time.perf_counter()
     result = pipeline.process(test_image)
     duration_ms = (time.perf_counter() - start) * 1000
-    
+
     assert duration_ms < baseline_ms * 1.05, \
         f"Performance regression: {duration_ms}ms > {baseline_ms}ms"
 ```
@@ -777,7 +777,7 @@ def test_lux_depth_throughput_regression():
 - ✅ Performance regression tests in CI
 - ✅ 10-20% speedup on GPU workloads
 
-**Timeline**: 1 week  
+**Timeline**: 1 week
 **Risk**: 🟢 LOW (additive, doesn't break existing code)
 
 ---
@@ -803,7 +803,7 @@ class GitInfo:
     commit: str
     branch: str
     is_dirty: bool
-    
+
     @classmethod
     def capture(cls) -> 'GitInfo':
         """Capture current git state."""
@@ -828,7 +828,7 @@ class DeviceInfo:
     cuda_version: Optional[str]
     python_version: str
     platform: str
-    
+
     @classmethod
     def capture(cls) -> 'DeviceInfo':
         """Capture device information."""
@@ -844,7 +844,7 @@ class DeviceInfo:
             device_type = "cpu"
             device_name = platform.processor()
             cuda_version = None
-        
+
         return cls(
             device_type=device_type,
             device_name=device_name,
@@ -859,7 +859,7 @@ class ModelInfo:
     """Model checksums and versions."""
     model_name: str
     checkpoint_sha256: str
-    
+
     @classmethod
     def from_weights(cls, model_name: str, weights_path: Path) -> 'ModelInfo':
         """Compute model checksum."""
@@ -882,28 +882,28 @@ class ProcessingReport:
     timestamp: str
     duration_ms: float
     metrics: Dict[str, float]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
-    
+
     def save(self, path: Path):
         """Save report to JSON file."""
         import json
         with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
-    
+
     @classmethod
     def create(cls, config, input_path, output_path, duration_ms, metrics):
         """Create report from processing run."""
         import hashlib
         import json
         from datetime import datetime
-        
+
         config_hash = hashlib.sha256(
             json.dumps(config, sort_keys=True).encode()
         ).hexdigest()
-        
+
         return cls(
             git_info=GitInfo.capture(),
             device_info=DeviceInfo.capture(),
@@ -926,7 +926,7 @@ import numpy as np
 
 class MetricsComputer:
     """Compute quality metrics with categorization."""
-    
+
     def __init__(self):
         self.weights = {
             "ssim": 0.3,      # Structural similarity
@@ -934,7 +934,7 @@ class MetricsComputer:
             "lpips": 0.3,     # Perceptual similarity
             "nima": 0.2       # Neural image assessment
         }
-    
+
     def compute(self, reference: np.ndarray, processed: np.ndarray) -> Dict[str, float]:
         """Compute all metrics."""
         return {
@@ -943,7 +943,7 @@ class MetricsComputer:
             "lpips": self._compute_lpips(reference, processed),
             "nima": self._compute_nima(processed)
         }
-    
+
     def compute_weighted_score(self, metrics: Dict[str, float]) -> float:
         """Compute weighted quality score."""
         return sum(metrics[k] * self.weights[k] for k in self.weights)
@@ -956,11 +956,11 @@ import json
 
 class BaselineComparator:
     """Compare against validation baseline."""
-    
+
     def __init__(self, baseline_dir: Path):
         self.baseline_dir = baseline_dir
         self.baseline_metrics = self._load_baseline()
-    
+
     def _load_baseline(self) -> dict:
         """Load baseline metrics."""
         baseline_path = self.baseline_dir / "baseline_metrics.json"
@@ -968,19 +968,19 @@ class BaselineComparator:
             with open(baseline_path) as f:
                 return json.load(f)
         return {}
-    
+
     def compare(self, preset: str, metrics: Dict[str, float]) -> dict:
         """Compare metrics against baseline."""
         if preset not in self.baseline_metrics:
             return {"status": "no_baseline", "delta": {}}
-        
+
         baseline = self.baseline_metrics[preset]
         delta = {
             k: metrics[k] - baseline[k]
             for k in metrics
             if k in baseline
         }
-        
+
         # Determine status
         if any(d < -0.05 for d in delta.values()):
             status = "regression"
@@ -988,7 +988,7 @@ class BaselineComparator:
             status = "improvement"
         else:
             status = "stable"
-        
+
         return {"status": status, "delta": delta, "baseline": baseline}
 ```
 
@@ -1004,7 +1004,7 @@ class BaselineComparator:
 - ✅ Baseline comparison integrated
 - ✅ <1% performance impact
 
-**Timeline**: 1 week  
+**Timeline**: 1 week
 **Risk**: 🟢 LOW (additive feature)
 
 ---
@@ -1048,7 +1048,7 @@ class BatchJob:
     job_id: str
     items: List[JobItem]
     checkpoint_path: Path
-    
+
     def save_checkpoint(self):
         """Save job state to disk."""
         with open(self.checkpoint_path, "w") as f:
@@ -1056,13 +1056,13 @@ class BatchJob:
                 "job_id": self.job_id,
                 "items": [asdict(item) for item in self.items]
             }, f, indent=2)
-    
+
     @classmethod
     def load_checkpoint(cls, checkpoint_path: Path) -> 'BatchJob':
         """Load job from checkpoint."""
         with open(checkpoint_path) as f:
             data = json.load(f)
-        
+
         items = [
             JobItem(
                 input_path=item["input_path"],
@@ -1073,26 +1073,26 @@ class BatchJob:
             )
             for item in data["items"]
         ]
-        
+
         return cls(
             job_id=data["job_id"],
             items=items,
             checkpoint_path=checkpoint_path
         )
-    
+
     def get_pending_items(self) -> List[JobItem]:
         """Get items that still need processing."""
         return [
             item for item in self.items
             if item.status == JobStatus.PENDING
         ]
-    
+
     def mark_completed(self, item: JobItem, duration_ms: float):
         """Mark item as completed."""
         item.status = JobStatus.COMPLETED
         item.duration_ms = duration_ms
         self.save_checkpoint()
-    
+
     def mark_failed(self, item: JobItem, error: str):
         """Mark item as failed."""
         item.status = JobStatus.FAILED
@@ -1101,16 +1101,16 @@ class BatchJob:
 
 class BatchProcessor:
     """Batch processor with checkpoint/resume."""
-    
+
     def __init__(self, pipeline, checkpoint_dir: Path):
         self.pipeline = pipeline
         self.checkpoint_dir = checkpoint_dir
-    
+
     def process_batch(self, input_paths: List[Path], output_dir: Path,
                       resume_from: Optional[Path] = None) -> BatchJob:
         """Process batch with checkpoint/resume."""
         import uuid
-        
+
         if resume_from:
             job = BatchJob.load_checkpoint(resume_from)
             print(f"Resuming job {job.job_id}")
@@ -1127,22 +1127,22 @@ class BatchProcessor:
             checkpoint_path = self.checkpoint_dir / f"{job_id}.json"
             job = BatchJob(job_id=job_id, items=items, checkpoint_path=checkpoint_path)
             job.save_checkpoint()
-        
+
         # Process pending items
         for item in job.get_pending_items():
             try:
                 import time
                 start = time.perf_counter()
-                
+
                 result = self.pipeline.process(Path(item.input_path))
                 result.save(Path(item.output_path))
-                
+
                 duration = (time.perf_counter() - start) * 1000
                 job.mark_completed(item, duration)
-                
+
             except Exception as e:
                 job.mark_failed(item, str(e))
-        
+
         return job
 ```
 
@@ -1157,14 +1157,14 @@ from unittest.mock import patch
 def test_segmentation_failure_falls_back_to_heuristic():
     """Test graceful fallback when ONNX segmentation fails."""
     from lux_depth_v2.material_segmentation import MaterialSegmenter
-    
+
     segmenter = MaterialSegmenter(backend="onnx")
-    
+
     # Mock ONNX failure
     with patch.object(segmenter.onnx_backend, "segment", side_effect=RuntimeError("ONNX error")):
         # Should fall back to heuristic
         result = segmenter.segment(test_image)
-        
+
         # Verify fallback was used
         assert result.backend_used == "heuristic"
         assert result.success
@@ -1175,14 +1175,14 @@ def test_segmentation_failure_falls_back_to_heuristic():
 def test_batch_processor_handles_disk_full():
     """Test checkpoint/resume when disk fills up mid-batch."""
     processor = BatchProcessor(pipeline, checkpoint_dir=Path("/tmp"))
-    
+
     # Simulate disk full on 5th image
     with patch("builtins.open", side_effect=OSError("No space left on device")):
         job = processor.process_batch(image_paths[:10], output_dir)
-    
+
     # Verify checkpoint saved successfully for completed items
     assert len([i for i in job.items if i.status == JobStatus.COMPLETED]) == 4
-    
+
     # Resume processing
     resumed_job = processor.process_batch([], output_dir, resume_from=job.checkpoint_path)
     assert len([i for i in resumed_job.items if i.status == JobStatus.COMPLETED]) == 10
@@ -1194,11 +1194,11 @@ def test_multi_gpu_selection():
     """Test explicit GPU selection when multiple GPUs available."""
     if torch.cuda.device_count() < 2:
         pytest.skip("Multi-GPU test requires 2+ GPUs")
-    
+
     # Test GPU 0
     manager = DeviceManager(preferred="cuda:0")
     assert manager.device.index == 0
-    
+
     # Test GPU 1
     manager = DeviceManager(preferred="cuda:1")
     assert manager.device.index == 1
@@ -1217,7 +1217,7 @@ def test_multi_gpu_selection():
 - ✅ Batch processor handles interruptions gracefully
 - ✅ Edge cases documented
 
-**Timeline**: 1-2 weeks  
+**Timeline**: 1-2 weeks
 **Risk**: 🟢 LOW (test improvements, no production code changes)
 
 ---
@@ -1462,6 +1462,6 @@ This Architecture Hardening Plan provides a clear, risk-managed path to transfor
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-12-08  
+**Document Version**: 1.0
+**Last Updated**: 2025-12-08
 **Next Review**: 2025-12-22 (2-week milestone check)

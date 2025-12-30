@@ -22,13 +22,13 @@ def test_classify_path():
     """Test path classification for output formatting."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
-        
+
         # Create test files and directories
         test_file = tmp_path / "test.txt"
         test_file.write_text("test")
         test_dir = tmp_path / "testdir"
         test_dir.mkdir()
-        
+
         assert clean_workspace.classify_path(test_file) == "FILE"
         assert clean_workspace.classify_path(test_dir) == "DIR "
 
@@ -39,14 +39,14 @@ def test_file_patterns():
     assert "*.log" in clean_workspace.FILE_PATTERNS
     assert "**/*.pyc" in clean_workspace.RECURSIVE_FILE_PATTERNS
     assert "**/__pycache__" in clean_workspace.DIR_PATTERNS
-    
+
     # Should include build artifacts from old Makefile
     assert "**/.pytest_cache" in clean_workspace.DIR_PATTERNS
     assert "**/.hypothesis" in clean_workspace.DIR_PATTERNS
     assert "**/*.egg-info" in clean_workspace.DIR_PATTERNS
     assert "build" in clean_workspace.DIR_PATTERNS
     assert "dist" in clean_workspace.DIR_PATTERNS
-    
+
     # Should not include overly broad patterns
     for pattern in clean_workspace.FILE_PATTERNS:
         assert pattern != "*"  # Would delete everything
@@ -57,7 +57,7 @@ def test_file_patterns():
 def test_iter_paths_stays_in_repo():
     """Verify that iter_paths only yields paths within the repository."""
     paths = list(clean_workspace.iter_paths())
-    
+
     # Filter to resolved paths that exist
     existing_paths = []
     for p in paths:
@@ -67,7 +67,7 @@ def test_iter_paths_stays_in_repo():
                 existing_paths.append(resolved)
         except Exception:
             continue
-    
+
     # All paths should be within the repository root
     for p in existing_paths:
         try:
@@ -81,27 +81,27 @@ def test_cleanup_dry_run_no_deletion():
     """Verify dry-run mode does not delete files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
-        
+
         # Create test artifacts
         test_log = tmp_path / "test.log"
         test_log.write_text("test log")
         test_cache = tmp_path / "__pycache__"
         test_cache.mkdir()
-        
+
         # Store original ROOT
         original_root = clean_workspace.ROOT
-        
+
         try:
             # Temporarily set ROOT to tmpdir for testing
             clean_workspace.ROOT = tmp_path
-            
+
             # Run cleanup in dry-run mode
             clean_workspace.cleanup(apply=False, verbose=False)
-            
+
             # Files should still exist
             assert test_log.exists()
             assert test_cache.exists()
-            
+
         finally:
             # Restore original ROOT
             clean_workspace.ROOT = original_root
@@ -163,12 +163,12 @@ def test_cleanup_skips_excluded_dirs(tmp_path, monkeypatch):
     venv_cache = venv_dir / "__pycache__"
     venv_cache.mkdir()
     (venv_cache / "test.pyc").write_text("bytecode")
-    
+
     # Create fake weights dir with a log file
     weights_dir = tmp_path / "weights"
     weights_dir.mkdir()
     (weights_dir / "training.log").write_text("log")
-    
+
     # Create non-excluded cache that should be cleaned
     normal_cache = tmp_path / "src" / "__pycache__"
     normal_cache.mkdir(parents=True)
@@ -185,7 +185,7 @@ def test_cleanup_skips_excluded_dirs(tmp_path, monkeypatch):
     # .venv and weights should be untouched
     assert venv_cache.exists(), ".venv/__pycache__ should be excluded"
     assert (weights_dir / "training.log").exists(), "weights/training.log should be excluded"
-    
+
     # Normal workspace artifacts should be cleaned
     assert not normal_cache.exists(), "src/__pycache__ should be deleted"
 
@@ -194,22 +194,22 @@ def test_is_excluded():
     """Test the exclusion logic."""
     # Save original ROOT
     original_root = clean_workspace.ROOT
-    
+
     try:
         # Use a temp directory as ROOT
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             clean_workspace.ROOT = tmp_path
-            
+
             # Paths inside excluded dirs should be excluded
             assert clean_workspace.is_excluded(tmp_path / ".venv" / "lib" / "test.py")
             assert clean_workspace.is_excluded(tmp_path / "weights" / "model.pth")
             assert clean_workspace.is_excluded(tmp_path / ".git" / "config")
-            
+
             # Paths outside excluded dirs should not be excluded
             assert not clean_workspace.is_excluded(tmp_path / "src" / "test.py")
             assert not clean_workspace.is_excluded(tmp_path / "tests" / "test.py")
-            
+
     finally:
         clean_workspace.ROOT = original_root
 
@@ -218,7 +218,7 @@ def test_get_tracked_files_graceful_failure():
     """Verify get_tracked_files handles non-git repos gracefully."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
-        
+
         original_root = clean_workspace.ROOT
         try:
             clean_workspace.ROOT = tmp_path
@@ -234,21 +234,21 @@ def test_cleanup_handles_external_paths_gracefully(tmp_path):
     # Create a file outside the repo (simulated by tmpdir)
     external_file = tmp_path / "external.log"
     external_file.write_text("external")
-    
+
     # Create symlink in repo to external file
     # (This test is conceptual - in practice the cleanup function
     # checks paths after resolution and skips non-repo paths)
-    
+
     # The cleanup function should handle this gracefully
     # by checking if resolved path is within ROOT
     original_root = clean_workspace.ROOT
-    
+
     try:
         clean_workspace.ROOT = Path("/nonexistent/path")
-        
+
         # Should not raise an error even with invalid ROOT
         clean_workspace.cleanup(apply=False, verbose=False)
-        
+
     finally:
         clean_workspace.ROOT = original_root
 
@@ -257,16 +257,16 @@ def test_no_cleanup_when_workspace_tidy(capsys):
     """Verify message when no cleanup needed."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
-        
+
         # Empty directory - nothing to clean
         original_root = clean_workspace.ROOT
-        
+
         try:
             clean_workspace.ROOT = tmp_path
             clean_workspace.cleanup(apply=False, verbose=False)
-            
+
             captured = capsys.readouterr()
             assert "Nothing to clean" in captured.out or "Workspace already tidy" in captured.out
-            
+
         finally:
             clean_workspace.ROOT = original_root

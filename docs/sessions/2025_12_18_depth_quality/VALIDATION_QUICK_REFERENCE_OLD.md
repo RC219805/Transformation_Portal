@@ -5,7 +5,7 @@
 
 ## 🎯 Bottom Line
 - **Tiling works**: +14.7% edge overlap, +119% gradients
-- **Materials V3 impact**: +15% water F1, +35% glass suppressor  
+- **Materials V3 impact**: +15% water F1, +35% glass suppressor
 - **Ready to deploy**: After 1-line global anchor bug fix
 
 ---

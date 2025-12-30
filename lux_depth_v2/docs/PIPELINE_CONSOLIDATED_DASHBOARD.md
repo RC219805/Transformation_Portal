@@ -1,8 +1,8 @@
 # LuxPipelineV2 Consolidated Performance Dashboard
 
-**Last Updated:** 2025-12-23  
-**Author:** Pipeline Performance Team  
-**Purpose:** Single reference for all performance scenarios (single-tile, multi-tile, 4K predictions)  
+**Last Updated:** 2025-12-23
+**Author:** Pipeline Performance Team
+**Purpose:** Single reference for all performance scenarios (single-tile, multi-tile, 4K predictions)
 **Scope:** Baseline → Standard → Full Production → Quick Preview
 
 ---

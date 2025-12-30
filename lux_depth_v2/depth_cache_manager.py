@@ -1,4 +1,5 @@
 """Depth map caching for AUTO depth generation."""
+
 from __future__ import annotations
 
 import hashlib

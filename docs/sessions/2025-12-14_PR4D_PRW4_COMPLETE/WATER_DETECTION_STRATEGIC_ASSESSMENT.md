@@ -1,7 +1,7 @@
 # Strategic Assessment: Advancing Water Detection for Materials V3
 
-**Date**: 2025-12-14  
-**Prepared By**: Transformation Portal Architect  
+**Date**: 2025-12-14
+**Prepared By**: Transformation Portal Architect
 **Context**: Post-PR-W4 validation harness completion, pre-production deployment planning
 
 ---
@@ -61,7 +61,7 @@
 
 #### Detection Algorithm (Stub Only)
 - **PR-W1 (Water Detector)**: ❌ **Stub Implementation Only**
-  
+
   **Current (Stub)**:
   ```python
   # lux_depth_v2/water_candidate.py
@@ -69,7 +69,7 @@
   blue_dominant = (blue > red) & (blue > green * 0.8)
   mask = blue_dominant & (blue > 0.3)
   ```
-  
+
   **Specified (PR-W1 Full)**:
   - ❌ Chromaticity cue (HSV/Lab, pool vs ocean tuned)
   - ❌ Specular cue (highlights + low saturation reflections)
@@ -173,7 +173,7 @@
 6. Add confidence calibration
 7. Validate performance (accuracy, inference time, memory)
 
-**Time**: 
+**Time**:
 - Dataset creation: 1 week (if not available)
 - Model training/fine-tuning: 2-3 days
 - Integration: 1 day
@@ -209,7 +209,7 @@
 
 ### Option 3: Hybrid Approach (Heuristic + ML Refinement)
 
-**What**: 
+**What**:
 1. Implement **fast simplified heuristic** detector (not full PR-W1, but better than stub)
 2. Use EfficientSAM only for boundary refinement (already implemented in PR-W3)
 3. Fallback chain: SegFormer → Heuristic → EfficientSAM refinement
@@ -262,7 +262,7 @@
 
 ### Option 4: Data-First Approach (Build Dataset, Then Detector)
 
-**What**: 
+**What**:
 1. Create labeled validation dataset FIRST (pool/ocean/non-water, 50-100 images)
 2. Run stub detector, analyze failure modes
 3. Design detector based on actual data patterns (not guesswork)
@@ -324,7 +324,7 @@
 
 ### Option 5: Pragmatic Minimum (Ship Improved Stub)
 
-**What**: 
+**What**:
 1. Keep stub detector but improve it slightly:
    - Add saturation check (not just blue channel)
    - Add simple component filtering (remove noise)
@@ -338,20 +338,20 @@
    ```python
    # Current stub: blue > red AND blue > green
    # Improved stub: HSV-based with scene context
-   
+
    hsv = rgb2hsv(rgb01)
    hue = hsv[:, :, 0] * 360  # degrees
    sat = hsv[:, :, 1]
    val = hsv[:, :, 2]
-   
+
    # Pool: cyan/blue (170-210°), ocean: broader blue-green (160-220°)
    if scene_context == POOL:
        hue_match = (hue >= 170) & (hue <= 210)
    else:
        hue_match = (hue >= 160) & (hue <= 220)
-   
+
    mask = hue_match & (sat > 0.2) & (val > 0.2)
-   
+
    # Component filtering
    mask = filter_components(mask, min_area=1000, top_k=3)
    ```
@@ -416,13 +416,13 @@ I recommend combining **Option 4 (Data-First)** with **Option 3 (Hybrid Heuristi
      - Luxury resort pools (infinity edges, complex shapes)
      - Lap pools (rectangular, lane markers)
      - Mixed scenes (pool + patio furniture, umbrellas)
-   
+
    - **Ocean scenes (20-30 images)**:
      - Calm ocean (minimal waves, horizon visible)
      - Waves (texture, foam, reflections)
      - Horizon shots (sky + ocean boundary)
      - Mixed scenes (beach + ocean)
-   
+
    - **Non-water scenes (10-20 images)**:
      - Blue sky (clear, clouds)
      - Glass buildings (reflections, blue tint)
@@ -490,33 +490,33 @@ I recommend combining **Option 4 (Data-First)** with **Option 3 (Hybrid Heuristi
 
 **Tasks**:
 1. **Implement Simplified Heuristic Detector** (1.5 days):
-   
+
    **Core Features**:
    - **Chromaticity Cue** (HSV-based):
      ```python
      # Pool: cyan/blue (170-210°), sat > 0.15, val > 0.20
      # Ocean: broader blue-green (160-220°), sat > 0.15, val > 0.20
      ```
-   
+
    - **Specular Boost** (optional, if needed):
      ```python
      # High highlights (val > 0.85) + low saturation (sat < 0.30)
      # Dilate slightly to capture reflection context
      ```
-   
+
    - **Component Filtering**:
      ```python
      # Remove tiny blobs (min_area_px = 1000)
      # Keep top-K largest components (max_components_kept = 3)
      # Fill holes
      ```
-   
+
    - **Confidence Scoring**:
      ```python
      # Based on coverage, hue purity, component stability
      # No ML, just weighted combination of metrics
      ```
-   
+
    **Skip** (not critical for MVP):
    - Texture/entropy cue (nice-to-have, but complex)
    - Planarity cue (requires depth, optional)
@@ -555,17 +555,17 @@ I recommend combining **Option 4 (Data-First)** with **Option 3 (Hybrid Heuristi
      - Target: ≥85%
      - Current: ?
      - Gap: If <85%, why? (missed reflections? shadows? tiles?)
-   
+
    - **False Positive Rate** (non-water scenes):
      - Target: ≤5%
      - Current: ?
      - Gap: If >5%, what's causing FP? (blue sky? glass?)
-   
+
    - **Edge Alignment**:
      - Target: ≥0.6 (60% boundary-gradient overlap)
      - Current: ?
      - Gap: If <0.6, is EfficientSAM refinement helping?
-   
+
    - **Stability**:
      - Target: ≥0.8 (coverage std ≤0.04)
      - Current: ?
@@ -577,7 +577,7 @@ I recommend combining **Option 4 (Data-First)** with **Option 3 (Hybrid Heuristi
      - Saturation/value thresholds
      - Component filtering thresholds
      - Confidence weights
-   
+
    - Re-run validation after each tuning iteration
    - Document threshold rationale
 
@@ -649,12 +649,12 @@ I recommend combining **Option 4 (Data-First)** with **Option 3 (Hybrid Heuristi
 
 If 3-5 weeks is too long, ship improved stub immediately and build proper detector in parallel.
 
-**Week 1**: 
+**Week 1**:
 - **Day 1**: Improve stub (6 hours) - HSV-based with scene context
 - **Day 2**: Ship in experimental preset, start dataset collection
 - **Days 3-5**: Continue dataset creation
 
-**Week 2-3**: 
+**Week 2-3**:
 - Validate stub performance on dataset
 - Implement simplified hybrid detector based on learnings
 - Run validation, tune thresholds
@@ -676,23 +676,23 @@ If 3-5 weeks is too long, ship improved stub immediately and build proper detect
 
 ### Questions to Guide Path Selection
 
-1. **Quality vs Speed**: 
+1. **Quality vs Speed**:
    - Do we need production-quality detection NOW (Option 5)?
    - Or can we wait 3-4 weeks for validated quality (Option 4 → Option 3)?
 
-2. **Data Availability**: 
+2. **Data Availability**:
    - Do we have access to labeled pool/ocean images?
    - Are we willing to invest 1 week in dataset creation?
 
-3. **Accuracy Requirements**: 
+3. **Accuracy Requirements**:
    - What's acceptable false-positive rate? (Medical: <1%, Marketing: <10%?)
    - What's minimum detection rate for production? (80%? 90%?)
 
-4. **Computational Budget**: 
+4. **Computational Budget**:
    - Can we afford ML inference (50-100ms per image)?
    - Or need heuristic speed (10-20ms)?
 
-5. **Maintenance Resources**: 
+5. **Maintenance Resources**:
    - Will we have resources to tune/improve detector based on production feedback?
    - Can we invest in dataset expansion over time?
 
@@ -746,19 +746,19 @@ From a **System Architect perspective**, meaningful advancement means:
 
 **Action Plan**:
 1. **This Week (Week 1)**: Create dataset specification and start collection (50-100 images)
-2. **Week 2**: 
+2. **Week 2**:
    - Fix edge alignment metric (2 hours)
    - Run baseline validation with stub
    - Implement simplified heuristic detector (2-3 days)
-3. **Week 3**: 
+3. **Week 3**:
    - Run full validation
    - Tune thresholds to meet targets
    - Document results
-4. **Week 4**: 
+4. **Week 4**:
    - Production deployment (canary → gradual rollout)
    - Monitor telemetry
 
-**Why**: 
+**Why**:
 - ✅ Defensible quality (data-proven)
 - ✅ Iterative (can improve)
 - ✅ Measurable (validation metrics)
@@ -777,7 +777,7 @@ From a **System Architect perspective**, meaningful advancement means:
 2. **Day 2**: Ship in experimental preset, start dataset collection
 3. **Week 2-3**: Validate stub, implement proper detector based on learnings
 
-**Why**: 
+**Why**:
 - ✅ Gets something in production fast (1 day)
 - ✅ Collects production data in parallel
 - ✅ Can iterate based on real feedback
@@ -796,7 +796,7 @@ From a **System Architect perspective**, meaningful advancement means:
 3. **Week 3**: Validate model performance, integrate into pipeline
 4. **Week 4+**: Production deployment, continuous improvement
 
-**Why**: 
+**Why**:
 - ✅ Best possible accuracy
 - ✅ Future-proof (improves with more data)
 - ✅ Handles complex scenes better than heuristics
@@ -931,8 +931,8 @@ water_detection_enabled: bool = False  # Instant rollback
 4. Validate and tune (Week 3)
 5. Production deployment (Week 4+)
 
-**Timeline**: **3-4 weeks** to production-validated water detection  
-**Risk**: **Low** (data-driven, validated, iterative)  
+**Timeline**: **3-4 weeks** to production-validated water detection
+**Risk**: **Low** (data-driven, validated, iterative)
 **Cost**: **1 week dataset + 1 week detector + 1 week validation**
 
 ### Alternative If Time-Constrained
@@ -990,14 +990,14 @@ def _compute_edge_alignment(rgb01: np.ndarray, mask: np.ndarray) -> float:
     # Compute image gradients
     gray = np.mean(rgb01, axis=2)
     grad_mag = np.sqrt(sobel_x**2 + sobel_y**2)
-    
+
     # Extract mask boundary
     boundary = dilate(mask) & ~erode(mask)
-    
+
     # Measure overlap with high-gradient regions
     high_grad = grad_mag >= percentile(grad_mag, 75)
     overlap = sum(boundary * high_grad)
-    
+
     return overlap / sum(boundary)
 ```
 
@@ -1009,13 +1009,13 @@ def _compute_stability(rgb01: np.ndarray) -> float:
     High score = consistent detection.
     """
     baseline_coverage = detect(rgb01).coverage
-    
+
     # Perturbation 1: resize 95%
     resized_coverage = detect(resize(rgb01, 0.95)).coverage
-    
+
     # Perturbation 2: add noise
     noisy_coverage = detect(rgb01 + noise).coverage
-    
+
     # Low variance = high stability
     std = np.std([baseline_coverage, resized_coverage, noisy_coverage])
     return 1.0 - min(std * 5, 1.0)
@@ -1048,6 +1048,6 @@ def _compute_stability(rgb01: np.ndarray) -> float:
 
 **End of Strategic Assessment**
 
-*Prepared by Transformation Portal Architect*  
-*Date: 2025-12-14*  
+*Prepared by Transformation Portal Architect*
+*Date: 2025-12-14*
 *Next Review: After dataset creation (Week 1)*

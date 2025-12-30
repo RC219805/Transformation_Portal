@@ -26,7 +26,7 @@
 
 **Pass Criteria**:
 - ✅ `scene_type` is a string (not null)
-- ✅ `edge_f1` is a number (not null)  
+- ✅ `edge_f1` is a number (not null)
 - ✅ `lenient_pass` is a boolean (not null)
 - ✅ `classification_factors` populated with ratio, depth_variance, decision_rule
 
@@ -144,7 +144,7 @@ save_metrics_atomic(metrics_dict, output_path)
 def validate_metrics_complete(metrics_dict: dict, image_name: str) -> None:
     """
     Fail fast if metrics are incomplete.
-    
+
     Production validators MUST NOT write null placeholders.
     """
     required_fields = [
@@ -154,9 +154,9 @@ def validate_metrics_complete(metrics_dict: dict, image_name: str) -> None:
         'strict_pass',
         'classification_factors'
     ]
-    
+
     missing = [f for f in required_fields if metrics_dict.get(f) is None]
-    
+
     if missing:
         raise ValueError(
             f"Incomplete metrics for {image_name}: missing {missing}. "
@@ -173,7 +173,7 @@ def validate_metrics_complete(metrics_dict: dict, image_name: str) -> None:
 The V2 classifier uses **3 factors**:
 
 1. **Edge ratio** (raw/structure): texture indicator
-2. **Depth variance**: smoothness indicator  
+2. **Depth variance**: smoothness indicator
 3. **Edge density**: structural complexity
 
 **Decision rules** (tuned on validation data):
@@ -211,12 +211,12 @@ EXPECTED_SCENE_TYPES = {
     '750Picacho_Kitchen': 'structure_dominated',
     '750Picacho_GreatRoom': 'structure_dominated',
     '750Picacho_MasterBath': 'structure_dominated',
-    
+
     # Texture-dominated (water, glass, reflective)
     '750Picacho_Pool': 'texture_dominated',
     '750Picacho_Ocean': 'texture_dominated',
     'Montecito-Shores-10': 'texture_dominated',
-    
+
     # Add all 18 images...
 }
 ```

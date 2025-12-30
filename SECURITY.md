@@ -73,11 +73,11 @@ python scripts/utilities/verify_no_basicsr_imports.py
 4. **AST-based detection** - Verification script uses Python AST for accurate import detection
 
 #### Benefits
-✅ **Real mitigation** - Vulnerable SLURM code completely removed  
-✅ **Clean security dashboard** - GitHub alerts will close once dependency tree updates  
-✅ **No upstream wait** - Independent of XPixelGroup's patching timeline  
-✅ **Minimal maintenance** - Only RRDBNet architecture, no training/distributed code  
-✅ **Drop-in replacement** - Same API as original BasicSR  
+✅ **Real mitigation** - Vulnerable SLURM code completely removed
+✅ **Clean security dashboard** - GitHub alerts will close once dependency tree updates
+✅ **No upstream wait** - Independent of XPixelGroup's patching timeline
+✅ **Minimal maintenance** - Only RRDBNet architecture, no training/distributed code
+✅ **Drop-in replacement** - Same API as original BasicSR
 
 #### Testing
 All existing tests pass with vendored implementation:

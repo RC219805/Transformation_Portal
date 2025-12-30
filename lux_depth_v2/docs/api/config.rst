@@ -19,7 +19,7 @@ Configuration Classes
 .. autoclass:: PipelineConfig
    :members:
    :undoc-members:
-   
+
    .. automethod:: apply_preset
 
 .. autoclass:: SegmentationConfig
@@ -39,14 +39,14 @@ Basic Configuration
 .. code-block:: python
 
    from lux_depth_v2.config import PipelineConfig, Preset
-   
+
    config = PipelineConfig(
        preset=Preset.PHOTO_REALISTIC,
        upscale=4,
        device="cuda",
        enable_material=True,
    )
-   
+
    # Apply preset values
    config.apply_preset()
 
@@ -70,7 +70,7 @@ Material Segmentation
 .. code-block:: python
 
    from lux_depth_v2.config import SegmentationConfig
-   
+
    seg_config = SegmentationConfig(
        backend="segformer",
        allow_downloads=True,
@@ -78,5 +78,5 @@ Material Segmentation
        soften_sigma_px=2.0,
        min_confidence=0.25,
    )
-   
+
    config = PipelineConfig(segmentation=seg_config)

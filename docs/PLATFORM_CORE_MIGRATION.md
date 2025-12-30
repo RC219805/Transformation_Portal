@@ -1,7 +1,7 @@
 # Platform Core Migration Guide
 
-**Version**: 1.0.0 (PR-2 - Platform Core Extraction)  
-**Date**: December 2025  
+**Version**: 1.0.0 (PR-2 - Platform Core Extraction)
+**Date**: December 2025
 **Status**: Phase 1 Complete - Ready for Pilot Migration
 
 ---
@@ -525,7 +525,7 @@ For migration support:
 - See existing foundation module patterns
 - Create issue for migration blockers
 
-**Migration Status**: Ready for pilot (lux_depth_v2)  
-**Test Coverage**: 90%+  
-**Breaking Changes**: Zero during migration  
+**Migration Status**: Ready for pilot (lux_depth_v2)
+**Test Coverage**: 90%+
+**Breaking Changes**: Zero during migration
 **Performance Impact**: Neutral or improved

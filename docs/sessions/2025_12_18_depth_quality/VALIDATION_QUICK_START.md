@@ -107,7 +107,7 @@ cat outputs/validation_*/validation_results.csv | column -t -s,
 
 ### Issue: Out of Memory
 
-**Symptoms**: Process killed, no output  
+**Symptoms**: Process killed, no output
 **Fix**: Reduce tile size or limit images
 
 ```bash
@@ -120,7 +120,7 @@ cat outputs/validation_*/validation_results.csv | column -t -s,
 
 ### Issue: Slow Processing
 
-**Symptoms**: >10min per image  
+**Symptoms**: >10min per image
 **Fix**: Check GPU availability
 
 ```bash
@@ -133,7 +133,7 @@ python -c "import torch; print(torch.backends.mps.is_available())"
 
 ### Issue: Quality Gate Failures
 
-**Symptoms**: High failure rate in dataset_report.json  
+**Symptoms**: High failure rate in dataset_report.json
 **Fix**: Review failure_reasons in CSV
 
 ```bash
@@ -335,6 +335,6 @@ cat outputs/validation_*/validation_results.csv | \
 
 ---
 
-**Last Updated**: December 17, 2025  
-**Version**: 1.0.0  
-**Status**: Production Ready  
+**Last Updated**: December 17, 2025
+**Version**: 1.0.0
+**Status**: Production Ready

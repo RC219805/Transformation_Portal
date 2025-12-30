@@ -1,7 +1,7 @@
 # Next Session Plan: Validation Expansion & Structure Improvement
 
-**Last Completed**: HF-Energy Texture Gate (77.8% lenient validated)  
-**Commits**: 9fd2590 → b5927d1  
+**Last Completed**: HF-Energy Texture Gate (77.8% lenient validated)
+**Commits**: 9fd2590 → b5927d1
 **Status**: ✅ Texture-healthy, ⚠️ Structure-limited
 
 ---
@@ -108,7 +108,7 @@ python scripts/depth_input_size_sweep.py \
    - Confusion matrix
    - Balanced accuracy
    - Per-class precision/recall/F1
-   
+
 2. **HF energy distributions**:
    - Texture scenes (should cluster 0.0001–0.0003)
    - Structure scenes (0.0002–0.0008)
@@ -123,16 +123,16 @@ python scripts/depth_input_size_sweep.py \
 
 ## ⚠️ What NOT to Do
 
-❌ **Don't integrate MaterialsV3 into active path yet**  
+❌ **Don't integrate MaterialsV3 into active path yet**
    → Shadow mode first, prove incremental value
 
-❌ **Don't tune thresholds before expanding dataset**  
+❌ **Don't tune thresholds before expanding dataset**
    → 18 images insufficient to calibrate reliably
 
-❌ **Don't chase strict gates on texture scenes**  
+❌ **Don't chase strict gates on texture scenes**
    → Texture "strict" may be conceptually undefined (no edges to align)
 
-❌ **Don't add more heuristics to structure gate**  
+❌ **Don't add more heuristics to structure gate**
    → Input-size sweep is the right lever, not more rules
 
 ---

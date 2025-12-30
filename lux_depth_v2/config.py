@@ -12,6 +12,7 @@ try:
     from transformation_portal.core.config.schemas import DeviceConfig as CoreDeviceConfig
     from transformation_portal.core.config.schemas import PathsConfig as CorePathsConfig
     from transformation_portal.core.config.schemas import DeviceType, PrecisionType
+
     CORE_CONFIG_AVAILABLE = True
 except ImportError:
     CORE_CONFIG_AVAILABLE = False
@@ -39,9 +40,13 @@ class Preset(str, Enum):
     INTERIOR_LUXURY_APEX_QUALITY = "interior_luxury_apex_quality"
     INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM = "interior_luxury_apex_quality_efficientsam"  # Canary V3
     INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS = "interior_luxury_apex_quality_materials_v3_glass"  # Canary PR-4B
-    INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE = "interior_luxury_apex_quality_materials_v3_glass_validate"  # Validation-only (forced)
+    INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE = (
+        "interior_luxury_apex_quality_materials_v3_glass_validate"  # Validation-only (forced)
+    )
     INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE = "interior_luxury_apex_quality_materials_v3_stone"  # Canary PR-4D
-    INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE = "interior_luxury_apex_quality_materials_v3_stone_validate"  # Validation-only (forced)
+    INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE = (
+        "interior_luxury_apex_quality_materials_v3_stone_validate"  # Validation-only (forced)
+    )
     EXTERIOR_SHOWCASE = "exterior_showcase"
     EXTERIOR_POOL_APEX_QUALITY = "exterior_pool_apex_quality"
     EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM = "exterior_pool_apex_quality_efficientsam"  # Canary V3
@@ -51,7 +56,7 @@ class Preset(str, Enum):
 
 class SegmentationBackend(str, Enum):
     """Material segmentation backend options (EfficientSAM V3)."""
-    
+
     SEGFORMER = "segformer"
     EFFICIENTSAM = "efficientsam"
     FUSED = "fused"  # SegFormer + EfficientSAM edge refinement
@@ -59,7 +64,7 @@ class SegmentationBackend(str, Enum):
 
 class FusionMode(str, Enum):
     """Mask fusion modes for EfficientSAM V3."""
-    
+
     NONE = "none"
     UNION = "union"
     INTERSECTION = "intersection"
@@ -68,40 +73,40 @@ class FusionMode(str, Enum):
 
 class DepthMode(str, Enum):
     """Depth requirement modes for pipeline contract."""
-    
-    REQUIRED = "required"      # Depth MUST be provided or generated (fail if impossible)
-    AUTO = "auto"              # Auto-generate if missing (production default)
-    OPTIONAL = "optional"      # Proceed without depth if missing (CI baseline only)
+
+    REQUIRED = "required"  # Depth MUST be provided or generated (fail if impossible)
+    AUTO = "auto"  # Auto-generate if missing (production default)
+    OPTIONAL = "optional"  # Proceed without depth if missing (CI baseline only)
 
 
 @dataclass
 class MaterialPropertySchema:
     """Material Property Schema for PHASE 1 Task 2.
-    
+
     Physics-based material properties for enhanced rendering.
     Enables per-material enhancement strength and surface characteristics.
     """
-    
+
     # Surface reflectance properties
     matte_gloss: float = 0.5  # 0=matte, 1=glossy
     specular_intensity: float = 0.5  # 0=diffuse, 1=specular
     roughness: float = 0.5  # 0=smooth, 1=rough (microfacet distribution)
     albedo: float = 0.5  # 0=dark, 1=bright (base reflectance)
-    
+
     # Material-specific enhancement strength
     enhancement_strength: float = 1.0  # Multiplier for material response
-    
+
     # Lighting interaction parameters
     highlight_response: float = 1.0  # How material responds to highlights
     shadow_response: float = 1.0  # How material responds to shadows
     midtone_response: float = 1.0  # How material responds to midtones
-    
+
     # Advanced surface properties
     metalness: float = 0.0  # 0=dielectric, 1=metal (PBR)
     subsurface_scattering: float = 0.0  # 0=none, 1=full (e.g., skin, wax)
-    
+
     @classmethod
-    def wood(cls) -> 'MaterialPropertySchema':
+    def wood(cls) -> "MaterialPropertySchema":
         """Wood material preset."""
         return cls(
             matte_gloss=0.3,
@@ -113,11 +118,11 @@ class MaterialPropertySchema:
             shadow_response=1.1,
             midtone_response=1.0,
             metalness=0.0,
-            subsurface_scattering=0.0
+            subsurface_scattering=0.0,
         )
-    
+
     @classmethod
-    def metal(cls) -> 'MaterialPropertySchema':
+    def metal(cls) -> "MaterialPropertySchema":
         """Metal material preset."""
         return cls(
             matte_gloss=0.9,
@@ -129,11 +134,11 @@ class MaterialPropertySchema:
             shadow_response=0.8,
             midtone_response=0.9,
             metalness=1.0,
-            subsurface_scattering=0.0
+            subsurface_scattering=0.0,
         )
-    
+
     @classmethod
-    def glass(cls) -> 'MaterialPropertySchema':
+    def glass(cls) -> "MaterialPropertySchema":
         """Glass material preset."""
         return cls(
             matte_gloss=1.0,
@@ -145,11 +150,11 @@ class MaterialPropertySchema:
             shadow_response=0.6,
             midtone_response=0.9,
             metalness=0.0,
-            subsurface_scattering=0.1
+            subsurface_scattering=0.1,
         )
-    
+
     @classmethod
-    def stone(cls) -> 'MaterialPropertySchema':
+    def stone(cls) -> "MaterialPropertySchema":
         """Stone material preset."""
         return cls(
             matte_gloss=0.2,
@@ -161,11 +166,11 @@ class MaterialPropertySchema:
             shadow_response=1.2,
             midtone_response=1.0,
             metalness=0.0,
-            subsurface_scattering=0.0
+            subsurface_scattering=0.0,
         )
-    
+
     @classmethod
-    def fabric(cls) -> 'MaterialPropertySchema':
+    def fabric(cls) -> "MaterialPropertySchema":
         """Fabric material preset."""
         return cls(
             matte_gloss=0.1,
@@ -177,28 +182,28 @@ class MaterialPropertySchema:
             shadow_response=1.1,
             midtone_response=1.0,
             metalness=0.0,
-            subsurface_scattering=0.15
+            subsurface_scattering=0.15,
         )
 
 
 @dataclass
 class DepthConfig:
     """Depth pipeline configuration for contract enforcement.
-    
+
     Hardening Sprint Week 1: Depth Contract
     - Prevents silent quality degradation when depth is missing
     - Enables auto-generation with tiling for production
     """
-    
+
     mode: DepthMode = DepthMode.AUTO
-    
+
     # Auto-generation parameters (when mode=AUTO and depth missing)
     auto_tile_size: int = 1024
     auto_overlap: int = 128
     auto_model: str = "depth-anything/Depth-Anything-V2-Large-hf"
     auto_use_global_anchor: bool = True
     auto_use_edge_snapping: bool = True
-    
+
     # Cache settings
     enable_cache: bool = True
     cache_dir: str = ".cache/depth"
@@ -207,49 +212,49 @@ class DepthConfig:
 @dataclass
 class HybridDepthZoneConfig:
     """Hybrid Depth Zone Configuration for PHASE 1 Task 3.
-    
+
     Combines percentile-based zones (relative) with metric-based zones (absolute).
     Enables scene-aware zone selection for optimal processing.
     """
-    
+
     # Zone selection mode
     mode: str = "percentile"  # percentile|metric|hybrid|auto
-    
+
     # Percentile-based zones (relative, scene-adaptive)
     fg_percentile: float = 0.35  # 0-35th percentile = foreground
     bg_percentile: float = 0.65  # 65-100th percentile = background
-    
+
     # Metric-based zones (absolute, physically meaningful)
     close_range_m: float = 2.0  # 0-2m = close/foreground
     mid_range_m: float = 10.0  # 2-10m = midground
     far_range_m: float = 20.0  # 10-20m = background
     infinity_m: float = 1000.0  # 20m-1km+ = sky/infinity
-    
+
     # Hybrid mode: Scene-aware zone selection
     auto_select_threshold: float = 0.7  # Confidence threshold for auto mode
     prefer_metric_outdoor: bool = True  # Use metric zones for outdoor scenes
     prefer_percentile_interior: bool = True  # Use percentile zones for interiors
-    
+
     # Scene classification hints
     scene_type: Optional[str] = None  # interior|exterior|auto
-    
+
     # Zone blending (smooth transitions)
     transition_blend_range: float = 0.08  # Blend range between zones
-    
+
     def get_zones_for_scene(self, scene_type: Optional[str] = None) -> str:
         """Get optimal zone mode for scene type.
-        
+
         Args:
             scene_type: interior|exterior|auto
-            
+
         Returns:
             Zone mode to use (percentile|metric|hybrid)
         """
         if self.mode != "auto":
             return self.mode
-        
+
         scene = scene_type or self.scene_type or "auto"
-        
+
         if scene == "interior" and self.prefer_percentile_interior:
             return "percentile"
         elif scene == "exterior" and self.prefer_metric_outdoor:
@@ -263,11 +268,11 @@ class SegmentationConfig:
     """Material segmentation configuration."""
 
     backend: str = "auto"  # auto|onnx|segformer|efficientSAM|sam_clip|heuristic|none
-    
+
     # EfficientSAM V3 backend selection
     backend_v3: SegmentationBackend = SegmentationBackend.SEGFORMER
     use_efficientsam_for_edges: bool = False  # Enable edge refinement via EfficientSAM
-    
+
     # Fusion configuration (typed)
     fusion_mode: FusionMode = FusionMode.NONE
     fusion_min_iou: float = 0.30  # IoU gating threshold
@@ -286,7 +291,7 @@ class SegmentationConfig:
     segformer_revision: Optional[str] = None
     # For backend=sam_clip: local SAM checkpoint path
     sam_checkpoint: Optional[Path] = None
-    
+
     # PHASE 2: EfficientSAM backend configuration (STUB)
     # Phase 2: EfficientSAM integration (24-32h implementation)
     efficientSAM_model: Optional[str] = None  # Path to EfficientSAM checkpoint
@@ -302,17 +307,18 @@ class SegmentationConfig:
 @dataclass
 class OrchestratorConfig:
     """Process orchestrator configuration for Phase 1 stability."""
+
     enabled: bool = True
     max_workers: int = 1  # Sequential processing for GPU safety
     memory_budget_gb: Optional[float] = None  # None = no limit
     checkpoint_dir: str = ".checkpoints"
     max_retries: int = 3
     pre_flight_check: bool = True
-    
+
     # Resource thresholds
     mps_memory_threshold_gb: float = 55.0  # 64GB - 9GB buffer
     disk_space_threshold_gb: float = 10.0
-    
+
     # Retry strategy
     retry_backoff_base: float = 2.0
     retry_max_delay_s: float = 300.0
@@ -321,68 +327,70 @@ class OrchestratorConfig:
 @dataclass
 class LightingConfig:
     """Lighting condition detection and adaptation (PHASE 2 - STUB).
-    
+
     Phase 2 Implementation (12-14h):
     - Implement lighting detection in lighting_detector.py
     - Enable adaptive tone mapping based on time of day
     - Enable adaptive color grading based on lighting condition
     """
-    
+
     enabled: bool = False  # Feature gate (default: disabled)
-    
+
     # Detection parameters
     use_sky_mask: bool = True  # Use material segmentation sky mask
     analyze_depth: bool = True  # Use depth map for lighting analysis
-    
+
     # Adaptation parameters
     adapt_tone_mapping: bool = True  # Adjust tone mapping per lighting
     adapt_color_grading: bool = True  # Adjust color grading per lighting
     adaptation_strength: float = 0.7  # Blend factor [0, 1]
-    
+
     # Time-of-day classification thresholds
     golden_hour_warmth_threshold: float = 0.5  # Warmth score to classify golden hour
     dawn_twilight_coolness_threshold: float = -0.3  # Coolness score for dawn/twilight
-    
+
     # Color temperature adjustments per time of day (Kelvin offset)
-    color_temp_adjustments: Dict[str, float] = field(default_factory=lambda: {
-        "dawn": -500.0,  # Cooler
-        "golden_hour": +800.0,  # Warmer
-        "twilight": -400.0,  # Cooler
-        "midday": 0.0,  # Neutral
-        "overcast": -200.0,  # Slightly cooler
-    })
+    color_temp_adjustments: Dict[str, float] = field(
+        default_factory=lambda: {
+            "dawn": -500.0,  # Cooler
+            "golden_hour": +800.0,  # Warmer
+            "twilight": -400.0,  # Cooler
+            "midday": 0.0,  # Neutral
+            "overcast": -200.0,  # Slightly cooler
+        }
+    )
 
 
 @dataclass
 class Phase2Config:
     """Phase 2 performance optimization configuration."""
-    
+
     # I/O Optimization
     async_io_enabled: bool = True
-    tiff_compression: Optional[str] = 'lzw'  # 'lzw' | 'deflate' | None
+    tiff_compression: Optional[str] = "lzw"  # 'lzw' | 'deflate' | None
     streaming_upscale: bool = True
-    
+
     # Storage Management
     storage_internal_path: str = "."
     storage_external_t9: Optional[str] = None
     auto_migrate_large_files: bool = True
     migrate_threshold_gb: float = 2.0
-    
+
     # Parallel Processing
     max_concurrent_workers: int = 2
     memory_budget_per_worker_gb: float = 25.0
-    
+
     # Caching
     model_cache_enabled: bool = True
     depth_map_cache_enabled: bool = True
-    cache_dir: str = '.cache'
-    
+    cache_dir: str = ".cache"
+
     # Upscaling Optimization
     tile_based_upscaling: bool = True
     upscale_tile_size: int = 512
     upscale_overlap: int = 64
     progressive_upscaling: bool = True  # 2×2 instead of 4× for memory safety
-    
+
     # Autotune Export Configuration (Phase 2 Slice 3)
     autotune_export: bool = False  # Default OFF
     autotune_use_complexity: bool = True
@@ -415,14 +423,14 @@ class PipelineConfig:
     # Upscaling
     upscale: int = 4  # 2 or 4
     upscaler_backend: str = "torch"  # torch|onnx|none|realesrgan (realesrgan deprecated; torch is secure default)
-    model_path: Optional[Path] = None     # .pth or .onnx depending on backend
+    model_path: Optional[Path] = None  # .pth or .onnx depending on backend
     model_sha256: Optional[str] = None
     tile: int = 512
     tile_pad: int = 16
     half: bool = True
 
     # Device / precision
-    device: str = "auto"   # auto|cuda|cpu
+    device: str = "auto"  # auto|cuda|cpu
     precision: str = "fp16"  # fp16|fp32 (fp16 is only used on cuda; fp32 elsewhere)
     cudnn_benchmark: bool = True
 
@@ -432,7 +440,7 @@ class PipelineConfig:
     save_marketing_png: bool = True
     save_preview_jpg: bool = True
     preview_scale: float = 0.25
-    
+
     # Marketing Export (M0+M1.1) - Benchmarked 2025-12-10
     marketing_png_compression: int = 1  # PNG compression level (0-9, default 1 for 84% speedup)
 
@@ -518,27 +526,27 @@ class PipelineConfig:
     service: ServiceConfig = field(default_factory=ServiceConfig)
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     phase2: Optional[Phase2Config] = None  # Phase 2 optimizations (optional)
-    
+
     # Materials v2 configuration (imported lazily to avoid circular dependency)
-    materials_v2: Optional['MaterialsV2Config'] = None
-    
+    materials_v2: Optional["MaterialsV2Config"] = None
+
     # Materials V3 configuration (advanced EfficientSAM integration)
-    materials_v3: Optional['MaterialsV3Config'] = None
-    
+    materials_v3: Optional["MaterialsV3Config"] = None
+
     # PHASE 1 Task 2: Material Property Schema
     material_properties: Dict[str, MaterialPropertySchema] = field(default_factory=dict)
-    
+
     # PHASE 1 Task 3: Hybrid Depth Zones
     depth_zones: HybridDepthZoneConfig = field(default_factory=HybridDepthZoneConfig)
-    
+
     # PHASE 2: Lighting Condition Detection (STUB)
     lighting: LightingConfig = field(default_factory=LightingConfig)
-    
+
     # Edge Refinement (Infrastructure - Feature Freeze)
     # Disabled by default, opt-in via --enable-edge-refinement flag
     enable_edge_refinement: bool = False
     refinement_preset: str = "balanced"  # subtle|balanced|aggressive
-    
+
     # Depth Contract (Hardening Sprint Week 1)
     depth: DepthConfig = field(default_factory=DepthConfig)
 
@@ -558,7 +566,7 @@ class PipelineConfig:
     def _get_depth_mode_for_preset(self, preset: Preset) -> DepthMode:
         """
         Rule-based depth mode assignment to avoid scattered conditionals.
-        
+
         Rules:
         - CI_BASELINE: OPTIONAL (allows testing without depth)
         - Presets containing "APEX": REQUIRED (fail fast without depth)
@@ -566,7 +574,7 @@ class PipelineConfig:
         """
         # Handle both Preset enum and string values
         preset_value = preset.value if isinstance(preset, Preset) else str(preset)
-        
+
         if preset == Preset.CI_BASELINE or preset_value == "ci_baseline":
             return DepthMode.OPTIONAL
         elif "APEX" in preset_value.upper():
@@ -577,10 +585,10 @@ class PipelineConfig:
     def apply_preset(self) -> None:
         """Mutate config in-place based on preset."""
         p = self.preset
-        
+
         # Apply rule-based depth mode assignment first
         self.depth.mode = self._get_depth_mode_for_preset(p)
-        
+
         # CI_BASELINE preset
         if str(p).lower() == "ci_baseline":
             self.material_strength = 0.60
@@ -630,19 +638,20 @@ class PipelineConfig:
             self.post_tile = 2048
             self.post_overlap = 64
             self.validate_ai = True
-            
+
             # MAX QUALITY Segmentation: SegFormer-B5 @ 1280px
             self.segmentation.backend = "segformer"
             self.segmentation.input_long_side = 1280
             self.segmentation.min_confidence = 0.25
             self.segmentation.allow_downloads = True
-            
+
             # MAX QUALITY Materials V2: High thresholds + 2048px segmentation
             if self.materials_v2 is None:
                 # Lazy import to avoid circular dependency
                 from lux_depth_v2.materials_v2 import MaterialsV2Config
+
                 self.materials_v2 = MaterialsV2Config()
-            
+
             self.materials_v2.enabled = True
             self.materials_v2.confidence.confidence_threshold = 0.4
             self.materials_v2.confidence.material_thresholds = {
@@ -674,42 +683,42 @@ class PipelineConfig:
             # Quality Gain: 37-58% improvement over max_quality
             # Use Cases: Archival outputs, flagship portfolio, print materials
             # ═══════════════════════════════════════════════════════════════
-            
+
             # Base grading (same as interior_luxury)
             self.material_strength = 0.90
             self.temp_fg, self.temp_mid, self.temp_bg = 0.013, 0.006, 0.000
             self.sat_fg, self.sat_mid, self.sat_bg = 1.045, 1.030, 1.010
             self.con_fg, self.con_mid, self.con_bg = 1.035, 1.030, 1.020
-            
+
             # APEX: Enhanced detail transfer (+7% from max_quality)
             self.detail_strength = 0.75
-            
+
             # APEX: Clarity/sharpening (already optimal)
             self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.20, 0.12, 0.06
             self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.09, 0.06, 0.035
-            
+
             # APEX: Maximum Precision
             self.precision = "fp32"  # Maximum numerical precision
             self.half = False  # Disable fp16 even on CUDA
-            
+
             # APEX: Post-Processing Quality
             self.post_tile = 2048  # UHR support with quality tiling
             self.post_overlap = 128  # +100% overlap for seamless blending
             self.validate_ai = True
-            
+
             # APEX: Upscaling Quality
             self.tile = 1024  # +100% tile size for better quality
             self.tile_pad = 32  # +100% padding for edge quality
-            
+
             # APEX: Phase2 upscaling tiling (write to actual config, not phantom attributes)
             ph2 = self._ensure_phase2()
             ph2.tile_based_upscaling = True
             ph2.upscale_tile_size = 2048  # Memory-efficient tiling for large images
             ph2.upscale_overlap = 128  # Generous overlap for seamless blending
-            
+
             # APEX: Export Quality
             self.marketing_png_compression = 0  # Lossless PNG
-            
+
             # APEX: Maximum Segmentation Quality (PHASE 1: SegFormer-B5 Activated)
             self.segmentation.backend = "segformer"
             self.segmentation.segformer_model = "nvidia/segformer-b5-finetuned-ade-640-640"
@@ -717,31 +726,32 @@ class PipelineConfig:
             self.segmentation.min_confidence = 0.15  # -40% threshold for better recall
             self.segmentation.soften_sigma_px = 2.0
             self.segmentation.allow_downloads = True
-            
+
             # APEX: Maximum Materials V2 Quality (PHASE 1: SegFormer-B5 Activated)
             if self.materials_v2 is None:
                 from lux_depth_v2.materials_v2 import MaterialsV2Config
+
                 self.materials_v2 = MaterialsV2Config()
-            
+
             self.materials_v2.enabled = True
             self.materials_v2.backend = "segformer"  # PHASE 1 FIX: Activate SegFormer-B5
-            
+
             # APEX: Lower confidence thresholds for maximum coverage
             self.materials_v2.confidence.confidence_threshold = 0.3  # -25% (vs 0.4)
             self.materials_v2.confidence.material_thresholds = {
-                "wood": 0.50,     # -9% for better wood coverage
-                "metal": 0.50,    # -9% for better metal coverage
-                "glass": 0.40,    # -11% (glass is hard to detect)
-                "fabric": 0.45,   # -10% for better fabric coverage
-                "stone": 0.50,    # -9% for better stone coverage
+                "wood": 0.50,  # -9% for better wood coverage
+                "metal": 0.50,  # -9% for better metal coverage
+                "glass": 0.40,  # -11% (glass is hard to detect)
+                "fabric": 0.45,  # -10% for better fabric coverage
+                "stone": 0.50,  # -9% for better stone coverage
                 "ceramic": 0.45,  # -10% for better ceramic coverage
-                "water": 0.35,    # -12.5% (water is highly variable)
-                "polished": 0.40, # -11% for polished surfaces
+                "water": 0.35,  # -12.5% (water is highly variable)
+                "polished": 0.40,  # -11% for polished surfaces
             }
             self.materials_v2.confidence.blend_range = 0.1
             self.materials_v2.confidence.blend_mode = "soft"
             self.materials_v2.confidence.fallback_strength = 0.2
-            
+
             # APEX: Maximum segmentation resolution + quality enforcement
             self.materials_v2.segmentation.max_segmentation_side = 2048
             self.materials_v2.segmentation.min_segmentation_side = 512
@@ -750,7 +760,7 @@ class PipelineConfig:
             self.materials_v2.segmentation.edge_feather_sigma = 1.0
             self.materials_v2.segmentation.require_high_quality = True  # ENFORCE quality
             self.materials_v2.segmentation.quality_threshold = 0.55  # +37.5% (vs 0.4)
-            
+
             # PHASE 1 Task 2: Material Property Schema (Physics-based properties)
             self.material_properties = {
                 "wood": MaterialPropertySchema.wood(),
@@ -759,7 +769,7 @@ class PipelineConfig:
                 "stone": MaterialPropertySchema.stone(),
                 "fabric": MaterialPropertySchema.fabric(),
             }
-            
+
             # PHASE 1 Task 3: Hybrid Depth Zones (Interior scene)
             self.depth_zones = HybridDepthZoneConfig(
                 mode="auto",  # Automatic scene-aware selection
@@ -771,7 +781,7 @@ class PipelineConfig:
                 infinity_m=1000.0,
                 scene_type="interior",  # Interior scene hint
                 prefer_percentile_interior=True,
-                transition_blend_range=0.08
+                transition_blend_range=0.08,
             )
 
         elif p == Preset.EXTERIOR_SHOWCASE:
@@ -797,32 +807,34 @@ class PipelineConfig:
             self.detail_strength = 0.80
             self.clarity_fg, self.clarity_mid, self.clarity_bg = 0.25, 0.16, 0.08
             self.sharpen_fg, self.sharpen_mid, self.sharpen_bg = 0.11, 0.08, 0.04
-            
+
             # APEX: Production tiling and strict validation
             self.post_tile = 2048
             self.post_overlap = 128
             self.validate_ai = True
             self.ai_color_warn, self.ai_color_fail = 0.04, 0.08
             self.ai_luma_warn, self.ai_luma_fail = 0.04, 0.08
-            
+
             # APEX: Maximum segmentation quality for SegFormer
             if self.segmentation is None:
                 from lux_depth_v2.config import SegmentationConfig
+
                 self.segmentation = SegmentationConfig()
-            
+
             self.segmentation.backend = "segformer"
             self.segmentation.input_long_side = 2048  # Max resolution for pool scene
             self.segmentation.min_confidence = 0.15  # Maximum recall
             self.segmentation.soften_sigma_px = 2.5
-            
+
             # APEX: Materials V2 with exterior-optimized settings
             if self.materials_v2 is None:
                 from lux_depth_v2.materials_v2 import MaterialsV2Config
+
                 self.materials_v2 = MaterialsV2Config()
-            
+
             self.materials_v2.enabled = True
             self.materials_v2.backend = "segformer"
-            
+
             # APEX: Exterior-specific thresholds (water, sky, vegetation critical)
             self.materials_v2.confidence.confidence_threshold = 0.30
             self.materials_v2.confidence.material_thresholds = {
@@ -830,17 +842,17 @@ class PipelineConfig:
                 "metal": 0.50,
                 "glass": 0.40,
                 "fabric": 0.45,
-                "stone": 0.48,      # Critical for pool deck/columns
+                "stone": 0.48,  # Critical for pool deck/columns
                 "ceramic": 0.45,
-                "water": 0.30,      # Critical for pool - lower threshold
-                "polished": 0.38,   # For glossy surfaces
-                "vegetation": 0.35, # Critical for landscaping
-                "sky": 0.25,        # Critical for twilight gradient
+                "water": 0.30,  # Critical for pool - lower threshold
+                "polished": 0.38,  # For glossy surfaces
+                "vegetation": 0.35,  # Critical for landscaping
+                "sky": 0.25,  # Critical for twilight gradient
             }
             self.materials_v2.confidence.blend_range = 0.12  # Smoother blending for sky/water
             self.materials_v2.confidence.blend_mode = "soft"
             self.materials_v2.confidence.fallback_strength = 0.25
-            
+
             # APEX: Maximum segmentation resolution
             self.materials_v2.segmentation.max_segmentation_side = 2048
             self.materials_v2.segmentation.min_segmentation_side = 512
@@ -849,7 +861,7 @@ class PipelineConfig:
             self.materials_v2.segmentation.edge_feather_sigma = 1.2
             self.materials_v2.segmentation.require_high_quality = True
             self.materials_v2.segmentation.quality_threshold = 0.55
-            
+
             # PHASE 1 Task 2: Material Property Schema (Exterior scene)
             self.material_properties = {
                 "wood": MaterialPropertySchema.wood(),
@@ -866,7 +878,7 @@ class PipelineConfig:
                     shadow_response=0.9,
                     midtone_response=1.0,
                     metalness=0.0,
-                    subsurface_scattering=0.3
+                    subsurface_scattering=0.3,
                 ),
                 "vegetation": MaterialPropertySchema(  # Custom vegetation properties
                     matte_gloss=0.2,
@@ -878,22 +890,22 @@ class PipelineConfig:
                     shadow_response=1.2,
                     midtone_response=1.0,
                     metalness=0.0,
-                    subsurface_scattering=0.4
+                    subsurface_scattering=0.4,
                 ),
             }
-            
+
             # PHASE 1 Task 3: Hybrid Depth Zones (Exterior pool scene)
             self.depth_zones = HybridDepthZoneConfig(
                 mode="auto",
                 fg_percentile=0.30,  # Pool edge/foreground vegetation
                 bg_percentile=0.70,  # Building/distant hills
-                close_range_m=1.5,   # Immediate foreground
-                mid_range_m=8.0,     # Pool + seating area
-                far_range_m=25.0,    # Building facade
-                infinity_m=5000.0,   # Distant mountains/sky
+                close_range_m=1.5,  # Immediate foreground
+                mid_range_m=8.0,  # Pool + seating area
+                far_range_m=25.0,  # Building facade
+                infinity_m=5000.0,  # Distant mountains/sky
                 scene_type="exterior",
                 prefer_percentile_interior=False,
-                transition_blend_range=0.10  # Wider for exterior depth
+                transition_blend_range=0.10,  # Wider for exterior depth
             )
 
         elif p == Preset.ARCHITECTURAL:
@@ -919,32 +931,32 @@ class PipelineConfig:
             self.post_overlap = 64
             self.validate_ai = True
 
-        elif p in (Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM, 
-                   Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM):
+        elif p in (Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM, Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM):
             # CANARY EfficientSAM V3 presets: APEX + FUSED segmentation
             # Inherits all settings from base APEX preset, then enables fusion
-            
+
             # Determine base APEX preset and recursion guard
             if p == Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM:
                 base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
             else:
                 base_preset = Preset.EXTERIOR_POOL_APEX_QUALITY
-            
+
             # Recursion guard
             if base_preset == p:
                 raise RuntimeError(f"Canary preset recursion detected: {p}")
-            
+
             # Temporarily change preset to base, apply it, then restore
             original_preset = self.preset
             self.preset = base_preset
             self.apply_preset()
             self.preset = original_preset
-            
+
             # Now overlay EfficientSAM V3 fusion settings
             if self.segmentation is None:
                 from lux_depth_v2.config import SegmentationConfig
+
                 self.segmentation = SegmentationConfig()
-            
+
             # Enable FUSED backend (SegFormer + EfficientSAM edge refinement)
             self.segmentation.backend_v3 = SegmentationBackend.FUSED
             self.segmentation.use_efficientsam_for_edges = True
@@ -952,10 +964,10 @@ class PipelineConfig:
             self.segmentation.fusion_min_iou = 0.30  # IoU gating threshold
             self.segmentation.fusion_alpha_edge = 0.70  # Prefer EfficientSAM on edges
             self.segmentation.fusion_alpha_core = 0.30  # Prefer SegFormer in core
-            
+
             # Explicitly use the verified efficientsam_s model
             self.segmentation.efficientSAM_model = "efficientsam_s"
-            
+
             # Note: This preset will gracefully fall back to SegFormer-only if:
             # - EfficientSAM model not available
             # - onnxruntime not installed
@@ -964,30 +976,31 @@ class PipelineConfig:
         elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS:
             # CANARY Materials V3 PR-4B: APEX + Glass Pixel Response
             # Inherits all settings from base APEX, then enables glass response
-            
+
             # Recursion guard (PR-4B.1: fix comparison to use .value)
             base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
             if base_preset.value == self.preset.value:
                 raise RuntimeError(f"Canary preset recursion detected: {self.preset}")
-            
+
             # Apply base APEX preset first
             original_preset = self.preset
             self.preset = base_preset
             self.apply_preset()
             self.preset = original_preset
-            
+
             # Enable Materials V3 with glass pixel operations
             if self.materials_v3 is None:
                 from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy
+
                 self.materials_v3 = MaterialsV3Config()
             else:
                 from lux_depth_v2.materials_v3 import RefinementStrategy
-            
+
             self.materials_v3.enabled = True
             self.materials_v3.apply_pixel_ops = True  # Master gate for pixel ops
             self.materials_v3.glass_response_enabled = True  # Glass-specific
             self.materials_v3.refine_edges = RefinementStrategy.CANARY  # Target glass only
-            
+
             # Note: This preset will apply glass response enhancement if:
             # - Glass is detected by segmentation (>0.5% coverage)
             # - Response plan marks glass as "should_refine"
@@ -995,61 +1008,63 @@ class PipelineConfig:
 
         elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE:
             # VALIDATION preset: identical to PR-4B canary, but forces glass pixel ops
-            # 
+            #
             # ⚠️ VALIDATION-ONLY - DO NOT USE IN PRODUCTION
             # This preset bypasses response plan quality gates to force pixel ops application.
             # It exists solely to validate pixel ops correctness in testing.
-            # 
+            #
             # MUST NOT be selected by auto-preset (even with --allow-canary).
             # MUST NOT appear in any production workflow or documentation.
-            # 
+            #
             # Use only: python scripts/pr4b_glass_pixel_validation.py --force-apply
-            
+
             # Recursion guard (PR-4B.1: fix comparison to use .value)
             base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS
             if base_preset.value == self.preset.value:
                 raise RuntimeError(f"Validation preset recursion detected: {self.preset}")
-            
+
             # Apply base canary preset first
             original_preset = self.preset
             self.preset = base_preset
             self.apply_preset()
             self.preset = original_preset
-            
+
             if self.materials_v3 is None:
                 from lux_depth_v2.materials_v3 import MaterialsV3Config
+
                 self.materials_v3 = MaterialsV3Config()
-            
+
             # Force pixel ops application for validation only
             self.materials_v3.force_glass_pixel_ops = True
 
         elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE:
             # CANARY Materials V3 PR-4D: APEX + Stone Pixel Response
             # Inherits all settings from base APEX, then enables stone response
-            
+
             # Recursion guard
             base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
             if base_preset.value == self.preset.value:
                 raise RuntimeError(f"Canary preset recursion detected: {self.preset}")
-            
+
             # Apply base APEX preset first
             original_preset = self.preset
             self.preset = base_preset
             self.apply_preset()
             self.preset = original_preset
-            
+
             # Enable Materials V3 with stone pixel operations
             if self.materials_v3 is None:
                 from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy
+
                 self.materials_v3 = MaterialsV3Config()
             else:
                 from lux_depth_v2.materials_v3 import RefinementStrategy
-            
+
             self.materials_v3.enabled = True
             self.materials_v3.apply_pixel_ops = True  # Master gate for pixel ops
             self.materials_v3.stone_response_enabled = True  # Stone-specific
             self.materials_v3.refine_edges = RefinementStrategy.CANARY  # Conservative
-            
+
             # Note: This preset will apply stone response enhancement if:
             # - Stone is detected by segmentation (>50k pixels)
             # - Response plan marks stone as "should_refine"
@@ -1057,31 +1072,32 @@ class PipelineConfig:
 
         elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE:
             # VALIDATION preset: identical to PR-4D canary, but forces stone pixel ops
-            # 
+            #
             # ⚠️ VALIDATION-ONLY - DO NOT USE IN PRODUCTION
             # This preset bypasses response plan quality gates to force pixel ops application.
             # It exists solely to validate pixel ops correctness in testing.
-            # 
+            #
             # MUST NOT be selected by auto-preset (even with --allow-canary).
             # MUST NOT appear in any production workflow or documentation.
-            # 
+            #
             # Use only: python scripts/pr4d_stone_pixel_validation.py --force-apply
-            
+
             # Recursion guard
             base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE
             if base_preset.value == self.preset.value:
                 raise RuntimeError(f"Validation preset recursion detected: {self.preset}")
-            
+
             # Apply base canary preset first
             original_preset = self.preset
             self.preset = base_preset
             self.apply_preset()
             self.preset = original_preset
-            
+
             if self.materials_v3 is None:
                 from lux_depth_v2.materials_v3 import MaterialsV3Config
+
                 self.materials_v3 = MaterialsV3Config()
-            
+
             # Force pixel ops application for validation only
             self.materials_v3.force_stone_pixel_ops = True
 
@@ -1097,7 +1113,7 @@ class PipelineConfig:
             self.post_tile = 2048
             self.post_overlap = 64
             self.validate_ai = True
-        
+
         # Add PRODUCTION_ULTRA preset
         if str(p).lower() == "production_ultra":
             self.material_strength = 0.95
@@ -1112,21 +1128,21 @@ class PipelineConfig:
             self.validate_ai = True
             self.precision = "fp32"
             self.half = False
-        
+
         # clamp some sanity
         self.upscale = 4 if int(self.upscale) not in (2, 4) else int(self.upscale)
         self.material_strength = float(max(0.0, min(1.25, self.material_strength)))
-    
+
     def _cfg_fingerprint(self) -> str:
         """Generate config fingerprint for cache invalidation (Week 2: Materials Hardening).
-        
+
         Includes parameters that affect processing output quality:
         - Material segmentation config
         - Depth zone config
         - Depth contract config (mode, model, tiling)
         - Core grading parameters
         - Materials V2/V3 config
-        
+
         Excludes I/O paths and performance-only settings.
         """
         cfg_dict = {
@@ -1155,19 +1171,19 @@ class PipelineConfig:
         }
         cfg_json = json.dumps(cfg_dict, sort_keys=True)
         return hashlib.sha256(cfg_json.encode()).hexdigest()[:16]
-    
+
     # --- Platform Core Integration ---
-    
-    def get_device_config(self) -> Optional['CoreDeviceConfig']:
+
+    def get_device_config(self) -> Optional["CoreDeviceConfig"]:
         """
         Get Platform Core DeviceConfig from legacy fields.
-        
+
         Provides backward-compatible bridge to unified device configuration.
         Returns None if core module not available.
         """
         if not CORE_CONFIG_AVAILABLE:
             return None
-        
+
         # Map legacy device string to DeviceType enum
         device_map = {
             "auto": DeviceType.AUTO,
@@ -1176,42 +1192,42 @@ class PipelineConfig:
             "mps": DeviceType.MPS,
         }
         device_type = device_map.get(self.device.lower(), DeviceType.AUTO)
-        
+
         # Map legacy precision string to PrecisionType enum
         precision_map = {
             "fp32": PrecisionType.FP32,
             "fp16": PrecisionType.FP16,
         }
         precision_type = precision_map.get(self.precision.lower(), PrecisionType.FP16)
-        
+
         # Calculate memory fraction from warn_float_gb (assume 64GB total as baseline)
         memory_fraction = 0.85  # Default
-        if hasattr(self, 'warn_float_gb'):
+        if hasattr(self, "warn_float_gb"):
             # Conservative: if warning at 6GB, allow 85% of available memory
             memory_fraction = min(0.95, max(0.1, 1.0 - (self.warn_float_gb / 64.0)))
-        
+
         return CoreDeviceConfig(
             device=device_type,
             precision=precision_type,
             enable_cudnn_benchmark=self.cudnn_benchmark,
             memory_fraction=memory_fraction,
-            prefer_neural_engine=True  # Always prefer ANE on Apple Silicon
+            prefer_neural_engine=True,  # Always prefer ANE on Apple Silicon
         )
-    
-    def get_paths_config(self) -> Optional['CorePathsConfig']:
+
+    def get_paths_config(self) -> Optional["CorePathsConfig"]:
         """
         Get Platform Core PathsConfig from legacy fields.
-        
+
         Provides backward-compatible bridge to unified path configuration.
         Returns None if core module not available.
         """
         if not CORE_CONFIG_AVAILABLE:
             return None
-        
+
         return CorePathsConfig(
             input_dir=self.input_dir,
             output_dir=self.output_dir,
-            cache_dir=Path('.cache'),
-            checkpoint_dir=Path(self.orchestrator.checkpoint_dir) if self.orchestrator else Path('.checkpoints'),
-            model_weights_dir=None  # Not used in lux_depth_v2
+            cache_dir=Path(".cache"),
+            checkpoint_dir=Path(self.orchestrator.checkpoint_dir) if self.orchestrator else Path(".checkpoints"),
+            model_weights_dir=None,  # Not used in lux_depth_v2
         )

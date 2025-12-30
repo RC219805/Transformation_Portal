@@ -1,7 +1,7 @@
 # Session Complete: PR-3C Final + Stage 6 A/B Boundary Metrics Test
 
-**Date**: December 13, 2025  
-**Duration**: ~2 hours  
+**Date**: December 13, 2025
+**Duration**: ~2 hours
 **Focus**: Execute Stage 6 A/B test with boundary metrics, make final EfficientSAM promotion decision
 
 ---
@@ -87,8 +87,8 @@ Boundary F1 below 0.20 indicates:
 
 ### Water Class Missing
 
-Target: pool scene, class `water`  
-Canonicalization: `normalize_material_dict()` applied  
+Target: pool scene, class `water`
+Canonicalization: `normalize_material_dict()` applied
 Result: **Still missing**
 
 Root cause candidates:
@@ -222,16 +222,16 @@ python scripts/stage6_ab_final_v3.py
 # - outputs/stage6_ab_run.log
 ```
 
-Device: CPU (forced via `FORCE_DEVICE = "cpu"`)  
-Runtime: ~5 minutes for 5 scenes  
+Device: CPU (forced via `FORCE_DEVICE = "cpu"`)
+Runtime: ~5 minutes for 5 scenes
 Dependencies: scipy (sobel), PIL (resize), torch (segmentation)
 
 ---
 
 ## CI Status
 
-**Main branch**: Pushed successfully (commit 4fa1e25)  
-**Expected workflows**: CodeQL, CI/CD Consolidated, Quality Gate, etc.  
+**Main branch**: Pushed successfully (commit 4fa1e25)
+**Expected workflows**: CodeQL, CI/CD Consolidated, Quality Gate, etc.
 **No breaking changes**: All additions; no behavior changes to existing presets
 
 ---
@@ -267,16 +267,16 @@ Before next session:
 
 This session represents a **critical milestone** in the EfficientSAM V3 journey:
 
-✅ **Infrastructure is production-ready** (Stages 1-5B merged)  
-✅ **Observability is comprehensive** (fusion stats, boundary metrics, decision logging)  
-✅ **Safety gates work** (canary-only, feature flags, opt-in design)  
-❌ **Current prompt strategy insufficient** (data-driven conclusion)  
+✅ **Infrastructure is production-ready** (Stages 1-5B merged)
+✅ **Observability is comprehensive** (fusion stats, boundary metrics, decision logging)
+✅ **Safety gates work** (canary-only, feature flags, opt-in design)
+❌ **Current prompt strategy insufficient** (data-driven conclusion)
 🎯 **Strategic pivot validated** (Materials V3 taxonomy + auto-preset more valuable now)
 
 **EfficientSAM remains canary-only. Move forward with Materials V3 and auto-preset work.**
 
 ---
 
-**Session End**: December 13, 2025, ~11:25 PM PST  
-**Status**: ✅ Complete, Decision Made, Repository Stable  
+**Session End**: December 13, 2025, ~11:25 PM PST
+**Status**: ✅ Complete, Decision Made, Repository Stable
 **Next**: Materials V3 Taxonomy Debugging (PR-3D/4) or Auto-Preset v2 (PR-4/5)

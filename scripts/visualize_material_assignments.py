@@ -116,7 +116,7 @@ def perform_clustering(image: Image.Image, n_clusters: int = 8) -> np.ndarray:
 
     # Upsample labels back to original size if needed
     if analysis_image.size != image.size:
-        labels_img = Image.fromarray(labels_small.astype('uint8'), mode='L')
+        labels_img = Image.fromarray(labels_small.astype("uint8"), mode="L")
         labels_full = labels_img.resize(image.size, Image.Resampling.NEAREST)
         labels = np.asarray(labels_full, dtype=np.uint8)
     else:
@@ -125,12 +125,7 @@ def perform_clustering(image: Image.Image, n_clusters: int = 8) -> np.ndarray:
     return labels
 
 
-def create_visualization(
-    image: Image.Image,
-    labels: np.ndarray,
-    assignments: Dict,
-    colors: List[tuple] = None
-) -> Image.Image:
+def create_visualization(image: Image.Image, labels: np.ndarray, assignments: Dict, colors: List[tuple] = None) -> Image.Image:
     """
     Create color-coded visualization with legend.
 
@@ -156,11 +151,7 @@ def create_visualization(
 
     # Add legend
     legend_height = min(400, len(assignments) * 50 + 100)
-    legend_img = Image.new(
-        "RGB",
-        (viz_img.width, viz_img.height + legend_height),
-        (255, 255, 255)
-    )
+    legend_img = Image.new("RGB", (viz_img.width, viz_img.height + legend_height), (255, 255, 255))
     legend_img.paste(viz_img, (0, 0))
 
     draw = ImageDraw.Draw(legend_img)
@@ -222,37 +213,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate material assignment visualization for aerial images",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__.split("Usage:")[1].split("Author:")[0].strip()
+        epilog=__doc__.split("Usage:")[1].split("Author:")[0].strip(),
     )
 
+    parser.add_argument("input_image", type=Path, help="Input aerial image (TIFF, JPEG, PNG)")
     parser.add_argument(
-        "input_image",
-        type=Path,
-        help="Input aerial image (TIFF, JPEG, PNG)"
+        "--output", "-o", type=Path, help="Output visualization path (default: input_name + _material_map.jpg)"
     )
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=Path,
-        help="Output visualization path (default: input_name + _material_map.jpg)"
-    )
-    parser.add_argument(
-        "--palette",
-        type=Path,
-        help="Load existing material palette from JSON file"
-    )
-    parser.add_argument(
-        "--save-palette",
-        type=Path,
-        help="Save computed material palette to JSON file for reuse"
-    )
-    parser.add_argument(
-        "--clusters",
-        "-k",
-        type=int,
-        default=8,
-        help="Number of k-means clusters (default: 8)"
-    )
+    parser.add_argument("--palette", type=Path, help="Load existing material palette from JSON file")
+    parser.add_argument("--save-palette", type=Path, help="Save computed material palette to JSON file for reuse")
+    parser.add_argument("--clusters", "-k", type=int, default=8, help="Number of k-means clusters (default: 8)")
 
     return parser.parse_args()
 

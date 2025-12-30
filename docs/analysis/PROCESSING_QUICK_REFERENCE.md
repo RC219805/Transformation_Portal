@@ -1,6 +1,6 @@
 # Transformation Portal - Processing Quick Reference
 
-**Last Updated:** November 5, 2025  
+**Last Updated:** November 5, 2025
 **Version:** 1.0 (Great Room lessons incorporated)
 
 ---
@@ -119,7 +119,7 @@ python your_chosen_script.py
 ## ⚠️ Common Pitfalls & Solutions
 
 ### Problem: Cyan Sky Artifacts
-**Cause:** RGB channel manipulation without sky masking  
+**Cause:** RGB channel manipulation without sky masking
 **Solution:** Always include sky neutrality protection
 ```python
 # Step 4 in pipeline
@@ -130,7 +130,7 @@ if sky_mask.sum() > 100:
 ```
 
 ### Problem: Too Dark After Processing
-**Cause:** Overly conservative approach  
+**Cause:** Overly conservative approach
 **Solution:** "Conservative" ≠ dark, lift appropriately
 ```python
 # Don't be afraid to lift dark images!
@@ -138,14 +138,14 @@ EXPOSURE_LIFT = 0.22  # Not 0.05
 ```
 
 ### Problem: Noisy Shadows
-**Cause:** Excessive clarity in shadow zones  
+**Cause:** Excessive clarity in shadow zones
 **Solution:** Reduce shadow clarity
 ```python
 CLARITY_ZONES['shadows'] = 0.06  # Not 0.15
 ```
 
 ### Problem: Loss of Material Detail
-**Cause:** Uniform enhancement without zones  
+**Cause:** Uniform enhancement without zones
 **Solution:** Zone-based processing
 ```python
 # Different strengths for different luminance zones
@@ -153,7 +153,7 @@ shadows: 6%, midtones: 12%, highlights: 8%
 ```
 
 ### Problem: Shifted Hue
-**Cause:** RGB multiplication for saturation  
+**Cause:** RGB multiplication for saturation
 **Solution:** Use HSV transformation
 ```python
 # Convert to HSV, boost S channel, convert back
@@ -343,8 +343,8 @@ done
 
 ---
 
-**Status:** ✅ **Production Ready Reference**  
-**Based on:** 750 Picacho Great Room comprehensive analysis  
-**Confidence:** 95% - Validated approach  
+**Status:** ✅ **Production Ready Reference**
+**Based on:** 750 Picacho Great Room comprehensive analysis
+**Confidence:** 95% - Validated approach
 
 *Keep this document handy for all future processing!*

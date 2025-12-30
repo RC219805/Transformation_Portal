@@ -56,6 +56,7 @@ def _now() -> float:
 def _torch():
     try:
         import torch  # type: ignore
+
         return torch
     except Exception:
         return None
@@ -145,7 +146,7 @@ def configure_pipeline(
     cfg.save_preview_jpg = False
 
     # output dir per test when end-to-end is requested
-    cfg.output_dir = output_root / f"bench_{device.replace(':','_')}_{upscale}x"
+    cfg.output_dir = output_root / f"bench_{device.replace(':', '_')}_{upscale}x"
 
     if io_mode == "compute":
         # Use the new write_outputs kill-switch for true compute-only mode
@@ -221,8 +222,7 @@ def main() -> None:
 
     # Warn about MPS fallback (can silently move ops to CPU and ruin comparisons)
     if os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK") == "1":
-        print("WARNING: PYTORCH_ENABLE_MPS_FALLBACK=1 is set. "
-              "Unsupported ops may silently run on CPU, skewing MPS results.")
+        print("WARNING: PYTORCH_ENABLE_MPS_FALLBACK=1 is set. Unsupported ops may silently run on CPU, skewing MPS results.")
 
     output_root.mkdir(parents=True, exist_ok=True)
 
@@ -271,20 +271,22 @@ def main() -> None:
                 for k, v in top:
                     print(f"    {k:24s} {float(v):.3f}s")
 
-            rows.append({
-                "device_requested": dev,
-                "device_resolved": resolved_device,
-                "upscale": up,
-                "io_mode": args.io,
-                "upscaler_backend": args.upscaler_backend,
-                "runs": args.runs,
-                "warmup": args.warmup,
-                "median_sec": med,
-                "p90_sec": p90,
-                "img_per_hour": imgs_hr,
-                "ai_color_diff": ai_color,
-                "ai_luma_diff": ai_luma,
-            })
+            rows.append(
+                {
+                    "device_requested": dev,
+                    "device_resolved": resolved_device,
+                    "upscale": up,
+                    "io_mode": args.io,
+                    "upscaler_backend": args.upscaler_backend,
+                    "runs": args.runs,
+                    "warmup": args.warmup,
+                    "median_sec": med,
+                    "p90_sec": p90,
+                    "img_per_hour": imgs_hr,
+                    "ai_color_diff": ai_color,
+                    "ai_luma_diff": ai_luma,
+                }
+            )
 
     # Write CSV/JSON
     args.csv.parent.mkdir(parents=True, exist_ok=True)

@@ -44,18 +44,18 @@ while IFS= read -r image_path; do
     if [[ "$image_path" =~ ^#.*$ ]] || [[ -z "$image_path" ]]; then
         continue
     fi
-    
+
     # Check if source file exists
     if [[ ! -f "$image_path" ]]; then
         echo -e "${YELLOW}⚠ Missing: $(basename "$image_path")${NC}"
         ((FAILED++))
         continue
     fi
-    
+
     # Copy with metadata preservation (-p flag)
     basename_file="$(basename "$image_path")"
     cp -p "$image_path" "$VALIDATION_DIR/"
-    
+
     if [[ $? -eq 0 ]]; then
         echo -e "${GREEN}✓${NC} Copied: $basename_file"
         ((COPIED++))
@@ -108,7 +108,7 @@ for img_path in images:
             width, height = img.size
             shortest = min(width, height)
             aspect = width / height
-            
+
             # Size categories
             if shortest < 2000:
                 small += 1
@@ -116,7 +116,7 @@ for img_path in images:
                 medium += 1
             else:
                 large += 1
-            
+
             # Aspect categories
             if aspect > 2.0:
                 pano += 1

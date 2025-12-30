@@ -12,8 +12,9 @@ try:
     from transformation_portal.core.security.validation import (
         InputValidator as CoreInputValidator,
         ValidationError as CoreValidationError,
-        ValidationResult
+        ValidationResult,
     )
+
     CORE_VALIDATION_AVAILABLE = True
 except ImportError:
     CORE_VALIDATION_AVAILABLE = False
@@ -37,7 +38,7 @@ def sniff_image_type(path: Path) -> str:
     if len(head) >= 4 and (head[:4] == b"II*\x00" or head[:4] == b"MM\x00*"):
         return "tiff"
     # JPEG: FF D8 FF
-    if len(head) >= 3 and head[:3] == b"\xFF\xD8\xFF":
+    if len(head) >= 3 and head[:3] == b"\xff\xd8\xff":
         return "jpeg"
     # PNG signature
     if len(head) >= 8 and head[:8] == b"\x89PNG\r\n\x1a\n":
@@ -54,12 +55,12 @@ def is_allowed_extension(path: Path, allowed_exts: Sequence[str]) -> bool:
 def validate_image_file(path: Path, policy: HardeningPolicy, use_core: bool = True) -> None:
     """
     Enforce existence, extension allowlist, size cap, and magic-byte sniffing.
-    
+
     Args:
         path: Path to image file
         policy: HardeningPolicy with validation rules
         use_core: If True and Platform Core available, use unified validator first
-    
+
     Notes:
         - When use_core=True and core available, performs dual validation
         - Core validation provides baseline checks
@@ -67,28 +68,22 @@ def validate_image_file(path: Path, policy: HardeningPolicy, use_core: bool = Tr
         - Backward compatible with existing behavior
     """
     p = Path(path)
-    
+
     # Phase 1: Use Platform Core validator if available (baseline checks)
     if use_core and CORE_VALIDATION_AVAILABLE:
         allowed_exts = policy.normalize_allowed_exts()
         max_size_mb = policy.max_input_bytes / (1024 * 1024)
-        
+
         core_validator = CoreInputValidator(
-            allowed_extensions=tuple(allowed_exts),
-            max_size_mb=max_size_mb,
-            enable_magic_bytes=True
+            allowed_extensions=tuple(allowed_exts), max_size_mb=max_size_mb, enable_magic_bytes=True
         )
-        
+
         try:
             core_validator.validate_file(p, strict=True)
         except CoreValidationError as e:
             # Convert core validation error to local format
-            raise InputValidationError(
-                str(e),
-                path=str(p),
-                details=e.details if hasattr(e, 'details') else {}
-            )
-    
+            raise InputValidationError(str(e), path=str(p), details=e.details if hasattr(e, "details") else {})
+
     # Phase 2: Local validation (legacy + lux_depth_v2-specific rules)
     if not p.exists():
         raise InputValidationError("Input does not exist", path=str(p))

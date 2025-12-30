@@ -1,4 +1,5 @@
 """Pytest configuration and shared fixtures for lux_depth_v2 tests."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -9,6 +10,7 @@ import shutil
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -16,6 +18,7 @@ except ImportError:
 
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
@@ -23,6 +26,7 @@ except ImportError:
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -116,6 +120,7 @@ def sample_depth_file(temp_dir, sample_depth_array):
 def mock_config():
     """Create a mock PipelineConfig for testing."""
     from lux_depth_v2.config import PipelineConfig, Preset
+
     return PipelineConfig(
         preset=Preset.PHOTO_REALISTIC,
         upscale=4,
@@ -158,7 +163,7 @@ def pytest_collection_modifyitems(config, items):
     if run_slow:
         # --slow flag provided: run all tests including slow ones
         return
-    
+
     # Skip slow tests by default
     skip_slow = pytest.mark.skip(reason="need --slow option to run")
     for item in items:

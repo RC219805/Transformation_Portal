@@ -8,10 +8,10 @@ https://github.com/JingyunLiang/SwinIR
 Installation:
 1. Clone SwinIR repository:
    git clone https://github.com/JingyunLiang/SwinIR.git /tmp/swinir
-   
+
 2. Copy architecture file:
    cp /tmp/swinir/models/network_swinir.py utils/swinir_arch.py
-   
+
 3. Download pre-trained weights:
    wget https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth \
      -O weights/upscaling/swinir_real_4x.pth
@@ -27,9 +27,11 @@ for production use.
 
 import sys
 
+
 # Placeholder error message
 class SwinIR:
     """Placeholder class - download official implementation."""
+
     def __init__(self, *args, **kwargs):
         raise NotImplementedError(
             "SwinIR architecture not available.\n\n"
@@ -48,29 +50,29 @@ def download_swinir():
     print("""
     SwinIR Setup Instructions
     =========================
-    
+
     1. Clone official repository:
        git clone https://github.com/JingyunLiang/SwinIR.git /tmp/swinir
-    
+
     2. Copy architecture (this file):
        cp /tmp/swinir/models/network_swinir.py utils/swinir_arch.py
-    
+
     3. Create weights directory:
        mkdir -p weights/upscaling
-    
+
     4. Download pre-trained models:
-       
+
        # Real-world SR (recommended for photos)
        wget https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFOWMFC_s64w8_SwinIR-L_x4_GAN.pth \\
          -O weights/upscaling/swinir_real_4x.pth
-       
+
        # Classical SR (for clean images)
        wget https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/001_classicalSR_DF2K_s64w8_SwinIR-M_x4.pth \\
          -O weights/upscaling/swinir_classical_4x.pth
-    
+
     5. Verify installation:
        python -c "from utils.swinir_arch import SwinIR; print('SwinIR ready!')"
-    
+
     For automatic installation, run:
        make setup-swinir
     """)

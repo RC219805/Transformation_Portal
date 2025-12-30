@@ -1,8 +1,8 @@
 # Phase C Implementation Summary: Multi-Scale Glass Suppressor
 
-**Status**: ✅ COMPLETE  
-**Date**: 2025-12-16  
-**Branch**: `feature/pr-w1.3-multiscale-glass-flag`  
+**Status**: ✅ COMPLETE
+**Date**: 2025-12-16
+**Branch**: `feature/pr-w1.3-multiscale-glass-flag`
 **PR Target**: `main`
 
 ## Executive Summary
@@ -75,7 +75,7 @@ is_glass = is_glass_base and not tile_exempted
 ```ini
 [flake8]
 max-line-length = 127
-exclude = 
+exclude =
     .git,
     __pycache__,
     deprecated/,
@@ -169,10 +169,10 @@ SHA: 1cfd3e1
 
 ## What's NOT in Phase C (By Design)
 
-❌ Holdout pack acquisition (blocks completion, not start)  
-❌ Baseline governance (separate action)  
-❌ Threshold tuning (post-holdout)  
-❌ ADE20K semantic segmentation (future enhancement)  
+❌ Holdout pack acquisition (blocks completion, not start)
+❌ Baseline governance (separate action)
+❌ Threshold tuning (post-holdout)
+❌ ADE20K semantic segmentation (future enhancement)
 ❌ CI flag enablement (governance decision)
 
 ## Next Steps (Post-Merge)

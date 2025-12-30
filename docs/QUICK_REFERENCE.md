@@ -27,7 +27,7 @@ convert_image_format('input.tiff', 'output.jpg', quality=95)
 # Batch convert directory
 stats = batch_convert_directory(
     './raw',
-    './processed', 
+    './processed',
     '.jpg',
     quality=90
 )

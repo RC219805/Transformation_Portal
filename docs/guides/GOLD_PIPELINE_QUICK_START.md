@@ -38,8 +38,8 @@ python3 gold_standard_lux_depth_pipeline.py \
 
 **Test Image**: `/Users/rc/Transformation_Portal/input_images/750Picacho_Pool_16bit.tiff`
 
-**Property**: 750 Picacho Drive, Paradise Valley, AZ  
-**Size**: 51 MB (4608 × 3456 pixels, 16-bit TIFF)  
+**Property**: 750 Picacho Drive, Paradise Valley, AZ
+**Size**: 51 MB (4608 × 3456 pixels, 16-bit TIFF)
 **Scene**: Luxury pool and outdoor entertainment area
 
 **Status**: ✅ Successfully processed with zero errors
@@ -110,9 +110,9 @@ OpenCV error: could not find a writer for the specified extension
 
 ## 🚀 Performance
 
-**Processing Time**: 283 seconds (4m 43s)  
-**CPU**: 100% utilization (single-threaded bottleneck)  
-**RAM**: ~16 GB peak (for 4× upscale)  
+**Processing Time**: 283 seconds (4m 43s)
+**CPU**: 100% utilization (single-threaded bottleneck)
+**RAM**: ~16 GB peak (for 4× upscale)
 **Throughput**: 0.21 images/minute
 
 **Bottlenecks**:
@@ -278,9 +278,9 @@ df -h /Users/rc/Transformation_Portal
 
 ## 📞 Quick Reference
 
-**Script**: `/Users/rc/Transformation_Portal/gold_standard_lux_depth_pipeline.py`  
-**Test Image**: `/Users/rc/Transformation_Portal/input_images/750Picacho_Pool_16bit.tiff`  
-**Depth Maps**: `/Users/rc/Transformation_Portal/output_750_Picacho_Depth_Maps/`  
+**Script**: `/Users/rc/Transformation_Portal/gold_standard_lux_depth_pipeline.py`
+**Test Image**: `/Users/rc/Transformation_Portal/input_images/750Picacho_Pool_16bit.tiff`
+**Depth Maps**: `/Users/rc/Transformation_Portal/output_750_Picacho_Depth_Maps/`
 **Latest Test**: `/Users/rc/Transformation_Portal/output_gold_test_fixed_v2/`
 
 **Status**: ✅ Production-ready (validated Dec 5, 2025)

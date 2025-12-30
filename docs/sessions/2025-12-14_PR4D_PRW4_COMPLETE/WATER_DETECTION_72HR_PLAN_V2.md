@@ -78,7 +78,7 @@ from pathlib import Path
 def validate_ground_truth(gt_path, images_dir):
     with open(gt_path) as f:
         gt = json.load(f)
-    
+
     errors = []
     for rel_path, metadata in gt["images"].items():
         full_path = images_dir / rel_path
@@ -86,13 +86,13 @@ def validate_ground_truth(gt_path, images_dir):
             errors.append(f"Missing: {rel_path}")
         if metadata["label"] not in ["pool", "ocean", "non_water"]:
             errors.append(f"Invalid label: {rel_path} → {metadata['label']}")
-    
+
     if errors:
         print("❌ Ground truth validation failed:")
         for e in errors:
             print(f"  - {e}")
         return False
-    
+
     print(f"✅ Ground truth valid ({len(gt['images'])} images)")
     return True
 ```
@@ -134,7 +134,7 @@ data/water_v0/
 └── README.md                   # Dataset provenance, licensing, download instructions
 ```
 
-**Time Estimate**: 
+**Time Estimate**:
 - Image collection/curation: 2 hours
 - Labeling + ground_truth.json: 1 hour
 
@@ -269,7 +269,7 @@ Detector v1 must meet **ALL** of:
 If gate fails, analyze v1 failures and iterate.
 ```
 
-**Time Estimate**: 
+**Time Estimate**:
 - Harness run: 30 mins (for 60 images)
 - Failure analysis generation: 1 hour
 - Manual triage/categorization: 1.5 hours
@@ -295,19 +295,19 @@ Implement **ONLY** the P0-P3 fixes identified in failure analysis.
 class WaterCandidateDetector:
     """
     Water Candidate Detector v1 - Failure-Driven
-    
+
     Based on data/water_v0 baseline failure analysis.
     See: docs/WATER_V0_BASELINE.md
-    
+
     Implements only P0-P3 fixes, not full PR-W1 spec.
     """
-    
+
     def detect(self, rgb01, depth01=None, scene_context=SceneContext.UNKNOWN):
         h, w = rgb01.shape[:2]
-        
+
         # P0: HSV chroma gating (tuned to failure buckets)
         hsv = rgb2hsv(rgb01)
-        
+
         # Scene-aware ranges (derived from failure analysis, not guessed)
         if scene_context == SceneContext.POOL:
             hue_range = (170, 210)      # Derived from pool samples
@@ -321,13 +321,13 @@ class WaterCandidateDetector:
             hue_range = (165, 215)      # Conservative middle
             sat_range = (0.12, 0.75)
             val_range = (0.18, 0.95)
-        
+
         chroma_mask = (
             (hsv[:,:,0]*360 >= hue_range[0]) & (hsv[:,:,0]*360 <= hue_range[1]) &
             (hsv[:,:,1] >= sat_range[0]) & (hsv[:,:,1] <= sat_range[1]) &
             (hsv[:,:,2] >= val_range[0]) & (hsv[:,:,2] <= val_range[1])
         )
-        
+
         # P1: Component filtering (reject extreme shapes)
         filtered_mask = self._filter_components(
             chroma_mask,
@@ -335,17 +335,17 @@ class WaterCandidateDetector:
             max_aspect_ratio=5.0,    # Reject long thin regions
             min_fill_ratio=0.6       # Reject scattered regions
         )
-        
+
         # P2: Texture sanity check (reject high-texture regions)
         texture_ok = self._texture_check(rgb01, filtered_mask)
-        
+
         final_mask = filtered_mask & texture_ok
-        
+
         # Compute metrics
         coverage_px = int(np.sum(final_mask))
         coverage = coverage_px / (h * w)
         confidence = self._compute_confidence(final_mask, chroma_mask, texture_ok)
-        
+
         return {
             "present": coverage >= 0.04 and confidence >= 0.35,
             "coverage": coverage,
@@ -353,46 +353,46 @@ class WaterCandidateDetector:
             "confidence": confidence,
             "mask": final_mask.astype(np.float32)
         }
-    
+
     def _filter_components(self, mask, min_area, max_aspect_ratio, min_fill_ratio):
         """P1: Geometric sanity checks."""
         from scipy.ndimage import label
         from skimage.measure import regionprops
-        
+
         labeled, num = label(mask)
         filtered = np.zeros_like(mask)
-        
+
         for region in regionprops(labeled):
             if region.area < min_area:
                 continue
-            
+
             bbox = region.bbox
             h = bbox[2] - bbox[0]
             w = bbox[3] - bbox[1]
             aspect = max(h, w) / max(min(h, w), 1)
-            
+
             if aspect > max_aspect_ratio:
                 continue
-            
+
             fill = region.area / (h * w)
             if fill < min_fill_ratio:
                 continue
-            
+
             filtered[labeled == region.label] = 1
-        
+
         return filtered.astype(bool)
-    
+
     def _texture_check(self, rgb01, mask):
         """P2: Reject high-texture regions (simple Laplacian variance)."""
         from scipy.ndimage import laplace
-        
+
         gray = rgb01.mean(axis=2)
         laplacian = laplace(gray)
-        
+
         # Low Laplacian variance = smooth (like water)
         # Threshold derived from dataset analysis
         variance_threshold = 0.02  # Tuned to dataset
-        
+
         smooth = np.abs(laplacian) < variance_threshold
         return smooth
 ```
@@ -447,7 +447,7 @@ python scripts/compare_detectors.py \
 [Based on v1 failures, what are P4-P6 fixes?]
 ```
 
-**Time estimate**: 
+**Time estimate**:
 - v1 implementation: 2-3 hours
 - Re-run harness: 30 mins
 - Comparison analysis: 30 mins
@@ -470,29 +470,29 @@ def calibrate_thresholds(validation_report):
     """Derive thresholds from dataset v0 performance."""
     with open(validation_report) as f:
         report = json.load(f)
-    
+
     results = report["results"]
-    
+
     # Analyze confidence distribution for true positives
     tp_confidences = [
         r["confidence"] for r in results
-        if r["scene_type"] in ["pool", "ocean"] and 
+        if r["scene_type"] in ["pool", "ocean"] and
         r["source"] != "none"
     ]
-    
+
     # Use 10th percentile as min confidence (allow 90% of TPs)
     confidence_threshold = np.percentile(tp_confidences, 10) if tp_confidences else 0.35
-    
+
     # Analyze coverage distribution
     tp_coverages = [
         r["coverage"] for r in results
         if r["scene_type"] in ["pool", "ocean"] and
         r["coverage"] > 0
     ]
-    
+
     # Use 5th percentile as min coverage
     coverage_threshold = np.percentile(tp_coverages, 5) if tp_coverages else 0.04
-    
+
     return {
         "water_candidate_confidence_threshold": round(confidence_threshold, 2),
         "water_min_coverage": round(coverage_threshold, 3),
@@ -539,22 +539,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-      
+
       - name: Validate ground truth schema
         run: |
           python scripts/validate_ground_truth.py \
             data/water_v0/ground_truth.json \
             data/water_v0/images
-      
+
       - name: Run validation harness (CI subset)
         run: |
           # CI runs on subset for speed (12-20 images)
@@ -563,7 +563,7 @@ jobs:
             --ground-truth data/water_v0/ci_subset.json \
             --output water_validation_ci.json \
             --config water_detection_enabled=true
-      
+
       - name: Check quality gates (WARNING MODE)
         run: |
           python scripts/check_quality_gates.py \
@@ -573,7 +573,7 @@ jobs:
             --fp-rate-max 0.20 \
             --mode warning
         # Warning mode: prints issues but doesn't fail build
-      
+
       - name: Upload validation report
         uses: actions/upload-artifact@v3
         with:
@@ -611,31 +611,31 @@ import sys
 def check_gates(report_path, pool_min, ocean_min, fp_max, mode):
     with open(report_path) as f:
         report = json.load(f)
-    
+
     summary = report.get("summary", {})
-    
+
     pool_recall = summary.get("pool_detection_rate", 0.0)
     ocean_recall = summary.get("ocean_detection_rate", 0.0)
     fp_rate = summary.get("false_positive_rate", 1.0)
-    
+
     failures = []
-    
+
     if pool_recall < pool_min:
         failures.append(f"Pool recall {pool_recall:.1%} < {pool_min:.1%}")
-    
+
     if ocean_recall < ocean_min:
         failures.append(f"Ocean recall {ocean_recall:.1%} < {ocean_min:.1%}")
-    
+
     if fp_rate > fp_max:
         failures.append(f"FP rate {fp_rate:.1%} > {fp_max:.1%}")
-    
+
     if failures:
         prefix = "❌ FAILED" if mode == "error" else "⚠️ WARNING"
         print(f"\n{prefix}: Quality gates")
         for f in failures:
             print(f"  - {f}")
         print(f"\nMetrics: pool={pool_recall:.1%}, ocean={ocean_recall:.1%}, fp={fp_rate:.1%}")
-        
+
         if mode == "error":
             sys.exit(1)
         else:
@@ -651,9 +651,9 @@ if __name__ == "__main__":
     parser.add_argument("--ocean-recall-min", type=float, default=0.70)
     parser.add_argument("--fp-rate-max", type=float, default=0.20)
     parser.add_argument("--mode", choices=["warning", "error"], default="warning")
-    
+
     args = parser.parse_args()
-    check_gates(args.report, args.pool_recall_min, args.ocean_recall_min, 
+    check_gates(args.report, args.pool_recall_min, args.ocean_recall_min,
                 args.fp_rate_max, args.mode)
 ```
 

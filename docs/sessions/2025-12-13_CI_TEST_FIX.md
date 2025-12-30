@@ -67,7 +67,7 @@ CLIP_TESTS_AVAILABLE = _can_create_preset_selector()
 **Change 2** - Updated skipif decorator:
 
 ```python
-@pytest.mark.skipif(not CLIP_TESTS_AVAILABLE, 
+@pytest.mark.skipif(not CLIP_TESTS_AVAILABLE,
                     reason="Phase 2 CLIP dependencies not available (transformers/torch required)")
 ```
 
@@ -118,7 +118,7 @@ But `PresetSelector.__init__()` does this:
 def __init__(self, ...):
     if not CLIP_AVAILABLE:
         raise ImportError(...)  # Never reached - flag is True
-    
+
     self.clip = CLIPClassifier(...)  # ❌ Fails here (model download in offline mode)
 ```
 
@@ -176,12 +176,12 @@ Author: RC219805
 Date:   Fri Dec 13 13:46:xx 2025
 
     fix(tests): add runtime CLIP availability check for Phase 2 integration tests
-    
+
     - Replaced static CLIP_AVAILABLE check with runtime instantiation test
     - Prevents ImportError in CI offline mode where transformers/torch installed but models unavailable
     - Tests now properly skip when PresetSelector cannot be created
     - Fixes 5 Phase 2 test failures in CI workflow
-    
+
     Resolves CI test failures from commit f869f73
 ```
 

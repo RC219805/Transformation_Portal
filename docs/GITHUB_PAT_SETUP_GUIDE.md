@@ -24,11 +24,11 @@
 
 ### 1.2 Configure Token Settings
 
-**Token name**: `Transformation_Portal_Dependency_Bot`  
-**Expiration**: `90 days` (recommended; set calendar reminder to regenerate)  
-**Description**: `Automated dependency update PRs for Transformation_Portal`  
+**Token name**: `Transformation_Portal_Dependency_Bot`
+**Expiration**: `90 days` (recommended; set calendar reminder to regenerate)
+**Description**: `Automated dependency update PRs for Transformation_Portal`
 
-**Repository access**: `Only select repositories`  
+**Repository access**: `Only select repositories`
 → Select: `RC219805/Transformation_Portal`
 
 ### 1.3 Set Repository Permissions
@@ -62,7 +62,7 @@
 
 ### 2.2 Create Secret
 
-**Name**: `PAT_TOKEN`  
+**Name**: `PAT_TOKEN`
 **Secret**: Paste the token copied in Step 1.4
 
 Click **"Add secret"**
@@ -168,7 +168,7 @@ on:
   workflow_dispatch:     # Allow manual trigger
 ```
 
-**Automated runs**: Every Monday morning  
+**Automated runs**: Every Monday morning
 **Manual trigger**: Available anytime via Actions tab
 
 ---

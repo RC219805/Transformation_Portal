@@ -235,5 +235,5 @@ python scripts/check_regression.py --help
 
 ---
 
-**Ready to merge:** ✅ Yes (if checklist complete)  
+**Ready to merge:** ✅ Yes (if checklist complete)
 **Post-merge action:** Start dataset v0 collection (Path A)

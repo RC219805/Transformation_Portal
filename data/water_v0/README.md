@@ -1,7 +1,7 @@
 # Water Detection Validation Dataset (v0)
 
-**Version**: v0  
-**Created**: 2024-12-14  
+**Version**: v0
+**Created**: 2024-12-14
 **Updated**: 2025-12-15 (Baseline v1 added)
 
 ## Overview
@@ -72,8 +72,8 @@ data/water_v0/
 
 ### baseline_ci_audit_v0.json (AUDIT - IMMUTABLE)
 
-**Date**: 2024-12-14  
-**Purpose**: Historical baseline from initial two-stage gating implementation  
+**Date**: 2024-12-14
+**Purpose**: Historical baseline from initial two-stage gating implementation
 **Status**: ✅ Immutable (historical audit baseline)
 
 **Configuration**:
@@ -94,8 +94,8 @@ data/water_v0/
 
 ### baseline_ci_current_v1.json (CURRENT - ENFORCED BY CI)
 
-**Date**: 2025-12-15 (Governance cleanup)  
-**Purpose**: Current enforced baseline with safe, conservative thresholds  
+**Date**: 2025-12-15 (Governance cleanup)
+**Purpose**: Current enforced baseline with safe, conservative thresholds
 **Status**: ⚠️ Mutable (requires holdout validation for updates)
 
 **Configuration**:
@@ -158,7 +158,7 @@ data/water_v0/
 
 **Status**: ❌ Deprecated (replaced by two-stage gating in PR-W4)
 
-**Historical Context**:  
+**Historical Context**:
 Original single-threshold gating system. Replaced by two-stage gating (candidate detection + injection decision) for better observability and control.
 
 ## Running Validation

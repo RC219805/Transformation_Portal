@@ -1,8 +1,8 @@
 # Performance Validation - Edge Refinement
 
-**Date**: December 21, 2025  
-**Test Image**: 750Picacho_Pool_16bit.tiff (54MB, exterior pool scene)  
-**Hardware**: Apple M4 Max, 64GB RAM, macOS  
+**Date**: December 21, 2025
+**Test Image**: 750Picacho_Pool_16bit.tiff (54MB, exterior pool scene)
+**Hardware**: Apple M4 Max, 64GB RAM, macOS
 **Status**: ✅ VALIDATED
 
 ---
@@ -142,5 +142,5 @@ Edge refinement implementation is **performance-neutral**:
 
 ---
 
-**Validated**: December 21, 2025, 03:31 UTC  
+**Validated**: December 21, 2025, 03:31 UTC
 **Next**: Quality validation (Edge F1, PSNR, SSIM) - Week 2

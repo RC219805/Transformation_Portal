@@ -218,19 +218,19 @@ python generate_validation_report.py \
 
 ### Inclusion Criteria
 
-✅ **Clear exemplars**: Each scene type has 2-4 representative images  
-✅ **Property diversity**: 3 properties, varied architectural styles  
-✅ **Size diversity**: 7 medium + 11 large (no small due to source material)  
-✅ **Aspect diversity**: 16 landscape + 2 portrait  
-✅ **Known challenges**: Reflections, foliage, portrait orientation, high-res processing  
+✅ **Clear exemplars**: Each scene type has 2-4 representative images
+✅ **Property diversity**: 3 properties, varied architectural styles
+✅ **Size diversity**: 7 medium + 11 large (no small due to source material)
+✅ **Aspect diversity**: 16 landscape + 2 portrait
+✅ **Known challenges**: Reflections, foliage, portrait orientation, high-res processing
 
 ### Exclusion Criteria
 
-❌ **Duplicates**: Avoided DJI_*_D 2.JPG duplicates  
-❌ **Near-duplicates**: Selected best representatives (e.g., 1 pool instead of 3)  
-❌ **Panoramas**: Excluded Montecito-shores-aerial-Pano.jpg (8705×5515) for speed  
-❌ **Overly similar scenes**: One kitchen, one bathroom, etc. instead of multiples  
-❌ **Processed variants**: Used Source_JPEGS, not signature/enhanced versions  
+❌ **Duplicates**: Avoided DJI_*_D 2.JPG duplicates
+❌ **Near-duplicates**: Selected best representatives (e.g., 1 pool instead of 3)
+❌ **Panoramas**: Excluded Montecito-shores-aerial-Pano.jpg (8705×5515) for speed
+❌ **Overly similar scenes**: One kitchen, one bathroom, etc. instead of multiples
+❌ **Processed variants**: Used Source_JPEGS, not signature/enhanced versions
 
 ## Dataset Statistics
 

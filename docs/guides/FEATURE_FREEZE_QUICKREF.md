@@ -1,5 +1,5 @@
 # Feature Freeze Quick Reference
-**Active Period**: December 20, 2025 - January 10, 2026  
+**Active Period**: December 20, 2025 - January 10, 2026
 **Next Sprint Start**: January 10, 2026
 
 ---

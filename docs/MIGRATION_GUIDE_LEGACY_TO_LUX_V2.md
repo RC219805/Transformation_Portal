@@ -1,7 +1,7 @@
 # Migration Guide: Legacy Depth Tools → Lux Depth V2
 
-**Version**: 1.0  
-**Date**: December 2025  
+**Version**: 1.0
+**Date**: December 2025
 **Target Audience**: Developers using legacy `depth_tools.py` or `scripts/utilities/depth_anything_v2.py`
 
 ---
@@ -416,13 +416,13 @@ predictor = DepthAnythingV2Predictor(variant="small")
 def my_pipeline(image_path):
     # Custom preprocessing
     image = load_and_preprocess(image_path)
-    
+
     # Depth generation
     depth = predictor.predict(str(image_path))
-    
+
     # Manual depth-aware processing
     processed = apply_manual_processing(image, depth)
-    
+
     # Custom postprocessing
     final = apply_lut_and_watermark(processed)
     return final
@@ -440,10 +440,10 @@ pipeline = LuxPipelineV2(PipelineConfig(preset=Preset.ARCHIVAL_QUALITY))
 def my_pipeline(image_path):
     # Custom preprocessing
     image = load_and_preprocess(image_path)
-    
+
     # Lux V2 handles: depth + zones + materials + processing + upscaling
     result = pipeline.process_image(image)
-    
+
     # Custom postprocessing
     final = apply_lut_and_watermark(result['master'])
     return final
@@ -603,7 +603,7 @@ from lux_depth_v2.config import PipelineConfig, Preset
 
 class DepthAnythingV2Predictor:
     """Legacy-compatible wrapper for Lux V2."""
-    
+
     def __init__(self, variant="small", backend="auto", cache_size=None):
         # Map legacy parameters to Lux V2 config
         self.config = PipelineConfig(
@@ -612,11 +612,11 @@ class DepthAnythingV2Predictor:
             upscaler_backend="none"  # No upscaling for legacy compatibility
         )
         self.pipeline = LuxPipelineV2(self.config)
-    
+
     def predict(self, image_path: str) -> np.ndarray:
         """Legacy-compatible predict method."""
         result = self.pipeline.process_one(Path(image_path))
-        
+
         # Load depth map from disk
         from PIL import Image
         depth_image = Image.open(result['depth'])
@@ -936,8 +936,8 @@ Track these metrics during migration:
 
 ---
 
-**Migration Guide Version**: 1.0  
-**Last Updated**: December 8, 2025  
+**Migration Guide Version**: 1.0
+**Last Updated**: December 8, 2025
 **Maintainer**: Transformation Portal Team
 
 For questions or issues, please file a GitHub issue or contact the team.

@@ -27,13 +27,9 @@ repos:
       - id: end-of-file-fixer
         exclude: ^(deprecated/|src/transformation_portal/|\.venv/)
       - id: check-yaml
-        exclude: ^(deprecated/|src/transformation_portal/)
+        exclude: ^(deprecated/|src/transformation_portal/|mkdocs\.yml)$
       - id: check-added-large-files
         args: ['--maxkb=5000']  # Warn on files >5MB
       - id: check-merge-conflict
       - id: check-ast  # Verify Python syntax
         exclude: ^(deprecated/|src/transformation_portal/)
-
-# Configuration
-default_language_version:
-  python: python3.10

@@ -1,7 +1,7 @@
 # CI/CD Integration Specification
 
-**Version**: 1.0  
-**Date**: 2025-12-08  
+**Version**: 1.0
+**Date**: 2025-12-08
 **Related**: Architecture Hardening Plan
 
 ---
@@ -27,18 +27,18 @@ security-gate:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements-ci.txt
-    
+
     - name: Enforce Safe Dependency Policy
       run: python scripts/ci/enforce_safe_deps.py
-      
+
     - name: Check for Banned Imports
       run: |
         # Fail if basicsr/realesrgan/gfpgan imported anywhere
@@ -61,7 +61,7 @@ secret-scan:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Full history for comprehensive scan
-    
+
     - name: TruffleHog Secret Scan
       uses: trufflesecurity/trufflehog@v3
       with:
@@ -69,7 +69,7 @@ secret-scan:
         base: ${{ github.event.repository.default_branch }}
         head: HEAD
         extra_args: --only-verified
-    
+
     - name: Gitleaks Scan
       uses: gitleaks/gitleaks-action@v2
       env:
@@ -85,28 +85,28 @@ vuln-scan:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Security Tools
       run: |
         pip install safety bandit pip-audit
-    
+
     - name: Safety Check (Known Vulnerabilities)
       run: safety check --file requirements.txt --json --output safety-report.json
       continue-on-error: true
-    
+
     - name: Bandit Scan (Code Security)
       run: bandit -r lux_depth_v2/ -ll -f json -o bandit-report.json
       continue-on-error: true
-    
+
     - name: Pip Audit (Dependency Audit)
       run: pip-audit --require-hashes --desc --format json > pip-audit-report.json
       continue-on-error: true
-    
+
     - name: Upload Security Reports
       uses: actions/upload-artifact@v4
       with:
@@ -170,17 +170,17 @@ test-core:
       python-version: ['3.10', '3.11', '3.12']
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - name: Install Dependencies
       run: |
         pip install -r requirements-dev.txt
         pip install -e .
-    
+
     - name: Run Core Module Tests
       run: |
         pytest transformation_portal/core/ \
@@ -189,7 +189,7 @@ test-core:
           --cov-report=xml \
           --cov-fail-under=90 \
           -v
-    
+
     - name: Upload Coverage
       uses: codecov/codecov-action@v4
       with:
@@ -206,18 +206,18 @@ test-integration:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements.txt -e .
-    
+
     - name: Run Integration Tests
       run: pytest tests/integration/ -v --tb=short
-    
+
     - name: Verify Lux Depth V2 Still Works
       run: |
         # Quick smoke test
@@ -257,21 +257,21 @@ test-stage-graph:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements.txt -e .
-    
+
     - name: Test Stage Infrastructure
       run: pytest transformation_portal/core/pipeline/ -v --cov
-    
+
     - name: Test Cache Correctness
       run: pytest tests/test_caching.py -v
-    
+
     - name: Test Policy Engine
       run: pytest tests/test_policy_engine.py -v
 ```
@@ -285,28 +285,28 @@ benchmark:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements.txt -e .
-    
+
     - name: Run Benchmarks
       run: |
         pytest tests/performance/ \
           --benchmark-only \
           --benchmark-json=benchmark-results.json
-    
+
     - name: Compare Against Baseline
       run: |
         python scripts/ci/compare_benchmarks.py \
           --current benchmark-results.json \
           --baseline baseline-benchmarks.json \
           --fail-on-regression 5%
-    
+
     - name: Upload Benchmark Results
       uses: actions/upload-artifact@v4
       with:
@@ -345,18 +345,18 @@ perf-regression:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements.txt -e .
-    
+
     - name: Run Performance Tests
       run: pytest tests/performance/ -v --tb=short
-    
+
     - name: Verify Profiler Overhead
       run: |
         pytest tests/test_profiler_overhead.py -v
@@ -373,18 +373,18 @@ gpu-tests:
   if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements.txt -e .
-    
+
     - name: Run GPU Tests
       run: pytest tests/gpu/ -v --tb=short
-    
+
     - name: Benchmark GPU Throughput
       run: |
         python benchmarks/gpu_throughput.py \
@@ -414,21 +414,21 @@ test-validation:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements.txt -e .
-    
+
     - name: Test Report Generation
       run: pytest transformation_portal/core/validation/ -v
-    
+
     - name: Test Metrics Computation
       run: pytest tests/test_metrics.py -v
-    
+
     - name: Test Baseline Comparison
       run: pytest tests/test_baseline_comparison.py -v
 ```
@@ -443,27 +443,27 @@ collect-reports:
   needs: test
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements.txt -e .
-    
+
     - name: Process Test Images
       run: |
         python scripts/ci/process_validation_suite.py \
           --input tests/fixtures/ \
           --output reports/
-    
+
     - name: Upload Reports
       uses: actions/upload-artifact@v4
       with:
         name: validation-reports
         path: reports/
-    
+
     - name: Generate Summary
       run: |
         python scripts/ci/summarize_reports.py \
@@ -493,21 +493,21 @@ test-edge-cases:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements.txt -e .
-    
+
     - name: Test Fallback Paths
       run: pytest tests/test_fallbacks.py -v
-    
+
     - name: Test Edge Cases
       run: pytest tests/test_edge_cases.py -v
-    
+
     - name: Test Checkpoint/Resume
       run: pytest tests/test_batch_checkpoint.py -v
 ```
@@ -522,15 +522,15 @@ coverage:
   needs: [test, test-core, test-stage-graph, test-edge-cases]
   steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-    
+
     - name: Install Dependencies
       run: pip install -r requirements-dev.txt -e .
-    
+
     - name: Generate Coverage Report
       run: |
         pytest --cov=transformation_portal \
@@ -539,12 +539,12 @@ coverage:
                --cov-report=html \
                --cov-report=xml \
                tests/
-    
+
     - name: Upload to Codecov
       uses: codecov/codecov-action@v4
       with:
         files: ./coverage.xml
-    
+
     - name: Check Coverage Threshold
       run: |
         coverage report --fail-under=85
@@ -552,9 +552,9 @@ coverage:
 
 ### Coverage Targets
 
-**Overall**: 85%+ line coverage  
-**Core Modules**: 90%+ line coverage  
-**Lux Depth V2**: 80%+ line coverage  
+**Overall**: 85%+ line coverage
+**Core Modules**: 90%+ line coverage
+**Lux Depth V2**: 80%+ line coverage
 **Fallback Branches**: 100% (critical paths)
 
 ### Success Criteria
@@ -611,7 +611,7 @@ coverage:
 
 ### Total CI Runtime
 
-**Fast Path** (no benchmarks): ~5-7 minutes  
+**Fast Path** (no benchmarks): ~5-7 minutes
 **Full Path** (with benchmarks): ~10-12 minutes
 
 **Optimization Strategies**:
@@ -684,6 +684,6 @@ if: ${{ github.event.label.name == 'hotfix' }}
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: 2025-12-08  
+**Version**: 1.0
+**Last Updated**: 2025-12-08
 **Next Review**: 2025-12-22

@@ -1,8 +1,8 @@
 # PR-W1.2 Phase 1 Complete: Confidence Suppressors
 
-**Status**: ✅ Implementation Complete  
-**Date**: 2025-12-15  
-**PR**: W1.2 (Calibration - False Trigger Reduction)  
+**Status**: ✅ Implementation Complete
+**Date**: 2025-12-15
+**PR**: W1.2 (Calibration - False Trigger Reduction)
 
 ## Summary
 

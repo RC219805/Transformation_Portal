@@ -128,8 +128,9 @@ def test_agent_has_troubleshooting_section():
     agent_file = Path(__file__).parents[1] / ".github" / "agents" / "transformation-portal-specialist.md"
     content = agent_file.read_text()
 
-    assert "troubleshoot" in content.lower() or "issue" in content.lower(), \
+    assert "troubleshoot" in content.lower() or "issue" in content.lower(), (
         "Agent should include troubleshooting or issue guidance"
+    )
 
 
 def test_agent_readme_exists():
@@ -143,8 +144,9 @@ def test_agent_readme_references_specialist():
     readme_file = Path(__file__).parents[1] / ".github" / "agents" / "README.md"
     content = readme_file.read_text()
 
-    assert "transformation-portal-specialist" in content.lower() or "specialist" in content.lower(), \
+    assert "transformation-portal-specialist" in content.lower() or "specialist" in content.lower(), (
         "README should reference the specialist agent"
+    )
 
 
 def test_custom_agent_guide_exists():
@@ -159,8 +161,7 @@ def test_custom_agent_guide_has_usage_examples():
     content = guide_file.read_text()
 
     # Should have example prompts using @ notation
-    assert "@transformation-portal-specialist" in content, \
-        "Guide should include example prompts using @ notation"
+    assert "@transformation-portal-specialist" in content, "Guide should include example prompts using @ notation"
 
     # Should have multiple examples
     example_count = content.count("@transformation-portal-specialist")
@@ -174,8 +175,7 @@ def test_agent_file_not_too_large():
 
     # Agent files should typically be under 50KB
     max_size = 50 * 1024  # 50KB
-    assert size_bytes < max_size, \
-        f"Agent file is {size_bytes} bytes, should be under {max_size} bytes for performance"
+    assert size_bytes < max_size, f"Agent file is {size_bytes} bytes, should be under {max_size} bytes for performance"
 
 
 def test_agent_file_has_reasonable_line_length():
@@ -187,11 +187,11 @@ def test_agent_file_has_reasonable_line_length():
     long_lines = [i for i, line in enumerate(lines, 1) if len(line) > 200 and not line.strip().startswith("http")]
 
     # Allow up to 10% of lines to be long (for tables, etc.)
-    assert len(long_lines) < len(lines) * 0.1, \
-        f"Too many long lines ({len(long_lines)}), check formatting"
+    assert len(long_lines) < len(lines) * 0.1, f"Too many long lines ({len(long_lines)}), check formatting"
 
 
 # Tests for Transformation Portal Architect agent
+
 
 def test_architect_agent_file_exists():
     """Verify the architect agent file exists."""
@@ -233,8 +233,9 @@ def test_architect_agent_frontmatter_has_description():
     content = architect_file.read_text()
 
     frontmatter = extract_frontmatter(content)
-    assert re.search(r"^description:\s*.+", frontmatter, re.MULTILINE), \
+    assert re.search(r"^description:\s*.+", frontmatter, re.MULTILINE), (
         "Architect frontmatter must include 'description:' field"
+    )
 
 
 def test_architect_agent_has_title():
@@ -266,8 +267,7 @@ def test_architect_agent_mentions_security_topics():
     security_keywords = ["security", "vulnerability", "audit", "safe"]
     mentioned_count = sum(1 for keyword in security_keywords if keyword in content)
 
-    assert mentioned_count >= 3, \
-        f"Architect should mention at least 3 security-related topics, found {mentioned_count}"
+    assert mentioned_count >= 3, f"Architect should mention at least 3 security-related topics, found {mentioned_count}"
 
 
 def test_architect_agent_has_core_responsibilities():
@@ -279,8 +279,7 @@ def test_architect_agent_has_core_responsibilities():
     responsibilities = ["integration", "security", "technical debt", "devops", "ci/cd"]
     mentioned_count = sum(1 for resp in responsibilities if resp in content)
 
-    assert mentioned_count >= 3, \
-        f"Architect should define at least 3 core responsibilities, found {mentioned_count}"
+    assert mentioned_count >= 3, f"Architect should define at least 3 core responsibilities, found {mentioned_count}"
 
 
 def test_architect_agent_provides_examples():
@@ -300,8 +299,9 @@ def test_architect_agent_not_too_large():
 
     # Agent files should typically be under 50KB
     max_size = 50 * 1024  # 50KB
-    assert size_bytes < max_size, \
+    assert size_bytes < max_size, (
         f"Architect agent file is {size_bytes} bytes, should be under {max_size} bytes for performance"
+    )
 
 
 def test_custom_agent_guide_mentions_architect():
@@ -319,8 +319,9 @@ def test_custom_agent_guide_differentiates_agents():
     content = guide_file.read_text().lower()
 
     # Should explain when to use each agent
-    assert "when to use" in content or "use when" in content or "choosing" in content, \
+    assert "when to use" in content or "use when" in content or "choosing" in content, (
         "Guide should explain when to use each agent"
+    )
 
 
 def test_copilot_instructions_mention_architect():
@@ -329,5 +330,4 @@ def test_copilot_instructions_mention_architect():
     content = copilot_file.read_text().lower()
 
     assert "architect" in content, "Copilot instructions should mention the architect agent"
-    assert "transformation-portal-architect" in content, \
-        "Copilot instructions should include the architect agent name"
+    assert "transformation-portal-architect" in content, "Copilot instructions should include the architect agent name"

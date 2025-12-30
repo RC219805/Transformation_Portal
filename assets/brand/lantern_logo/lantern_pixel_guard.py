@@ -84,9 +84,7 @@ def _count_colors(image: Image.Image) -> int:
 
 def _compute_metrics(original: Image.Image, candidate: Image.Image) -> ImageMetrics:
     if original.size != candidate.size:
-        raise ValueError(
-            "Images must share the same dimensions to compare palette and pixels"
-        )
+        raise ValueError("Images must share the same dimensions to compare palette and pixels")
 
     original_colors = _count_colors(original)
     candidate_colors = _count_colors(candidate)
@@ -120,37 +118,18 @@ def _save_diff(original: Image.Image, candidate: Image.Image, destination: Path)
 
 def _validate_thresholds(metrics: ImageMetrics, args: argparse.Namespace) -> Iterable[str]:
     if args.max_pixel_change is not None and metrics.max_delta > args.max_pixel_change:
-        yield (
-            f"Maximum pixel delta {metrics.max_delta} exceeds"
-            f" --max-pixel-change {args.max_pixel_change}"
-        )
+        yield (f"Maximum pixel delta {metrics.max_delta} exceeds --max-pixel-change {args.max_pixel_change}")
     if args.max_color_count is not None and metrics.candidate_colors > args.max_color_count:
-        yield (
-            f"Candidate color count {metrics.candidate_colors} exceeds"
-            f" --max-color-count {args.max_color_count}"
-        )
-    if (
-        args.max_color_delta is not None
-        and metrics.color_delta > args.max_color_delta
-    ):
-        yield (
-            f"Color count delta {metrics.color_delta} exceeds"
-            f" --max-color-delta {args.max_color_delta}"
-        )
+        yield (f"Candidate color count {metrics.candidate_colors} exceeds --max-color-count {args.max_color_count}")
+    if args.max_color_delta is not None and metrics.color_delta > args.max_color_delta:
+        yield (f"Color count delta {metrics.color_delta} exceeds --max-color-delta {args.max_color_delta}")
 
 
 def _print_metrics(metrics: ImageMetrics) -> None:
     delta_symbol = f"Δ{metrics.color_delta:+d}" if metrics.color_delta else "Δ0"
-    print(
-        f"Color count change: {metrics.original_colors} ->"
-        f" {metrics.candidate_colors} ({delta_symbol})"
-    )
+    print(f"Color count change: {metrics.original_colors} -> {metrics.candidate_colors} ({delta_symbol})")
     changed_percentage = metrics.changed_ratio * 100
-    print(
-        "Changed pixels:"
-        f" {metrics.changed_pixels} / {metrics.total_pixels}"
-        f" ({changed_percentage:.2f}%)"
-    )
+    print(f"Changed pixels: {metrics.changed_pixels} / {metrics.total_pixels} ({changed_percentage:.2f}%)")
     print(f"Maximum channel delta: {metrics.max_delta}")
     print(f"Mean channel delta: {metrics.mean_delta:.4f}")
 
@@ -173,9 +152,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional path to write a channel-difference visualization",
     )
-    parser.add_argument(
-        "--json", type=Path, default=None, help="Optional path to export metrics as JSON"
-    )
+    parser.add_argument("--json", type=Path, default=None, help="Optional path to export metrics as JSON")
     parser.add_argument(
         "--max-pixel-change",
         type=int,
@@ -206,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
 
     metrics = _compute_metrics(original, candidate)
 
-    if hasattr(args, 'diff') and args.diff is not None:
+    if hasattr(args, "diff") and args.diff is not None:
         _save_diff(original, candidate, args.diff)
 
     if args.json is not None:

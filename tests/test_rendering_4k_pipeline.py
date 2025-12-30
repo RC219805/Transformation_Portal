@@ -46,6 +46,7 @@ from transformation_portal.pipelines.rendering_4k_pipeline import (
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def sample_image_np():
     """Create a sample RGB image as numpy array."""
@@ -55,11 +56,14 @@ def sample_image_np():
     g = np.linspace(0.3, 0.7, h)[:, np.newaxis]
     b = np.ones((h, w)) * 0.5
 
-    image = np.stack([
-        np.broadcast_to(r, (h, w)),
-        np.broadcast_to(g, (h, w)),
-        b,
-    ], axis=2).astype(np.float32)
+    image = np.stack(
+        [
+            np.broadcast_to(r, (h, w)),
+            np.broadcast_to(g, (h, w)),
+            b,
+        ],
+        axis=2,
+    ).astype(np.float32)
 
     return image
 
@@ -68,7 +72,7 @@ def sample_image_np():
 def sample_image_pil(sample_image_np):
     """Create a sample PIL Image."""
     img_uint8 = (sample_image_np * 255).astype(np.uint8)
-    return Image.fromarray(img_uint8, mode='RGB')
+    return Image.fromarray(img_uint8, mode="RGB")
 
 
 @pytest.fixture
@@ -91,7 +95,7 @@ def temp_output_dir():
 @pytest.fixture
 def temp_image_file(sample_image_pil):
     """Create a temporary image file."""
-    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         sample_image_pil.save(f.name)
         temp_path = Path(f.name)
 
@@ -105,6 +109,7 @@ def temp_image_file(sample_image_pil):
 # =============================================================================
 # Configuration Tests
 # =============================================================================
+
 
 class TestPipelineConfig:
     """Tests for pipeline configuration classes."""
@@ -191,6 +196,7 @@ class TestPipelineConfig:
 # Quality Assessment Tests
 # =============================================================================
 
+
 class TestQualityAssessor:
     """Tests for the quality assessment module."""
 
@@ -267,6 +273,7 @@ class TestQualityAssessor:
 # =============================================================================
 # Image Processing Tests
 # =============================================================================
+
 
 class TestToneMapping:
     """Tests for tone mapping functions."""
@@ -465,6 +472,7 @@ class TestDepthEstimation:
 # Pipeline Tests
 # =============================================================================
 
+
 class TestRendering4KPipeline:
     """Tests for the main Rendering4KPipeline class."""
 
@@ -626,6 +634,7 @@ class TestProcessingResult:
 # Integration Tests
 # =============================================================================
 
+
 class TestPipelineIntegration:
     """Integration tests for complete pipeline workflows."""
 
@@ -683,14 +692,15 @@ class TestPipelineIntegration:
 # Edge Cases and Error Handling
 # =============================================================================
 
+
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
     def test_very_small_image(self, temp_output_dir):
         """Test processing very small image."""
         # Create tiny image
-        tiny_image = Image.new('RGB', (32, 32), color='red')
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+        tiny_image = Image.new("RGB", (32, 32), color="red")
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             tiny_image.save(f.name)
             tiny_path = Path(f.name)
 
@@ -705,10 +715,10 @@ class TestEdgeCases:
     def test_grayscale_handling(self, temp_output_dir):
         """Test handling of grayscale input (converted to RGB)."""
         # Create grayscale image
-        gray_image = Image.new('L', (100, 100), color=128)
-        rgb_image = gray_image.convert('RGB')  # Convert to RGB first
+        gray_image = Image.new("L", (100, 100), color=128)
+        rgb_image = gray_image.convert("RGB")  # Convert to RGB first
 
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             rgb_image.save(f.name)
             gray_path = Path(f.name)
 
@@ -716,7 +726,7 @@ class TestEdgeCases:
             pipeline = Rendering4KPipeline.from_preset("preview")
             result = pipeline.process(gray_path, temp_output_dir)
             assert result.image is not None
-            assert result.image.mode == 'RGB'
+            assert result.image.mode == "RGB"
         finally:
             if gray_path.exists():
                 gray_path.unlink()
@@ -732,6 +742,7 @@ class TestEdgeCases:
 # =============================================================================
 # Batch Processing Tests
 # =============================================================================
+
 
 class TestBatchProcessing:
     """Tests for batch processing functionality."""
@@ -760,6 +771,7 @@ class TestBatchProcessing:
 # =============================================================================
 # GPU Memory Manager Tests
 # =============================================================================
+
 
 class TestGPUMemoryManager:
     """Tests for GPU memory management functionality."""
@@ -792,7 +804,7 @@ class TestGPUMemoryManager:
     def test_pipeline_has_memory_manager(self):
         """Test that pipeline has memory manager initialized."""
         pipeline = Rendering4KPipeline.from_preset("preview")
-        assert hasattr(pipeline, 'memory_manager')
+        assert hasattr(pipeline, "memory_manager")
         assert pipeline.memory_manager is not None
         assert pipeline.memory_manager.device == pipeline.device
 
@@ -800,6 +812,7 @@ class TestGPUMemoryManager:
 # =============================================================================
 # AI Enhancement Config Tests
 # =============================================================================
+
 
 class TestAIEnhancementConfig:
     """Tests for AIEnhancementConfig with seed field."""
@@ -811,7 +824,7 @@ class TestAIEnhancementConfig:
         )
 
         config = AIEnhancementConfig()
-        assert hasattr(config, 'seed')
+        assert hasattr(config, "seed")
         assert config.seed == 42  # Default value
 
     def test_ai_enhancement_config_custom_seed(self):
@@ -827,6 +840,7 @@ class TestAIEnhancementConfig:
 # =============================================================================
 # Depth Model Lazy Loading Tests
 # =============================================================================
+
 
 class TestDepthModelLazyLoading:
     """Tests for lazy loading of depth models."""
@@ -848,6 +862,7 @@ class TestDepthModelLazyLoading:
 # ControlNet Methods Tests
 # =============================================================================
 
+
 class TestControlNetMethods:
     """Tests for ControlNet lazy loading and AI enhancement methods."""
 
@@ -858,7 +873,7 @@ class TestControlNetMethods:
         # Should not crash even without diffusers installed
         pipe = pipeline._get_or_load_controlnet_pipe()
         # Will be None if diffusers not installed, or a pipeline if installed
-        assert pipe is None or hasattr(pipe, '__call__')
+        assert pipe is None or hasattr(pipe, "__call__")
         assert pipeline._controlnet_initialized is True
 
     def test_apply_ai_enhancement_returns_image(self, sample_image_pil):
@@ -875,6 +890,7 @@ class TestControlNetMethods:
 # =============================================================================
 # Batch Processing with Memory Management Tests
 # =============================================================================
+
 
 class TestBatchProcessingMemoryManagement:
     """Tests for batch processing with GPU memory management."""
@@ -913,8 +929,7 @@ class TestBatchProcessingMemoryManagement:
         # - Once at final cleanup
         # Total: at least 2 calls
         assert mock_clear_cache.call_count >= 2, (
-            f"Expected at least 2 clear_cache calls (periodic + final), "
-            f"got {mock_clear_cache.call_count}"
+            f"Expected at least 2 clear_cache calls (periodic + final), got {mock_clear_cache.call_count}"
         )
 
     def test_batch_process_clears_depth_cache_on_high_memory(self, sample_image_pil, temp_output_dir):

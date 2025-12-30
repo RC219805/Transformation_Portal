@@ -29,10 +29,10 @@ The DA3 reference view selection system provides **four intelligent strategies**
 
 ### Key Benefits
 
-✅ **Improved Reconstruction Quality** - Automatic selection of information-rich anchor points  
-✅ **Robustness to Input Order** - Works with unsorted image collections  
-✅ **Negligible Overhead** - Selection adds <1ms per inference  
-✅ **Flexible Strategies** - Tailored approaches for different use cases  
+✅ **Improved Reconstruction Quality** - Automatic selection of information-rich anchor points
+✅ **Robustness to Input Order** - Works with unsorted image collections
+✅ **Negligible Overhead** - Selection adds <1ms per inference
+✅ **Flexible Strategies** - Tailored approaches for different use cases
 
 ---
 
@@ -98,10 +98,10 @@ DA3 provides four reference view selection strategies, each optimized for differ
 - Production pipelines requiring robustness
 
 **Advantages**:
-✅ Most robust across diverse scenarios  
-✅ Avoids extreme views (too similar or too different)  
-✅ Balances information richness and stability  
-✅ Works well with 3-20 views  
+✅ Most robust across diverse scenarios
+✅ Avoids extreme views (too similar or too different)
+✅ Balances information richness and stability
+✅ Works well with 3-20 views
 
 **Example Use Case**:
 ```
@@ -128,14 +128,14 @@ ensuring stable feature matching across the entire set.
 - Architectural exteriors with varying distances
 
 **Advantages**:
-✅ Maximizes information content  
-✅ Excellent for challenging baselines  
-✅ Selects "anchor point" views  
-✅ Robust to outliers  
+✅ Maximizes information content
+✅ Excellent for challenging baselines
+✅ Selects "anchor point" views
+✅ Robust to outliers
 
 **Trade-offs**:
-⚠️ May select less stable views in dense sets  
-⚠️ Can be sensitive to image quality variations  
+⚠️ May select less stable views in dense sets
+⚠️ Can be sensitive to image quality variations
 
 **Example Use Case**:
 ```
@@ -161,15 +161,15 @@ close-up detail and overview context.
 - Quick prototyping without feature computation
 
 **Advantages**:
-✅ Zero computational overhead  
-✅ Predictable and reproducible  
-✅ Maintains temporal coherence  
-✅ Works with any number of views  
+✅ Zero computational overhead
+✅ Predictable and reproducible
+✅ Maintains temporal coherence
+✅ Works with any number of views
 
 **Trade-offs**:
-⚠️ Ignores image content and quality  
-⚠️ May select poor view if sequence has quality variations  
-⚠️ Not optimal for unordered collections  
+⚠️ Ignores image content and quality
+⚠️ May select poor view if sequence has quality variations
+⚠️ Not optimal for unordered collections
 
 **Example Use Case**:
 ```
@@ -195,14 +195,14 @@ temporal context from both directions.
 - Legacy compatibility
 
 **Advantages**:
-✅ Completely deterministic  
-✅ Zero overhead  
-✅ Simple and predictable  
+✅ Completely deterministic
+✅ Zero overhead
+✅ Simple and predictable
 
 **Trade-offs**:
-⚠️ Requires manual pre-sorting  
-⚠️ No quality guarantees  
-⚠️ Not recommended for production  
+⚠️ Requires manual pre-sorting
+⚠️ No quality guarantees
+⚠️ Not recommended for production
 
 **Example Use Case**:
 ```
@@ -334,7 +334,7 @@ for strategy in strategies:
     else:
         selector = ReferenceViewSelector(strategy=strategy)
         result = selector.select(num_views)
-    
+
     print(f"{strategy.value:20s} -> view {result.selected_index}")
     if result.metrics:
         print(f"  Metrics: {list(result.metrics.keys())[:3]}")
@@ -430,27 +430,27 @@ The DA3 vision transformer produces **class tokens** that encode global scene in
 def _select_saddle_balanced(class_tokens):
     # 1. Normalize class tokens (unit vectors)
     normalized_tokens = class_tokens / (norm(class_tokens) + ε)
-    
+
     # 2. Compute similarity matrix (cosine similarity)
     similarity_matrix = normalized_tokens @ normalized_tokens.T
-    
+
     # 3. Calculate three metrics per view
     similarity_scores = mean(similarity_matrix, axis=1)  # Avg similarity
     feature_norms = norm(class_tokens, axis=1)           # L2 norm
     feature_variances = var(class_tokens, axis=1)        # Variance
-    
+
     # 4. Normalize metrics to [0, 1]
     norm_similarity = normalize(similarity_scores)
     norm_norms = normalize(feature_norms)
     norm_variances = normalize(feature_variances)
-    
+
     # 5. Find view closest to median (0.5) across all metrics
     distances = (
         |norm_similarity - 0.5| +
         |norm_norms - 0.5| +
         |norm_variances - 0.5|
     )
-    
+
     selected_idx = argmin(distances)
     return selected_idx
 ```
@@ -469,10 +469,10 @@ def _select_saddle_balanced(class_tokens):
 def _select_saddle_sim_range(class_tokens):
     # 1. Normalize class tokens
     normalized_tokens = class_tokens / (norm(class_tokens) + ε)
-    
+
     # 2. Compute similarity matrix
     similarity_matrix = normalized_tokens @ normalized_tokens.T
-    
+
     # 3. For each view, calculate similarity range
     similarity_ranges = []
     for i in range(num_views):
@@ -480,7 +480,7 @@ def _select_saddle_sim_range(class_tokens):
         other_sims = other_sims[other_sims != 1.0]
         sim_range = max(other_sims) - min(other_sims)
         similarity_ranges.append(sim_range)
-    
+
     # 4. Select view with maximum range
     selected_idx = argmax(similarity_ranges)
     return selected_idx
@@ -640,10 +640,10 @@ for scene_dir in image_dir.iterdir():
     for strategy in strategies:
         config = DA3APIConfig(ref_view_strategy=strategy)
         engine = DA3InferenceEngine(api_config=config)
-        
+
         images = list(scene_dir.glob("*.jpg"))
         output_dir = Path(f"output/{scene_dir.name}/{strategy}")
-        
+
         result = engine.infer(images=images, export_dir=output_dir)
         print(f"{scene_dir.name}/{strategy}: RMSE = {result.rmse:.3f}")
 ```
@@ -700,7 +700,7 @@ result = selector.select(len(images), class_tokens)
 
 **Symptom**: All strategies return the same reference view index.
 
-**Cause**: 
+**Cause**:
 - Input views may be very similar (e.g., small baseline)
 - All views have similar quality/features
 - Expected behavior for highly redundant sets
@@ -817,23 +817,23 @@ If you have known camera poses, you can use geometric criteria for selection:
 def select_by_pose_centrality(extrinsics: np.ndarray) -> int:
     """
     Select view with camera position closest to geometric centroid.
-    
+
     Args:
         extrinsics: (num_views, 4, 4) camera-to-world matrices
-    
+
     Returns:
         Index of most central view
     """
     # Extract camera centers (last column of extrinsic matrix)
     camera_centers = extrinsics[:, :3, 3]  # (num_views, 3)
-    
+
     # Compute centroid
     centroid = np.mean(camera_centers, axis=0)
-    
+
     # Find closest camera to centroid
     distances = np.linalg.norm(camera_centers - centroid, axis=1)
     central_idx = np.argmin(distances)
-    
+
     return central_idx
 
 # Usage with known poses
@@ -903,6 +903,6 @@ For production pipelines, we recommend:
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: December 2025*  
+*Document Version: 1.0*
+*Last Updated: December 2025*
 *Author: Transformation Portal Team*

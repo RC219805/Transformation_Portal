@@ -1,8 +1,8 @@
 # Materials v2 Design Specification
 
-**Date**: 2025-12-08  
-**Version**: 2.0  
-**Owner**: Transformation Portal Architect  
+**Date**: 2025-12-08
+**Version**: 2.0
+**Owner**: Transformation Portal Architect
 **Status**: Design Complete - Ready for Implementation
 
 ---
@@ -78,10 +78,10 @@ Output Image (enhanced)
 @dataclass
 class ConfidenceConfig:
     """Confidence gating configuration."""
-    
+
     # Global threshold (default: 0.6)
     confidence_threshold: float = 0.6
-    
+
     # Per-material thresholds (override global)
     material_thresholds: Dict[str, float] = field(default_factory=lambda: {
         'wood': 0.7,        # High confidence for wood (clear texture)
@@ -93,14 +93,14 @@ class ConfidenceConfig:
         'water': 0.4,       # Very low for water (highly variable)
         'polished': 0.5,    # Lower for polished surfaces
     })
-    
+
     # Blending parameters
     blend_range: float = 0.1  # Blend from (threshold - range) to threshold
     blend_mode: str = 'soft'  # 'soft' (smooth transition) or 'hard' (sharp cutoff)
-    
+
     # Fallback behavior for low-confidence
     fallback_strength: float = 0.2  # Apply response at 20% strength for low-confidence
-    
+
     def get_threshold(self, material_type: str) -> float:
         """Get threshold for specific material type."""
         return self.material_thresholds.get(material_type, self.confidence_threshold)
@@ -115,18 +115,18 @@ def generate_confidence_mask(
     config: ConfidenceConfig
 ) -> np.ndarray:
     """Generate confidence-gated mask for material response.
-    
+
     Args:
         confidence_map: Per-pixel confidence scores [0, 1]
         material_type: Material type (wood, metal, glass, etc.)
         config: Confidence configuration
-        
+
     Returns:
         Gated mask [0, 1] with smooth transitions
     """
     threshold = config.get_threshold(material_type)
     blend_range = config.blend_range
-    
+
     if config.blend_mode == 'soft':
         # Smooth transition from (threshold - blend_range) to threshold
         mask = np.clip(
@@ -135,11 +135,11 @@ def generate_confidence_mask(
         )
     else:  # 'hard'
         mask = (confidence_map >= threshold).astype(np.float32)
-    
+
     # Apply fallback strength for low-confidence regions
     low_confidence_mask = 1.0 - mask
     mask = mask + low_confidence_mask * config.fallback_strength
-    
+
     return mask
 ```
 
@@ -158,7 +158,7 @@ class ConfidenceMetrics:
     low_confidence_pct: float   # % pixels below threshold
     coverage_ratio: float       # % of image with material detected
     material_counts: Dict[str, int]  # Pixel count per material type
-    
+
     def is_high_quality(self, threshold: float = 0.6) -> bool:
         """Check if segmentation is high quality."""
         return (
@@ -182,18 +182,18 @@ class ConfidenceMetrics:
 @dataclass
 class SegmentationConfig:
     """Segmentation resolution configuration."""
-    
+
     # Resolution limits
     max_segmentation_side: int = 1536  # Max resolution for segmentation
     min_segmentation_side: int = 512   # Min resolution (quality floor)
-    
+
     # Upsampling strategy
     upsample_mode: str = 'bicubic'  # 'bicubic', 'lanczos', 'bilinear'
-    
+
     # Edge feathering (soft masks)
     edge_feather_radius: int = 3  # Gaussian blur radius (pixels)
     edge_feather_sigma: float = 1.0  # Gaussian blur sigma
-    
+
     # Quality validation
     require_high_quality: bool = True  # Require high confidence
     quality_threshold: float = 0.6  # Minimum average confidence
@@ -207,29 +207,29 @@ def calculate_segmentation_size(
     config: SegmentationConfig
 ) -> Tuple[int, int]:
     """Calculate optimal segmentation resolution.
-    
+
     Args:
         original_size: Original (H, W)
         config: Segmentation configuration
-        
+
     Returns:
         Segmentation (H, W) bounded by max_segmentation_side
     """
     h, w = original_size
     max_side = max(h, w)
-    
+
     if max_side <= config.max_segmentation_side:
         return original_size  # No downscaling needed
-    
+
     # Scale down to max_segmentation_side
     scale = config.max_segmentation_side / max_side
     new_h = int(h * scale)
     new_w = int(w * scale)
-    
+
     # Ensure minimum size
     new_h = max(new_h, config.min_segmentation_side)
     new_w = max(new_w, config.min_segmentation_side)
-    
+
     return (new_h, new_w)
 ```
 
@@ -241,31 +241,31 @@ def create_soft_mask(
     config: SegmentationConfig
 ) -> np.ndarray:
     """Create soft mask with feathered edges.
-    
+
     Args:
         mask: Binary or continuous mask [0, 1]
         config: Segmentation configuration
-        
+
     Returns:
         Soft mask with feathered edges
     """
     if config.edge_feather_radius == 0:
         return mask
-    
+
     # Apply Gaussian blur for edge feathering
     import scipy.ndimage
     sigma = config.edge_feather_sigma
     kernel_size = config.edge_feather_radius * 2 + 1
-    
+
     soft_mask = scipy.ndimage.gaussian_filter(
         mask,
         sigma=sigma,
         truncate=config.edge_feather_radius / sigma
     )
-    
+
     # Normalize to [0, 1]
     soft_mask = np.clip(soft_mask, 0.0, 1.0)
-    
+
     return soft_mask
 ```
 
@@ -315,30 +315,30 @@ Stage 6: Export
 ```python
 class VRAMLifecycleManager:
     """Manage VRAM lifecycle across pipeline stages."""
-    
+
     def __init__(self, device: str, logger=None):
         self.device = device
         self.logger = logger or setup_logging("INFO")
         self.segmenter = None
         self.upscaler = None
-        
+
     def load_segmenter(self, config):
         """Load segmentation model."""
         self.logger.info("Loading segmentation model...")
         self.segmenter = create_material_segmenter(config, self.device)
         self._log_memory("after_load_segmenter")
-        
+
     def release_segmenter(self):
         """Hard release segmentation model + buffers."""
         if self.segmenter is None:
             return
-        
+
         self.logger.info("Releasing segmentation model...")
-        
+
         # Explicit cleanup
         del self.segmenter
         self.segmenter = None
-        
+
         # GPU memory cleanup
         if self.device == "cuda":
             import torch
@@ -348,26 +348,26 @@ class VRAMLifecycleManager:
             import torch
             torch.mps.empty_cache()
             # Note: MPS doesn't have synchronize()
-        
+
         self._log_memory("after_release_segmenter")
-        
+
     def load_upscaler(self, config):
         """Load upscaling model."""
         self.logger.info("Loading upscaling model...")
         self.upscaler = create_upscaler(config, self.device)
         self._log_memory("after_load_upscaler")
-        
+
     def release_upscaler(self):
         """Hard release upscaling model + buffers."""
         if self.upscaler is None:
             return
-        
+
         self.logger.info("Releasing upscaling model...")
-        
+
         # Explicit cleanup
         del self.upscaler
         self.upscaler = None
-        
+
         # GPU memory cleanup
         if self.device == "cuda":
             import torch
@@ -376,9 +376,9 @@ class VRAMLifecycleManager:
         elif self.device == "mps":
             import torch
             torch.mps.empty_cache()
-        
+
         self._log_memory("after_release_upscaler")
-        
+
     def _log_memory(self, stage: str):
         """Log memory usage."""
         if self.device == "cuda":
@@ -408,7 +408,7 @@ class MemorySnapshot:
     timestamp: float
     allocated_gb: float
     reserved_gb: Optional[float] = None  # CUDA only
-    
+
     def to_dict(self) -> Dict:
         return {
             'stage': self.stage,
@@ -483,15 +483,15 @@ cache_dir/
 ```python
 class MaskCacheManager:
     """Manage material mask caching."""
-    
+
     def __init__(self, cache_dir: Optional[Path], logger=None):
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.logger = logger or setup_logging("INFO")
-        
+
         if self.cache_dir:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             self.logger.info(f"Mask cache enabled: {self.cache_dir}")
-    
+
     def compute_input_hash(self, image_path: Path) -> str:
         """Compute SHA256 hash of input image."""
         import hashlib
@@ -500,30 +500,30 @@ class MaskCacheManager:
             for chunk in iter(lambda: f.read(8192), b''):
                 hasher.update(chunk)
         return f"sha256:{hasher.hexdigest()}"
-    
+
     def get_cache_key(self, task_id: str) -> str:
         """Get cache key for task."""
         return task_id
-    
+
     def is_cached(self, task_id: str, input_hash: str) -> bool:
         """Check if valid cache exists for task."""
         if not self.cache_dir:
             return False
-        
+
         metadata_path = self.cache_dir / f"{task_id}_metadata.json"
         if not metadata_path.exists():
             return False
-        
+
         # Load metadata and check hash
         try:
             with open(metadata_path, 'r') as f:
                 metadata = json.load(f)
-            
+
             cached_hash = metadata.get('input_hash', '')
             if cached_hash != input_hash:
                 self.logger.info(f"Cache invalid (hash mismatch): {task_id}")
                 return False
-            
+
             # Check mask files exist
             materials = metadata.get('material_counts', {}).keys()
             for material in materials:
@@ -531,21 +531,21 @@ class MaskCacheManager:
                 if not mask_path.exists():
                     self.logger.info(f"Cache invalid (missing mask): {task_id}")
                     return False
-            
+
             return True
         except Exception as e:
             self.logger.warning(f"Cache check failed: {e}")
             return False
-    
+
     def load_masks(self, task_id: str) -> Dict[str, np.ndarray]:
         """Load cached masks for task."""
         if not self.cache_dir:
             return {}
-        
+
         metadata_path = self.cache_dir / f"{task_id}_metadata.json"
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
-        
+
         masks = {}
         materials = metadata.get('material_counts', {}).keys()
         for material in materials:
@@ -554,10 +554,10 @@ class MaskCacheManager:
                 from PIL import Image
                 mask_img = Image.open(mask_path)
                 masks[material] = np.array(mask_img).astype(np.float32) / 255.0
-        
+
         self.logger.info(f"Loaded {len(masks)} cached masks: {task_id}")
         return masks
-    
+
     def save_masks(
         self,
         task_id: str,
@@ -569,14 +569,14 @@ class MaskCacheManager:
         """Save masks and metadata to cache."""
         if not self.cache_dir:
             return
-        
+
         # Save mask PNGs
         from PIL import Image
         for material, mask in masks.items():
             mask_path = self.cache_dir / f"{task_id}_{material}_mask.png"
             mask_img = (mask * 255).astype(np.uint8)
             Image.fromarray(mask_img).save(mask_path)
-        
+
         # Save metadata
         metadata = {
             'task_id': task_id,
@@ -587,22 +587,22 @@ class MaskCacheManager:
             'material_counts': confidence_metrics.material_counts,
             'version': '2.0',
         }
-        
+
         metadata_path = self.cache_dir / f"{task_id}_metadata.json"
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2)
-        
+
         self.logger.info(f"Saved masks to cache: {task_id}")
-    
+
     def invalidate(self, task_id: str):
         """Invalidate cache for task."""
         if not self.cache_dir:
             return
-        
+
         # Remove mask files and metadata
         for path in self.cache_dir.glob(f"{task_id}_*"):
             path.unlink()
-        
+
         self.logger.info(f"Invalidated cache: {task_id}")
 ```
 
@@ -664,40 +664,40 @@ Add material-specific fallback strategies:
 # In error_recovery.py: ErrorRecovery class
 class MaterialFallbackStrategy:
     """Fallback strategies for material segmentation failures."""
-    
+
     def get_fallback(self, error: Exception, config: Dict) -> Optional[Dict]:
         """Generate fallback configuration for material errors.
-        
+
         Args:
             error: Exception that occurred
             config: Original configuration
-            
+
         Returns:
             Fallback configuration dict or None
         """
         error_str = str(error).lower()
-        
+
         # Segmentation backend fallback
         if 'segmentation' in error_str or 'onnx' in error_str:
             return {
                 'segmentation_backend': 'heuristic',  # Fallback to heuristic
                 'confidence_threshold': 0.5,  # Lower threshold for heuristic
             }
-        
+
         # Memory error fallback
         elif 'memory' in error_str or 'out of memory' in error_str:
             return {
                 'max_segmentation_side': config.get('max_segmentation_side', 1536) // 2,
                 'edge_feather_radius': config.get('edge_feather_radius', 3) * 2,  # More feathering for lower res
             }
-        
+
         # Low confidence fallback
         elif 'confidence' in error_str or 'low quality' in error_str:
             return {
                 'materials_enabled': False,  # Disable materials entirely
                 'skip_material_response': True,
             }
-        
+
         return None
 ```
 
@@ -709,10 +709,10 @@ Add material readiness checks:
 # In preflight.py: PreFlightValidator class
 def validate_materials_config(self, config: MaterialsV2Config) -> ValidationResult:
     """Validate materials v2 configuration.
-    
+
     Args:
         config: Materials v2 configuration
-        
+
     Returns:
         ValidationResult
     """
@@ -722,17 +722,17 @@ def validate_materials_config(self, config: MaterialsV2Config) -> ValidationResu
             message="Materials v2 disabled",
             severity="info"
         )
-    
+
     issues = []
-    
+
     # Check confidence thresholds
     if config.confidence_threshold < 0.0 or config.confidence_threshold > 1.0:
         issues.append("confidence_threshold must be in [0, 1]")
-    
+
     # Check segmentation resolution
     if config.max_segmentation_side < 512:
         issues.append("max_segmentation_side too low (minimum 512)")
-    
+
     # Check cache directory if enabled
     if config.cache_dir:
         cache_path = Path(config.cache_dir)
@@ -743,14 +743,14 @@ def validate_materials_config(self, config: MaterialsV2Config) -> ValidationResu
                 issues.append(f"Cannot create cache directory: {e}")
         elif not os.access(cache_path, os.W_OK):
             issues.append("Cache directory not writable")
-    
+
     # Check backend availability
     if config.backend == 'onnx':
         try:
             import onnxruntime
         except ImportError:
             issues.append("ONNX backend requires onnxruntime (pip install onnxruntime)")
-    
+
     if issues:
         return ValidationResult(
             passed=False,
@@ -758,7 +758,7 @@ def validate_materials_config(self, config: MaterialsV2Config) -> ValidationResu
             severity="error",
             details={'issues': issues}
         )
-    
+
     return ValidationResult(
         passed=True,
         message="Materials v2 config valid",
@@ -779,7 +779,7 @@ Materials v2 is **feature-gated** to allow safe rollout:
 @dataclass
 class PipelineConfig:
     # ... existing fields ...
-    
+
     # Materials v2 feature gate
     materials_v2_enabled: bool = False  # Default: disabled
     materials_v2_config: Optional[MaterialsV2Config] = None
@@ -967,5 +967,5 @@ Materials v2 delivers **quality + efficiency** improvements through confidence-g
 
 **Architect Approval**: ✅ **DESIGN COMPLETE - READY FOR IMPLEMENTATION**
 
-**Date**: 2025-12-08  
+**Date**: 2025-12-08
 **Version**: 2.0

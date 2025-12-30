@@ -277,4 +277,3 @@ autopep8 --in-place --select=W291,W293 your_file.py
    - Benchmark each stage
    - Identify bottlenecks
    - Optimize critical paths
-

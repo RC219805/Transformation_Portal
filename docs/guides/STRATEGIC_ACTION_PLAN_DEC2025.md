@@ -1,7 +1,7 @@
 # Strategic Action Plan - December 2025
 
-**Status**: ✅ **Objective 1 Complete** | 🔄 **Objectives 2-4 In Progress**  
-**Date**: December 10, 2025  
+**Status**: ✅ **Objective 1 Complete** | 🔄 **Objectives 2-4 In Progress**
+**Date**: December 10, 2025
 **Context**: Post-Architecture Hardening completion reality check
 
 ---
@@ -60,8 +60,8 @@ Following completion of the Architecture Hardening Plan (6/6 PRs), we conducted 
 
 ### ✅ Objective 1: Restore Test Strictness [COMPLETE]
 
-**Status**: ✅ Complete (commit 3774c11)  
-**Timeline**: Immediate (same day)  
+**Status**: ✅ Complete (commit 3774c11)
+**Timeline**: Immediate (same day)
 **Risk**: 🟢 LOW (test-only changes)
 
 **Deliverables**:
@@ -75,8 +75,8 @@ Following completion of the Architecture Hardening Plan (6/6 PRs), we conducted 
 
 ### 🔄 Objective 2: Platform Core Lockdown
 
-**Status**: 🔄 In Progress  
-**Timeline**: Week 1-2 (Dec 10-24, 2025)  
+**Status**: 🔄 In Progress
+**Timeline**: Week 1-2 (Dec 10-24, 2025)
 **Risk**: 🟡 MEDIUM (requires careful API design)
 
 **Goal**: One spine, not two half-overlapping frameworks.
@@ -112,12 +112,12 @@ Following completion of the Architecture Hardening Plan (6/6 PRs), we conducted 
    ```python
    # lux_depth_v2/compat/core_adapter.py
    from transformation_portal.core.batch import BatchProcessor as CoreBatchProcessor
-   
+
    class OrchestratorAdapter:
        """Adapter to use core BatchProcessor via old orchestrator API."""
        def __init__(self, core_processor: CoreBatchProcessor):
            self._core = core_processor
-       
+
        def process_batch(self, inputs, config):
            # Translate old API to new core API
            return self._core.process_batch(inputs, config.output_dir)
@@ -129,10 +129,10 @@ Following completion of the Architecture Hardening Plan (6/6 PRs), we conducted 
        """Confirm LuxPipelineV2 via old vs core give identical results."""
        # Small batch through old path
        old_result = legacy_orchestrator.process_batch(test_images)
-       
+
        # Same batch through core
        core_result = core_batch_processor.process_batch(test_images)
-       
+
        # Results should match (metrics, timing, outputs)
        assert_results_equivalent(old_result, core_result)
    ```
@@ -153,8 +153,8 @@ Following completion of the Architecture Hardening Plan (6/6 PRs), we conducted 
 
 ### 🔜 Objective 3: Phase 2 Performance - Targeted Slices
 
-**Status**: 🔜 Planned  
-**Timeline**: Week 3-5 (Dec 24 - Jan 14, 2025)  
+**Status**: 🔜 Planned
+**Timeline**: Week 3-5 (Dec 24 - Jan 14, 2025)
 **Risk**: 🟢 LOW (incremental, measurable)
 
 **Goal**: Begin attacking biggest wins without parallelism yet.
@@ -205,12 +205,12 @@ task_result = {
 # core/processing/export.py
 class TiledExporter:
     """Async tiled TIFF export for UHR images."""
-    
+
     def export_async(self, image, output_path, scratch_dir):
         # Write to scratch first (fast local disk)
         scratch_path = scratch_dir / output_path.name
         self._write_tiled_tiff(image, scratch_path)
-        
+
         # Queue async copy to final destination
         self.copy_queue.put((scratch_path, output_path))
 ```
@@ -245,22 +245,22 @@ class AdaptiveUpscaler:
         # Compute edge density
         edges = cv2.Canny(image, 100, 200)
         complexity = edges.sum() / (image.shape[0] * image.shape[1])
-        
+
         if complexity < 0.1:
             return "easy"
         elif complexity < 0.3:
             return "medium"
         else:
             return "hard"
-    
+
     def upscale(self, image, target_size):
         complexity = self.estimate_complexity(image)
-        
+
         if complexity == "easy":
             tile_size = 1024  # Larger tiles, fewer passes
         else:
             tile_size = 512   # Smaller tiles, safer
-        
+
         logger.info(f"Upscaling {complexity} image with tile_size={tile_size}")
         return self._upscale_tiled(image, target_size, tile_size)
 ```
@@ -281,8 +281,8 @@ class AdaptiveUpscaler:
 
 ### 🔜 Objective 4: Validation System → Live Quality Gate
 
-**Status**: 🔜 Planned  
-**Timeline**: Week 6-8 (Jan 14 - Feb 4, 2025)  
+**Status**: 🔜 Planned
+**Timeline**: Week 6-8 (Jan 14 - Feb 4, 2025)
 **Risk**: 🟡 MEDIUM (depends on baseline stability)
 
 **Goal**: Turn design into reproducible, automated benchmarking.
@@ -313,26 +313,26 @@ class AdaptiveUpscaler:
 # core/validation/runner.py
 class ValidationRunner:
     """Run validation benchmarks against datasets."""
-    
+
     def validate_pipeline(self, dataset_name, pipeline_name):
         """Validate pipeline against dataset."""
         dataset = self.load_dataset(dataset_name)
         pipeline = self.load_pipeline(pipeline_name)
-        
+
         results = []
         for image in dataset.images:
             # Process with pipeline
             output = pipeline.process(image.path)
-            
+
             # Compute metrics against baseline
             metrics = self.compute_metrics(output, image.baseline_topaz)
-            
+
             results.append({
                 "image": image.name,
                 "metrics": metrics,
                 "timing": output.timing_s
             })
-        
+
         return ValidationReport(dataset_name, pipeline_name, results)
 ```
 
@@ -357,13 +357,13 @@ jobs:
     steps:
       - name: Run validation
         run: lux-depth-validate --dataset validation_v1
-      
+
       - name: Compare to baseline
         run: |
           python scripts/compare_validation.py \
             --current validation_reports/latest.json \
             --baseline validation_reports/baseline.json
-      
+
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
@@ -429,7 +429,7 @@ jobs:
 
 **Objective 2: Platform Core Lockdown**
 - **Risk**: Breaking existing code during integration
-- **Mitigation**: 
+- **Mitigation**:
   - Feature flags to toggle core vs legacy
   - Comprehensive parity tests before switchover
   - Gradual rollout (internal testing first)
@@ -481,7 +481,7 @@ jobs:
 
 **Current Position**: Strong foundation with minor test gaps now resolved.
 
-**Strategic Direction**: 
+**Strategic Direction**:
 1. Lock Platform Core as the spine (Weeks 1-2)
 2. Attack performance with data-driven slices (Weeks 3-5)
 3. Turn validation into automated quality proof (Weeks 6-8)
@@ -492,6 +492,6 @@ jobs:
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-12-10  
+**Document Version**: 1.0
+**Last Updated**: 2025-12-10
 **Next Review**: 2025-12-17 (End of Week 1)

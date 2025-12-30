@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 # Add agents directory to path
-agents_path = Path(__file__).parent.parent / '.github' / 'agents'
+agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))
 
 from rag_system.phase2_activation import (  # noqa: E402
@@ -36,36 +36,14 @@ def sample_ci_results():
     return {
         "run_id": "test_run_001",
         "timestamp": "2025-11-30T12:00:00Z",
-        "summary": {
-            "total_tests": 100,
-            "passed": 90,
-            "skipped": 10,
-            "failed": 0,
-            "errors": 0,
-            "duration_seconds": 5.5
-        },
-        "codeql_results": {
-            "alerts": 0,
-            "queries_run": 20,
-            "modules_extracted": 50
-        },
+        "summary": {"total_tests": 100, "passed": 90, "skipped": 10, "failed": 0, "errors": 0, "duration_seconds": 5.5},
+        "codeql_results": {"alerts": 0, "queries_run": 20, "modules_extracted": 50},
         "test_categories": {
-            "unit_tests": {
-                "test_module_a.py": {"passed": 30, "skipped": 5},
-                "test_module_b.py": {"passed": 25, "skipped": 0}
-            },
-            "integration_tests": {
-                "test_integration.py": {"passed": 35, "skipped": 5}
-            }
+            "unit_tests": {"test_module_a.py": {"passed": 30, "skipped": 5}, "test_module_b.py": {"passed": 25, "skipped": 0}},
+            "integration_tests": {"test_integration.py": {"passed": 35, "skipped": 5}},
         },
-        "phase2_files_validated": [
-            "file1.py", "file2.py", "file3.py",
-            "file4.py", "file5.py", "file6.py"
-        ],
-        "extraction_warnings": [
-            "Warning 1",
-            "Warning 2"
-        ]
+        "phase2_files_validated": ["file1.py", "file2.py", "file3.py", "file4.py", "file5.py", "file6.py"],
+        "extraction_warnings": ["Warning 1", "Warning 2"],
     }
 
 
@@ -75,10 +53,7 @@ class TestTestResultEntry:
     def test_create_entry(self):
         """Test creating a test result entry."""
         entry = TestResultEntry(
-            test_id="test_module.py::test_func",
-            test_file="test_module.py",
-            test_name="test_func",
-            status="passed"
+            test_id="test_module.py::test_func", test_file="test_module.py", test_name="test_func", status="passed"
         )
         assert entry.test_id == "test_module.py::test_func"
         assert entry.status == "passed"
@@ -91,7 +66,7 @@ class TestTestResultEntry:
             test_file="test_module.py",
             test_name="test_fail",
             status="failed",
-            error_message="AssertionError: Expected 1, got 2"
+            error_message="AssertionError: Expected 1, got 2",
         )
         assert entry.status == "failed"
         assert "AssertionError" in entry.error_message
@@ -103,11 +78,7 @@ class TestQualityMetricEntry:
     def test_create_metric(self):
         """Test creating a quality metric entry."""
         metric = QualityMetricEntry(
-            metric_id="test_pass_rate",
-            metric_type="test_health",
-            value=90.0,
-            unit="percent",
-            source="CI Run #1"
+            metric_id="test_pass_rate", metric_type="test_health", value=90.0, unit="percent", source="CI Run #1"
         )
         assert metric.metric_id == "test_pass_rate"
         assert metric.value == 90.0
@@ -121,7 +92,7 @@ class TestQualityMetricEntry:
             value=85.5,
             unit="percent",
             source="Coverage Report",
-            context={"lines_covered": 1000, "total_lines": 1170}
+            context={"lines_covered": 1000, "total_lines": 1170},
         )
         assert metric.context["lines_covered"] == 1000
 
@@ -202,10 +173,7 @@ class TestPhase2Activator:
 
     def test_test_selection_with_custom_files(self, activator):
         """Test test selection with custom changed files."""
-        changed_files = [
-            "src/streaming/processor.py",
-            "src/streaming/checkpoint.py"
-        ]
+        changed_files = ["src/streaming/processor.py", "src/streaming/checkpoint.py"]
         selection = activator.generate_test_selection_strategy(changed_files)
 
         assert selection["changed_files"] == changed_files
@@ -273,9 +241,7 @@ class TestObservedCIResults:
         # Calculate expected count dynamically from test categories
         expected_entries = sum(
             results.get("passed", 0) + results.get("skipped", 0)
-            for category_tests in OBSERVED_CI_RESULTS.get(
-                "test_categories", {}
-            ).values()
+            for category_tests in OBSERVED_CI_RESULTS.get("test_categories", {}).values()
             for results in category_tests.values()
         )
         assert report["entries_created"] == expected_entries
@@ -319,7 +285,7 @@ class TestKnowledgeBaseIntegration:
             "quality_metrics.json",
             "detected_patterns.json",
             "dependency_stats.json",
-            "knowledge_state.json"
+            "knowledge_state.json",
         ]
 
         for filename in json_files:

@@ -1,8 +1,8 @@
 # Export Pipeline Architecture Map
 
-**Version**: Phase 2 Slice 3 (Post-Benchmarking)  
-**Date**: 2025-12-10  
-**Status**: Pre-Autotune Integration Review  
+**Version**: Phase 2 Slice 3 (Post-Benchmarking)
+**Date**: 2025-12-10
+**Status**: Pre-Autotune Integration Review
 
 ---
 
@@ -164,8 +164,8 @@ This document maps the complete pipeline flow from configuration → preflight �
 
 ### 2.1 Recommended Integration Location
 
-**File**: `lux_depth_v2/pipeline.py`  
-**Location**: `__init__()` method, lines 182-189  
+**File**: `lux_depth_v2/pipeline.py`
+**Location**: `__init__()` method, lines 182-189
 
 **Current Code**:
 ```python
@@ -193,7 +193,7 @@ if EXPORT_MANAGER_AVAILABLE and cfg.output_dir:
         else:
             # Legacy: Static config from pipeline config
             export_config = ExportConfig(output_dir=Path(cfg.output_dir))
-        
+
         if export_config:
             self.export_manager = ExportManager(export_config, io_utils)
             self.logger.info("ExportManager initialized")
@@ -212,10 +212,10 @@ with self._stage(report, "io/read_input"):
 if self.export_manager is None and EXPORT_MANAGER_AVAILABLE:
     if getattr(cfg, 'autotune_export', False):
         from transformation_portal.core.storage.export_manager import autotune_export_config
-        
+
         # Estimate scene complexity (optional, can be None)
         scene_complexity = _estimate_scene_complexity(rgb01) if cfg.autotune_use_complexity else None
-        
+
         export_config = autotune_export_config(
             output_dir=Path(cfg.output_dir),
             image_width=W,
@@ -239,7 +239,7 @@ if self.export_manager is None and EXPORT_MANAGER_AVAILABLE:
 @dataclass
 class PipelineConfig:
     # ... existing fields ...
-    
+
     # Phase 2 Slice 3: Autotune export configuration
     autotune_export: bool = False  # Enable adaptive export config
     autotune_use_complexity: bool = False  # Use scene complexity estimation
@@ -252,37 +252,37 @@ class PipelineConfig:
 def _estimate_scene_complexity(rgb01: np.ndarray) -> float:
     """
     Estimate scene complexity for autotune decisions.
-    
+
     Heuristic: High-frequency content ratio (gradients / total pixels)
     - 0.0 = simple (sky, gradients, water)
     - 1.0 = complex (textures, interiors, foliage)
-    
+
     Args:
         rgb01: RGB float array [0, 1]
-    
+
     Returns:
         Complexity score 0.0-1.0
     """
     try:
         import cv2
         gray = cv2.cvtColor((rgb01 * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
-        
+
         # Sobel gradients
         gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
         gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
         grad_mag = np.sqrt(gx**2 + gy**2)
-        
+
         # Normalize by image intensity range
         intensity_range = gray.max() - gray.min()
         if intensity_range > 0:
             grad_mag_norm = grad_mag / intensity_range
         else:
             grad_mag_norm = grad_mag
-        
+
         # High-frequency ratio (pixels with gradient > threshold)
         threshold = 0.1
         hf_ratio = np.mean(grad_mag_norm > threshold)
-        
+
         # Clamp to [0, 1]
         return float(np.clip(hf_ratio, 0.0, 1.0))
     except Exception:
@@ -441,7 +441,7 @@ export_report     → ExportManager.write_report()     → JSON
 1. **Fallback I/O paths**: Direct `io_utils` calls bypass ExportManager in edge cases
    - **Impact**: Low (only triggered if ExportManager init fails)
    - **Mitigation**: Make ExportManager init mandatory for production
-   
+
 2. **Preflight doesn't validate scratch_dir**: When `enable_tiered_storage=True`
    - **Impact**: Low (ExportConfig validation catches this, but later in lifecycle)
    - **Mitigation**: Add preflight check for scratch_dir writability
@@ -496,12 +496,12 @@ def test_pipeline_autotune_aerial_like():
     )
     pipe = LuxPipelineV2(cfg)
     result = pipe.process_one(Path("fixtures/aerial/sample.tif"))
-    
+
     # Verify autotune enabled optimizations
     assert pipe.export_manager is not None
     assert pipe.export_manager.config.tiff_tile_size == 512
     assert pipe.export_manager.config.use_atomic_image_writes is True
-    
+
     # Verify timing reported
     assert "export_master" in result["stage_times_sec"]
     assert result["status"] == "ok"
@@ -517,12 +517,12 @@ def test_pipeline_autotune_interior():
     )
     pipe = LuxPipelineV2(cfg)
     result = pipe.process_one(Path("fixtures/interior/sample.tif"))
-    
+
     # Verify autotune disabled optimizations (complex scene)
     assert pipe.export_manager is not None
     assert pipe.export_manager.config.tiff_tile_size is None
     assert pipe.export_manager.config.use_atomic_image_writes is False
-    
+
     assert result["status"] == "ok"
 
 def test_pipeline_autotune_disabled():
@@ -534,11 +534,11 @@ def test_pipeline_autotune_disabled():
     )
     pipe = LuxPipelineV2(cfg)
     result = pipe.process_one(Path("fixtures/mixed/sample.tif"))
-    
+
     # Verify baseline config used
     assert pipe.export_manager is not None
     assert pipe.export_manager.config.tiff_tile_size is None
-    
+
     assert result["status"] == "ok"
 ```
 
@@ -559,24 +559,24 @@ def test_pipeline_autotune_disabled():
 
 ### 8.1 Advanced Scene Analysis
 
-**Current**: Simple gradient-based complexity estimation  
+**Current**: Simple gradient-based complexity estimation
 **Future**: Use Materials v2 segmentation results for smarter decisions
 
 ```python
 def _complexity_from_materials_v2(materials_result: SegmentationResult) -> float:
     """
     Estimate complexity from material coverage.
-    
+
     High complexity = many small material regions (interiors)
     Low complexity = few large regions (exteriors/sky)
     """
     if materials_result is None:
         return 0.5
-    
+
     # Count distinct material regions
     material_counts = materials_result.metrics.material_counts
     total_regions = sum(material_counts.values())
-    
+
     # High region count → high complexity
     if total_regions > 50:
         return 0.9
@@ -648,8 +648,8 @@ Before wiring autotune:
 
 ## 10. Conclusion
 
-**Pipeline Health**: ✅ **EXCELLENT**  
-**Autotune Readiness**: ✅ **READY**  
+**Pipeline Health**: ✅ **EXCELLENT**
+**Autotune Readiness**: ✅ **READY**
 **Blocking Issues**: **NONE**
 
 The pipeline architecture is clean, well-instrumented, and ready for autotune integration. ExportManager is the single point of export control, with no hidden bypass paths (except documented fallbacks). Timing infrastructure is comprehensive, and validation gates are well-aligned.
@@ -665,6 +665,6 @@ The pipeline architecture is clean, well-instrumented, and ready for autotune in
 
 ---
 
-**Document Version**: 1.0  
-**Reviewed By**: Transformation Portal Specialist  
+**Document Version**: 1.0
+**Reviewed By**: Transformation Portal Specialist
 **Next Review**: After autotune integration PR

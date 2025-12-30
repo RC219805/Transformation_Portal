@@ -223,7 +223,7 @@ graded = apply_lut(
   enabled: true
   intensity: 0.7
   mode: "auto"
-  
+
   # Advanced options
   advanced:
     preserve_highlights: true
@@ -272,35 +272,35 @@ See [Troubleshooting Guide](#troubleshooting) for more issues.
 class {ClassName}:
     """
     {Brief description}
-    
+
     {Detailed description}
-    
+
     Args:
         param1: Description
         param2: Description
-    
+
     Attributes:
         attr1: Description
         attr2: Description
-    
+
     Example:
         >>> feature = {ClassName}(param1="value")
         >>> result = feature.process(image)
     """
-    
+
     def __init__(self, param1: str, param2: float = 0.5):
         ...
-    
+
     def process(self, image: Image.Image) -> Image.Image:
         """
         Process image with {FEATURE_NAME}.
-        
+
         Args:
             image: Input PIL Image
-        
+
         Returns:
             Processed PIL Image
-        
+
         Raises:
             ValueError: If image is invalid
             RuntimeError: If processing fails
@@ -343,10 +343,10 @@ def function_name(
 ) -> Dict[str, Any]:
     """
     Brief one-line summary of what the function does.
-    
+
     More detailed explanation of the function's purpose, behavior,
     and any important details users should know.
-    
+
     Parameters
     ----------
     param1 : str
@@ -357,45 +357,45 @@ def function_name(
     param3 : float, optional
         Description of optional parameter. Include default behavior
         when not provided. Default is None.
-    
+
     Returns
     -------
     dict
         Description of return value structure:
         - 'key1': Description of key1
         - 'key2': Description of key2
-    
+
     Raises
     ------
     ValueError
         When param1 is empty or param2 is negative.
     RuntimeError
         When processing fails due to system resources.
-    
+
     Notes
     -----
     Additional important information:
     - Performance characteristics
     - Thread safety
     - Side effects
-    
+
     Examples
     --------
     Basic usage:
-    
+
     >>> result = function_name("test", 42)
     >>> result['key1']
     'expected_value'
-    
+
     With optional parameter:
-    
+
     >>> result = function_name("test", 42, param3=1.5)
-    
+
     See Also
     --------
     related_function : Related functionality
     other_module.function : Alternative approach
-    
+
     References
     ----------
     .. [1] Author Name, "Paper Title", Journal, Year.
@@ -411,52 +411,52 @@ def function_name(
 class ClassName:
     """
     Brief one-line description of the class.
-    
+
     Detailed explanation of what the class does, its purpose,
     and how it should be used.
-    
+
     Parameters
     ----------
     param1 : str
         Description of initialization parameter.
     param2 : float, optional
         Description of optional parameter. Default is 0.5.
-    
+
     Attributes
     ----------
     attr1 : str
         Description of public attribute.
     attr2 : int
         Description of another attribute.
-    
+
     Methods
     -------
     method1(arg)
         Brief description of method1.
     method2()
         Brief description of method2.
-    
+
     Examples
     --------
     Create an instance and use it:
-    
+
     >>> obj = ClassName("value", param2=0.7)
     >>> result = obj.method1(input_data)
-    
+
     Notes
     -----
     - Thread safety: This class is thread-safe.
     - Performance: O(n) for method1, O(1) for method2.
-    
+
     See Also
     --------
     RelatedClass : Similar functionality
     """
-    
+
     def __init__(self, param1: str, param2: float = 0.5):
         """
         Initialize {ClassName}.
-        
+
         Parameters
         ----------
         param1 : str
@@ -560,15 +560,15 @@ def main():
         'param1': 'value1',
         'param2': 0.7,
     }
-    
+
     # Initialize
     processor = {Class}(config)
-    
+
     # Process
     input_dir = Path('input/')
     output_dir = Path('output/')
     output_dir.mkdir(exist_ok=True)
-    
+
     for input_file in input_dir.glob('*.jpg'):
         result = processor.process(input_file)
         output_file = output_dir / input_file.name
@@ -760,6 +760,6 @@ Common issues and solutions for {COMPONENT_NAME}.
 
 ---
 
-**Template Version**: 1.0  
-**Last Updated**: 2025-11-06  
+**Template Version**: 1.0
+**Last Updated**: 2025-11-06
 **Maintained By**: Transformation Portal RAG System

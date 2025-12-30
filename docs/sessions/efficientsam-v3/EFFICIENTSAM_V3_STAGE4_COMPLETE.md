@@ -1,7 +1,7 @@
 # ✅ EfficientSAM V3 - Stage 4 Complete
 
-**Date**: December 12, 2025  
-**Commit**: `e8144d8` on `feature/efficientsam-v3`  
+**Date**: December 12, 2025
+**Commit**: `e8144d8` on `feature/efficientsam-v3`
 **Status**: **OPERATIONAL** - Ready for Stage 5 (APEX Integration)
 
 ---
@@ -30,16 +30,16 @@
 def segment(image: np.ndarray, prompts: Sequence[Prompt]) -> np.ndarray:
     # 1. Preprocess image and prompts
     input_tensor, prompt_tensors = self._preprocess(image, prompts)
-    
+
     # 2. Build ONNX feed dict with auto-detected tensor names
     onnx_inputs = self._prepare_onnx_inputs(input_tensor, prompt_tensors, h, w)
-    
+
     # 3. Run inference with error handling
     outputs = session.run(self._output_names, onnx_inputs)
-    
+
     # 4. Postprocess to HxW float32 [0,1] mask
     mask = self._postprocess_outputs(outputs, h, w)
-    
+
     return mask
 ```
 
@@ -374,7 +374,6 @@ CI: Not yet pushed (feature branch)
 
 ---
 
-**Stage 4 Status**: ✅ **COMPLETE AND OPERATIONAL**  
-**Next**: Stage 5 - APEX Integration & Real-World Validation  
+**Stage 4 Status**: ✅ **COMPLETE AND OPERATIONAL**
+**Next**: Stage 5 - APEX Integration & Real-World Validation
 **Timeline**: Ready for Stage 5 immediately upon ONNX model availability
-

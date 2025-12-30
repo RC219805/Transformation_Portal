@@ -29,6 +29,7 @@ from PIL import Image
 # Optional scipy for advanced image processing
 try:
     from scipy.ndimage import gaussian_filter as scipy_gaussian_filter
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 class MaterialType(Enum):
     """Types of materials detected in architectural imagery."""
+
     STONE = "stone"
     GLASS = "glass"
     WATER = "water"
@@ -55,6 +57,7 @@ class MaterialType(Enum):
 
 class RoomType(Enum):
     """Types of rooms/spaces in the property."""
+
     EXTERIOR = "exterior"
     LIVING_ROOM = "living_room"
     KITCHEN = "kitchen"
@@ -71,6 +74,7 @@ class RoomType(Enum):
 @dataclass
 class ColorPalette:
     """Extracted color palette from an image."""
+
     dominant_colors: List[Tuple[int, int, int]] = field(default_factory=list)
     color_weights: List[float] = field(default_factory=list)
     average_color: Tuple[int, int, int] = (128, 128, 128)
@@ -93,11 +97,10 @@ class ColorPalette:
 @dataclass
 class MaterialDetection:
     """Results of material detection in an image."""
+
     detected_materials: Dict[MaterialType, float] = field(default_factory=dict)
     primary_materials: List[MaterialType] = field(default_factory=list)
-    material_regions: Dict[MaterialType, List[Tuple[int, int, int, int]]] = field(
-        default_factory=dict
-    )
+    material_regions: Dict[MaterialType, List[Tuple[int, int, int, int]]] = field(default_factory=dict)
     total_coverage: Dict[MaterialType, float] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -112,6 +115,7 @@ class MaterialDetection:
 @dataclass
 class ArchitecturalFeatures:
     """Detected architectural features in an image."""
+
     has_infinity_edge: bool = False
     has_floor_to_ceiling_windows: bool = False
     has_open_floor_plan: bool = False
@@ -140,6 +144,7 @@ class ArchitecturalFeatures:
 @dataclass
 class ImageAnalysis:
     """Complete analysis of a single image."""
+
     image_path: Path = field(default_factory=Path)
     room_type: RoomType = RoomType.UNKNOWN
     dimensions: Tuple[int, int] = (0, 0)
@@ -168,6 +173,7 @@ class ImageAnalysis:
 @dataclass
 class PropertyReport:
     """Complete property analysis report."""
+
     property_name: str = "750 Picacho Lane"
     property_address: str = "750 Picacho Lane, Montecito, CA"
     project_number: str = "24098.00"
@@ -242,11 +248,7 @@ class PicachoAnalyzer:
         MaterialType.SKY: {"h_range": (180, 240), "s_range": (20, 80), "v_range": (60, 100)},
     }
 
-    def __init__(
-        self,
-        property_dir: Optional[Path] = None,
-        project_root: Optional[Path] = None
-    ):
+    def __init__(self, property_dir: Optional[Path] = None, project_root: Optional[Path] = None):
         """
         Initialize property analyzer.
 
@@ -416,16 +418,8 @@ class PicachoAnalyzer:
         avg_saturation = hsv_pixels[:, 1].mean()
         avg_brightness = hsv_pixels[:, 2].mean()
 
-        saturation_level = (
-            "high" if avg_saturation > 0.5
-            else "moderate" if avg_saturation > 0.25
-            else "low"
-        )
-        brightness_level = (
-            "high" if avg_brightness > 0.7
-            else "moderate" if avg_brightness > 0.4
-            else "low"
-        )
+        saturation_level = "high" if avg_saturation > 0.5 else "moderate" if avg_saturation > 0.25 else "low"
+        brightness_level = "high" if avg_brightness > 0.7 else "moderate" if avg_brightness > 0.4 else "low"
 
         return ColorPalette(
             dominant_colors=dominant_colors,
@@ -436,19 +430,13 @@ class PicachoAnalyzer:
             brightness_level=brightness_level,
         )
 
-    def _simple_color_clustering(
-        self,
-        pixels: np.ndarray,
-        n_clusters: int
-    ) -> Tuple[List[Tuple[int, int, int]], List[float]]:
+    def _simple_color_clustering(self, pixels: np.ndarray, n_clusters: int) -> Tuple[List[Tuple[int, int, int]], List[float]]:
         """Simple color clustering using random sampling and binning."""
         # Quantize colors to reduce complexity
         quantized = (pixels // 32) * 32 + 16
 
         # Find unique colors and their counts
-        unique_colors, indices, counts = np.unique(
-            quantized, axis=0, return_inverse=True, return_counts=True
-        )
+        unique_colors, indices, counts = np.unique(quantized, axis=0, return_inverse=True, return_counts=True)
 
         # Get top n_clusters by count
         top_indices = np.argsort(-counts)[:n_clusters]
@@ -485,11 +473,7 @@ class PicachoAnalyzer:
 
         return np.stack([h, s, v], axis=1)
 
-    def _detect_materials(
-        self,
-        img_array: np.ndarray,
-        room_type: RoomType
-    ) -> MaterialDetection:
+    def _detect_materials(self, img_array: np.ndarray, room_type: RoomType) -> MaterialDetection:
         """Detect materials present in the image."""
         # Ensure RGB
         if len(img_array.shape) == 2:
@@ -540,9 +524,7 @@ class PicachoAnalyzer:
         detected_materials = self._adjust_materials_for_room(detected_materials, room_type)
 
         # Determine primary materials (top 3)
-        sorted_materials = sorted(
-            detected_materials.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_materials = sorted(detected_materials.items(), key=lambda x: x[1], reverse=True)
         primary_materials = [m[0] for m in sorted_materials[:3]]
 
         return MaterialDetection(
@@ -552,9 +534,7 @@ class PicachoAnalyzer:
         )
 
     def _adjust_materials_for_room(
-        self,
-        materials: Dict[MaterialType, float],
-        room_type: RoomType
+        self, materials: Dict[MaterialType, float], room_type: RoomType
     ) -> Dict[MaterialType, float]:
         """Adjust material detection confidence based on room type."""
         adjusted = materials.copy()
@@ -576,11 +556,7 @@ class PicachoAnalyzer:
 
         return adjusted
 
-    def _detect_architectural_features(
-        self,
-        img_array: np.ndarray,
-        room_type: RoomType
-    ) -> ArchitecturalFeatures:
+    def _detect_architectural_features(self, img_array: np.ndarray, room_type: RoomType) -> ArchitecturalFeatures:
         """Detect architectural features based on image analysis and room type."""
         features = ArchitecturalFeatures()
 
@@ -673,16 +649,13 @@ class PicachoAnalyzer:
         # Sample center region for speed
         center_h, center_w = h // 2, w // 2
         region_size = min(256, min(h, w) // 2)
-        region = img[
-            center_h - region_size:center_h + region_size,
-            center_w - region_size:center_w + region_size
-        ]
+        region = img[center_h - region_size : center_h + region_size, center_w - region_size : center_w + region_size]
 
         # Simple convolution approximation
         edges = np.zeros_like(region)
         for i in range(1, region.shape[0] - 1):
             for j in range(1, region.shape[1] - 1):
-                patch = region[i - 1:i + 2, j - 1:j + 2]
+                patch = region[i - 1 : i + 2, j - 1 : j + 2]
                 edges[i, j] = np.abs(np.sum(patch * kernel))
 
         return edges.var()
@@ -800,9 +773,7 @@ class PicachoAnalyzer:
             all_materials.update(analysis.materials.primary_materials)
 
         if len(all_materials) >= 5:
-            recommendations.append(
-                "Good material diversity detected. Multi-material training recommended."
-            )
+            recommendations.append("Good material diversity detected. Multi-material training recommended.")
         else:
             recommendations.append(
                 f"Limited material diversity ({len(all_materials)} types). "
@@ -812,25 +783,21 @@ class PicachoAnalyzer:
         # Check quality scores
         avg_quality = np.mean([a.quality_score for a in self.analyses])
         if avg_quality > 0.7:
-            recommendations.append(
-                "High-quality source images. Suitable for direct training."
-            )
+            recommendations.append("High-quality source images. Suitable for direct training.")
         elif avg_quality > 0.5:
-            recommendations.append(
-                "Moderate quality sources. Pre-processing recommended."
-            )
+            recommendations.append("Moderate quality sources. Pre-processing recommended.")
         else:
-            recommendations.append(
-                "Lower quality sources detected. Significant pre-processing required."
-            )
+            recommendations.append("Lower quality sources detected. Significant pre-processing required.")
 
         # Training-specific recommendations
-        recommendations.extend([
-            "Use multi-scale crops (512, 1024, 2048) for comprehensive training.",
-            "Apply depth-aware augmentation for architectural coherence.",
-            "Implement material-specific loss weighting for balanced learning.",
-            "Consider 3-stage training: Material → Architectural → Full-Resolution.",
-        ])
+        recommendations.extend(
+            [
+                "Use multi-scale crops (512, 1024, 2048) for comprehensive training.",
+                "Apply depth-aware augmentation for architectural coherence.",
+                "Implement material-specific loss weighting for balanced learning.",
+                "Consider 3-stage training: Material → Architectural → Full-Resolution.",
+            ]
+        )
 
         return recommendations
 
@@ -843,7 +810,4 @@ class PicachoAnalyzer:
         return [a.room_type for a in self.analyses]
 
     def __repr__(self) -> str:
-        return (
-            f"PicachoAnalyzer(property_dir={self.property_dir}, "
-            f"images={len(self.image_paths)})"
-        )
+        return f"PicachoAnalyzer(property_dir={self.property_dir}, images={len(self.image_paths)})"

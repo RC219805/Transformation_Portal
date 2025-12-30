@@ -36,6 +36,7 @@ except ImportError as e:
 
 try:
     import typer
+
     HAS_TYPER = True
 except ImportError:
     HAS_TYPER = False
@@ -83,11 +84,7 @@ def adjust_saturation(image: Image.Image, factor: float = 1.0) -> Image.Image:
     return enhancer.enhance(factor)
 
 
-def resize_image(
-    image: Image.Image,
-    target_size: Tuple[int, int],
-    maintain_aspect: bool = True
-) -> Image.Image:
+def resize_image(image: Image.Image, target_size: Tuple[int, int], maintain_aspect: bool = True) -> Image.Image:
     """Resize image with optional aspect ratio preservation.
 
     Args:
@@ -114,7 +111,7 @@ def process_image(
     saturation: float = 1.0,
     resize: Optional[Tuple[int, int]] = None,
     quality: int = 95,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> bool:
     """Process a single image with basic adjustments.
 
@@ -144,10 +141,10 @@ def process_image(
             print(f"  Original: {original_size[0]}x{original_size[1]} {original_mode}")
 
         # Convert to RGB if needed (for processing)
-        if img.mode != 'RGB':
+        if img.mode != "RGB":
             if verbose:
                 print(f"  Converting {img.mode} → RGB")
-            img = img.convert('RGB')
+            img = img.convert("RGB")
 
         # Apply adjustments
         if brightness != 1.0:
@@ -178,11 +175,11 @@ def process_image(
         output_format = output_path.suffix.lower()
         save_kwargs = {}
 
-        if output_format in ['.jpg', '.jpeg']:
-            save_kwargs['quality'] = quality
-            save_kwargs['optimize'] = True
-        elif output_format == '.png':
-            save_kwargs['optimize'] = True
+        if output_format in [".jpg", ".jpeg"]:
+            save_kwargs["quality"] = quality
+            save_kwargs["optimize"] = True
+        elif output_format == ".png":
+            save_kwargs["optimize"] = True
 
         img.save(output_path, **save_kwargs)
 
@@ -206,7 +203,7 @@ def main_simple(
     width: Optional[int] = None,
     height: Optional[int] = None,
     quality: int = 95,
-    verbose: bool = False
+    verbose: bool = False,
 ):
     """
     Simple image processor for basic operations.
@@ -242,7 +239,7 @@ def main_simple(
         saturation=saturation,
         resize=resize_target,
         quality=quality,
-        verbose=verbose
+        verbose=verbose,
     )
 
     if success:
@@ -255,10 +252,7 @@ def main_simple(
 
 # CLI setup
 if HAS_TYPER:
-    app = typer.Typer(
-        help="Simple image processor (minimal dependencies)",
-        add_completion=False
-    )
+    app = typer.Typer(help="Simple image processor (minimal dependencies)", add_completion=False)
 
     @app.command()
     def main(
@@ -295,14 +289,16 @@ else:
 
         args = parser.parse_args()
 
-        sys.exit(main_simple(
-            args.input_path,
-            args.output,
-            args.brightness,
-            args.contrast,
-            args.saturation,
-            args.width,
-            args.height,
-            args.quality,
-            args.verbose
-        ))
+        sys.exit(
+            main_simple(
+                args.input_path,
+                args.output,
+                args.brightness,
+                args.contrast,
+                args.saturation,
+                args.width,
+                args.height,
+                args.quality,
+                args.verbose,
+            )
+        )

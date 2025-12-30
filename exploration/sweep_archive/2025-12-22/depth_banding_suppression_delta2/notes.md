@@ -1,10 +1,10 @@
 # depth_banding_suppression_delta2
 
-**Date**: 2025-12-22 01:18:32  
-**Sweep Type**: Single-Parameter (Phase 1)  
-**Parameter**: `depth.banding_suppression`  
-**Value**: 0.007  
-**Delta ID**: delta-2 
+**Date**: 2025-12-22 01:18:32
+**Sweep Type**: Single-Parameter (Phase 1)
+**Parameter**: `depth.banding_suppression`
+**Value**: 0.007
+**Delta ID**: delta-2
 
 ## Expected Impact
 

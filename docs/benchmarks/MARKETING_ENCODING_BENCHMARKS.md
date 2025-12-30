@@ -2,9 +2,9 @@
 
 ## PNG Compression Level Benchmarks (M1.1)
 
-**Date**: 2025-12-10  
-**Dataset**: Pool, Aerial, GreatRoom (750 Picacho)  
-**Method**: Median-based comparison (15 runs total, 3 images × 5 levels)  
+**Date**: 2025-12-10
+**Dataset**: Pool, Aerial, GreatRoom (750 Picacho)
+**Method**: Median-based comparison (15 runs total, 3 images × 5 levels)
 **Tool**: `scripts/analyze_marketing_export.py`
 
 ---

@@ -19,15 +19,13 @@ from PIL import Image
 # Check if torch is available before importing the module
 try:
     import torch  # noqa: F401
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
 
 # Skip all tests in this module if torch is not available
-pytestmark = pytest.mark.skipif(
-    not TORCH_AVAILABLE,
-    reason="torch is required for depth_anything_v2 module"
-)
+pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch is required for depth_anything_v2 module")
 
 # Guard the import - only import if torch is available
 if TORCH_AVAILABLE:
@@ -50,7 +48,7 @@ else:
 @pytest.fixture
 def sample_image():
     """Create a sample RGB image for testing."""
-    return Image.new('RGB', (100, 100), color='red')
+    return Image.new("RGB", (100, 100), color="red")
 
 
 class TestONNXBackendAvailability:
@@ -64,8 +62,8 @@ class TestONNXBackendAvailability:
 
     def test_onnx_backend_enum_exists(self):
         """Test that ONNX backend is defined in ModelBackend enum."""
-        assert hasattr(ModelBackend, 'ONNX')
-        assert ModelBackend.ONNX.value == 'onnx'
+        assert hasattr(ModelBackend, "ONNX")
+        assert ModelBackend.ONNX.value == "onnx"
 
 
 class TestModelBackendEnum:
@@ -73,16 +71,16 @@ class TestModelBackendEnum:
 
     def test_all_backends_defined(self):
         """Test that all expected backends are defined."""
-        expected_backends = ['PYTORCH_CPU', 'PYTORCH_MPS', 'COREML', 'ONNX']
+        expected_backends = ["PYTORCH_CPU", "PYTORCH_MPS", "COREML", "ONNX"]
         for backend in expected_backends:
             assert hasattr(ModelBackend, backend), f"Missing backend: {backend}"
 
     def test_backend_values(self):
         """Test that backend enum values are correct."""
-        assert ModelBackend.PYTORCH_CPU.value == 'pytorch_cpu'
-        assert ModelBackend.PYTORCH_MPS.value == 'pytorch_mps'
-        assert ModelBackend.COREML.value == 'coreml'
-        assert ModelBackend.ONNX.value == 'onnx'
+        assert ModelBackend.PYTORCH_CPU.value == "pytorch_cpu"
+        assert ModelBackend.PYTORCH_MPS.value == "pytorch_mps"
+        assert ModelBackend.COREML.value == "coreml"
+        assert ModelBackend.ONNX.value == "onnx"
 
 
 class TestModelVariant:
@@ -90,7 +88,7 @@ class TestModelVariant:
 
     def test_all_variants_defined(self):
         """Test that all expected model variants are defined."""
-        expected_variants = ['SMALL', 'BASE', 'LARGE']
+        expected_variants = ["SMALL", "BASE", "LARGE"]
         for variant in expected_variants:
             assert hasattr(ModelVariant, variant), f"Missing variant: {variant}"
 
@@ -100,19 +98,19 @@ class TestONNXInference:
 
     def test_estimate_depth_onnx_method_exists(self):
         """Test that _estimate_depth_onnx method exists."""
-        assert hasattr(DepthAnythingV2Model, '_estimate_depth_onnx')
+        assert hasattr(DepthAnythingV2Model, "_estimate_depth_onnx")
 
     def test_load_onnx_model_method_exists(self):
         """Test that _load_onnx_model method exists."""
-        assert hasattr(DepthAnythingV2Model, '_load_onnx_model')
+        assert hasattr(DepthAnythingV2Model, "_load_onnx_model")
 
     def test_download_onnx_model_method_exists(self):
         """Test that _download_onnx_model method exists."""
-        assert hasattr(DepthAnythingV2Model, '_download_onnx_model')
+        assert hasattr(DepthAnythingV2Model, "_download_onnx_model")
 
     def test_get_onnx_providers_method_exists(self):
         """Test that _get_onnx_providers method exists."""
-        assert hasattr(DepthAnythingV2Model, '_get_onnx_providers')
+        assert hasattr(DepthAnythingV2Model, "_get_onnx_providers")
 
 
 class TestAutoDetectDevice:
@@ -126,7 +124,7 @@ class TestAutoDetectDevice:
 
         # Test the device detection
         device = model._auto_detect_device()
-        assert device == 'onnx'
+        assert device == "onnx"
 
 
 class TestONNXDownloadMapping:
@@ -145,38 +143,38 @@ class TestONNXDownloadMapping:
 
     def test_onnx_download_uses_correct_filename(self):
         """Test that _download_onnx_model uses correct filename for each variant."""
-        pytest.importorskip('huggingface_hub')
+        pytest.importorskip("huggingface_hub")
 
         model = DepthAnythingV2Model.__new__(DepthAnythingV2Model)
 
-        with patch('huggingface_hub.hf_hub_download') as mock_download:
-            mock_download.return_value = '/fake/path/model.onnx'
+        with patch("huggingface_hub.hf_hub_download") as mock_download:
+            mock_download.return_value = "/fake/path/model.onnx"
 
             # Test SMALL variant
             model.variant = ModelVariant.SMALL
             model._download_onnx_model()
             mock_download.assert_called_with(
-                repo_id='onnx/Depth-Anything-V2',
-                filename='depth_anything_v2_vits.onnx',
-                cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+                repo_id="onnx/Depth-Anything-V2",
+                filename="depth_anything_v2_vits.onnx",
+                cache_dir=Path.home() / ".cache" / "depth_anything_v2",
             )
 
             # Test BASE variant
             model.variant = ModelVariant.BASE
             model._download_onnx_model()
             mock_download.assert_called_with(
-                repo_id='onnx/Depth-Anything-V2',
-                filename='depth_anything_v2_vitb.onnx',
-                cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+                repo_id="onnx/Depth-Anything-V2",
+                filename="depth_anything_v2_vitb.onnx",
+                cache_dir=Path.home() / ".cache" / "depth_anything_v2",
             )
 
             # Test LARGE variant
             model.variant = ModelVariant.LARGE
             model._download_onnx_model()
             mock_download.assert_called_with(
-                repo_id='onnx/Depth-Anything-V2',
-                filename='depth_anything_v2_vitl.onnx',
-                cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+                repo_id="onnx/Depth-Anything-V2",
+                filename="depth_anything_v2_vitl.onnx",
+                cache_dir=Path.home() / ".cache" / "depth_anything_v2",
             )
 
 
@@ -188,7 +186,7 @@ class TestLoadModelRouting:
         model = DepthAnythingV2Model.__new__(DepthAnythingV2Model)
         model.backend = ModelBackend.ONNX
 
-        with patch.object(model, '_load_onnx_model') as mock_load:
+        with patch.object(model, "_load_onnx_model") as mock_load:
             model._load_model()
             mock_load.assert_called_once()
 
@@ -204,15 +202,15 @@ class TestEstimateDepthRouting:
 
         # Mock the ONNX inference method
         mock_result = {
-            'depth': np.zeros((100, 100), dtype=np.float32),
-            'depth_raw': np.zeros((100, 100), dtype=np.float32),
-            'metadata': {'backend': 'onnx'}
+            "depth": np.zeros((100, 100), dtype=np.float32),
+            "depth_raw": np.zeros((100, 100), dtype=np.float32),
+            "metadata": {"backend": "onnx"},
         }
 
-        with patch.object(model, '_estimate_depth_onnx', return_value=mock_result) as mock_onnx:
+        with patch.object(model, "_estimate_depth_onnx", return_value=mock_result) as mock_onnx:
             result = model.estimate_depth(sample_image)
             mock_onnx.assert_called_once()
-            assert result['metadata']['backend'] == 'onnx'
+            assert result["metadata"]["backend"] == "onnx"
 
 
 class TestONNXModelLoadingWithMock:
@@ -225,7 +223,7 @@ class TestONNXModelLoadingWithMock:
         providers = model._get_onnx_providers()
         assert isinstance(providers, list)
         assert len(providers) > 0
-        assert 'CPUExecutionProvider' in providers
+        assert "CPUExecutionProvider" in providers
 
 
 if __name__ == "__main__":

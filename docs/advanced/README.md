@@ -21,27 +21,27 @@ Use these workflows **only if**:
 ## Available Advanced Workflows
 
 ### 🔄 Async/Streaming Pipeline
-**Use when**: Processing 1000+ images, need 3-5x throughput improvement  
-**Documentation**: [ASYNC_PIPELINE.md](ASYNC_PIPELINE.md)  
-**Location**: `src/transformation_portal/streaming/`  
+**Use when**: Processing 1000+ images, need 3-5x throughput improvement
+**Documentation**: [ASYNC_PIPELINE.md](ASYNC_PIPELINE.md)
+**Location**: `src/transformation_portal/streaming/`
 **Status**: Stable, production-ready
 
 ### 🧠 Context-Aware Rendering
-**Use when**: Need document-driven architectural intelligence  
-**Documentation**: [CONTEXT_AWARE_RENDERING.md](CONTEXT_AWARE_RENDERING.md)  
-**Location**: `src/transformation_portal/context_aware_rendering/`  
+**Use when**: Need document-driven architectural intelligence
+**Documentation**: [CONTEXT_AWARE_RENDERING.md](CONTEXT_AWARE_RENDERING.md)
+**Location**: `src/transformation_portal/context_aware_rendering/`
 **Status**: Stable, specialized use case
 
 ### 🎨 Material Response (Advanced)
-**Use when**: Custom material enhancement beyond 8 standard types  
-**Documentation**: [MATERIAL_RESPONSE.md](MATERIAL_RESPONSE.md)  
-**Location**: `material_response.py`  
+**Use when**: Custom material enhancement beyond 8 standard types
+**Documentation**: [MATERIAL_RESPONSE.md](MATERIAL_RESPONSE.md)
+**Location**: `material_response.py`
 **Status**: Stable, expert-level
 
 ### 🎬 Video Processing
-**Use when**: Processing video files (not images)  
-**Documentation**: [VIDEO_PROCESSING.md](VIDEO_PROCESSING.md)  
-**Tool**: `luxury_video_master_grader.py`  
+**Use when**: Processing video files (not images)
+**Documentation**: [VIDEO_PROCESSING.md](VIDEO_PROCESSING.md)
+**Tool**: `luxury_video_master_grader.py`
 **Status**: Stable, separate domain
 
 ---

@@ -1,8 +1,8 @@
 # Depth Anything 3 (DA3) Integration Architecture
 
-**Author**: Transformation Portal Architect  
-**Date**: 2025-12-19  
-**Status**: Implemented (Design Documentation)  
+**Author**: Transformation Portal Architect
+**Date**: 2025-12-19
+**Status**: Implemented (Design Documentation)
 **Module**: `lux_depth_v3/`
 
 ---
@@ -213,34 +213,34 @@ intrinsics = result.intrinsics         # (N, 3, 3) camera intrinsics
 @dataclass
 class DA3Result:
     """Unified result container for DA3 inference."""
-    
+
     # Status
     success: bool
     message: str
-    
+
     # Output paths
     output_dir: Path
     depth_path: Optional[Path] = None       # Primary depth file (NPZ)
     glb_path: Optional[Path] = None         # 3D mesh
     ply_path: Optional[Path] = None         # Point cloud
     depth_vis_dir: Optional[Path] = None    # Visualization frames
-    
+
     # Lazy-loaded data (only when accessed)
     _depth_array: Optional[np.ndarray] = None
     _confidence_array: Optional[np.ndarray] = None
     _extrinsics: Optional[np.ndarray] = None
     _intrinsics: Optional[np.ndarray] = None
-    
+
     # Quality metrics
     metrics: Optional[DepthQualityMetrics] = None
-    
+
     @property
     def depth_array(self) -> np.ndarray:
         """Lazy load depth array from NPZ."""
         if self._depth_array is None:
             self._depth_array = load_depth_from_npz(self.depth_path)
         return self._depth_array
-    
+
     # Similar properties for confidence, extrinsics, intrinsics
 ```
 
@@ -250,51 +250,51 @@ class DA3Result:
 @dataclass
 class DA3Config:
     """Comprehensive DA3 configuration."""
-    
+
     # Model selection
     model: ModelVariant = ModelVariant.DA3_LARGE_V1_1
-    
+
     # Inference mode
     inference_mode: InferenceMode = InferenceMode.MONOCULAR
-    
+
     # Processing parameters
     process_res: int = 768            # Processing resolution
     process_res_method: str = "long"  # 'long' or 'short' edge
-    
+
     # Export configuration
     export_format: List[str] = field(default_factory=lambda: ["mini_npz"])
     export_dir: Optional[Path] = None
-    
+
     # Pose parameters
     use_ray_pose: bool = False
     align_to_input_ext_scale: bool = False
     ref_view_strategy: str = "center"  # center, auto, manual
-    
+
     # Gaussian Splatting
     infer_gs: bool = False
     render_exts: Optional[np.ndarray] = None
     render_ixts: Optional[np.ndarray] = None
     render_hw: Tuple[int, int] = (512, 512)
-    
+
     # GLB export settings
     conf_thresh_percentile: float = 0.5
     num_max_points: int = 10_000_000
     show_cameras: bool = False
-    
+
     # Feature extraction
     export_feat_layers: Optional[List[int]] = None
     feat_vis_fps: int = 15
-    
+
     # Device & precision
     device: str = "auto"
     precision: str = "fp16"
-    
+
     # CLI-specific (backward compatibility)
     cli: DA3CLIConfig = field(default_factory=DA3CLIConfig)
-    
+
     # API-specific (Python API mode)
     api: DA3APIConfig = field(default_factory=DA3APIConfig)
-    
+
     def to_api_kwargs(self) -> Dict[str, Any]:
         """Convert to kwargs for DepthAnything3.inference()."""
         # Implementation provided in config.py
@@ -312,25 +312,25 @@ class DA3Config:
 ```python
 class ModelCacheManager:
     """Manage DA3 model downloads and caching."""
-    
+
     # Supported models
     OFFICIAL_MODELS = {
         # v1.1 models (recommended)
         "nested-giant-large-v1.1": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         "giant-v1.1": "depth-anything/DA3-GIANT-1.1",
         "large-v1.1": "depth-anything/DA3-LARGE-1.1",
-        
+
         # Apache-licensed (commercial)
         "metric-large": "depth-anything/DA3METRIC-LARGE",
         "base": "depth-anything/DA3-BASE",
         "small": "depth-anything/DA3-SMALL",
         "mono-large": "depth-anything/DA3MONO-LARGE",
     }
-    
+
     # Recommended sets
     RECOMMENDED_SETS = {
         "essential": ["nested-giant-large-v1.1", "metric-large"],
-        "production": ["nested-giant-large-v1.1", "giant-v1.1", 
+        "production": ["nested-giant-large-v1.1", "giant-v1.1",
                       "large-v1.1", "metric-large"],
         "benchmark": list(OFFICIAL_MODELS.keys()),
     }
@@ -548,7 +548,7 @@ if metrics.rmse < 0.5 and metrics.delta_1 > 0.85:
     print("✅ Quality gate passed")
 else:
     print("❌ Quality gate failed")
-    
+
 # Export to validation framework format
 metrics.export_to_json("validation_v1_baseline_pack/metrics/da3_results.json")
 ```
@@ -602,23 +602,23 @@ class InputManager:
         self.max_file_size_mb = max_file_size_mb
         self.max_image_dimension = max_image_dimension
         self.allowed_extensions = allowed_extensions
-    
+
     def validate_input(self, path: Path) -> None:
         """Validate input against security constraints."""
         # File size check
         size_mb = path.stat().st_size / (1024 * 1024)
         if size_mb > self.max_file_size_mb:
             raise ValueError(f"File too large: {size_mb:.1f}MB > {self.max_file_size_mb}MB")
-        
+
         # Extension check
         if path.suffix.lower() not in self.allowed_extensions:
             raise ValueError(f"Invalid extension: {path.suffix}")
-        
+
         # Dimension check
         img = Image.open(path)
         if max(img.size) > self.max_image_dimension:
             raise ValueError(f"Image too large: {img.size} > {self.max_image_dimension}")
-        
+
         # Path traversal check
         if ".." in str(path):
             raise ValueError("Path traversal detected")
@@ -643,14 +643,14 @@ async def estimate_depth_endpoint(
     model: str = "large-v1.1",
 ):
     """Depth estimation API endpoint."""
-    
+
     # Input validation
     if file.size > 50 * 1024 * 1024:  # 50MB
         raise HTTPException(400, "File too large")
-    
+
     if not file.filename.endswith((".jpg", ".png")):
         raise HTTPException(400, "Invalid file type")
-    
+
     # Process
     # ...
 ```
@@ -734,7 +734,7 @@ lux-depth-v3 show-license --model nested-giant-large-v1.1
 # Model: DA3NESTED-GIANT-LARGE-1.1
 # License: CC-BY-NC-4.0 (Non-commercial)
 # Commercial use: ❌ Not allowed
-# 
+#
 # For commercial projects, use:
 # - metric-large (Apache-2.0) ✅
 # - base (Apache-2.0) ✅
@@ -1142,7 +1142,7 @@ Total: ~6,088 lines of code + documentation
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-12-19  
-**Approved By**: Transformation Portal Architect  
+**Document Version**: 1.0
+**Last Updated**: 2025-12-19
+**Approved By**: Transformation Portal Architect
 **Status**: Active

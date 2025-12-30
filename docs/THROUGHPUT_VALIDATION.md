@@ -76,8 +76,8 @@ python scripts/validate_throughput.py \
 
 ### 4. CI Integration (`.github/workflows/ci-consolidated.yml`)
 
-**Job**: `test-throughput`  
-**Stage**: 3.5 (between `test-core` and `test-ml`)  
+**Job**: `test-throughput`
+**Stage**: 3.5 (between `test-core` and `test-ml`)
 **Triggers**: Pull requests and pushes to main
 
 **Workflow**:
@@ -244,12 +244,12 @@ Together, these systems provide comprehensive performance coverage:
 
 ## Maintenance
 
-**Owner**: Transformation Portal Architect  
-**Review Cadence**: Quarterly baseline review  
+**Owner**: Transformation Portal Architect
+**Review Cadence**: Quarterly baseline review
 **Update Triggers**: Major feature changes, CI environment changes, regression fixes
 
 ---
 
-**Last Updated**: 2025-12-28  
-**Version**: 1.0.0  
+**Last Updated**: 2025-12-28
+**Version**: 1.0.0
 **PR**: #608 (Automated Throughput Validation - P0-2)

@@ -186,6 +186,6 @@ python3 scripts/benchmark_materials_v2.py \
 
 ---
 
-**Status:** Ready for integration and testing!  
-**Estimated Time:** 3-4 hours total  
+**Status:** Ready for integration and testing!
+**Estimated Time:** 3-4 hours total
 **Next Step:** Complete pipeline integration (Step 1)

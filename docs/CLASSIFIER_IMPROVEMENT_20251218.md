@@ -1,6 +1,6 @@
 # Session Summary: Scene Classifier V2 Improvement
-**Date**: 2025-12-18  
-**Commit Range**: Validation analysis + classifier improvements  
+**Date**: 2025-12-18
+**Commit Range**: Validation analysis + classifier improvements
 **Status**: ⚠️ MARGINAL SUCCESS (77.8% accuracy, target 85-90%)
 
 ---
@@ -71,7 +71,7 @@ def classify_scene_type_v2(
     image_filename=None  # NEW: Optional filename for weak supervision
 ):
     # ... existing depth-based logic
-    
+
     # Filename hint extraction
     filename_hint = None
     if image_filename:
@@ -79,7 +79,7 @@ def classify_scene_type_v2(
             filename_hint = 'texture'
         elif any(p in filename.lower() for p in ['kitchen', 'bathroom', 'bedroom', 'living', 'great']):
             filename_hint = 'structure'
-    
+
     # Borderline detection + override
     if is_borderline(ratio, depth_gradient_var, edge_density):
         if filename_hint:

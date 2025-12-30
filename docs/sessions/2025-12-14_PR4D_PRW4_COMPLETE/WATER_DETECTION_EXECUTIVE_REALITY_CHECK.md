@@ -1,7 +1,7 @@
 # Water Detection: Exact Current State & Meaningful Next Steps
 
-**Date:** 2025-12-14  
-**Assessment Type:** Engineering Reality Check  
+**Date:** 2025-12-14
+**Assessment Type:** Engineering Reality Check
 **Purpose:** Zero-bullshit status + executable path forward
 
 ---
@@ -247,7 +247,7 @@
 - [ ] Uploads JSON artifact
 - [ ] Emits warnings on regression
 
-**Current Score:** 7/26 (27%)  
+**Current Score:** 7/26 (27%)
 **Blocker:** No dataset, no detector implementation
 
 ---

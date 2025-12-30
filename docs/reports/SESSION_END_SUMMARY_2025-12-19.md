@@ -1,6 +1,6 @@
 # Session End Summary: Depth Quality & Validation Framework
-**Date**: 2025-12-19  
-**Final Commit**: `85ebba2` - feat: add 50-image validation quick-start script  
+**Date**: 2025-12-19
+**Final Commit**: `85ebba2` - feat: add 50-image validation quick-start script
 **Status**: ✅ **Production-Ready Validation Framework Established**
 
 ---
@@ -21,7 +21,7 @@ This session completed the transformation from a failing, adversarial depth vali
 ## 📊 Key Achievements
 
 ### 1. Scene Classifier V2 (Multi-Factor)
-**Problem Solved**: Single-threshold classifier was brittle and adversarial  
+**Problem Solved**: Single-threshold classifier was brittle and adversarial
 **Solution Implemented**:
 - Multi-factor decision logic (ratio, depth_var, edge_density, HF_energy, depth_range)
 - Balanced accuracy metric for imbalanced datasets
@@ -33,7 +33,7 @@ This session completed the transformation from a failing, adversarial depth vali
 ---
 
 ### 2. High-Frequency Energy Metric
-**Problem Solved**: Texture scenes (pool, ocean, glass) failed because depth was smooth (correct behavior)  
+**Problem Solved**: Texture scenes (pool, ocean, glass) failed because depth was smooth (correct behavior)
 **Solution Implemented**:
 - HF energy metric: `depth - gaussian_blur(depth)` → detects texture copying
 - Not-flat safeguard: `p95 - p05 > 0.05` → prevents degenerate depth collapse
@@ -44,7 +44,7 @@ This session completed the transformation from a failing, adversarial depth vali
 ---
 
 ### 3. Balanced Quality Gates
-**Problem Solved**: Universal gates punished valid smooth depth in texture scenes  
+**Problem Solved**: Universal gates punished valid smooth depth in texture scenes
 **Solution Implemented**:
 
 #### Texture Scenes:
@@ -440,18 +440,18 @@ The validation framework is now:
 3. **Extensible** - Ready for DA3, Materials V3, multi-model A/B testing
 4. **Reproducible** - Versioned artifacts, frozen baselines, documented thresholds
 
-**Remaining Bottleneck**: Structure scene quality (limited by 518px inference)  
+**Remaining Bottleneck**: Structure scene quality (limited by 518px inference)
 **Next Lever**: Input-size sweep (DA2 at 1022px) or model upgrade (DA3-Metric-Large)
 
 **Confidence Level**: High for texture scenes, medium for structure scenes pending input-size sweep.
 
 ---
 
-**Session wrapped safely. All critical context preserved in documentation and scripts.**  
+**Session wrapped safely. All critical context preserved in documentation and scripts.**
 **Next session can pick up from checklist above with zero ramp-up time.**
 
 ---
 
-*End of Session Summary*  
-*Generated: 2025-12-19*  
+*End of Session Summary*
+*Generated: 2025-12-19*
 *Commit: 85ebba2*

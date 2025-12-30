@@ -1,7 +1,7 @@
 # Fix: Lux Render Pipeline CLI Bug
-**Issue:** Critical TypeError preventing pipeline execution  
-**Bug Report:** BUG_REPORT_2025-11-05.md - Issue #1  
-**Fixed:** 2025-11-05  
+**Issue:** Critical TypeError preventing pipeline execution
+**Bug Report:** BUG_REPORT_2025-11-05.md - Issue #1
+**Fixed:** 2025-11-05
 **Status:** ✅ RESOLVED
 
 ---
@@ -198,9 +198,9 @@ Tested:
 
 ---
 
-**Fixed By:** GitHub Copilot CLI  
-**Date:** 2025-11-05 04:23 UTC  
-**Severity:** CRITICAL → RESOLVED  
-**Lines Changed:** 3 additions in lux_render_pipeline.py  
+**Fixed By:** GitHub Copilot CLI
+**Date:** 2025-11-05 04:23 UTC
+**Severity:** CRITICAL → RESOLVED
+**Lines Changed:** 3 additions in lux_render_pipeline.py
 
 ---

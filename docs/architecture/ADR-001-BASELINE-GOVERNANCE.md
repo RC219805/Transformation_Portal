@@ -1,9 +1,9 @@
 # ADR-001: Baseline Governance for Water Detection Validation
 
-**Status**: ✅ Accepted  
-**Date**: 2025-12-15  
-**Author**: Transformation Portal Architect  
-**Context**: PR-W1 Water Detection - Baseline Management  
+**Status**: ✅ Accepted
+**Date**: 2025-12-15
+**Author**: Transformation Portal Architect
+**Context**: PR-W1 Water Detection - Baseline Management
 
 ---
 
@@ -89,15 +89,15 @@ To modify `baseline_ci_current_v{N}.json`:
 
 ### Positive
 
-✅ **Prevents overfitting**: Holdout validation requirement stops test set tuning  
-✅ **Reproducible state**: Clean commits with documented validation  
-✅ **Transparent limitations**: Known issues (pool_0008 miss) documented  
-✅ **Long-term tracking**: Immutable audit baselines preserve history  
+✅ **Prevents overfitting**: Holdout validation requirement stops test set tuning
+✅ **Reproducible state**: Clean commits with documented validation
+✅ **Transparent limitations**: Known issues (pool_0008 miss) documented
+✅ **Long-term tracking**: Immutable audit baselines preserve history
 
 ### Negative
 
-⚠️ **Slower iteration**: Validation overhead for threshold changes  
-⚠️ **Known limitations persist**: 83.3% pool recall until proper validation  
+⚠️ **Slower iteration**: Validation overhead for threshold changes
+⚠️ **Known limitations persist**: 83.3% pool recall until proper validation
 
 ### Mitigation
 
@@ -249,7 +249,7 @@ Any of the following **rejects** baseline v2 promotion:
 
 ## Approval
 
-**Architect**: ✅ Approved  
-**Status**: ✅ Implemented (2025-12-15)  
-**Amendment v2**: ✅ Approved (2025-12-16) - Holdout Infrastructure  
-**Review Date**: After PR-W1.3 completes holdout validation  
+**Architect**: ✅ Approved
+**Status**: ✅ Implemented (2025-12-15)
+**Amendment v2**: ✅ Approved (2025-12-16) - Holdout Infrastructure
+**Review Date**: After PR-W1.3 completes holdout validation

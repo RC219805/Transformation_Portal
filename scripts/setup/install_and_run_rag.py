@@ -36,7 +36,7 @@ def locate_python311():
     candidates = [
         "python3.11",
         "/opt/homebrew/bin/python3.11",  # Apple Silicon
-        "/usr/local/bin/python3.11"      # Intel Mac / Homebrew (x86)
+        "/usr/local/bin/python3.11",  # Intel Mac / Homebrew (x86)
     ]
     for c in candidates:
         try:
@@ -76,11 +76,7 @@ def ensure_venv(python311_path):
     if REQUIREMENTS_FILE.exists():
         run([str(pip), "install", "-r", str(REQUIREMENTS_FILE)])
     else:
-        run([
-            str(pip), "install",
-            "numpy", "pandas", "scikit-learn",
-            faiss_pkg, "openai", "tiktoken", "pytest"
-        ])
+        run([str(pip), "install", "numpy", "pandas", "scikit-learn", faiss_pkg, "openai", "tiktoken", "pytest"])
 
     print("🔗 Installing RAG system in editable (-e) mode...")
     run([str(pip), "install", "-e", str(REPO_ROOT)])

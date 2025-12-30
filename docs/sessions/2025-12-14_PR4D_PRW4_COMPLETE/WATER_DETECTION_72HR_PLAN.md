@@ -97,8 +97,8 @@ python scripts/analyze_failures.py \
 ```markdown
 # Water v0 Baseline Failures
 
-**Date**: 2025-12-14  
-**Dataset**: data/water_v0 (20 pool, 20 ocean, 20 non-water)  
+**Date**: 2025-12-14
+**Dataset**: data/water_v0 (20 pool, 20 ocean, 20 non-water)
 **Detector**: Stub (blue threshold)
 
 ## Summary Statistics
@@ -199,18 +199,18 @@ Instead, implement ONLY what fixes the largest failure buckets from baseline v0.
 class WaterCandidateDetector:
     """
     Water Candidate Detector v1 - Failure-Driven Implementation
-    
+
     Based on data/water_v0 baseline failures:
     - P0: HSV constraints (kills 5/8 FPs)
     - P1: Component filtering (kills 3/8 FPs)
     - P2: Texture check (kills 4/8 FPs)
     - P3: Scene-aware thresholds (recovers 6/14 misses)
     """
-    
+
     def detect(self, rgb01, depth01=None, scene_context=SceneContext.UNKNOWN):
         # P0: HSV constraints (30 mins to implement)
         hsv = self._rgb_to_hsv(rgb01)
-        
+
         if scene_context == SceneContext.POOL:
             hue_range = (170, 210)
             sat_range = (0.15, 0.8)
@@ -223,13 +223,13 @@ class WaterCandidateDetector:
             hue_range = (165, 215)
             sat_range = (0.12, 0.75)
             val_range = (0.18, 0.95)
-        
+
         hue_mask = self._hue_in_range(hsv, hue_range)
         sat_mask = self._saturation_in_range(hsv, sat_range)
         val_mask = self._value_in_range(hsv, val_range)
-        
+
         candidate_mask = hue_mask & sat_mask & val_mask
-        
+
         # P1: Component filtering (30 mins to implement)
         filtered_mask = self._filter_components(
             candidate_mask,
@@ -237,35 +237,35 @@ class WaterCandidateDetector:
             max_aspect_ratio=5.0,
             min_fill_ratio=0.6
         )
-        
+
         # P2: Texture check (45 mins to implement)
         texture_valid = self._texture_check(rgb01, filtered_mask)
         final_mask = filtered_mask & texture_valid
-        
+
         # Rest is same as stub...
         coverage = np.sum(final_mask) / (h * w)
         confidence = self._compute_confidence(final_mask, texture_valid)
-        
+
         return {
             "present": coverage >= 0.05 and confidence >= 0.4,
             "coverage": coverage,
             "confidence": confidence,
             "mask": final_mask
         }
-    
+
     def _filter_components(self, mask, min_area, max_aspect_ratio, min_fill_ratio):
         """P1: Kill FPs with geometric constraints."""
         from scipy import ndimage
         from skimage.measure import regionprops
-        
+
         labeled, num = ndimage.label(mask)
         filtered = np.zeros_like(mask)
-        
+
         for region in regionprops(labeled):
             # Area check
             if region.area < min_area:
                 continue
-            
+
             # Aspect ratio check (water shouldn't be extreme aspect ratio)
             bbox = region.bbox
             height = bbox[2] - bbox[0]
@@ -273,38 +273,38 @@ class WaterCandidateDetector:
             aspect = max(height, width) / max(min(height, width), 1)
             if aspect > max_aspect_ratio:
                 continue
-            
+
             # Fill ratio check (water is contiguous, not scattered)
             fill_ratio = region.area / (height * width)
             if fill_ratio < min_fill_ratio:
                 continue
-            
+
             # Keep this component
             filtered[labeled == region.label] = 1
-        
+
         return filtered
-    
+
     def _texture_check(self, rgb01, mask):
         """P2: Kill FPs with texture analysis."""
         from scipy import ndimage
         from skimage.filters.rank import entropy
         from skimage.morphology import disk
-        
+
         # Compute local entropy
         gray = (rgb01.mean(axis=2) * 255).astype(np.uint8)
         local_entropy = entropy(gray, disk(5))
-        
+
         # Smooth water has low entropy
         smooth_mask = local_entropy < 5.0
-        
+
         # Also check Laplacian variance (high-frequency content)
         gray_float = rgb01.mean(axis=2)
         laplacian = ndimage.laplace(gray_float)
         laplacian_var = ndimage.variance(laplacian, labels=(mask > 0.5).astype(int), index=1)
-        
+
         # Water should have low high-frequency content
         low_highfreq = laplacian_var < 0.01
-        
+
         return smooth_mask & low_highfreq
 ```
 
@@ -378,7 +378,7 @@ class MaterialsV3Config:
     water_detection_enabled: bool = False
     water_candidate_confidence_threshold: float = 0.35  # Was 0.4, tuned to dataset
     water_min_coverage: float = 0.04  # Was 0.05, tuned to dataset
-    
+
     # Quality targets (for monitoring, not gating yet)
     water_target_detection_rate: float = 0.85
     water_target_fp_rate: float = 0.05
@@ -407,14 +407,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Run validation harness
         run: |
           python scripts/prw_water_validation.py \
             --input-dir data/water_v0/images \
             --ground-truth data/water_v0/ground_truth.json \
             --output validation_result.json
-      
+
       - name: Check quality gates (warning only for now)
         run: |
           python scripts/check_quality_gates.py \
@@ -441,35 +441,35 @@ def main():
     parser.add_argument("--fp-rate-max", type=float, default=0.15)
     parser.add_argument("--mode", choices=["error", "warning"], default="warning")
     args = parser.parse_args()
-    
+
     with open(args.report) as f:
         report = json.load(f)
-    
+
     summary = report["summary"]
-    
+
     failures = []
-    
+
     # Check pool detection rate
     pool_rate = summary.get("pool_detection_rate", 0.0)
     if pool_rate < args.pool_detection_min:
         failures.append(f"Pool detection rate {pool_rate:.1%} < {args.pool_detection_min:.1%}")
-    
+
     # Check ocean detection rate
     ocean_rate = summary.get("ocean_detection_rate", 0.0)
     if ocean_rate < args.ocean_detection_min:
         failures.append(f"Ocean detection rate {ocean_rate:.1%} < {args.ocean_detection_min:.1%}")
-    
+
     # Check FP rate
     fp_rate = summary.get("false_positive_rate", 1.0)
     if fp_rate > args.fp_rate_max:
         failures.append(f"False positive rate {fp_rate:.1%} > {args.fp_rate_max:.1%}")
-    
+
     if failures:
         prefix = "❌ FAILED" if args.mode == "error" else "⚠️ WARNING"
         print(f"{prefix}: Water detection quality gates")
         for failure in failures:
             print(f"  - {failure}")
-        
+
         if args.mode == "error":
             sys.exit(1)
     else:

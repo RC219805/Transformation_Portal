@@ -1,6 +1,6 @@
 # Platform Core API - Quick Reference
 
-**Version**: 1.0.0  
+**Version**: 1.0.0
 **Module**: `transformation_portal.core`
 
 ---
@@ -430,11 +430,11 @@ except ValidationError as e:
 def test_pipeline_with_core():
     from transformation_portal.core import ConfigSchema
     from transformation_portal.core.device import DeviceDetector
-    
+
     config = ConfigSchema()
     detector = DeviceDetector()
     device_info = detector.detect()
-    
+
     assert device_info.device is not None
     assert config.device.device.value == "auto"
 ```
@@ -463,6 +463,6 @@ def test_pipeline_with_core():
 
 ---
 
-**Version**: 1.0.0  
-**Status**: Production Ready  
+**Version**: 1.0.0
+**Status**: Production Ready
 **Last Updated**: December 9, 2025

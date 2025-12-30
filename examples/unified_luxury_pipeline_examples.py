@@ -28,9 +28,7 @@ def example_basic_usage():
 
     # Process with balanced profile (default)
     outputs = process_luxury_render(
-        Path("input/kitchen.jpg"),
-        output_dir=Path("output/example1"),
-        profile=ProcessingProfile.BALANCED
+        Path("input/kitchen.jpg"), output_dir=Path("output/example1"), profile=ProcessingProfile.BALANCED
     )
 
     print(f"Generated {len(outputs)} outputs:")
@@ -48,28 +46,20 @@ def example_premium_quality():
         scene_type=SceneType.INTERIOR,
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/hero_shot"),
-
         # Select specific output formats
-        output_formats=[
-            OutputFormat.MASTER_TIFF,
-            OutputFormat.PRINT_8K,
-            OutputFormat.WEB_4K
-        ],
-
+        output_formats=[OutputFormat.MASTER_TIFF, OutputFormat.PRINT_8K, OutputFormat.WEB_4K],
         # Enable all enhancements
         enable_depth=True,
         enable_material_response=True,
         enable_vfx=False,  # Optional VFX
         enable_color_grading=True,
-
         # Fine-tune parameters
         exposure=0.15,
         contrast=1.10,
         saturation=1.05,
         clarity=0.18,
-
         # Save intermediate stages for review
-        save_intermediates=True
+        save_intermediates=True,
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
@@ -92,19 +82,16 @@ def example_performance_mode():
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.PERFORMANCE,
         output_dir=Path("output/quick_review"),
-
         # Minimal outputs for speed
         output_formats=[OutputFormat.WEB_4K],
-
         # Disable heavy processing
         enable_depth=False,
         enable_material_response=False,
         enable_vfx=False,
-
         # Basic color grading only
         enable_color_grading=True,
         exposure=0.1,
-        contrast=1.05
+        contrast=1.05,
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
@@ -121,9 +108,7 @@ def example_batch_processing():
 
     # Process all images in directory
     results = batch_process_luxury_renders(
-        input_dir=Path("input/renders"),
-        output_dir=Path("output/batch"),
-        profile=ProcessingProfile.BALANCED
+        input_dir=Path("input/renders"), output_dir=Path("output/batch"), profile=ProcessingProfile.BALANCED
     )
 
     print(f"Processed {len(results)} images:")
@@ -146,7 +131,7 @@ def example_custom_scene_optimization():
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/interior"),
         clarity=0.15,  # Higher clarity for interiors
-        contrast=1.12
+        contrast=1.12,
     )
 
     # Exterior scene
@@ -155,7 +140,7 @@ def example_custom_scene_optimization():
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/exterior"),
         saturation=1.08,  # Higher saturation for exteriors
-        enable_vfx=True   # Atmospheric effects
+        enable_vfx=True,  # Atmospheric effects
     )
 
     # Aerial scene
@@ -164,7 +149,7 @@ def example_custom_scene_optimization():
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/aerial"),
         clarity=0.20,  # Maximum clarity for aerials
-        saturation=1.10
+        saturation=1.10,
     )
 
     print("Configured 3 scene-specific pipelines")
@@ -179,15 +164,13 @@ def example_with_lut():
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.BALANCED,
         output_dir=Path("output/lut_graded"),
-
         # Apply custom LUT
         lut_path=Path("assets/luts/film_emulation/Kodak_2393.cube"),
         lut_strength=0.7,
-
         # Additional grading
         exposure=0.05,
         contrast=1.08,
-        saturation=1.05
+        saturation=1.05,
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
@@ -203,10 +186,7 @@ def example_runtime_overrides():
     print("=" * 70)
 
     # Create base configuration
-    config = UnifiedPipelineConfig(
-        profile=ProcessingProfile.BALANCED,
-        output_dir=Path("output/overrides")
-    )
+    config = UnifiedPipelineConfig(profile=ProcessingProfile.BALANCED, output_dir=Path("output/overrides"))
 
     pipeline = UnifiedLuxuryPipeline(config)
 
@@ -216,9 +196,9 @@ def example_runtime_overrides():
     # Process second image with overrides
     _outputs2 = pipeline.process(  # noqa: F841
         Path("input/image2.jpg"),
-        exposure=0.3,      # Override exposure
-        saturation=1.15,   # Override saturation
-        enable_vfx=True    # Enable VFX for this image only
+        exposure=0.3,  # Override exposure
+        saturation=1.15,  # Override saturation
+        enable_vfx=True,  # Enable VFX for this image only
     )
 
     print("Processed 2 images with different parameters")
@@ -235,7 +215,7 @@ def example_parallel_output_generation():
         output_formats=list(OutputFormat),  # All 5 formats
         parallel_outputs=True,  # Generate in parallel (faster)
         enable_depth=False,
-        enable_material_response=False
+        enable_material_response=False,
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
@@ -250,10 +230,7 @@ def example_statistics_tracking():
     print("Example 9: Statistics Tracking")
     print("=" * 70)
 
-    config = UnifiedPipelineConfig(
-        profile=ProcessingProfile.BALANCED,
-        output_dir=Path("output/stats_demo")
-    )
+    config = UnifiedPipelineConfig(profile=ProcessingProfile.BALANCED, output_dir=Path("output/stats_demo"))
 
     pipeline = UnifiedLuxuryPipeline(config)
 
@@ -278,20 +255,17 @@ def example_social_media_workflow():
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.BALANCED,
         output_dir=Path("output/social"),
-
         # Social media specific outputs
         output_formats=[
-            OutputFormat.SOCIAL,      # 1080p for Instagram
-            OutputFormat.WEB_4K       # 4K for website
+            OutputFormat.SOCIAL,  # 1080p for Instagram
+            OutputFormat.WEB_4K,  # 4K for website
         ],
-
         # Optimize for social media aesthetics
         saturation=1.12,  # Slightly boosted saturation
-        contrast=1.10,    # Punchy contrast
-        clarity=0.15,     # Enhanced clarity
-
+        contrast=1.10,  # Punchy contrast
+        clarity=0.15,  # Enhanced clarity
         enable_material_response=True,
-        parallel_outputs=True
+        parallel_outputs=True,
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
@@ -313,7 +287,7 @@ def example_auto_scene_detection():
     config = UnifiedPipelineConfig(
         scene_type=SceneType.AUTO,  # Auto-detect scene type
         profile=ProcessingProfile.BALANCED,
-        output_dir=Path("output/auto_detect")
+        output_dir=Path("output/auto_detect"),
     )
 
     pipeline = UnifiedLuxuryPipeline(config)
@@ -321,9 +295,9 @@ def example_auto_scene_detection():
     # Pipeline will automatically detect if each image is interior/exterior/aerial
     # and optimize parameters accordingly
     images = [
-        Path("input/kitchen.jpg"),      # Will detect as interior
-        Path("input/facade.jpg"),       # Will detect as exterior
-        Path("input/aerial_view.jpg")   # Will detect as aerial
+        Path("input/kitchen.jpg"),  # Will detect as interior
+        Path("input/facade.jpg"),  # Will detect as exterior
+        Path("input/aerial_view.jpg"),  # Will detect as aerial
     ]
 
     for image_path in images:
@@ -340,22 +314,19 @@ def example_print_production():
     config = UnifiedPipelineConfig(
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/print_production"),
-
         # Print-specific outputs
         output_formats=[
             OutputFormat.MASTER_TIFF,  # 16-bit master archive
-            OutputFormat.PRINT_8K      # 8K print JPEG
+            OutputFormat.PRINT_8K,  # 8K print JPEG
         ],
-
         # Print-optimized parameters
-        contrast=1.08,     # Conservative contrast for print
-        saturation=1.05,   # Slightly reduced saturation
-        clarity=0.12,      # Controlled clarity
-
+        contrast=1.08,  # Conservative contrast for print
+        saturation=1.05,  # Slightly reduced saturation
+        clarity=0.12,  # Controlled clarity
         enable_depth=True,
         enable_material_response=True,
         preserve_metadata=True,  # Preserve all EXIF/IPTC data
-        save_intermediates=True  # Keep depth maps, etc.
+        save_intermediates=True,  # Keep depth maps, etc.
     )
 
     pipeline = UnifiedLuxuryPipeline(config)

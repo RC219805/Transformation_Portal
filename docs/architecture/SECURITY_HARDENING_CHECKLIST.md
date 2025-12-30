@@ -1,7 +1,7 @@
 # Security Hardening Checklist
 
-**Version**: 1.0  
-**Date**: 2025-12-08  
+**Version**: 1.0
+**Date**: 2025-12-08
 **Related**: PR-1 (Security + Repo Hygiene)
 
 ---
@@ -48,12 +48,12 @@ This checklist ensures all security measures are implemented and verified before
   .env.*
   secrets/
   credentials/
-  
+
   # Backups
   .local_backup/
   *.backup
   *_BACKUP/
-  
+
   # Client data
   client_*/
   *_client_*/
@@ -334,7 +334,7 @@ This checklist ensures all security measures are implemented and verified before
   ```bash
   # Should fail (no key)
   curl -X POST http://localhost:8088/v2/process
-  
+
   # Should succeed
   curl -X POST http://localhost:8088/v2/process \
     -H "X-API-Key: test-key"
@@ -385,7 +385,7 @@ This checklist ensures all security measures are implemented and verified before
   ```bash
   # Create 101MB file
   dd if=/dev/zero of=large.jpg bs=1M count=101
-  
+
   # Should be rejected
   curl -X POST http://localhost:8088/v2/process \
     -H "X-API-Key: test-key" \
@@ -517,7 +517,7 @@ This checklist ensures all security measures are implemented and verified before
 - [ ] **Verified all items complete**
 - [ ] **Approved for production**
 
-**Signature**: ________________  
+**Signature**: ________________
 **Date**: ________
 
 ### Security Reviewer
@@ -526,7 +526,7 @@ This checklist ensures all security measures are implemented and verified before
 - [ ] **Verified implementation**
 - [ ] **No critical issues found**
 
-**Signature**: ________________  
+**Signature**: ________________
 **Date**: ________
 
 ---
@@ -556,6 +556,6 @@ This checklist ensures all security measures are implemented and verified before
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: 2025-12-08  
+**Version**: 1.0
+**Last Updated**: 2025-12-08
 **Next Review**: 2025-12-15 (post-implementation)

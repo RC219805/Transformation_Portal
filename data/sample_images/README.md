@@ -174,6 +174,6 @@ Some samples may show "TODO: upload to GitHub Release" - this means they haven't
 
 ---
 
-**Last Updated**: 2025-11-06  
-**Sample Version**: v1.0.0 (planned)  
+**Last Updated**: 2025-11-06
+**Sample Version**: v1.0.0 (planned)
 **Status**: 📋 Ready for sample upload

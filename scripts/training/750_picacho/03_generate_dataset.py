@@ -26,57 +26,22 @@ from training.property_specific.picacho_analyzer import PicachoAnalyzer
 from training.property_specific.depth_synthesis import DepthSynthesis
 from training.property_specific.dataset_generator import DatasetGenerator, DatasetConfig
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Generate training dataset for 750 Picacho Lane"
-    )
+    parser = argparse.ArgumentParser(description="Generate training dataset for 750 Picacho Lane")
+    parser.add_argument("--property-dir", type=Path, default=None, help="Path to property images directory")
     parser.add_argument(
-        "--property-dir",
-        type=Path,
-        default=None,
-        help="Path to property images directory"
+        "--output-dir", type=Path, default=Path("data/training_750picacho"), help="Output directory for dataset"
     )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("data/training_750picacho"),
-        help="Output directory for dataset"
-    )
-    parser.add_argument(
-        "--num-samples",
-        type=int,
-        default=600,
-        help="Total number of training samples to generate"
-    )
-    parser.add_argument(
-        "--no-depth",
-        action="store_true",
-        help="Skip depth map generation/inclusion"
-    )
-    parser.add_argument(
-        "--no-augmentation",
-        action="store_true",
-        help="Skip augmentation (raw crops only)"
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility"
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose output"
-    )
+    parser.add_argument("--num-samples", type=int, default=600, help="Total number of training samples to generate")
+    parser.add_argument("--no-depth", action="store_true", help="Skip depth map generation/inclusion")
+    parser.add_argument("--no-augmentation", action="store_true", help="Skip augmentation (raw crops only)")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()
 
@@ -121,11 +86,7 @@ def main():
     print(f"  Random seed: {args.seed}")
 
     # Generate dataset
-    generator = DatasetGenerator(
-        analyzer=analyzer,
-        depth_synthesis=depth_synth,
-        config=config
-    )
+    generator = DatasetGenerator(analyzer=analyzer, depth_synthesis=depth_synth, config=config)
 
     print("\nGenerating training samples...")
     samples = generator.generate_dataset(num_samples=args.num_samples)

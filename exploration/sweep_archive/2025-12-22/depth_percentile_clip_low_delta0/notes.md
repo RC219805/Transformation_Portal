@@ -1,9 +1,9 @@
 # depth_percentile_clip_low_delta0
 
-**Date**: 2025-12-22 01:18:32  
-**Sweep Type**: Single-Parameter (Phase 1)  
-**Parameter**: `depth.percentile_clip_low`  
-**Value**: 0.5  
+**Date**: 2025-12-22 01:18:32
+**Sweep Type**: Single-Parameter (Phase 1)
+**Parameter**: `depth.percentile_clip_low`
+**Value**: 0.5
 **Delta ID**: delta-0 (baseline)
 
 ## Expected Impact

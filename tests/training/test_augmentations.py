@@ -18,21 +18,22 @@ import numpy as np
 # Check if dependencies are available (including actual torch functionality, not just mock)
 try:
     import torch
+
     # Verify torch has actual functionality (not just a mock/stub)
-    TORCH_AVAILABLE = hasattr(torch, 'from_numpy') and hasattr(torch, 'Tensor')
+    TORCH_AVAILABLE = hasattr(torch, "from_numpy") and hasattr(torch, "Tensor")
 except ImportError:
     TORCH_AVAILABLE = False
 
 try:
     import PIL  # noqa: F401
+
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
 
 # Skip all tests if dependencies not available
 pytestmark = pytest.mark.skipif(
-    not (TORCH_AVAILABLE and PIL_AVAILABLE),
-    reason="PyTorch and PIL required for augmentation tests"
+    not (TORCH_AVAILABLE and PIL_AVAILABLE), reason="PyTorch and PIL required for augmentation tests"
 )
 
 

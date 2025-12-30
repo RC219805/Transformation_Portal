@@ -1,7 +1,7 @@
 # ❄️ Feature Freeze: lux_depth_v2
 
-**Status**: ACTIVE  
-**Effective Date**: December 23, 2025  
+**Status**: ACTIVE
+**Effective Date**: December 23, 2025
 **Review Date**: March 1, 2026
 
 ---
@@ -182,8 +182,8 @@ Track during freeze period:
 
 ## Questions?
 
-**For freeze exceptions**: Open issue with `freeze-exception` label  
-**For clarifications**: See [CONTRIBUTING.md](../CONTRIBUTING.md)  
+**For freeze exceptions**: Open issue with `freeze-exception` label
+**For clarifications**: See [CONTRIBUTING.md](../CONTRIBUTING.md)
 **For security issues**: Follow [SECURITY.md](SECURITY.md) process
 
 ---
@@ -198,4 +198,3 @@ Track during freeze period:
 **PR:** #588 - security/fix-marshmallow-cve-2025-68480
 
 Feature freeze enforcement is now active on main branch.
-

@@ -63,7 +63,7 @@ depth_processing:
 tone_mapping:
   enabled: true
   operator: "agx"  # Options: agx, reinhard, filmic, hable, aces
-  
+
   # Zone definitions (depth ranges)
   zones:
     foreground:
@@ -71,13 +71,13 @@ tone_mapping:
       exposure: 0.0
       contrast: 1.0
       saturation: 1.0
-    
+
     midground:
       depth_range: [0.3, 0.7]  # Mid-distance
       exposure: 0.05
       contrast: 1.05
       saturation: 1.02
-    
+
     background:
       depth_range: [0.7, 1.0]  # Far objects
       exposure: 0.1
@@ -112,7 +112,7 @@ color_grading:
   enabled: true
   lut_path: ""  # Path to .cube LUT file (optional)
   lut_strength: 0.8  # 0.0-1.0 if LUT is used
-  
+
   # Manual adjustments
   exposure: 0.0  # -2.0 to +2.0 (EV)
   contrast: 1.0  # 0.5 to 2.0
@@ -190,11 +190,11 @@ Zones divide the image by depth for differential processing:
 - **Interior**: Bright foreground, darker background
   - foreground: `exposure: 0.1, contrast: 1.0`
   - background: `exposure: -0.1, contrast: 1.1`
-  
+
 - **Exterior**: Even foreground, lighter background (sky)
   - foreground: `exposure: 0.0, contrast: 1.05`
   - background: `exposure: 0.15, saturation: 0.9`
-  
+
 - **Aerial**: Compressed depth, uniform tone mapping
   - All zones: `exposure: 0.0, contrast: 1.08, saturation: 1.1`
 
@@ -267,18 +267,18 @@ PRESETS = {
         name="{Display Name}",
         lut="assets/luts/{category}/{lut_file}.cube",
         notes="{Description of aesthetic, use case, and inspiration}",
-        
+
         # Global Adjustments
         exposure=0.0,      # -1.0 to +1.0 (EV)
         contrast=1.0,      # 0.5 to 2.0
         saturation=1.0,    # 0.0 to 2.0
-        
+
         # Enhancement (optional)
         clarity=0.0,       # 0.0 to 0.5 (micro-contrast)
         glow=0.0,          # 0.0 to 0.1 (highlight bloom)
         grain=0.0,         # 0.0 to 0.05 (film grain)
         vignette=0.0,      # 0.0 to 0.5 (edge darkening)
-        
+
         # Advanced (optional)
         hdr_tone_map="none",  # none, hable, reinhard, mobius
         temperature=0,        # -100 to +100 (Kelvin)
@@ -344,25 +344,25 @@ PRESETS = {
 "{preset_name}": {
     "name": "{Display Name}",
     "description": "{Detailed description of aesthetic and use case}",
-    
+
     # Adjustments
     "exposure": 0.0,      # -2.0 to +2.0 (EV)
     "contrast": 1.0,      # 0.5 to 2.0
     "saturation": 1.0,    # 0.0 to 2.0
     "clarity": 0.0,       # 0.0 to 1.0
-    
+
     # Color (optional)
     "temperature": 0,     # -100 to +100
     "tint": 0,           # -100 to +100
-    
+
     # LUT (optional)
     "lut": "",           # Path to .cube file
     "lut_strength": 0.8, # 0.0 to 1.0
-    
+
     # Sharpening (optional)
     "sharpen": 0.0,      # 0.0 to 2.0
     "sharpen_radius": 1.0,
-    
+
     # Effects (optional)
     "glow": 0.0,         # 0.0 to 0.2
     "grain": 0.0,        # 0.0 to 0.1
@@ -381,7 +381,7 @@ PRESETS = {
    ```python
    # Validate LUT file exists
    from pathlib import Path
-   
+
    lut_path = Path(config['color_grading']['lut_path'])
    assert lut_path.exists(), f"LUT not found: {lut_path}"
    assert lut_path.suffix == '.cube', f"LUT must be .cube format"
@@ -409,7 +409,7 @@ PRESETS = {
    # Warn about performance-intensive settings
    if config['depth_model']['name'] == 'vitl':
        logger.warning("vitl model is slower (~80ms/image). Consider vits for faster processing.")
-   
+
    if config['performance']['batch_size'] > 8:
        logger.warning("Large batch size may cause OOM on systems with < 16GB RAM")
    ```
@@ -470,13 +470,13 @@ def test_config_has_required_fields():
     """Test that config has all required fields."""
     with open('config/test_config.yaml') as f:
         config = yaml.safe_load(f)
-    
+
     required_sections = [
         'depth_model',
         'tone_mapping',
         'output',
     ]
-    
+
     for section in required_sections:
         assert section in config, f"Missing required section: {section}"
 
@@ -484,7 +484,7 @@ def test_lut_paths_exist():
     """Test that referenced LUT files exist."""
     with open('config/test_config.yaml') as f:
         config = yaml.safe_load(f)
-    
+
     lut_path = config.get('color_grading', {}).get('lut_path', '')
     if lut_path:
         assert Path(lut_path).exists(), f"LUT not found: {lut_path}"
@@ -498,13 +498,13 @@ def test_parameter_ranges(param, min_val, max_val):
     """Test that parameters are within valid ranges."""
     with open('config/test_config.yaml') as f:
         config = yaml.safe_load(f)
-    
+
     # Navigate nested dict
     keys = param.split('.')
     value = config
     for key in keys:
         value = value[key]
-    
+
     assert min_val <= value <= max_val, \
         f"{param} out of range: {value} not in [{min_val}, {max_val}]"
 ```
@@ -643,7 +643,7 @@ depth_model:
 performance:
   batch_size: 8
   cache_size: 256       # Large cache for repeated images
-  
+
 # Disable expensive effects
 atmospheric:
   enabled: false
@@ -683,6 +683,6 @@ logging:
 
 ---
 
-**Template Version**: 1.0  
-**Last Updated**: 2025-11-06  
+**Template Version**: 1.0
+**Last Updated**: 2025-11-06
 **Maintained By**: Transformation Portal RAG System

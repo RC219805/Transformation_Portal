@@ -8,7 +8,7 @@ Pipeline wiring is **COMPLETE** and working correctly. Materials V3 is fully int
 
 ### 1. Stage 3a Segmentation Trigger
 - **Before:** Only ran when `cfg.enable_material=True`
-- **After:** Runs when Materials V3 is enabled OR legacy materials enabled  
+- **After:** Runs when Materials V3 is enabled OR legacy materials enabled
 - **Result:** Materials V3 now receives real masks
 
 ### 2. Stage 3c Mask Population
@@ -33,7 +33,7 @@ Pipeline wiring is **COMPLETE** and working correctly. Materials V3 is fully int
 - **Response plan decision:** `should_refine=false, reason="confidence_already_high"`
 - **Pixel ops:** NOT APPLIED (correct - mask already high quality)
 
-### Bedroom Scene  
+### Bedroom Scene
 ✅ **Materials V3 Functioning Correctly**
 - Processing completed
 - Similar behavior expected (high confidence masks)

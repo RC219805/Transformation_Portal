@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 # Add agents directory to path
-agents_path = Path(__file__).parent.parent / '.github' / 'agents'
+agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))
 
 # pylint: disable=wrong-import-position
@@ -380,5 +380,5 @@ class TestGetCurrentFilesIntegration:
         assert files1.keys() == files2.keys()
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

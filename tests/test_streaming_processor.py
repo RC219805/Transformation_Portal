@@ -17,6 +17,7 @@ class TestStreamingProcessor:
 
     def test_sequential_processing(self):
         """Test sequential processing (batch_size=1)."""
+
         def double(x):
             return x * 2
 
@@ -29,8 +30,9 @@ class TestStreamingProcessor:
 
     def test_batch_processing(self):
         """Test batch processing with threads."""
+
         def square(x):
-            return x ** 2
+            return x**2
 
         processor = StreamingProcessor(process_func=square, batch_size=2)
         items = [1, 2, 3, 4]
@@ -42,6 +44,7 @@ class TestStreamingProcessor:
 
     def test_batch_processing_with_remainder(self):
         """Test batch processing when items don't divide evenly."""
+
         def triple(x):
             return x * 3
 
@@ -54,23 +57,17 @@ class TestStreamingProcessor:
 
     def test_custom_max_workers(self):
         """Test custom max_workers setting."""
+
         def identity(x):
             return x
 
-        processor = StreamingProcessor(
-            process_func=identity,
-            batch_size=4,
-            max_workers=2
-        )
+        processor = StreamingProcessor(process_func=identity, batch_size=4, max_workers=2)
 
         assert processor.max_workers == 2
 
     def test_default_max_workers(self):
         """Test that max_workers defaults to batch_size."""
-        processor = StreamingProcessor(
-            process_func=lambda x: x,
-            batch_size=8
-        )
+        processor = StreamingProcessor(process_func=lambda x: x, batch_size=8)
 
         assert processor.max_workers == 8
 
@@ -87,6 +84,7 @@ class TestStreamResults:
 
     def test_stream_without_callback(self):
         """Test streaming without callback."""
+
         def add_one(x):
             return x + 1
 
@@ -97,6 +95,7 @@ class TestStreamResults:
 
     def test_stream_with_callback(self):
         """Test streaming with callback."""
+
         def multiply_by_two(x):
             return x * 2
 
@@ -264,11 +263,11 @@ class TestRealTimeMonitor:
 
         stats = monitor.get_stats()
 
-        assert 'throughput' in stats
-        assert 'avg_processing_time' in stats
-        assert 'total_elapsed' in stats
-        assert 'items_processed' in stats
-        assert stats['items_processed'] == 2
+        assert "throughput" in stats
+        assert "avg_processing_time" in stats
+        assert "total_elapsed" in stats
+        assert "items_processed" in stats
+        assert stats["items_processed"] == 2
 
     def test_throughput_zero_time_span(self):
         """Test throughput when time span is zero (edge case)."""

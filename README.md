@@ -27,10 +27,10 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
 
 **`lux_depth_v2`** is the primary workflow for 95% of use cases:
 
-✅ **Security Hardened** - CVE-2024-27763 mitigated, input validation  
-✅ **Production Validated** - 1,348 tests passing, 127-400 img/hr throughput  
-✅ **Deployment Ready** - Docker stack, Prometheus, health checks  
-✅ **Feature Frozen** - Predictable, stable, no breaking changes  
+✅ **Security Hardened** - CVE-2024-27763 mitigated, input validation
+✅ **Production Validated** - 1,348 tests passing, 127-400 img/hr throughput
+✅ **Deployment Ready** - Docker stack, Prometheus, health checks
+✅ **Feature Frozen** - Predictable, stable, no breaking changes
 ✅ **16-bit Precision** - Archival-grade quality maintained
 
 ### When to Use the Golden Path
@@ -272,8 +272,8 @@ Attribution-based license. See repository for details.
 
 ## 🆘 Support
 
-**Issues**: Open GitHub issue with error logs  
-**Security**: See [SECURITY.md](SECURITY.md)  
+**Issues**: Open GitHub issue with error logs
+**Security**: See [SECURITY.md](SECURITY.md)
 **Questions**: Check [docs/](docs/) first, then open discussion
 
 ---
@@ -403,7 +403,7 @@ python utils/upscaling_engine.py noisy.jpg clean_4x.tif --model realesrgan_gener
 
 **Model Selection Guide:**
 - **SwinIR Real 4x**: Best quality for photos (portraits, architecture) - ~150 images/hour
-- **Real-ESRGAN 4x**: Fast processing, robust for mixed quality - ~410 images/hour  
+- **Real-ESRGAN 4x**: Fast processing, robust for mixed quality - ~410 images/hour
 - **Real-ESRGAN General**: Configurable denoising for very noisy sources - ~395 images/hour
 
 **Features:**
@@ -413,8 +413,8 @@ python utils/upscaling_engine.py noisy.jpg clean_4x.tif --model realesrgan_gener
 - ✅ Batch model caching (10-20x speedup)
 - ✅ Cross-platform (CPU, CUDA, Apple MPS)
 
-📚 **Full Documentation**: [docs/UPSCALING_GUIDE.md](docs/UPSCALING_GUIDE.md)  
-🔬 **Examples**: [examples/upscaling_workflow.py](examples/upscaling_workflow.py)  
+📚 **Full Documentation**: [docs/UPSCALING_GUIDE.md](docs/UPSCALING_GUIDE.md)
+🔬 **Examples**: [examples/upscaling_workflow.py](examples/upscaling_workflow.py)
 📊 **Summary**: [docs/UPSCALING_SUMMARY.md](docs/UPSCALING_SUMMARY.md)
 
 ### 🚀 Lux Depth V2 Pipeline (NEW - December 2025)
@@ -459,8 +459,8 @@ lux-depth-v2-service \
 - `*_marketing.png` - 8-bit preview
 - `*_report.json` - Processing metadata
 
-📚 **Documentation**: [lux_depth_v2/README.md](lux_depth_v2/README.md)  
-🔒 **Security Guide**: [lux_depth_v2/SECURITY.md](lux_depth_v2/SECURITY.md)  
+📚 **Documentation**: [lux_depth_v2/README.md](lux_depth_v2/README.md)
+🔒 **Security Guide**: [lux_depth_v2/SECURITY.md](lux_depth_v2/SECURITY.md)
 ⚡ **Quick Start**: [docs/LUX_DEPTH_V2_QUICK_START.md](docs/LUX_DEPTH_V2_QUICK_START.md)
 
 ### 🎯 Unified Luxury Pipeline (December 2025)
@@ -503,9 +503,9 @@ python unified_luxury_pipeline.py estate.tif --preset signature_estate
 - ✓ Material Response (Physics-based) - **Phase 2 Complete**
 - 🔄 LUT System (Phase 3 pending)
 
-📚 **Documentation**: [docs/UNIFIED_PIPELINE_GUIDE.md](docs/UNIFIED_PIPELINE_GUIDE.md)  
-🔬 **Examples**: [examples/unified_pipeline_workflows.py](examples/unified_pipeline_workflows.py)  
-📊 **Summary**: [UNIFIED_PIPELINE_COMPLETE.md](UNIFIED_PIPELINE_COMPLETE.md)  
+📚 **Documentation**: [docs/UNIFIED_PIPELINE_GUIDE.md](docs/UNIFIED_PIPELINE_GUIDE.md)
+🔬 **Examples**: [examples/unified_pipeline_workflows.py](examples/unified_pipeline_workflows.py)
+📊 **Summary**: [UNIFIED_PIPELINE_COMPLETE.md](UNIFIED_PIPELINE_COMPLETE.md)
 ✅ **Phase 2**: [PHASE2_INTEGRATION_COMPLETE.md](PHASE2_INTEGRATION_COMPLETE.md)
 
 ## 🎓 Advanced: Model Training
@@ -514,7 +514,7 @@ python unified_luxury_pipeline.py estate.tif --preset signature_estate
 
 Neural network training infrastructure for researchers and advanced users who need custom model adaptation.
 
-**Requires**: GPU, 10GB+ disk, 2-3 hours training time  
+**Requires**: GPU, 10GB+ disk, 2-3 hours training time
 **Production users**: Use pre-trained models in `lux-depth-v2` instead
 
 📚 **Complete training documentation**: [docs/training/TRAINING_GUIDE.md](docs/training/TRAINING_GUIDE.md)
@@ -577,7 +577,7 @@ pip install -e .
 > **Important**: Installing the package in editable mode with `pip install -e .` is **required** for:
 > - Using CLI console scripts (`luxury-tiff-batch`, etc.)
 > - Importing from the `transformation_portal` package
-> - Running the test suite correctly  
+> - Running the test suite correctly
 > The editable installation makes the package importable and registers command-line entry points.
 
 ### Optional Extras
@@ -989,8 +989,8 @@ Professional use permitted with attribution.
 
 ## Support and Contact
 
-Author: Richard Cheetham  
-Brand: Carolwood Estates · RACLuxe Division  
+Author: Richard Cheetham
+Brand: Carolwood Estates · RACLuxe Division
 Email: info@racluxe.com
 
 Resources:

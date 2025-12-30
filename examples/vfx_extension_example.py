@@ -42,29 +42,20 @@ def example_single_image():
 
     # Process with VFX
     result = enhance_with_vfx(
-        img,
-        base_preset="signature_estate_agx",
-        vfx_preset="montecito_golden",
-        material_response=True,
-        save_depth=True
+        img, base_preset="signature_estate_agx", vfx_preset="montecito_golden", material_response=True, save_depth=True
     )
 
     # Save result
-    _save_with_meta(
-        result["image"],
-        result["array"],
-        output_path,
-        meta,
-        out_bitdepth=16
-    )
+    _save_with_meta(result["image"], result["array"], output_path, meta, out_bitdepth=16)
 
     # Save depth map
     if result["depth"] is not None:
         import numpy as np
         from PIL import Image
+
         depth_path = output_path.with_name(f"{output_path.stem}_depth.png")
         depth_img = (result["depth"] * 65535).astype(np.uint16)
-        Image.fromarray(depth_img, mode='I;16').save(depth_path)
+        Image.fromarray(depth_img, mode="I;16").save(depth_path)
         _info(f"Saved depth map: {depth_path}")
 
     # Print metrics
@@ -83,7 +74,7 @@ def example_list_presets():
         _info(f"  Description: {config['description']}")
         _info(f"  Bloom: {config.get('bloom_intensity', 0)}")
         _info(f"  Fog: {config.get('fog_density', 0)}")
-        if 'lut_default' in config:
+        if "lut_default" in config:
             _info(f"  Default LUT: {config['lut_default']}")
 
 

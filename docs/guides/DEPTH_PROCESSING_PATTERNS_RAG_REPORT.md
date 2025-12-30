@@ -1,8 +1,8 @@
 # Depth Processing Patterns - Comprehensive RAG Retrieval Report
 
-**Generated**: 2025-12-08  
-**RAG Agent**: Transformation Portal RAG Integration Agent  
-**Retrieval Method**: Multi-source hybrid search (pattern matching + semantic analysis)  
+**Generated**: 2025-12-08
+**RAG Agent**: Transformation Portal RAG Integration Agent
+**Retrieval Method**: Multi-source hybrid search (pattern matching + semantic analysis)
 **Repository**: Transformation Portal (Luxury Real Estate Image Processing)
 
 ---
@@ -37,8 +37,8 @@ This report presents a comprehensive analysis of all depth processing patterns i
 
 ### 1.1 Lux Depth V2 (Production Pipeline) ⭐
 
-**Location**: `lux_depth_v2/`  
-**Status**: Production-ready (December 2025)  
+**Location**: `lux_depth_v2/`
+**Status**: Production-ready (December 2025)
 **Architecture**: GPU-accelerated, modular, security-hardened
 
 #### Key Components
@@ -88,8 +88,8 @@ class Preset(str, Enum):
 
 ### 1.2 Depth Anything V2
 
-**Location**: `scripts/utilities/depth_anything_v2.py`  
-**Purpose**: Monocular depth estimation via transformers  
+**Location**: `scripts/utilities/depth_anything_v2.py`
+**Purpose**: Monocular depth estimation via transformers
 **Performance**: 24-65ms per image on M4 Max, 400-600 images/hour batch
 
 #### Features
@@ -116,8 +116,8 @@ depth_map = predictor.predict("image.jpg")
 
 ### 1.3 CoreML Depth Predictor
 
-**Location**: `scripts/utilities/depth_predict_coreml.py`  
-**Purpose**: Apple Neural Engine optimized depth inference  
+**Location**: `scripts/utilities/depth_predict_coreml.py`
+**Purpose**: Apple Neural Engine optimized depth inference
 **Requirements**: macOS 13+, M1/M2/M3/M4 chip
 
 #### Export Process
@@ -138,8 +138,8 @@ depth_map = predictor.predict("image.jpg")
 
 ### 1.4 Legacy Depth Tools
 
-**Location**: `scripts/utilities/depth_tools.py`  
-**Status**: Legacy (superseded by Lux Depth V2)  
+**Location**: `scripts/utilities/depth_tools.py`
+**Status**: Legacy (superseded by Lux Depth V2)
 **Note**: Original depth processing utilities, maintained for backward compatibility
 
 ---
@@ -364,7 +364,7 @@ processing:
     enabled: true
     sigma_spatial: 2.5
     preserve_strength: 0.9
-  
+
   zone_tone_mapping:
     enabled: true
     num_zones: 4
@@ -374,10 +374,10 @@ processing:
       - {contrast: 1.1, saturation: 1.05, exposure: 0.0}
       - {contrast: 1.0, saturation: 1.0, exposure: 0.0}
       - {contrast: 0.95, saturation: 0.95, exposure: -0.05}
-  
+
   atmospheric_effects:
     enabled: false  # Typically disabled for interiors
-  
+
   depth_guided_filters:
     enabled: true
     clarity_strength: 0.6
@@ -402,33 +402,33 @@ class PipelineConfig:
     input_dir: Optional[Path] = None
     depth_dir: Optional[Path] = None
     output_dir: Optional[Path] = None
-    
+
     # Preset
     preset: Preset = Preset.PHOTO_REALISTIC
-    
+
     # Upscaling
     upscale: int = 4                      # 2 or 4
     upscaler_backend: str = "torch"       # torch|onnx|none
     tile: int = 512
     tile_pad: int = 16
     half: bool = True                     # FP16 upscaling
-    
+
     # Device / Precision
     device: str = "auto"                  # auto|cuda|mps|cpu
     precision: str = "fp16"               # fp16|fp32
     cudnn_benchmark: bool = True
-    
+
     # Output Options
     save_master: bool = True              # 16-bit TIFF master
     save_upscaled: bool = True            # Upscaled output
     save_marketing_png: bool = True       # 8-bit PNG
     save_preview_jpg: bool = True         # Preview JPEG
     preview_scale: float = 0.25
-    
+
     # Safety
     warn_float_gb: float = 6.0            # Memory warning threshold
     strict_depth: bool = False            # Error if depth missing
-    
+
     # Depth Zone Synthesis (quantiles)
     fg_q: float = 0.35                    # Foreground threshold
     mg_q: float = 0.70                    # Midground threshold
@@ -456,7 +456,7 @@ config.exposure = 0.2
 
 1. **Load Image**: Read RGB image from disk (TIFF/PNG/JPEG)
 2. **Preprocess**: Resize to model input size, normalize to [0, 1]
-3. **Depth Inference**: 
+3. **Depth Inference**:
    - PyTorch: `transformers.DepthEstimationPipeline`
    - CoreML: `coreml.MLModel.predict()`
    - ONNX: `onnxruntime.InferenceSession.run()`
@@ -559,11 +559,11 @@ def synthesize_zones(depth: torch.Tensor, fg_q: float, mg_q: float, bg_q: float)
     """Generate binary zone masks from depth quantiles."""
     fg_thresh = torch.quantile(depth, fg_q)
     mg_thresh = torch.quantile(depth, mg_q)
-    
+
     foreground = (depth <= fg_thresh)
     midground = (depth > fg_thresh) & (depth <= mg_thresh)
     background = (depth > mg_thresh)
-    
+
     return foreground, midground, background
 ```
 
@@ -687,7 +687,7 @@ result = pipeline.process_single("input.jpg")
 
 #### CLI Mode (Batch Processing)
 
-**Command**: `lux-depth-v2`  
+**Command**: `lux-depth-v2`
 **Implementation**: `lux_depth_v2/cli.py`
 
 ```bash
@@ -708,7 +708,7 @@ lux-depth-v2 \
 
 #### Service Mode (FastAPI)
 
-**Command**: `lux-depth-v2-service`  
+**Command**: `lux-depth-v2-service`
 **Implementation**: `lux_depth_v2/service.py`
 
 ```bash
@@ -985,7 +985,7 @@ Stage Breakdown:
   Zone Processing:      6.3s  (63ms/image)  [12.6%]
   Upscaling:           28.7s  (287ms/image) [57.4%]
   Export:               7.5s  (75ms/image)  [15.0%]
-  
+
 Total:                 50.0s  (500ms/image)
 
 Throughput:           7,200 images/hour
@@ -1449,7 +1449,7 @@ config = PipelineConfig(
 
 ### Q: How do I optimize for Apple Silicon (M1/M2/M3/M4)?
 
-**A**: 
+**A**:
 1. Set `device="auto"` to use MPS backend
 2. Use `precision="fp16"` for 2x memory reduction
 3. Consider CoreML export for 3-5x speedup (see `depth_predict_coreml.py`)

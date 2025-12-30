@@ -37,10 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 # Import core pipeline components
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -48,51 +45,51 @@ class SceneConfig:
     """Scene-specific configuration for optimal processing."""
 
     AERIAL = {
-        'name': 'Aerial',
-        'depth_strength': 0.7,
-        'atmospheric_strength': 0.8,
-        'clarity_boost': 1.3,
-        'saturation': 1.15,
-        'contrast': 1.1,
-        'focus_zones': ['middle', 'far'],
-        'sky_enhancement': True,
-        'vegetation_boost': True
+        "name": "Aerial",
+        "depth_strength": 0.7,
+        "atmospheric_strength": 0.8,
+        "clarity_boost": 1.3,
+        "saturation": 1.15,
+        "contrast": 1.1,
+        "focus_zones": ["middle", "far"],
+        "sky_enhancement": True,
+        "vegetation_boost": True,
     }
 
     INTERIOR_LARGE = {  # Great Room, Primary Bedroom
-        'name': 'Interior Large',
-        'depth_strength': 0.85,
-        'atmospheric_strength': 0.4,
-        'clarity_boost': 1.4,
-        'saturation': 1.1,
-        'contrast': 1.15,
-        'focus_zones': ['near', 'middle'],
-        'warm_tone': True,
-        'window_recovery': True
+        "name": "Interior Large",
+        "depth_strength": 0.85,
+        "atmospheric_strength": 0.4,
+        "clarity_boost": 1.4,
+        "saturation": 1.1,
+        "contrast": 1.15,
+        "focus_zones": ["near", "middle"],
+        "warm_tone": True,
+        "window_recovery": True,
     }
 
     INTERIOR_DETAIL = {  # Kitchen, Bathroom
-        'name': 'Interior Detail',
-        'depth_strength': 0.9,
-        'atmospheric_strength': 0.3,
-        'clarity_boost': 1.5,
-        'saturation': 1.12,
-        'contrast': 1.2,
-        'focus_zones': ['near'],
-        'material_enhancement': True,
-        'specular_refinement': True
+        "name": "Interior Detail",
+        "depth_strength": 0.9,
+        "atmospheric_strength": 0.3,
+        "clarity_boost": 1.5,
+        "saturation": 1.12,
+        "contrast": 1.2,
+        "focus_zones": ["near"],
+        "material_enhancement": True,
+        "specular_refinement": True,
     }
 
     OUTDOOR = {  # Pool
-        'name': 'Outdoor',
-        'depth_strength': 0.75,
-        'atmospheric_strength': 0.6,
-        'clarity_boost': 1.35,
-        'saturation': 1.18,
-        'contrast': 1.12,
-        'focus_zones': ['near', 'middle'],
-        'water_enhancement': True,
-        'sky_enhancement': True
+        "name": "Outdoor",
+        "depth_strength": 0.75,
+        "atmospheric_strength": 0.6,
+        "clarity_boost": 1.35,
+        "saturation": 1.18,
+        "contrast": 1.12,
+        "focus_zones": ["near", "middle"],
+        "water_enhancement": True,
+        "sky_enhancement": True,
     }
 
 
@@ -108,12 +105,7 @@ class WorldClassProPipeline:
     - Ultra-high-quality 16-bit output
     """
 
-    def __init__(
-        self,
-        input_dir: Path,
-        output_dir: Path,
-        model_size: str = 'large'
-    ):
+    def __init__(self, input_dir: Path, output_dir: Path, model_size: str = "large"):
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -129,21 +121,21 @@ class WorldClassProPipeline:
 
         # Scene mapping
         self.scene_map = {
-            'Aerial': SceneConfig.AERIAL,
-            'GreatRoom': SceneConfig.INTERIOR_LARGE,
-            'Kitchen': SceneConfig.INTERIOR_DETAIL,
-            'Pool': SceneConfig.OUTDOOR,
-            'PrimaryBathroom': SceneConfig.INTERIOR_DETAIL,
-            'PrimaryBedroom': SceneConfig.INTERIOR_LARGE
+            "Aerial": SceneConfig.AERIAL,
+            "GreatRoom": SceneConfig.INTERIOR_LARGE,
+            "Kitchen": SceneConfig.INTERIOR_DETAIL,
+            "Pool": SceneConfig.OUTDOOR,
+            "PrimaryBathroom": SceneConfig.INTERIOR_DETAIL,
+            "PrimaryBedroom": SceneConfig.INTERIOR_LARGE,
         }
 
         # Processing metadata
         self.metadata = {
-            'pipeline': 'WorldClassProPipeline',
-            'version': '1.0',
-            'timestamp': datetime.now().isoformat(),
-            'model': f'DepthAnythingV2-{model_size}',
-            'processed_images': []
+            "pipeline": "WorldClassProPipeline",
+            "version": "1.0",
+            "timestamp": datetime.now().isoformat(),
+            "model": f"DepthAnythingV2-{model_size}",
+            "processed_images": [],
         }
 
     def detect_scene_type(self, filename: str) -> Dict:
@@ -159,7 +151,7 @@ class WorldClassProPipeline:
 
     def load_image(self, path: Path) -> np.ndarray:
         """Load and prepare image for processing."""
-        img = Image.open(path).convert('RGB')
+        img = Image.open(path).convert("RGB")
         return np.array(img, dtype=np.float32) / 255.0
 
     def estimate_depth(self, image: np.ndarray) -> np.ndarray:
@@ -168,37 +160,23 @@ class WorldClassProPipeline:
         depth = self.depth_model.infer(image)
         return depth
 
-    def apply_depth_aware_enhancement(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray,
-        config: Dict
-    ) -> np.ndarray:
+    def apply_depth_aware_enhancement(self, image: np.ndarray, depth: np.ndarray, config: Dict) -> np.ndarray:
         """Apply depth-aware enhancement based on scene config."""
         enhanced = image.copy()
 
         # Depth-aware clarity enhancement
-        if config.get('clarity_boost', 1.0) > 1.0:
-            clarity_strength = config['clarity_boost']
+        if config.get("clarity_boost", 1.0) > 1.0:
+            clarity_strength = config["clarity_boost"]
             enhanced = self._apply_clarity_boost(enhanced, depth, clarity_strength)
 
         # Atmospheric effects for depth
-        if config.get('atmospheric_strength', 0) > 0:
-            atmo_strength = config['atmospheric_strength']
-            enhanced = self.atmospheric.apply(
-                enhanced,
-                depth,
-                strength=atmo_strength
-            )
+        if config.get("atmospheric_strength", 0) > 0:
+            atmo_strength = config["atmospheric_strength"]
+            enhanced = self.atmospheric.apply(enhanced, depth, strength=atmo_strength)
 
         return enhanced
 
-    def _apply_clarity_boost(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray,
-        strength: float
-    ) -> np.ndarray:
+    def _apply_clarity_boost(self, image: np.ndarray, depth: np.ndarray, strength: float) -> np.ndarray:
         """Apply depth-guided clarity enhancement."""
         from scipy.ndimage import gaussian_filter
 
@@ -208,68 +186,48 @@ class WorldClassProPipeline:
         detail = image - blurred
 
         # Depth-weighted enhancement (focus on near/middle zones)
-        depth_weight = 1.0 - (depth ** 2)  # Boost near content
+        depth_weight = 1.0 - (depth**2)  # Boost near content
         depth_weight = np.clip(depth_weight, 0.3, 1.0)
 
         # Apply weighted clarity boost
         enhanced = image + detail * (strength - 1.0) * depth_weight[..., np.newaxis]
         return np.clip(enhanced, 0, 1)
 
-    def apply_zone_tone_mapping(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray,
-        config: Dict
-    ) -> np.ndarray:
+    def apply_zone_tone_mapping(self, image: np.ndarray, depth: np.ndarray, config: Dict) -> np.ndarray:
         """Apply zone-based tone mapping."""
-        return self.zone_mapper.apply(
-            image,
-            depth,
-            zones=config.get('focus_zones', ['near', 'middle'])
-        )
+        return self.zone_mapper.apply(image, depth, zones=config.get("focus_zones", ["near", "middle"]))
 
-    def apply_color_grading(
-        self,
-        image: np.ndarray,
-        config: Dict
-    ) -> np.ndarray:
+    def apply_color_grading(self, image: np.ndarray, config: Dict) -> np.ndarray:
         """Apply professional color grading."""
         graded = image.copy()
 
         # Saturation adjustment
-        saturation = config.get('saturation', 1.1)
+        saturation = config.get("saturation", 1.1)
         if saturation != 1.0:
             # Convert to HSV for saturation adjustment
             from skimage import color
+
             hsv = color.rgb2hsv(graded)
             hsv[..., 1] = np.clip(hsv[..., 1] * saturation, 0, 1)
             graded = color.hsv2rgb(hsv)
 
         # Contrast adjustment
-        contrast = config.get('contrast', 1.1)
+        contrast = config.get("contrast", 1.1)
         if contrast != 1.0:
             graded = self._apply_contrast(graded, contrast)
 
         # Warm tone for interiors
-        if config.get('warm_tone', False):
+        if config.get("warm_tone", False):
             graded = self._apply_warm_tone(graded, strength=0.15)
 
         return graded
 
-    def _apply_contrast(
-        self,
-        image: np.ndarray,
-        factor: float
-    ) -> np.ndarray:
+    def _apply_contrast(self, image: np.ndarray, factor: float) -> np.ndarray:
         """Apply contrast adjustment."""
         mean = np.mean(image, axis=(0, 1), keepdims=True)
         return np.clip((image - mean) * factor + mean, 0, 1)
 
-    def _apply_warm_tone(
-        self,
-        image: np.ndarray,
-        strength: float = 0.15
-    ) -> np.ndarray:
+    def _apply_warm_tone(self, image: np.ndarray, strength: float = 0.15) -> np.ndarray:
         """Apply subtle warm tone for luxury interiors."""
         warm = image.copy()
         warm[..., 0] = np.clip(warm[..., 0] * (1 + strength * 0.5), 0, 1)  # Boost red
@@ -277,34 +235,25 @@ class WorldClassProPipeline:
         warm[..., 2] = np.clip(warm[..., 2] * (1 - strength * 0.1), 0, 1)  # Reduce blue
         return warm
 
-    def apply_scene_specific_enhancements(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray,
-        config: Dict
-    ) -> np.ndarray:
+    def apply_scene_specific_enhancements(self, image: np.ndarray, depth: np.ndarray, config: Dict) -> np.ndarray:
         """Apply scene-specific enhancements."""
         enhanced = image.copy()
 
         # Sky enhancement for aerial/outdoor
-        if config.get('sky_enhancement', False):
+        if config.get("sky_enhancement", False):
             enhanced = self._enhance_sky(enhanced, depth)
 
         # Water enhancement for pool
-        if config.get('water_enhancement', False):
+        if config.get("water_enhancement", False):
             enhanced = self._enhance_water(enhanced, depth)
 
         # Material enhancement for detail shots
-        if config.get('material_enhancement', False):
+        if config.get("material_enhancement", False):
             enhanced = self._enhance_materials(enhanced)
 
         return enhanced
 
-    def _enhance_sky(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray
-    ) -> np.ndarray:
+    def _enhance_sky(self, image: np.ndarray, depth: np.ndarray) -> np.ndarray:
         """Enhance sky regions (far depth, blue hue)."""
         # Detect sky: far depth + blue color
         sky_mask = depth > 0.7
@@ -318,11 +267,7 @@ class WorldClassProPipeline:
 
         return enhanced
 
-    def _enhance_water(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray
-    ) -> np.ndarray:
+    def _enhance_water(self, image: np.ndarray, depth: np.ndarray) -> np.ndarray:
         """Enhance water regions (pool)."""
         # Detect water: blue-cyan hue
         water_mask = (image[..., 2] > image[..., 0]) & (image[..., 2] > image[..., 1] * 0.9)
@@ -335,10 +280,7 @@ class WorldClassProPipeline:
 
         return enhanced
 
-    def _enhance_materials(
-        self,
-        image: np.ndarray
-    ) -> np.ndarray:
+    def _enhance_materials(self, image: np.ndarray) -> np.ndarray:
         """Enhance material details (surfaces, textures)."""
         from scipy.ndimage import gaussian_filter
 
@@ -349,12 +291,7 @@ class WorldClassProPipeline:
 
         return np.clip(enhanced, 0, 1)
 
-    def save_output(
-        self,
-        image: np.ndarray,
-        output_path: Path,
-        metadata: Dict
-    ):
+    def save_output(self, image: np.ndarray, output_path: Path, metadata: Dict):
         """Save output as 16-bit TIFF with metadata."""
         logger.info(f"Saving 16-bit TIFF: {output_path.name}")
 
@@ -362,28 +299,21 @@ class WorldClassProPipeline:
         image_16bit = np.clip(image * 65535, 0, 65535).astype(np.uint16)
 
         # Save with PIL
-        img_pil = Image.fromarray(image_16bit, mode='RGB')
+        img_pil = Image.fromarray(image_16bit, mode="RGB")
 
         # Add metadata to EXIF
         from PIL import TiffImagePlugin
+
         info = TiffImagePlugin.ImageFileDirectory_v2()
         info[270] = json.dumps(metadata)  # ImageDescription tag
 
-        img_pil.save(
-            output_path,
-            format='TIFF',
-            compression='lzw',
-            tiffinfo=info
-        )
+        img_pil.save(output_path, format="TIFF", compression="lzw", tiffinfo=info)
 
-    def process_image(
-        self,
-        input_path: Path
-    ) -> Dict:
+    def process_image(self, input_path: Path) -> Dict:
         """Process a single image through the full pipeline."""
-        logger.info(f"\n{'='*80}")
+        logger.info(f"\n{'=' * 80}")
         logger.info(f"Processing: {input_path.name}")
-        logger.info(f"{'='*80}")
+        logger.info(f"{'=' * 80}")
 
         # Detect scene configuration
         config = self.detect_scene_type(input_path.name)
@@ -418,34 +348,34 @@ class WorldClassProPipeline:
         # Save enhanced image
         output_path = self.output_dir / f"{stem}_WorldClassPro.tif"
         image_metadata = {
-            'source': input_path.name,
-            'scene_type': config['name'],
-            'size': f"{original_size[1]}x{original_size[0]}",
-            'processing_stages': [
-                'depth_aware_enhancement',
-                'zone_tone_mapping',
-                'scene_specific_enhancements',
-                'professional_color_grading'
+            "source": input_path.name,
+            "scene_type": config["name"],
+            "size": f"{original_size[1]}x{original_size[0]}",
+            "processing_stages": [
+                "depth_aware_enhancement",
+                "zone_tone_mapping",
+                "scene_specific_enhancements",
+                "professional_color_grading",
             ],
-            'config': {k: v for k, v in config.items() if isinstance(v, (int, float, str, bool))}
+            "config": {k: v for k, v in config.items() if isinstance(v, (int, float, str, bool))},
         }
         self.save_output(enhanced, output_path, image_metadata)
 
         # Save depth map for reference
         depth_path = self.output_dir / f"{stem}_DepthMap.tif"
         depth_16bit = np.clip(depth * 65535, 0, 65535).astype(np.uint16)
-        Image.fromarray(depth_16bit, mode='I;16').save(depth_path, compression='lzw')
+        Image.fromarray(depth_16bit, mode="I;16").save(depth_path, compression="lzw")
         logger.info(f"Saved depth map: {depth_path.name}")
 
         result = {
-            'input': input_path.name,
-            'output': output_path.name,
-            'depth_map': depth_path.name,
-            'scene_type': config['name'],
-            'size': original_size
+            "input": input_path.name,
+            "output": output_path.name,
+            "depth_map": depth_path.name,
+            "scene_type": config["name"],
+            "size": original_size,
         }
 
-        self.metadata['processed_images'].append(result)
+        self.metadata["processed_images"].append(result)
 
         logger.info(f"✓ Complete: {output_path.name}\n")
         return result
@@ -459,13 +389,13 @@ class WorldClassProPipeline:
             logger.error(f"No JPEG files found in {self.input_dir}")
             return []
 
-        logger.info(f"\n{'='*80}")
+        logger.info(f"\n{'=' * 80}")
         logger.info("750 Picacho - World-Class Professional Pipeline")
-        logger.info(f"{'='*80}")
+        logger.info(f"{'=' * 80}")
         logger.info(f"Input: {self.input_dir}")
         logger.info(f"Output: {self.output_dir}")
         logger.info(f"Files to process: {len(jpeg_files)}")
-        logger.info(f"{'='*80}\n")
+        logger.info(f"{'=' * 80}\n")
 
         results = []
         for img_path in tqdm(jpeg_files, desc="Processing images"):
@@ -475,21 +405,22 @@ class WorldClassProPipeline:
             except Exception as e:
                 logger.error(f"Error processing {img_path.name}: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         # Save metadata
         metadata_path = self.output_dir / "processing_metadata.json"
-        with open(metadata_path, 'w') as f:
+        with open(metadata_path, "w") as f:
             json.dump(self.metadata, f, indent=2)
         logger.info(f"\nMetadata saved: {metadata_path}")
 
         # Print summary
-        logger.info(f"\n{'='*80}")
+        logger.info(f"\n{'=' * 80}")
         logger.info("PROCESSING COMPLETE")
-        logger.info(f"{'='*80}")
+        logger.info(f"{'=' * 80}")
         logger.info(f"Processed: {len(results)}/{len(jpeg_files)} images")
         logger.info(f"Output directory: {self.output_dir}")
-        logger.info(f"{'='*80}\n")
+        logger.info(f"{'=' * 80}\n")
 
         return results
 
@@ -509,7 +440,7 @@ def main():
     pipeline = WorldClassProPipeline(
         input_dir=input_dir,
         output_dir=output_dir,
-        model_size='large'  # Use large model for best quality
+        model_size="large",  # Use large model for best quality
     )
 
     # Process all images

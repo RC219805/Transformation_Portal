@@ -1,7 +1,7 @@
 # Transformation Portal - Comprehensive Architecture Review
-**Date**: December 7, 2025  
-**Reviewer**: Transformation Portal Architect  
-**Version**: 1.0  
+**Date**: December 7, 2025
+**Reviewer**: Transformation Portal Architect
+**Version**: 1.0
 
 ## Executive Summary
 
@@ -75,7 +75,7 @@ Test Files: 99
 **Areas for Improvement:**
 
 #### 2.1.1 Input Validation & Path Traversal
-**Risk**: Medium  
+**Risk**: Medium
 **Finding**: Limited input validation in file processing pipelines
 
 ```python
@@ -100,11 +100,11 @@ def process_image(input_path: str, base_dir: Path):
     img = Image.open(validated_path)
 ```
 
-**Priority**: High  
+**Priority**: High
 **Files**: All pipelines accepting file paths (`lux_render_pipeline.py`, `luxury_video_master_grader.py`)
 
 #### 2.1.2 FFmpeg Command Injection
-**Risk**: High  
+**Risk**: High
 **Finding**: FFmpeg commands constructed via string formatting
 
 ```python
@@ -131,11 +131,11 @@ cmd = build_ffmpeg_cmd(input_file, output_file, filter_graph)
 subprocess.run(cmd, check=True)  # No shell=True
 ```
 
-**Priority**: Critical  
+**Priority**: Critical
 **Files**: `luxury_video_master_grader.py`, `hdr_production_pipeline.sh`
 
 #### 2.1.3 Dependency Supply Chain
-**Risk**: Medium  
+**Risk**: Medium
 **Finding**: 28 direct ML dependencies, potential for supply chain attacks
 
 **Current Dependencies (ML):**
@@ -229,7 +229,7 @@ $ pip-compile pyproject.toml -o requirements/base.txt
 $ pip-compile --extra ml pyproject.toml -o requirements/ml.txt
 ```
 
-**Priority**: High  
+**Priority**: High
 **Effort**: 2-4 hours
 
 #### 3.2.2 Missing Dependency Licenses Audit
@@ -271,7 +271,7 @@ ml-full = [
 ]
 ```
 
-**Priority**: Medium  
+**Priority**: Medium
 **Effort**: 4-6 hours
 
 ---
@@ -335,12 +335,12 @@ import numpy as np
 
 class ImageProcessor(ABC):
     """Base interface for all image processors."""
-    
+
     @abstractmethod
     def process(self, image: np.ndarray, **kwargs) -> np.ndarray:
         """Process image and return result."""
         pass
-    
+
     @abstractmethod
     def get_config(self) -> dict[str, Any]:
         """Return processor configuration."""
@@ -349,12 +349,12 @@ class ImageProcessor(ABC):
 # src/transformation_portal/interfaces/pipeline.py
 class Pipeline(ABC):
     """Base interface for multi-stage pipelines."""
-    
+
     @abstractmethod
     def add_stage(self, stage: ImageProcessor) -> None:
         """Add processing stage."""
         pass
-    
+
     @abstractmethod
     def execute(self, input_path: Path) -> Path:
         """Execute pipeline and return output path."""
@@ -366,17 +366,17 @@ class Pipeline(ABC):
 # scripts/validation/check_module_boundaries.py
 def check_boundaries():
     violations = []
-    
+
     # Utils cannot import from processors/pipelines
     for file in Path("src/transformation_portal/utils").glob("**/*.py"):
         imports = extract_imports(file)
         if any(imp.startswith("transformation_portal.processors") for imp in imports):
             violations.append(f"{file}: Utils importing from processors")
-    
+
     return violations
 ```
 
-**Priority**: High  
+**Priority**: High
 **Effort**: 1-2 days
 
 ---
@@ -386,7 +386,7 @@ def check_boundaries():
 ### 5.1 Identified Duplication Patterns
 
 #### 5.1.1 Image Loading Logic
-**Occurrences**: 15+ files  
+**Occurrences**: 15+ files
 **Evidence**:
 ```python
 # Pattern repeated in multiple files
@@ -407,14 +407,14 @@ def load_image(
 ) -> np.ndarray:
     """
     Unified image loading with format detection.
-    
+
     Handles: TIFF (8/16-bit), PNG, JPEG, with metadata preservation.
     """
     # Implementation...
 ```
 
 #### 5.1.2 Depth Map Processing
-**Occurrences**: 8 files  
+**Occurrences**: 8 files
 **Pattern**: Depth normalization, inversion, edge detection
 
 **Recommendation**: Create `depth/processing.py` module
@@ -422,22 +422,22 @@ def load_image(
 # src/transformation_portal/depth/processing.py
 class DepthProcessor:
     """Centralized depth map processing operations."""
-    
+
     def normalize(self, depth: np.ndarray) -> np.ndarray:
         """Normalize depth to [0, 1] range."""
         pass
-    
+
     def invert(self, depth: np.ndarray) -> np.ndarray:
         """Invert depth map (near->far, far->near)."""
         pass
-    
+
     def detect_edges(self, depth: np.ndarray, threshold: float) -> np.ndarray:
         """Detect depth discontinuities."""
         pass
 ```
 
 #### 5.1.3 Material Detection
-**Occurrences**: 5 files (material_response/, lux_depth_v2/, enhancers/)  
+**Occurrences**: 5 files (material_response/, lux_depth_v2/, enhancers/)
 **Issue**: Three different material segmentation implementations
 
 **Recommendation**: Unified material segmentation interface
@@ -457,7 +457,7 @@ class MaterialType(Enum):
 
 class MaterialSegmenter(ABC):
     """Base interface for material segmentation."""
-    
+
     @abstractmethod
     def segment(self, image: np.ndarray) -> dict[MaterialType, np.ndarray]:
         """Return material masks."""
@@ -513,15 +513,15 @@ class ONNXMaterialSegmenter(MaterialSegmenter):
 def test_full_luxury_pipeline():
     """Test complete pipeline: load -> depth -> material -> color -> save."""
     input_path = Path("tests/fixtures/luxury_kitchen.jpg")
-    
+
     pipeline = LuxuryPipeline(
         depth_estimator=DepthAnythingV2(),
         material_response=MaterialResponse(),
         color_grader=LUTColorGrader(),
     )
-    
+
     result = pipeline.process(input_path)
-    
+
     assert result.exists()
     assert result.stat().st_size > 0
     # Validate quality metrics
@@ -540,9 +540,9 @@ def test_depth_estimation_performance(benchmark):
     """Ensure depth estimation stays under 100ms per image."""
     image = load_test_image()
     estimator = DepthAnythingV2()
-    
+
     result = benchmark(estimator.estimate, image)
-    
+
     assert benchmark.stats.mean < 0.1  # 100ms threshold
 ```
 
@@ -555,14 +555,14 @@ def test_depth_estimation_performance(benchmark):
 def test_material_response_contract():
     """Validate MaterialResponse adheres to ImageProcessor interface."""
     processor = MaterialResponse()
-    
+
     # Contract: Must have process() method
     assert hasattr(processor, 'process')
-    
+
     # Contract: Must accept np.ndarray
     image = np.random.rand(100, 100, 3)
     result = processor.process(image)
-    
+
     # Contract: Must return np.ndarray of same shape
     assert isinstance(result, np.ndarray)
     assert result.shape == image.shape
@@ -585,7 +585,7 @@ def test_material_response_contract():
 - name: Test with Coverage
   run: |
     pytest --cov=src/transformation_portal --cov-report=xml --cov-report=term
-    
+
 - name: Upload Coverage
   uses: codecov/codecov-action@v3
 ```
@@ -631,7 +631,7 @@ jobs:
           # Deploy Docker image to staging environment
           docker build -t transformation-portal:staging .
           docker push ${{ secrets.REGISTRY }}/transformation-portal:staging
-  
+
   deploy-production:
     needs: [test, security]
     if: github.ref == 'refs/heads/main'
@@ -652,7 +652,7 @@ jobs:
 - name: Performance Benchmarks
   run: |
     pytest tests/performance/ --benchmark-only --benchmark-json=benchmark.json
-    
+
 - name: Upload Benchmarks
   uses: benchmark-action/github-action-benchmark@v1
   with:
@@ -848,7 +848,7 @@ from transformation_portal.interfaces import Pipeline
 class MyPipeline(Pipeline):
     def add_stage(self, stage: ImageProcessor) -> None:
         self._stages.append(stage)
-    
+
     def execute(self, input_path: Path) -> Path:
         # Implementation follows interface contract
         pass
@@ -991,7 +991,7 @@ graph TD
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 7, 2025  
-**Next Review**: March 7, 2026 (Quarterly)  
+**Document Version**: 1.0
+**Last Updated**: December 7, 2025
+**Next Review**: March 7, 2026 (Quarterly)
 **Owner**: Transformation Portal Architect Team

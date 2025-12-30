@@ -305,6 +305,6 @@ A successful RAW mode execution must show:
 
 ---
 
-**Last Updated**: 2025-12-22  
-**Status**: Production-ready  
+**Last Updated**: 2025-12-22
+**Status**: Production-ready
 **Security**: No model loading, CPU-only, safe

@@ -16,6 +16,7 @@ Strategy:
 4. Micro-contrast for depth perception
 5. Edge clarity for architectural details
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -23,6 +24,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -41,31 +43,31 @@ OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Exposure & Tone
-GLOBAL_EXPOSURE_LIFT = 0.18          # Lift brightness from 0.218 to ~0.398 (+80%)
-SHADOW_LIFT_AMOUNT = 20              # +20 luminance for shadows (<60 brightness)
-SHADOW_THRESHOLD = 60                # Brightness < 60/255
-HIGHLIGHT_PROTECTION = 240           # Protect pixels > 240/255
-MIDTONE_CONTRAST = 1.08              # +8% midtone contrast
+GLOBAL_EXPOSURE_LIFT = 0.18  # Lift brightness from 0.218 to ~0.398 (+80%)
+SHADOW_LIFT_AMOUNT = 20  # +20 luminance for shadows (<60 brightness)
+SHADOW_THRESHOLD = 60  # Brightness < 60/255
+HIGHLIGHT_PROTECTION = 240  # Protect pixels > 240/255
+MIDTONE_CONTRAST = 1.08  # +8% midtone contrast
 
 # Color & Saturation
-GLOBAL_SATURATION = 1.06             # +6% saturation (lift from flat rendering)
-WARMTH_BOOST_RED = 1.02              # +2% red (preserve warm interior)
-WARMTH_REDUCE_BLUE = 0.98            # -2% blue (prevent cool cast)
+GLOBAL_SATURATION = 1.06  # +6% saturation (lift from flat rendering)
+WARMTH_BOOST_RED = 1.02  # +2% red (preserve warm interior)
+WARMTH_REDUCE_BLUE = 0.98  # -2% blue (prevent cool cast)
 
 # Material Enhancement
-MATERIAL_CLARITY = 0.15              # 15% clarity (wood grain, stone texture)
+MATERIAL_CLARITY = 0.15  # 15% clarity (wood grain, stone texture)
 TEXTURE_ZONES = {
-    'highlights': 0.10,              # 10% for bright surfaces
-    'midtones': 0.15,                # 15% for main materials
-    'shadows': 0.08                  # 8% for shadows (avoid noise)
+    "highlights": 0.10,  # 10% for bright surfaces
+    "midtones": 0.15,  # 15% for main materials
+    "shadows": 0.08,  # 8% for shadows (avoid noise)
 }
 
 # Sharpening
-EDGE_SHARPNESS = 0.12                # 12% edge enhancement
-UNSHARP_RADIUS = 1.5                 # Unsharp mask radius
+EDGE_SHARPNESS = 0.12  # 12% edge enhancement
+UNSHARP_RADIUS = 1.5  # Unsharp mask radius
 
 # Output
-OUTPUT_BIT_DEPTH = 16                # 16-bit TIFF
+OUTPUT_BIT_DEPTH = 16  # 16-bit TIFF
 
 # ============================================================================
 # LOAD IMAGE
@@ -95,7 +97,7 @@ if TIFFFILE_AVAILABLE:
         TIFFFILE_AVAILABLE = False
 
 if not TIFFFILE_AVAILABLE:
-    img = Image.open(INPUT).convert('RGB')
+    img = Image.open(INPUT).convert("RGB")
     rgb = np.array(img, dtype=np.float32) / 255.0
 
 print(f"  Range: [{rgb.min():.3f}, {rgb.max():.3f}]")
@@ -170,11 +172,11 @@ print(f"  ✓ Saturation: {GLOBAL_SATURATION:.0%}")
 
 # Warmth adjustment (subtle)
 img_array = np.array(img_pil, dtype=np.float32) / 255.0
-img_array[:, :, 0] *= WARMTH_BOOST_RED    # Red
+img_array[:, :, 0] *= WARMTH_BOOST_RED  # Red
 img_array[:, :, 2] *= WARMTH_REDUCE_BLUE  # Blue
 img_array = np.clip(img_array, 0, 1)
 
-print(f"  ✓ Warmth: R+{(WARMTH_BOOST_RED-1)*100:.1f}%, B{(WARMTH_REDUCE_BLUE-1)*100:.1f}%")
+print(f"  ✓ Warmth: R+{(WARMTH_BOOST_RED - 1) * 100:.1f}%, B{(WARMTH_REDUCE_BLUE - 1) * 100:.1f}%")
 
 img_pil = Image.fromarray((img_array * 255).astype(np.uint8))
 
@@ -209,9 +211,9 @@ detail = img_array - blurred_array
 
 # Apply zone-specific clarity
 clarity_map = np.zeros_like(brightness_map)
-clarity_map[highlight_zone] = TEXTURE_ZONES['highlights']
-clarity_map[midtone_zone] = TEXTURE_ZONES['midtones']
-clarity_map[shadow_zone] = TEXTURE_ZONES['shadows']
+clarity_map[highlight_zone] = TEXTURE_ZONES["highlights"]
+clarity_map[midtone_zone] = TEXTURE_ZONES["midtones"]
+clarity_map[shadow_zone] = TEXTURE_ZONES["shadows"]
 
 # Expand to 3 channels
 clarity_map_3d = np.stack([clarity_map] * 3, axis=2)
@@ -243,13 +245,13 @@ output_path = OUTPUT_DIR / "750Picacho_GreatRoom_v8.ti"
 
 # Save as 16-bit TIFF (OUTPUT_BIT_DEPTH is always 16 in this version)
 final_array = np.array(sharpened, dtype=np.uint8)
-final_16bit = (final_array.astype(np.uint16) * 257)
+final_16bit = final_array.astype(np.uint16) * 257
 if TIFFFILE_AVAILABLE:
-    tifffile.imwrite(output_path, final_16bit, photometric='rgb', compression='lzw')
+    tifffile.imwrite(output_path, final_16bit, photometric="rgb", compression="lzw")
     print("  ✓ Saved 16-bit TIFF with tifffile")
 else:
-    final_img = Image.fromarray(final_16bit, mode='RGB;16')
-    final_img.save(output_path, compression='tiff_lzw')
+    final_img = Image.fromarray(final_16bit, mode="RGB;16")
+    final_img.save(output_path, compression="tiff_lzw")
     print("  ✓ Saved 16-bit TIFF with PIL")
 
 file_size_mb = output_path.stat().st_size / 1024 / 1024
@@ -257,9 +259,9 @@ file_size_mb = output_path.stat().st_size / 1024 / 1024
 # ============================================================================
 # SUMMARY
 # ============================================================================
-print(f"\n{'='*80}")
+print(f"\n{'=' * 80}")
 print("PROCESSING COMPLETE - v8 OPTIMIZED")
-print(f"{'='*80}")
+print(f"{'=' * 80}")
 print(f"\nInput:  {INPUT}")
 print(f"Output: {output_path}")
 print(f"Size:   {file_size_mb:.1f} MB")
@@ -273,7 +275,7 @@ print(f"    • Final brightness: {rgb.mean():.3f} → {new_brightness:.3f}")
 print()
 print("  Color Grading:")
 print(f"    • Saturation: {GLOBAL_SATURATION:.0%}")
-print(f"    • Warmth: R+{(WARMTH_BOOST_RED-1)*100:.1f}%, B{(WARMTH_REDUCE_BLUE-1)*100:.1f}%")
+print(f"    • Warmth: R+{(WARMTH_BOOST_RED - 1) * 100:.1f}%, B{(WARMTH_REDUCE_BLUE - 1) * 100:.1f}%")
 print(f"    • Midtone contrast: {MIDTONE_CONTRAST:.0%}")
 print()
 print("  Material Enhancement:")
@@ -285,5 +287,5 @@ print()
 print("  Processing Zones:")
 print(f"    • Shadows: {shadow_percentage:.1f}%")
 print(f"    • Highlights: {highlight_percentage:.2f}%")
-print(f"{'='*80}")
+print(f"{'=' * 80}")
 print("\n✓ Dark interior lifted with preserved detail and warmth!")

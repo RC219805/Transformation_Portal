@@ -43,14 +43,14 @@ Optimized for luxury interior spaces with emphasis on:
   - Contrast: 1.035
   - Clarity: 0.20
   - Sharpening: 0.09
-  
+
 - **Midground Zone**: Middle 30%
   - Temperature: +0.006
   - Saturation: 1.030
   - Contrast: 1.030
   - Clarity: 0.12
   - Sharpening: 0.06
-  
+
 - **Background Zone**: Farthest 35%
   - Temperature: 0.000
   - Saturation: 1.010

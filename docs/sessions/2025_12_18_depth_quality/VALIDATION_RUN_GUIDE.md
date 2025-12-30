@@ -169,20 +169,20 @@ EXTERIOR: X/2 strict pass, avg_edge_f1=0.XXX, avg_seam_ratio=X.XX
 ## 🎯 Success Criteria
 
 ### Execution (Must Pass)
-✅ All 6 images process without exceptions  
+✅ All 6 images process without exceptions
 ✅ All artifacts generated (depth, edges, heatmap, metrics)
 
 ### Seam Validation (Target)
-🎯 >80% pass rate (5/6 images)  
+🎯 >80% pass rate (5/6 images)
 🎯 Aerial seam_ratio <1.15 (spatial smoothing working)
 
 ### Quality Gates (Expected)
-🎯 Lenient: 50-70% pass rate (3-4/6)  
+🎯 Lenient: 50-70% pass rate (3-4/6)
 🎯 Strict: 30-50% pass rate (2-3/6 initially)
 
 ### Reporting Integrity (Must Pass)
-✅ Terminal shows separated execution/seam/quality rates  
-✅ Category breakdown visible  
+✅ Terminal shows separated execution/seam/quality rates
+✅ Category breakdown visible
 ✅ Overshoot components logged
 
 ---
@@ -341,9 +341,9 @@ python production_depth_validation.py \
 
 ---
 
-**Status:** READY FOR EXECUTION  
-**Blocking Issues:** NONE  
-**Estimated Runtime:** 30-45 minutes  
+**Status:** READY FOR EXECUTION
+**Blocking Issues:** NONE
+**Estimated Runtime:** 30-45 minutes
 **Expected Success Rate:** 6/6 execution, 2-3/6 strict quality
 
 🎯 **GO/NO-GO:** ✅ GO - All fixes implemented and tested

@@ -14,7 +14,7 @@ Successfully merged PR-W1/W2 water candidate detector + Materials V3 integration
   - Post-processing: morphology, component filtering, hole fill
   - Scene context support (pool vs ocean tuning)
 
-### PR-W2: Materials V3 Integration  
+### PR-W2: Materials V3 Integration
 - **Module**: `lux_depth_v2/materials_v3.py`
 - **Behavior**:
   - Opt-in via `water_detection_enabled=False` (default OFF)
@@ -113,12 +113,12 @@ Add to `.github/workflows/consolidated.yml`:
       --output current_report.json \
       --seed 42 \
       --no-scipy-warning
-    
+
     python scripts/check_regression.py \
       data/water_v0/baseline_ci_v0.json \
       current_report.json \
       --mode warn
-  
+
   - name: Upload Current Report
     uses: actions/upload-artifact@v4
     with:
@@ -131,7 +131,7 @@ Add to `.github/workflows/consolidated.yml`:
 ### Dataset Isolation
 ✅ No images committed to git:
 ```bash
-git diff --cached --name-only | grep -E '^data/water_v0/images/' 
+git diff --cached --name-only | grep -E '^data/water_v0/images/'
 # Expected: no output
 ```
 
@@ -148,7 +148,7 @@ json.dumps(result["materials_v3"])  # Must not throw
 
 ### Merged
 - ✅ PR-4B: Glass pixel ops (canary)
-- ✅ PR-4D: Stone pixel ops (canary) 
+- ✅ PR-4D: Stone pixel ops (canary)
 - ✅ PR-W1/W2: Water candidate detector + injection
 
 ### Pending
@@ -199,6 +199,6 @@ CI: All required checks passed
 
 ---
 
-**Session End**: 2025-12-15 04:55 UTC  
-**Duration**: ~2 hours (contract fix + merge + cleanup)  
+**Session End**: 2025-12-15 04:55 UTC
+**Duration**: ~2 hours (contract fix + merge + cleanup)
 **Outcome**: ✅ Production-ready water detection infrastructure merged

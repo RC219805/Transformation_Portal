@@ -126,27 +126,19 @@ class TemporalEvolutionRoadmap:
 
 def _normalise_directives(name: str, directives: object) -> List[EvolutionDirective]:
     if isinstance(directives, (str, bytes)) or not isinstance(directives, Sequence):
-        raise TypeError(
-            f"Directives for discipline '{name}' must be a sequence of steps"
-        )
+        raise TypeError(f"Directives for discipline '{name}' must be a sequence of steps")
 
     result: List[EvolutionDirective] = []
     for entry in directives:  # type: ignore[union-attr]
         if isinstance(entry, Mapping):
             if len(entry) != 1:
-                raise TypeError(
-                    f"Directive mappings for discipline '{name}' must contain a single entry"
-                )
+                raise TypeError(f"Directive mappings for discipline '{name}' must contain a single entry")
             summary, detail = next(iter(entry.items()))
             if not isinstance(summary, str) or not isinstance(detail, str):
-                raise TypeError(
-                    f"Directive mapping for discipline '{name}' must map strings to strings"
-                )
+                raise TypeError(f"Directive mapping for discipline '{name}' must map strings to strings")
             stripped_summary = summary.strip()
             if not stripped_summary:
-                raise TypeError(
-                    f"Directive mapping for discipline '{name}' must include a summary"
-                )
+                raise TypeError(f"Directive mapping for discipline '{name}' must include a summary")
             result.append(EvolutionDirective(stripped_summary, detail.strip()))
         elif isinstance(entry, str):
             stripped = entry.strip()
@@ -154,9 +146,7 @@ def _normalise_directives(name: str, directives: object) -> List[EvolutionDirect
                 continue
             result.append(EvolutionDirective(stripped))
         else:
-            raise TypeError(
-                f"Unsupported directive type for discipline '{name}': {type(entry)!r}"
-            )
+            raise TypeError(f"Unsupported directive type for discipline '{name}': {type(entry)!r}")
 
     return result
 

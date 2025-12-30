@@ -233,5 +233,5 @@ pip install -e ".[tiff]"
 
 ---
 
-**Version**: 1.0.0  
+**Version**: 1.0.0
 **Last Updated**: November 2025

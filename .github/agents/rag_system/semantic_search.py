@@ -77,7 +77,7 @@ class CodeParser:
         entities = []
 
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 source = f.read()
 
             tree = ast.parse(source)
@@ -94,12 +94,7 @@ class CodeParser:
                     # Parse methods within class
                     for method_node in node.body:
                         if isinstance(method_node, ast.FunctionDef):
-                            method_entity = self._parse_function(
-                                method_node,
-                                file_path,
-                                imports,
-                                parent_class=node.name
-                            )
+                            method_entity = self._parse_function(method_node, file_path, imports, parent_class=node.name)
                             entities.append(method_entity)
 
                 elif isinstance(node, ast.FunctionDef):
@@ -126,20 +121,12 @@ class CodeParser:
 
         return imports
 
-    def _parse_class(
-        self,
-        node: ast.ClassDef,
-        file_path: str,
-        imports: Set[str]
-    ) -> CodeEntity:
+    def _parse_class(self, node: ast.ClassDef, file_path: str, imports: Set[str]) -> CodeEntity:
         """Parse a class definition."""
         docstring = ast.get_docstring(node)
 
         # Extract decorators
-        decorators = [
-            self._get_decorator_name(dec)
-            for dec in node.decorator_list
-        ]
+        decorators = [self._get_decorator_name(dec) for dec in node.decorator_list]
 
         # Get base classes
         bases = [self._get_name(base) for base in node.bases]
@@ -147,21 +134,17 @@ class CodeParser:
 
         return CodeEntity(
             name=node.name,
-            entity_type='class',
+            entity_type="class",
             file_path=file_path,
             line_number=node.lineno,
             signature=signature,
             docstring=docstring,
             decorators=decorators,
-            imports=imports.copy()
+            imports=imports.copy(),
         )
 
     def _parse_function(
-        self,
-        node: ast.FunctionDef,
-        file_path: str,
-        imports: Set[str],
-        parent_class: Optional[str] = None
+        self, node: ast.FunctionDef, file_path: str, imports: Set[str], parent_class: Optional[str] = None
     ) -> CodeEntity:
         """Parse a function or method definition."""
         docstring = ast.get_docstring(node)
@@ -175,13 +158,10 @@ class CodeParser:
             return_type = self._get_name(node.returns)
 
         # Extract decorators
-        decorators = [
-            self._get_decorator_name(dec)
-            for dec in node.decorator_list
-        ]
+        decorators = [self._get_decorator_name(dec) for dec in node.decorator_list]
 
         # Build signature
-        params_str = ', '.join(parameters)
+        params_str = ", ".join(parameters)
         signature = f"def {node.name}({params_str})"
         if return_type:
             signature += f" -> {return_type}"
@@ -192,7 +172,7 @@ class CodeParser:
         # Calculate complexity
         complexity = self._calculate_complexity(node)
 
-        entity_type = 'method' if parent_class else 'function'
+        entity_type = "method" if parent_class else "function"
 
         return CodeEntity(
             name=node.name,
@@ -206,7 +186,7 @@ class CodeParser:
             decorators=decorators,
             calls=calls,
             imports=imports.copy(),
-            complexity=complexity
+            complexity=complexity,
         )
 
     def _extract_calls(self, node: ast.AST) -> Set[str]:
@@ -283,7 +263,7 @@ class SemanticCodeSearch:
         print("Indexing codebase for semantic search...")
 
         # Parse all Python files
-        for py_file in self.repo_root.rglob('*.py'):
+        for py_file in self.repo_root.rglob("*.py"):
             if self._should_index(py_file):
                 entities = self.parser.parse_file(str(py_file))
                 for entity in entities:
@@ -299,12 +279,7 @@ class SemanticCodeSearch:
 
         print(f"Indexed {len(self.entities)} code entities")
 
-    def search(
-        self,
-        query: str,
-        entity_type: Optional[str] = None,
-        top_k: int = 10
-    ) -> List[SemanticSearchResult]:
+    def search(self, query: str, entity_type: Optional[str] = None, top_k: int = 10) -> List[SemanticSearchResult]:
         """
         Semantic search for code entities.
 
@@ -345,29 +320,23 @@ class SemanticCodeSearch:
             all_matches[key] = (entity, current_score + score * 0.3, reason)
 
         # Step 4: Create results with usage examples
-        for entity, score, reason in sorted(
-            all_matches.values(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:top_k]:
+        for entity, score, reason in sorted(all_matches.values(), key=lambda x: x[1], reverse=True)[:top_k]:
             code_snippet = self._get_code_snippet(entity)
             usage_examples = self._find_usage_examples(entity, max_examples=3)
 
-            results.append(SemanticSearchResult(
-                entity=entity,
-                relevance_score=score,
-                match_reason=reason,
-                code_snippet=code_snippet,
-                usage_examples=usage_examples
-            ))
+            results.append(
+                SemanticSearchResult(
+                    entity=entity,
+                    relevance_score=score,
+                    match_reason=reason,
+                    code_snippet=code_snippet,
+                    usage_examples=usage_examples,
+                )
+            )
 
         return results
 
-    def find_similar_code(
-        self,
-        code_snippet: str,
-        top_k: int = 5
-    ) -> List[SemanticSearchResult]:
+    def find_similar_code(self, code_snippet: str, top_k: int = 5) -> List[SemanticSearchResult]:
         """
         Find similar code patterns in the repository.
 
@@ -397,15 +366,12 @@ class SemanticCodeSearch:
                 relevance_score=score,
                 match_reason=reason,
                 code_snippet=self._get_code_snippet(entity),
-                usage_examples=self._find_usage_examples(entity, max_examples=2)
+                usage_examples=self._find_usage_examples(entity, max_examples=2),
             )
             for entity, score, reason in results[:top_k]
         ]
 
-    def discover_api(
-        self,
-        task_description: str
-    ) -> Dict[str, List[CodeEntity]]:
+    def discover_api(self, task_description: str) -> Dict[str, List[CodeEntity]]:
         """
         Discover relevant APIs for a task.
 
@@ -419,27 +385,21 @@ class SemanticCodeSearch:
         results = self.search(task_description, top_k=20)
 
         # Categorize by type and purpose
-        api_map = {
-            'core_functions': [],
-            'utilities': [],
-            'processors': [],
-            'models': [],
-            'configuration': []
-        }
+        api_map = {"core_functions": [], "utilities": [], "processors": [], "models": [], "configuration": []}
 
         for result in results:
             entity = result.entity
 
-            if 'processor' in entity.file_path.lower():
-                api_map['processors'].append(entity)
-            elif 'model' in entity.file_path.lower():
-                api_map['models'].append(entity)
-            elif 'util' in entity.file_path.lower() or 'helper' in entity.name.lower():
-                api_map['utilities'].append(entity)
-            elif 'config' in entity.file_path.lower():
-                api_map['configuration'].append(entity)
+            if "processor" in entity.file_path.lower():
+                api_map["processors"].append(entity)
+            elif "model" in entity.file_path.lower():
+                api_map["models"].append(entity)
+            elif "util" in entity.file_path.lower() or "helper" in entity.name.lower():
+                api_map["utilities"].append(entity)
+            elif "config" in entity.file_path.lower():
+                api_map["configuration"].append(entity)
             else:
-                api_map['core_functions'].append(entity)
+                api_map["core_functions"].append(entity)
 
         return {k: v for k, v in api_map.items() if v}
 
@@ -448,40 +408,36 @@ class SemanticCodeSearch:
         query_lower = query.lower()
 
         intent = {
-            'action': None,  # 'find', 'how_to', 'example', etc.
-            'keywords': [],
-            'entity_type': None
+            "action": None,  # 'find', 'how_to', 'example', etc.
+            "keywords": [],
+            "entity_type": None,
         }
 
         # Detect action verbs
-        if any(word in query_lower for word in ['how to', 'how do i', 'way to']):
-            intent['action'] = 'how_to'
-        elif any(word in query_lower for word in ['find', 'search', 'locate']):
-            intent['action'] = 'find'
-        elif any(word in query_lower for word in ['example', 'show me', 'demonstrate']):
-            intent['action'] = 'example'
+        if any(word in query_lower for word in ["how to", "how do i", "way to"]):
+            intent["action"] = "how_to"
+        elif any(word in query_lower for word in ["find", "search", "locate"]):
+            intent["action"] = "find"
+        elif any(word in query_lower for word in ["example", "show me", "demonstrate"]):
+            intent["action"] = "example"
 
         # Extract keywords
-        keywords = re.findall(r'\b[a-z_][a-z0-9_]{2,}\b', query_lower)
-        intent['keywords'] = keywords
+        keywords = re.findall(r"\b[a-z_][a-z0-9_]{2,}\b", query_lower)
+        intent["keywords"] = keywords
 
         # Detect entity type
-        if 'class' in query_lower:
-            intent['entity_type'] = 'class'
-        elif 'function' in query_lower or 'method' in query_lower:
-            intent['entity_type'] = 'function'
+        if "class" in query_lower:
+            intent["entity_type"] = "class"
+        elif "function" in query_lower or "method" in query_lower:
+            intent["entity_type"] = "function"
 
         return intent
 
-    def _search_by_name(
-        self,
-        query: str,
-        entity_type: Optional[str]
-    ) -> List[Tuple[CodeEntity, float, str]]:
+    def _search_by_name(self, query: str, entity_type: Optional[str]) -> List[Tuple[CodeEntity, float, str]]:
         """Search by entity name."""
         results = []
         query_lower = query.lower()
-        keywords = re.findall(r'\b[a-z_][a-z0-9_]{2,}\b', query_lower)
+        keywords = re.findall(r"\b[a-z_][a-z0-9_]{2,}\b", query_lower)
 
         for name, entities in self.entity_index.items():
             for entity in entities:
@@ -503,30 +459,18 @@ class SemanticCodeSearch:
                     score = keyword_matches * 2.0
 
                 if score > 0:
-                    results.append((
-                        entity,
-                        score,
-                        f"Name match: {entity.name}"
-                    ))
+                    results.append((entity, score, f"Name match: {entity.name}"))
 
         return results
 
-    def _search_by_semantics(
-        self,
-        query: str,
-        entity_type: Optional[str]
-    ) -> List[Tuple[CodeEntity, float, str]]:
+    def _search_by_semantics(self, query: str, entity_type: Optional[str]) -> List[Tuple[CodeEntity, float, str]]:
         """Search using RAG semantic retrieval."""
         # Use hybrid retriever for semantic search
         chunk_filter = None
         if entity_type:
-            chunk_filter = ['code']  # Only search code chunks
+            chunk_filter = ["code"]  # Only search code chunks
 
-        retrieval_results = self.retriever.retrieve(
-            query,
-            top_k=20,
-            chunk_type_filter=chunk_filter
-        )
+        retrieval_results = self.retriever.retrieve(query, top_k=20, chunk_type_filter=chunk_filter)
 
         results = []
         for retrieval_result in retrieval_results:
@@ -536,33 +480,27 @@ class SemanticCodeSearch:
                 if entity.file_path == file_path:
                     if not entity_type or entity.entity_type == entity_type:
                         # Check if entity is in the retrieved chunk
-                        in_range = (entity.line_number >= retrieval_result.start_line and
-                                    entity.line_number <= retrieval_result.end_line)
+                        in_range = (
+                            entity.line_number >= retrieval_result.start_line
+                            and entity.line_number <= retrieval_result.end_line
+                        )
                         if in_range:
-                            results.append((
-                                entity,
-                                retrieval_result.score * 0.5,
-                                f"Semantic match in {file_path}"
-                            ))
+                            results.append((entity, retrieval_result.score * 0.5, f"Semantic match in {file_path}"))
 
         return results
 
-    def _search_by_usage_pattern(
-        self,
-        query: str,
-        entity_type: Optional[str]
-    ) -> List[Tuple[CodeEntity, float, str]]:
+    def _search_by_usage_pattern(self, query: str, entity_type: Optional[str]) -> List[Tuple[CodeEntity, float, str]]:
         """Search based on usage patterns."""
         results = []
         query_lower = query.lower()
 
         # Look for common usage patterns in query
         patterns = {
-            'depth': ['depth', 'estimate', 'map'],
-            'color': ['color', 'grade', 'lut', 'tone'],
-            'material': ['material', 'surface', 'texture'],
-            'enhance': ['enhance', 'improve', 'optimize'],
-            'batch': ['batch', 'process', 'multiple']
+            "depth": ["depth", "estimate", "map"],
+            "color": ["color", "grade", "lut", "tone"],
+            "material": ["material", "surface", "texture"],
+            "enhance": ["enhance", "improve", "optimize"],
+            "batch": ["batch", "process", "multiple"],
         }
 
         for pattern_name, pattern_keywords in patterns.items():
@@ -578,11 +516,7 @@ class SemanticCodeSearch:
 
                     if match_count > 0:
                         score = match_count * 1.5
-                        results.append((
-                            entity,
-                            score,
-                            f"Usage pattern: {pattern_name}"
-                        ))
+                        results.append((entity, score, f"Usage pattern: {pattern_name}"))
 
         return results
 
@@ -599,31 +533,23 @@ class SemanticCodeSearch:
     def _get_code_snippet(self, entity: CodeEntity) -> str:
         """Get code snippet for an entity."""
         try:
-            with open(entity.file_path, 'r') as f:
+            with open(entity.file_path, "r") as f:
                 lines = f.readlines()
 
             # Get 10 lines starting from entity
             start = max(0, entity.line_number - 1)
             end = min(len(lines), start + 10)
 
-            return ''.join(lines[start:end])
+            return "".join(lines[start:end])
         except Exception:
             return entity.signature
 
-    def _find_usage_examples(
-        self,
-        entity: CodeEntity,
-        max_examples: int = 3
-    ) -> List[str]:
+    def _find_usage_examples(self, entity: CodeEntity, max_examples: int = 3) -> List[str]:
         """Find usage examples for an entity."""
         examples = []
 
         # Search in test files first
-        test_chunks = self.retriever.retrieve(
-            entity.name,
-            top_k=10,
-            chunk_type_filter=['test']
-        )
+        test_chunks = self.retriever.retrieve(entity.name, top_k=10, chunk_type_filter=["test"])
 
         for chunk in test_chunks[:max_examples]:
             if entity.name in chunk.content:
@@ -633,68 +559,60 @@ class SemanticCodeSearch:
 
     def _extract_code_patterns(self, code: str) -> Dict[str, any]:
         """Extract patterns from code snippet."""
-        patterns = {
-            'imports': set(),
-            'function_calls': set(),
-            'keywords': set()
-        }
+        patterns = {"imports": set(), "function_calls": set(), "keywords": set()}
 
         try:
             tree = ast.parse(code)
 
             # Extract patterns
-            patterns['imports'] = self.parser._extract_imports(tree)
+            patterns["imports"] = self.parser._extract_imports(tree)
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call):
                     call_name = self.parser._get_name(node.func)
                     if call_name:
-                        patterns['function_calls'].add(call_name)
+                        patterns["function_calls"].add(call_name)
         except Exception:
             pass
 
         # Extract keywords
-        keywords = re.findall(r'\b[a-z_][a-z0-9_]{3,}\b', code.lower())
-        patterns['keywords'] = set(keywords)
+        keywords = re.findall(r"\b[a-z_][a-z0-9_]{3,}\b", code.lower())
+        patterns["keywords"] = set(keywords)
 
         return patterns
 
-    def _calculate_pattern_similarity(
-        self,
-        patterns: Dict[str, any],
-        entity: CodeEntity
-    ) -> float:
+    def _calculate_pattern_similarity(self, patterns: Dict[str, any], entity: CodeEntity) -> float:
         """Calculate similarity between patterns and entity."""
         similarity = 0.0
 
         # Compare imports
-        if patterns['imports']:
-            common_imports = patterns['imports'].intersection(entity.imports)
-            similarity += len(common_imports) / len(patterns['imports']) * 0.3
+        if patterns["imports"]:
+            common_imports = patterns["imports"].intersection(entity.imports)
+            similarity += len(common_imports) / len(patterns["imports"]) * 0.3
 
         # Compare function calls
-        if patterns['function_calls']:
-            common_calls = patterns['function_calls'].intersection(entity.calls)
-            similarity += len(common_calls) / len(patterns['function_calls']) * 0.4
+        if patterns["function_calls"]:
+            common_calls = patterns["function_calls"].intersection(entity.calls)
+            similarity += len(common_calls) / len(patterns["function_calls"]) * 0.4
 
         # Compare keywords
-        if patterns['keywords']:
+        if patterns["keywords"]:
             entity_text = f"{entity.name} {entity.docstring or ''}".lower()
-            keyword_matches = sum(1 for kw in patterns['keywords'] if kw in entity_text)
-            similarity += (keyword_matches / len(patterns['keywords'])) * 0.3
+            keyword_matches = sum(1 for kw in patterns["keywords"] if kw in entity_text)
+            similarity += (keyword_matches / len(patterns["keywords"])) * 0.3
 
         return similarity
 
     def _should_index(self, file_path: Path) -> bool:
         """Check if file should be indexed."""
         # Skip test files, cache, build artifacts
-        skip_dirs = {'__pycache__', '.pytest_cache', 'build', 'dist', '.git'}
+        skip_dirs = {"__pycache__", ".pytest_cache", "build", "dist", ".git"}
 
         if any(part in skip_dirs for part in file_path.parts):
             return False
 
         # Skip __init__.py and setup.py
-        if file_path.name in {'__init__.py', 'setup.py'}:
+        if file_path.name in {"__init__.py", "setup.py"}:
             return False
 
         return True
@@ -705,15 +623,13 @@ def main():
     import argparse
     import json
 
-    parser = argparse.ArgumentParser(description='Semantic Code Search')
-    parser.add_argument('--repo-root', default='.', help='Repository root')
-    parser.add_argument('--query', required=True, help='Search query')
-    parser.add_argument('--type', choices=['function', 'class', 'method'],
-                        help='Filter by entity type')
-    parser.add_argument('--top-k', type=int, default=10, help='Number of results')
-    parser.add_argument('--discover-api', action='store_true',
-                        help='Discover API for task')
-    parser.add_argument('--json', action='store_true', help='Output as JSON')
+    parser = argparse.ArgumentParser(description="Semantic Code Search")
+    parser.add_argument("--repo-root", default=".", help="Repository root")
+    parser.add_argument("--query", required=True, help="Search query")
+    parser.add_argument("--type", choices=["function", "class", "method"], help="Filter by entity type")
+    parser.add_argument("--top-k", type=int, default=10, help="Number of results")
+    parser.add_argument("--discover-api", action="store_true", help="Discover API for task")
+    parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     args = parser.parse_args()
 
@@ -742,16 +658,18 @@ def main():
             # JSON output
             output = []
             for result in results:
-                output.append({
-                    'name': result.entity.name,
-                    'type': result.entity.entity_type,
-                    'file_path': result.entity.file_path,
-                    'line_number': result.entity.line_number,
-                    'signature': result.entity.signature,
-                    'relevance_score': result.relevance_score,
-                    'match_reason': result.match_reason,
-                    'docstring': result.entity.docstring
-                })
+                output.append(
+                    {
+                        "name": result.entity.name,
+                        "type": result.entity.entity_type,
+                        "file_path": result.entity.file_path,
+                        "line_number": result.entity.line_number,
+                        "signature": result.entity.signature,
+                        "relevance_score": result.relevance_score,
+                        "match_reason": result.match_reason,
+                        "docstring": result.entity.docstring,
+                    }
+                )
             print(json.dumps(output, indent=2))
         else:
             # Human-readable output
@@ -772,5 +690,5 @@ def main():
                     print(f"    Usage examples: {len(result.usage_examples)} found")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
