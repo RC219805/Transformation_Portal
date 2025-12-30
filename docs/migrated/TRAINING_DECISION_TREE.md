@@ -70,23 +70,23 @@ START HERE
 ## 🎯 By Use Case
 
 ### Production / Client Work
-→ **Use:** `train_with_750picacho.sh`  
-→ **Why:** Best quality (103-107/100), real architectural data, material realism  
+→ **Use:** `train_with_750picacho.sh`
+→ **Why:** Best quality (103-107/100), real architectural data, material realism
 → **Time:** Worth waiting 2.5-3.5 hours for production-ready results
 
 ### Experimentation / Research
-→ **Use:** `quickstart_training.sh`  
-→ **Why:** Good baseline (100-103/100), fast iterations, consistent results  
+→ **Use:** `quickstart_training.sh`
+→ **Why:** Good baseline (100-103/100), fast iterations, consistent results
 → **Time:** 2-3 hours allows multiple experiments
 
 ### Custom Client Projects
-→ **Use:** Manual training with your data  
-→ **Why:** Train on your specific style and requirements  
+→ **Use:** Manual training with your data
+→ **Why:** Train on your specific style and requirements
 → **How:** Organize data as `high_quality/` and `low_quality/` directories
 
 ### Infrastructure Testing
-→ **Use:** `quick_train_demo.py`  
-→ **Why:** Validate setup before long training runs  
+→ **Use:** `quick_train_demo.py`
+→ **Why:** Validate setup before long training runs
 → **Time:** 5-10 minutes, not production-ready
 
 ---
@@ -142,23 +142,23 @@ export CUDA_VISIBLE_DEVICES=0
 ## ⏱️ By Available Time
 
 ### Have 3-4 hours + GPU
-✅ **Use:** `train_with_750picacho.sh`  
+✅ **Use:** `train_with_750picacho.sh`
 → Best quality, real data, production-ready
 
 ### Have 2-3 hours + GPU
-✅ **Use:** `quickstart_training.sh`  
+✅ **Use:** `quickstart_training.sh`
 → Good baseline, experiments
 
 ### Have 12-18 hours (overnight) + CPU
-✅ **Use:** `train_with_750picacho.sh`  
+✅ **Use:** `train_with_750picacho.sh`
 → Best quality, run overnight
 
 ### Have 8-12 hours (overnight) + CPU
-✅ **Use:** `quickstart_training.sh`  
+✅ **Use:** `quickstart_training.sh`
 → Good baseline, faster than real data
 
 ### Have 10 minutes (testing only)
-✅ **Use:** `quick_train_demo.py`  
+✅ **Use:** `quick_train_demo.py`
 → Validate infrastructure
 
 ---
@@ -357,5 +357,5 @@ python src/enhancements/hyper_reality_enhancement.py test.jpg -o output.jpg
 
 ---
 
-**Last Updated:** 2025-11-19  
+**Last Updated:** 2025-11-19
 **Need Help?** Check HOW_TO_TRAIN.md or run `./scripts/train_with_750picacho.sh --help`

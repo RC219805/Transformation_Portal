@@ -20,7 +20,7 @@ Models supported:
     - depth-anything/Depth-Anything-V2-Large-hf (baseline relative)
     - depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf
     - depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf
-    
+
 Optional (requires high VRAM):
     - LiheYoung/depth-anything-large-hf (v1 for comparison)
 """
@@ -112,9 +112,10 @@ def validate_vram(model_key: str) -> bool:
     """Check if system has enough VRAM for model."""
     model_info = MODEL_REGISTRY[model_key]
     required_gb = model_info.get("vram_gb", 12)
-    
+
     try:
         import torch
+
         if torch.cuda.is_available():
             available_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             if available_gb < required_gb:
@@ -127,7 +128,7 @@ def validate_vram(model_key: str) -> bool:
             print(f"⚠️  No GPU detected; {model_key} may run slowly on CPU")
     except ImportError:
         print("⚠️  PyTorch not available for VRAM check")
-    
+
     return True
 
 
@@ -146,13 +147,13 @@ def run_depth_validation_for_model(
     model_info = MODEL_REGISTRY[model_key]
     model_id = model_info["hf_id"]
     model_type = model_info["type"]
-    
-    print(f"\n{'='*70}")
+
+    print(f"\n{'=' * 70}")
     print(f"MODEL: {model_key}")
     print(f"HF ID: {model_id}")
     print(f"Type: {model_type}")
-    print(f"{'='*70}\n")
-    
+    print(f"{'=' * 70}\n")
+
     results = {
         "model_key": model_key,
         "model_id": model_id,
@@ -160,15 +161,15 @@ def run_depth_validation_for_model(
         "sweep_results": {},
         "overall_best": {},
     }
-    
+
     # Run validation for each input size
     for input_size in sweep_sizes:
         size_tag = f"input_{input_size}"
         size_output_dir = output_dir / size_tag
         size_output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         print(f"\n▶ Running {model_key} @ input_size={input_size}")
-        
+
         # Call the main validation runner with model override
         val_cmd = (
             f"python3 scripts/production_depth_validation_fixed.py "
@@ -178,16 +179,16 @@ def run_depth_validation_for_model(
             f"--input-size {input_size} "
             f"--labels {labels_path}"
         )
-        
+
         result = run_script(val_cmd, capture=True, timeout=3600)
-        
+
         if result and result.returncode == 0:
             # Parse validation_report.json if it exists
             report_path = size_output_dir / "validation_report.json"
             if report_path.exists():
                 with open(report_path) as f:
                     report_data = json.load(f)
-                
+
                 results["sweep_results"][size_tag] = {
                     "input_size": input_size,
                     "lenient_pass": report_data.get("lenient_pass", 0),
@@ -210,7 +211,7 @@ def run_depth_validation_for_model(
                 "success": False,
                 "error": result.stderr if result else "timeout or crash",
             }
-    
+
     # Determine best input size by lenient pass rate
     best_size = None
     best_rate = 0.0
@@ -218,12 +219,12 @@ def run_depth_validation_for_model(
         if size_result.get("success") and size_result.get("lenient_pass_rate", 0) > best_rate:
             best_rate = size_result["lenient_pass_rate"]
             best_size = size_result["input_size"]
-    
+
     results["overall_best"] = {
         "input_size": best_size,
         "lenient_pass_rate": best_rate,
     }
-    
+
     return results
 
 
@@ -235,35 +236,37 @@ def generate_comparison_report(
     """
     Generate cross-model comparison CSVs and JSON summary.
     """
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("GENERATING COMPARISON REPORT")
-    print("="*70 + "\n")
-    
+    print("=" * 70 + "\n")
+
     # Build comparison table
     rows = []
     for model_key, model_results in all_results.items():
         for size_tag, size_result in model_results["sweep_results"].items():
             if not size_result.get("success"):
                 continue
-            
-            rows.append({
-                "model": model_key,
-                "model_type": model_results["model_type"],
-                "input_size": size_result["input_size"],
-                "lenient_pass": size_result.get("lenient_pass", 0),
-                "strict_pass": size_result.get("strict_pass", 0),
-                "lenient_rate": size_result.get("lenient_pass_rate", 0.0),
-                "strict_rate": size_result.get("strict_pass_rate", 0.0),
-                "total_images": size_result.get("total_images", 0),
-            })
-    
+
+            rows.append(
+                {
+                    "model": model_key,
+                    "model_type": model_results["model_type"],
+                    "input_size": size_result["input_size"],
+                    "lenient_pass": size_result.get("lenient_pass", 0),
+                    "strict_pass": size_result.get("strict_pass", 0),
+                    "lenient_rate": size_result.get("lenient_pass_rate", 0.0),
+                    "strict_rate": size_result.get("strict_pass_rate", 0.0),
+                    "total_images": size_result.get("total_images", 0),
+                }
+            )
+
     df = pd.DataFrame(rows)
-    
+
     # Save overall comparison
     overall_csv = output_dir / "comparison_overall.csv"
     df.to_csv(overall_csv, index=False)
     print(f"✅ Saved: {overall_csv}")
-    
+
     # Pivot by model
     pivot_csv = output_dir / "comparison_by_model.csv"
     pivot = df.pivot_table(
@@ -274,21 +277,19 @@ def generate_comparison_report(
     )
     pivot.to_csv(pivot_csv)
     print(f"✅ Saved: {pivot_csv}")
-    
+
     # Best models summary
     best_models = df.loc[df.groupby("model")["lenient_rate"].idxmax()]
     best_csv = output_dir / "best_per_model.csv"
     best_models.to_csv(best_csv, index=False)
     print(f"✅ Saved: {best_csv}")
-    
+
     print("\n📊 Best Performing Configurations:")
     print(best_models[["model", "input_size", "lenient_rate", "strict_rate"]].to_string(index=False))
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Multi-model depth validation and A/B testing framework"
-    )
+    parser = argparse.ArgumentParser(description="Multi-model depth validation and A/B testing framework")
     parser.add_argument(
         "--input-dir",
         type=Path,
@@ -330,48 +331,48 @@ def main():
         action="store_true",
         help="Skip VRAM validation (use with caution)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Expand "all" models
     if "all" in args.models:
         args.models = [k for k in MODEL_REGISTRY.keys() if not MODEL_REGISTRY[k].get("requires_high_vram")]
-    
+
     # Create versioned output directory
     ts = timestamp_tag()
     sha = get_git_sha()
     run_dir = args.output_root / f"run_{ts}_{sha}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"\n📌 Multi-Model Validation Run")
     print(f"   Output: {run_dir}")
     print(f"   Models: {', '.join(args.models)}")
     print(f"   Sizes:  {args.sweep_sizes}")
     print(f"   Commit: {sha}\n")
-    
+
     # Validate models
     valid_models = []
     for model_key in args.models:
         if model_key not in MODEL_REGISTRY:
             print(f"⚠️  Unknown model: {model_key}, skipping")
             continue
-        
+
         if not args.skip_vram_check and not validate_vram(model_key):
             print(f"⚠️  Skipping {model_key} due to insufficient VRAM")
             continue
-        
+
         valid_models.append(model_key)
-    
+
     if not valid_models:
         print("❌ No valid models to test. Exiting.")
         sys.exit(1)
-    
+
     # Run validation for each model
     all_results = {}
     for model_key in valid_models:
         model_output_dir = run_dir / f"model_{model_key}"
         model_output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         try:
             results = run_depth_validation_for_model(
                 model_key=model_key,
@@ -389,14 +390,14 @@ def main():
                 "error": str(e),
                 "sweep_results": {},
             }
-    
+
     # Generate comparison report
     generate_comparison_report(
         all_results=all_results,
         output_dir=run_dir,
         labels_path=args.labels,
     )
-    
+
     # Save full JSON summary
     summary_json = run_dir / "model_comparison_summary.json"
     summary = {
@@ -408,10 +409,10 @@ def main():
         "sweep_sizes": args.sweep_sizes,
         "results": all_results,
     }
-    
+
     with open(summary_json, "w") as f:
         json.dump(summary, f, indent=2)
-    
+
     print(f"\n✅ Full summary saved: {summary_json}")
     print(f"\n🎉 Multi-model comparison complete!")
     print(f"   Results: {run_dir}")

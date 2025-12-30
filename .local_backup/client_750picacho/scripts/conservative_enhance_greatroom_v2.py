@@ -4,6 +4,7 @@ Conservative Enhancement - 750 Picacho Great Room v2
 WITH SKY REFINEMENT for window areas
 Optimized for luxury living room with improved sky/window detail
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -45,7 +47,7 @@ if TIFFFILE_AVAILABLE:
 
         # Convert to 8-bit for PIL processing
         img_8bit = (rgb * 255).astype(np.uint8)
-        img = Image.fromarray(img_8bit, 'RGB')
+        img = Image.fromarray(img_8bit, "RGB")
 
     except Exception as e:
         print(f"  tifffile failed: {e}")
@@ -79,8 +81,8 @@ print("  ✓ Saturation: +10%")
 # ============================================================================
 print("\n[3/9] Balancing color temperature...")
 result_array = np.array(result).astype(np.float32)
-result_array[:,:,0] *= 0.98  # Reduce red by 2%
-result_array[:,:,2] *= 1.02  # Boost blue by 2%
+result_array[:, :, 0] *= 0.98  # Reduce red by 2%
+result_array[:, :, 2] *= 1.02  # Boost blue by 2%
 result_array = np.clip(result_array, 0, 255).astype(np.uint8)
 result = Image.fromarray(result_array)
 print("  ✓ Color temperature: Warm-preserved with balanced highlights")
@@ -112,8 +114,8 @@ result_array = np.array(result).astype(np.float32)
 # Detect bright sky regions (likely windows showing exterior)
 # Sky is typically bright (>180) and has high blue/red ratio
 brightness = result_array.mean(axis=2)
-blue_channel = result_array[:,:,2]
-red_channel = result_array[:,:,0]
+blue_channel = result_array[:, :, 2]
+red_channel = result_array[:, :, 0]
 
 # Sky mask: bright areas with blue tint
 sky_mask = ((brightness > 180) & (blue_channel > red_channel)).astype(float)
@@ -134,17 +136,17 @@ if sky_percentage > 0.5:  # Only process if we found sky
 
     # 1. Reduce overexposure (pull down highlights)
     highlight_reduction = 0.92  # 8% reduction
-    result_array[:,:,0] = result_array[:,:,0] * (1 - sky_mask * (1 - highlight_reduction))
-    result_array[:,:,1] = result_array[:,:,1] * (1 - sky_mask * (1 - highlight_reduction))
-    result_array[:,:,2] = result_array[:,:,2] * (1 - sky_mask * (1 - highlight_reduction))
+    result_array[:, :, 0] = result_array[:, :, 0] * (1 - sky_mask * (1 - highlight_reduction))
+    result_array[:, :, 1] = result_array[:, :, 1] * (1 - sky_mask * (1 - highlight_reduction))
+    result_array[:, :, 2] = result_array[:, :, 2] * (1 - sky_mask * (1 - highlight_reduction))
 
     # 2. Add subtle blue saturation to sky
     blue_boost = 1.08  # 8% blue boost in sky areas
-    result_array[:,:,2] = result_array[:,:,2] * (1 + sky_mask * (blue_boost - 1))
+    result_array[:, :, 2] = result_array[:, :, 2] * (1 + sky_mask * (blue_boost - 1))
 
     # 3. Slight warmth reduction in sky (make it cooler/more natural)
     red_reduction = 0.96  # 4% red reduction in sky
-    result_array[:,:,0] = result_array[:,:,0] * (1 - sky_mask * (1 - red_reduction))
+    result_array[:, :, 0] = result_array[:, :, 0] * (1 - sky_mask * (1 - red_reduction))
 
     result_array = np.clip(result_array, 0, 255)
 
@@ -162,7 +164,7 @@ result = Image.fromarray(result_array.astype(np.uint8))
 # ============================================================================
 print("\n[7/9] Material enhancement...")
 edges = result.filter(ImageFilter.FIND_EDGES)
-edges_gray = edges.convert('L')
+edges_gray = edges.convert("L")
 edges_array = np.array(edges_gray)
 edge_mask = (edges_array > 20).astype(float)
 

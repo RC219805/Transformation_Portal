@@ -1,7 +1,7 @@
 # Next Three Improvements (Priority Order)
 
-**Status:** Post-Production Framework  
-**Focus:** Operational efficiency, not features  
+**Status:** Post-Production Framework
+**Focus:** Operational efficiency, not features
 **Timeline:** Implement incrementally as projects demand
 
 ---
@@ -53,28 +53,28 @@ def generate_run_card(
     Generate draft run card from pipeline output.
     Human fills in: human_rating, decision, notes, lessons, tags
     """
-    
+
     image_id = Path(image_path).stem
     scene_type = infer_scene_type(image_path)  # From filename/folder
-    
+
     run_card = {
         "image_id": image_id,
         "project": project_name,
         "scene_type": scene_type,
         "scene_features": ["TODO: Review and add"],
-        
+
         "source_baseline_score": round(baseline_score, 2),
         "processed_score": round(processed_score, 2),
         "delta_score": round(processed_score - baseline_score, 2),
         "targets_met": "TODO: Review quality report",
-        
+
         "recipe": recipe_name,
         "recipe_path": f"config/recipes/{recipe_name}.yaml",
         "recipe_settings": recipe_settings,
-        
+
         "processing_time_seconds": "TODO: From pipeline log",
         "date": datetime.now().strftime("%Y-%m-%d"),
-        
+
         "# HUMAN REVIEW REQUIRED": {
             "human_rating": "TODO: [clearly_better|acceptable_but_unnecessary|worse_than_source|significantly_worse]",
             "decision": "TODO: [recipe_recommended|recipe_acceptable|recipe_avoid]",
@@ -83,24 +83,24 @@ def generate_run_card(
             "tags": ["TODO: Add tags"]
         }
     }
-    
+
     # Write to project subdirectory
     project_dir = Path(output_dir) / project_name
     project_dir.mkdir(parents=True, exist_ok=True)
-    
+
     output_file = project_dir / f"{image_id}_{recipe_name}.yaml"
     with open(output_file, 'w') as f:
         yaml.dump(run_card, f, default_flow_style=False, sort_keys=False)
-    
+
     print(f"✅ Draft run card: {output_file}")
     print(f"⚠️  Review and complete human assessment fields")
-    
+
     return output_file
 
 def infer_scene_type(image_path: str) -> str:
     """Infer scene type from filename or folder structure."""
     path_lower = str(image_path).lower()
-    
+
     # Interior detection
     if any(x in path_lower for x in ["bedroom", "bed"]):
         return "interior_bedroom"
@@ -110,7 +110,7 @@ def infer_scene_type(image_path: str) -> str:
         return "interior_bathroom"
     elif any(x in path_lower for x in ["great", "living", "family"]):
         return "interior_great_room"
-    
+
     # Exterior detection
     elif any(x in path_lower for x in ["pool", "water"]):
         return "exterior_pool"
@@ -118,7 +118,7 @@ def infer_scene_type(image_path: str) -> str:
         return "aerial_exterior"
     elif any(x in path_lower for x in ["garden", "yard"]):
         return "exterior_garden"
-    
+
     # Default
     return "TODO: Specify scene type"
 
@@ -151,7 +151,7 @@ python scripts/generate_run_card.py \
 def process_batch(...):
     for image_path in images:
         # ... existing processing ...
-        
+
         # Generate draft run card
         if config.get('generate_run_cards', False):
             from scripts.generate_run_card import generate_run_card
@@ -222,7 +222,7 @@ SCENE_TYPES = {
         "aliases": ["closet", "wardrobe", "dressing"],
         "description": "Walk-in closets, dressing rooms"
     },
-    
+
     # Exteriors
     "exterior_pool": {
         "aliases": ["pool", "spa", "water"],
@@ -244,7 +244,7 @@ SCENE_TYPES = {
         "aliases": ["aerial", "drone", "overhead"],
         "description": "Aerial views, drone shots"
     },
-    
+
     # Special
     "twilight_exterior": {
         "aliases": ["twilight", "dusk", "blue_hour"],
@@ -259,13 +259,13 @@ SCENE_TYPES = {
 def normalize_scene_type(raw_input: str) -> str:
     """Convert any alias to canonical scene type."""
     raw_lower = raw_input.lower()
-    
+
     for canonical, config in SCENE_TYPES.items():
         if raw_lower == canonical:
             return canonical
         if any(alias in raw_lower for alias in config["aliases"]):
             return canonical
-    
+
     raise ValueError(
         f"Unknown scene type: {raw_input}. "
         f"Valid types: {', '.join(SCENE_TYPES.keys())}"
@@ -285,14 +285,14 @@ from transformation_portal.scene_types import normalize_scene_type, validate_sce
 def generate_run_card(...):
     # Infer from path
     raw_scene_type = infer_scene_type(image_path)
-    
+
     # Normalize to canonical
     try:
         scene_type = normalize_scene_type(raw_scene_type)
     except ValueError as e:
         print(f"⚠️  {e}")
         scene_type = "TODO: Specify valid scene type"
-    
+
     # ... rest of run card generation
 ```
 
@@ -362,10 +362,10 @@ def get_recipe_status(recipe_name: str) -> dict:
 
 def rule_based_suggestion(...):
     # ... existing logic ...
-    
+
     # Check if recommended recipe is quarantined
     recipe_status = get_recipe_status(suggestion["recipe"])
-    
+
     if recipe_status["status"] == "quarantined":
         # Override recommendation
         original_recipe = suggestion["recipe"]
@@ -375,7 +375,7 @@ def rule_based_suggestion(...):
             f"{recipe_status['quarantine_reason']}"
         )
         suggestion["alternative_if_desperate"] = original_recipe
-    
+
     return suggestion
 ```
 
@@ -389,25 +389,25 @@ def check_exit_criteria(recipe_name: str):
     if recipe_status["status"] != "quarantined":
         print(f"✅ {recipe_name} is not quarantined")
         return
-    
+
     # Load all run cards using this recipe
     run_cards = find_run_cards_by_recipe(recipe_name)
-    
+
     # Check criteria
     successful_cases = [
-        rc for rc in run_cards 
+        rc for rc in run_cards
         if rc["human_rating"] in ["clearly_better", "acceptable_but_unnecessary"]
     ]
     avg_delta = statistics.mean([rc["delta_score"] for rc in run_cards])
     catastrophic_failures = [rc for rc in run_cards if rc["delta_score"] < -7.0]
-    
+
     print(f"\n{recipe_name} Quarantine Status:")
     print(f"  Successful cases: {len(successful_cases)}/3 required")
     print(f"  Average Δ: {avg_delta:.1f}% (≥-2% required)")
     print(f"  Catastrophic failures: {len(catastrophic_failures)} (0 required)")
-    
-    if (len(successful_cases) >= 3 and 
-        avg_delta >= -2.0 and 
+
+    if (len(successful_cases) >= 3 and
+        avg_delta >= -2.0 and
         len(catastrophic_failures) == 0):
         print(f"\n✅ {recipe_name} meets exit criteria!")
         print(f"   Ready to un-quarantine")
@@ -456,7 +456,7 @@ def check_exit_criteria(recipe_name: str):
    - Time saved vs manual approach
    - Confidence in system
 
-**If alignment <70%:** Adjust policies before automation.  
+**If alignment <70%:** Adjust policies before automation.
 **If alignment >70%:** Proceed with automation.
 
 This validates the system reflects your taste before building on top of it.
@@ -467,12 +467,12 @@ This validates the system reflects your taste before building on top of it.
 
 **Things that sound good but aren't worth it:**
 
-❌ **Real-time web dashboard** - CLI + filesystem is fine  
-❌ **Complex UI** - Text output works, don't gold-plate it  
-❌ **ML model training** - Rule-based + RAG is sufficient  
-❌ **Multi-tenant architecture** - Single operator doesn't need it  
-❌ **API endpoints** - No external consumers  
-❌ **Database** - YAML + filesystem scales to 1000s of cards  
+❌ **Real-time web dashboard** - CLI + filesystem is fine
+❌ **Complex UI** - Text output works, don't gold-plate it
+❌ **ML model training** - Rule-based + RAG is sufficient
+❌ **Multi-tenant architecture** - Single operator doesn't need it
+❌ **API endpoints** - No external consumers
+❌ **Database** - YAML + filesystem scales to 1000s of cards
 
 **Keep it simple. Build when pain is real, not anticipated.**
 

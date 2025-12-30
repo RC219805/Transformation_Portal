@@ -164,25 +164,25 @@ config = UnifiedPipelineConfig(
     input_path=Path("input.tif"),
     output_dir=Path("output/"),
     preset=PipelinePreset.PHOTO_REALISTIC,
-    
+
     # Override upscaling
     upscale_model=UpscalingModel.SWINIR_REAL_4X,
     tile_size=384,
-    
+
     # Material response
     material_strength=0.85,
     surface_types=["wood", "metal", "glass", "stone"],
-    
+
     # Color grading
     lut_name="signature_estate",
     saturation_boost=1.10,
     color_temperature_shift=0.03,
-    
+
     # Quality
     preserve_16bit=True,
     validate_colors=True,
     color_tolerance=0.015,
-    
+
     # Performance
     device="mps",  # or "cuda", "cpu"
     cache_models=True
@@ -485,32 +485,32 @@ class UnifiedPipelineConfig:
     input_path: Path                      # Input image/directory
     output_dir: Path                      # Output directory
     preset: PipelinePreset                # Preset configuration
-    
+
     # Stage toggles
     enable_upscaling: bool = True
     enable_depth_processing: bool = True
     enable_material_response: bool = True
     enable_color_grading: bool = True
-    
+
     # Upscaling
     upscale_model: UpscalingModel         # Model choice
     upscale_factor: int = 4               # Upscale factor
     tile_size: int = 0                    # Tile size (0=auto)
-    
+
     # Material response
     material_strength: float = 0.75       # Strength (0-1)
     surface_types: List[str]              # Surface types
-    
+
     # Color grading
     lut_name: Optional[str]               # LUT name
     saturation_boost: float = 1.08        # Saturation multiplier
     color_temperature_shift: float = 0.0  # Temperature shift
-    
+
     # Quality
     preserve_16bit: bool = True           # 16-bit output
     validate_colors: bool = True          # Validate consistency
     color_tolerance: float = 0.02         # Max deviation
-    
+
     # Performance
     device: str = "auto"                  # Device selection
     cache_models: bool = True             # Cache between images
@@ -524,19 +524,19 @@ class PipelineResult:
     input_path: Path                      # Input path
     output_path: Path                     # Output path
     processing_time: float                # Total time (seconds)
-    
+
     # Stage results
     upscaling_metrics: UpscalingMetrics   # Upscaling details
     depth_map_generated: bool             # Depth stage
     material_response_applied: bool       # Material stage
     color_grading_applied: bool           # Color stage
-    
+
     # Quality
     final_size: Tuple[int, int]          # Output dimensions
     color_deviation: float                # Color consistency
     bit_depth: int                        # 8 or 16
     file_size_mb: float                   # File size
-    
+
     warnings: List[str]                   # Issues encountered
 ```
 

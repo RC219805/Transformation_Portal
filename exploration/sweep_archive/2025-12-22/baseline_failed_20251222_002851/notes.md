@@ -1,6 +1,6 @@
 # Baseline Run - 0779a57
 
-**Date**: 2025-12-22 00:07:37  
+**Date**: 2025-12-22 00:07:37
 **Status**: Reference (quality ceiling)
 
 ## Parameters

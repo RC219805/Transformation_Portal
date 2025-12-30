@@ -17,25 +17,25 @@ if [ "$RUNNING" -gt 0 ]; then
     echo ""
     ps aux | grep production_depth_validation_fixed.py | grep -v grep
     echo ""
-    
+
     # Check progress from latest output directory
     OUTPUT_DIR=$(ls -td outputs/validation_full_50img_* 2>/dev/null | head -1)
     if [ -n "$OUTPUT_DIR" ]; then
         COMPLETED=$(ls -1 "$OUTPUT_DIR"/*_metrics.json 2>/dev/null | wc -l | tr -d ' ')
         echo "Progress: $COMPLETED/50 images completed ($(echo "scale=1; $COMPLETED * 100 / 50" | bc)%)"
         echo ""
-        
+
         # Show latest image processed
         LATEST=$(ls -t "$OUTPUT_DIR"/*_metrics.json 2>/dev/null | head -1)
         if [ -n "$LATEST" ]; then
             echo "Latest: $(basename "$LATEST" _metrics.json)"
         fi
     fi
-    
+
     echo ""
     echo "Tail log:"
     tail -20 validation_full_50img_run.log 2>/dev/null || echo "  (log not found)"
-    
+
     exit 0
 fi
 
@@ -74,7 +74,7 @@ if [ -f "$OUTPUT_DIR/validation_report.json" ]; then
     echo "Quality Summary:"
     jq -r '.quality | "  Lenient: \(.lenient_pass)/\(.total) (\(.lenient_pass_rate * 100 | floor)%)\n  Strict:  \(.strict_pass)/\(.total) (\(.strict_pass_rate * 100 | floor)%)"' "$OUTPUT_DIR/validation_report.json" 2>/dev/null || echo "  (unable to parse JSON)"
     echo ""
-    
+
     # Scene type breakdown
     echo "Scene Type Breakdown:"
     jq -r '.images[] | .scene_type' "$OUTPUT_DIR/validation_report.json" 2>/dev/null | sort | uniq -c | while read count type; do

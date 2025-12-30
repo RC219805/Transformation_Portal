@@ -1,7 +1,7 @@
 # EfficientSAM V3 - Stage 3 Complete: Pipeline Integration ✅
 
-**Date**: December 12, 2025  
-**Branch**: `feature/efficientsam-v3`  
+**Date**: December 12, 2025
+**Branch**: `feature/efficientsam-v3`
 **Commit**: `c0c5a25`
 
 ---
@@ -30,7 +30,7 @@ Implemented a **production-grade fusion architecture** that:
 class FusedMaterialSegmenter(MaterialSegmenter):
     """
     Materials V3 fusion: SegFormer base + EfficientSAM edge refinement
-    
+
     - Conservative class targeting (glass, water, foliage only)
     - IoU gating (min_iou=0.30)
     - Confidence-weighted blending
@@ -55,8 +55,8 @@ class FusedMaterialSegmenter(MaterialSegmenter):
 ```python
 class RefinementProvider(Protocol):
     def get_refined_mask(
-        rgb: Tensor, 
-        base_mask: Tensor, 
+        rgb: Tensor,
+        base_mask: Tensor,
         material_class: str
     ) -> Optional[Tensor]
 ```
@@ -336,10 +336,10 @@ Input RGB Image (1x3xHxW)
 **Stage 3 is production-ready** and provides a solid foundation for Stage 4 ONNX integration.
 
 ### Key Achievements
-✅ Fusion pipeline fully integrated and tested  
-✅ Zero regressions to Phase 2  
-✅ Graceful degradation on EfficientSAM failure  
-✅ Conservative edge refinement strategy  
+✅ Fusion pipeline fully integrated and tested
+✅ Zero regressions to Phase 2
+✅ Graceful degradation on EfficientSAM failure
+✅ Conservative edge refinement strategy
 ✅ Comprehensive test coverage (42 tests)
 
 ### Confidence Level for Stage 4
@@ -353,7 +353,7 @@ Stage 4 can proceed with confidence that the integration layer is stable.
 
 ---
 
-**Stage 3 Status**: ✅ **COMPLETE**  
-**Ready for**: Stage 4 (EfficientSAM ONNX Model Integration)  
-**Branch**: `feature/efficientsam-v3`  
+**Stage 3 Status**: ✅ **COMPLETE**
+**Ready for**: Stage 4 (EfficientSAM ONNX Model Integration)
+**Branch**: `feature/efficientsam-v3`
 **Tests**: 42 passing, 1 skipped, 0 failing

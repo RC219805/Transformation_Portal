@@ -123,24 +123,24 @@ from lux_depth_v2.advanced_refinement import DepthRefiner, AdvancedRefinementCon
 class DepthPipeline:
     def __init__(self, config):
         self.config = config
-        
+
         # Initialize advanced refiner
         refinement_config = AdvancedRefinementConfig(
             guided_radius=config.get("guided_radius", 8),
             use_bilateral_first=config.get("use_bilateral_first", True)
         )
         self.refiner = DepthRefiner(refinement_config)
-    
+
     def process(self, rgb_path):
         # ... existing depth inference ...
-        
+
         # Apply advanced refinement
         depth_refined = self.refiner.refine(
-            depth_raw, 
-            rgb_image, 
+            depth_raw,
+            rgb_image,
             technique="hybrid"
         )
-        
+
         return depth_refined
 ```
 
@@ -153,7 +153,7 @@ Add refinement presets to `config.py`:
 @dataclass
 class PipelineConfig:
     # ... existing fields ...
-    
+
     # Advanced refinement settings
     use_advanced_refinement: bool = True
     refinement_technique: str = "hybrid"  # bilateral, guided, hybrid, etc.
@@ -248,13 +248,13 @@ for scene_path in structure_scenes:
     # Load RGB and depth
     rgb = load_image(scene_path)
     depth = infer_depth(rgb)
-    
+
     # Refine with hybrid technique
     depth_refined = refiner.refine(depth, rgb, technique="hybrid")
-    
+
     # Compute metrics
     metrics = compute_edge_metrics(depth_refined, rgb, "comprehensive")
-    
+
     results.append({
         'scene': Path(scene_path).stem,
         'edge_f1': metrics['edge_f1'],

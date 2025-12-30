@@ -1,6 +1,6 @@
 # PR-W4 Water Validation Harness - Final Status
 
-**Date:** 2025-12-14  
+**Date:** 2025-12-14
 **Status:** ✅ **COMPLETE AND MERGED**
 
 ## Summary
@@ -45,7 +45,7 @@ PR-W4 water validation harness is complete, tested, and merged to main through t
 ## Critical Fixes Applied (PR #557)
 
 ### 1. Deterministic Per-Image Seeding
-**Problem:** `hash(str(img_path))` is process-salted, breaks determinism  
+**Problem:** `hash(str(img_path))` is process-salted, breaks determinism
 **Fix:** Replaced with `zlib.crc32(str(img_path).encode('utf-8'))` for stable hashing
 
 ```python
@@ -55,7 +55,7 @@ np.random.seed(per_image)
 ```
 
 ### 2. Explicit `detected` Boolean
-**Problem:** Old code derived "detected" from `coverage > 0 and confidence > 0`  
+**Problem:** Old code derived "detected" from `coverage > 0 and confidence > 0`
 **Fix:** Use explicit `water_dict.get('present', False)` boolean
 
 ```python
@@ -63,7 +63,7 @@ detected = water_dict.get('present', False)
 ```
 
 ### 3. False Trigger Semantics
-**Problem:** Confusing FP terminology without non-water class  
+**Problem:** Confusing FP terminology without non-water class
 **Fix:** Clear false trigger semantics with legacy alias
 
 ```python
@@ -99,10 +99,10 @@ tests/test_prw_water_validation_deterministic.py::test_full_validation_determini
 
 1. **Detector is Stub**: Current `water_candidate.py` is minimal baseline (simple blue threshold)
    - Production detector requires PR-W1 (multi-cue heuristics)
-   
+
 2. **Thresholds Uncalibrated**: Target thresholds defined but not calibrated against labeled dataset
    - Requires dataset v0 collection (20+ pool, 20+ ocean, 20+ hard negatives)
-   
+
 3. **Edge Alignment Requires SciPy**: Falls back to 0.0 if SciPy unavailable
    - Non-blocking, clearly documented
 

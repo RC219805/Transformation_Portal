@@ -38,7 +38,7 @@ def download_file(url, output_path):
     print(f"\nDownloading: {output_path.name}")
     print(f"From: {url}")
 
-    with DownloadProgressBar(unit='B', unit_scale=True, miniters=1, desc=output_path.name) as t:
+    with DownloadProgressBar(unit="B", unit_scale=True, miniters=1, desc=output_path.name) as t:
         urllib.request.urlretrieve(url, output_path, reporthook=t.update_to)
 
     print(f"✓ Downloaded: {output_path}")
@@ -84,13 +84,9 @@ print("2. REAL-ESRGAN WEIGHTS")
 print("=" * 70)
 
 REALESRGAN_MODELS = {
-    "RealESRGAN_x4plus.pth": (
-        "https://github.com/xinntao/Real-ESRGAN/releases/download/"
-        "v0.1.0/RealESRGAN_x4plus.pth"
-    ),
+    "RealESRGAN_x4plus.pth": ("https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"),
     "RealESRGAN_x4plus_anime_6B.pth": (
-        "https://github.com/xinntao/Real-ESRGAN/releases/download/"
-        "v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth"
     ),
 }
 
@@ -106,7 +102,7 @@ for model_name, model_url in REALESRGAN_MODELS.items():
         print(f"\n⚠ Missing: {model_name}")
         response = input(f"  Download {model_name}? (~67MB) [y/N]: ").lower().strip()
 
-        if response == 'y':
+        if response == "y":
             try:
                 download_file(model_url, model_path)
             except Exception as e:
@@ -137,6 +133,7 @@ try:
         try:
             # Check if model exists in cache (don't load)
             from huggingface_hub import snapshot_download
+
             cache_dir = snapshot_download(repo_id=model_id, allow_patterns=["*.json"])
             print(f"✓ Found: {model_id}")
         except Exception:

@@ -15,7 +15,7 @@
 
 Best for: Quick previews, batch processing, time-sensitive deliverables
 
-### Option 2: AI-Enhanced - Lux Render Pipeline  
+### Option 2: AI-Enhanced - Lux Render Pipeline
 **Time:** ~90-120 seconds | **Quality:** Excellent | **GPU:** MPS (M4 Max)
 
 Best for: High-end marketing materials, photorealistic enhancement
@@ -265,12 +265,12 @@ EOPOLISH
 For your 750 Picacho aerial rendering, **Option 2** provides the best balance:
 
 ### Why Option 2?
-✅ **Photorealistic AI enhancement** via Stable Diffusion + ControlNet  
-✅ **Preserves architectural accuracy** with low strength (0.35)  
-✅ **4x upscaling** via Real-ESRGAN for crisp detail  
-✅ **Material Response** for surface realism  
-✅ **Fast processing** (~2 minutes on M4 Max)  
-✅ **Brand overlay** capability  
+✅ **Photorealistic AI enhancement** via Stable Diffusion + ControlNet
+✅ **Preserves architectural accuracy** with low strength (0.35)
+✅ **4x upscaling** via Real-ESRGAN for crisp detail
+✅ **Material Response** for surface realism
+✅ **Fast processing** (~2 minutes on M4 Max)
+✅ **Brand overlay** capability
 
 ### Execution
 ```bash

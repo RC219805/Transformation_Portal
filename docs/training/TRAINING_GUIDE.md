@@ -21,7 +21,7 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
 
 ✅ You should use this training guide ONLY if:
 - You have a custom architectural dataset requiring model adaptation
-- You're conducting research on depth estimation algorithms  
+- You're conducting research on depth estimation algorithms
 - You have GPU resources (8GB+ VRAM) and 2-3 hours for training
 - You understand neural network fine-tuning concepts
 

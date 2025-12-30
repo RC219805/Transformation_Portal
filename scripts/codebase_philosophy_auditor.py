@@ -55,9 +55,7 @@ class _AuditContext:
                 return decision
         return None
 
-    def decision_for_line(
-        self, name: str, line: int, *, max_distance: int = 2
-    ) -> Optional[Decision]:
+    def decision_for_line(self, name: str, line: int, *, max_distance: int = 2) -> Optional[Decision]:
         name = name.lower()
         for decision in reversed(self.decisions):
             if decision.name != name:
@@ -122,18 +120,13 @@ def _check_wildcard_imports(tree: ast.Module, context: _AuditContext) -> List[Vi
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if alias.name == "*":
-                    decision = context.decision_for_line(
-                        "allow_wildcard_import", node.lineno
-                    )
+                    decision = context.decision_for_line("allow_wildcard_import", node.lineno)
                     if decision:
                         continue
                     violations.append(
                         Violation(
                             principle="no_wildcard_imports",
-                            message=(
-                                f"Wildcard import from '{node.module or ''}' "
-                                "violates import policy"
-                            ),
+                            message=(f"Wildcard import from '{node.module or ''}' violates import policy"),
                             line=node.lineno,
                         )
                     )
@@ -147,11 +140,15 @@ class CodebasePhilosophyAuditor:
     """Audit Python modules for high-level codebase philosophy violations."""
 
     def __init__(self, rules: Optional[Iterable[Rule]] = None) -> None:
-        self._rules: List[Rule] = list(rules) if rules is not None else [
-            _check_module_docstring,
-            _check_public_api_docstrings,
-            _check_wildcard_imports,
-        ]
+        self._rules: List[Rule] = (
+            list(rules)
+            if rules is not None
+            else [
+                _check_module_docstring,
+                _check_public_api_docstrings,
+                _check_wildcard_imports,
+            ]
+        )
 
     def audit_module(self, module_path: Path) -> List[Violation]:
         """Inspect *module_path* and return any principle violations discovered."""

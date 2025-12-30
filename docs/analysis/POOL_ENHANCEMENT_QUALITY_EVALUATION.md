@@ -1,8 +1,8 @@
 # 750 Picacho Pool - Enhancement Quality Evaluation
 
-**Date**: November 6, 2025  
-**Script**: `conservative_enhance_pool.py`  
-**Input**: `RC_002RC-office750Picacho_Pool 2.tiff` (2000x1125, RGBA)  
+**Date**: November 6, 2025
+**Script**: `conservative_enhance_pool.py`
+**Input**: `RC_002RC-office750Picacho_Pool 2.tiff` (2000x1125, RGBA)
 **Output**: `750_Picacho_Pool_MBAR_Enhanced.jpg` (4096x2304, RGB, 4K)
 
 ---
@@ -138,7 +138,7 @@
        'equitone': 0.55,
        'roof': 0.60
    }
-   
+
    # Recommended (more conservative)
    blend_strengths = {
        'plaster': 0.35,

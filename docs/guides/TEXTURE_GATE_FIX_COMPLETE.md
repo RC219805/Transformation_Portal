@@ -1,8 +1,8 @@
 # Texture Scene Gate Fix Complete ✅
 
-**Date**: 2025-12-18  
-**Commit**: db333d2  
-**Session**: Texture Gate Loophole Fix  
+**Date**: 2025-12-18
+**Commit**: db333d2
+**Session**: Texture Gate Loophole Fix
 
 ---
 
@@ -19,8 +19,8 @@
 | **Texture Scene Lenient** | — | **92.9% (13/14)** | — |
 | **Structure Scene Lenient** | — | 25% (1/4) | Expected |
 
-✅ **Status**: Baseline now healthy for 15-20 image expansion  
-✅ **MaterialsV3**: Unblocked for shadow-mode integration  
+✅ **Status**: Baseline now healthy for 15-20 image expansion
+✅ **MaterialsV3**: Unblocked for shadow-mode integration
 
 ---
 
@@ -380,17 +380,17 @@ All recommendations align with external review feedback:
 
 ### Technical References
 
-1. **Depth Anything V2 Input Size**  
+1. **Depth Anything V2 Input Size**
    - Default: `input_size=518`
    - Higher resolution: `--input-size 768|896|1022` for finer detail
    - Source: [Depth-Anything-V2 README](https://github.com/DepthAnything/Depth-Anything-V2)
 
-2. **DINOv2 Patch Geometry**  
+2. **DINOv2 Patch Geometry**
    - Patch size: 14×14
    - Input dimensions should be multiples of 14 to avoid silent cropping
    - 1022 = 14×73 (chosen deliberately)
 
-3. **Bilateral Filtering** (used in structure edge extraction)  
+3. **Bilateral Filtering** (used in structure edge extraction)
    - Removes texture/noise while preserving edges
    - Computationally heavier than Gaussian blur
    - OpenCV reference: `cv2.bilateralFilter()`
@@ -436,12 +436,12 @@ grep -r "hf_energy" outputs/validation_not_flat_v2_20251218_205751_d9c53f0/*_met
 
 ## Status: ✅ READY FOR NEXT PHASE
 
-**Baseline**: Healthy (77.8% lenient, stable classifier)  
-**Next**: 15-20 image expansion + confusion matrix  
-**Blocker**: None (MaterialsV3 shadow mode unblocked)  
+**Baseline**: Healthy (77.8% lenient, stable classifier)
+**Next**: 15-20 image expansion + confusion matrix
+**Blocker**: None (MaterialsV3 shadow mode unblocked)
 
 ---
 
-**Session Complete**: 2025-12-18 21:01 PST  
-**Validation Runtime**: ~3.5 minutes for 18 images  
-**Commit**: db333d2  
+**Session Complete**: 2025-12-18 21:01 PST
+**Validation Runtime**: ~3.5 minutes for 18 images
+**Commit**: db333d2

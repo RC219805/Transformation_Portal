@@ -30,4 +30,3 @@ pip install -r requirements-docs.txt
 ```
 
 Open `http://127.0.0.1:8000/`.
-

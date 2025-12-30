@@ -7,15 +7,13 @@ import pytest
 # Check if sklearn is available before importing the module
 try:
     import sklearn  # noqa: F401
+
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
 
 # Skip all tests in this module if sklearn is not available
-pytestmark = pytest.mark.skipif(
-    not SKLEARN_AVAILABLE,
-    reason="sklearn is required for board_material_aerial_enhancer module"
-)
+pytestmark = pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="sklearn is required for board_material_aerial_enhancer module")
 
 # Guard the import - only import if sklearn is available
 if SKLEARN_AVAILABLE:
@@ -59,6 +57,7 @@ def test_kmeans_simple_deterministic():
     labels_b = _kmeans(x, k=2, max_iter=100, seed=42)
     assert np.array_equal(labels_a, labels_b)
 
+
 # ==========================
 # Compute cluster stats
 # ==========================
@@ -74,6 +73,7 @@ def test_compute_cluster_stats_basic():
     assert np.allclose(stats[0].centroid, [0, 0])
     assert np.allclose(stats[1].centroid, [1, 1])
 
+
 # ==========================
 # Relabel & relabel_safe
 # ==========================
@@ -81,13 +81,13 @@ def test_compute_cluster_stats_basic():
 
 def test_relabel_and_relabel_safe_behavior():
     labels = np.array([0, 1, 2])
-    assignments = {0: MaterialRule("plaster", "tex", 0.5, lambda x: 0.5),
-                   2: MaterialRule("stone", "tex", 0.5, lambda x: 0.5)}
+    assignments = {0: MaterialRule("plaster", "tex", 0.5, lambda x: 0.5), 2: MaterialRule("stone", "tex", 0.5, lambda x: 0.5)}
     relabeled = relabel(assignments, labels)
     assert set(relabeled) <= set(range(len(assignments)))
 
     safe = relabel_safe(assignments, labels, strict=False, verbose=False)
     assert safe.shape == labels.shape
+
 
 # ==========================
 # Build material rules
@@ -99,6 +99,7 @@ def test_build_material_rules_and_assign_alias():
     rules = build_material_rules(textures)
     assert isinstance(rules, list)
     assert all(isinstance(r, MaterialRule) for r in rules)
+
 
 # ==========================
 # Save/load palette assignments
@@ -115,6 +116,7 @@ def test_save_and_load_palette_assignments():
         assert all(isinstance(v, MaterialRule) for v in loaded.values())
         assert loaded[0].name == "plaster"
 
+
 # ==========================
 # Apply tint / missing texture
 # ==========================
@@ -124,6 +126,7 @@ def test_apply_materials_tint_and_missing_texture():
     img = np.ones((2, 2, 3), dtype=np.float32)
     out = enhance_aerial(img, k=1)
     assert out.shape == img.shape
+
 
 # ==========================
 # Auto-assign by stats
@@ -137,6 +140,7 @@ def test_auto_assign_materials_by_stats_basic():
     assert isinstance(assignments, dict)
     assert all(isinstance(v, MaterialRule) for v in assignments.values())
 
+
 # ==========================
 # Enhance aerial with k clusters
 # ==========================
@@ -146,6 +150,7 @@ def test_enhance_aerial_simple_save_palette():
     img = np.ones((2, 2, 3), dtype=np.float32)
     out = enhance_aerial(img, k=2)
     assert out.shape == img.shape
+
 
 # ==========================
 # Cluster full labels dry run (dummy)

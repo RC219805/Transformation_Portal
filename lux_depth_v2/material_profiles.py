@@ -21,19 +21,73 @@ class SurfaceProfile:
 
 # Conservatively tuned; intended to be subtle and photorealistic.
 SURFACE_PROFILES: Dict[str, SurfaceProfile] = {
-    "wood":    SurfaceProfile(temp_offset=0.004, sat_mult=1.05, exp_mult=1.000, con_mult=1.010, detail_mult=1.08, clarity_mult=1.04, sharpen_mult=1.03, highlight_compress=0.00),
-    "metal":   SurfaceProfile(temp_offset=-0.002, sat_mult=0.98, exp_mult=1.000, con_mult=1.025, detail_mult=1.05, clarity_mult=1.02, sharpen_mult=1.05, highlight_compress=0.00),
-    "glass":   SurfaceProfile(temp_offset=-0.002, sat_mult=0.98, exp_mult=1.000, con_mult=1.010, detail_mult=0.95, clarity_mult=0.82, sharpen_mult=0.78, highlight_compress=0.20),
-    "stone":   SurfaceProfile(temp_offset=-0.001, sat_mult=0.99, exp_mult=1.000, con_mult=1.020, detail_mult=1.05, clarity_mult=1.03, sharpen_mult=1.02, highlight_compress=0.00),
-    "sky":     SurfaceProfile(temp_offset=-0.003, sat_mult=1.02, exp_mult=1.000, con_mult=1.010, detail_mult=0.90, clarity_mult=0.78, sharpen_mult=0.75, highlight_compress=0.15),
-    "foliage": SurfaceProfile(temp_offset=0.000, sat_mult=1.03, exp_mult=1.000, con_mult=1.015, detail_mult=1.02, clarity_mult=1.02, sharpen_mult=1.02, highlight_compress=0.00),
+    "wood": SurfaceProfile(
+        temp_offset=0.004,
+        sat_mult=1.05,
+        exp_mult=1.000,
+        con_mult=1.010,
+        detail_mult=1.08,
+        clarity_mult=1.04,
+        sharpen_mult=1.03,
+        highlight_compress=0.00,
+    ),
+    "metal": SurfaceProfile(
+        temp_offset=-0.002,
+        sat_mult=0.98,
+        exp_mult=1.000,
+        con_mult=1.025,
+        detail_mult=1.05,
+        clarity_mult=1.02,
+        sharpen_mult=1.05,
+        highlight_compress=0.00,
+    ),
+    "glass": SurfaceProfile(
+        temp_offset=-0.002,
+        sat_mult=0.98,
+        exp_mult=1.000,
+        con_mult=1.010,
+        detail_mult=0.95,
+        clarity_mult=0.82,
+        sharpen_mult=0.78,
+        highlight_compress=0.20,
+    ),
+    "stone": SurfaceProfile(
+        temp_offset=-0.001,
+        sat_mult=0.99,
+        exp_mult=1.000,
+        con_mult=1.020,
+        detail_mult=1.05,
+        clarity_mult=1.03,
+        sharpen_mult=1.02,
+        highlight_compress=0.00,
+    ),
+    "sky": SurfaceProfile(
+        temp_offset=-0.003,
+        sat_mult=1.02,
+        exp_mult=1.000,
+        con_mult=1.010,
+        detail_mult=0.90,
+        clarity_mult=0.78,
+        sharpen_mult=0.75,
+        highlight_compress=0.15,
+    ),
+    "foliage": SurfaceProfile(
+        temp_offset=0.000,
+        sat_mult=1.03,
+        exp_mult=1.000,
+        con_mult=1.015,
+        detail_mult=1.02,
+        clarity_mult=1.02,
+        sharpen_mult=1.02,
+        highlight_compress=0.00,
+    ),
 }
 
 
 @dataclass
 class MaterialMods:
-    temp_offset: "torch_ops.torch.Tensor"      # 1x1xHxW
-    sat_mult: "torch_ops.torch.Tensor"         # 1x1xHxW
+    temp_offset: "torch_ops.torch.Tensor"  # 1x1xHxW
+    sat_mult: "torch_ops.torch.Tensor"  # 1x1xHxW
     exp_mult: "torch_ops.torch.Tensor"
     con_mult: "torch_ops.torch.Tensor"
     detail_mult: "torch_ops.torch.Tensor"

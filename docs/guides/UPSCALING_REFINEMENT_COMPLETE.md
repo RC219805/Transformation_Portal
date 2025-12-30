@@ -391,15 +391,15 @@ make test-fast             # Includes upscaling tests
 ## Comparison to Alternatives
 
 ### vs. Topaz Gigapixel AI
-**Pros**: Offline, scriptable, no licensing, model choice, batch efficiency  
+**Pros**: Offline, scriptable, no licensing, model choice, batch efficiency
 **Cons**: Manual setup, no GUI, requires GPU for best performance
 
 ### vs. Cloud Services (Let's Enhance, etc.)
-**Pros**: Privacy, unlimited batches, reproducible, no costs  
+**Pros**: Privacy, unlimited batches, reproducible, no costs
 **Cons**: Requires setup, local GPU needed
 
 ### vs. Current Real-ESRGAN
-**Pros**: SwinIR quality upgrade, 16-bit workflow, color validation, better memory management  
+**Pros**: SwinIR quality upgrade, 16-bit workflow, color validation, better memory management
 **Migration**: Drop-in replacement with config change
 
 ## Future Enhancements
@@ -507,6 +507,6 @@ All requirements from your upscaling refinement document achieved:
 
 **Status**: ✅ **Complete** - Production-ready upscaling engine with all requirements met
 
-**Date**: December 5, 2025  
-**Implementation**: 800+ lines of code, 18 tests, 14KB documentation  
+**Date**: December 5, 2025
+**Implementation**: 800+ lines of code, 18 tests, 14KB documentation
 **Performance**: 150-450 images/hour (model-dependent), <2% color deviation

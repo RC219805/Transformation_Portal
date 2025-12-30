@@ -78,11 +78,11 @@ config = TiledInferenceConfig(
     tile_size=1024,
     overlap=128,
     bypass_image_processor=True,
-    
+
     # Global anchor: aggressive (more global coherence)
     use_global_anchor=True,
     global_anchor_config=GLOBAL_PRESETS["aggressive"],
-    
+
     # Edge snapping: subtle (less aggressive)
     use_edge_snapping=True,
     edge_snap_config=SNAP_PRESETS["subtle"]
@@ -174,19 +174,19 @@ python lux_depth_v2/tools/ab_comparison.py \
 ## Common Issues
 
 ### Issue: "do_resize parameter not recognized"
-**Cause**: Older transformers version  
+**Cause**: Older transformers version
 **Fix**: `pip install --upgrade transformers`
 
 ### Issue: Out of memory
-**Cause**: Tile size too large or too many tiles in memory  
+**Cause**: Tile size too large or too many tiles in memory
 **Fix**: Reduce `tile_size` to 512 or 768
 
 ### Issue: Tile seams visible
-**Cause**: Insufficient overlap or global anchor disabled  
+**Cause**: Insufficient overlap or global anchor disabled
 **Fix**: Increase `overlap` to 256 or enable `use_global_anchor=True`
 
 ### Issue: Soft edges
-**Cause**: Edge snapping disabled  
+**Cause**: Edge snapping disabled
 **Fix**: Enable `use_edge_snapping=True`
 
 ## Integration with Existing Pipeline

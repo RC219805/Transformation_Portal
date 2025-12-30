@@ -1,8 +1,8 @@
 # Depth Anything 3 (DA3) - Overview
 
-**Status**: Production Ready  
-**Module**: `lux_depth_v3/`  
-**Version**: 1.1 (bug-fixed, improved street scenes)  
+**Status**: Production Ready
+**Module**: `lux_depth_v3/`
+**Version**: 1.1 (bug-fixed, improved street scenes)
 **Last Updated**: 2025-12-19
 
 ---

@@ -5,6 +5,7 @@ Segmentation mask fusion utilities for EfficientSAM V3.
 Provides IoU-gated confidence-weighted fusion between base segmentation
 (SegFormer) and refined segmentation (EfficientSAM).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -94,9 +95,7 @@ def fuse_masks(
       stats: {'iou_base_vs_refined': float, 'fusion_applied': 0/1}
     """
     if base_conf.shape != refined_conf.shape:
-        raise ValueError(
-            f"Shape mismatch: base {base_conf.shape} vs refined {refined_conf.shape}"
-        )
+        raise ValueError(f"Shape mismatch: base {base_conf.shape} vs refined {refined_conf.shape}")
     if base_conf.ndim != 2:
         raise ValueError(f"Expected 2D masks, got {base_conf.shape}")
 

@@ -15,16 +15,16 @@ def analyze_image(path):
     arr = np.array(img)
 
     return {
-        'path': path.name,
-        'size': f"{img.width}x{img.height}",
-        'mode': img.mode,
-        'mean_r': np.mean(arr[:, :, 0]),
-        'mean_g': np.mean(arr[:, :, 1]),
-        'mean_b': np.mean(arr[:, :, 2]),
-        'mean_overall': np.mean(arr),
-        'std': np.std(arr),
-        'min': np.min(arr),
-        'max': np.max(arr),
+        "path": path.name,
+        "size": f"{img.width}x{img.height}",
+        "mode": img.mode,
+        "mean_r": np.mean(arr[:, :, 0]),
+        "mean_g": np.mean(arr[:, :, 1]),
+        "mean_b": np.mean(arr[:, :, 2]),
+        "mean_overall": np.mean(arr),
+        "std": np.std(arr),
+        "min": np.min(arr),
+        "max": np.max(arr),
     }
 
 
@@ -63,19 +63,21 @@ if __name__ == "__main__":
         print()
 
         if original.exists():
-            brightness_change = enh_stats['mean_overall'] - orig_stats['mean_overall']
-            contrast_change = enh_stats['std'] - orig_stats['std']
+            brightness_change = enh_stats["mean_overall"] - orig_stats["mean_overall"]
+            contrast_change = enh_stats["std"] - orig_stats["std"]
 
             print("📊 ENHANCEMENT IMPACT:")
-            print(f"   Brightness Shift: {brightness_change:+.1f} ({brightness_change/orig_stats['mean_overall']*100:+.1f}%)")
-            print(f"   Contrast Change: {contrast_change:+.2f} ({contrast_change/orig_stats['std']*100:+.1f}%)")
+            print(
+                f"   Brightness Shift: {brightness_change:+.1f} ({brightness_change / orig_stats['mean_overall'] * 100:+.1f}%)"
+            )
+            print(f"   Contrast Change: {contrast_change:+.2f} ({contrast_change / orig_stats['std'] * 100:+.1f}%)")
             print(f"   Red Channel: {enh_stats['mean_r'] - orig_stats['mean_r']:+.1f}")
             print(f"   Green Channel: {enh_stats['mean_g'] - orig_stats['mean_g']:+.1f}")
             print(f"   Blue Channel: {enh_stats['mean_b'] - orig_stats['mean_b']:+.1f}")
 
             # Color balance shift
-            orig_temp = orig_stats['mean_r'] / orig_stats['mean_b']
-            enh_temp = enh_stats['mean_r'] / enh_stats['mean_b']
+            orig_temp = orig_stats["mean_r"] / orig_stats["mean_b"]
+            enh_temp = enh_stats["mean_r"] / enh_stats["mean_b"]
             temp_direction = "(cooler)" if enh_temp < orig_temp else "(warmer)"
             print(f"   Color Temperature Shift: {orig_temp:.3f} → {enh_temp:.3f} {temp_direction}")
             print()

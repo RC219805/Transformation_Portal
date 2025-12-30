@@ -6,8 +6,8 @@ This document details the critical fixes implemented to address depth pipeline q
 
 ## Status
 
-**Implementation**: ✅ COMPLETE  
-**Testing**: ⏳ PENDING (rerun production validation required)  
+**Implementation**: ✅ COMPLETE
+**Testing**: ⏳ PENDING (rerun production validation required)
 **Deployment**: 🔶 BLOCKED (awaiting validation results)
 
 ---
@@ -26,7 +26,7 @@ Current report showed "2/2 passed" but both images failed strict quality gates.
 Field naming inconsistency between `comprehensive_validation.py` (uses `passed_lenient`/`passed_strict`) and `production_depth_validation.py` (used `quality_passed_lenient`/`quality_passed_strict`).
 
 ### Fix Implemented
-**Files Modified**: 
+**Files Modified**:
 - `production_depth_validation.py` (lines 155-169, 319-323, 329-333)
 
 **Changes**:
@@ -35,7 +35,7 @@ Field naming inconsistency between `comprehensive_validation.py` (uses `passed_l
 3. Logging now clearly separates:
    ```
    Execution: 2/2 succeeded
-   Seam validation: 2/2 passed  
+   Seam validation: 2/2 passed
    Quality (lenient): 1/2 passed
    Quality (strict): 0/2 passed ⚠️ KEY METRIC
    ```
@@ -152,7 +152,7 @@ depth = estimator.estimate_depth(rgb, use_global_anchor=False, smooth_calibratio
 ```python
 # Thin colored lines (not tinted overlay)
 overlay[rgb_only] = [255, 0, 0]     # RED: RGB edges only
-overlay[depth_only] = [0, 0, 255]   # BLUE: depth edges only  
+overlay[depth_only] = [0, 0, 255]   # BLUE: depth edges only
 overlay[overlap] = [0, 255, 0]      # GREEN: aligned edges
 
 # Legend with alignment stats
@@ -185,8 +185,8 @@ If overlays still appear "green flooded," the issue is likely:
 ```python
 heatmap_path = output_dir / f"{image_name}_overshoot.png"
 metrics = validate_depth_quality(
-    rgb, depth, dilation=3, 
-    save_heatmap=True, 
+    rgb, depth, dilation=3,
+    save_heatmap=True,
     heatmap_path=heatmap_path
 )
 ```
@@ -336,7 +336,7 @@ chamfer_distance < 15.0
 
 ---
 
-**Document Status**: Ready for validation run  
-**Next Update**: After production_validation_fixed_v2 completes  
-**Owner**: Transformation Portal Core Team  
+**Document Status**: Ready for validation run
+**Next Update**: After production_validation_fixed_v2 completes
+**Owner**: Transformation Portal Core Team
 **Review Date**: December 18, 2025

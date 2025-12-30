@@ -234,5 +234,5 @@ For issues or questions:
 
 ---
 
-**Last Updated:** December 19, 2024  
+**Last Updated:** December 19, 2024
 **Applies To:** Lux Depth v3.0+

@@ -1,9 +1,9 @@
 # Stage Graph Architecture
 
-**Status**: ✅ Production-Ready  
-**PR**: #3 - Stage Graph Architecture  
-**Date**: December 9, 2025  
-**Test Coverage**: 65/65 tests passing (100%)  
+**Status**: ✅ Production-Ready
+**PR**: #3 - Stage Graph Architecture
+**Date**: December 9, 2025
+**Test Coverage**: 65/65 tests passing (100%)
 
 ## Executive Summary
 
@@ -190,31 +190,31 @@ import hashlib
 
 class CustomStage(Stage):
     """Custom processing stage."""
-    
+
     def __init__(self, param1: float):
         super().__init__(name="custom", version="1.0.0")
         self.param1 = param1
-    
+
     def compute(self, context: StageContext) -> StageResult:
         """Execute custom processing."""
         input_data = context.get_artifact("input")
-        
+
         # Your processing logic here
         output_data = self.process(input_data)
-        
+
         return StageResult(
             stage_name=self.name,
             stage_version=self.version,
             status=StageStatus.COMPLETED,
             artifacts={"output": output_data},
         )
-    
+
     def get_cache_key(self, context: StageContext) -> str:
         """Generate deterministic cache key."""
         input_data = context.get_artifact("input")
         input_hash = hashlib.sha256(input_data.tobytes()).hexdigest()[:16]
         return f"{self.name}_{self.version}_{self.param1}_{input_hash}"
-    
+
     def get_dependencies(self) -> list:
         """Declare dependencies."""
         return ["depth_estimation"]  # Depends on depth
@@ -552,8 +552,8 @@ pytest tests/stage_graph/ --cov=src/transformation_portal/stage_graph --cov-repo
 
 ---
 
-**Delivered by**: transformation-portal-architect  
-**Implementation Time**: ~4 hours  
-**Lines of Code**: 2,847 insertions  
-**Files Changed**: 15 files added  
+**Delivered by**: transformation-portal-architect
+**Implementation Time**: ~4 hours
+**Lines of Code**: 2,847 insertions
+**Files Changed**: 15 files added
 **Test Coverage**: 65/65 (100%)

@@ -1,6 +1,6 @@
 # Actionable Fixes for Open Pull Requests
 
-**Generated:** October 31, 2025  
+**Generated:** October 31, 2025
 **Purpose:** Document specific issues found in each PR and provide actionable fixes
 
 ---
@@ -24,8 +24,8 @@ After analyzing all 5 open/draft PRs, here are the key findings:
 
 ## PR #103: Restore process_batch() error count return value ✅
 
-**Branch:** `copilot/sub-pr-102` → `RC219805-patch-1`  
-**Status:** READY TO MERGE  
+**Branch:** `copilot/sub-pr-102` → `RC219805-patch-1`
+**Status:** READY TO MERGE
 **Risk Level:** LOW
 
 ### What It Fixes
@@ -38,8 +38,8 @@ After analyzing all 5 open/draft PRs, here are the key findings:
 - `tests/test_depth_tools.py`: Updated to fix array dimension bugs
 
 ### Test Results
-✅ All 13 tests passing  
-✅ No regressions  
+✅ All 13 tests passing
+✅ No regressions
 ✅ Code review feedback addressed
 
 ### Action Required
@@ -56,8 +56,8 @@ After analyzing all 5 open/draft PRs, here are the key findings:
 
 ## PR #101: Fix CI: fetch base branch for git diff in pylint step ✅
 
-**Branch:** `copilot/install-flake8-and-pylint` → `main`  
-**Status:** READY TO MERGE  
+**Branch:** `copilot/install-flake8-and-pylint` → `main`
+**Status:** READY TO MERGE
 **Risk Level:** MINIMAL
 
 ### What It Fixes
@@ -85,8 +85,8 @@ After analyzing all 5 open/draft PRs, here are the key findings:
 
 ## PR #100: Add depth-guided VFX extension ⚠️
 
-**Branch:** `copilot/file-candidate-draft` → `main`  
-**Status:** HAS CI FAILURES  
+**Branch:** `copilot/file-candidate-draft` → `main`
+**Status:** HAS CI FAILURES
 **Risk Level:** MEDIUM
 
 ### What It Adds
@@ -97,8 +97,8 @@ After analyzing all 5 open/draft PRs, here are the key findings:
 ### Issues Found
 
 #### 1. CI Workflow Failures
-**Problem:** Last 10 workflow runs all failed  
-**Run IDs:** 18991636175, 18991636164, 18991546766, etc.  
+**Problem:** Last 10 workflow runs all failed
+**Run IDs:** 18991636175, 18991636164, 18991546766, etc.
 **Status:** All show "failure" conclusion
 
 **Investigation Needed:**
@@ -213,8 +213,8 @@ pytest tests/ -v
 
 ## PR #98: Document and validate image file format support ⚠️
 
-**Branch:** `copilot/enhance-image-file-types` → `main`  
-**Status:** CI BLOCKED  
+**Branch:** `copilot/enhance-image-file-types` → `main`
+**Status:** CI BLOCKED
 **Risk Level:** LOW (documentation only)
 
 ### What It Adds
@@ -226,7 +226,7 @@ pytest tests/ -v
 ### Issues Found
 
 #### 1. CI Status: Blocked
-**Problem:** PR marked as "mergeable_state": "blocked"  
+**Problem:** PR marked as "mergeable_state": "blocked"
 **Possible Causes:**
 - Required approvals missing
 - Required checks not passing
@@ -242,7 +242,7 @@ gh pr checks 98
 ```
 
 #### 2. Large PR Size
-**Stats:** 2275 additions, 7 files  
+**Stats:** 2275 additions, 7 files
 **Concern:** Might be hard to review thoroughly
 
 ### Action Required
@@ -290,25 +290,25 @@ git push origin copilot/enhance-image-file-types --force-with-lease
 
 ## PR #102: Reference files ❌
 
-**Branch:** `RC219805-patch-1` → `copilot/enhance-image-file-types` (WRONG!)  
-**Status:** NEEDS MAJOR REWORK  
+**Branch:** `RC219805-patch-1` → `copilot/enhance-image-file-types` (WRONG!)
+**Status:** NEEDS MAJOR REWORK
 **Risk Level:** HIGH (dependency chain issue)
 
 ### Critical Issues
 
 #### 1. Wrong Base Branch
-**Current Base:** `copilot/enhance-image-file-types` (PR #98's branch)  
+**Current Base:** `copilot/enhance-image-file-types` (PR #98's branch)
 **Should Be:** `main`
 
-**Problem:** Creates dependency chain - PR #98 must merge before #102  
+**Problem:** Creates dependency chain - PR #98 must merge before #102
 **Impact:** Changes will include PR #98's changes + PR #102's changes
 
 #### 2. Large, Unfocused Scope
-**Stats:** 4752 additions, 172 deletions, 12 files  
+**Stats:** 4752 additions, 172 deletions, 12 files
 **Description:** "New files for potential enhancements and integration" (vague)
 
 #### 3. Many Review Comments
-**Comments:** 48 review comments  
+**Comments:** 48 review comments
 **Status:** Not clear if all addressed
 
 ### Action Required

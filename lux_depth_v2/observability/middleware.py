@@ -57,7 +57,7 @@ class ObservabilityMiddleware:
             if h in hdrs and hdrs[h].strip():
                 candidate_id = hdrs[h].strip()
                 # Validate: max 64 chars, only alphanumeric and hyphens to prevent injection
-                if len(candidate_id) <= 64 and all(c.isalnum() or c == '-' for c in candidate_id):
+                if len(candidate_id) <= 64 and all(c.isalnum() or c == "-" for c in candidate_id):
                     request_id = candidate_id
                     break
         if request_id is None:

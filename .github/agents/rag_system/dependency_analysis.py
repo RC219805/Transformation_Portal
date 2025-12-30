@@ -136,17 +136,11 @@ class DependencyGraph:
     edges: List[DependencyEdge] = field(default_factory=list)
 
     # Adjacency lists for efficient traversal
-    forward_edges: Dict[str, List[str]] = field(
-        default_factory=lambda: defaultdict(list)
-    )
-    backward_edges: Dict[str, List[str]] = field(
-        default_factory=lambda: defaultdict(list)
-    )
+    forward_edges: Dict[str, List[str]] = field(default_factory=lambda: defaultdict(list))
+    backward_edges: Dict[str, List[str]] = field(default_factory=lambda: defaultdict(list))
 
     # Metadata
-    built_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    built_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     root_path: str = "."
 
 
@@ -164,19 +158,23 @@ class DependencyConfig:
     cache_dir: str = ".rag_cache/dependencies"
 
     # Analysis scope
-    include_patterns: List[str] = field(default_factory=lambda: [
-        "*.py",
-        ".github/workflows/*.yml",
-        ".github/workflows/*.yaml",
-    ])
+    include_patterns: List[str] = field(
+        default_factory=lambda: [
+            "*.py",
+            ".github/workflows/*.yml",
+            ".github/workflows/*.yaml",
+        ]
+    )
 
-    exclude_patterns: List[str] = field(default_factory=lambda: [
-        "deprecated/*",
-        ".venv/*",
-        "__pycache__/*",
-        ".rag_cache/*",
-        "*.pyc",
-    ])
+    exclude_patterns: List[str] = field(
+        default_factory=lambda: [
+            "deprecated/*",
+            ".venv/*",
+            "__pycache__/*",
+            ".rag_cache/*",
+            "*.pyc",
+        ]
+    )
 
     # Analysis options
     analyze_imports: bool = True
@@ -186,9 +184,7 @@ class DependencyConfig:
 
     # Test mapping
     test_directories: List[str] = field(default_factory=lambda: ["tests/"])
-    test_patterns: List[str] = field(
-        default_factory=lambda: ["test_*.py", "*_test.py"]
-    )
+    test_patterns: List[str] = field(default_factory=lambda: ["test_*.py", "*_test.py"])
 
 
 # =============================================================================
@@ -228,10 +224,7 @@ class ImportGraphBuilder:
                 for path in self.repo_root.rglob(pattern):
                     # Check exclusions
                     rel_path = str(path.relative_to(self.repo_root))
-                    excluded = any(
-                        fnmatch.fnmatch(rel_path, excl)
-                        for excl in self.config.exclude_patterns
-                    )
+                    excluded = any(fnmatch.fnmatch(rel_path, excl) for excl in self.config.exclude_patterns)
 
                     if not excluded and path.is_file():
                         files.append(path)
@@ -395,21 +388,14 @@ class WorkflowGraphBuilder:
             logger.warning("No workflows directory found")
             return
 
-        workflow_files = (
-            list(workflows_dir.glob("*.yml")) +
-            list(workflows_dir.glob("*.yaml"))
-        )
+        workflow_files = list(workflows_dir.glob("*.yml")) + list(workflows_dir.glob("*.yaml"))
 
         logger.info(f"Analyzing {len(workflow_files)} workflow files")
 
         for workflow_path in workflow_files:
             self._analyze_workflow(workflow_path, graph)
 
-    def _analyze_workflow(
-        self,
-        workflow_path: Path,
-        graph: DependencyGraph
-    ) -> None:
+    def _analyze_workflow(self, workflow_path: Path, graph: DependencyGraph) -> None:
         """Analyze a single workflow file."""
         # yaml was already imported and validated in build() method
         import yaml  # noqa: F401 - re-import since we're in a different method
@@ -548,11 +534,7 @@ class TestGraphBuilder:
 
         return test_files
 
-    def _map_test_to_code(
-        self,
-        test_path: Path,
-        graph: DependencyGraph
-    ) -> None:
+    def _map_test_to_code(self, test_path: Path, graph: DependencyGraph) -> None:
         """Map a test file to the code it tests."""
         rel_path = str(test_path.relative_to(self.repo_root))
         test_name = test_path.stem
@@ -613,15 +595,11 @@ class ImpactCalculator:
         # Find direct dependents (who imports these files)
         for file_path in changed_files:
             if file_path in self.graph.backward_edges:
-                report.direct_dependents.extend(
-                    self.graph.backward_edges[file_path]
-                )
+                report.direct_dependents.extend(self.graph.backward_edges[file_path])
 
             # Direct dependencies (what this file imports)
             if file_path in self.graph.forward_edges:
-                report.direct_dependencies.extend(
-                    self.graph.forward_edges[file_path]
-                )
+                report.direct_dependencies.extend(self.graph.forward_edges[file_path])
 
         # Deduplicate
         report.direct_dependents = list(set(report.direct_dependents))
@@ -715,10 +693,7 @@ class ImpactCalculator:
                         recommendations.append(node_id)
 
         # Add affected tests
-        recommendations.extend(
-            t for t in report.affected_tests
-            if t not in recommendations
-        )
+        recommendations.extend(t for t in report.affected_tests if t not in recommendations)
 
         return recommendations[:20]  # Limit recommendations
 
@@ -814,9 +789,7 @@ class TestSelector:
         impact = self.impact_calc.analyze_impact(changed_files)
 
         # Prioritize tests
-        prioritized = self._prioritize_tests(
-            impact.recommended_tests, changed_files
-        )
+        prioritized = self._prioritize_tests(impact.recommended_tests, changed_files)
 
         # Select top tests
         selected = prioritized[:max_tests]
@@ -830,9 +803,7 @@ class TestSelector:
         return {
             "selected_tests": selected,
             "total_recommended": len(impact.recommended_tests),
-            "coverage_estimate": (
-                len(covered_modules) / max(len(changed_files), 1)
-            ),
+            "coverage_estimate": (len(covered_modules) / max(len(changed_files), 1)),
             "impact_score": impact.impact_score,
             "test_command": self._generate_pytest_command(selected),
         }
@@ -941,18 +912,9 @@ class DependencyAnalyzer:
             "status": "built",
             "nodes": len(self.graph.nodes),
             "edges": len(self.graph.edges),
-            "modules": sum(
-                1 for n in self.graph.nodes.values()
-                if n.node_type == "module"
-            ),
-            "workflows": sum(
-                1 for n in self.graph.nodes.values()
-                if n.node_type == "workflow"
-            ),
-            "tests": sum(
-                1 for n in self.graph.nodes.values()
-                if "test" in n.tags
-            ),
+            "modules": sum(1 for n in self.graph.nodes.values() if n.node_type == "module"),
+            "workflows": sum(1 for n in self.graph.nodes.values() if n.node_type == "workflow"),
+            "tests": sum(1 for n in self.graph.nodes.values() if "test" in n.tags),
         }
 
     def _load_cached_graph(self) -> bool:
@@ -980,9 +942,7 @@ class DependencyAnalyzer:
                 self.graph.forward_edges[edge.source].append(edge.target)
                 self.graph.backward_edges[edge.target].append(edge.source)
 
-            logger.info(
-                f"Loaded graph from cache: {len(self.graph.nodes)} nodes"
-            )
+            logger.info(f"Loaded graph from cache: {len(self.graph.nodes)} nodes")
             return True
 
         except (json.JSONDecodeError, IOError, TypeError) as e:
@@ -1047,26 +1007,14 @@ class DependencyAnalyzer:
             return {"status": "not_built"}
 
         # Calculate stats
-        module_count = sum(
-            1 for n in self.graph.nodes.values()
-            if n.node_type == "module"
-        )
-        test_count = sum(
-            1 for n in self.graph.nodes.values()
-            if "test" in n.tags
-        )
-        workflow_count = sum(
-            1 for n in self.graph.nodes.values()
-            if n.node_type == "workflow"
-        )
+        module_count = sum(1 for n in self.graph.nodes.values() if n.node_type == "module")
+        test_count = sum(1 for n in self.graph.nodes.values() if "test" in n.tags)
+        workflow_count = sum(1 for n in self.graph.nodes.values() if n.node_type == "workflow")
 
         total_loc = sum(n.lines_of_code for n in self.graph.nodes.values())
         avg_complexity = 0
         if module_count > 0:
-            avg_complexity = sum(
-                n.complexity for n in self.graph.nodes.values()
-                if n.node_type == "module"
-            ) / module_count
+            avg_complexity = sum(n.complexity for n in self.graph.nodes.values() if n.node_type == "module") / module_count
 
         return {
             "total_nodes": len(self.graph.nodes),
@@ -1128,17 +1076,19 @@ class DependencyAnalyzer:
             if dependents:
                 content_lines.append(f"Imported by: {', '.join(dependents[:5])}")
 
-            chunks.append({
-                "chunk_id": f"dep:{node_id}",
-                "content": "\n".join(content_lines),
-                "file_path": f"dependencies/{node_id}",
-                "chunk_type": "dependency",
-                "metadata": {
-                    "node_type": node.node_type,
-                    "dependencies": deps,
-                    "dependents": dependents,
-                },
-            })
+            chunks.append(
+                {
+                    "chunk_id": f"dep:{node_id}",
+                    "content": "\n".join(content_lines),
+                    "file_path": f"dependencies/{node_id}",
+                    "chunk_type": "dependency",
+                    "metadata": {
+                        "node_type": node.node_type,
+                        "dependencies": deps,
+                        "dependents": dependents,
+                    },
+                }
+            )
 
         return chunks
 
@@ -1152,9 +1102,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Transformation Portal - Cross-Pipeline Dependency Analysis"
-    )
+    parser = argparse.ArgumentParser(description="Transformation Portal - Cross-Pipeline Dependency Analysis")
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -1164,15 +1112,11 @@ def main():
 
     # Impact command
     impact_parser = subparsers.add_parser("impact", help="Analyze change impact")
-    impact_parser.add_argument(
-        "--files", nargs="+", required=True, help="Changed files"
-    )
+    impact_parser.add_argument("--files", nargs="+", required=True, help="Changed files")
 
     # Tests command
     tests_parser = subparsers.add_parser("tests", help="Select tests for changes")
-    tests_parser.add_argument(
-        "--files", nargs="+", required=True, help="Changed files"
-    )
+    tests_parser.add_argument("--files", nargs="+", required=True, help="Changed files")
     tests_parser.add_argument("--max", type=int, default=50, help="Max tests")
 
     # Cycles command
@@ -1227,7 +1171,7 @@ def main():
         result = analyzer.select_tests(args.files, args.max)
 
         print(f"Selected {len(result['selected_tests'])} tests:")
-        for test in result['selected_tests'][:20]:
+        for test in result["selected_tests"][:20]:
             print(f"  - {test}")
 
         print(f"\nCoverage estimate: {result['coverage_estimate']:.1%}")

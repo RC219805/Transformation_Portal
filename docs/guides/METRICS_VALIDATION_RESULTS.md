@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**Status**: ✅ Metric fixes are CORRECT and working as intended.  
+**Status**: ✅ Metric fixes are CORRECT and working as intended.
 **Finding**: The low halo scores (0.0) are NOT a bug - they accurately reflect real edge artifacts in the current depth outputs.
 
 ## Validation Method
@@ -74,7 +74,7 @@ Scaled penalty (×10):         0.432
 
 ## Key Finding: The Metrics Are Correct
 
-The "0.0 halo score" is **not a bug in the metric computation**.  
+The "0.0 halo score" is **not a bug in the metric computation**.
 It is an **accurate measurement of genuine edge artifacts** in the current depth output.
 
 ### Why GreatRoom Has Halos (Root Cause)
@@ -97,17 +97,17 @@ It is an **accurate measurement of genuine edge artifacts** in the current depth
 ## Implications
 
 ### For Reporting (Priority 1 Fix)
-✅ **Status**: Field names are now consistent (`passed_lenient` / `passed_strict`)  
+✅ **Status**: Field names are now consistent (`passed_lenient` / `passed_strict`)
 ✅ **Impact**: Reports will correctly show "lenient pass, strict fail" for GreatRoom
 
 ### For Metric Calibration (Priority 2 Fix)
-✅ **Status**: Halo and overshoot metrics are correctly implemented  
-✅ **Impact**: Scores accurately reflect real depth quality issues  
+✅ **Status**: Halo and overshoot metrics are correctly implemented
+✅ **Impact**: Scores accurately reflect real depth quality issues
 ⚠️ **Action Required**: Thresholds may need per-scene-type tuning (interior vs exterior)
 
 ### For Pipeline Improvement (Deferred to Phase 2)
-❌ **Root cause**: Texture edges being interpreted as depth discontinuities  
-✅ **Solution exists**: Structural edge detection + AND-gated refinement  
+❌ **Root cause**: Texture edges being interpreted as depth discontinuities
+✅ **Solution exists**: Structural edge detection + AND-gated refinement
 📅 **Timeline**: Not in current validation run (refinement disabled for stability)
 
 ## Next Steps (Prioritized)
@@ -152,8 +152,8 @@ The path forward is **not to change the metrics**, but to **improve the depth pi
 
 ---
 
-**Test Date**: December 18, 2025  
-**Test Image**: 750Picacho_GreatRoom_Ultimate (4000×3000)  
-**Configuration**: tile_size=1024, overlap=128, refinement=null  
-**Metric Implementation**: `high_fidelity_depth/quality_metrics.py` (post-fix)  
+**Test Date**: December 18, 2025
+**Test Image**: 750Picacho_GreatRoom_Ultimate (4000×3000)
+**Configuration**: tile_size=1024, overlap=128, refinement=null
+**Metric Implementation**: `high_fidelity_depth/quality_metrics.py` (post-fix)
 **Validation Status**: ✅ METRICS CORRECT, ⏳ PIPELINE IMPROVEMENT PENDING

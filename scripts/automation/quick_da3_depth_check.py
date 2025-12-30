@@ -84,7 +84,7 @@ if baseline_files:
     da2_depth = np.array(Image.open(baseline_files[0]))
     if da2_depth.ndim == 3:
         da2_depth = da2_depth[:, :, 0]
-    
+
     print(f"\n📊 DA2 BASELINE DEPTH (for comparison):")
     print(f"  Shape: {da2_depth.shape}")
     print(f"  Min: {da2_depth.min():.6f}")

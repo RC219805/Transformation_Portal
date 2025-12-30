@@ -43,7 +43,6 @@ SCENE_PRESETS: Dict[str, Dict] = {
         "haze_intensity": 0.15,
         "depth_falloff": 0.7,
     },
-
     "GreatRoom": {
         "name": "Interior - Luxury Great Room",
         "lut": "assets/luts/film_emulation/Fuji_Reala_500D.cube",
@@ -61,7 +60,6 @@ SCENE_PRESETS: Dict[str, Dict] = {
         "window_exposure_offset": -0.30,
         "shadow_lift": 6,
     },
-
     "Kitchen": {
         "name": "Interior - Luxury Kitchen",
         "lut": "assets/luts/location_aesthetic/Modern_Clean_Luxury.cube",
@@ -79,7 +77,6 @@ SCENE_PRESETS: Dict[str, Dict] = {
         "preserve_specular": True,
         "specular_range": [250, 255],
     },
-
     "Pool": {
         "name": "Exterior - Pool & Water Feature",
         "lut": "assets/luts/location_aesthetic/California_Pool_Azure.cube",
@@ -100,7 +97,6 @@ SCENE_PRESETS: Dict[str, Dict] = {
         # Atmospheric
         "haze_intensity": 0.10,
     },
-
     "PrimaryBathroom": {
         "name": "Interior - Luxury Bathroom (Wet Surfaces)",
         "lut": "assets/luts/location_aesthetic/Spa_Luxury_Warmth.cube",
@@ -122,7 +118,6 @@ SCENE_PRESETS: Dict[str, Dict] = {
         # Local adjustments
         "shadow_lift": 8,
     },
-
     "PrimaryBedroom": {
         "name": "Interior - Luxury Primary Bedroom",
         "lut": "assets/luts/film_emulation/Fuji_Superia_400.cube",
@@ -147,12 +142,7 @@ SCENE_PRESETS: Dict[str, Dict] = {
 }
 
 
-def process_scene(
-    scene_name: str,
-    source_path: Path,
-    output_dir: Path,
-    dry_run: bool = False
-) -> Optional[Path]:
+def process_scene(scene_name: str, source_path: Path, output_dir: Path, dry_run: bool = False) -> Optional[Path]:
     """
     Process a single scene with scene-specific preset
 
@@ -172,12 +162,12 @@ def process_scene(
     preset = SCENE_PRESETS[scene_name]
     output_path = output_dir / f"750Picacho_{scene_name}_enhanced.ti"
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Scene: {scene_name}")
     print(f"Preset: {preset['name']}")
     print(f"Source: {source_path}")
     print(f"Output: {output_path}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     # Display configuration
     print("\nConfiguration:")
@@ -204,32 +194,26 @@ def process_scene(
 
 def main():
     """Main batch processing routine"""
-    parser = argparse.ArgumentParser(
-        description="Enhanced batch processing for 750 Picacho Lane"
-    )
+    parser = argparse.ArgumentParser(description="Enhanced batch processing for 750 Picacho Lane")
     parser.add_argument(
         "--source-dir",
         type=Path,
         default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs"),
-        help="Source directory with original JPEGs"
+        help="Source directory with original JPEGs",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Enhanced_Production"),
-        help="Output directory for processed files"
+        help="Output directory for processed files",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print configuration without processing"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Print configuration without processing")
     parser.add_argument(
         "--scenes",
         nargs="+",
         choices=list(SCENE_PRESETS.keys()),
         default=list(SCENE_PRESETS.keys()),
-        help="Scenes to process (default: all)"
+        help="Scenes to process (default: all)",
     )
 
     args = parser.parse_args()
@@ -237,9 +221,9 @@ def main():
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("="*80)
+    print("=" * 80)
     print("750 PICACHO LANE - ENHANCED BATCH PROCESSING")
-    print("="*80)
+    print("=" * 80)
     print(f"\nSource Directory: {args.source_dir}")
     print(f"Output Directory: {args.output_dir}")
     print(f"Scenes to Process: {', '.join(args.scenes)}")
@@ -258,25 +242,22 @@ def main():
 
         # pylint: disable=assignment-from-none
         result = process_scene(
-            scene_name=scene_name,
-            source_path=source_file,
-            output_dir=args.output_dir,
-            dry_run=args.dry_run
+            scene_name=scene_name, source_path=source_file, output_dir=args.output_dir, dry_run=args.dry_run
         )
 
         results[scene_name] = result
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("PROCESSING SUMMARY")
-    print("="*80)
+    print("=" * 80)
     for scene_name, result in results.items():
         status = "✓ Configured" if args.dry_run else ("✓ Processed" if result else "✗ Failed")
         print(f"  {status} {scene_name}")
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("RECOMMENDED NEXT STEPS:")
-    print("="*80)
+    print("=" * 80)
     print("""
 1. Review scene-specific presets in SCENE_PRESETS dictionary
 2. Adjust parameters based on client preferences

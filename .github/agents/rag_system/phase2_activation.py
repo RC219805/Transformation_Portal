@@ -35,21 +35,14 @@ OBSERVED_CI_RESULTS = {
     "workflow": "Running Copilot #386",
     "duration_seconds": 734,  # ~12m 14s from log
     "python_version": "3.12.3",
-    "summary": {
-        "total_tests": 1117,
-        "passed": 913,
-        "skipped": 204,
-        "failed": 0,
-        "errors": 0,
-        "duration_seconds": 12.79
-    },
+    "summary": {"total_tests": 1117, "passed": 913, "skipped": 204, "failed": 0, "errors": 0, "duration_seconds": 12.79},
     "codeql_results": {
         "language": "python",
         "alerts": 0,
         "queries_run": 43,
         "modules_extracted": 575,
         "extraction_time_seconds": 25.68,
-        "lines_analyzed": "4670141 bytes SCC output"
+        "lines_analyzed": "4670141 bytes SCC output",
     },
     "test_categories": {
         "rag_system": {
@@ -58,22 +51,22 @@ OBSERVED_CI_RESULTS = {
             "test_rag_integration.py": {"passed": 9, "skipped": 0},
             "test_rag_knowledge_engine.py": {"passed": 26, "skipped": 0},
             "test_rag_phase2_integration.py": {"passed": 23, "skipped": 0},
-            "test_rag_system.py": {"passed": 24, "skipped": 0}
+            "test_rag_system.py": {"passed": 24, "skipped": 0},
         },
         "streaming": {
             "test_streaming_checkpoint.py": {"passed": 20, "skipped": 0},
             "test_streaming_processor.py": {"passed": 26, "skipped": 0},
-            "test_streaming_progress.py": {"passed": 36, "skipped": 0}
+            "test_streaming_progress.py": {"passed": 36, "skipped": 0},
         },
         "ml_dependent": {
             "test_realize_v8_vfx_extension.py": {"passed": 0, "skipped": 30},
             "test_temporal_evolution.py": {"passed": 0, "skipped": 10},
-            "test_training_infrastructure.py": {"passed": 0, "skipped": 27}
+            "test_training_infrastructure.py": {"passed": 0, "skipped": 27},
         },
         "unified_pipeline": {
             "test_unified_luxury_pipeline.py": {"passed": 36, "skipped": 0},
-            "test_ultimate_quality_pipeline.py": {"passed": 9, "skipped": 0}
-        }
+            "test_ultimate_quality_pipeline.py": {"passed": 9, "skipped": 0},
+        },
     },
     "phase2_files_validated": [
         ".github/agents/rag_system/git_hooks.py",
@@ -81,14 +74,14 @@ OBSERVED_CI_RESULTS = {
         ".github/agents/rag_system/dependency_analysis.py",
         ".github/agents/rag_system/cache_manager.py",
         ".github/agents/rag_system/enhanced_retriever.py",
-        ".github/agents/rag_system/phase1_integration.py"
+        ".github/agents/rag_system/phase1_integration.py",
     ],
     "extraction_warnings": [
         "Failed to find .spatial_processor in depth_intelligence",
         "Failed to find .atmospheric_modeler in depth_intelligence",
         "Failed to find .depth_pipeline in depth_intelligence",
-        "Failed to find .depth_filters in depth_intelligence"
-    ]
+        "Failed to find .depth_filters in depth_intelligence",
+    ],
 }
 
 
@@ -98,7 +91,7 @@ OBSERVED_CI_RESULTS = {
 
 # Dependency graph simulation parameters
 AVG_IMPORTS_PER_MODULE = 3  # Average number of imports per Python module
-DEFAULT_COMPLEXITY = 2.5    # Moderate complexity estimate
+DEFAULT_COMPLEXITY = 2.5  # Moderate complexity estimate
 GRAPH_BUILD_TIME_MS = 2340  # Simulated build time in milliseconds
 
 # Test selection parameters
@@ -109,9 +102,11 @@ TESTS_PER_FILE_ESTIMATE = 10  # Estimated number of tests per test file
 # Knowledge Entry Types
 # =============================================================================
 
+
 @dataclass
 class TestResultEntry:
     """Individual test result for knowledge base."""
+
     test_id: str
     test_file: str
     test_name: str
@@ -129,6 +124,7 @@ class TestResultEntry:
 @dataclass
 class QualityMetricEntry:
     """Quality metric for trend tracking."""
+
     metric_id: str
     metric_type: str
     value: float
@@ -147,6 +143,7 @@ class QualityMetricEntry:
 @dataclass
 class DependencyGraphStats:
     """Statistics from dependency graph construction."""
+
     total_nodes: int
     total_edges: int
     module_count: int
@@ -161,6 +158,7 @@ class DependencyGraphStats:
 @dataclass
 class KnowledgeBaseState:
     """Current state of the knowledge base."""
+
     test_results_count: int
     metrics_count: int
     patterns_count: int
@@ -172,6 +170,7 @@ class KnowledgeBaseState:
 # =============================================================================
 # Knowledge Engine Simulator
 # =============================================================================
+
 
 class Phase2Activator:
     """
@@ -197,7 +196,7 @@ class Phase2Activator:
             "source": f"CI Run #{ci_data.get('run_id', 'unknown')}",
             "entries_created": 0,
             "metrics_recorded": 0,
-            "patterns_detected": 0
+            "patterns_detected": 0,
         }
 
         # 1. Ingest test results by category
@@ -211,7 +210,7 @@ class Phase2Activator:
                         test_name=f"test_{i}",
                         status="passed",
                         category=category,
-                        timestamp=ci_data.get("timestamp", "")
+                        timestamp=ci_data.get("timestamp", ""),
                     )
                     self.test_results.append(entry)
                     ingestion_report["entries_created"] += 1
@@ -224,7 +223,7 @@ class Phase2Activator:
                         test_name=f"skipped_{i}",
                         status="skipped",
                         category=category,
-                        timestamp=ci_data.get("timestamp", "")
+                        timestamp=ci_data.get("timestamp", ""),
                     )
                     self.test_results.append(entry)
                     ingestion_report["entries_created"] += 1
@@ -236,49 +235,49 @@ class Phase2Activator:
         total = summary.get("total_tests", 1)
         passed = summary.get("passed", 0)
         pass_rate = (passed / total * 100) if total > 0 else 0
-        self.metrics.append(QualityMetricEntry(
-            metric_id="test_pass_rate",
-            metric_type="test_health",
-            value=pass_rate,
-            unit="percent",
-            source=f"CI Run #{ci_data.get('run_id')}",
-            context={"total": total, "passed": passed}
-        ))
+        self.metrics.append(
+            QualityMetricEntry(
+                metric_id="test_pass_rate",
+                metric_type="test_health",
+                value=pass_rate,
+                unit="percent",
+                source=f"CI Run #{ci_data.get('run_id')}",
+                context={"total": total, "passed": passed},
+            )
+        )
         ingestion_report["metrics_recorded"] += 1
 
         # Test execution speed
-        self.metrics.append(QualityMetricEntry(
-            metric_id="test_execution_time",
-            metric_type="performance",
-            value=summary.get("duration_seconds", 0),
-            unit="seconds",
-            source=f"CI Run #{ci_data.get('run_id')}",
-            context={"test_count": total}
-        ))
+        self.metrics.append(
+            QualityMetricEntry(
+                metric_id="test_execution_time",
+                metric_type="performance",
+                value=summary.get("duration_seconds", 0),
+                unit="seconds",
+                source=f"CI Run #{ci_data.get('run_id')}",
+                context={"test_count": total},
+            )
+        )
         ingestion_report["metrics_recorded"] += 1
 
         # CodeQL security health
         codeql = ci_data.get("codeql_results", {})
-        self.metrics.append(QualityMetricEntry(
-            metric_id="security_alerts",
-            metric_type="security",
-            value=codeql.get("alerts", 0),
-            unit="count",
-            source="CodeQL Analysis",
-            context={
-                "queries_run": codeql.get("queries_run"),
-                "modules_analyzed": codeql.get("modules_extracted")
-            }
-        ))
+        self.metrics.append(
+            QualityMetricEntry(
+                metric_id="security_alerts",
+                metric_type="security",
+                value=codeql.get("alerts", 0),
+                unit="count",
+                source="CodeQL Analysis",
+                context={"queries_run": codeql.get("queries_run"), "modules_analyzed": codeql.get("modules_extracted")},
+            )
+        )
         ingestion_report["metrics_recorded"] += 1
 
         # 3. Detect patterns
         # ML-gating pattern detected
         ml_skipped = sum(
-            tests.get("skipped", 0)
-            for tests in ci_data.get("test_categories", {}).get(
-                "ml_dependent", {}
-            ).values()
+            tests.get("skipped", 0) for tests in ci_data.get("test_categories", {}).get("ml_dependent", {}).values()
         )
         if ml_skipped > 0:
             self.patterns["ml_test_gating"] = ml_skipped
@@ -308,23 +307,37 @@ class Phase2Activator:
         # Module structure observed from CodeQL extraction
         observed_modules = {
             "rag_system": [
-                "git_hooks.py", "knowledge_feedback.py", "dependency_analysis.py",
-                "cache_manager.py", "enhanced_retriever.py", "phase1_integration.py",
-                "classifier.py", "retriever.py", "indexer.py", "config.py",
-                "semantic_search.py", "advanced_features.py", "cli.py"
+                "git_hooks.py",
+                "knowledge_feedback.py",
+                "dependency_analysis.py",
+                "cache_manager.py",
+                "enhanced_retriever.py",
+                "phase1_integration.py",
+                "classifier.py",
+                "retriever.py",
+                "indexer.py",
+                "config.py",
+                "semantic_search.py",
+                "advanced_features.py",
+                "cli.py",
             ],
             "transformation_portal": [
-                "depth/", "streaming/", "perceptual/", "vlm/", "diffusion/",
-                "atmosphere/", "neuroaesthetics/", "comfyui/", "plugins/",
-                "foundation/", "segmentation/", "style_transfer/", "pipelines/"
+                "depth/",
+                "streaming/",
+                "perceptual/",
+                "vlm/",
+                "diffusion/",
+                "atmosphere/",
+                "neuroaesthetics/",
+                "comfyui/",
+                "plugins/",
+                "foundation/",
+                "segmentation/",
+                "style_transfer/",
+                "pipelines/",
             ],
-            "tests": [
-                "test_rag_*.py", "test_streaming_*.py", "test_unified_*.py",
-                "test_plugin_*.py", "test_depth_*.py"
-            ],
-            "scripts": [
-                "pipelines/", "utilities/", "analysis/", "setup/"
-            ]
+            "tests": ["test_rag_*.py", "test_streaming_*.py", "test_unified_*.py", "test_plugin_*.py", "test_depth_*.py"],
+            "scripts": ["pipelines/", "utilities/", "analysis/", "setup/"],
         }
 
         # Simulate graph construction
@@ -342,10 +355,10 @@ class Phase2Activator:
             critical_paths=[
                 "transformation_portal.foundation -> streaming -> pipelines",
                 "rag_system.cache_manager -> enhanced_retriever -> phase1_integration",
-                "transformation_portal.depth -> vlm -> perceptual"
+                "transformation_portal.depth -> vlm -> perceptual",
             ],
             circular_dependencies=[],  # None detected
-            build_time_ms=GRAPH_BUILD_TIME_MS
+            build_time_ms=GRAPH_BUILD_TIME_MS,
         )
 
         return {
@@ -353,13 +366,10 @@ class Phase2Activator:
             "nodes": self.dependency_stats.total_nodes,
             "edges": self.dependency_stats.total_edges,
             "critical_paths": self.dependency_stats.critical_paths,
-            "build_time_ms": self.dependency_stats.build_time_ms
+            "build_time_ms": self.dependency_stats.build_time_ms,
         }
 
-    def generate_test_selection_strategy(
-        self,
-        changed_files: List[str] = None
-    ) -> Dict[str, Any]:
+    def generate_test_selection_strategy(self, changed_files: List[str] = None) -> Dict[str, Any]:
         """
         Generate intelligent test selection based on dependency analysis.
 
@@ -371,7 +381,7 @@ class Phase2Activator:
             changed_files = [
                 ".github/agents/rag_system/git_hooks.py",
                 ".github/agents/rag_system/knowledge_feedback.py",
-                ".github/agents/rag_system/dependency_analysis.py"
+                ".github/agents/rag_system/dependency_analysis.py",
             ]
 
         # Map files to affected tests
@@ -380,16 +390,10 @@ class Phase2Activator:
                 "test_rag_phase2_integration.py",
                 "test_rag_knowledge_engine.py",
                 "test_rag_system.py",
-                "test_rag_integration.py"
+                "test_rag_integration.py",
             ],
-            "streaming": [
-                "test_streaming_processor.py",
-                "test_streaming_checkpoint.py"
-            ],
-            "depth": [
-                "test_depth_tools.py",
-                "test_depth_anything_v2_onnx.py"
-            ]
+            "streaming": ["test_streaming_processor.py", "test_streaming_checkpoint.py"],
+            "depth": ["test_depth_tools.py", "test_depth_anything_v2_onnx.py"],
         }
 
         # Determine affected tests
@@ -413,11 +417,9 @@ class Phase2Activator:
             "total_repository_tests": total_tests,
             "selected_test_count": selected_tests,
             "test_reduction_percent": round(reduction_percent, 1),
-            "estimated_time_savings_seconds": round(
-                12.79 * (reduction_percent / 100), 2
-            ),
+            "estimated_time_savings_seconds": round(12.79 * (reduction_percent / 100), 2),
             "strategy": "dependency_aware_selection",
-            "confidence": 0.92
+            "confidence": 0.92,
         }
 
     def export_knowledge_base(self, output_path: Path) -> Dict[str, Any]:
@@ -429,18 +431,12 @@ class Phase2Activator:
         # Export test results
         test_results_path = output_path / "test_results.json"
         with open(test_results_path, "w") as f:
-            json.dump(
-                [asdict(tr) for tr in self.test_results],
-                f, indent=2
-            )
+            json.dump([asdict(tr) for tr in self.test_results], f, indent=2)
 
         # Export metrics
         metrics_path = output_path / "quality_metrics.json"
         with open(metrics_path, "w") as f:
-            json.dump(
-                [asdict(m) for m in self.metrics],
-                f, indent=2
-            )
+            json.dump([asdict(m) for m in self.metrics], f, indent=2)
 
         # Export patterns
         patterns_path = output_path / "detected_patterns.json"
@@ -460,7 +456,7 @@ class Phase2Activator:
             patterns_count=len(self.patterns),
             last_ingestion=datetime.now().isoformat(),
             dependency_graph_built=self.dependency_stats is not None,
-            storage_path=str(output_path)
+            storage_path=str(output_path),
         )
 
         state_path = output_path / "knowledge_state.json"
@@ -468,13 +464,8 @@ class Phase2Activator:
             json.dump(asdict(state), f, indent=2)
 
         return {
-            "exported_files": [
-                str(test_results_path),
-                str(metrics_path),
-                str(patterns_path),
-                str(state_path)
-            ],
-            "state": asdict(state)
+            "exported_files": [str(test_results_path), str(metrics_path), str(patterns_path), str(state_path)],
+            "state": asdict(state),
         }
 
     def generate_activation_report(self) -> str:
@@ -494,7 +485,7 @@ class Phase2Activator:
             f"  Test Results Ingested: {len(self.test_results)}",
             f"  Quality Metrics Recorded: {len(self.metrics)}",
             f"  Patterns Detected: {len(self.patterns)}",
-            ""
+            "",
         ]
 
         # Pattern details
@@ -508,72 +499,71 @@ class Phase2Activator:
         if self.metrics:
             lines.append("  Quality Metrics:")
             for metric in self.metrics:
-                lines.append(
-                    f"    • {metric.metric_type}/{metric.metric_id}: "
-                    f"{metric.value} {metric.unit}"
-                )
+                lines.append(f"    • {metric.metric_type}/{metric.metric_id}: {metric.value} {metric.unit}")
             lines.append("")
 
-        lines.extend([
-            "─" * 70,
-            "2. DEPENDENCY GRAPH CONSTRUCTION",
-            "─" * 70
-        ])
+        lines.extend(["─" * 70, "2. DEPENDENCY GRAPH CONSTRUCTION", "─" * 70])
 
         if self.dependency_stats:
-            lines.extend([
-                f"  Total Nodes: {self.dependency_stats.total_nodes}",
-                f"  Total Edges: {self.dependency_stats.total_edges}",
-                f"  Module Count: {self.dependency_stats.module_count}",
-                f"  Test Count: {self.dependency_stats.test_count}",
-                f"  Average Complexity: {self.dependency_stats.avg_complexity}",
-                f"  Build Time: {self.dependency_stats.build_time_ms}ms",
-                "",
-                "  Critical Dependency Paths:"
-            ])
+            lines.extend(
+                [
+                    f"  Total Nodes: {self.dependency_stats.total_nodes}",
+                    f"  Total Edges: {self.dependency_stats.total_edges}",
+                    f"  Module Count: {self.dependency_stats.module_count}",
+                    f"  Test Count: {self.dependency_stats.test_count}",
+                    f"  Average Complexity: {self.dependency_stats.avg_complexity}",
+                    f"  Build Time: {self.dependency_stats.build_time_ms}ms",
+                    "",
+                    "  Critical Dependency Paths:",
+                ]
+            )
             for path in self.dependency_stats.critical_paths:
                 lines.append(f"    → {path}")
             lines.append("")
 
         # Test selection demonstration
         selection = self.generate_test_selection_strategy()
-        lines.extend([
-            "─" * 70,
-            "3. INTELLIGENT TEST SELECTION (Demonstration)",
-            "─" * 70,
-            f"  Changed Files: {len(selection['changed_files'])}",
-            f"  Affected Tests: {len(selection['affected_tests'])}",
-            f"  Repository Total: {selection['total_repository_tests']} tests",
-            f"  Selected for Execution: {selection['selected_test_count']} tests",
-            f"  Reduction: {selection['test_reduction_percent']}%",
-            f"  Estimated Time Savings: {selection['estimated_time_savings_seconds']}s",
-            f"  Strategy Confidence: {selection['confidence'] * 100}%",
-            "",
-            "  Affected Test Files:"
-        ])
-        for test in selection['affected_tests']:
+        lines.extend(
+            [
+                "─" * 70,
+                "3. INTELLIGENT TEST SELECTION (Demonstration)",
+                "─" * 70,
+                f"  Changed Files: {len(selection['changed_files'])}",
+                f"  Affected Tests: {len(selection['affected_tests'])}",
+                f"  Repository Total: {selection['total_repository_tests']} tests",
+                f"  Selected for Execution: {selection['selected_test_count']} tests",
+                f"  Reduction: {selection['test_reduction_percent']}%",
+                f"  Estimated Time Savings: {selection['estimated_time_savings_seconds']}s",
+                f"  Strategy Confidence: {selection['confidence'] * 100}%",
+                "",
+                "  Affected Test Files:",
+            ]
+        )
+        for test in selection["affected_tests"]:
             lines.append(f"    • {test}")
 
-        lines.extend([
-            "",
-            "─" * 70,
-            "4. STRATEGIC VALUE DELIVERED",
-            "─" * 70,
-            "  ✓ Knowledge Engine operational with CI feedback loop",
-            "  ✓ Dependency graph enables precision test selection",
-            "  ✓ Quality metrics baseline established for trend analysis",
-            "  ✓ Pattern detection identifies ML-gating and deployment patterns",
-            "",
-            "  Next Recommended Actions:",
-            "    1. Install git hooks for incremental indexing",
-            "    2. Configure CI to export JUnit XML for richer ingestion",
-            "    3. Enable PR context generation for code reviews",
-            "    4. Schedule trend analysis for quality dashboards",
-            "",
-            "=" * 70,
-            "ACTIVATION COMPLETE",
-            "=" * 70
-        ])
+        lines.extend(
+            [
+                "",
+                "─" * 70,
+                "4. STRATEGIC VALUE DELIVERED",
+                "─" * 70,
+                "  ✓ Knowledge Engine operational with CI feedback loop",
+                "  ✓ Dependency graph enables precision test selection",
+                "  ✓ Quality metrics baseline established for trend analysis",
+                "  ✓ Pattern detection identifies ML-gating and deployment patterns",
+                "",
+                "  Next Recommended Actions:",
+                "    1. Install git hooks for incremental indexing",
+                "    2. Configure CI to export JUnit XML for richer ingestion",
+                "    3. Enable PR context generation for code reviews",
+                "    4. Schedule trend analysis for quality dashboards",
+                "",
+                "=" * 70,
+                "ACTIVATION COMPLETE",
+                "=" * 70,
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -581,6 +571,7 @@ class Phase2Activator:
 # =============================================================================
 # Main Execution
 # =============================================================================
+
 
 def main():
     """Execute Phase 2 activation."""
@@ -642,7 +633,7 @@ def main():
         "graph": graph_report,
         "selection": selection,
         "export": export_report,
-        "report_path": str(report_path)
+        "report_path": str(report_path),
     }
 
 

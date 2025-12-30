@@ -16,7 +16,7 @@
   - Added fallback error handling
 - **Impact**: Quality assessment now properly loads LPIPS-based perceptual scoring
 
-### 3. ✅ Python SSL Certificates Installation  
+### 3. ✅ Python SSL Certificates Installation
 - **Status**: Complete
 - **Action**: Ran Python 3.11 certificate installer
 - **Impact**: Fixed SSL certificate verification errors preventing model downloads

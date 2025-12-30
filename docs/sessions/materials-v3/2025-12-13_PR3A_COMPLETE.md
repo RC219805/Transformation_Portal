@@ -1,7 +1,7 @@
 # Materials V3 PR-3A: Metrics + Taxonomy Foundation
 
-**Status:** Complete ✅  
-**Date:** December 13, 2025  
+**Status:** Complete ✅
+**Date:** December 13, 2025
 **Purpose:** Foundation for objective edge-quality evaluation and material identity normalization
 
 ---

@@ -134,11 +134,11 @@ from enhancements import (
     QualityTargets,
     QualityDomain,
     assess_quality,
-    
+
     # Model Management
     ModelLoader,
     load_pretrained_weights,
-    
+
     # Core (existing)
     HyperRealityProcessor,
     enhance_image,

@@ -67,7 +67,7 @@
 # requirements.txt
 -r requirements/base.txt
 
-# requirements-dev.txt  
+# requirements-dev.txt
 -r requirements/dev.txt
 -r requirements/base.txt
 ```
@@ -90,7 +90,7 @@
 **Option B - Artifact Only** (recommended):
 - ✅ Cleaner git history
 - ✅ Still available in workflow artifacts
-- **Action**: 
+- **Action**:
   1. Add to `.gitignore`: `safety-report.json`
   2. Remove from git: `git rm safety-report.json`
   3. Update workflow to upload as artifact instead of committing
@@ -114,7 +114,7 @@ rg -n "^nvidia-|^triton\b" requirements/ml.txt requirements/all.txt
 
 **Security Status**:
 - Critical: 0
-- High: 0  
+- High: 0
 - Medium: 0
 - Low: 0
 

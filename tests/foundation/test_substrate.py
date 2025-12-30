@@ -61,9 +61,7 @@ class TestComputationalSubstrate:
         """Test batch tensor allocation."""
         batch_size = 4
         shape = (64, 64)
-        tensors = substrate.memory_manager.allocate_batch(
-            batch_size, shape
-        )
+        tensors = substrate.memory_manager.allocate_batch(batch_size, shape)
         assert len(tensors) == batch_size
         for tensor in tensors:
             assert tensor.shape == shape
@@ -189,22 +187,22 @@ class TestSubstrateConfig:
     def test_device_auto_detection(self):
         """Test that substrate auto-detects appropriate device when none specified."""
         import torch
-        
+
         # Create substrate without explicit device
         substrate = ComputationalSubstrate()
-        
+
         # Should detect available device (MPS > CUDA > CPU)
         assert substrate.device is not None
         assert substrate.device.type in ["mps", "cuda", "cpu"]
-        
+
         # Device should be usable for tensor creation
         test_tensor = torch.randn(10, 10, device=substrate.device)
         assert test_tensor.device == substrate.device
-        
+
         # If MPS is not available, should fall back to CUDA or CPU
         if not torch.backends.mps.is_available():
             assert substrate.device.type in ["cuda", "cpu"]
-        
+
         # If CUDA is not available either, should be CPU
         if not torch.backends.mps.is_available() and not torch.cuda.is_available():
             assert substrate.device.type == "cpu"
@@ -226,11 +224,7 @@ class TestIntegration:
         # Perform computation
         with substrate.autocast():
             # Simple convolution-like operation
-            result = torch.conv2d(
-                input_tensor,
-                weight_tensor,
-                padding=3
-            )
+            result = torch.conv2d(input_tensor, weight_tensor, padding=3)
 
         # Verify result
         assert result is not None
@@ -249,10 +243,7 @@ class TestIntegration:
 
         # Create batch of tensors
         batch_size = 4
-        tensors = [
-            substrate.allocate_tensor((3, 128, 128))
-            for _ in range(batch_size)
-        ]
+        tensors = [substrate.allocate_tensor((3, 128, 128)) for _ in range(batch_size)]
 
         # Define operation
         def process_fn(x):

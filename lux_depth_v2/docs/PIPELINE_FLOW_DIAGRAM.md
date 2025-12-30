@@ -1,16 +1,16 @@
 # LuxPipelineV2 Flow Diagram
 
-**Last Updated:** 2025-12-23  
-**Author:** Pipeline Architecture Team  
+**Last Updated:** 2025-12-23
+**Author:** Pipeline Architecture Team
 **Purpose:** Visual reference for LuxPipelineV2 architecture, stage dependencies, and error handling
 
 ---
 
 ## Quick Reference
 
-**For Onboarding:** Jump to [Flow Diagram](#flow-diagram) and [Visual Legend](#visual-legend)  
-**For Performance Analysis:** See [Timing Checkpoint Mapping](#timing-checkpoint-mapping-to-python-implementation) and [Performance Optimization Guidelines](#performance-optimization-guidelines)  
-**For Code Reviews:** Check [Code Traceability Matrix](#code-traceability-matrix) and [Stage Dependencies](#stage-dependencies--execution-order)  
+**For Onboarding:** Jump to [Flow Diagram](#flow-diagram) and [Visual Legend](#visual-legend)
+**For Performance Analysis:** See [Timing Checkpoint Mapping](#timing-checkpoint-mapping-to-python-implementation) and [Performance Optimization Guidelines](#performance-optimization-guidelines)
+**For Code Reviews:** Check [Code Traceability Matrix](#code-traceability-matrix) and [Stage Dependencies](#stage-dependencies--execution-order)
 **For Debugging:** Review [Error Handling Patterns](#error-handling-patterns) and [Configuration Flags](#configuration-flags)
 
 ---
@@ -54,13 +54,13 @@ flowchart TD
         H -->|Yes| I[Legacy Material Segmentation]
         H -->|No| J[Skip Segmentation]
         I --> TC3((t_material_segmentation))
-        
+
         %% Materials V2 path
         I --> K{Materials V2 Enabled?}
         K -->|Yes| L[Materials V2 Engine]
         K -->|No| M[Skip Materials V2]
         L --> TC4((t_materials_v2))
-        
+
         %% Materials V3 path
         L --> N{Materials V3 Enabled?}
         M --> N
@@ -354,7 +354,7 @@ with self._stage("stage_name"):
 | Bicubic Upscaling | 100-200ms | ~200MB | Yes |
 | Export | 200-500ms | ~300MB | No |
 
-**Total (Typical 4K, AI Upscaler):** ~2-3 seconds  
+**Total (Typical 4K, AI Upscaler):** ~2-3 seconds
 **Total (Typical 4K, Bicubic):** ~1-1.5 seconds
 
 ---

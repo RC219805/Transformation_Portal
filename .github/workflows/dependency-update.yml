@@ -31,21 +31,21 @@ jobs:
         run: |
           echo "Disk space before cleanup:"
           df -h
-          
+
           # Remove large unnecessary tools and libraries
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /opt/hostedtoolcache/CodeQL || true
           sudo rm -rf /usr/local/share/boost || true
-          
+
           # Clean Docker
           sudo docker image prune --all --force || true
           sudo docker container prune --force || true
-          
+
           # Clean apt cache
           sudo apt-get clean || true
-          
+
           echo "Disk space after cleanup:"
           df -h
 
@@ -63,10 +63,10 @@ jobs:
           if [ -d "requirements" ]; then
             echo "Updating layered requirements with pip-compile..."
             cd requirements
-            
+
             # Update all requirements to latest versions within constraints
             make update || echo "Warning: Failed to update all requirements"
-            
+
             cd ..
           else
             echo "Warning: requirements/ directory not found. Skipping update."

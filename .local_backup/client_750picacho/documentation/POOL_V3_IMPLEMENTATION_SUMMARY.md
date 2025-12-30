@@ -1,7 +1,7 @@
 # Pool Enhancement V3 - Implementation Summary
 
-**Date:** November 6, 2025  
-**Status:** ⚠️ IN PROGRESS - Tuning Required  
+**Date:** November 6, 2025
+**Status:** ⚠️ IN PROGRESS - Tuning Required
 **Script:** `conservative_enhance_pool_v3.py`
 
 ---
@@ -32,9 +32,9 @@ The balance between brightness enhancement and highlight preservation is difficu
 
 ### Latest Run Results
 ```
-Luminance Change: -2.4% (target: +15-20%)  
-Highlight Clipping: 7.11% (target: <1%)  
-Shadow Clipping: 0.88% (target: <2%) ✅  
+Luminance Change: -2.4% (target: +15-20%)
+Highlight Clipping: 7.11% (target: <1%)
+Shadow Clipping: 0.88% (target: <2%) ✅
 Saturation Change: +3.4% (target: +5-15%)
 ```
 
@@ -47,7 +47,7 @@ Saturation Change: +3.4% (target: +5-15%)
 ### Issue 1: Multiple Sky Protection Applications
 Sky protection is applied at:
 1. Line 255: Shadow lift
-2. Line 272: Contrast enhancement  
+2. Line 272: Contrast enhancement
 3. Each application compounds, making sky (and nearby areas) progressively darker
 
 **Solution:** Apply sky protection once at the end, OR reduce protection strength significantly
@@ -68,7 +68,7 @@ The original rendering is in LINEAR space (0.247 mean), which tone maps to 0.616
 ## Recommended Next Steps
 
 ### Option 1: Simplify Sky Protection (Recommended)
-**Time:** 15-20 minutes  
+**Time:** 15-20 minutes
 **Approach:** Remove redundant sky protection applications, apply once at the end
 
 ```python
@@ -83,7 +83,7 @@ rgb_final[highlights] = 0.90 + (rgb_final[highlights] - 0.90) * 0.3  # Compress 
 ```
 
 ### Option 2: Adjust AgX Tone Mapping Parameters (Technical)
-**Time:** 30-45 minutes  
+**Time:** 30-45 minutes
 **Approach:** Modify tone mapping curve to provide more headroom
 
 ```python
@@ -97,7 +97,7 @@ MAX_EV = 8.0  # More highlight headroom
 ```
 
 ### Option 3: Use Simpler Enhancement Pipeline (Fastest)
-**Time:** 10 minutes  
+**Time:** 10 minutes
 **Approach:** Minimal intervention, leverage AgX tone mapping alone
 
 ```python
@@ -109,7 +109,7 @@ MAX_EV = 8.0  # More highlight headroom
 ```
 
 ### Option 4: Hybrid Approach - Adaptive Sky Protection
-**Time:** 45-60 minutes  
+**Time:** 45-60 minutes
 **Approach:** Apply sky protection only where luminance > 0.85, feather more aggressively
 
 ```python
@@ -125,10 +125,10 @@ protection = 1.0 - sky_mask * SKY_PROTECTION_STRENGTH * (luminance - 0.85) / 0.1
 
 ## What's Working Well
 
-✅ **AgX Tone Mapping:** Properly converts LINEAR to display space without the 2x brightness explosion of V2  
-✅ **Highlight Rolloff:** When not interfered with, AgX preserves sky gradients naturally  
-✅ **Water Enhancement:** Cyan boost with luminance preservation works correctly  
-✅ **Validation Metrics:** Automated checking helps identify issues quickly  
+✅ **AgX Tone Mapping:** Properly converts LINEAR to display space without the 2x brightness explosion of V2
+✅ **Highlight Rolloff:** When not interfered with, AgX preserves sky gradients naturally
+✅ **Water Enhancement:** Cyan boost with luminance preservation works correctly
+✅ **Validation Metrics:** Automated checking helps identify issues quickly
 ✅ **Shadow Preservation:** Shadow clipping stays under 2% target
 
 ---
@@ -228,6 +228,6 @@ This is applied 2-3 times in pipeline, resulting in compounding darkening:
 
 ---
 
-**Status:** V3 core implementation complete, requires parameter tuning for production use.  
-**Priority:** Medium - AgX tone mapping is working correctly, just needs balance adjustments.  
+**Status:** V3 core implementation complete, requires parameter tuning for production use.
+**Priority:** Medium - AgX tone mapping is working correctly, just needs balance adjustments.
 **Blocker:** None - can proceed with recommended options above.

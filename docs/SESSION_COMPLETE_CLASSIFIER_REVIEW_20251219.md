@@ -1,6 +1,6 @@
 # Session Complete: Classifier Implementation Review
-**Date**: 2025-12-19  
-**Session Type**: Technical Review & Validation  
+**Date**: 2025-12-19
+**Session Type**: Technical Review & Validation
 **Status**: ✅ **ALL FIXES VERIFIED - READY FOR EXPANDED VALIDATION**
 
 ---
@@ -247,23 +247,23 @@ lenient_pass = (smooth_hf and not_flat) or reasonable_edges
 ## Key Insights from Review
 
 ### 1. Texture Validation is Now Principled
-**Before**: Global variance penalized valid aerial/pool scenes  
-**Now**: HF energy targets ripples/speckles, allows large depth gradients  
+**Before**: Global variance penalized valid aerial/pool scenes
+**Now**: HF energy targets ripples/speckles, allows large depth gradients
 **Impact**: Texture scenes can now pass lenient without false failures
 
 ### 2. Not-Flat Prevents Degenerate Cases
-**Before**: Smooth depth could be "perfectly flat" and still pass  
-**Now**: Requires `p95-p05 > 0.05` (robust depth range)  
+**Before**: Smooth depth could be "perfectly flat" and still pass
+**Now**: Requires `p95-p05 > 0.05` (robust depth range)
 **Impact**: Guards against collapsed/constant depth
 
 ### 3. Classifier is No Longer Brittle
-**Before**: Single threshold (ratio > 3.0)  
-**Now**: 5 factors + 9 decision rules + filename weak supervision  
+**Before**: Single threshold (ratio > 3.0)
+**Now**: 5 factors + 9 decision rules + filename weak supervision
 **Impact**: Handles edge cases (glass, pool ripples, dense interiors)
 
 ### 4. Fail-Fast is Real
-**Before**: Pipeline wrote null metrics and "succeeded"  
-**Now**: Hard failure on missing/null metrics before JSON write  
+**Before**: Pipeline wrote null metrics and "succeeded"
+**Now**: Hard failure on missing/null metrics before JSON write
 **Impact**: No more silent integration failures
 
 ---
@@ -315,6 +315,6 @@ The classifier is no longer brittle (multi-factor), texture validation is no lon
 
 ---
 
-**Session completed**: 2025-12-19 06:58 UTC  
-**Ready for**: Expanded validation run (follow `docs/guides/PRE_VALIDATION_CHECKLIST.md`)  
+**Session completed**: 2025-12-19 06:58 UTC
+**Ready for**: Expanded validation run (follow `docs/guides/PRE_VALIDATION_CHECKLIST.md`)
 **Next review**: After 50-image results available

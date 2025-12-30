@@ -51,9 +51,9 @@ class PremiumPipelineFixed:
             Dictionary of output file paths
         """
         if self.verbose:
-            print(f"\n{'='*70}")
+            print(f"\n{'=' * 70}")
             print("PREMIUM PIPELINE (FIXED)")
-            print(f"{'='*70}")
+            print(f"{'=' * 70}")
             print(f"Input: {input_path.name}")
             print(f"Preset: {preset}")
             print(f"4K Upscale: {'ENABLED' if enable_4k_upscale else 'DISABLED'}")
@@ -65,8 +65,8 @@ class PremiumPipelineFixed:
         if self.verbose:
             print("\n[1/6] Loading input...")
         img = Image.open(input_path)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
         if self.verbose:
             print(f"  Original size: {img.size} ({img.mode})")
@@ -113,12 +113,7 @@ class PremiumPipelineFixed:
             arr_float = arr_8bit.astype(np.float32) / 255.0
             arr_16bit = (np.clip(arr_float, 0.0, 1.0) * 65535).astype(np.uint16)
 
-            tifffile.imwrite(
-                master_path,
-                arr_16bit,
-                photometric='rgb',
-                compression='lzw'
-            )
+            tifffile.imwrite(master_path, arr_16bit, photometric="rgb", compression="lzw")
 
             if self.verbose:
                 size_mb = master_path.stat().st_size / (1024**2)
@@ -130,17 +125,13 @@ class PremiumPipelineFixed:
                 print("  ⚠️  tifffile not available - saving 8-bit TIFF")
                 print("     Install tifffile for 16-bit: pip install tifffile")
 
-            master.save(
-                master_path,
-                compression='lzw',
-                dpi=(300, 300)
-            )
+            master.save(master_path, compression="lzw", dpi=(300, 300))
 
             if self.verbose:
                 size_mb = master_path.stat().st_size / (1024**2)
                 print(f"  ✓ Master: {master_path.name} (8-bit, {size_mb:.1f} MB)")
 
-        outputs['master'] = master_path
+        outputs["master"] = master_path
 
         # Stage 5: Export optimized deliverables
         if self.verbose:
@@ -150,9 +141,9 @@ class PremiumPipelineFixed:
         outputs.update(deliverables)
 
         if self.verbose:
-            print(f"\n{'='*70}")
+            print(f"\n{'=' * 70}")
             print(f"COMPLETE - {len(outputs)} outputs generated")
-            print(f"{'='*70}")
+            print(f"{'=' * 70}")
 
         return outputs
 
@@ -185,7 +176,7 @@ class PremiumPipelineFixed:
             arr = self._hsv_to_rgb(hsv)
 
         # Convert back to image
-        enhanced = Image.fromarray((arr * 255).astype(np.uint8), 'RGB')
+        enhanced = Image.fromarray((arr * 255).astype(np.uint8), "RGB")
 
         return enhanced
 
@@ -226,24 +217,21 @@ class PremiumPipelineFixed:
             from realesrgan import RealESRGANer
             from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 
-            model = SRVGGNetCompact(
-                num_in_ch=3, num_out_ch=3, num_feat=64,
-                num_conv=32, upscale=4, act_type='prelu'
-            )
+            model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type="prelu")
 
             upsampler = RealESRGANer(
                 scale=4,
-                model_path='weights/RealESRGAN_x4plus.pth',
+                model_path="weights/RealESRGAN_x4plus.pth",
                 model=model,
                 tile=400,  # Memory efficient
                 tile_pad=10,
                 pre_pad=0,
-                half=False  # Full precision for quality
+                half=False,  # Full precision for quality
             )
 
             img_array = np.array(img)
             output, _ = upsampler.enhance(img_array, outscale=4)
-            upscaled = Image.fromarray(output, 'RGB')
+            upscaled = Image.fromarray(output, "RGB")
 
             if self.verbose:
                 print("  ✓ Real-ESRGAN 4x upscale")
@@ -257,11 +245,7 @@ class PremiumPipelineFixed:
 
         return upscaled
 
-    def _create_optimized_deliverables(
-        self,
-        master: Image.Image,
-        basename: str
-    ) -> Dict[str, Path]:
+    def _create_optimized_deliverables(self, master: Image.Image, basename: str) -> Dict[str, Path]:
         """
         Create optimized deliverables with FIXED quality settings.
 
@@ -274,7 +258,7 @@ class PremiumPipelineFixed:
         deliverables = {}
 
         # Extract color profile if available
-        icc_profile = master.info.get('icc_profile')
+        icc_profile = master.info.get("icc_profile")
 
         # 1. Print JPEG (8K) - FIXED quality
         if self.verbose:
@@ -291,13 +275,13 @@ class PremiumPipelineFixed:
         print_path = self.output_dir / f"{basename}_PRINT_8K_FIXED.jpg"
         print_img.save(
             print_path,
-            quality=98,              # ← FIX: Increased from ~85
-            subsampling=0,           # ← FIX: No chroma subsampling (4:4:4)
+            quality=98,  # ← FIX: Increased from ~85
+            subsampling=0,  # ← FIX: No chroma subsampling (4:4:4)
             optimize=True,
             dpi=(300, 300),
-            icc_profile=icc_profile
+            icc_profile=icc_profile,
         )
-        deliverables['print_8k'] = print_path
+        deliverables["print_8k"] = print_path
 
         size_mb = print_path.stat().st_size / (1024**2)
         if self.verbose:
@@ -314,12 +298,12 @@ class PremiumPipelineFixed:
         web_path = self.output_dir / f"{basename}_WEB_4K_FIXED.jpg"
         web_img.save(
             web_path,
-            quality=96,              # ← FIX: Increased from ~85
-            subsampling=0,           # ← FIX: 4:4:4 chroma
+            quality=96,  # ← FIX: Increased from ~85
+            subsampling=0,  # ← FIX: 4:4:4 chroma
             optimize=True,
-            dpi=(72, 72)
+            dpi=(72, 72),
         )
-        deliverables['web_4k'] = web_path
+        deliverables["web_4k"] = web_path
 
         size_mb = web_path.stat().st_size / (1024**2)
         if self.verbose:
@@ -334,14 +318,8 @@ class PremiumPipelineFixed:
         mag_img = master.resize(mag_size, Image.Resampling.LANCZOS)
 
         mag_path = self.output_dir / f"{basename}_MAGAZINE_2K_FIXED.jpg"
-        mag_img.save(
-            mag_path,
-            quality=95,
-            subsampling=0,
-            optimize=True,
-            dpi=(300, 300)
-        )
-        deliverables['magazine'] = mag_path
+        mag_img.save(mag_path, quality=95, subsampling=0, optimize=True, dpi=(300, 300))
+        deliverables["magazine"] = mag_path
 
         size_mb = mag_path.stat().st_size / (1024**2)
         if self.verbose:
@@ -356,13 +334,8 @@ class PremiumPipelineFixed:
         social_img = master.resize(social_size, Image.Resampling.LANCZOS)
 
         social_path = self.output_dir / f"{basename}_SOCIAL_FIXED.jpg"
-        social_img.save(
-            social_path,
-            quality=92,
-            optimize=True,
-            dpi=(72, 72)
-        )
-        deliverables['social'] = social_path
+        social_img.save(social_path, quality=92, optimize=True, dpi=(72, 72))
+        deliverables["social"] = social_path
 
         size_kb = social_path.stat().st_size / 1024
         if self.verbose:
@@ -374,12 +347,14 @@ class PremiumPipelineFixed:
     def _rgb_to_hsv(rgb):
         """Convert RGB to HSV using vectorized operations."""
         from skimage import color
+
         return color.rgb2hsv(rgb)
 
     @staticmethod
     def _hsv_to_rgb(hsv):
         """Convert HSV to RGB using vectorized operations."""
         from skimage import color
+
         return color.hsv2rgb(hsv)
 
 
@@ -389,33 +364,21 @@ def main():
 
     parser = argparse.ArgumentParser(description="Premium Pipeline (Fixed Quality)")
     parser.add_argument("input", type=Path, help="Input image")
-    parser.add_argument("--preset", default="kitchen-bright",
-                        help="Processing preset")
-    parser.add_argument("--output", type=Path, default=None,
-                        help="Output directory")
-    parser.add_argument("--enable-4k", action="store_true", default=True,
-                        help="Enable 4K upscaling (default: True)")
-    parser.add_argument("--no-4k", dest="enable_4k", action="store_false",
-                        help="Disable 4K upscaling")
-    parser.add_argument("--enable-ai", action="store_true", default=False,
-                        help="Enable AI enhancement (conservative)")
-    parser.add_argument("--quiet", action="store_true",
-                        help="Suppress verbose output")
+    parser.add_argument("--preset", default="kitchen-bright", help="Processing preset")
+    parser.add_argument("--output", type=Path, default=None, help="Output directory")
+    parser.add_argument("--enable-4k", action="store_true", default=True, help="Enable 4K upscaling (default: True)")
+    parser.add_argument("--no-4k", dest="enable_4k", action="store_false", help="Disable 4K upscaling")
+    parser.add_argument("--enable-ai", action="store_true", default=False, help="Enable AI enhancement (conservative)")
+    parser.add_argument("--quiet", action="store_true", help="Suppress verbose output")
 
     args = parser.parse_args()
 
     # Initialize pipeline
-    pipeline = PremiumPipelineFixed(
-        output_dir=args.output,
-        verbose=not args.quiet
-    )
+    pipeline = PremiumPipelineFixed(output_dir=args.output, verbose=not args.quiet)
 
     # Process image
     outputs = pipeline.process_image(
-        input_path=args.input,
-        preset=args.preset,
-        enable_4k_upscale=args.enable_4k,
-        enable_ai_enhance=args.enable_ai
+        input_path=args.input, preset=args.preset, enable_4k_upscale=args.enable_4k, enable_ai_enhance=args.enable_ai
     )
 
     print("\n✅ Premium processing complete")

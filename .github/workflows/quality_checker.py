@@ -3,6 +3,7 @@
 Comprehensive Quality Checker for Transformation Portal.
 Proactively catches common code quality issues before commit.
 """
+
 import subprocess
 import sys
 from pathlib import Path
@@ -23,13 +24,14 @@ class QualityChecker:
 
         for py_file in self.repo_root.rglob("*.py"):
             # Skip excluded directories
-            if any(excluded in str(py_file) for excluded in
-                   ['deprecated/', 'src/transformation_portal/', '.venv/', '__pycache__']):
+            if any(
+                excluded in str(py_file) for excluded in ["deprecated/", "src/transformation_portal/", ".venv/", "__pycache__"]
+            ):
                 continue
 
-            with open(py_file, 'r', encoding='utf-8') as f:
+            with open(py_file, "r", encoding="utf-8") as f:
                 for line_num, line in enumerate(f, 1):
-                    if line.rstrip() != line.rstrip('\n'):
+                    if line.rstrip() != line.rstrip("\n"):
                         files_with_issues.append((py_file, line_num))
 
         if files_with_issues:
@@ -45,11 +47,12 @@ class QualityChecker:
         issues = []
 
         for py_file in self.repo_root.rglob("*.py"):
-            if any(excluded in str(py_file) for excluded in
-                   ['deprecated/', 'src/transformation_portal/', '.venv/', '__pycache__']):
+            if any(
+                excluded in str(py_file) for excluded in ["deprecated/", "src/transformation_portal/", ".venv/", "__pycache__"]
+            ):
                 continue
 
-            with open(py_file, 'r', encoding='utf-8') as f:
+            with open(py_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Find first import
@@ -58,12 +61,12 @@ class QualityChecker:
 
             for i, line in enumerate(lines):
                 stripped = line.strip()
-                if not stripped or stripped.startswith('#') or stripped.startswith('"""') or stripped.startswith("'''"):
+                if not stripped or stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
                     continue
-                if stripped.startswith('import ') or stripped.startswith('from '):
+                if stripped.startswith("import ") or stripped.startswith("from "):
                     if first_import_line is None:
                         first_import_line = i
-                elif first_code_line is None and not stripped.startswith('#'):
+                elif first_code_line is None and not stripped.startswith("#"):
                     first_code_line = i
 
             # Check if there are imports after code
@@ -83,12 +86,19 @@ class QualityChecker:
 
         try:
             result = subprocess.run(
-                ['flake8', '.', '--count', '--select=E9,F63,F7,F82', '--show-source', '--statistics',
-                 '--exclude=deprecated/,src/transformation_portal/,.venv/'],
+                [
+                    "flake8",
+                    ".",
+                    "--count",
+                    "--select=E9,F63,F7,F82",
+                    "--show-source",
+                    "--statistics",
+                    "--exclude=deprecated/,src/transformation_portal/,.venv/",
+                ],
                 cwd=self.repo_root,
                 capture_output=True,
                 text=True,
-                check=False
+                check=False,
             )
 
             if result.returncode != 0:
@@ -108,10 +118,7 @@ class QualityChecker:
 
         markdown_files = list(self.repo_root.glob("*.md"))
         if len(markdown_files) > 10:
-            self.errors.append(
-                f"Too many markdown files in root ({len(markdown_files)}). "
-                "Move documentation to docs/"
-            )
+            self.errors.append(f"Too many markdown files in root ({len(markdown_files)}). Move documentation to docs/")
             return False
 
         print(f"✅ Markdown file count OK ({len(markdown_files)}/10)")
@@ -123,20 +130,18 @@ class QualityChecker:
 
         fixed_count = 0
         for py_file in self.repo_root.rglob("*.py"):
-            if any(excluded in str(py_file) for excluded in
-                   ['deprecated/', 'src/transformation_portal/', '.venv/', '__pycache__']):
+            if any(
+                excluded in str(py_file) for excluded in ["deprecated/", "src/transformation_portal/", ".venv/", "__pycache__"]
+            ):
                 continue
 
-            with open(py_file, 'r', encoding='utf-8') as f:
+            with open(py_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
-            fixed_lines = [
-                line.rstrip() + '\n' if line.endswith('\n') else line.rstrip()
-                for line in lines
-            ]
+            fixed_lines = [line.rstrip() + "\n" if line.endswith("\n") else line.rstrip() for line in lines]
 
             if lines != fixed_lines:
-                with open(py_file, 'w', encoding='utf-8') as f:
+                with open(py_file, "w", encoding="utf-8") as f:
                     f.writelines(fixed_lines)
                 fixed_count += 1
 
@@ -146,9 +151,9 @@ class QualityChecker:
 
     def run_all_checks(self, auto_fix: bool = False) -> bool:
         """Run all quality checks."""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🚀 Running Quality Checks")
-        print("="*60 + "\n")
+        print("=" * 60 + "\n")
 
         if auto_fix:
             self.auto_fix_whitespace()
@@ -160,10 +165,10 @@ class QualityChecker:
             self.check_markdown_count(),
         ]
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         if all(checks):
             print("✅ All quality checks passed!")
-            print("="*60 + "\n")
+            print("=" * 60 + "\n")
             return True
         else:
             print("❌ Quality checks failed!")
@@ -175,7 +180,7 @@ class QualityChecker:
                 print("\n⚠️  WARNINGS:")
                 for warning in self.warnings:
                     print(f"  - {warning}")
-            print("="*60 + "\n")
+            print("=" * 60 + "\n")
             return False
 
 
@@ -184,11 +189,11 @@ def main():
     repo_root = Path(__file__).parent.parent.parent
     checker = QualityChecker(repo_root)
 
-    auto_fix = '--fix' in sys.argv
+    auto_fix = "--fix" in sys.argv
     success = checker.run_all_checks(auto_fix=auto_fix)
 
     sys.exit(0 if success else 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

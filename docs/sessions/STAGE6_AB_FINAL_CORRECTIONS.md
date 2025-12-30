@@ -1,7 +1,7 @@
 # Stage 6 A/B Boundary Metrics: Final Corrections
 
-**Date**: 2025-12-13  
-**Status**: Ready to Run  
+**Date**: 2025-12-13
+**Status**: Ready to Run
 **Script**: `scripts/stage6_ab_corrected_final.py`
 
 ---
@@ -180,5 +180,5 @@ Prevents tiny masks from counting as "improvements."
 
 **Status**: Script validated, imports green, ready to execute.
 
-**Author**: RC + Copilot  
+**Author**: RC + Copilot
 **Session**: 2025-12-13 Stage 6 Final Validation

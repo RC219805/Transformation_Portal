@@ -1,8 +1,8 @@
 # Materials V3 Integration Status Report
 
-**Date**: December 21, 2025  
-**Report Type**: Architectural Review & Integration Assessment  
-**Prepared By**: Transformation Portal Architect  
+**Date**: December 21, 2025
+**Report Type**: Architectural Review & Integration Assessment
+**Prepared By**: Transformation Portal Architect
 **Status**: 🟢 **INTEGRATION COMPLETE - CANARY MODE**
 
 ---
@@ -100,43 +100,43 @@ if self.materials_v3_engine is not None:
     with self._stage(report, "material/materials_v3"):
         # Prepare segmentation result
         seg_result_for_v3 = {'materials': {}}
-        
+
         # Convert torch masks to numpy
         for material_name, mask_t in masks.items():
             mask_np = mask_t.cpu().numpy()
             seg_result_for_v3['materials'][material_name] = mask_np.astype(np.float32)
-        
+
         # Call Materials V3 engine
         v3_result = self.materials_v3_engine.process(
             image=rgb01,
             segmentation_result=seg_result_for_v3,
             depth_map=depth01 if depth01 is not None else None
         )
-        
+
         # Extract metadata
         materials_v3_metadata = v3_result.get('materials_v3', {})
         materials_v3_response_plan = v3_result.get('materials_v3_response_plan', {})
-        
+
         # Apply glass pixel operations if enabled (PR-4B)
         enhanced_rgb01, pixel_ops_stats = self.materials_v3_engine.apply_glass_response_if_enabled(
             image=rgb01,
             segmentation_result=v3_result,
             response_plan=materials_v3_response_plan,
         )
-        
+
         # If pixel ops applied, rebuild rgb_t
         if pixel_ops_stats.get('enabled', False):
             rgb01 = enhanced_rgb01
             rgb_t = torch_ops.to_torch_rgb(rgb01, self.device)
             materials_v3_pixel_ops = pixel_ops_stats
-        
+
         # Apply stone pixel operations if enabled (PR-4D)
         enhanced_rgb01_stone, stone_ops_stats = self.materials_v3_engine.apply_stone_response_if_enabled(
             image=rgb01,
             segmentation_result=v3_result,
             response_plan=materials_v3_response_plan,
         )
-        
+
         # If stone ops applied, rebuild rgb_t
         if stone_ops_stats.get('applied', False):
             rgb01 = enhanced_rgb01_stone
@@ -194,18 +194,18 @@ elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS:
     base_preset = Preset.INTERIOR_LUXURY_APEX_QUALITY
     if base_preset.value == self.preset.value:
         raise RuntimeError(f"Canary preset recursion detected: {self.preset}")
-    
+
     # Apply base APEX preset first
     original_preset = self.preset
     self.preset = base_preset
     self.apply_preset()
     self.preset = original_preset
-    
+
     # Enable Materials V3 with glass pixel operations
     if self.materials_v3 is None:
         from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy
         self.materials_v3 = MaterialsV3Config()
-    
+
     self.materials_v3.enabled = True
     self.materials_v3.apply_pixel_ops = True
     self.materials_v3.glass_response_enabled = True
@@ -692,7 +692,7 @@ All critical integration work is complete. The system is production-ready for ca
 - **Effort**: 2-3 hours
 - **Impact**: Reduces support burden, improves user experience
 - **Owner**: Architect / Technical Writer
-- **Content**: 
+- **Content**:
   - How to enable canary presets
   - Expected behavior (water/glass/stone detection)
   - Troubleshooting common issues
@@ -938,7 +938,7 @@ Materials V3 demonstrates **exemplary architectural discipline** and is **ready 
 ```python
 class MaterialsV3Engine:
     def __init__(self, config: MaterialsV3Config): ...
-    
+
     def process(
         self,
         image: np.ndarray,
@@ -946,14 +946,14 @@ class MaterialsV3Engine:
         depth_map: Optional[np.ndarray] = None,
     ) -> dict:
         """Process materials with V3 enhancements (Plan Mode).
-        
+
         Returns:
             Segmentation result with V3 metadata:
             - materials_v3: Per-class stats and decisions
             - materials_v3_response_plan: Response plan (PR-4C schema)
             - materials_v3_pixel_ops: Pixel ops stats (if applied)
         """
-    
+
     def apply_glass_response_if_enabled(
         self,
         image: np.ndarray,
@@ -961,7 +961,7 @@ class MaterialsV3Engine:
         response_plan: dict,
     ) -> Tuple[np.ndarray, dict]:
         """Apply glass pixel response if enabled and glass is present."""
-    
+
     def apply_stone_response_if_enabled(
         self,
         image: np.ndarray,
@@ -1003,7 +1003,7 @@ class WaterCandidateReport:
 
 ---
 
-**Report Prepared By**: Transformation Portal Architect  
-**Last Updated**: December 21, 2025  
-**Document Version**: 1.0  
+**Report Prepared By**: Transformation Portal Architect
+**Last Updated**: December 21, 2025
+**Document Version**: 1.0
 **Distribution**: Public (repository documentation)

@@ -27,6 +27,7 @@ try:
     import torch.nn as nn
     from torch.utils.data import DataLoader
     from torch.cuda.amp import GradScaler, autocast
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -35,6 +36,7 @@ except ImportError:
 # Try to import tqdm
 try:
     from tqdm import tqdm
+
     TQDM_AVAILABLE = True
 except ImportError:
     TQDM_AVAILABLE = False
@@ -42,6 +44,7 @@ except ImportError:
 # Try to import tensorboard
 try:
     from torch.utils.tensorboard import SummaryWriter
+
     TENSORBOARD_AVAILABLE = True
 except ImportError:
     TENSORBOARD_AVAILABLE = False
@@ -85,6 +88,7 @@ class TrainingConfig:
         log_every_n_steps: Log training loss every N steps
         save_images_every_n_epochs: Save visualization every N epochs
     """
+
     # Training
     num_epochs: int = 50
     batch_size: int = 8
@@ -217,15 +221,14 @@ class DepthTrainer:
             device: Training device
         """
         if not TORCH_AVAILABLE:
-            raise ImportError(
-                "PyTorch required for training. "
-                "Install with: pip install torch"
-            )
+            raise ImportError("PyTorch required for training. Install with: pip install torch")
 
         self.config = config
         self.device = device or torch.device(
-            "cuda" if torch.cuda.is_available()
-            else "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps"
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
             else "cpu"
         )
 
@@ -328,10 +331,7 @@ class DepthTrainer:
                 self.training_history["val_rmse"].append(val_metrics["rmse"])
 
                 # Check for best model
-                current_metric = val_metrics.get(
-                    self.config.monitor_metric.replace("val_", ""),
-                    val_metrics["rmse"]
-                )
+                current_metric = val_metrics.get(self.config.monitor_metric.replace("val_", ""), val_metrics["rmse"])
                 is_best = self._is_best(current_metric)
 
                 if is_best:
@@ -440,27 +440,20 @@ class DepthTrainer:
 
             # Update progress bar
             if TQDM_AVAILABLE:
-                pbar.set_postfix({
-                    "loss": f"{loss_meter.avg:.4f}",
-                    "lr": f"{get_lr(self.optimizer):.2e}",
-                })
+                pbar.set_postfix(
+                    {
+                        "loss": f"{loss_meter.avg:.4f}",
+                        "lr": f"{get_lr(self.optimizer):.2e}",
+                    }
+                )
 
             # Log to TensorBoard
-            if (
-                self.writer is not None
-                and self.global_step % self.config.log_every_n_steps == 0
-            ):
-                self.writer.add_scalar(
-                    "train/loss", loss_meter.val, self.global_step
-                )
-                self.writer.add_scalar(
-                    "train/lr", get_lr(self.optimizer), self.global_step
-                )
+            if self.writer is not None and self.global_step % self.config.log_every_n_steps == 0:
+                self.writer.add_scalar("train/loss", loss_meter.val, self.global_step)
+                self.writer.add_scalar("train/lr", get_lr(self.optimizer), self.global_step)
                 for name, value in loss_dict.items():
                     if name != "total":
-                        self.writer.add_scalar(
-                            f"train/{name}", value.item(), self.global_step
-                        )
+                        self.writer.add_scalar(f"train/{name}", value.item(), self.global_step)
 
         logger.info(f"Epoch {epoch + 1} - Train Loss: {loss_meter.avg:.4f}")
         return loss_meter.avg
@@ -646,9 +639,7 @@ class DepthTrainer:
                 return float(current_step) / float(max(1, warmup_steps))
             else:
                 # Cosine decay
-                progress = float(current_step - warmup_steps) / float(
-                    max(1, total_steps - warmup_steps)
-                )
+                progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
                 return max(0.0, 0.5 * (1.0 + np.cos(np.pi * progress)))
 
         return LambdaLR(self.optimizer, lr_lambda)

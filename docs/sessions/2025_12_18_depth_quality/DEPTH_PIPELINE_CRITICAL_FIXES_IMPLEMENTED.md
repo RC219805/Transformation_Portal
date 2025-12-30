@@ -127,8 +127,8 @@ DepthConfig(
 
 ## Current Validation Run Status
 
-**Input**: `/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_TIFFs_Base`  
-**Images**: 2 (Aerial 3600×6000, Pool 4000×6000)  
+**Input**: `/Users/rc/Transformation_Portal/input_images/750_Picacho/Source_TIFFs_Base`
+**Images**: 2 (Aerial 3600×6000, Pool 4000×6000)
 **Output**: `/Users/rc/Transformation_Portal/outputs/production_validation_stable`
 
 **Progress** (as of latest check):
@@ -276,6 +276,6 @@ The pipeline has transitioned from **"numerically correct but spatially unusable
 
 ---
 
-**Report Generated**: 2025-12-18T00:01:00Z  
-**Validation Status**: IN PROGRESS (stable, no errors)  
+**Report Generated**: 2025-12-18T00:01:00Z
+**Validation Status**: IN PROGRESS (stable, no errors)
 **Author**: GitHub Copilot (following rigorous review feedback)

@@ -1,8 +1,8 @@
 # Freeze-Lift Decision Memo - Template
 
-**Decision Type**: Risk Acceptance with Bounded Exposure  
-**Authority**: Architecture Team  
-**Effective Date**: January 10, 2026 (freeze lift)  
+**Decision Type**: Risk Acceptance with Bounded Exposure
+**Authority**: Architecture Team
+**Effective Date**: January 10, 2026 (freeze lift)
 **Status**: TEMPLATE - Pending Validation Execution
 
 ---
@@ -28,8 +28,8 @@ Edge refinement applies guided filtering and bilateral smoothing to depth maps, 
 - **Timeline**: Days 4-14 of Phase 3 (December 21 - January 10, 2026)
 
 ### Decision Authority
-**Primary**: Architectural Quality Reviewer  
-**Final Approval**: Architecture Team  
+**Primary**: Architectural Quality Reviewer
+**Final Approval**: Architecture Team
 **Accountability**: This decision is signed by named individuals, not "the team"
 
 ---
@@ -198,9 +198,9 @@ Edge refinement applies guided filtering and bilateral smoothing to depth maps, 
 
 ## Audit Trail
 
-**Validation Execution**: [DATE]  
-**Dataset Version**: VALIDATION_CHECKSUMS.txt (SHA256)  
-**Harness Version**: validation_harness.py ([COMMIT HASH])  
+**Validation Execution**: [DATE]
+**Dataset Version**: VALIDATION_CHECKSUMS.txt (SHA256)
+**Harness Version**: validation_harness.py ([COMMIT HASH])
 **Environment**: Python [VERSION], lux-depth-v2 [VERSION]
 
 **Evidence Artifacts**:
@@ -228,5 +228,5 @@ Edge refinement applies guided filtering and bilateral smoothing to depth maps, 
 
 ---
 
-**Status**: TEMPLATE - To be completed after validation execution  
+**Status**: TEMPLATE - To be completed after validation execution
 **Next Update**: After Days 9-12 (threshold review complete)

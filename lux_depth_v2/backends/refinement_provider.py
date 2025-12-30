@@ -97,9 +97,7 @@ class MockRefinementProvider:
         if self.mode == "dilate":
             # Simulate edge expansion
             kernel = torch_ops.torch.ones(1, 1, 3, 3, device=base_mask.device) / 9.0
-            refined = torch_ops.torch.nn.functional.conv2d(
-                base_mask, kernel, padding=1
-            )
+            refined = torch_ops.torch.nn.functional.conv2d(base_mask, kernel, padding=1)
             return refined.clamp(0.0, 1.0)
 
         if self.mode == "erode":
@@ -121,7 +119,7 @@ class EfficientSAMRefinementProvider:
 
     Wraps EfficientSAMBackend and converts between torch tensors and
     the backend's numpy interface.
-    
+
     PR-2 enhancements:
     - Mask-driven prompt generation (high-confidence sampling)
     - ROI cropping for efficiency and focus
@@ -166,7 +164,7 @@ class EfficientSAMRefinementProvider:
         self._PointPrompt = PointPrompt
         self._BoxPrompt = BoxPrompt
         self.prompt_cfg = PromptGenerationConfig()
-        
+
         # Per-class stats for observability
         self.refinement_stats: Dict[str, dict] = {}
 
@@ -211,48 +209,40 @@ class EfficientSAMRefinementProvider:
 
         # Extract HxWx3 numpy image
         try:
-            rgb_np = (
-                rgb[0]
-                .permute(1, 2, 0)
-                .clamp(0.0, 1.0)
-                .to("cpu")
-                .numpy()
-                .astype(np.float32)
-            )
+            rgb_np = rgb[0].permute(1, 2, 0).clamp(0.0, 1.0).to("cpu").numpy().astype(np.float32)
 
             base_np = base_mask[0, 0].to("cpu").numpy().astype(np.float32)
             h, w = base_np.shape
-            
+
             # OOM safety guard: skip refinement on very large images
             MAX_EFFICIENTSAM_MEGAPIXELS = 30  # conservative safe limit
             megapixels = (h * w) / 1e6
             if megapixels > MAX_EFFICIENTSAM_MEGAPIXELS:
                 logging.getLogger(__name__).warning(
-                    "Image too large for EfficientSAM refinement (%.1f MP > %d MP), "
-                    "skipping class '%s' to prevent OOM",
-                    megapixels, MAX_EFFICIENTSAM_MEGAPIXELS, material_class
+                    "Image too large for EfficientSAM refinement (%.1f MP > %d MP), skipping class '%s' to prevent OOM",
+                    megapixels,
+                    MAX_EFFICIENTSAM_MEGAPIXELS,
+                    material_class,
                 )
                 stats["skip_reason"] = f"image_too_large_{megapixels:.1f}MP"
                 self.refinement_stats[material_class] = stats
                 return None
 
             # Generate intelligent prompts from mask
-            fg_points_yx, bg_points_yx, prompt_stats = generate_prompts_from_mask(
-                base_np, self.prompt_cfg
-            )
-            
+            fg_points_yx, bg_points_yx, prompt_stats = generate_prompts_from_mask(base_np, self.prompt_cfg)
+
             if prompt_stats["skip_reason"] is not None:
                 stats.update(prompt_stats)
                 self.refinement_stats[material_class] = stats
                 return None
-            
+
             stats["prompt_count_fg"] = prompt_stats["fg_points_generated"]
             stats["prompt_count_bg"] = prompt_stats["bg_points_generated"]
 
             # Decide whether to use ROI cropping
             use_roi = self.use_roi_cropping
             roi_bbox = None
-            
+
             if use_roi:
                 roi_bbox, roi_stats = compute_roi_from_mask(
                     base_np,
@@ -263,19 +253,19 @@ class EfficientSAMRefinementProvider:
                     stats.update(roi_stats)
                     self.refinement_stats[material_class] = stats
                     return None
-                
+
                 y0, x0, y1, x1 = roi_bbox
                 stats["roi_used"] = True
-                stats["roi_size"] = f"{y1-y0}x{x1-x0}"
-                
+                stats["roi_size"] = f"{y1 - y0}x{x1 - x0}"
+
                 # Crop image and mask to ROI
                 rgb_crop = rgb_np[y0:y1, x0:x1, :]
-                
+
                 # Adjust prompt coordinates to ROI
                 fg_points_yx = fg_points_yx - np.array([[y0, x0]])
                 if len(bg_points_yx) > 0:
                     bg_points_yx = bg_points_yx - np.array([[y0, x0]])
-                
+
                 h_roi, w_roi = y1 - y0, x1 - x0
                 process_img = rgb_crop
                 process_h, process_w = h_roi, w_roi
@@ -319,7 +309,7 @@ class EfficientSAMRefinementProvider:
                 .unsqueeze(0)
                 .unsqueeze(0)
             )
-            
+
             self.refinement_stats[material_class] = stats
             return mask_tensor
 
@@ -329,9 +319,7 @@ class EfficientSAMRefinementProvider:
             self.refinement_stats[material_class] = stats
             return None
         except Exception as e:
-            logging.getLogger(__name__).warning(
-                "EfficientSAM refinement failed for %s: %s", material_class, e
-            )
+            logging.getLogger(__name__).warning("EfficientSAM refinement failed for %s: %s", material_class, e)
             stats["skip_reason"] = f"exception_{type(e).__name__}"
             self.refinement_stats[material_class] = stats
             return None

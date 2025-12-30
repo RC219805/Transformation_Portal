@@ -1,6 +1,6 @@
 # Phase 2 Gap Analysis & Remediation
 
-**Date**: December 21, 2025  
+**Date**: December 21, 2025
 **Status**: REMEDIATION IN PROGRESS
 
 ---
@@ -9,7 +9,7 @@
 
 ### Finding
 - **Claimed**: "48/49 tests passing (98%)"
-- **Reality**: 
+- **Reality**:
   - 48 passed, 1 skipped
   - Skipped test: `test_performance_benchmark`
   - **Actual coverage**: 87% of `edge_refinement.py` (214 statements, 27 missed)
@@ -142,7 +142,7 @@ from lux_depth_v2.config import PipelineConfig, Preset
 
 class TestPresetRegressions:
     """Ensure preset defaults remain stable."""
-    
+
     def test_edge_refinement_opt_in_default(self):
         """REGRESSION: Edge refinement must be opt-in by default."""
         for preset in Preset:
@@ -151,20 +151,20 @@ class TestPresetRegressions:
                 f"Preset {preset} unexpectedly enabled edge refinement by default. "
                 "Edge refinement must be opt-in via CLI flag."
             )
-    
+
     def test_refinement_preset_default(self):
         """REGRESSION: Default refinement preset must be 'balanced'."""
         config = PipelineConfig()
         assert config.refinement_preset == "balanced", (
             "Default refinement preset changed. Expected 'balanced'."
         )
-    
+
     @pytest.mark.parametrize("preset", list(Preset))
     def test_preset_immutability(self, preset):
         """REGRESSION: Preset configs must be deterministic."""
         config1 = PipelineConfig(preset=preset)
         config2 = PipelineConfig(preset=preset)
-        
+
         # Critical fields must match
         assert config1.material_strength == config2.material_strength
         assert config1.enable_edge_refinement == config2.enable_edge_refinement
@@ -261,7 +261,7 @@ lux-depth-v2 --input ... --output ...
 # lux_depth_v2/config.py (hot-patch)
 class PipelineConfig:
     enable_edge_refinement: bool = False  # LOCKED: Emergency disable
-    
+
     def __post_init__(self):
         # Kill-switch: Ignore CLI flags during incident
         if os.environ.get("LUX_EMERGENCY_DISABLE_EDGE", "0") == "1":
@@ -336,5 +336,5 @@ preset_overrides:
 
 ---
 
-**Remediation Completed**: December 21, 2025  
+**Remediation Completed**: December 21, 2025
 **Sign-Off**: Ready for Week 2 execution

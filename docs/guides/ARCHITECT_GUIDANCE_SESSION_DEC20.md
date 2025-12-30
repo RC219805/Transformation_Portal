@@ -1,6 +1,6 @@
 # Architect Guidance Session Summary
-**Date**: December 20, 2025  
-**Session**: Branch Strategy & Sprint Planning  
+**Date**: December 20, 2025
+**Session**: Branch Strategy & Sprint Planning
 **Architect**: Transformation Portal Architect
 
 ---
@@ -253,23 +253,23 @@ git apply .local_backup/branch_cleanup_*/materials-v3-prw1-w2-water-detection-in
 ## Key Decisions Made
 
 ### 1. Branch Management
-**Decision**: Archive all three branches via tags instead of merging  
-**Rationale**: Feature freeze compliance, merge conflict avoidance, main branch stability  
+**Decision**: Archive all three branches via tags instead of merging
+**Rationale**: Feature freeze compliance, merge conflict avoidance, main branch stability
 **Impact**: Clean workspace, reduced cognitive load, recoverable work
 
 ### 2. Feature Freeze Compliance
-**Decision**: Strict infrastructure-only preparation during freeze (no functional changes)  
-**Rationale**: Honor feature freeze commitment, prioritize quality over velocity  
+**Decision**: Strict infrastructure-only preparation during freeze (no functional changes)
+**Rationale**: Honor feature freeze commitment, prioritize quality over velocity
 **Impact**: Thorough design preparation, efficient sprint execution in January
 
 ### 3. Edge Refinement Architecture
-**Decision**: Modular subsystem within lux_depth_v2 (not standalone tool, not inline modification)  
-**Rationale**: Golden Path alignment, testability, backward compatibility  
+**Decision**: Modular subsystem within lux_depth_v2 (not standalone tool, not inline modification)
+**Rationale**: Golden Path alignment, testability, backward compatibility
 **Impact**: Clean integration, opt-in usage, maintainable codebase
 
 ### 4. Backup Strategy
-**Decision**: Incremental backup (diffs + logs) instead of full repository backup  
-**Rationale**: External backup exists, remote tags provide redundancy, lightweight and fast  
+**Decision**: Incremental backup (diffs + logs) instead of full repository backup
+**Rationale**: External backup exists, remote tags provide redundancy, lightweight and fast
 **Impact**: Quick recovery, minimal storage overhead
 
 ---

@@ -1,4 +1,5 @@
 """Color adjustments, presets, and supporting image math."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -13,6 +14,7 @@ from .profiles import ProcessingProfile
 
 try:
     from scipy.ndimage import convolve1d as _scipy_convolve1d
+
     _HAVE_SCIPY_NDIMAGE = True
 except ImportError:
     _HAVE_SCIPY_NDIMAGE = False
@@ -152,7 +154,7 @@ def apply_exposure(arr: np.ndarray, stops: float) -> np.ndarray:
     """
     if stops == 0:
         return arr
-    factor = float(2.0 ** stops)
+    factor = float(2.0**stops)
     LOGGER.debug("Applying exposure: %s stops (factor %.3f)", stops, factor)
     return arr * factor
 
@@ -383,7 +385,7 @@ def _gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.nd
         return np.array([1.0], dtype=np.float32)
     sigma = sigma or max(radius / 3.0, 1e-6)
     ax = np.arange(-radius, radius + 1, dtype=np.float32)
-    kernel = np.exp(-(ax ** 2) / (2.0 * sigma ** 2))
+    kernel = np.exp(-(ax**2) / (2.0 * sigma**2))
     kernel /= np.sum(kernel)
     cached = kernel.astype(np.float32)
     cached.setflags(write=False)
@@ -448,18 +450,14 @@ def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.nda
         Convolved array with same shape as input.
     """
     if _HAVE_SCIPY_NDIMAGE:
-        return _scipy_convolve1d(
-            arr, kernel, axis=axis, mode='mirror'
-        ).astype(np.float32)
+        return _scipy_convolve1d(arr, kernel, axis=axis, mode="mirror").astype(np.float32)
 
     # Fallback implementation for environments without scipy
     pad_width = [(0, 0)] * arr.ndim
     k = kernel.size // 2
     pad_width[axis] = (k, k)
     padded = np.pad(arr, pad_width, mode="reflect")
-    convolved = np.apply_along_axis(
-        lambda m: np.convolve(m, kernel, mode="valid"), axis=axis, arr=padded
-    )
+    convolved = np.apply_along_axis(lambda m: np.convolve(m, kernel, mode="valid"), axis=axis, arr=padded)
     return convolved.astype(np.float32)
 
 

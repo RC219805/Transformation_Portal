@@ -63,7 +63,7 @@ python scripts/validate_throughput.py \
 Defines minimum acceptable performance thresholds:
 
 - **Standard Quality (CPU)**: 50 images/hour, 2000MB memory
-- **Max Quality (CPU)**: 30 images/hour, 3000MB memory  
+- **Max Quality (CPU)**: 30 images/hour, 3000MB memory
 - **Max Quality (GPU)**: 100 images/hour, 3000MB memory
 
 Production targets (aspirational):
@@ -112,4 +112,3 @@ Per-operation performance targets:
 - GPU comparison matrix (CUDA vs MPS vs CPU)
 - Baseline versioning and historical trend tracking
 - Latency percentile validation (P50/P95/P99)
-

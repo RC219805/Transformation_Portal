@@ -10,9 +10,7 @@ from transformation_portal.streaming.checkpoint import EvolutionaryCheckpoint
 
 
 def test_evolution_required_message_when_horizon_has_passed() -> None:
-    checkpoint = EvolutionaryCheckpoint(
-        horizon=date(2024, 1, 1), mutation_path="lux/v2/pipeline"
-    )
+    checkpoint = EvolutionaryCheckpoint(horizon=date(2024, 1, 1), mutation_path="lux/v2/pipeline")
 
     message = checkpoint.evolve_or_alert(today=date(2024, 1, 2))
 
@@ -20,16 +18,11 @@ def test_evolution_required_message_when_horizon_has_passed() -> None:
 
 
 def test_evolution_not_required_message_when_within_horizon() -> None:
-    checkpoint = EvolutionaryCheckpoint(
-        horizon=date(2024, 1, 10), mutation_path="lux/v3/pipeline"
-    )
+    checkpoint = EvolutionaryCheckpoint(horizon=date(2024, 1, 10), mutation_path="lux/v3/pipeline")
 
     message = checkpoint.evolve_or_alert(today=date(2024, 1, 5))
 
-    assert (
-        message
-        == "STABLE: Current form viable until 2024-01-10"
-    )
+    assert message == "STABLE: Current form viable until 2024-01-10"
 
 
 class _FrozenDate(date):
@@ -43,9 +36,7 @@ class _FrozenDate(date):
 def test_today_defaults_to_current_date(monkeypatch: pytest.MonkeyPatch) -> None:
     import datetime as dt_module
 
-    checkpoint = EvolutionaryCheckpoint(
-        horizon=date(2024, 1, 10), mutation_path="lux/v3/pipeline"
-    )
+    checkpoint = EvolutionaryCheckpoint(horizon=date(2024, 1, 10), mutation_path="lux/v3/pipeline")
 
     # Patch the datetime module's date class
     _original_date = dt_module.date  # noqa: F841

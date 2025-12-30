@@ -685,7 +685,7 @@ Phase 1 establishes a **robust, optimized, and production-ready** computational 
 
 **Issue**: Test failures due to hardcoded MPS device defaults in `TensorProcessor` and `MemoryManager`.
 
-**Root Cause**: 
+**Root Cause**:
 - `TensorConfig.device` defaulted to `"mps"` (line 40 of `tensor_processor.py`)
 - `MemoryManager.__init__` defaulted to `torch.device("mps")` (line 155 of `memory_manager.py`)
 

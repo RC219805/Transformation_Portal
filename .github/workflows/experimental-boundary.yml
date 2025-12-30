@@ -21,42 +21,42 @@ jobs:
   check-experimental-imports:
     name: Prevent Production → Experimental Imports
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-      
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.10'
-      
+
       - name: Check for experimental imports in production code
         run: |
           echo "Checking that production code does not import from experimental/..."
-          
+
           # Define production code paths
           PRODUCTION_PATHS="lux_depth_v2 src"
-          
+
           # Search for imports from experimental
           VIOLATIONS=0
-          
+
           for path in $PRODUCTION_PATHS; do
             if [ -d "$path" ]; then
               echo "Checking $path..."
-              
+
               # Find Python files importing from experimental
               FOUND=$(grep -r "from experimental" "$path" --include="*.py" || true)
-              
+
               if [ ! -z "$FOUND" ]; then
                 echo "❌ VIOLATION: Production code importing from experimental:"
                 echo "$FOUND"
                 VIOLATIONS=$((VIOLATIONS + 1))
               fi
-              
+
               # Also check for "import experimental"
               FOUND=$(grep -r "^import experimental" "$path" --include="*.py" || true)
-              
+
               if [ ! -z "$FOUND" ]; then
                 echo "❌ VIOLATION: Production code importing experimental:"
                 echo "$FOUND"
@@ -64,7 +64,7 @@ jobs:
               fi
             fi
           done
-          
+
           if [ $VIOLATIONS -gt 0 ]; then
             echo ""
             echo "═══════════════════════════════════════════════════════════════"
@@ -87,9 +87,9 @@ jobs:
             echo "═══════════════════════════════════════════════════════════════"
             exit 1
           fi
-          
+
           echo "✅ No experimental imports found in production code"
-      
+
       - name: Verify experimental/__init__.py has warning
         run: |
           if [ -f "experimental/__init__.py" ]; then
@@ -101,7 +101,7 @@ jobs:
           else
             echo "⚠️  experimental/ directory exists but no __init__.py"
           fi
-      
+
       - name: Check for experimental marker
         run: |
           if [ -d "experimental" ]; then
@@ -117,24 +117,24 @@ jobs:
   check-tier1-feature-freeze:
     name: Tier 1 Feature Freeze Compliance
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 2
-      
+
       - name: Check for new parameters in lux_depth_v2/config.py
         run: |
           if git diff HEAD~1 HEAD --name-only | grep -q "lux_depth_v2/config.py"; then
             echo "⚠️  config.py modified - checking for new parameters..."
-            
+
             # Get diff
             DIFF=$(git diff HEAD~1 HEAD lux_depth_v2/config.py)
-            
+
             # Check for new parameters (lines starting with + that aren't comments)
             NEW_PARAMS=$(echo "$DIFF" | grep "^+" | grep -v "^+++" | grep -v "^+#" | grep -v "^+\s*$" || true)
-            
+
             if [ ! -z "$NEW_PARAMS" ]; then
               echo "⚠️  New parameters detected in config.py"
               echo "$NEW_PARAMS"
@@ -145,12 +145,12 @@ jobs:
               echo "✅ Manual review required - see PR checklist"
             fi
           fi
-      
+
       - name: Check for new presets
         run: |
           if git diff HEAD~1 HEAD --name-only | grep -q "lux_depth_v2/config.py"; then
             DIFF=$(git diff HEAD~1 HEAD lux_depth_v2/config.py)
-            
+
             # Check for new preset definitions
             if echo "$DIFF" | grep -q "def.*preset" || echo "$DIFF" | grep -q "PRESET"; then
               echo "⚠️  Potential new preset detected"
@@ -164,7 +164,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [check-experimental-imports, check-tier1-feature-freeze]
     if: always()
-    
+
     steps:
       - name: Report results
         run: |

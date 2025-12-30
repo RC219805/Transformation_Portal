@@ -4,8 +4,8 @@
 
 Successfully integrated the **Gold Standard Lux Depth Pipeline** into the Transformation Portal repository. This represents the culmination of integrating advanced upscaling technology (SwinIR/Real-ESRGAN) with production-grade depth-aware processing and luxury rendering workflows.
 
-**Date**: December 5-6, 2025  
-**Status**: ✅ Integration Complete, Initial Testing Successful  
+**Date**: December 5-6, 2025
+**Status**: ✅ Integration Complete, Initial Testing Successful
 **Repository**: `/Users/rc/Transformation_Portal`
 
 ---
@@ -14,8 +14,8 @@ Successfully integrated the **Gold Standard Lux Depth Pipeline** into the Transf
 
 ### 1. Gold Standard Lux Depth Pipeline (`gold_standard_lux_depth_pipeline.py`)
 
-**Source**: `/Users/rc/Desktop/gold_standard_lux_depth_pipeline.py`  
-**Destination**: `/Users/rc/Transformation_Portal/gold_standard_lux_depth_pipeline.py`  
+**Source**: `/Users/rc/Desktop/gold_standard_lux_depth_pipeline.py`
+**Destination**: `/Users/rc/Transformation_Portal/gold_standard_lux_depth_pipeline.py`
 **Size**: 58KB (1,543 lines)
 
 **Key Features**:
@@ -33,7 +33,7 @@ Successfully integrated the **Gold Standard Lux Depth Pipeline** into the Transf
 
 ### 2. Comparison Test Framework (`test_gold_standard_comparison.py`)
 
-**New File**: `/Users/rc/Transformation_Portal/test_gold_standard_comparison.py`  
+**New File**: `/Users/rc/Transformation_Portal/test_gold_standard_comparison.py`
 **Purpose**: Automated comparison testing between all major pipelines
 
 **Capabilities**:
@@ -474,7 +474,7 @@ The pipeline generates comprehensive metrics in JSON format:
    # Download model if needed
    wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/RealESRGAN_x4plus.pth \
      -P weights/
-   
+
    # Test with AI upscaling
    python gold_standard_lux_depth_pipeline.py \
      --input input_images/750Picacho_Pool_16bit.tiff \
@@ -494,7 +494,7 @@ The pipeline generates comprehensive metrics in JSON format:
    # - Metal surfaces (fixtures, hardware, appliances)
    # - Glass surfaces (windows, mirrors, glassware)
    # - Stone surfaces (countertops, tile, masonry)
-   
+
    # Save as 8-bit PNG in depth-dir:
    # - 750Picacho_Pool_16bit_material_wood.png
    # - 750Picacho_Pool_16bit_material_metal.png
@@ -658,6 +658,6 @@ The **Gold Standard Lux Depth Pipeline** is now fully integrated into the Transf
 
 **Status**: ✅ **COMPLETE** - Gold Standard Pipeline Integrated & Tested
 
-**Last Updated**: December 6, 2025 01:23 UTC  
-**Test Results**: Initial 2× upscale successful, 16-bit outputs verified  
+**Last Updated**: December 6, 2025 01:23 UTC
+**Test Results**: Initial 2× upscale successful, 16-bit outputs verified
 **Next Action**: Comprehensive 3-pipeline comparison test

@@ -1,7 +1,7 @@
 # Feature Freeze Policy - Narrative Consolidation Period
 
-**Period**: December 20, 2025 - January 10, 2026  
-**Duration**: 3 weeks  
+**Period**: December 20, 2025 - January 10, 2026
+**Duration**: 3 weeks
 **Objective**: Consolidate narrative structure while preserving technical capability
 
 ---
@@ -142,7 +142,7 @@ The freeze can be lifted when:
    - Decision branches presented: 1 + "Advanced"
    - Lines to scroll before lux-depth-v2: <10
 
-**Target Completion**: January 10, 2026  
+**Target Completion**: January 10, 2026
 **Review Date**: January 8, 2026 (assess if extension needed)
 
 ---
@@ -168,28 +168,28 @@ Pinned discussion: "Golden Path Consolidation - Dec 20-Jan 10"
 
 ## FAQ
 
-**Q: Can I fix a bug in lux_depth_v2?**  
+**Q: Can I fix a bug in lux_depth_v2?**
 A: ✅ Yes - bug fixes are allowed.
 
-**Q: Can I add a new preset for "modern_minimalist"?**  
+**Q: Can I add a new preset for "modern_minimalist"?**
 A: ❌ No - new presets are blocked. Use existing presets with custom parameters.
 
-**Q: Can I improve error messages in the CLI?**  
+**Q: Can I improve error messages in the CLI?**
 A: ✅ Yes - ergonomics improvements are allowed.
 
-**Q: Can I integrate Depth Anything 4 when it releases?**  
+**Q: Can I integrate Depth Anything 4 when it releases?**
 A: ❌ No - new model integrations are blocked. File issue for post-freeze.
 
-**Q: Can I add unit tests for edge cases?**  
+**Q: Can I add unit tests for edge cases?**
 A: ✅ Yes - validation tightening is encouraged.
 
-**Q: Can I optimize GPU memory usage in async pipeline?**  
+**Q: Can I optimize GPU memory usage in async pipeline?**
 A: ✅ Yes - performance improvements are allowed.
 
-**Q: Can I add training data augmentation techniques?**  
+**Q: Can I add training data augmentation techniques?**
 A: ⚠️ Maybe - request exception if critical for research. Otherwise wait.
 
-**Q: Can I update documentation to clarify confusion?**  
+**Q: Can I update documentation to clarify confusion?**
 A: ✅ Yes - documentation clarification is allowed (not new sections).
 
 ---

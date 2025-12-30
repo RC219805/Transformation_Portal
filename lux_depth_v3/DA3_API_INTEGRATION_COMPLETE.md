@@ -89,13 +89,13 @@ Successfully integrated the official Depth Anything 3 Python API into the `lux_d
   ```bash
   # Basic monocular depth
   lux-depth-v3 api-process image.jpg -o output
-  
+
   # Multi-view with GLB export
   lux-depth-v3 api-process images/ -o output -f "mini_npz-glb"
-  
+
   # Gaussian Splatting workflow
   lux-depth-v3 api-process images/ -o output -m da3-giant --infer-gs -f "gs_ply-gs_video"
-  
+
   # Feature extraction
   lux-depth-v3 api-process images/ -o output --export-feat "0,3,6,9" -f "feat_vis"
   ```

@@ -13,6 +13,7 @@ Exit codes:
     1 - Budget violations detected (CI should fail)
     2 - Configuration / usage / input error (missing deps, unreadable/malformed files)
 """
+
 import argparse
 import fnmatch
 import json
@@ -133,21 +134,15 @@ def match_names(all_names: list[str], patterns: list[str]) -> list[str]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(
-        description="Validate pytest-benchmark results against performance budgets"
-    )
+    ap = argparse.ArgumentParser(description="Validate pytest-benchmark results against performance budgets")
     ap.add_argument("--budgets", required=True, help="Path to performance_budgets.yaml")
     ap.add_argument("--bench-json", required=True, help="Path to pytest-benchmark JSON output")
-    ap.add_argument(
-        "--baseline-json",
-        default=None,
-        help="Optional baseline benchmark JSON for regression checks"
-    )
+    ap.add_argument("--baseline-json", default=None, help="Optional baseline benchmark JSON for regression checks")
     ap.add_argument(
         "--metric",
         default="median",
         choices=["median", "mean", "min", "max"],
-        help="Metric to use for validation (default: median)"
+        help="Metric to use for validation (default: median)",
     )
     args = ap.parse_args()
 
@@ -267,18 +262,9 @@ def main() -> int:
                         continue
                     if t > t0 * (1 + max_reg):
                         regression_pct = (t / t0 - 1) * 100
-                        violations.append(
-                            (
-                                group,
-                                name,
-                                f"{t:.6f}s",
-                                f"regressed {regression_pct:.1f}% > {max_reg_pct:.1f}%"
-                            )
-                        )
+                        violations.append((group, name, f"{t:.6f}s", f"regressed {regression_pct:.1f}% > {max_reg_pct:.1f}%"))
                 else:
-                    warnings.append(
-                        f"⚠️  Baseline missing benchmark '{name}' (no regression check)."
-                    )
+                    warnings.append(f"⚠️  Baseline missing benchmark '{name}' (no regression check).")
 
     # Print warnings
     for w in warnings:

@@ -8,6 +8,7 @@ Runs A/B comparison between:
 
 Uses LuxPipelineV2 API directly for maximum fidelity.
 """
+
 from __future__ import annotations
 
 import json
@@ -75,10 +76,10 @@ def run_ab_test(benchmark_name: str, benchmark_config: dict, output_root: Path) 
     }
 
     # Run baseline (SegFormer-only APEX)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running BASELINE: {benchmark_name} → {baseline_preset.value}")
-    print(f"{'='*60}")
-    
+    print(f"{'=' * 60}")
+
     baseline_out = output_root / f"{benchmark_name}_A_baseline"
     baseline_out.mkdir(parents=True, exist_ok=True)
 
@@ -108,10 +109,10 @@ def run_ab_test(benchmark_name: str, benchmark_config: dict, output_root: Path) 
         results["runs"]["baseline"] = {"status": "error", "error": str(e)}
 
     # Run canary (EfficientSAM fusion enabled)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running CANARY: {benchmark_name} → {canary_preset.value}")
-    print(f"{'='*60}")
-    
+    print(f"{'=' * 60}")
+
     canary_out = output_root / f"{benchmark_name}_B_efficientsam"
     canary_out.mkdir(parents=True, exist_ok=True)
 
@@ -136,7 +137,7 @@ def run_ab_test(benchmark_name: str, benchmark_config: dict, output_root: Path) 
             "segmentation_v3": report_canary.get("segmentation_v3"),
         }
         print(f"✓ Canary complete in {canary_elapsed:.2f}s")
-        
+
         # Stage 6.5 validation: canary must have segmentation_v3
         if not report_canary.get("segmentation_v3"):
             print("⚠️  WARNING: Canary run missing segmentation_v3 stats!")
@@ -174,15 +175,15 @@ def main() -> int:
     # Write summary
     summary_path = output_root / "stage6_ab_summary.json"
     summary_path.write_text(json.dumps(summary, indent=2))
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"✓ Stage 6 A/B complete. Summary written to:")
     print(f"  {summary_path}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Check for failures
     any_failures = False
     any_missing_v3 = False
-    
+
     for bench_name, result in summary["benchmarks"].items():
         runs = result.get("runs", {})
         if runs.get("baseline", {}).get("status") == "error":

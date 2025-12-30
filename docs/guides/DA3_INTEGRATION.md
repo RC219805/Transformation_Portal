@@ -1,8 +1,8 @@
 # Depth Anything 3 (DA3) - Integration Guide
 
-**Module**: `lux_depth_v3/`  
-**Status**: Production Ready  
-**Integration Type**: Standalone module with validation framework hooks  
+**Module**: `lux_depth_v3/`
+**Status**: Production Ready
+**Integration Type**: Standalone module with validation framework hooks
 **Last Updated**: 2025-12-19
 
 ---
@@ -110,16 +110,16 @@ class DA3Config:
     model_variant: ModelVariant = ModelVariant.BASE_v1_1
     device: str = "auto"  # auto, cuda, mps, cpu
     fp16: bool = True     # FP16 acceleration
-    
+
     # Input settings
     input_size: int = 518
     max_input_size: int = 2160
-    
+
     # Output settings
     normalize_depth: bool = True
     metric_depth: bool = False
     sky_segmentation: bool = True
-    
+
     # Performance
     batch_size: int = 1
     num_workers: int = 4

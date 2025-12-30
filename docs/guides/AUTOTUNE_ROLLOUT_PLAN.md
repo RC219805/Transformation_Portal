@@ -1,7 +1,7 @@
 # Autotune Rollout & Next Steps
 
-**Date**: 2025-12-10  
-**Status**: 🚀 Controlled Production Trial  
+**Date**: 2025-12-10
+**Status**: 🚀 Controlled Production Trial
 **Phase**: Post-Integration Validation
 
 ---
@@ -61,21 +61,21 @@ import statistics
 
 def analyze_autotune_batch(output_dir: Path):
     reports = list(output_dir.glob("*/*_report.json"))
-    
+
     total_pipeline_times = []
     export_times = []
     marketing_times = []
-    
+
     for report_path in reports:
         with open(report_path) as f:
             report = json.load(f)
-        
+
         total_pipeline_times.append(report["timing_s"]["total_pipeline"])
         export_times.append(report["timing_s"]["total_export"])
         marketing_times.append(
             report["timing_stages_s"].get("export_marketing", 0)
         )
-    
+
     print(f"Total Pipeline: {statistics.mean(total_pipeline_times):.1f}s "
           f"(median: {statistics.median(total_pipeline_times):.1f}s)")
     print(f"Export: {statistics.mean(export_times):.1f}s")
@@ -141,10 +141,10 @@ autotune_export_log_only: bool = False
 if cfg.phase2.autotune_export_log_only:
     # Compute autotune decision
     tuned_cfg = autotune_export_config(...)
-    
+
     # Log what would have happened
     logger.info(f"[DRY-RUN] Autotune would use: {tuned_cfg}")
-    
+
     # Use baseline config anyway
     export_cfg = baseline_cfg
 ```
@@ -186,7 +186,7 @@ Compare "what autotune would have done" vs "what baseline did" before fully comm
    - Primary pipeline writes master/upscaled/report
    - Enqueue marketing export job
    - Separate worker processes handle marketing
-   
+
 3. **Separate Process** (max isolation):
    - Fork/spawn marketing export after critical outputs done
 
@@ -255,7 +255,7 @@ rgb → depth → materials → grade → MASTER → upscale → UPSCALED
 
 ### 4.1 Preflight Scratch Dir Validation
 
-**Current**: ExportConfig validates scratch_dir, but only at ExportManager init  
+**Current**: ExportConfig validates scratch_dir, but only at ExportManager init
 **Better**: Preflight checks scratch_dir early (fail-fast)
 
 ```python
@@ -421,7 +421,7 @@ lux-depth-v2 --input aerial.tif --output out/ --autotune-export
 
 ## 🔄 Current Mode: Controlled Rollout
 
-**No longer in**: Design/architecture mode  
+**No longer in**: Design/architecture mode
 **Now in**: Controlled rollout and next-bottleneck targeting
 
 **Focus**:
@@ -432,5 +432,5 @@ lux-depth-v2 --input aerial.tif --output out/ --autotune-export
 
 ---
 
-**Last Updated**: 2025-12-10  
+**Last Updated**: 2025-12-10
 **Status**: 🟢 Ready for Production Trial

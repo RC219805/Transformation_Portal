@@ -1,8 +1,8 @@
 # ADR-002: Depth Anything 3 Module Architecture
 
-**Date**: 2025-12-19  
-**Status**: Implemented  
-**Deciders**: Transformation Portal Architect  
+**Date**: 2025-12-19
+**Status**: Implemented
+**Deciders**: Transformation Portal Architect
 **Related**: ADR-001 (Validation System)
 
 ---
@@ -395,6 +395,6 @@ tests/
 
 ---
 
-**ADR Version**: 1.0  
-**Last Updated**: 2025-12-19  
+**ADR Version**: 1.0
+**Last Updated**: 2025-12-19
 **Next Review**: 2026-01-19

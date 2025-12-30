@@ -1,11 +1,11 @@
 # Holdout Image Acquisition Specification
 ## Water Detection Phase C Validation - Architectural Glass Negative Set
 
-**Version**: v1  
-**Date**: 2025-12-17  
-**Purpose**: Phase C completion gate - validate multi-scale glass suppressor  
-**Target**: Prove detector doesn't false-trigger on architectural glass, reflective surfaces, blue materials  
-**Feature Under Test**: Multi-scale grid detection distinguishing pool tiles from glass facades  
+**Version**: v1
+**Date**: 2025-12-17
+**Purpose**: Phase C completion gate - validate multi-scale glass suppressor
+**Target**: Prove detector doesn't false-trigger on architectural glass, reflective surfaces, blue materials
+**Feature Under Test**: Multi-scale grid detection distinguishing pool tiles from glass facades
 
 ---
 
@@ -44,7 +44,7 @@
 12. **pool_tiles_closeup_002.jpg** - Blue ceramic pool tiles without water
 13. **concrete_blue_tint_001.jpg** - Concrete surface with blue color cast
 
-**Difficulty**: Hard-Medium  
+**Difficulty**: Hard-Medium
 **Why**: Tests grid alignment, blue hue confusers, and pool context without actual water
 
 ---
@@ -505,11 +505,11 @@ Photograph light-colored concrete (sidewalk, wall, pavement) with blue color cas
 1. **Priority Captures** (hardest to find):
    - #11, #12: Pool tiles (requires empty pool access)
    - #1, #2: Modern glass facades (requires downtown access)
-   
+
 2. **Opportunistic Captures** (as you encounter):
    - #4, #5: Blue walls (residential/commercial)
    - #6, #7, #8: Reflective surfaces (public spaces)
-   
+
 3. **Controlled Captures** (easiest):
    - #9, #10: Skylights (shopping malls, public buildings)
    - #13: Concrete (anywhere, weather-dependent)
@@ -536,15 +536,15 @@ Photograph light-colored concrete (sidewalk, wall, pavement) with blue color cas
 ## Troubleshooting & Substitutions
 
 ### If You Can't Find Empty Pool Tiles (#11, #12)
-**Option A**: Photograph pool tile samples at home improvement store (Lowe's, Home Depot tile section)  
-**Option B**: Photograph pool waterline tiles above water level (must be dry)  
-**Option C**: Use architectural salvage yard samples  
+**Option A**: Photograph pool tile samples at home improvement store (Lowe's, Home Depot tile section)
+**Option B**: Photograph pool waterline tiles above water level (must be dry)
+**Option C**: Use architectural salvage yard samples
 **Minimum Requirement**: Must show clear tile grid, pool-appropriate blue color, completely dry
 
 ### If Glass Facades Not Accessible (#1, #2, #3)
-**Option A**: Photograph glass bus shelters, phone booths, or large storefront windows  
-**Option B**: Use modern residential glass railings (balconies, staircases)  
-**Option C**: Photograph greenhouse or conservatory glass walls  
+**Option A**: Photograph glass bus shelters, phone booths, or large storefront windows
+**Option B**: Use modern residential glass railings (balconies, staircases)
+**Option C**: Photograph greenhouse or conservatory glass walls
 **Minimum Requirement**: Must show reflective glass surface, blue sky reflections, architectural framing
 
 ### If Weather Doesn't Cooperate
@@ -563,16 +563,16 @@ Photograph light-colored concrete (sidewalk, wall, pavement) with blue color cas
 ## Success Criteria
 
 **Holdout set is COMPLETE when**:
-✅ All 13 images captured and named correctly  
-✅ All images ≥1024px short edge  
-✅ Zero images contain actual water  
-✅ Each image clearly represents its confuser category  
-✅ Images are real photographs (not AI-generated, not renders)  
-✅ SHA256 hashes updated in manifest  
+✅ All 13 images captured and named correctly
+✅ All images ≥1024px short edge
+✅ Zero images contain actual water
+✅ Each image clearly represents its confuser category
+✅ Images are real photographs (not AI-generated, not renders)
+✅ SHA256 hashes updated in manifest
 
 **Holdout set PASSES validation when**:
-✅ Water detector triggers ≤1 false positive (max 1 of 13 images)  
-✅ If 2+ images trigger detection, multi-scale grid suppressor requires adjustment  
+✅ Water detector triggers ≤1 false positive (max 1 of 13 images)
+✅ If 2+ images trigger detection, multi-scale grid suppressor requires adjustment
 
 This holdout set provides the **Phase C completion gate** for water detection. Acquiring these images with precision ensures robust validation of the glass suppressor feature.
 

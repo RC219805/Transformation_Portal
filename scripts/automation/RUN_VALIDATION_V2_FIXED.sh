@@ -96,11 +96,11 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "Results saved to: $OUTPUT_DIR"
     echo ""
-    
+
     # Run analysis
     echo "Running analysis..."
     python scripts/analyze_validation_v2.py --results-dir "$OUTPUT_DIR"
-    
+
     echo ""
     echo "Comparison with baseline:"
     echo "  Baseline: outputs/validation_v2_20251218_170022_8197588"
@@ -108,7 +108,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "To compare:"
     echo "  diff outputs/validation_v2_20251218_170022_8197588/classification_report.txt $OUTPUT_DIR/classification_report.txt"
-    
+
 else
     echo ""
     echo "❌ Validation failed"

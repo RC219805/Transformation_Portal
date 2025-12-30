@@ -33,9 +33,7 @@ def test_capabilities_with_hdr_supporting_dependency():
 
 
 def test_capabilities_detect_hdr_limitations():
-    capabilities = ProcessingCapabilities(
-        tifffile_module=_StubTiffFile(supports_hdr=False)
-    )
+    capabilities = ProcessingCapabilities(tifffile_module=_StubTiffFile(supports_hdr=False))
 
     assert capabilities.bit_depth == 16
     assert capabilities.hdr_capable is False
@@ -45,9 +43,7 @@ def test_capabilities_detect_hdr_limitations():
 
 
 def test_capabilities_detect_writer_absence():
-    capabilities = ProcessingCapabilities(
-        tifffile_module=_StubTiffFile(provide_writer=False)
-    )
+    capabilities = ProcessingCapabilities(tifffile_module=_StubTiffFile(provide_writer=False))
 
     assert capabilities.bit_depth == 8
     assert capabilities.hdr_capable is False

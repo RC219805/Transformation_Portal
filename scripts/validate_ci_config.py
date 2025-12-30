@@ -55,13 +55,13 @@ class CIValidator:
     def validate_yaml_syntax(self, workflow_path: Path) -> Optional[Dict]:
         """Validate YAML syntax and return parsed content."""
         try:
-            with open(workflow_path, 'r') as f:
+            with open(workflow_path, "r") as f:
                 # Use yaml.safe_load with version 1.2 to avoid 'on' being interpreted as boolean
                 content = yaml.safe_load(f)
 
             # Fix 'on' key being interpreted as boolean True
-            if content and True in content and 'on' not in content:
-                content['on'] = content.pop(True)
+            if content and True in content and "on" not in content:
+                content["on"] = content.pop(True)
 
             return content
         except yaml.YAMLError as e:
@@ -73,18 +73,18 @@ class CIValidator:
         valid = True
 
         # Check required top-level keys
-        required_keys = ['name', 'on', 'jobs']
+        required_keys = ["name", "on", "jobs"]
         for key in required_keys:
             if key not in config:
                 self.log_error(f"{workflow_path.name}: Missing required key '{key}'")
                 valid = False
 
         # Validate jobs
-        if 'jobs' in config:
-            if not isinstance(config['jobs'], dict):
+        if "jobs" in config:
+            if not isinstance(config["jobs"], dict):
                 self.log_error(f"{workflow_path.name}: 'jobs' must be a dictionary")
                 valid = False
-            elif not config['jobs']:
+            elif not config["jobs"]:
                 self.log_error(f"{workflow_path.name}: No jobs defined")
                 valid = False
 
@@ -93,21 +93,21 @@ class CIValidator:
     def validate_python_matrix(self, workflow_path: Path, config: Dict) -> bool:
         """Validate Python version matrix."""
         valid = True
-        supported_versions = {'3.10', '3.11', '3.12'}
+        supported_versions = {"3.10", "3.11", "3.12"}
 
-        for job_name, job_config in config.get('jobs', {}).items():
+        for job_name, job_config in config.get("jobs", {}).items():
             if not isinstance(job_config, dict):
                 continue
 
-            strategy = job_config.get('strategy', {})
+            strategy = job_config.get("strategy", {})
             if not isinstance(strategy, dict):
                 continue
 
-            matrix = strategy.get('matrix', {})
+            matrix = strategy.get("matrix", {})
             if not isinstance(matrix, dict):
                 continue
 
-            python_versions = matrix.get('python-version', [])
+            python_versions = matrix.get("python-version", [])
             if not python_versions:
                 continue
 
@@ -120,8 +120,7 @@ class CIValidator:
                 version_str = str(version)
                 if version_str not in supported_versions:
                     self.log_warning(
-                        f"{workflow_path.name}:{job_name}: "
-                        f"Python {version_str} not in supported versions {supported_versions}"
+                        f"{workflow_path.name}:{job_name}: Python {version_str} not in supported versions {supported_versions}"
                     )
 
         return valid
@@ -129,22 +128,19 @@ class CIValidator:
     def validate_job_dependencies(self, workflow_path: Path, config: Dict) -> bool:
         """Validate job dependencies (needs clause)."""
         valid = True
-        job_names = set(config.get('jobs', {}).keys())
+        job_names = set(config.get("jobs", {}).keys())
 
-        for job_name, job_config in config.get('jobs', {}).items():
+        for job_name, job_config in config.get("jobs", {}).items():
             if not isinstance(job_config, dict):
                 continue
 
-            needs = job_config.get('needs', [])
+            needs = job_config.get("needs", [])
             if isinstance(needs, str):
                 needs = [needs]
 
             for dependency in needs:
                 if dependency not in job_names:
-                    self.log_error(
-                        f"{workflow_path.name}:{job_name}: "
-                        f"Depends on non-existent job '{dependency}'"
-                    )
+                    self.log_error(f"{workflow_path.name}:{job_name}: Depends on non-existent job '{dependency}'")
                     valid = False
 
         return valid
@@ -152,13 +148,13 @@ class CIValidator:
     def validate_checkout_action(self, workflow_path: Path, config: Dict) -> bool:
         """Validate checkout action versions."""
         valid = True
-        recommended_version = 'v5'
+        recommended_version = "v5"
 
-        for job_name, job_config in config.get('jobs', {}).items():
+        for job_name, job_config in config.get("jobs", {}).items():
             if not isinstance(job_config, dict):
                 continue
 
-            steps = job_config.get('steps', [])
+            steps = job_config.get("steps", [])
             if not isinstance(steps, list):
                 continue
 
@@ -166,9 +162,9 @@ class CIValidator:
                 if not isinstance(step, dict):
                     continue
 
-                uses = step.get('uses', '')
-                if 'actions/checkout@' in uses:
-                    version = uses.split('@')[1] if '@' in uses else ''
+                uses = step.get("uses", "")
+                if "actions/checkout@" in uses:
+                    version = uses.split("@")[1] if "@" in uses else ""
                     if version != recommended_version:
                         self.log_warning(
                             f"{workflow_path.name}:{job_name}: "
@@ -181,46 +177,37 @@ class CIValidator:
         """Check for common configuration issues."""
         valid = True
 
-        for job_name, job_config in config.get('jobs', {}).items():
+        for job_name, job_config in config.get("jobs", {}).items():
             if not isinstance(job_config, dict):
                 continue
 
             # Check for matrix without strategy
-            if 'matrix' in job_config and 'strategy' not in job_config:
-                self.log_error(
-                    f"{workflow_path.name}:{job_name}: "
-                    "'matrix' defined without 'strategy' wrapper"
-                )
+            if "matrix" in job_config and "strategy" not in job_config:
+                self.log_error(f"{workflow_path.name}:{job_name}: 'matrix' defined without 'strategy' wrapper")
                 valid = False
 
             # Check for runs-on
-            if 'runs-on' not in job_config:
-                self.log_error(
-                    f"{workflow_path.name}:{job_name}: "
-                    "Missing 'runs-on' specification"
-                )
+            if "runs-on" not in job_config:
+                self.log_error(f"{workflow_path.name}:{job_name}: Missing 'runs-on' specification")
                 valid = False
 
             # Check for empty steps
-            steps = job_config.get('steps', [])
+            steps = job_config.get("steps", [])
             if isinstance(steps, list) and len(steps) == 0:
-                self.log_warning(
-                    f"{workflow_path.name}:{job_name}: "
-                    "Job has no steps"
-                )
+                self.log_warning(f"{workflow_path.name}:{job_name}: Job has no steps")
 
         return valid
 
     def validate_flake8_config(self, workflow_path: Path, config: Dict) -> bool:
         """Validate flake8 configuration matches CI requirements."""
         valid = True
-        expected_select = 'E9,F63,F7,F82'
+        expected_select = "E9,F63,F7,F82"
 
-        for job_name, job_config in config.get('jobs', {}).items():
+        for job_name, job_config in config.get("jobs", {}).items():
             if not isinstance(job_config, dict):
                 continue
 
-            steps = job_config.get('steps', [])
+            steps = job_config.get("steps", [])
             if not isinstance(steps, list):
                 continue
 
@@ -228,11 +215,11 @@ class CIValidator:
                 if not isinstance(step, dict):
                     continue
 
-                run_cmd = step.get('run', '')
-                if 'flake8' in run_cmd:
+                run_cmd = step.get("run", "")
+                if "flake8" in run_cmd:
                     # Check if using correct select flags
-                    if '--select=' in run_cmd:
-                        match = re.search(r'--select=([^\s]+)', run_cmd)
+                    if "--select=" in run_cmd:
+                        match = re.search(r"--select=([^\s]+)", run_cmd)
                         if match:
                             select_flags = match.group(1)
                             if select_flags != expected_select:
@@ -241,10 +228,7 @@ class CIValidator:
                                     f"flake8 select flags '{select_flags}' != expected '{expected_select}'"
                                 )
                     else:
-                        self.log_warning(
-                            f"{workflow_path.name}:{job_name}: "
-                            "flake8 running without explicit --select flags"
-                        )
+                        self.log_warning(f"{workflow_path.name}:{job_name}: flake8 running without explicit --select flags")
 
         return valid
 
@@ -272,37 +256,25 @@ class CIValidator:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Validate GitHub Actions workflow configurations',
+        description="Validate GitHub Actions workflow configurations",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=__doc__,
     )
-    parser.add_argument(
-        'workflows',
-        nargs='*',
-        help='Specific workflow files to validate (default: all)'
-    )
-    parser.add_argument(
-        '--fix',
-        action='store_true',
-        help='Auto-fix common issues where possible'
-    )
+    parser.add_argument("workflows", nargs="*", help="Specific workflow files to validate (default: all)")
+    parser.add_argument("--fix", action="store_true", help="Auto-fix common issues where possible")
 
     args = parser.parse_args()
 
     # Get repository root
     try:
         import subprocess
-        result = subprocess.run(
-            ['git', 'rev-parse', '--show-toplevel'],
-            capture_output=True,
-            text=True,
-            check=True
-        )
+
+        result = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
         repo_root = Path(result.stdout.strip())
     except (subprocess.CalledProcessError, FileNotFoundError):
         repo_root = Path.cwd()
 
-    workflows_dir = repo_root / '.github' / 'workflows'
+    workflows_dir = repo_root / ".github" / "workflows"
 
     if not workflows_dir.exists():
         print(f"Error: Workflows directory not found: {workflows_dir}")
@@ -312,7 +284,7 @@ def main():
     if args.workflows:
         workflow_files = [Path(w) for w in args.workflows]
     else:
-        workflow_files = list(workflows_dir.glob('*.yml')) + list(workflows_dir.glob('*.yaml'))
+        workflow_files = list(workflows_dir.glob("*.yml")) + list(workflows_dir.glob("*.yaml"))
 
     if not workflow_files:
         print("No workflow files found")
@@ -365,5 +337,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

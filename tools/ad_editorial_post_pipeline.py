@@ -195,13 +195,7 @@ LOG = logging.getLogger("ad_post")
 
 
 def setup_logging(verbosity: int) -> None:
-    level = (
-        logging.WARNING
-        if verbosity == 0
-        else logging.INFO
-        if verbosity == 1
-        else logging.DEBUG
-    )
+    level = logging.WARNING if verbosity == 0 else logging.INFO if verbosity == 1 else logging.DEBUG
     logging.basicConfig(
         level=level,
         format="%(asctime)s | %(levelname)s | %(message)s",
@@ -309,7 +303,7 @@ def atomic_write(path: Path, writer_func, *args, **kwargs) -> None:
         writer_func: Function that takes a path and writes to it
         *args, **kwargs: Additional arguments for writer_func
     """
-    temp_path = path.with_suffix(path.suffix + '.tmp')
+    temp_path = path.with_suffix(path.suffix + ".tmp")
     try:
         writer_func(temp_path, *args, **kwargs)
         # Atomic rename on POSIX systems
@@ -353,11 +347,7 @@ class PipelineConfig:
             project_name=data["project_name"],
             project_root=root,
             input_raw_dir=Path(data["input_raw_dir"]).expanduser().resolve(),
-            backup_raw_dir=(
-                Path(data["backup_raw_dir"]).expanduser().resolve()
-                if data.get("backup_raw_dir")
-                else None
-            ),
+            backup_raw_dir=(Path(data["backup_raw_dir"]).expanduser().resolve() if data.get("backup_raw_dir") else None),
             rename=data.get("rename", {"enabled": False}),
             selects=data.get("selects", {"use_csv": False}),
             icc=data.get("icc", {}),
@@ -372,9 +362,7 @@ class PipelineConfig:
                 },
             ),
             styles=data.get("styles", {}),
-            consistency=data.get(
-                "consistency", {"target_median": 0.42, "wb_neutralize": True}
-            ),
+            consistency=data.get("consistency", {"target_median": 0.42, "wb_neutralize": True}),
             retouch=data.get("retouch", {"dust_remove": False, "hotspot_reduce": False}),
             export=data.get(
                 "export",
@@ -540,11 +528,7 @@ class Layout:
             self.DOCS_CONTACTS,
             self.DOCS_MANIFESTS,
         ]
-        dirs += (
-            list(self.WORK_VARIANTS.values())
-            + list(self.EXPORT_PRINT.values())
-            + list(self.EXPORT_WEB.values())
-        )
+        dirs += list(self.WORK_VARIANTS.values()) + list(self.EXPORT_PRINT.values()) + list(self.EXPORT_WEB.values())
         ensure_dirs(dirs)
         if self.RAW_BACKUP:
             self.RAW_BACKUP.mkdir(parents=True, exist_ok=True)
@@ -618,12 +602,7 @@ def rename_raws(cfg: PipelineConfig, lay: Layout, files: List[Path]) -> List[Pat
         index_by_room[room] += 1
         seq = index_by_room[room]
 
-        new_name = (
-            pattern.format(
-                project=safe_name(cfg.project_name), room=safe_name(room), seq=seq
-            )
-            + f.suffix.lower()
-        )
+        new_name = pattern.format(project=safe_name(cfg.project_name), room=safe_name(room), seq=seq) + f.suffix.lower()
         dst = f.with_name(new_name)
 
         # Handle collision with unique suffix
@@ -638,15 +617,11 @@ def rename_raws(cfg: PipelineConfig, lay: Layout, files: List[Path]) -> List[Pat
         mapping[f.name] = dst.name
         renamed.append(dst)
 
-    (cfg.project_root / "DOCS" / "rename_mapping.json").write_text(
-        json.dumps(mapping, indent=2)
-    )
+    (cfg.project_root / "DOCS" / "rename_mapping.json").write_text(json.dumps(mapping, indent=2))
     return renamed
 
 
-def guess_room_for_file(
-    f: Path, lay: Layout, rooms_by_folder: Dict[str, str]
-) -> str:
+def guess_room_for_file(f: Path, lay: Layout, rooms_by_folder: Dict[str, str]) -> str:
     # Map by containing folder match; fallback "Room"
     for folder, room in rooms_by_folder.items():
         full = (lay.RAW_ORIG.parent.parent / folder).resolve()
@@ -766,9 +741,7 @@ def raw_to_prophoto_tiff(raw_path: Path) -> np.ndarray:
 
 
 # FIXED: Properly save 16-bit TIFFs
-def save_tiff16_prophoto(
-    img: np.ndarray, path: Path, icc_bytes: Optional[bytes]
-) -> None:
+def save_tiff16_prophoto(img: np.ndarray, path: Path, icc_bytes: Optional[bytes]) -> None:
     """Save 16-bit TIFF preserving full bit depth."""
     img16 = np.clip(np.round(img * 65535.0), 0, 65535).astype(np.uint16)
 
@@ -788,9 +761,7 @@ def save_tiff16_prophoto(
     atomic_write(path, _write)
 
 
-def save_jpeg_srgb(
-    img: np.ndarray, path: Path, icc_bytes: Optional[bytes], quality: int = 96
-) -> None:
+def save_jpeg_srgb(img: np.ndarray, path: Path, icc_bytes: Optional[bytes], quality: int = 96) -> None:
     """Save 8-bit JPEG with sRGB color space."""
     img8 = np.clip(np.round(img * 255.0), 0, 255).astype(np.uint8)
     im = Image.fromarray(img8, mode="RGB")
@@ -827,7 +798,8 @@ def resize_long_edge(img: np.ndarray, long_edge: int) -> np.ndarray:
     out = (
         np.array(
             Image.fromarray((img * 255).astype(np.uint8)).resize(
-                (new_w, new_h), Image.LANCZOS  # pylint: disable=no-member
+                (new_w, new_h),
+                Image.LANCZOS,  # pylint: disable=no-member
             )
         ).astype(np.float32)
         / 255.0
@@ -932,17 +904,14 @@ def split_tone(
         H = (H * (1 - mask_hi)) + ((hi_h / 360.0) * mask_hi)
         S = np.clip(S + hi_s * mask_hi, 0, 1)
 
-    out = (
-        Image.merge(
-            "HSV",
-            [
-                Image.fromarray((H * 255).astype(np.uint8)),
-                Image.fromarray((S * 255).astype(np.uint8)),
-                Image.fromarray((V * 255).astype(np.uint8)),
-            ],
-        )
-        .convert("RGB")
-    )
+    out = Image.merge(
+        "HSV",
+        [
+            Image.fromarray((H * 255).astype(np.uint8)),
+            Image.fromarray((S * 255).astype(np.uint8)),
+            Image.fromarray((V * 255).astype(np.uint8)),
+        ],
+    ).convert("RGB")
     return np.array(out).astype(np.float32) / 255.0
 
 
@@ -992,9 +961,7 @@ def median_luma(img: np.ndarray) -> float:
     return float(np.median(luma))
 
 
-def normalize_exposure(
-    imgs: List[np.ndarray], target_median: float = 0.42
-) -> List[np.ndarray]:
+def normalize_exposure(imgs: List[np.ndarray], target_median: float = 0.42) -> List[np.ndarray]:
     out = []
     for im in imgs:
         m = median_luma(im) + 1e-6
@@ -1043,9 +1010,7 @@ def reduce_hotspots(img: np.ndarray) -> np.ndarray:
     return softened
 
 
-def unsharp_mask(
-    img: np.ndarray, amount: float = 0.2, radius: float = 1.2, threshold: float = 0.0
-) -> np.ndarray:
+def unsharp_mask(img: np.ndarray, amount: float = 0.2, radius: float = 1.2, threshold: float = 0.0) -> np.ndarray:
     if amount <= 0:
         return img
 
@@ -1070,12 +1035,8 @@ def group_hdr_candidates(files: List[Path], gap_sec: float = 2.0) -> List[List[P
     def dt(path: Path) -> float:
         try:
             with path.open("rb") as f:
-                tags = exifread.process_file(
-                    f, details=False, stop_tag="EXIF DateTimeOriginal"
-                )
-                dt_str = str(
-                    tags.get("EXIF DateTimeOriginal") or tags.get("Image DateTime") or ""
-                )
+                tags = exifread.process_file(f, details=False, stop_tag="EXIF DateTimeOriginal")
+                dt_str = str(tags.get("EXIF DateTimeOriginal") or tags.get("Image DateTime") or "")
                 # "YYYY:MM:DD HH:MM:SS"
                 from datetime import datetime
 
@@ -1214,9 +1175,7 @@ def embed_iptc_exiftool(img_path: Path, row: Dict[str, str]) -> None:
     add("XMP-iptcCore:Location", row.get("location"), "location")
 
     args.append(str(img_path))
-    subprocess.run(
-        args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
+    subprocess.run(args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def embed_iptc_fallback_jpeg(img_path: Path, row: Dict[str, str]) -> None:
@@ -1227,9 +1186,7 @@ def embed_iptc_fallback_jpeg(img_path: Path, row: Dict[str, str]) -> None:
         exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
 
         if row.get("copyright"):
-            exif_dict["0th"][piexif.ImageIFD.Copyright] = row["copyright"].encode(
-                "utf-8"
-            )
+            exif_dict["0th"][piexif.ImageIFD.Copyright] = row["copyright"].encode("utf-8")
 
         if row.get("creator"):
             exif_dict["0th"][piexif.ImageIFD.Artist] = row["creator"].encode("utf-8")
@@ -1261,11 +1218,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
     # Decode RAW → BaseTIFF
     LOG.info("Decoding RAW to 16-bit ProPhoto base TIFFs")
     base_outputs: List[Path] = []
-    icc_prophoto = (
-        load_icc_bytes(Path(cfg.icc.get("prophoto_path", "")))
-        if cfg.icc.get("prophoto_path")
-        else None
-    )
+    icc_prophoto = load_icc_bytes(Path(cfg.icc.get("prophoto_path", ""))) if cfg.icc.get("prophoto_path") else None
 
     for rp in tqdm(raws, desc="RAW→TIFF"):
         try:
@@ -1280,9 +1233,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
     hdr_paths: List[Path] = []
     if cfg.processing.get("enable_hdr", False):
         LOG.info("HDR merge enabled")
-        groups = group_hdr_candidates(
-            raws, float(cfg.processing.get("hdr_group_gap_sec", 2.0))
-        )
+        groups = group_hdr_candidates(raws, float(cfg.processing.get("hdr_group_gap_sec", 2.0)))
         for g in tqdm(groups, desc="HDR groups"):
             try:
                 hdr = hdr_merge_debvec(g)
@@ -1320,9 +1271,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         for p in tqdm(sources, desc="Upright"):
             try:
                 img = np.array(Image.open(p)).astype(np.float32) / 255.0
-                img = auto_upright_small(
-                    img, float(cfg.processing.get("upright_max_deg", 3.0))
-                )
+                img = auto_upright_small(img, float(cfg.processing.get("upright_max_deg", 3.0)))
                 out = lay.WORK_ALIGN / p.name
                 save_tiff16_prophoto(img, out, icc_prophoto)
                 aligned_paths.append(out)
@@ -1363,9 +1312,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
             save_tiff16_prophoto(im, pt, icc_prophoto)
 
     # Optional automated retouch
-    if cfg.retouch.get("dust_remove", False) or cfg.retouch.get(
-        "hotspot_reduce", False
-    ):
+    if cfg.retouch.get("dust_remove", False) or cfg.retouch.get("hotspot_reduce", False):
         LOG.info("Applying lightweight automated retouch")
         for style, paths in variant_map.items():
             for pt in tqdm(paths, desc=f"Retouch {style}"):
@@ -1380,11 +1327,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 save_tiff16_prophoto(im, pt, icc_prophoto)
 
     # Export print & web
-    icc_srgb = (
-        load_icc_bytes(Path(cfg.icc.get("srgb_path", "")))
-        if cfg.icc.get("srgb_path")
-        else None
-    )
+    icc_srgb = load_icc_bytes(Path(cfg.icc.get("srgb_path", ""))) if cfg.icc.get("srgb_path") else None
 
     manifest = {"project": cfg.project_name, "exports": []}
 
@@ -1435,11 +1378,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 sorted(list(lay.EXPORT_WEB[style].glob("*.jpg")), key=human_sort_key),
                 desc=f"Metadata {style}",
             ):
-                row = (
-                    meta_map.get(img.name)
-                    or meta_map.get(img.stem + ".ti")
-                    or meta_map.get(img.stem + ".jpg")
-                )
+                row = meta_map.get(img.name) or meta_map.get(img.stem + ".ti") or meta_map.get(img.stem + ".jpg")
                 if not row:
                     continue
 
@@ -1469,28 +1408,20 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         if zip_path.exists():
             zip_path.unlink()
 
-        shutil.make_archive(
-            str(zip_path.with_suffix("")), "zip", root_dir=cfg.project_root, base_dir="EXPORT"
-        )
+        shutil.make_archive(str(zip_path.with_suffix("")), "zip", root_dir=cfg.project_root, base_dir="EXPORT")
         LOG.info("Deliverable zip: %s", zip_path)
 
-    LOG.info(
-        "Done. Print TIFFs in EXPORT/Print_TIFF/**; Web JPEGs in EXPORT/Web_JPEG/**"
-    )
+    LOG.info("Done. Print TIFFs in EXPORT/Print_TIFF/**; Web JPEGs in EXPORT/Web_JPEG/**")
 
 
 # ------------------------------ CLI ---------------------------------------- #
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="AD Editorial Interior Post-Production Pipeline"
-    )
+    ap = argparse.ArgumentParser(description="AD Editorial Interior Post-Production Pipeline")
     ap.add_argument("run", nargs="?", help="Run the full pipeline", default="run")
     ap.add_argument("--config", required=True, type=Path, help="Path to YAML config")
-    ap.add_argument(
-        "-v", "--verbose", action="count", default=1, help="Increase verbosity (-v, -vv)"
-    )
+    ap.add_argument("-v", "--verbose", action="count", default=1, help="Increase verbosity (-v, -vv)")
 
     args = ap.parse_args(argv)
 

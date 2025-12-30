@@ -23,6 +23,7 @@ from PIL import Image
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -31,6 +32,7 @@ except ImportError:
 
 try:
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation, pipeline
+
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
@@ -38,6 +40,7 @@ except ImportError:
 
 try:
     import coremltools as ct
+
     COREML_AVAILABLE = True
 except ImportError:
     COREML_AVAILABLE = False
@@ -45,6 +48,7 @@ except ImportError:
 
 try:
     from skimage.transform import resize
+
     SKIMAGE_AVAILABLE = True
 except ImportError:
     SKIMAGE_AVAILABLE = False
@@ -53,6 +57,7 @@ except ImportError:
 
 try:
     import onnxruntime as ort
+
     ONNX_AVAILABLE = True
 except ImportError:
     ONNX_AVAILABLE = False
@@ -65,6 +70,7 @@ logger = logging.getLogger(__name__)
 
 class ModelBackend(Enum):
     """Supported inference backends."""
+
     PYTORCH_CPU = "pytorch_cpu"
     PYTORCH_MPS = "pytorch_mps"  # Apple Silicon GPU
     COREML = "coreml"  # Apple Neural Engine
@@ -73,6 +79,7 @@ class ModelBackend(Enum):
 
 class ModelVariant(Enum):
     """Depth Anything V2 model variants."""
+
     SMALL = "depth-anything/Depth-Anything-V2-Small-hf"
     BASE = "depth-anything/Depth-Anything-V2-Base-hf"
     LARGE = "depth-anything/Depth-Anything-V2-Large-hf"
@@ -168,9 +175,7 @@ class DepthAnythingV2Model:
             return ModelBackend.PYTORCH_CPU
         if ONNX_AVAILABLE:
             return ModelBackend.ONNX
-        raise RuntimeError(
-            "No backend available. Install torch or onnxruntime."
-        )
+        raise RuntimeError("No backend available. Install torch or onnxruntime.")
 
     def _auto_detect_device(self) -> str:
         """Auto-detect optimal device for PyTorch."""
@@ -198,15 +203,9 @@ class DepthAnythingV2Model:
     def _load_pytorch_model(self):
         """Load PyTorch model using transformers."""
         if not TORCH_AVAILABLE:
-            raise ImportError(
-                "torch required for PyTorch backend. "
-                "Install with: pip install torch"
-            )
+            raise ImportError("torch required for PyTorch backend. Install with: pip install torch")
         if not TRANSFORMERS_AVAILABLE:
-            raise ImportError(
-                "transformers required for PyTorch backend. "
-                "Install with: pip install transformers"
-            )
+            raise ImportError("transformers required for PyTorch backend. Install with: pip install transformers")
 
         try:
             # Use transformers pipeline for simplicity
@@ -221,9 +220,7 @@ class DepthAnythingV2Model:
             logger.error("Failed to load PyTorch model: %s", e)
             # Fallback: manual loading
             self.processor = AutoImageProcessor.from_pretrained(self.variant.value)
-            self.model = AutoModelForDepthEstimation.from_pretrained(
-                self.variant.value
-            )
+            self.model = AutoModelForDepthEstimation.from_pretrained(self.variant.value)
 
             if self.device == "mps":
                 self.model = self.model.to("mps")
@@ -251,10 +248,7 @@ class DepthAnythingV2Model:
         load or produce incorrect results.
         """
         if not ONNX_AVAILABLE:
-            raise ImportError(
-                "onnxruntime required for ONNX backend. "
-                "Install with: pip install onnxruntime"
-            )
+            raise ImportError("onnxruntime required for ONNX backend. Install with: pip install onnxruntime")
 
         # Check if local model exists
         if self.model_path and self.model_path.exists():
@@ -271,11 +265,7 @@ class DepthAnythingV2Model:
             # Select execution providers based on available hardware
             providers = self._get_onnx_providers()
 
-            self.model = ort.InferenceSession(
-                str(model_path),
-                sess_options=sess_options,
-                providers=providers
-            )
+            self.model = ort.InferenceSession(str(model_path), sess_options=sess_options, providers=providers)
             logger.info("Loaded ONNX model: %s with providers: %s", model_path, providers)
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Failed to load ONNX model: %s", e)
@@ -287,19 +277,14 @@ class DepthAnythingV2Model:
     def _get_onnx_providers(self) -> list:
         """Get available ONNX execution providers in priority order."""
         available_providers = ort.get_available_providers()
-        preferred_order = [
-            'CUDAExecutionProvider',
-            'CoreMLExecutionProvider',
-            'DmlExecutionProvider',
-            'CPUExecutionProvider'
-        ]
+        preferred_order = ["CUDAExecutionProvider", "CoreMLExecutionProvider", "DmlExecutionProvider", "CPUExecutionProvider"]
         providers = []
         for provider in preferred_order:
             if provider in available_providers:
                 providers.append(provider)
         # Ensure at least CPU provider is included
         if not providers:
-            providers = ['CPUExecutionProvider']
+            providers = ["CPUExecutionProvider"]
         return providers
 
     def _download_onnx_model(self) -> Path:
@@ -315,17 +300,12 @@ class DepthAnythingV2Model:
         onnx_filename = ONNX_MODEL_FILENAMES.get(self.variant)
 
         if not onnx_filename:
-            raise ValueError(
-                f"ONNX model not available for variant {self.variant}. "
-                "Use SMALL, BASE, or LARGE."
-            )
+            raise ValueError(f"ONNX model not available for variant {self.variant}. Use SMALL, BASE, or LARGE.")
 
         # nosec B615 - revision pinning intentionally omitted for development flexibility
         # Production deployments should pin specific model revisions
         model_path = hf_hub_download(
-            repo_id=onnx_repo,
-            filename=onnx_filename,
-            cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+            repo_id=onnx_repo, filename=onnx_filename, cache_dir=Path.home() / ".cache" / "depth_anything_v2"
         )
 
         return Path(model_path)
@@ -333,10 +313,7 @@ class DepthAnythingV2Model:
     def _load_coreml_model(self):
         """Load CoreML model for Apple Neural Engine."""
         if not COREML_AVAILABLE:
-            raise ImportError(
-                "coremltools required for CoreML backend. "
-                "Install with: pip install coremltools"
-            )
+            raise ImportError("coremltools required for CoreML backend. Install with: pip install coremltools")
 
         # Check if local model exists
         if self.model_path and self.model_path.exists():
@@ -368,17 +345,12 @@ class DepthAnythingV2Model:
         }.get(self.variant)
 
         if not coreml_variant:
-            raise ValueError(
-                f"CoreML model not available for variant {self.variant}. "
-                "Use SMALL or BASE."
-            )
+            raise ValueError(f"CoreML model not available for variant {self.variant}. Use SMALL or BASE.")
 
         # Download model package
         filename = f"DepthAnythingV2{self.variant.name.title()}F16.mlpackage"
         model_path = hf_hub_download(
-            repo_id=coreml_variant,
-            filename=filename,
-            cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+            repo_id=coreml_variant, filename=filename, cache_dir=Path.home() / ".cache" / "depth_anything_v2"
         )
 
         return Path(model_path)
@@ -424,12 +396,12 @@ class DepthAnythingV2Model:
             if not SKIMAGE_AVAILABLE:
                 raise ImportError("scikit-image is required for resizing. Install with: pip install scikit-image")
 
-            result['depth'] = resize(
-                result['depth'],
+            result["depth"] = resize(
+                result["depth"],
                 output_size,
                 order=1,  # Bilinear
                 preserve_range=True,
-                anti_aliasing=True
+                anti_aliasing=True,
             )
 
         return result
@@ -442,10 +414,10 @@ class DepthAnythingV2Model:
         start_time = time.time()
 
         # Run inference
-        if hasattr(self.model, '__call__'):
+        if hasattr(self.model, "__call__"):
             # Pipeline API
             prediction = self.model(image)
-            depth_raw = prediction['depth']
+            depth_raw = prediction["depth"]
 
             # Convert to numpy
             if TORCH_AVAILABLE and isinstance(depth_raw, torch.Tensor):
@@ -474,15 +446,15 @@ class DepthAnythingV2Model:
         inference_time = time.time() - start_time
 
         return {
-            'depth': depth_normalized.astype(np.float32),
-            'depth_raw': depth_raw.astype(np.float32),
-            'metadata': {
-                'backend': self.backend.value,
-                'variant': self.variant.name,
-                'device': self.device,
-                'inference_time_ms': inference_time * 1000,
-                'shape': depth_normalized.shape,
-            }
+            "depth": depth_normalized.astype(np.float32),
+            "depth_raw": depth_raw.astype(np.float32),
+            "metadata": {
+                "backend": self.backend.value,
+                "variant": self.variant.name,
+                "device": self.device,
+                "inference_time_ms": inference_time * 1000,
+                "shape": depth_normalized.shape,
+            },
         }
 
     def _estimate_depth_coreml(self, image: Image.Image) -> dict:
@@ -494,10 +466,10 @@ class DepthAnythingV2Model:
         image_array = np.array(image).astype(np.float32) / 255.0
 
         # Run inference
-        prediction = self.model.predict({'image': image_array})
+        prediction = self.model.predict({"image": image_array})
 
         # Extract depth from output
-        depth_raw = prediction.get('depth', prediction.get('var_1071'))
+        depth_raw = prediction.get("depth", prediction.get("var_1071"))
 
         # Normalize to [0, 1]
         depth_min = depth_raw.min()
@@ -507,15 +479,15 @@ class DepthAnythingV2Model:
         inference_time = time.time() - start_time
 
         return {
-            'depth': depth_normalized.astype(np.float32),
-            'depth_raw': depth_raw.astype(np.float32),
-            'metadata': {
-                'backend': 'coreml',
-                'variant': self.variant.name,
-                'device': 'ane',
-                'inference_time_ms': inference_time * 1000,
-                'shape': depth_normalized.shape,
-            }
+            "depth": depth_normalized.astype(np.float32),
+            "depth_raw": depth_raw.astype(np.float32),
+            "metadata": {
+                "backend": "coreml",
+                "variant": self.variant.name,
+                "device": "ane",
+                "inference_time_ms": inference_time * 1000,
+                "shape": depth_normalized.shape,
+            },
         }
 
     def _estimate_depth_onnx(self, image: Image.Image) -> dict:
@@ -559,15 +531,15 @@ class DepthAnythingV2Model:
         inference_time = time.time() - start_time
 
         return {
-            'depth': depth_normalized.astype(np.float32),
-            'depth_raw': depth_raw.astype(np.float32),
-            'metadata': {
-                'backend': 'onnx',
-                'variant': self.variant.name,
-                'device': self.device,
-                'inference_time_ms': inference_time * 1000,
-                'shape': depth_normalized.shape,
-            }
+            "depth": depth_normalized.astype(np.float32),
+            "depth_raw": depth_raw.astype(np.float32),
+            "metadata": {
+                "backend": "onnx",
+                "variant": self.variant.name,
+                "device": self.device,
+                "inference_time_ms": inference_time * 1000,
+                "shape": depth_normalized.shape,
+            },
         }
 
     def estimate_depth_batch(
@@ -590,7 +562,7 @@ class DepthAnythingV2Model:
         results = []
 
         for i in range(0, len(images), batch_size):
-            batch = images[i:i + batch_size]
+            batch = images[i : i + batch_size]
 
             for image in batch:
                 result = self.estimate_depth(image, output_size)
@@ -599,12 +571,7 @@ class DepthAnythingV2Model:
         return results
 
     def __repr__(self) -> str:
-        return (
-            "DepthAnythingV2Model("
-            f"variant={self.variant.name}, "
-            f"backend={self.backend.name}, "
-            f"device={self.device})"
-        )
+        return f"DepthAnythingV2Model(variant={self.variant.name}, backend={self.backend.name}, device={self.device})"
 
 
 def safe_depth_estimation(
@@ -628,9 +595,7 @@ def safe_depth_estimation(
 
     except RuntimeError as e:
         if "out of memory" in str(e).lower():
-            logger.warning(
-                "OOM error, falling back to %spx resolution", fallback_size
-            )
+            logger.warning("OOM error, falling back to %spx resolution", fallback_size)
 
             # Downscale image
             if isinstance(image, np.ndarray):
@@ -638,30 +603,18 @@ def safe_depth_estimation(
             else:
                 image_pil = image
 
-            image_pil.thumbnail(
-                (fallback_size, fallback_size), Image.Resampling.LANCZOS
-            )
+            image_pil.thumbnail((fallback_size, fallback_size), Image.Resampling.LANCZOS)
 
             # Retry with smaller size
             result = model.estimate_depth(image_pil)
 
             # Upscale depth map to original size
-            original_size = (
-                image.shape[:2]
-                if isinstance(image, np.ndarray)
-                else image.size[::-1]
-            )
+            original_size = image.shape[:2] if isinstance(image, np.ndarray) else image.size[::-1]
             if not SKIMAGE_AVAILABLE:
                 raise ImportError("scikit-image is required for resizing. Install with: pip install scikit-image") from None
 
-            result['depth'] = resize(
-                result['depth'],
-                original_size,
-                order=1,
-                preserve_range=True,
-                anti_aliasing=True
-            )
+            result["depth"] = resize(result["depth"], original_size, order=1, preserve_range=True, anti_aliasing=True)
 
-            result['metadata']['fallback_resolution'] = fallback_size
+            result["metadata"]["fallback_resolution"] = fallback_size
             return result
         raise

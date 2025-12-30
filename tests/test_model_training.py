@@ -15,6 +15,7 @@ from packaging import version
 # Check if PyTorch is available (required for training infrastructure)
 try:
     import torch  # noqa: F401 - imported for availability check only
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -31,17 +32,14 @@ if TORCH_AVAILABLE:
             SyntheticDataGenerator,
             EnhancementDataset,
             HyperRealityTrainer,
-            configure_device
+            configure_device,
         )
     except ImportError:
         # torch exists but nn module or other dependencies not available
         TORCH_AVAILABLE = False
 
 # Skip all tests in this module if PyTorch is not available
-pytestmark = pytest.mark.skipif(
-    not TORCH_AVAILABLE,
-    reason="PyTorch not installed - training tests require ML dependencies"
-)
+pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch not installed - training tests require ML dependencies")
 
 
 class TestTrainingConfig:
@@ -59,12 +57,7 @@ class TestTrainingConfig:
 
     def test_custom_config(self):
         """Test custom configuration"""
-        config = TrainingConfig(
-            batch_size=8,
-            num_epochs=100,
-            learning_rate=5e-5,
-            checkpoint_dir="custom/path"
-        )
+        config = TrainingConfig(batch_size=8, num_epochs=100, learning_rate=5e-5, checkpoint_dir="custom/path")
 
         assert config.batch_size == 8
         assert config.num_epochs == 100
@@ -119,10 +112,12 @@ class TestEnhancementDataset:
         """Test dataset can load images"""
         from torchvision import transforms
 
-        transform = transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-        ])
+        transform = transforms.Compose(
+            [
+                transforms.Resize((256, 256)),
+                transforms.ToTensor(),
+            ]
+        )
 
         low_quality_dir = Path(sample_dataset) / "low_quality"
         high_quality_dir = Path(sample_dataset) / "high_quality"
@@ -145,7 +140,7 @@ class TestDeviceConfiguration:
         device = configure_device()
 
         # Should return a valid device (cpu, cuda, or mps)
-        assert str(device) in ['cpu', 'cuda', 'mps', 'cuda:0']
+        assert str(device) in ["cpu", "cuda", "mps", "cuda:0"]
 
 
 class TestTrainerInitialization:
@@ -153,19 +148,15 @@ class TestTrainerInitialization:
 
     def test_trainer_creation(self):
         """Test trainer can be created"""
-        config = TrainingConfig(
-            num_epochs=1,
-            batch_size=2,
-            checkpoint_dir="weights/test"
-        )
+        config = TrainingConfig(num_epochs=1, batch_size=2, checkpoint_dir="weights/test")
 
         trainer = HyperRealityTrainer(config)
 
         # Check models were created
-        assert 'caustics' in trainer.models
-        assert 'atmosphere' in trainer.models
-        assert 'materials' in trainer.models
-        assert 'harmonics' in trainer.models
+        assert "caustics" in trainer.models
+        assert "atmosphere" in trainer.models
+        assert "materials" in trainer.models
+        assert "harmonics" in trainer.models
 
         # Check optimizer was created
         assert trainer.optimizer is not None
@@ -180,7 +171,8 @@ class TestTrainingDemo:
         """Test training loop with minimal data (integration test)"""
         # Skip in CI unless explicitly requested
         import os
-        if not os.environ.get('RUN_SLOW_TESTS'):
+
+        if not os.environ.get("RUN_SLOW_TESTS"):
             pytest.skip("Slow test - set RUN_SLOW_TESTS=1 to run")
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -197,7 +189,7 @@ class TestTrainingDemo:
                 save_frequency=1,
                 val_split=0.25,  # 1 validation sample
                 num_workers=0,  # No multiprocessing for test
-                use_mixed_precision=False
+                use_mixed_precision=False,
             )
 
             # Create dataset and dataloaders
@@ -205,10 +197,12 @@ class TestTrainingDemo:
             from torch.utils.data import DataLoader
             import torch  # noqa: F811
 
-            transform = transforms.Compose([
-                transforms.Resize((256, 256)),
-                transforms.ToTensor(),
-            ])
+            transform = transforms.Compose(
+                [
+                    transforms.Resize((256, 256)),
+                    transforms.ToTensor(),
+                ]
+            )
 
             low_quality_dir = Path(tmpdir) / "low_quality"
             high_quality_dir = Path(tmpdir) / "high_quality"
@@ -218,23 +212,11 @@ class TestTrainingDemo:
             # Split dataset
             val_size = 1
             train_size = len(dataset) - val_size
-            train_dataset, val_dataset = torch.utils.data.random_split(
-                dataset, [train_size, val_size]
-            )
+            train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
-            train_loader = DataLoader(
-                train_dataset,
-                batch_size=config.batch_size,
-                shuffle=True,
-                num_workers=0
-            )
+            train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=0)
 
-            val_loader = DataLoader(
-                val_dataset,
-                batch_size=config.batch_size,
-                shuffle=False,
-                num_workers=0
-            )
+            val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=0)
 
             # Train for 1 epoch
             trainer = HyperRealityTrainer(config)
@@ -244,7 +226,7 @@ class TestTrainingDemo:
 
             # Check that training happened
             assert len(trainer.training_history) > 0
-            assert trainer.best_val_loss < initial_loss or initial_loss == float('inf')
+            assert trainer.best_val_loss < initial_loss or initial_loss == float("inf")
 
             # Check checkpoint was saved
             checkpoint_path = Path(config.checkpoint_dir) / "checkpoint_epoch_1.pth"

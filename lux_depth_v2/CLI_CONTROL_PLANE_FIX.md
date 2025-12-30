@@ -2,9 +2,9 @@
 
 ## Status: ✅ SUCCEEDED
 
-**Date**: 2025-12-22  
-**Issue**: Critical control-plane failure preventing forensic baseline isolation  
-**Impact**: Phase 1 sweep outputs contaminated, visual verification invalid  
+**Date**: 2025-12-22
+**Issue**: Critical control-plane failure preventing forensic baseline isolation
+**Impact**: Phase 1 sweep outputs contaminated, visual verification invalid
 **Fix**: Forensics mode with non-negotiable CLI overrides
 
 ---
@@ -15,7 +15,7 @@ The lux_depth_v2 CLI was ignoring runtime intent and force-applying preset defau
 
 ### Root Cause
 
-1. **Preset Application Architecture**: 
+1. **Preset Application Architecture**:
    - `PipelineConfig.__post_init__` applies preset defaults (e.g., `post_tile=2048`)
    - `LuxPipelineV2.__init__` called `apply_preset()` AGAIN
    - CLI overrides were applied but then overwritten by second preset application
@@ -45,14 +45,14 @@ Added `_preset_applied` flag to `PipelineConfig`:
 ```python
 class PipelineConfig:
     _preset_applied: bool = field(default=False, init=False, repr=False)
-    
+
     def apply_preset(self) -> None:
         """Apply preset once only to preserve CLI overrides."""
         if self._preset_applied:
             return  # Skip re-application
-        
+
         # Apply preset logic...
-        
+
         self._preset_applied = True  # Mark as applied
 ```
 
@@ -300,11 +300,11 @@ ls -1 test/  # Should only show master16.tif and report.json
 
 ## Success Metrics
 
-✅ **Implementation Complete**: All forensics flags functional  
-✅ **Validation Passed**: Automated test script confirms clean baseline  
-✅ **Performance Verified**: 97% reduction in processing time (16s → 0.5s)  
-✅ **Override Guaranteed**: post_tile, upscale, exports successfully overridden  
-✅ **Documentation Complete**: FORENSICS_MODE.md and test script created  
+✅ **Implementation Complete**: All forensics flags functional
+✅ **Validation Passed**: Automated test script confirms clean baseline
+✅ **Performance Verified**: 97% reduction in processing time (16s → 0.5s)
+✅ **Override Guaranteed**: post_tile, upscale, exports successfully overridden
+✅ **Documentation Complete**: FORENSICS_MODE.md and test script created
 
 ---
 

@@ -13,7 +13,7 @@ OpenCV(4.12.0) error: (-2:Unspecified error) could not find a writer for the spe
 
 **Root Cause:**
 The temp file naming used `.with_suffix(path.suffix + ".tmp")` which created filenames like:
-- `file_MARKETING.png.tmp` 
+- `file_MARKETING.png.tmp`
 - `file_PREVIEW.jpg.tmp`
 
 OpenCV only recognized the final extension (`.tmp`) and couldn't determine the image format.

@@ -25,7 +25,7 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
     """
     ext = normalize_extension(input_path)
 
-    if ext == '.exr':
+    if ext == ".exr":
         try:
             import OpenEXR
             import Imath
@@ -33,24 +33,24 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
             exr_file = OpenEXR.InputFile(str(input_path))
             header = exr_file.header()
 
-            dw = header['dataWindow']
+            dw = header["dataWindow"]
             width = dw.max.x - dw.min.x + 1
             height = dw.max.y - dw.min.y + 1
 
             # Read RGB channels
             FLOAT = Imath.PixelType(Imath.PixelType.FLOAT)
-            channels = ['R', 'G', 'B']
+            channels = ["R", "G", "B"]
 
             channel_data = {}
             for channel in channels:
-                if channel in header['channels']:
+                if channel in header["channels"]:
                     channel_str = exr_file.channel(channel, FLOAT)
                     channel_data[channel] = np.frombuffer(channel_str, dtype=np.float32)
                     channel_data[channel] = channel_data[channel].reshape(height, width)
 
             # Stack into RGB array
             if len(channel_data) == 3:
-                img_array = np.stack([channel_data['R'], channel_data['G'], channel_data['B']], axis=2)
+                img_array = np.stack([channel_data["R"], channel_data["G"], channel_data["B"]], axis=2)
             else:
                 raise ValueError("EXR must have R, G, B channels")
 
@@ -58,7 +58,7 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
             # Clip to [0-1] for processing
             img_array = np.clip(img_array, 0, 1)
 
-            metadata = {'source_format': 'exr', 'color_space': 'linear'}
+            metadata = {"source_format": "exr", "color_space": "linear"}
             print(f"✓ Loaded EXR: {width}x{height}, range [{img_array.min():.3f}, {img_array.max():.3f}]")
 
             return img_array.astype(np.float32), metadata
@@ -66,6 +66,7 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
         except ImportError:
             print("⚠️  OpenEXR not available, falling back to imageio")
             import imageio
+
             img_array = imageio.imread(input_path)
             # Convert to float [0-1]
             if img_array.dtype == np.uint8:
@@ -75,10 +76,10 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
             else:
                 img_array = img_array.astype(np.float32)
 
-            metadata = {'source_format': 'exr', 'color_space': 'unknown'}
+            metadata = {"source_format": "exr", "color_space": "unknown"}
             return img_array, metadata
 
-    elif ext in ['.ti', '.tiff']:
+    elif ext in [".ti", ".tiff"]:
         # Use tifffile for proper 16-bit loading
         img_array = tifffile.imread(input_path)
 
@@ -89,16 +90,16 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
         else:
             img_array = img_array.astype(np.float32)
 
-        metadata = {'source_format': 'tif', 'color_space': 'srgb'}
+        metadata = {"source_format": "tif", "color_space": "srgb"}
         print(f"✓ Loaded TIFF: {img_array.shape}, dtype was {tifffile.imread(input_path).dtype}")
 
         return img_array, metadata
 
     else:
         # Use PIL for other formats
-        img = Image.open(input_path).convert('RGB')
+        img = Image.open(input_path).convert("RGB")
         img_array = np.array(img).astype(np.float32) / 255.0
-        metadata = {'source_format': str(ext), 'color_space': 'srgb'}
+        metadata = {"source_format": str(ext), "color_space": "srgb"}
         print(f"✓ Loaded {ext}: {img.size}")
 
         return img_array, metadata
@@ -115,22 +116,22 @@ def apply_luxury_enhancements(img_array: np.ndarray, scene_name: str) -> np.ndar
     enhanced = img_array.copy()
 
     # Scene-specific adjustments
-    if 'pool' in scene_name.lower():
+    if "pool" in scene_name.lower():
         # Pool: enhance blues, boost highlights slightly
         enhanced[:, :, 2] = np.clip(enhanced[:, :, 2] * 1.05, 0, 1)  # Blue channel
         enhanced = np.clip(enhanced * 1.02, 0, 1)  # Slight global lift
 
-    elif 'aerial' in scene_name.lower():
+    elif "aerial" in scene_name.lower():
         # Aerial: enhance greens, add clarity
         enhanced[:, :, 1] = np.clip(enhanced[:, :, 1] * 1.03, 0, 1)  # Green channel
 
-    elif 'kitchen' in scene_name.lower() or 'bathroom' in scene_name.lower():
+    elif "kitchen" in scene_name.lower() or "bathroom" in scene_name.lower():
         # Interior: subtle warmth, maintain neutrals
         enhanced[:, :, 0] = np.clip(enhanced[:, :, 0] * 1.01, 0, 1)  # Red channel
 
     # Universal enhancements
     # 1. Gentle S-curve for contrast (preserves highlights and shadows)
-    enhanced = enhanced ** 0.95
+    enhanced = enhanced**0.95
 
     # 2. Subtle saturation boost
     # Convert to HSV-like adjustment
@@ -144,18 +145,13 @@ def apply_luxury_enhancements(img_array: np.ndarray, scene_name: str) -> np.ndar
     return enhanced
 
 
-def process_single_view(
-    input_path: Path,
-    output_dir: Path,
-    save_jpeg: bool = True,
-    save_tiff: bool = True
-):
+def process_single_view(input_path: Path, output_dir: Path, save_jpeg: bool = True, save_tiff: bool = True):
     """
     Process a single view with maximum quality.
     """
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Processing: {input_path.name}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     # Load
     img_array, metadata = load_exr_or_tiff(input_path)
@@ -178,7 +174,7 @@ def process_single_view(
 
         # Convert to 16-bit
         img_16bit = (np.clip(enhanced, 0, 1) * 65535).astype(np.uint16)
-        save_16bit_tiff_tifffile(img_16bit, tiff_path, compression='lzw')
+        save_16bit_tiff_tifffile(img_16bit, tiff_path, compression="lzw")
 
         # Immediate verification
         verify = tifffile.imread(tiff_path)
@@ -187,7 +183,7 @@ def process_single_view(
 
         # Log bit depth confirmation
         print(f"✓ Verified 16-bit TIFF: dtype={verify.dtype}, range=[{verify.min()}, {verify.max()}]")
-        print(f"  - Size: {tiff_path.stat().st_size / (1024*1024):.2f} MB")
+        print(f"  - Size: {tiff_path.stat().st_size / (1024 * 1024):.2f} MB")
 
         outputs.append(tiff_path)
 
@@ -195,8 +191,8 @@ def process_single_view(
         # High-quality JPEG for web/preview
         jpeg_path = output_dir / f"{scene_name}_luxury.jpg"
         img_uint8 = (np.clip(enhanced, 0, 1) * 255).astype(np.uint8)
-        img_pil = Image.fromarray(img_uint8, mode='RGB')
-        img_pil.save(jpeg_path, 'JPEG', quality=98, optimize=True, subsampling=0)
+        img_pil = Image.fromarray(img_uint8, mode="RGB")
+        img_pil.save(jpeg_path, "JPEG", quality=98, optimize=True, subsampling=0)
         outputs.append(jpeg_path)
         print(f"✓ Saved JPEG: {jpeg_path.name}")
 
@@ -224,10 +220,10 @@ def main():
         print(f"❌ No EXR files found in {source_dir}")
         return 1
 
-    print(f"\n{'#'*80}")
+    print(f"\n{'#' * 80}")
     print("  750 PICACHO LANE - UNIFIED LUXURY PIPELINE")
     print("  Maximum Quality Processing")
-    print(f"{'#'*80}\n")
+    print(f"{'#' * 80}\n")
     print(f"Source: {source_dir}")
     print(f"Output: {output_dir}")
     print(f"Files to process: {len(exr_files)}\n")
@@ -237,30 +233,26 @@ def main():
     for i, exr_file in enumerate(exr_files, 1):
         print(f"\n[{i}/{len(exr_files)}] " + "=" * 70)
         try:
-            outputs = process_single_view(
-                input_path=exr_file,
-                output_dir=output_dir,
-                save_jpeg=True,
-                save_tiff=True
-            )
+            outputs = process_single_view(input_path=exr_file, output_dir=output_dir, save_jpeg=True, save_tiff=True)
             all_outputs.extend(outputs)
         except Exception as e:
             print(f"❌ Error processing {exr_file.name}: {e}")
             import traceback
+
             traceback.print_exc()
             continue
 
     # Summary
-    print(f"\n{'#'*80}")
+    print(f"\n{'#' * 80}")
     print("  PROCESSING COMPLETE")
-    print(f"{'#'*80}\n")
+    print(f"{'#' * 80}\n")
     print(f"Total files processed: {len(exr_files)}")
     print(f"Total outputs created: {len(all_outputs)}")
     print(f"\nOutputs saved to: {output_dir}\n")
 
     # Verify TIFFs
     print("\nVerifying TIFF quality...")
-    tiff_outputs = [f for f in all_outputs if f.suffix.lower() in ['.ti', '.tiff']]
+    tiff_outputs = [f for f in all_outputs if f.suffix.lower() in [".ti", ".tiff"]]
     if tiff_outputs:
         sample_tiff = tiff_outputs[0]
         img_verify = tifffile.imread(sample_tiff)

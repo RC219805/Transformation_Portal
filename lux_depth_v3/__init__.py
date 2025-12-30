@@ -35,8 +35,8 @@ from __future__ import annotations
 import os
 
 # Fix OpenMP duplicate library issue (must be set before importing DA3)
-if os.environ.get('KMP_DUPLICATE_LIB_OK') != 'TRUE':
-    os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+if os.environ.get("KMP_DUPLICATE_LIB_OK") != "TRUE":
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 __version__ = "0.1.0"
 __author__ = "RC219805"
@@ -60,12 +60,14 @@ DA3Backend = None
 
 try:
     from lux_depth_v3.validation import DepthQualityMetrics as _DQM
+
     DepthQualityMetrics = _DQM
 except ImportError:
     pass
 
 try:
     from lux_depth_v3.inference import DA3InferenceEngine as _Engine
+
     DA3InferenceEngine = _Engine
 except ImportError:
     pass
@@ -76,6 +78,7 @@ try:
         DA3CLI,
         check_da3_cli_available,
     )
+
     DA3Backend = _Backend
 except ImportError:
     DA3CLI = None

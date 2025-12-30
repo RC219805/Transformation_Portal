@@ -4,9 +4,9 @@
 
 This document describes the comprehensive property-specific training protocol for the **750 Picacho Lane luxury estate** in Montecito, CA. The protocol integrates architectural data analysis, material-aware optimization, and depth intelligence to produce a fully operational 4K 16-bit TIFF enhancement pipeline.
 
-**Project Number**: 24098.00  
-**Property Type**: Contemporary Mediterranean Luxury Estate  
-**Target Output**: 6 enhanced 4K 16-bit TIFF files  
+**Project Number**: 24098.00
+**Property Type**: Contemporary Mediterranean Luxury Estate
+**Target Output**: 6 enhanced 4K 16-bit TIFF files
 **Protocol Version**: 1.0.0
 
 ---

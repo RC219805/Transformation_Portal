@@ -156,4 +156,3 @@ DA3 reconsidered when:
 
 **Ready to merge**: Production deployment approved
 **Next action**: Structure scenes input-size sweep (6h, proven ROI)
-

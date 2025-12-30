@@ -1,7 +1,7 @@
 # Heavy Quality Benchmark Results
 
-**Date:** December 10, 2025  
-**Benchmark:** `benchmarks_heavy_quality_20251210_202928`  
+**Date:** December 10, 2025
+**Benchmark:** `benchmarks_heavy_quality_20251210_202928`
 **Test Images:** Aerial (6000×3600), Pool (6000×3375), GreatRoom (4000×3000)
 
 ## Executive Summary
@@ -236,7 +236,7 @@ Recommendation: Add memory instrumentation in future benchmarks if needed for la
 
 ---
 
-**Benchmark Status:** ✅ Complete  
-**Decision:** Enable heavy features by default  
-**Risk Level:** Low  
-**Quality Impact:** High  
+**Benchmark Status:** ✅ Complete
+**Decision:** Enable heavy features by default
+**Risk Level:** Low
+**Quality Impact:** High

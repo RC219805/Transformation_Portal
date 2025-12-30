@@ -119,7 +119,7 @@ __all__ = ["RRDBNet"]
 # This allows accessing package metadata (__version__, etc.) without torch installed
 def __getattr__(name):
     """Lazy import RRDBNet only when accessed.
-    
+
     This prevents ImportError when torch is not installed but user only needs
     package metadata or wants to check if basicsr_tp is available.
     """
@@ -390,6 +390,6 @@ The fixes follow Python best practices:
 
 ---
 
-**Report Generated:** 2025-11-24  
-**Branch:** copilot/identify-system-bug-fix  
+**Report Generated:** 2025-11-24
+**Branch:** copilot/identify-system-bug-fix
 **Commit:** b3799ad

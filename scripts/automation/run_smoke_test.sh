@@ -20,7 +20,7 @@ mkdir -p "$SMOKE_DIR"
 # Copy 2 test images (if validation_expanded exists)
 if [ -d "data/validation_expanded" ]; then
     echo "Copying test images from validation_expanded..."
-    
+
     # Find first 2 images
     COUNT=0
     for img in data/validation_expanded/*.{jpg,jpeg,png,tif,tiff} 2>/dev/null; do
@@ -33,11 +33,11 @@ if [ -d "data/validation_expanded" ]; then
             fi
         fi
     done
-    
+
     if [ $COUNT -lt 2 ]; then
         echo "⚠️  Warning: Only found $COUNT image(s) in validation_expanded"
         echo "Creating synthetic test images..."
-        
+
         # Create synthetic images using Python
         python3 -c "
 import numpy as np
@@ -114,41 +114,41 @@ ALL_PASS=true
 for metrics_file in "$OUTPUT_DIR"/*_metrics.json; do
     echo ""
     echo "File: $(basename $metrics_file)"
-    
+
     # Extract key fields
     scene_type=$(python3 -c "import json; print(json.load(open('$metrics_file')).get('scene_type', 'NULL'))")
     edge_f1=$(python3 -c "import json; print(json.load(open('$metrics_file')).get('edge_f1', 'NULL'))")
     lenient_pass=$(python3 -c "import json; print(json.load(open('$metrics_file')).get('lenient_pass', 'NULL'))")
-    
+
     echo "  scene_type: $scene_type"
     echo "  edge_f1: $edge_f1"
     echo "  lenient_pass: $lenient_pass"
-    
+
     # Check for NULL values
     if [ "$scene_type" == "NULL" ] || [ "$scene_type" == "None" ]; then
         echo "  ❌ FAIL: scene_type is NULL"
         ALL_PASS=false
     fi
-    
+
     if [ "$edge_f1" == "NULL" ] || [ "$edge_f1" == "None" ]; then
         echo "  ❌ FAIL: edge_f1 is NULL"
         ALL_PASS=false
     fi
-    
+
     if [ "$lenient_pass" == "NULL" ] || [ "$lenient_pass" == "None" ]; then
         echo "  ❌ FAIL: lenient_pass is NULL"
         ALL_PASS=false
     fi
-    
+
     # Check classification_factors exists
     has_factors=$(python3 -c "import json; print('classification_factors' in json.load(open('$metrics_file')))")
     echo "  classification_factors: $has_factors"
-    
+
     if [ "$has_factors" != "True" ]; then
         echo "  ❌ FAIL: classification_factors missing"
         ALL_PASS=false
     fi
-    
+
     if [ "$ALL_PASS" = true ]; then
         echo "  ✅ PASS: All required fields populated"
     fi

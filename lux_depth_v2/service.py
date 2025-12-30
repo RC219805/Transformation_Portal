@@ -16,17 +16,17 @@ def validate_filepath(filename: str) -> None:
     """Validate uploaded filename to prevent path traversal attacks."""
     if not filename:
         raise ValueError("Filename cannot be empty")
-    
+
     # Check for path traversal attempts
     if ".." in filename or "/" in filename or "\\" in filename:
         raise ValueError(f"Invalid filename: path traversal detected in '{filename}'")
-    
+
     # Check for suspicious characters
-    if any(c in filename for c in ['\x00', '\n', '\r']):
+    if any(c in filename for c in ["\x00", "\n", "\r"]):
         raise ValueError(f"Invalid filename: null or newline characters in '{filename}'")
-    
+
     # Verify extension is allowed
-    allowed_extensions = {'.tif', '.tiff', '.png', '.jpg', '.jpeg', '.webp', '.bmp'}
+    allowed_extensions = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".webp", ".bmp"}
     ext = Path(filename).suffix.lower()
     if ext not in allowed_extensions:
         raise ValueError(f"Invalid file extension: {ext}. Allowed: {allowed_extensions}")
@@ -46,8 +46,7 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
     except ImportError as e:
         missing = str(e).split("'")[-2] if "'" in str(e) else "unknown"
         raise RuntimeError(
-            f"Service mode requires fastapi, uvicorn, and slowapi. "
-            f"Install: pip install fastapi 'uvicorn[standard]' slowapi"
+            f"Service mode requires fastapi, uvicorn, and slowapi. Install: pip install fastapi 'uvicorn[standard]' slowapi"
         ) from e
 
     # Rate limiting (10 requests per minute per IP)
@@ -58,6 +57,7 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
 
     # Install observability (Prometheus /metrics + JSON logging + request correlation)
     from lux_depth_v2.observability import install_observability
+
     install_observability(app, service_name="lux_depth_v2")
 
     # Max upload size (100MB default)
@@ -75,11 +75,7 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
 
     @app.post("/v2/process")
     @limiter.limit("10/minute")
-    async def process(
-        request: Request,
-        image: UploadFile = File(...),
-        depth: Optional[UploadFile] = File(None)
-    ):
+    async def process(request: Request, image: UploadFile = File(...), depth: Optional[UploadFile] = File(None)):
         async with sem:
             # Validate filenames
             try:
@@ -92,16 +88,13 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
             # Check file size
             img_data = await image.read()
             if len(img_data) > MAX_UPLOAD_SIZE:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"Image too large: {len(img_data)} bytes (max {MAX_UPLOAD_SIZE})"
-                )
+                raise HTTPException(status_code=413, detail=f"Image too large: {len(img_data)} bytes (max {MAX_UPLOAD_SIZE})")
 
             req_id = uuid.uuid4().hex
             # Use sanitized filename
             safe_img_name = Path(image.filename or "image.png").name
             img_path = incoming_dir / f"{req_id}_{safe_img_name}"
-            
+
             with open(img_path, "wb") as f:
                 f.write(img_data)
 
@@ -110,8 +103,7 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
                 depth_data = await depth.read()
                 if len(depth_data) > MAX_UPLOAD_SIZE:
                     raise HTTPException(
-                        status_code=413,
-                        detail=f"Depth too large: {len(depth_data)} bytes (max {MAX_UPLOAD_SIZE})"
+                        status_code=413, detail=f"Depth too large: {len(depth_data)} bytes (max {MAX_UPLOAD_SIZE})"
                     )
                 safe_depth_name = Path(depth.filename or "depth.png").name
                 depth_path = incoming_dir / f"{req_id}_{safe_depth_name}"
@@ -132,28 +124,26 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
 
 def main() -> None:
     """Entry point for lux-depth-v2-service command.
-    
+
     This is a convenience wrapper that starts the service with default settings.
     For more control over configuration, use: lux-depth-v2 --service [options]
     """
     parser = argparse.ArgumentParser(
         description="Lux Depth V2 Service Mode (FastAPI server)",
-        epilog="For full configuration options, use: lux-depth-v2 --service --help"
+        epilog="For full configuration options, use: lux-depth-v2 --service --help",
     )
     parser.add_argument("--output-dir", type=str, required=True, help="Output directory for processed images")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=8088, help="Port to bind to (default: 8088)")
-    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "cpu"],
-                       help="Device to use (default: auto)")
-    
-    args = parser.parse_args()
-    
-    # Create minimal config for service mode
-    cfg = PipelineConfig(
-        output_dir=Path(args.output_dir),
-        device=args.device
+    parser.add_argument(
+        "--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Device to use (default: auto)"
     )
-    
+
+    args = parser.parse_args()
+
+    # Create minimal config for service mode
+    cfg = PipelineConfig(output_dir=Path(args.output_dir), device=args.device)
+
     logger = setup_logging("INFO")
     run_service(cfg, host=args.host, port=args.port, logger=logger)
 

@@ -60,12 +60,12 @@ Per `.github/workflows/feature-freeze-check.yml` lines 53-58, **allowed changes*
 
 This PR **explicitly excludes** all freeze-restricted activities:
 
-❌ **No new features** - Zero pipeline code changes  
-❌ **No model changes** - No retraining, no evolution  
-❌ **No taxonomy expansion** - Classification unchanged  
-❌ **No heuristic modifications** - Existing logic validated as-is  
-❌ **No architectural changes** - Pure validation layer  
-❌ **No breaking changes** - Backward compatible by design  
+❌ **No new features** - Zero pipeline code changes
+❌ **No model changes** - No retraining, no evolution
+❌ **No taxonomy expansion** - Classification unchanged
+❌ **No heuristic modifications** - Existing logic validated as-is
+❌ **No architectural changes** - Pure validation layer
+❌ **No breaking changes** - Backward compatible by design
 
 **Scope**: Measure and document existing capabilities. Do not expand.
 
@@ -136,9 +136,9 @@ From implied freeze policy (based on workflow):
 
 ## Freeze Approval Granted
 
-**Category**: Quality validation + documentation  
-**Risk Level**: Zero (no production code changes)  
-**Freeze Policy**: Explicitly allowed (test + documentation improvements)  
+**Category**: Quality validation + documentation
+**Risk Level**: Zero (no production code changes)
+**Freeze Policy**: Explicitly allowed (test + documentation improvements)
 **Precedent**: PR #577 (governance fix, freeze-approved)
 
 **Justification**: This PR **prevents quality regressions** by establishing a measurable baseline during freeze—exactly the kind of disciplined work freeze periods should encourage.

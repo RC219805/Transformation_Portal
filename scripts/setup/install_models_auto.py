@@ -23,7 +23,7 @@ def download_file(url, output_path):
         percent = min(100, (downloaded / total_size) * 100)
         mb_downloaded = downloaded / (1024 * 1024)
         mb_total = total_size / (1024 * 1024)
-        print(f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end='', flush=True)
+        print(f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end="", flush=True)
 
     try:
         urllib.request.urlretrieve(url, output_path, reporthook=report_progress)
@@ -38,6 +38,7 @@ def download_file(url, output_path):
 print("\n[1/4] Checking Depth Anything V2...")
 try:
     from transformers import AutoImageProcessor
+
     processor = AutoImageProcessor.from_pretrained("LiheYoung/depth-anything-small-h")
     print("✓ Depth Anything V2 ready")
 except Exception as e:
@@ -75,6 +76,7 @@ except ImportError:
 print("\n[4/4] Checking Stable Diffusion...")
 try:
     from huggingface_hub import snapshot_download
+
     snapshot_download(repo_id="runwayml/stable-diffusion-v1-5", allow_patterns=["*.json"])
     print("✓ Stable Diffusion v1.5 cached")
 except Exception:

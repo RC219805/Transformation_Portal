@@ -134,7 +134,7 @@ engine = DA3InferenceEngine(
     commercial_use=True,
     validate_license_strict=True
 )
-# RuntimeError: Model DA3NESTED-GIANT-LARGE-1.1 (CC-BY-NC-4.0) 
+# RuntimeError: Model DA3NESTED-GIANT-LARGE-1.1 (CC-BY-NC-4.0)
 #               cannot be used for commercial purposes.
 ```
 
@@ -188,7 +188,7 @@ lux-depth-v3 api-process image.jpg -o output \
 # License: CC-BY-NC-4.0
 # Commercial Use: ❌ Not Allowed
 # License URL: https://creativecommons.org/licenses/by-nc/4.0/
-# 
+#
 # Commercial Alternative: DA3METRIC-LARGE
 # ======================================================================
 ```
@@ -214,7 +214,7 @@ lux-depth-v3 api-process images/ -o output \
     -m nested-giant-large-v1.1 \
     --commercial \
     --strict-license
-# ERROR: Model DA3NESTED-GIANT-LARGE-1.1 (CC-BY-NC-4.0) 
+# ERROR: Model DA3NESTED-GIANT-LARGE-1.1 (CC-BY-NC-4.0)
 #        cannot be used for commercial purposes.
 ```
 
@@ -337,5 +337,5 @@ For licensing questions:
 
 ---
 
-**Last Updated:** December 19, 2024  
+**Last Updated:** December 19, 2024
 **Disclaimer:** This is not legal advice. Consult a lawyer for commercial deployments.

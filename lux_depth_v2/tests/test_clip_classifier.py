@@ -18,7 +18,7 @@ import numpy as np
 @pytest.fixture
 def sample_rgb_tensor():
     """Sample RGB tensor for testing.
-    
+
     Phase 2: Replace with actual pool/kitchen test images.
     """
     # Mock torch tensor (will need actual torch tensor in implementation)
@@ -28,7 +28,7 @@ def sample_rgb_tensor():
 @pytest.fixture
 def clip_classifier_config():
     """CLIP classifier configuration.
-    
+
     Phase 2: Create proper configuration dataclass.
     """
     return {
@@ -39,14 +39,14 @@ def clip_classifier_config():
 
 class TestCLIPModelLoading:
     """Test CLIP model loading and initialization.
-    
+
     Phase 2: Implement once CLIPMaterialClassifier is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_model_loads_successfully(self, clip_classifier_config):
         """Test that CLIP model loads without errors.
-        
+
         Expected behavior:
         - Model loads from OpenAI or HuggingFace
         - Vision and text encoders initialized
@@ -55,11 +55,11 @@ class TestCLIPModelLoading:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_model_variant_selection(self):
         """Test different CLIP model variants.
-        
+
         Expected behavior:
         - ViT-B/32: Fast, 224px, good accuracy
         - ViT-L/14: Slower, 336px, best accuracy
@@ -71,14 +71,14 @@ class TestCLIPModelLoading:
 
 class TestZeroShotClassification:
     """Test zero-shot material classification.
-    
+
     Phase 2: Implement once classify_image() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_classify_pool_scene(self, sample_rgb_tensor, clip_classifier_config):
         """Test classification of pool scene materials.
-        
+
         Expected behavior:
         - Detects pool_water with high confidence (>0.8)
         - Detects stone_paver with medium confidence (>0.6)
@@ -90,11 +90,11 @@ class TestZeroShotClassification:
         # materials = classifier.classify_image(sample_rgb_tensor)
         # assert materials["pool_water"] > 0.8
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_classification_accuracy_threshold(self):
         """Test that classification accuracy meets >85% threshold.
-        
+
         Expected behavior:
         - Validate on ground truth dataset
         - Overall accuracy > 85%
@@ -102,11 +102,11 @@ class TestZeroShotClassification:
         """
         # Phase 2: Implement test with validation dataset
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_material_templates_effectiveness(self):
         """Test different material classification templates.
-        
+
         Expected behavior:
         - "a photo of {material}" baseline template
         - Context-aware templates improve accuracy
@@ -118,14 +118,14 @@ class TestZeroShotClassification:
 
 class TestNaturalLanguageQuery:
     """Test natural language query interface.
-    
+
     Phase 2: Implement once query_natural_language() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_query_reflective_surfaces(self, sample_rgb_tensor):
         """Test query for reflective surfaces.
-        
+
         Expected behavior:
         - Query: "surfaces that would reflect light"
         - Returns mask highlighting glass, water, polished metal
@@ -133,11 +133,11 @@ class TestNaturalLanguageQuery:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_query_natural_materials(self, sample_rgb_tensor):
         """Test query for natural materials.
-        
+
         Expected behavior:
         - Query: "natural materials like wood or stone"
         - Returns mask highlighting wood, stone, vegetation
@@ -145,11 +145,11 @@ class TestNaturalLanguageQuery:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_query_water_features(self, sample_rgb_tensor):
         """Test query for water features.
-        
+
         Expected behavior:
         - Query: "water features"
         - Returns mask highlighting pool, fountains
@@ -161,14 +161,14 @@ class TestNaturalLanguageQuery:
 
 class TestHybridSegFormerCLIPFusion:
     """Test hybrid SegFormer+CLIP fusion.
-    
+
     Phase 2: Implement once fuse_with_segformer() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_fusion_improves_accuracy(self):
         """Test that fusion improves accuracy over SegFormer alone.
-        
+
         Expected behavior:
         - SegFormer provides spatial priors (WHERE)
         - CLIP refines classification (WHAT)
@@ -176,11 +176,11 @@ class TestHybridSegFormerCLIPFusion:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_confidence_weighted_fusion(self):
         """Test confidence-weighted fusion algorithm.
-        
+
         Expected behavior:
         - High SegFormer confidence: trust SegFormer (alpha ~ 0.8)
         - Low SegFormer confidence: trust CLIP (alpha ~ 0.2)
@@ -188,11 +188,11 @@ class TestHybridSegFormerCLIPFusion:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_conflict_resolution(self):
         """Test resolution of SegFormer-CLIP conflicts.
-        
+
         Expected behavior:
         - When SegFormer says "wood" and CLIP says "metal":
           - Use confidence scores to resolve
@@ -201,11 +201,11 @@ class TestHybridSegFormerCLIPFusion:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_boundary_refinement_with_clip(self):
         """Test boundary refinement using CLIP attention maps.
-        
+
         Expected behavior:
         - CLIP attention maps highlight material boundaries
         - Boundaries refined to align with attention edges
@@ -217,14 +217,14 @@ class TestHybridSegFormerCLIPFusion:
 
 class TestMaterialQueryTemplates:
     """Test material query template effectiveness.
-    
+
     Phase 2: Implement once _get_material_templates() is complete.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_pool_water_templates(self):
         """Test pool water classification templates.
-        
+
         Expected templates:
         - "a photo of pool water"
         - "clear blue swimming pool water"
@@ -232,11 +232,11 @@ class TestMaterialQueryTemplates:
         """
         # Phase 2: Implement test
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_architectural_material_templates(self):
         """Test architectural material templates.
-        
+
         Expected templates:
         - Stucco: "textured stucco wall in architectural photography"
         - Stone: "natural stone paving in architectural design"
@@ -248,14 +248,14 @@ class TestMaterialQueryTemplates:
 
 class TestCLIPBenchmarking:
     """Benchmark CLIP classifier performance.
-    
+
     Phase 2: Implement comprehensive benchmarking suite.
     """
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_classification_accuracy_benchmark(self):
         """Benchmark classification accuracy on validation set.
-        
+
         Expected metrics:
         - Overall accuracy > 85%
         - Per-material accuracy > 75%
@@ -264,11 +264,11 @@ class TestCLIPBenchmarking:
         """
         # Phase 2: Implement benchmark
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_inference_time_benchmark(self):
         """Benchmark inference time per image.
-        
+
         Expected performance:
         - Single image: < 100ms (ViT-B/32)
         - Batch processing: < 50ms/image (batch=8)
@@ -276,11 +276,11 @@ class TestCLIPBenchmarking:
         """
         # Phase 2: Implement benchmark
         pass
-    
+
     @pytest.mark.skip(reason="Phase 2 stub - implementation pending")
     def test_hybrid_fusion_accuracy_gain(self):
         """Benchmark hybrid fusion accuracy gain.
-        
+
         Expected metrics:
         - SegFormer alone: baseline accuracy
         - CLIP alone: comparison accuracy

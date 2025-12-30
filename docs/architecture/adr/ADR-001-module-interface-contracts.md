@@ -1,8 +1,8 @@
 # ADR-001: Module Interface Contracts
 
-**Date**: December 7, 2025  
-**Status**: Accepted  
-**Implementation Date**: December 7, 2025  
+**Date**: December 7, 2025
+**Status**: Accepted
+**Implementation Date**: December 7, 2025
 **Architect**: Transformation Portal Architecture Team
 
 ## Context
@@ -42,55 +42,55 @@ import numpy as np
 class ImageProcessor(ABC):
     """
     Base interface for all image processing operations.
-    
+
     Contract:
     - Must accept numpy array (H, W, C) in [0, 1] float or [0, 255] uint8
     - Must return numpy array of same shape and dtype
     - Must be stateless OR clearly document state management
     - Configuration must be serializable (for reproducibility)
     """
-    
+
     @abstractmethod
     def process(self, image: np.ndarray, **kwargs) -> np.ndarray:
         """
         Process input image.
-        
+
         Args:
             image: Input image (H, W, C) numpy array
             **kwargs: Processor-specific parameters
-            
+
         Returns:
             Processed image, same shape and dtype as input
-            
+
         Raises:
             ValueError: If image format is invalid
             ProcessingError: If processing fails
         """
         pass
-    
+
     @abstractmethod
     def get_config(self) -> Dict[str, Any]:
         """
         Return current processor configuration.
-        
+
         Returns:
             Dictionary of configuration parameters (JSON-serializable)
         """
         pass
-    
+
     def validate_input(self, image: np.ndarray) -> None:
         """
         Validate input image meets contract requirements.
-        
+
         Raises:
             ValueError: If image format invalid
         """
         if not isinstance(image, np.ndarray):
             raise ValueError(f"Expected numpy array, got {type(image)}")
-        
+
         if image.ndim not in (2, 3):
             raise ValueError(f"Expected 2D or 3D array, got {image.ndim}D")
-        
+
         if image.ndim == 3 and image.shape[2] not in (1, 3, 4):
             raise ValueError(f"Expected 1, 3, or 4 channels, got {image.shape[2]}")
 ```
@@ -145,18 +145,18 @@ class ImageProcessor(ABC):
 ## Alternatives Considered
 
 ### Alternative 1: Protocol (PEP 544) Structural Subtyping
-**Pros**: No explicit inheritance, more flexible  
-**Cons**: Weaker enforcement, harder to document  
+**Pros**: No explicit inheritance, more flexible
+**Cons**: Weaker enforcement, harder to document
 **Rejected**: Explicit ABCs provide clearer contracts
 
 ### Alternative 2: TypedDict for Configuration
-**Pros**: Type-safe configuration  
-**Cons**: Doesn't enforce method contracts  
+**Pros**: Type-safe configuration
+**Cons**: Doesn't enforce method contracts
 **Rejected**: Complements but doesn't replace interfaces
 
 ### Alternative 3: No Interfaces (Status Quo)
-**Pros**: No migration effort  
-**Cons**: Continues current coupling and boundary violations  
+**Pros**: No migration effort
+**Cons**: Continues current coupling and boundary violations
 **Rejected**: Technical debt will compound
 
 ## Validation Criteria
@@ -174,15 +174,15 @@ def test_material_response_implements_interface():
     """Verify MaterialResponse conforms to ImageProcessor interface."""
     from transformation_portal.interfaces import ImageProcessor
     from transformation_portal.processors.material_response import MaterialResponse
-    
+
     # Structural check
     assert issubclass(MaterialResponse, ImageProcessor)
-    
+
     # Behavioral check
     processor = MaterialResponse()
     image = np.random.rand(100, 100, 3).astype(np.float32)
     result = processor.process(image)
-    
+
     # Contract validation
     assert result.shape == image.shape
     assert result.dtype == image.dtype
@@ -205,8 +205,8 @@ def test_material_response_implements_interface():
 
 ---
 
-**Approval**: Accepted and Implemented  
-**Implementation**: Completed December 7, 2025  
+**Approval**: Accepted and Implemented
+**Implementation**: Completed December 7, 2025
 **Review Date**: March 7, 2026
 
 ## Implementation Status

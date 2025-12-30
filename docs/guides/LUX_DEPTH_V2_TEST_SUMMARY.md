@@ -253,6 +253,6 @@ A side-by-side comparison image has been generated:
 - `LUX_DEPTH_V2_TEST_SUMMARY.md` - This document
 - Log files: `test_lux_depth_v2_pool*.log`
 
-**Test Date**: December 6, 2025  
-**Status**: COMPLETE ✅  
+**Test Date**: December 6, 2025
+**Status**: COMPLETE ✅
 **Recommendation**: Deploy with depth maps enabled for optimal results

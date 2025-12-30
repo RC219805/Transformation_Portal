@@ -77,7 +77,7 @@ Issues = "https://github.com/RC219805/Transformation_Portal/issues"
 packages = []
 py-modules = [
     "cli",
-    "config", 
+    "config",
     "da3_wrapper",
     "export",
     "inference",

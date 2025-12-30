@@ -40,6 +40,7 @@ class WaterCandidateReport:
     PR-W3 adds edge refinement tracking.
     PR-W4 adds two-stage gating telemetry.
     """
+
     present: bool  # Water detected and passed thresholds
     coverage: float  # 0.0-1.0 (fraction of image)
     coverage_px: int  # Absolute pixel count
@@ -121,16 +122,18 @@ class ConfidenceSemantics:
     edge_threshold: float = 0.30  # Edge band lower threshold
 
     # Per-material overrides
-    material_thresholds: Dict[str, float] = field(default_factory=lambda: {
-        'wood': 0.65,
-        'metal': 0.60,
-        'glass': 0.40,  # Inherently low confidence
-        'water': 0.35,  # Highly variable
-        'stone': 0.65,
-        'fabric': 0.55,
-        'foliage': 0.45,
-        'polished': 0.45,
-    })
+    material_thresholds: Dict[str, float] = field(
+        default_factory=lambda: {
+            "wood": 0.65,
+            "metal": 0.60,
+            "glass": 0.40,  # Inherently low confidence
+            "water": 0.35,  # Highly variable
+            "stone": 0.65,
+            "fabric": 0.55,
+            "foliage": 0.45,
+            "polished": 0.45,
+        }
+    )
 
     # Edge-aware gating
     use_edge_confidence: bool = True
@@ -174,32 +177,57 @@ class ExpandedTaxonomyConfig:
     enabled: bool = False  # Feature gate
 
     # Semantic layer (SegFormer→buckets)
-    semantic_classes: List[str] = field(default_factory=lambda: [
-        'sky', 'building', 'wall', 'floor', 'ceiling',
-        'window', 'door', 'furniture', 'vegetation',
-        'water', 'ground', 'road', 'sidewalk'
-    ])
+    semantic_classes: List[str] = field(
+        default_factory=lambda: [
+            "sky",
+            "building",
+            "wall",
+            "floor",
+            "ceiling",
+            "window",
+            "door",
+            "furniture",
+            "vegetation",
+            "water",
+            "ground",
+            "road",
+            "sidewalk",
+        ]
+    )
 
     # Material layer (what matters for response)
-    material_classes: List[str] = field(default_factory=lambda: [
-        'wood_grain', 'wood_smooth',
-        'stone_paver', 'stone_wall', 'stone_counter',
-        'metal_brushed', 'metal_polished',
-        'glass_clear', 'glass_frosted',
-        'water_surface', 'water_volume',
-        'fabric_matte', 'fabric_glossy',
-        'stucco', 'painted_plaster',
-        'ceramic_tile', 'ceramic_glazed',
-    ])
+    material_classes: List[str] = field(
+        default_factory=lambda: [
+            "wood_grain",
+            "wood_smooth",
+            "stone_paver",
+            "stone_wall",
+            "stone_counter",
+            "metal_brushed",
+            "metal_polished",
+            "glass_clear",
+            "glass_frosted",
+            "water_surface",
+            "water_volume",
+            "fabric_matte",
+            "fabric_glossy",
+            "stucco",
+            "painted_plaster",
+            "ceramic_tile",
+            "ceramic_glazed",
+        ]
+    )
 
     # Mapping: semantic→material (simple heuristics for now)
-    semantic_to_material_map: Dict[str, List[str]] = field(default_factory=lambda: {
-        'window': ['glass_clear', 'glass_frosted', 'metal_brushed'],
-        'floor': ['wood_grain', 'stone_paver', 'ceramic_tile'],
-        'wall': ['stucco', 'painted_plaster', 'wood_smooth'],
-        'water': ['water_surface', 'water_volume'],
-        # etc.
-    })
+    semantic_to_material_map: Dict[str, List[str]] = field(
+        default_factory=lambda: {
+            "window": ["glass_clear", "glass_frosted", "metal_brushed"],
+            "floor": ["wood_grain", "stone_paver", "ceramic_tile"],
+            "wall": ["stucco", "painted_plaster", "wood_smooth"],
+            "water": ["water_surface", "water_volume"],
+            # etc.
+        }
+    )
 
 
 @dataclass
@@ -232,7 +260,7 @@ class MaterialsV3Config:
     cache_enabled: bool = False
 
     # Backend compatibility
-    backend: str = 'segformer'  # Inherit from SegmentationConfig
+    backend: str = "segformer"  # Inherit from SegmentationConfig
 
     # Lighting-aware tuning (optional, deferred until lighting validated)
     lighting_aware: bool = False
@@ -297,6 +325,7 @@ class MaterialsV3Engine:
         if config.water_detection_enabled:
             try:
                 from .water_candidate import WaterCandidateDetector, SCIPY_AVAILABLE, SKIMAGE_AVAILABLE
+
                 if not (SCIPY_AVAILABLE and SKIMAGE_AVAILABLE):
                     log.warning(
                         "Water detection enabled but scipy/scikit-image not available. "
@@ -373,10 +402,7 @@ class MaterialsV3Engine:
                 }
             else:
                 # Try to find which emitted classes might have mapped
-                possible_sources = [
-                    k for k in raw_materials.keys()
-                    if normalize_material_name(k) == canonical_target
-                ]
+                possible_sources = [k for k in raw_materials.keys() if normalize_material_name(k) == canonical_target]
 
                 status = {
                     "present": False,
@@ -626,8 +652,7 @@ class MaterialsV3Engine:
             # V1: Apply boost when low saturation detected, UNLESS glass suppressor fired
             # Glass suppressor indicates architectural glass (false positive), not a pool
             # Flat surface suppressor indicates a desaturated pool (legitimate, needs rescue)
-            if (avg_saturation < self.config.water_saturation_boost_threshold and
-                    not glass_grid_suppressed):
+            if avg_saturation < self.config.water_saturation_boost_threshold and not glass_grid_suppressed:
                 confidence_final = min(1.0, confidence_after_suppressors + self.config.water_saturation_boost_amount)
                 saturation_boost_applied = True
 
@@ -652,9 +677,7 @@ class MaterialsV3Engine:
         if present and self.config.water_edge_refinement_enabled:
             if confidence_final >= self.config.water_edge_refinement_min_confidence:
                 refined_mask = self._refine_water_edges(
-                    rgb01=rgb01,
-                    water_candidate_mask=result.mask,
-                    water_confidence=confidence_final
+                    rgb01=rgb01, water_candidate_mask=result.mask, water_confidence=confidence_final
                 )
 
                 if refined_mask is not None:
@@ -729,10 +752,10 @@ class MaterialsV3Engine:
             True if candidate passes thresholds and should be injected
         """
         return (
-            water_candidate.present and
-            water_candidate.source == "heuristic" and  # Only inject heuristics, not SegFormer
-            water_candidate.coverage >= self.config.water_min_coverage and
-            water_candidate.confidence >= self.config.water_candidate_confidence_threshold
+            water_candidate.present
+            and water_candidate.source == "heuristic"  # Only inject heuristics, not SegFormer
+            and water_candidate.coverage >= self.config.water_min_coverage
+            and water_candidate.confidence >= self.config.water_candidate_confidence_threshold
         )
 
     def _build_water_material(
@@ -750,11 +773,7 @@ class MaterialsV3Engine:
         # Return the mask from candidate (already float32)
         return water_candidate.mask
 
-    def _extract_boundary(
-        self,
-        mask: np.ndarray,
-        width: int = 5
-    ) -> np.ndarray:
+    def _extract_boundary(self, mask: np.ndarray, width: int = 5) -> np.ndarray:
         """Extract boundary region of mask (PR-W3).
 
         Args:
@@ -777,10 +796,7 @@ class MaterialsV3Engine:
         return boundary
 
     def _sample_prompts_from_mask(
-        self,
-        mask: np.ndarray,
-        confidence_threshold: float = 0.7,
-        num_samples: int = 5
+        self, mask: np.ndarray, confidence_threshold: float = 0.7, num_samples: int = 5
     ) -> List[Tuple[int, int]]:
         """Sample point prompts from high-confidence regions (PR-W3).
 
@@ -811,11 +827,7 @@ class MaterialsV3Engine:
         prompts = [(int(y_coords[i]), int(x_coords[i])) for i in indices]
         return prompts
 
-    def _compute_roi_bbox(
-        self,
-        mask: np.ndarray,
-        padding: int = 50
-    ) -> Tuple[int, int, int, int]:
+    def _compute_roi_bbox(self, mask: np.ndarray, padding: int = 50) -> Tuple[int, int, int, int]:
         """Compute ROI bounding box around mask region (PR-W3).
 
         Args:
@@ -842,11 +854,7 @@ class MaterialsV3Engine:
 
         return (int(y0), int(y1), int(x0), int(x1))
 
-    def _crop_to_roi(
-        self,
-        image: np.ndarray,
-        bbox: Tuple[int, int, int, int]
-    ) -> np.ndarray:
+    def _crop_to_roi(self, image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.ndarray:
         """Crop image to ROI (PR-W3).
 
         Args:
@@ -860,10 +868,7 @@ class MaterialsV3Engine:
         return image[y0:y1, x0:x1]
 
     def _uncrop_from_roi(
-        self,
-        mask_roi: np.ndarray,
-        bbox: Tuple[int, int, int, int],
-        full_shape: Tuple[int, int]
+        self, mask_roi: np.ndarray, bbox: Tuple[int, int, int, int], full_shape: Tuple[int, int]
     ) -> np.ndarray:
         """Map ROI mask back to full resolution (PR-W3).
 
@@ -881,10 +886,7 @@ class MaterialsV3Engine:
         return full_mask
 
     def _refine_water_edges(
-        self,
-        rgb01: np.ndarray,
-        water_candidate_mask: np.ndarray,
-        water_confidence: float
+        self, rgb01: np.ndarray, water_candidate_mask: np.ndarray, water_confidence: float
     ) -> Optional[np.ndarray]:
         """Refine water edges using EfficientSAM (PR-W3).
 
@@ -922,11 +924,7 @@ class MaterialsV3Engine:
             return None
 
         # Generate prompts from high-confidence regions
-        prompts = self._sample_prompts_from_mask(
-            water_candidate_mask,
-            confidence_threshold=0.7,
-            num_samples=5
-        )
+        prompts = self._sample_prompts_from_mask(water_candidate_mask, confidence_threshold=0.7, num_samples=5)
 
         if len(prompts) == 0:
             log.debug("PR-W3: No high-confidence prompts found, skipping refinement")
@@ -939,10 +937,7 @@ class MaterialsV3Engine:
         # Try to run EfficientSAM
         try:
             # Check if EfficientSAM backend is available
-            from .backends.efficientsam_backend import (
-                EfficientSAMBackend,
-                PointPrompt
-            )
+            from .backends.efficientsam_backend import EfficientSAMBackend, PointPrompt
 
             # Adjust prompts to ROI coordinates and create PointPrompt objects
             y0, y1, x0, x1 = roi_bbox
@@ -967,18 +962,12 @@ class MaterialsV3Engine:
             rgb_roi_uint8 = (rgb_roi * 255).astype(np.uint8) if rgb_roi.dtype == np.float32 else rgb_roi
 
             # Run segmentation
-            sam_mask_roi = sam_backend.segment(
-                rgb_roi_uint8,
-                prompts=roi_prompts
-            )
+            sam_mask_roi = sam_backend.segment(rgb_roi_uint8, prompts=roi_prompts)
 
             # Map back to full resolution
             refined_mask = self._uncrop_from_roi(sam_mask_roi, roi_bbox, rgb01.shape[:2])
 
-            log.info(
-                f"PR-W3: Edge refinement successful "
-                f"(boundary={boundary_px}px, prompts={len(prompts)})"
-            )
+            log.info(f"PR-W3: Edge refinement successful (boundary={boundary_px}px, prompts={len(prompts)})")
             return refined_mask
 
         except Exception as e:
@@ -1024,11 +1013,11 @@ class MaterialsV3Engine:
 
         # Extract masks from segmentation result
         # Segmentation result is typically dict with 'materials' key containing masks
-        if 'materials' not in segmentation_result:
+        if "materials" not in segmentation_result:
             log.warning("No 'materials' key in segmentation_result; V3 pass-through")
             return segmentation_result
 
-        raw_materials = segmentation_result['materials']
+        raw_materials = segmentation_result["materials"]
 
         # PR-3A Step 1: Canonicalize material keys
         canonical_materials = normalize_material_dict(raw_materials)
@@ -1045,7 +1034,7 @@ class MaterialsV3Engine:
             water_mask = self._build_water_material(water_candidate)
             canonical_materials["water"] = water_mask
             # Also inject into original materials dict so it's visible to downstream
-            segmentation_result['materials']["water"] = water_mask
+            segmentation_result["materials"]["water"] = water_mask
             log.info(
                 f"PR-W2: Injected heuristic water mask "
                 f"(confidence={water_candidate.confidence:.3f}, "
@@ -1111,7 +1100,7 @@ class MaterialsV3Engine:
         )
         class_audit["water"] = water_audit
 
-        segmentation_result['materials_v3'] = {
+        segmentation_result["materials_v3"] = {
             "enabled": True,
             "taxonomy": self.config.taxonomy.value,
             "refinement_strategy": self.config.refine_edges.value,
@@ -1132,7 +1121,7 @@ class MaterialsV3Engine:
             rgb_image=image,  # PR-4C: for edge signal computation
         )
 
-        segmentation_result['materials_v3_response_plan'] = response_plan
+        segmentation_result["materials_v3_response_plan"] = response_plan
 
         # Still return original masks (no pixel changes in PR-3A/PR-4A)
         return segmentation_result
@@ -1163,7 +1152,7 @@ class MaterialsV3Engine:
 
         # Edge band: pixels near boundary
         # Use edge_gating config if available
-        edge_width = getattr(self.config.edge_gating, 'edge_low', 0.20)
+        edge_width = getattr(self.config.edge_gating, "edge_low", 0.20)
         iterations = max(1, int(edge_width * 10))  # heuristic
 
         # Erode and dilate to get boundary band
@@ -1187,22 +1176,26 @@ class MaterialsV3Engine:
         """
         report = {
             "enabled": self.config.enabled,
-            "taxonomy": (self.config.taxonomy.value
-                         if isinstance(self.config.taxonomy, MaterialTaxonomy)
-                         else str(self.config.taxonomy)),
-            "refinement_strategy": (self.config.refine_edges.value
-                                    if isinstance(self.config.refine_edges, RefinementStrategy)
-                                    else str(self.config.refine_edges)),
+            "taxonomy": (
+                self.config.taxonomy.value if isinstance(self.config.taxonomy, MaterialTaxonomy) else str(self.config.taxonomy)
+            ),
+            "refinement_strategy": (
+                self.config.refine_edges.value
+                if isinstance(self.config.refine_edges, RefinementStrategy)
+                else str(self.config.refine_edges)
+            ),
             "edge_gating_enabled": self.config.edge_gating.enabled,
         }
 
         # Include per-class stats if available
-        if segmentation_result and 'materials_v3' in segmentation_result:
-            v3_data = segmentation_result['materials_v3']
-            report.update({
-                "per_class_stats": v3_data.get("per_class_stats", {}),
-                "canonical_materials": v3_data.get("canonical_materials", []),
-            })
+        if segmentation_result and "materials_v3" in segmentation_result:
+            v3_data = segmentation_result["materials_v3"]
+            report.update(
+                {
+                    "per_class_stats": v3_data.get("per_class_stats", {}),
+                    "canonical_materials": v3_data.get("canonical_materials", []),
+                }
+            )
 
         return report
 
@@ -1225,7 +1218,7 @@ class MaterialsV3Engine:
             Enhanced image (HxWx3 float32) + pixel_ops_stats dict
         """
         # Check if pixel ops are enabled
-        pixel_ops_enabled = getattr(self.config, 'apply_pixel_ops', False)
+        pixel_ops_enabled = getattr(self.config, "apply_pixel_ops", False)
 
         if not pixel_ops_enabled:
             return image, {"enabled": False, "reason": "disabled_by_config"}
@@ -1235,12 +1228,7 @@ class MaterialsV3Engine:
         glass_plan = per_class.get("glass", {})
 
         should_refine = bool(glass_plan.get("should_refine", False))
-        plan_reason = (
-            glass_plan.get("refine_reason")
-            or glass_plan.get("skip_reason")
-            or glass_plan.get("reason")
-            or None
-        )
+        plan_reason = glass_plan.get("refine_reason") or glass_plan.get("skip_reason") or glass_plan.get("reason") or None
 
         forced = bool(getattr(self.config, "force_glass_pixel_ops", False))
         if forced:
@@ -1260,6 +1248,7 @@ class MaterialsV3Engine:
         # Extract glass mask
         canonical_materials = segmentation_result.get("materials", {})
         from .materials_v3_taxonomy import normalize_material_dict
+
         normalized = normalize_material_dict(canonical_materials)
 
         glass_mask = normalized.get("glass")
@@ -1267,7 +1256,7 @@ class MaterialsV3Engine:
             return image, {"enabled": False, "reason": "glass_mask_missing"}
 
         # Convert mask to numpy float32 if needed
-        if hasattr(glass_mask, 'cpu'):  # torch tensor
+        if hasattr(glass_mask, "cpu"):  # torch tensor
             glass_mask = glass_mask.cpu().numpy()
         if glass_mask.ndim == 4:  # (1,1,H,W)
             glass_mask = glass_mask[0, 0]
@@ -1319,8 +1308,8 @@ class MaterialsV3Engine:
             Enhanced image (HxWx3 float32) + pixel_ops_stats dict
         """
         # Check if pixel ops are enabled
-        pixel_ops_enabled = getattr(self.config, 'apply_pixel_ops', False)
-        stone_enabled = getattr(self.config, 'stone_response_enabled', False)
+        pixel_ops_enabled = getattr(self.config, "apply_pixel_ops", False)
+        stone_enabled = getattr(self.config, "stone_response_enabled", False)
 
         if not pixel_ops_enabled or not stone_enabled:
             return image, {"enabled": False, "reason": "disabled_by_config"}
@@ -1330,12 +1319,7 @@ class MaterialsV3Engine:
         stone_plan = per_class.get("stone", {})
 
         should_refine = bool(stone_plan.get("should_refine", False))
-        plan_reason = (
-            stone_plan.get("refine_reason")
-            or stone_plan.get("skip_reason")
-            or stone_plan.get("reason")
-            or None
-        )
+        plan_reason = stone_plan.get("refine_reason") or stone_plan.get("skip_reason") or stone_plan.get("reason") or None
 
         forced = bool(getattr(self.config, "force_stone_pixel_ops", False))
         if forced:
@@ -1355,6 +1339,7 @@ class MaterialsV3Engine:
         # Extract stone mask
         canonical_materials = segmentation_result.get("materials", {})
         from .materials_v3_taxonomy import normalize_material_dict
+
         normalized = normalize_material_dict(canonical_materials)
 
         stone_mask = normalized.get("stone")
@@ -1362,7 +1347,7 @@ class MaterialsV3Engine:
             return image, {"enabled": False, "reason": "stone_mask_missing"}
 
         # Convert mask to numpy float32 if needed
-        if hasattr(stone_mask, 'cpu'):  # torch tensor
+        if hasattr(stone_mask, "cpu"):  # torch tensor
             stone_mask = stone_mask.cpu().numpy()
         if stone_mask.ndim == 4:  # (1,1,H,W)
             stone_mask = stone_mask[0, 0]
@@ -1380,7 +1365,7 @@ class MaterialsV3Engine:
         stone_cfg = StoneResponseConfig()
         enhanced, stats = apply_stone_response(image, stone_mask, stone_cfg, stone_plan)
 
-        if stats.get('applied', False):
+        if stats.get("applied", False):
             log.info(
                 f"PR-4D Stone Response: "
                 f"core={stats.get('core_px', 0)}px, edge={stats.get('edge_px', 0)}px, "
@@ -1390,9 +1375,9 @@ class MaterialsV3Engine:
 
         return enhanced, {
             "enabled": True,
-            "applied": stats.get('applied', False),
-            "applied_to": ["stone"] if stats.get('applied', False) else [],
+            "applied": stats.get("applied", False),
+            "applied_to": ["stone"] if stats.get("applied", False) else [],
             "forced": forced,
-            "reason": plan_reason if stats.get('applied', False) else stats.get('reason', 'unknown'),
+            "reason": plan_reason if stats.get("applied", False) else stats.get("reason", "unknown"),
             "stone_stats": stats,
         }

@@ -1,6 +1,6 @@
 # How to Fully Implement Training - Complete Action Plan
 
-**Last Updated:** 2025-11-19  
+**Last Updated:** 2025-11-19
 **Status:** ✅ Infrastructure Complete & Validated - Ready for Production Training
 
 ---
@@ -89,14 +89,14 @@ python -c "import torch; print(f'PyTorch {torch.__version__} ready')"
 
 **Expected Results:**
 - 530+ training pairs from real luxury estate project
-- 103-107/100 quality (vs 78/100 baseline) 
+- 103-107/100 quality (vs 78/100 baseline)
 - +13-15 dB PSNR improvement
 - +28-31% SSIM improvement
 - Excellent material realism
 
 **Training Time:**
 - M4 Max (MPS): 2.5-3.5 hours
-- NVIDIA GPU (CUDA): 3-4 hours  
+- NVIDIA GPU (CUDA): 3-4 hours
 - CPU only: 12-18 hours (not recommended)
 
 ---
@@ -421,7 +421,7 @@ python src/enhancements/hyper_reality_enhancement.py \
    ```bash
    # For NVIDIA GPU:
    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-   
+
    # For Apple Silicon:
    pip install torch torchvision  # Should work automatically
    export PYTORCH_ENABLE_MPS_FALLBACK=1
@@ -444,7 +444,7 @@ python src/enhancements/hyper_reality_enhancement.py \
    ```bash
    # Try batch size 2
    ./scripts/train_with_750picacho.sh --batch-size 2
-   
+
    # Or batch size 1 (slowest but safest)
    ./scripts/train_with_750picacho.sh --batch-size 1
    ```
@@ -474,7 +474,7 @@ python src/enhancements/hyper_reality_enhancement.py \
    # Verify data exists
    ls projects/750_picacho_lane/Final_Production_UltraQuality/
    ls "extracted_context/24098.00_750 PICACHO LANE_images/"
-   
+
    # If missing, use synthetic data instead:
    ./scripts/quickstart_training.sh
    ```
@@ -570,7 +570,7 @@ python src/enhancements/hyper_reality_enhancement.py \
    ```bash
    # Increase epochs
    ./scripts/train_with_750picacho.sh --epochs 100
-   
+
    # Use real data instead of synthetic
    ./scripts/train_with_750picacho.sh  # vs quickstart_training.sh
    ```
@@ -675,17 +675,17 @@ python src/enhancements/train_hyper_reality.py --lr 5e-4
 
 You know training succeeded when:
 
-✅ Training completes all 50 epochs without errors  
-✅ Final training loss < 0.015  
-✅ Best model file exists and is 15-25 MB  
-✅ Console confirms trained weights loaded  
+✅ Training completes all 50 epochs without errors
+✅ Final training loss < 0.015
+✅ Best model file exists and is 15-25 MB
+✅ Console confirms trained weights loaded
 ✅ Processed images show visible quality improvements:
    - Sharper details and textures
    - Better material rendering
    - Improved lighting and depth
-   - Realistic caustics and atmospheric effects  
-✅ PSNR improvement +10 dB or more  
-✅ SSIM improvement +0.25 or more  
+   - Realistic caustics and atmospheric effects
+✅ PSNR improvement +10 dB or more
+✅ SSIM improvement +0.25 or more
 ✅ Visual quality rating 100-107/100 (vs 78/100 baseline)
 
 ---
@@ -743,27 +743,27 @@ python src/enhancements/train_hyper_reality.py --help
 
 ### Common Questions
 
-**Q: Which training method should I use?**  
+**Q: Which training method should I use?**
 A: Use `train_with_750picacho.sh` for best quality. Use `quickstart_training.sh` if you don't have the 750 Picacho data or want faster results.
 
-**Q: Can I stop training and resume later?**  
+**Q: Can I stop training and resume later?**
 A: Yes! Training saves checkpoints every 5 epochs. Resume with `--resume-from checkpoint_epoch_XX.pth`.
 
-**Q: How do I know if training is working?**  
+**Q: How do I know if training is working?**
 A: Watch the loss decrease. Initial loss ~0.08, target <0.01 by epoch 50.
 
-**Q: What if I don't have a GPU?**  
+**Q: What if I don't have a GPU?**
 A: Training will work on CPU but be 4-6x slower. Consider using synthetic data (`quickstart_training.sh`) which is faster.
 
-**Q: Can I use my own images for training?**  
+**Q: Can I use my own images for training?**
 A: Yes! Organize as `high_quality/` and `low_quality/` directories with matching filenames, then use the manual training method.
 
 ---
 
-**Last Updated:** 2025-11-19  
-**Infrastructure Status:** ✅ Complete & Validated  
-**Ready for Production Training:** ✅ Yes  
-**Recommended Next Action:** Run `./scripts/train_with_750picacho.sh`  
+**Last Updated:** 2025-11-19
+**Infrastructure Status:** ✅ Complete & Validated
+**Ready for Production Training:** ✅ Yes
+**Recommended Next Action:** Run `./scripts/train_with_750picacho.sh`
 
 ---
 

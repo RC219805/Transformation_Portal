@@ -79,44 +79,44 @@ for dir in "${DIRS_TO_MOVE[@]}"; do
     SOURCE_DIR="$REPO_ROOT/$dir"
     DEST_DIR="$EXTERNAL_BASE/$dir"
     SYMLINK="$SOURCE_DIR"
-    
+
     if [ ! -d "$SOURCE_DIR" ]; then
         echo -e "${YELLOW}Skipping $dir (not found)${NC}"
         continue
     fi
-    
+
     echo -e "${BLUE}Moving: $dir${NC}"
-    
+
     # Check if it's already a symlink
     if [ -L "$SOURCE_DIR" ]; then
         echo -e "${YELLOW}  Already a symlink, skipping${NC}"
         continue
     fi
-    
+
     # Move directory
     echo "  → Copying to external SSD..."
     rsync -ah --progress "$SOURCE_DIR/" "$DEST_DIR/"
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}  ✓ Copy complete${NC}"
-        
+
         # Verify copy
         SOURCE_SIZE=$(du -sk "$SOURCE_DIR" | awk '{print $1}')
         DEST_SIZE=$(du -sk "$DEST_DIR" | awk '{print $1}')
         SIZE_DIFF=$((SOURCE_SIZE - DEST_SIZE))
         SIZE_DIFF_ABS=${SIZE_DIFF#-}  # absolute value
-        
+
         if [ $SIZE_DIFF_ABS -lt 1024 ]; then  # Allow 1MB difference
             echo -e "${GREEN}  ✓ Verification passed${NC}"
-            
+
             # Remove original
             echo "  → Removing original..."
             rm -rf "$SOURCE_DIR"
-            
+
             # Create symlink
             echo "  → Creating symlink..."
             ln -s "$DEST_DIR" "$SOURCE_DIR"
-            
+
             echo -e "${GREEN}  ✓ Migration complete: $dir${NC}"
         else
             echo -e "${RED}  ✗ Size mismatch! Source: ${SOURCE_SIZE}KB, Dest: ${DEST_SIZE}KB${NC}"
@@ -125,7 +125,7 @@ for dir in "${DIRS_TO_MOVE[@]}"; do
     else
         echo -e "${RED}  ✗ Copy failed for $dir${NC}"
     fi
-    
+
     echo ""
 done
 

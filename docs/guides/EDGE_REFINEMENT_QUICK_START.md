@@ -46,9 +46,9 @@ lux-depth-v3 process -i images/ -o output/ \
 
 ## 🔧 Parameter Tuning
 
-**Too smooth?** → Decrease `guided_eps` or `bilateral_sigma_color`  
-**Too noisy?** → Increase `bilateral_sigma_space`  
-**Edges blurred?** → Decrease `bilateral_d`  
+**Too smooth?** → Decrease `guided_eps` or `bilateral_sigma_color`
+**Too noisy?** → Increase `bilateral_sigma_space`
+**Edges blurred?** → Decrease `bilateral_d`
 **Missing edges?** → Lower Canny thresholds
 
 ## 📊 Expected Results

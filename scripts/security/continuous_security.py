@@ -52,10 +52,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("continuous_security")
 
 
@@ -66,6 +63,7 @@ logger = logging.getLogger("continuous_security")
 
 class SecurityCheckType(Enum):
     """Types of security checks."""
+
     IMPORT_SCAN = "import_scan"
     PACKAGE_AUDIT = "package_audit"
     CONSTRAINT_VERIFY = "constraint_verify"
@@ -75,6 +73,7 @@ class SecurityCheckType(Enum):
 
 class SecurityStatus(Enum):
     """Security status levels."""
+
     SECURE = "secure"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -123,13 +122,12 @@ DANGEROUS_PATTERNS: List[Dict[str, Any]] = [
 @dataclass
 class SecurityCheckResult:
     """Result of a security check."""
+
     check_type: SecurityCheckType
     status: SecurityStatus
     message: str
     details: List[str] = field(default_factory=list)
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -145,15 +143,14 @@ class SecurityCheckResult:
 @dataclass
 class SecurityHealthReport:
     """Comprehensive security health report."""
+
     overall_status: SecurityStatus = SecurityStatus.UNKNOWN
     checks_performed: int = 0
     checks_passed: int = 0
     checks_failed: int = 0
     warnings: int = 0
     results: List[SecurityCheckResult] = field(default_factory=list)
-    generated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     recommendations: List[str] = field(default_factory=list)
 
     def to_markdown(self) -> str:
@@ -183,10 +180,12 @@ class SecurityHealthReport:
         ]
 
         if self.results:
-            lines.extend([
-                "## Check Results",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Check Results",
+                    "",
+                ]
+            )
             for result in self.results:
                 emoji = status_emoji.get(result.status, "❓")
                 lines.append(f"### {emoji} {result.check_type.value}")
@@ -199,10 +198,12 @@ class SecurityHealthReport:
                 lines.append("")
 
         if self.recommendations:
-            lines.extend([
-                "## Recommendations",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Recommendations",
+                    "",
+                ]
+            )
             for i, rec in enumerate(self.recommendations, 1):
                 lines.append(f"{i}. {rec}")
             lines.append("")
@@ -227,9 +228,7 @@ class ImportScanner:
 
         for py_file in self.repo_root.rglob("*.py"):
             # Skip certain directories
-            if any(skip in str(py_file) for skip in [
-                ".git", "__pycache__", ".venv", "venv", "basicsr_tp"
-            ]):
+            if any(skip in str(py_file) for skip in [".git", "__pycache__", ".venv", "venv", "basicsr_tp"]):
                 continue
 
             file_violations = self._check_file(py_file)
@@ -254,7 +253,7 @@ class ImportScanner:
         violations = []
 
         try:
-            with open(py_file, 'r', encoding='utf-8') as f:
+            with open(py_file, "r", encoding="utf-8") as f:
                 content = f.read()
 
             tree = ast.parse(content, filename=str(py_file))
@@ -262,22 +261,18 @@ class ImportScanner:
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom):
                     if node.module:
-                        module_parts = node.module.split('.')
+                        module_parts = node.module.split(".")
                         # Check if the first part of the module is a blocked package
                         if module_parts[0] in BLOCKED_PACKAGES:
                             rel_path = py_file.relative_to(self.repo_root)
-                            violations.append(
-                                f"{rel_path}:{node.lineno} - imports from blocked package '{module_parts[0]}'"
-                            )
+                            violations.append(f"{rel_path}:{node.lineno} - imports from blocked package '{module_parts[0]}'")
                 elif isinstance(node, ast.Import):
                     for alias in node.names:
-                        module_parts = alias.name.split('.')
+                        module_parts = alias.name.split(".")
                         # Check if the first part of the module is a blocked package
                         if module_parts[0] in BLOCKED_PACKAGES:
                             rel_path = py_file.relative_to(self.repo_root)
-                            violations.append(
-                                f"{rel_path}:{node.lineno} - imports blocked package '{module_parts[0]}'"
-                            )
+                            violations.append(f"{rel_path}:{node.lineno} - imports blocked package '{module_parts[0]}'")
 
         except (SyntaxError, UnicodeDecodeError) as e:
             # Skip files that cannot be parsed (syntax errors, encoding issues)
@@ -298,20 +293,14 @@ class PackageAuditor:
 
         try:
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "list", "--format=json"],
-                capture_output=True,
-                text=True,
-                check=True
+                [sys.executable, "-m", "pip", "list", "--format=json"], capture_output=True, text=True, check=True
             )
             packages = json.loads(result.stdout)
             installed = {pkg["name"].lower(): pkg["version"] for pkg in packages}
 
             for pkg_name, pkg_info in BLOCKED_PACKAGES.items():
                 if pkg_name.lower() in installed:
-                    violations.append(
-                        f"CRITICAL: {pkg_name}=={installed[pkg_name.lower()]} is installed! "
-                        f"({pkg_info['cve']})"
-                    )
+                    violations.append(f"CRITICAL: {pkg_name}=={installed[pkg_name.lower()]} is installed! ({pkg_info['cve']})")
 
         except (subprocess.SubprocessError, json.JSONDecodeError) as e:
             return SecurityCheckResult(
@@ -356,7 +345,7 @@ class ConstraintVerifier:
             )
 
         # Read constraints
-        with open(self.constraints_file, 'r') as f:
+        with open(self.constraints_file, "r") as f:
             content = f.read()
 
         # Verify all blocked packages have constraints
@@ -365,8 +354,7 @@ class ConstraintVerifier:
             # Check for expected constraint string (case-insensitive)
             if expected_constraint.lower() not in content.lower():
                 issues.append(
-                    f"Missing or incorrect constraint for blocked package: {pkg_name} "
-                    f"(expected: '{expected_constraint}')"
+                    f"Missing or incorrect constraint for blocked package: {pkg_name} (expected: '{expected_constraint}')"
                 )
 
         if issues:
@@ -396,9 +384,7 @@ class CodePatternScanner:
 
         for py_file in self.repo_root.rglob("*.py"):
             # Skip certain directories
-            if any(skip in str(py_file) for skip in [
-                ".git", "__pycache__", ".venv", "venv", "test_", "_test.py"
-            ]):
+            if any(skip in str(py_file) for skip in [".git", "__pycache__", ".venv", "venv", "test_", "_test.py"]):
                 continue
 
             file_findings = self._check_file(py_file)
@@ -423,7 +409,7 @@ class CodePatternScanner:
         findings = []
 
         try:
-            with open(py_file, 'r', encoding='utf-8') as f:
+            with open(py_file, "r", encoding="utf-8") as f:
                 content = f.read()
                 lines = content.splitlines()
 
@@ -432,9 +418,7 @@ class CodePatternScanner:
                 for i, line in enumerate(lines, 1):
                     if pattern.search(line):
                         rel_path = py_file.relative_to(self.repo_root)
-                        findings.append(
-                            f"{rel_path}:{i} - {pattern_info['message']}"
-                        )
+                        findings.append(f"{rel_path}:{i} - {pattern_info['message']}")
 
         except (UnicodeDecodeError, IOError):
             # Skip files that cannot be read due to encoding or I/O errors
@@ -471,7 +455,7 @@ class ContinuousSecurityVerifier:
         """Find repository root."""
         current = Path(__file__).resolve().parent
         for _ in range(10):
-            if (current / '.git').exists():
+            if (current / ".git").exists():
                 return current
             if current.parent == current:
                 break
@@ -563,18 +547,14 @@ class ContinuousSecurityVerifier:
         for result in report.results:
             if result.status == SecurityStatus.CRITICAL:
                 if result.check_type == SecurityCheckType.IMPORT_SCAN:
-                    recommendations.append(
-                        "Replace vulnerable imports with secure alternatives (e.g., basicsr -> basicsr_tp)"
-                    )
+                    recommendations.append("Replace vulnerable imports with secure alternatives (e.g., basicsr -> basicsr_tp)")
                 elif result.check_type == SecurityCheckType.PACKAGE_AUDIT:
                     recommendations.append(
                         "Remove vulnerable packages and reinstall with constraints: "
                         "pip install -c requirements/constraints.txt -r requirements.txt"
                     )
                 elif result.check_type == SecurityCheckType.CONSTRAINT_VERIFY:
-                    recommendations.append(
-                        "Update requirements/constraints.txt with proper blocking constraints"
-                    )
+                    recommendations.append("Update requirements/constraints.txt with proper blocking constraints")
 
         if not recommendations:
             recommendations.append("Continue maintaining current security practices")
@@ -584,14 +564,18 @@ class ContinuousSecurityVerifier:
     def _save_check_result(self, report: SecurityHealthReport) -> None:
         """Save check result for tracking."""
         try:
-            with open(self.last_check_file, 'w') as f:
-                json.dump({
-                    "status": report.overall_status.value,
-                    "checks_performed": report.checks_performed,
-                    "checks_passed": report.checks_passed,
-                    "checks_failed": report.checks_failed,
-                    "timestamp": report.generated_at,
-                }, f, indent=2)
+            with open(self.last_check_file, "w") as f:
+                json.dump(
+                    {
+                        "status": report.overall_status.value,
+                        "checks_performed": report.checks_performed,
+                        "checks_passed": report.checks_passed,
+                        "checks_failed": report.checks_failed,
+                        "timestamp": report.generated_at,
+                    },
+                    f,
+                    indent=2,
+                )
         except IOError as e:
             logger.warning(f"Failed to save check result: {e}")
 
@@ -599,7 +583,7 @@ class ContinuousSecurityVerifier:
         """Get last check result."""
         if self.last_check_file.exists():
             try:
-                with open(self.last_check_file, 'r') as f:
+                with open(self.last_check_file, "r") as f:
                     return json.load(f)
             except (IOError, json.JSONDecodeError):
                 pass
@@ -626,11 +610,7 @@ def security_guard() -> bool:
     """
     try:
         # Quick check for vulnerable packages
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "show", "basicsr"],
-            capture_output=True,
-            check=False
-        )
+        result = subprocess.run([sys.executable, "-m", "pip", "show", "basicsr"], capture_output=True, check=False)
         if result.returncode == 0:
             logger.critical("SECURITY VIOLATION: basicsr package is installed!")
             return False
@@ -651,9 +631,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Continuous Security Verification System"
-    )
+    parser = argparse.ArgumentParser(description="Continuous Security Verification System")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Quick check
@@ -664,18 +642,10 @@ def main():
 
     # Verify specific
     verify_parser = subparsers.add_parser("verify", help="Verify specific aspect")
-    verify_parser.add_argument(
-        "--imports", action="store_true", help="Check for vulnerable imports"
-    )
-    verify_parser.add_argument(
-        "--packages", action="store_true", help="Audit installed packages"
-    )
-    verify_parser.add_argument(
-        "--constraints", action="store_true", help="Verify constraint configuration"
-    )
-    verify_parser.add_argument(
-        "--patterns", action="store_true", help="Scan for dangerous patterns"
-    )
+    verify_parser.add_argument("--imports", action="store_true", help="Check for vulnerable imports")
+    verify_parser.add_argument("--packages", action="store_true", help="Audit installed packages")
+    verify_parser.add_argument("--constraints", action="store_true", help="Verify constraint configuration")
+    verify_parser.add_argument("--patterns", action="store_true", help="Scan for dangerous patterns")
 
     # Health report
     subparsers.add_parser("health", help="Generate security health report")

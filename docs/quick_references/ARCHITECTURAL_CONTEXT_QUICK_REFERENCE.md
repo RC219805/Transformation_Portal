@@ -167,7 +167,7 @@ enhanced = pipeline.enhance_prompt(
 )
 
 print(enhanced)
-# "photorealistic rendering, Luxury residence: 750 Picacho Lane, 
+# "photorealistic rendering, Luxury residence: 750 Picacho Lane,
 #  kitchen, 18' x 22', materials: white oak, quartz, brass, ..."
 ```
 
@@ -381,5 +381,5 @@ python context_aware_pro_pipeline.py design_v3.jpg  # Uses cached context
 
 ---
 
-*Quick Reference - Architectural Context Integration*  
+*Quick Reference - Architectural Context Integration*
 *Version 1.0 - November 7, 2025*

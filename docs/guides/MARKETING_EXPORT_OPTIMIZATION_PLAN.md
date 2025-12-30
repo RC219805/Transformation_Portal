@@ -1,7 +1,7 @@
 # Marketing Export Optimization Plan
 
-**Date**: 2025-12-10  
-**Status**: 🎯 **ACTIVE PRIORITY**  
+**Date**: 2025-12-10
+**Status**: 🎯 **ACTIVE PRIORITY**
 **Context**: Autotune validated, marketing export identified as primary bottleneck
 
 ---
@@ -141,14 +141,14 @@ class MarketingExportConfig:
 # In ExportManager
 def write_marketing(self, img: np.ndarray, stem: str) -> Path:
     cfg = self.config.marketing
-    
+
     if cfg.format == "webp":
         path = self._write_webp(img, stem, quality=cfg.webp_quality)
     elif cfg.format == "jpeg":
         path = self._write_jpeg(img, stem, quality=cfg.jpeg_quality)
     else:  # png
         path = self._write_png(img, stem, compression=cfg.png_compression_level)
-    
+
     return path
 ```
 
@@ -208,7 +208,7 @@ class ExportManager:
             )
         else:
             self._executor = None
-    
+
     def write_marketing(self, img: np.ndarray, stem: str):
         if self._marketing_async:
             # Queue for background processing
@@ -221,7 +221,7 @@ class ExportManager:
         else:
             # Synchronous (current behavior)
             return self._do_write_marketing(img, stem)
-    
+
     def _do_write_marketing(self, img: np.ndarray, stem: str) -> Path:
         """
         Idempotent atomic write:
@@ -230,7 +230,7 @@ class ExportManager:
         3. Safe to retry on failure
         """
         # Implementation details...
-    
+
     def close(self):
         """Block until all async work completes."""
         if self._executor:
@@ -243,15 +243,15 @@ class ExportManager:
 # In pipeline.py
 def process_one(self, img_path: Path):
     # ... processing ...
-    
+
     # Critical outputs (blocking)
     self.export_manager.write_master(master, stem)
     self.export_manager.write_upscaled(upscaled, stem)
     self.export_manager.write_report(report, stem)
-    
+
     # Marketing (async if enabled)
     self.export_manager.write_marketing(marketing, stem)
-    
+
     # User sees "done" here, marketing continues in background
     return report
 
@@ -267,7 +267,7 @@ def __del__(self):
 @dataclass
 class ExportConfig:
     # ... existing fields ...
-    
+
     # Async marketing export
     marketing_async: bool = False  # Default OFF
     marketing_async_workers: int = 2
@@ -293,7 +293,7 @@ class ExportConfig:
    - Start with `max_workers=1`, small batches
    - Log queue depth and memory usage
    - Validate correctness before expanding
-   
+
 2. **Phase 2**: Service mode (**Separate decision, requires discussion**)
    - Only enable if:
      * OK to return response before marketing completes
@@ -324,14 +324,14 @@ def autotune_marketing_config(
     megapixels: float,
     scene_complexity: float
 ) -> MarketingExportConfig:
-    
+
     # Exteriors with simple scenes: fast lossy OK
     if preset == Preset.EXTERIOR_SHOWCASE and scene_complexity < 0.5:
         return MarketingExportConfig(
             format="webp",
             webp_quality=88,  # Aggressive
         )
-    
+
     # Interiors or complex scenes: lossless or near-lossless
     else:
         return MarketingExportConfig(
@@ -462,15 +462,15 @@ After implementation:
 
 ## 🔄 Current Status
 
-**Phase**: Planning → Implementation  
-**Next Action**: Implement Slice M0 (instrumentation)  
-**Blocker**: None  
+**Phase**: Planning → Implementation
+**Next Action**: Implement Slice M0 (instrumentation)
+**Blocker**: None
 **Dependencies**: None
 
 **Ready to proceed** ✅
 
 ---
 
-**Last Updated**: 2025-12-10  
-**Owner**: Transformation Portal Team  
+**Last Updated**: 2025-12-10
+**Owner**: Transformation Portal Team
 **Status**: 🎯 **ACTIVE - TOP PRIORITY**

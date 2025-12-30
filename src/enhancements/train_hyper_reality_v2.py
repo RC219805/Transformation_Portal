@@ -41,10 +41,10 @@ from enhancements.hyper_reality_enhancement import (  # noqa: E402
     MaterialTranscendence,
     SpatialHarmonics,
     EnhancementConfig,
-    configure_device
+    configure_device,
 )
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 # Configure device
 device = configure_device()
@@ -66,19 +66,21 @@ class EnhancedTrainingConfig:
     weight_decay: float = 1e-5
 
     # Per-model learning rates (relative to base LR)
-    model_lr_scales: Dict[str, float] = field(default_factory=lambda: {
-        'caustics': 1.0,
-        'atmosphere': 1.0,
-        'materials': 1.2,  # Slightly higher for segmentation learning
-        'harmonics': 0.8,  # Slightly lower for stable SH learning
-    })
+    model_lr_scales: Dict[str, float] = field(
+        default_factory=lambda: {
+            "caustics": 1.0,
+            "atmosphere": 1.0,
+            "materials": 1.2,  # Slightly higher for segmentation learning
+            "harmonics": 0.8,  # Slightly lower for stable SH learning
+        }
+    )
 
     # Loss weights (calibrated for perceptual quality)
     mse_weight: float = 1.0
-    perceptual_weight: float = 2.0       # Increased for perceptual targets
-    lpips_weight: float = 1.5            # NEW: Direct LPIPS loss
+    perceptual_weight: float = 2.0  # Increased for perceptual targets
+    lpips_weight: float = 1.5  # NEW: Direct LPIPS loss
     style_weight: float = 0.5
-    material_weight: float = 0.3         # NEW: Material-specific loss
+    material_weight: float = 0.3  # NEW: Material-specific loss
     depth_consistency_weight: float = 0.2  # NEW: Depth-aware consistency
 
     # Progressive training
@@ -154,7 +156,7 @@ class DepthEstimator(nn.Module):
 
         # Ensure output matches input spatial size
         if depth.shape[-2:] != x.shape[-2:]:
-            depth = F.interpolate(depth, size=x.shape[-2:], mode='bilinear', align_corners=False)
+            depth = F.interpolate(depth, size=x.shape[-2:], mode="bilinear", align_corners=False)
 
         return depth
 
@@ -172,8 +174,8 @@ class NormalEstimator(nn.Module):
         sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32)
         sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32)
 
-        self.register_buffer('sobel_x', sobel_x.view(1, 1, 3, 3))
-        self.register_buffer('sobel_y', sobel_y.view(1, 1, 3, 3))
+        self.register_buffer("sobel_x", sobel_x.view(1, 1, 3, 3))
+        self.register_buffer("sobel_y", sobel_y.view(1, 1, 3, 3))
 
     def forward(self, depth: torch.Tensor) -> torch.Tensor:
         """Compute surface normals from depth"""
@@ -199,9 +201,11 @@ class VGGFeatureExtractor(nn.Module):
 
         try:
             from torchvision.models import vgg19, VGG19_Weights
+
             vgg = vgg19(weights=VGG19_Weights.IMAGENET1K_V1).features
         except (ImportError, TypeError):
             from torchvision.models import vgg19
+
             vgg = vgg19(pretrained=True).features
 
         self.layers = sorted(layers)
@@ -214,8 +218,8 @@ class VGGFeatureExtractor(nn.Module):
         self.features.eval()
         self.features.to(device)
 
-        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+        self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, x):
         if self.use_input_norm:
@@ -298,13 +302,14 @@ class LPIPSLoss(nn.Module):
     to a VGG-based approximation with learned channel weights.
     """
 
-    def __init__(self, net: str = 'vgg'):
+    def __init__(self, net: str = "vgg"):
         super().__init__()
 
         self.use_official = False
 
         try:
             import lpips
+
             self.lpips_fn = lpips.LPIPS(net=net).to(device)
             self.lpips_fn.eval()
             for param in self.lpips_fn.parameters():
@@ -320,13 +325,15 @@ class LPIPSLoss(nn.Module):
         self.vgg = VGGFeatureExtractor(layers=[2, 7, 12, 21, 30])
 
         # Learned channel weights (approximated from LPIPS)
-        self.weights = nn.ParameterList([
-            nn.Parameter(torch.ones(64) / 64),
-            nn.Parameter(torch.ones(128) / 128),
-            nn.Parameter(torch.ones(256) / 256),
-            nn.Parameter(torch.ones(512) / 512),
-            nn.Parameter(torch.ones(512) / 512),
-        ])
+        self.weights = nn.ParameterList(
+            [
+                nn.Parameter(torch.ones(64) / 64),
+                nn.Parameter(torch.ones(128) / 128),
+                nn.Parameter(torch.ones(256) / 256),
+                nn.Parameter(torch.ones(512) / 512),
+                nn.Parameter(torch.ones(512) / 512),
+            ]
+        )
 
         # Layer weights
         self.layer_weights = nn.Parameter(torch.tensor([0.1, 0.1, 0.3, 0.3, 0.2]))
@@ -367,20 +374,22 @@ class MaterialConsistencyLoss(nn.Module):
     by computing per-material reconstruction quality.
     """
 
-    MATERIAL_COLORS = torch.tensor([
-        [0.85, 0.80, 0.75],  # quartzite
-        [0.55, 0.40, 0.25],  # oak
-        [0.50, 0.50, 0.55],  # metal
-        [0.70, 0.80, 0.90],  # glass
-        [0.92, 0.90, 0.85],  # stucco
-        [0.30, 0.50, 0.70],  # water
-        [0.25, 0.45, 0.20],  # vegetation
-        [0.60, 0.75, 0.95],  # sky
-    ])
+    MATERIAL_COLORS = torch.tensor(
+        [
+            [0.85, 0.80, 0.75],  # quartzite
+            [0.55, 0.40, 0.25],  # oak
+            [0.50, 0.50, 0.55],  # metal
+            [0.70, 0.80, 0.90],  # glass
+            [0.92, 0.90, 0.85],  # stucco
+            [0.30, 0.50, 0.70],  # water
+            [0.25, 0.45, 0.20],  # vegetation
+            [0.60, 0.75, 0.95],  # sky
+        ]
+    )
 
     def __init__(self):
         super().__init__()
-        self.register_buffer('material_colors', self.MATERIAL_COLORS.T)
+        self.register_buffer("material_colors", self.MATERIAL_COLORS.T)
 
     def get_material_masks(self, x: torch.Tensor) -> torch.Tensor:
         """Get soft material masks based on color similarity"""
@@ -406,16 +415,22 @@ class MaterialConsistencyLoss(nn.Module):
         error = (pred - target) ** 2
 
         # Weight by material importance
-        material_weights = torch.tensor([
-            1.2,  # quartzite - high fidelity needed
-            1.0,  # oak
-            1.3,  # metal - high fidelity for reflections
-            1.1,  # glass
-            0.9,  # stucco
-            1.0,  # water
-            0.8,  # vegetation
-            0.7,  # sky
-        ]).to(pred.device).view(1, -1, 1, 1)
+        material_weights = (
+            torch.tensor(
+                [
+                    1.2,  # quartzite - high fidelity needed
+                    1.0,  # oak
+                    1.3,  # metal - high fidelity for reflections
+                    1.1,  # glass
+                    0.9,  # stucco
+                    1.0,  # water
+                    0.8,  # vegetation
+                    0.7,  # sky
+                ]
+            )
+            .to(pred.device)
+            .view(1, -1, 1, 1)
+        )
 
         # Weighted material loss
         weighted_masks = masks * material_weights
@@ -441,7 +456,7 @@ class DepthConsistencyLoss(nn.Module):
         pred: torch.Tensor,
         target: torch.Tensor,
         pred_depth: Optional[torch.Tensor] = None,
-        target_depth: Optional[torch.Tensor] = None
+        target_depth: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """Compute depth consistency loss"""
         # Estimate depth if not provided
@@ -488,8 +503,8 @@ class EnhancementDataset(Dataset):
     def __getitem__(self, idx):
         low_path, high_path = self.image_pairs[idx]
 
-        low_img = Image.open(low_path).convert('RGB')
-        high_img = Image.open(high_path).convert('RGB')
+        low_img = Image.open(low_path).convert("RGB")
+        high_img = Image.open(high_path).convert("RGB")
 
         if self.transform:
             low_img = self.transform(low_img)
@@ -507,9 +522,9 @@ class SyntheticDataGenerator:
         self.num_pairs = num_pairs
 
     def generate_training_data(self):
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("GENERATING SYNTHETIC TRAINING DATA")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         low_quality_dir = self.output_dir / "low_quality"
         high_quality_dir = self.output_dir / "high_quality"
@@ -553,9 +568,9 @@ class SyntheticDataGenerator:
         for window_x in range(50, w - 50, 100):
             for window_y in range(building_y + 30, h - 30, 80):
                 window_w, window_h = 60, 50
-                img[window_y:window_y + window_h, window_x:window_x + window_w, 2] = 140
-                img[window_y:window_y + window_h, window_x:window_x + window_w, 1] = 120
-                img[window_y:window_y + window_h, window_x:window_x + window_w, 0] = 100
+                img[window_y : window_y + window_h, window_x : window_x + window_w, 2] = 140
+                img[window_y : window_y + window_h, window_x : window_x + window_w, 1] = 120
+                img[window_y : window_y + window_h, window_x : window_x + window_w, 0] = 100
 
         x_gradient = np.linspace(0.9, 1.1, w)
         for c in range(3):
@@ -572,6 +587,7 @@ class SyntheticDataGenerator:
         degraded += noise
 
         from scipy.ndimage import gaussian_filter
+
         for c in range(3):
             degraded[:, :, c] = gaussian_filter(degraded[:, :, c], sigma=0.8)
 
@@ -607,16 +623,16 @@ class EnhancedHyperRealityTrainer:
 
         # Training state
         self.current_epoch = 0
-        self.best_val_loss = float('inf')
+        self.best_val_loss = float("inf")
         self.training_history = {
-            'train_loss': [],
-            'val_loss': [],
-            'mse': [],
-            'perceptual': [],
-            'lpips': [],
-            'style': [],
-            'material': [],
-            'depth': [],
+            "train_loss": [],
+            "val_loss": [],
+            "mse": [],
+            "perceptual": [],
+            "lpips": [],
+            "style": [],
+            "material": [],
+            "depth": [],
         }
 
     def _init_models(self):
@@ -624,10 +640,10 @@ class EnhancedHyperRealityTrainer:
         enhancement_config = EnhancementConfig()
 
         self.models = {
-            'caustics': CausticGenerator(enhancement_config.quantum_caustics).to(device),
-            'atmosphere': AtmosphericSynthesizer(enhancement_config.neural_atmosphere).to(device),
-            'materials': MaterialTranscendence(enhancement_config.material_transcendence).to(device),
-            'harmonics': SpatialHarmonics(enhancement_config.spatial_harmonics).to(device),
+            "caustics": CausticGenerator(enhancement_config.quantum_caustics).to(device),
+            "atmosphere": AtmosphericSynthesizer(enhancement_config.neural_atmosphere).to(device),
+            "materials": MaterialTranscendence(enhancement_config.material_transcendence).to(device),
+            "harmonics": SpatialHarmonics(enhancement_config.spatial_harmonics).to(device),
         }
 
         # Auxiliary networks
@@ -654,53 +670,37 @@ class EnhancedHyperRealityTrainer:
 
         for name, model in self.models.items():
             lr_scale = self.config.model_lr_scales.get(name, 1.0)
-            param_groups.append({
-                'params': model.parameters(),
-                'lr': self.config.learning_rate * lr_scale,
-                'name': name
-            })
+            param_groups.append({"params": model.parameters(), "lr": self.config.learning_rate * lr_scale, "name": name})
 
         # Add depth estimator
-        param_groups.append({
-            'params': self.depth_estimator.parameters(),
-            'lr': self.config.learning_rate * 0.5,
-            'name': 'depth'
-        })
-
-        self.optimizer = torch.optim.AdamW(
-            param_groups,
-            weight_decay=self.config.weight_decay
+        param_groups.append(
+            {"params": self.depth_estimator.parameters(), "lr": self.config.learning_rate * 0.5, "name": "depth"}
         )
 
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer,
-            T_max=self.config.num_epochs
-        )
+        self.optimizer = torch.optim.AdamW(param_groups, weight_decay=self.config.weight_decay)
+
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.config.num_epochs)
 
     def _get_active_stages(self, epoch: int) -> List[str]:
         """Get active training stages for progressive training"""
         if not self.config.progressive:
-            return ['caustics', 'atmosphere', 'materials', 'harmonics']
+            return ["caustics", "atmosphere", "materials", "harmonics"]
 
         stages = []
         stage_epochs = self.config.stage_epochs
 
         if epoch >= 0:
-            stages.append('caustics')
+            stages.append("caustics")
         if epoch >= stage_epochs[0]:
-            stages.append('atmosphere')
+            stages.append("atmosphere")
         if epoch >= stage_epochs[1]:
-            stages.append('materials')
+            stages.append("materials")
         if epoch >= stage_epochs[2]:
-            stages.append('harmonics')
+            stages.append("harmonics")
 
         return stages
 
-    def _forward_pass(
-        self,
-        low_img: torch.Tensor,
-        active_stages: List[str]
-    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    def _forward_pass(self, low_img: torch.Tensor, active_stages: List[str]) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """
         Forward pass through enhancement pipeline
 
@@ -712,32 +712,31 @@ class EnhancedHyperRealityTrainer:
         # Estimate depth and normals
         depth = self.depth_estimator(enhanced)
         normals = self.normal_estimator(depth)
-        aux_outputs['depth'] = depth
-        aux_outputs['normals'] = normals
+        aux_outputs["depth"] = depth
+        aux_outputs["normals"] = normals
 
         # Stage 1: Caustics (depth-aware)
-        if 'caustics' in active_stages:
-            caustics = self.models['caustics'](enhanced, depth)
+        if "caustics" in active_stages:
+            caustics = self.models["caustics"](enhanced, depth)
             # Apply caustics to water regions
-            water_mask = (enhanced[:, 2:3] > enhanced[:, 0:1] * 1.2) & \
-                (enhanced[:, 2:3] > enhanced[:, 1:2] * 1.1)
+            water_mask = (enhanced[:, 2:3] > enhanced[:, 0:1] * 1.2) & (enhanced[:, 2:3] > enhanced[:, 1:2] * 1.1)
             water_mask = water_mask.float()
             enhanced = enhanced + caustics * water_mask * 0.3
-            aux_outputs['caustics'] = caustics
+            aux_outputs["caustics"] = caustics
 
         # Stage 2: Atmosphere
-        if 'atmosphere' in active_stages:
-            enhanced = self.models['atmosphere'](enhanced)
+        if "atmosphere" in active_stages:
+            enhanced = self.models["atmosphere"](enhanced)
 
         # Stage 3: Materials
-        if 'materials' in active_stages:
-            enhanced = self.models['materials'](enhanced)
+        if "materials" in active_stages:
+            enhanced = self.models["materials"](enhanced)
 
         # Stage 4: Spatial Harmonics (normal-aware)
-        if 'harmonics' in active_stages:
-            illumination = self.models['harmonics'](normals)
+        if "harmonics" in active_stages:
+            illumination = self.models["harmonics"](normals)
             enhanced = enhanced * (1 + illumination * 0.3)
-            aux_outputs['illumination'] = illumination
+            aux_outputs["illumination"] = illumination
 
         # Clamp to valid range
         enhanced = torch.clamp(enhanced, 0, 1)
@@ -745,58 +744,55 @@ class EnhancedHyperRealityTrainer:
         return enhanced, aux_outputs
 
     def _compute_loss(
-        self,
-        enhanced: torch.Tensor,
-        target: torch.Tensor,
-        aux_outputs: Dict[str, torch.Tensor]
+        self, enhanced: torch.Tensor, target: torch.Tensor, aux_outputs: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         """Compute combined loss with all components"""
         losses = {}
 
         # MSE loss
         mse = self.mse_loss(enhanced, target)
-        losses['mse'] = mse.item()
+        losses["mse"] = mse.item()
 
         # Perceptual loss
         perceptual = self.perceptual_loss(enhanced, target)
-        losses['perceptual'] = perceptual.item()
+        losses["perceptual"] = perceptual.item()
 
         # LPIPS loss
         lpips = self.lpips_loss(enhanced, target)
-        losses['lpips'] = lpips.item()
+        losses["lpips"] = lpips.item()
 
         # Style loss
         style = self.style_loss(enhanced, target)
-        losses['style'] = style.item()
+        losses["style"] = style.item()
 
         # Material consistency loss
         material = self.material_loss(enhanced, target)
-        losses['material'] = material.item()
+        losses["material"] = material.item()
 
         # Depth consistency loss
         target_depth = self.depth_estimator(target)
-        depth = self.depth_loss(enhanced, target, aux_outputs.get('depth'), target_depth)
-        losses['depth'] = depth.item()
+        depth = self.depth_loss(enhanced, target, aux_outputs.get("depth"), target_depth)
+        losses["depth"] = depth.item()
 
         # Combined loss
         total_loss = (
-            self.config.mse_weight * mse +
-            self.config.perceptual_weight * perceptual +
-            self.config.lpips_weight * lpips +
-            self.config.style_weight * style +
-            self.config.material_weight * material +
-            self.config.depth_consistency_weight * depth
+            self.config.mse_weight * mse
+            + self.config.perceptual_weight * perceptual
+            + self.config.lpips_weight * lpips
+            + self.config.style_weight * style
+            + self.config.material_weight * material
+            + self.config.depth_consistency_weight * depth
         )
 
-        losses['total'] = total_loss.item()
+        losses["total"] = total_loss.item()
 
         return total_loss, losses
 
     def train(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None):
         """Main training loop"""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("ENHANCED HYPER-REALITY TRAINING PIPELINE v2.0")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         print(f"Device: {device}")
         print(f"Epochs: {self.config.num_epochs}")
         print(f"Batch size: {self.config.batch_size}")
@@ -812,11 +808,11 @@ class EnhancedHyperRealityTrainer:
             self.current_epoch = epoch
             active_stages = self._get_active_stages(epoch)
 
-            print(f"\nEpoch {epoch+1}/{self.config.num_epochs} - Active stages: {active_stages}")
+            print(f"\nEpoch {epoch + 1}/{self.config.num_epochs} - Active stages: {active_stages}")
 
             # Training phase
             train_loss, train_metrics = self._train_epoch(train_loader, epoch, active_stages)
-            self.training_history['train_loss'].append(train_loss)
+            self.training_history["train_loss"].append(train_loss)
 
             for key, value in train_metrics.items():
                 if key not in self.training_history:
@@ -826,7 +822,7 @@ class EnhancedHyperRealityTrainer:
             # Validation phase
             if val_loader and (epoch + 1) % self.config.val_frequency == 0:
                 val_loss = self._validate(val_loader, epoch, active_stages)
-                self.training_history['val_loss'].append(val_loss)
+                self.training_history["val_loss"].append(val_loss)
 
                 if val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
@@ -838,24 +834,19 @@ class EnhancedHyperRealityTrainer:
 
             self.scheduler.step()
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TRAINING COMPLETE")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"Best validation loss: {self.best_val_loss:.6f}")
         print(f"Checkpoint directory: {self.config.checkpoint_dir}")
 
         # Save training history
         history_path = Path(self.config.checkpoint_dir) / "training_history.json"
-        with open(history_path, 'w') as f:
+        with open(history_path, "w") as f:
             json.dump(self.training_history, f, indent=2)
         print(f"Training history saved: {history_path}")
 
-    def _train_epoch(
-        self,
-        train_loader: DataLoader,
-        epoch: int,
-        active_stages: List[str]
-    ) -> Tuple[float, Dict[str, float]]:
+    def _train_epoch(self, train_loader: DataLoader, epoch: int, active_stages: List[str]) -> Tuple[float, Dict[str, float]]:
         """Train for one epoch"""
         total_loss = 0.0
         total_metrics = {}
@@ -866,7 +857,7 @@ class EnhancedHyperRealityTrainer:
             self.models[name].train()
         self.depth_estimator.train()
 
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{self.config.num_epochs}")
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{self.config.num_epochs}")
 
         for batch_idx, (low_img, high_img) in enumerate(pbar):
             low_img = low_img.to(device)
@@ -877,8 +868,8 @@ class EnhancedHyperRealityTrainer:
                 scale = np.random.choice(self.config.scales)
                 if scale != 1.0:
                     new_size = (int(low_img.shape[2] * scale), int(low_img.shape[3] * scale))
-                    low_img = F.interpolate(low_img, size=new_size, mode='bilinear', align_corners=False)
-                    high_img = F.interpolate(high_img, size=new_size, mode='bilinear', align_corners=False)
+                    low_img = F.interpolate(low_img, size=new_size, mode="bilinear", align_corners=False)
+                    high_img = F.interpolate(high_img, size=new_size, mode="bilinear", align_corners=False)
 
             # Forward pass
             enhanced, aux_outputs = self._forward_pass(low_img, active_stages)
@@ -907,23 +898,20 @@ class EnhancedHyperRealityTrainer:
                     total_metrics[key] = 0.0
                 total_metrics[key] += value
 
-            pbar.set_postfix({
-                'loss': f'{loss.item():.4f}',
-                'lpips': f'{metrics["lpips"]:.4f}',
-                'mse': f'{metrics["mse"]:.4f}',
-            })
+            pbar.set_postfix(
+                {
+                    "loss": f"{loss.item():.4f}",
+                    "lpips": f"{metrics['lpips']:.4f}",
+                    "mse": f"{metrics['mse']:.4f}",
+                }
+            )
 
         avg_loss = total_loss / num_batches
         avg_metrics = {k: v / num_batches for k, v in total_metrics.items()}
 
         return avg_loss, avg_metrics
 
-    def _validate(
-        self,
-        val_loader: DataLoader,
-        epoch: int,
-        active_stages: List[str]
-    ) -> float:
+    def _validate(self, val_loader: DataLoader, epoch: int, active_stages: List[str]) -> float:
         """Validate model"""
         total_loss = 0.0
         num_batches = len(val_loader)
@@ -954,17 +942,17 @@ class EnhancedHyperRealityTrainer:
     def _save_checkpoint(self, epoch: int, is_best: bool = False):
         """Save model checkpoint"""
         checkpoint = {
-            'epoch': epoch,
-            'config': asdict(self.config),
-            'models': {name: model.state_dict() for name, model in self.models.items()},
-            'depth_estimator': self.depth_estimator.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'scheduler': self.scheduler.state_dict(),
-            'best_val_loss': self.best_val_loss,
-            'training_history': self.training_history,
+            "epoch": epoch,
+            "config": asdict(self.config),
+            "models": {name: model.state_dict() for name, model in self.models.items()},
+            "depth_estimator": self.depth_estimator.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.scheduler.state_dict(),
+            "best_val_loss": self.best_val_loss,
+            "training_history": self.training_history,
         }
 
-        checkpoint_path = Path(self.config.checkpoint_dir) / f"checkpoint_epoch_{epoch+1}.pth"
+        checkpoint_path = Path(self.config.checkpoint_dir) / f"checkpoint_epoch_{epoch + 1}.pth"
         torch.save(checkpoint, checkpoint_path)
 
         if is_best:
@@ -977,24 +965,15 @@ class EnhancedHyperRealityTrainer:
 
 def main():
     parser = argparse.ArgumentParser(description="Enhanced Training for Hyper-Reality Models v2.0")
-    parser.add_argument("--data-dir", type=str, default="data/training",
-                        help="Directory for training data")
-    parser.add_argument("--generate-data", action="store_true",
-                        help="Generate synthetic training data")
-    parser.add_argument("--num-pairs", type=int, default=1000,
-                        help="Number of synthetic pairs to generate")
-    parser.add_argument("--epochs", type=int, default=50,
-                        help="Number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=4,
-                        help="Training batch size")
-    parser.add_argument("--lr", type=float, default=1e-4,
-                        help="Learning rate")
-    parser.add_argument("--checkpoint-dir", type=str, default="weights/hyper_reality",
-                        help="Directory for checkpoints")
-    parser.add_argument("--progressive", action="store_true",
-                        help="Use progressive training")
-    parser.add_argument("--multi-scale", action="store_true",
-                        help="Use multi-scale training")
+    parser.add_argument("--data-dir", type=str, default="data/training", help="Directory for training data")
+    parser.add_argument("--generate-data", action="store_true", help="Generate synthetic training data")
+    parser.add_argument("--num-pairs", type=int, default=1000, help="Number of synthetic pairs to generate")
+    parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=4, help="Training batch size")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument("--checkpoint-dir", type=str, default="weights/hyper_reality", help="Directory for checkpoints")
+    parser.add_argument("--progressive", action="store_true", help="Use progressive training")
+    parser.add_argument("--multi-scale", action="store_true", help="Use multi-scale training")
 
     args = parser.parse_args()
 
@@ -1014,36 +993,24 @@ def main():
         return 1
 
     # Create datasets
-    transform = transforms.Compose([
-        transforms.Resize((512, 512)),
-        transforms.ToTensor(),
-    ])
+    transform = transforms.Compose(
+        [
+            transforms.Resize((512, 512)),
+            transforms.ToTensor(),
+        ]
+    )
 
     dataset = EnhancementDataset(low_quality_dir, high_quality_dir, transform)
 
     # Split into train/val
     val_size = int(0.1 * len(dataset))
     train_size = len(dataset) - val_size
-    train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, [train_size, val_size]
-    )
+    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
     # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True
-    )
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True
-    )
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     # Create training config
     config = EnhancedTrainingConfig(
@@ -1072,5 +1039,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\n❌ Training failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

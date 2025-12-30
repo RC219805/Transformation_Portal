@@ -26,12 +26,12 @@ The DA3 benchmark integration provides comprehensive validation capabilities fol
 
 ### Key Features
 
-✅ **6 Benchmark Datasets**: ETH3D, 7Scenes, ScanNet++, HiRoom, DTU-49, DTU-64  
-✅ **Multiple Evaluation Modes**: Pose-only, reconstruction with predicted poses, reconstruction with GT poses  
-✅ **Industry-Standard Metrics**: AUC@3°, AUC@30°, F-score, Chamfer distance  
-✅ **TSDF Fusion**: Multi-view depth integration for high-quality mesh reconstruction  
-✅ **RANSAC Alignment**: Robust coordinate system alignment  
-✅ **Automated Workflows**: End-to-end evaluation with CLI and Python API  
+✅ **6 Benchmark Datasets**: ETH3D, 7Scenes, ScanNet++, HiRoom, DTU-49, DTU-64
+✅ **Multiple Evaluation Modes**: Pose-only, reconstruction with predicted poses, reconstruction with GT poses
+✅ **Industry-Standard Metrics**: AUC@3°, AUC@30°, F-score, Chamfer distance
+✅ **TSDF Fusion**: Multi-view depth integration for high-quality mesh reconstruction
+✅ **RANSAC Alignment**: Robust coordinate system alignment
+✅ **Automated Workflows**: End-to-end evaluation with CLI and Python API
 
 ---
 
@@ -278,19 +278,19 @@ config = BenchmarkConfig(
     modes=[EvaluationMode.POSE, EvaluationMode.RECON_POSED],
     max_frames=100,
     scenes=["courtyard", "chess"],  # Specific scenes only
-    
+
     # TSDF fusion parameters
     voxel_length=0.005,  # 5mm voxels for higher resolution
     sdf_trunc=0.02,  # 2cm truncation
-    
+
     # RANSAC parameters
     ransac_iterations=2000,  # More iterations for robustness
     ransac_inlier_threshold=0.05,  # 5cm inlier threshold
-    
+
     # Paths
     data_root=Path("workspace/benchmark_dataset"),
     work_dir=Path("workspace/evaluation"),
-    
+
     # Debugging
     debug=True,  # Enable debug mode
     num_fusion_workers=8,  # More workers for faster fusion
@@ -423,10 +423,10 @@ from lux_depth_v3.benchmark.dataset_loader import DA3BenchmarkDataset
 
 class CustomDataset(DA3BenchmarkDataset):
     """Custom benchmark dataset."""
-    
+
     def _get_scenes(self):
         return ["scene1", "scene2", "scene3"]
-    
+
     def load_scene(self, scene_name):
         # Load images, poses, intrinsics
         return {
@@ -520,6 +520,6 @@ print(df.groupby(["dataset", "mode"]).mean())
 
 ---
 
-**Last Updated**: December 2025  
-**Version**: 1.0.0  
+**Last Updated**: December 2025
+**Version**: 1.0.0
 **Maintainer**: Transformation Portal Team

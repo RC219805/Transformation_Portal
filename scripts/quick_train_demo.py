@@ -22,7 +22,7 @@ from enhancements.train_hyper_reality import (
     SyntheticDataGenerator,
     HyperRealityTrainer,
     EnhancementDataset,
-    configure_device
+    configure_device,
 )
 import sys
 from pathlib import Path
@@ -74,7 +74,7 @@ def main():
         val_split=0.2,  # 20% validation
         val_frequency=1,
         num_workers=2,
-        use_mixed_precision=False  # Disable for CPU
+        use_mixed_precision=False,  # Disable for CPU
     )
 
     print("Training config:")
@@ -89,10 +89,12 @@ def main():
     print("Step 3: Preparing datasets...")
     print("-" * 70)
 
-    transform = transforms.Compose([
-        transforms.Resize((512, 512)),
-        transforms.ToTensor(),
-    ])
+    transform = transforms.Compose(
+        [
+            transforms.Resize((512, 512)),
+            transforms.ToTensor(),
+        ]
+    )
 
     low_quality_dir = Path(output_dir) / "low_quality"
     high_quality_dir = Path(output_dir) / "high_quality"
@@ -102,16 +104,14 @@ def main():
     # Split into train/val
     val_size = int(config.val_split * len(dataset))
     train_size = len(dataset) - val_size
-    train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, [train_size, val_size]
-    )
+    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=config.batch_size,
         shuffle=True,
         num_workers=config.num_workers,
-        pin_memory=False  # Disable for CPU
+        pin_memory=False,  # Disable for CPU
     )
 
     val_loader = DataLoader(
@@ -119,7 +119,7 @@ def main():
         batch_size=config.batch_size,
         shuffle=False,
         num_workers=config.num_workers,
-        pin_memory=False  # Disable for CPU
+        pin_memory=False,  # Disable for CPU
     )
 
     print("✓ Created dataloaders:")

@@ -167,13 +167,13 @@ indexing:
   chunk_size: 512
   overlap: 50
   min_chunk_length: 50
-  
+
   file_patterns:
     - "**/*.md"
     - "**/*.py"
     - "**/*.yaml"
     - "**/*.sh"
-    
+
   exclude_patterns:
     - ".git/**"
     - "__pycache__/**"
@@ -402,6 +402,6 @@ For issues or questions:
 
 ---
 
-**Last Updated**: 2025-11-07  
-**Version**: 1.0.0  
+**Last Updated**: 2025-11-07
+**Version**: 1.0.0
 **Status**: Production Ready ✅

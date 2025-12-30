@@ -248,8 +248,8 @@ def estimate_depth(image_hash: str) -> np.ndarray:
 
 ## Version Control
 
-**Template Version**: 1.0  
-**Last Updated**: 2025-11-06  
+**Template Version**: 1.0
+**Last Updated**: 2025-11-06
 **Maintained By**: Transformation Portal RAG System
 
 ### Changelog

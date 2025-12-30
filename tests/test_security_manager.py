@@ -26,11 +26,11 @@ class TestSeverityLevel:
         """Test that all expected severity levels are defined."""
         from security.security_manager import SeverityLevel
 
-        assert hasattr(SeverityLevel, 'CRITICAL')
-        assert hasattr(SeverityLevel, 'HIGH')
-        assert hasattr(SeverityLevel, 'MEDIUM')
-        assert hasattr(SeverityLevel, 'LOW')
-        assert hasattr(SeverityLevel, 'INFORMATIONAL')
+        assert hasattr(SeverityLevel, "CRITICAL")
+        assert hasattr(SeverityLevel, "HIGH")
+        assert hasattr(SeverityLevel, "MEDIUM")
+        assert hasattr(SeverityLevel, "LOW")
+        assert hasattr(SeverityLevel, "INFORMATIONAL")
 
 
 class TestMitigationType:
@@ -40,10 +40,10 @@ class TestMitigationType:
         """Test that all expected mitigation types are defined."""
         from security.security_manager import MitigationType
 
-        assert hasattr(MitigationType, 'CONSTRAINT')
-        assert hasattr(MitigationType, 'VENDOR')
-        assert hasattr(MitigationType, 'UPGRADE')
-        assert hasattr(MitigationType, 'REMOVE')
+        assert hasattr(MitigationType, "CONSTRAINT")
+        assert hasattr(MitigationType, "VENDOR")
+        assert hasattr(MitigationType, "UPGRADE")
+        assert hasattr(MitigationType, "REMOVE")
 
 
 class TestMitigationStatus:
@@ -53,11 +53,11 @@ class TestMitigationStatus:
         """Test that all expected mitigation statuses are defined."""
         from security.security_manager import MitigationStatus
 
-        assert hasattr(MitigationStatus, 'NOT_STARTED')
-        assert hasattr(MitigationStatus, 'IN_PROGRESS')
-        assert hasattr(MitigationStatus, 'MITIGATED')
-        assert hasattr(MitigationStatus, 'ACCEPTED_RISK')
-        assert hasattr(MitigationStatus, 'FALSE_POSITIVE')
+        assert hasattr(MitigationStatus, "NOT_STARTED")
+        assert hasattr(MitigationStatus, "IN_PROGRESS")
+        assert hasattr(MitigationStatus, "MITIGATED")
+        assert hasattr(MitigationStatus, "ACCEPTED_RISK")
+        assert hasattr(MitigationStatus, "FALSE_POSITIVE")
 
 
 class TestVulnerability:
@@ -93,19 +93,19 @@ class TestVulnerability:
 
         data = vuln.to_dict()
 
-        assert data['cve_id'] == "CVE-2024-27763"
-        assert data['severity'] == 'critical'
+        assert data["cve_id"] == "CVE-2024-27763"
+        assert data["severity"] == "critical"
 
     def test_vulnerability_from_dict(self):
         """Test that vulnerabilities can be created from dictionary."""
         from security.security_manager import Vulnerability, SeverityLevel
 
         data = {
-            'cve_id': "CVE-2024-27763",
-            'package_name': "basicsr",
-            'affected_versions': "<1.0.0",
-            'severity': 'critical',
-            'description': "Command injection vulnerability",
+            "cve_id": "CVE-2024-27763",
+            "package_name": "basicsr",
+            "affected_versions": "<1.0.0",
+            "severity": "critical",
+            "description": "Command injection vulnerability",
         }
 
         vuln = Vulnerability.from_dict(data)
@@ -119,9 +119,7 @@ class TestMitigation:
 
     def test_mitigation_creation(self):
         """Test that mitigation objects can be created."""
-        from security.security_manager import (
-            Mitigation, MitigationType, MitigationStatus
-        )
+        from security.security_manager import Mitigation, MitigationType, MitigationStatus
 
         mitigation = Mitigation(
             cve_id="CVE-2024-27763",
@@ -135,9 +133,7 @@ class TestMitigation:
 
     def test_mitigation_to_dict(self):
         """Test that mitigations can be converted to dictionary."""
-        from security.security_manager import (
-            Mitigation, MitigationType, MitigationStatus
-        )
+        from security.security_manager import Mitigation, MitigationType, MitigationStatus
 
         mitigation = Mitigation(
             cve_id="CVE-2024-27763",
@@ -148,9 +144,9 @@ class TestMitigation:
 
         data = mitigation.to_dict()
 
-        assert data['cve_id'] == "CVE-2024-27763"
-        assert data['mitigation_type'] == 'constraint'
-        assert data['status'] == 'not_started'
+        assert data["cve_id"] == "CVE-2024-27763"
+        assert data["mitigation_type"] == "constraint"
+        assert data["status"] == "not_started"
 
 
 class TestSecurityPolicy:
@@ -242,9 +238,7 @@ class TestSecurityKnowledgeBase:
 
     def test_index_vulnerability(self, tmp_path):
         """Test indexing a vulnerability to knowledge base."""
-        from security.security_manager import (
-            SecurityKnowledgeBase, Vulnerability, SeverityLevel
-        )
+        from security.security_manager import SecurityKnowledgeBase, Vulnerability, SeverityLevel
 
         kb = SecurityKnowledgeBase(tmp_path)
 
@@ -281,7 +275,7 @@ class TestSecurityManager:
         report = manager.scan()
 
         assert report is not None
-        assert hasattr(report, 'vulnerabilities')
+        assert hasattr(report, "vulnerabilities")
 
     def test_get_blocked_packages(self, tmp_path):
         """Test getting blocked packages."""
@@ -308,8 +302,8 @@ class TestSecurityReport:
 
         report = SecurityReport()
 
-        assert hasattr(report, 'vulnerabilities')
-        assert hasattr(report, 'mitigations')
+        assert hasattr(report, "vulnerabilities")
+        assert hasattr(report, "mitigations")
 
     def test_report_to_markdown(self):
         """Test markdown report generation."""

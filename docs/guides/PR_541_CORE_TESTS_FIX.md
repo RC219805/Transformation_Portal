@@ -1,7 +1,7 @@
 # PR #541 Core Tests Fix - Root Cause Analysis and Resolution
 
-**Date**: 2025-12-09  
-**Status**: ✅ RESOLVED  
+**Date**: 2025-12-09
+**Status**: ✅ RESOLVED
 **Commit**: 2be6808
 
 ## Executive Summary
@@ -97,7 +97,7 @@ namespaces = false  # ✅ Prevent namespace package conflicts
 1. **Added explicit package-dir mapping**
    - `"" = "src"` tells setuptools that default packages are in `src/`
    - `"lux_depth_v2" = "lux_depth_v2"` explicitly maps root-level package
-   
+
 2. **Set `namespaces = false`**
    - Prevents setuptools from treating packages as namespace packages
    - Ensures proper subpackage discovery
@@ -202,10 +202,10 @@ Transformation_Portal/
 ### Design Principles Reinforced
 1. **Explicit is better than implicit** (Zen of Python)
    - Explicit package-dir mappings prevent ambiguity
-   
+
 2. **Single source of truth**
    - Main package in `src/`, special cases explicitly mapped
-   
+
 3. **Predictable CI behavior**
    - Configuration works the same locally and in CI
    - No hidden state dependencies
@@ -217,11 +217,11 @@ Transformation_Portal/
 ### For Future Package Structure Changes
 1. **Always test editable installs in clean environments**
    - Use `python -m venv .venv-test` for isolated testing
-   
+
 2. **Explicit package-dir mappings are required when:**
    - Scanning multiple `where` directories
    - Mixing src-layout with root-level packages
-   
+
 3. **Verify with `setuptools.find_packages()`**
    ```python
    from setuptools import find_packages
@@ -237,7 +237,7 @@ Transformation_Portal/
 1. **Fresh environment testing is critical**
    - What works locally may fail in CI
    - Use Docker or fresh VMs for validation
-   
+
 2. **Early import verification**
    - Add import smoke tests before running full test suite
    - Fail fast if package structure is broken
@@ -274,8 +274,8 @@ Transformation_Portal/
 
 ## Acknowledgments
 
-**Root cause identified by**: Systematic analysis of CI logs  
-**Fix validated by**: Local testing + CI verification  
+**Root cause identified by**: Systematic analysis of CI logs
+**Fix validated by**: Local testing + CI verification
 **Architecture review**: Confirmed compatibility with Platform Core extraction goals
 
 ---

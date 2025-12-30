@@ -35,8 +35,7 @@ except ImportError:
 # Latest releases: https://github.com/xinntao/Real-ESRGAN/releases
 REALESRGAN_MODEL_VERSION = "v0.2.5.0"
 REALESRGAN_MODEL_URL = (
-    f"https://github.com/xinntao/Real-ESRGAN/releases/download/"
-    f"{REALESRGAN_MODEL_VERSION}/RealESRGAN_x4plus.pth"
+    f"https://github.com/xinntao/Real-ESRGAN/releases/download/{REALESRGAN_MODEL_VERSION}/RealESRGAN_x4plus.pth"
 )
 REALESRGAN_MODEL_FILENAME = "RealESRGAN_x4plus.pth"
 
@@ -56,22 +55,16 @@ class DownloadProgressBar:
         if total_size > 0:
             if self.pbar is None:
                 if tqdm:
-                    self.pbar = tqdm(
-                        total=total_size,
-                        unit='B',
-                        unit_scale=True,
-                        unit_divisor=1024,
-                        desc=self.desc
-                    )
+                    self.pbar = tqdm(total=total_size, unit="B", unit_scale=True, unit_divisor=1024, desc=self.desc)
                 else:
-                    print(f"Downloading {self.desc}... 0%", end='', flush=True)
+                    print(f"Downloading {self.desc}... 0%", end="", flush=True)
 
             downloaded = block_num * block_size
             if tqdm and self.pbar:
                 self.pbar.update(block_size)
             elif not tqdm:
                 percent = min(100, int(downloaded * 100 / total_size))
-                print(f"\rDownloading {self.desc}... {percent}%", end='', flush=True)
+                print(f"\rDownloading {self.desc}... {percent}%", end="", flush=True)
 
             if downloaded >= total_size:
                 if tqdm and self.pbar:
@@ -95,11 +88,7 @@ def download_file(url: str, output_path: Path, desc: str = "file") -> bool:
         print(f"Downloading {desc} from {url}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        urllib.request.urlretrieve(
-            url,
-            output_path,
-            reporthook=DownloadProgressBar(desc)
-        )
+        urllib.request.urlretrieve(url, output_path, reporthook=DownloadProgressBar(desc))
 
         print(f"✓ Successfully downloaded to {output_path}")
         return True
@@ -208,27 +197,16 @@ def verify_models(model_dir: Path) -> dict:
 
 def main():
     """Main entry point for model download script."""
-    parser = argparse.ArgumentParser(
-        description="Download depth estimation and upscaling models for Transformation Portal"
-    )
+    parser = argparse.ArgumentParser(description="Download depth estimation and upscaling models for Transformation Portal")
     parser.add_argument(
         "--model",
         type=str,
         choices=["depth", "realesrgan", "all"],
         default="all",
-        help="Which model to download (default: all)"
+        help="Which model to download (default: all)",
     )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="./weights",
-        help="Output directory for models (default: ./weights)"
-    )
-    parser.add_argument(
-        "--verify-only",
-        action="store_true",
-        help="Only verify model status, don't download"
-    )
+    parser.add_argument("--output-dir", type=str, default="./weights", help="Output directory for models (default: ./weights)")
+    parser.add_argument("--verify-only", action="store_true", help="Only verify model status, don't download")
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)

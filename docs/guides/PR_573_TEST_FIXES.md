@@ -1,6 +1,6 @@
 # PR #573 Test Import Fixes
 
-**Date**: 2025-12-20  
+**Date**: 2025-12-20
 **Commit**: 7b81652
 
 ## Problem
@@ -91,7 +91,7 @@ except ImportError as e:
     SKIP_REASON = f"Dependencies not available: {e}"
 
 pytestmark = pytest.mark.skipif(
-    not DEPS_AVAILABLE, 
+    not DEPS_AVAILABLE,
     reason=getattr(globals(), 'SKIP_REASON', 'Dependencies not available')
 )
 ```

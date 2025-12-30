@@ -1,6 +1,6 @@
 # Edge Detection Failure - Root Cause Analysis
-**Date**: 2025-12-18  
-**Status**: ROOT CAUSE IDENTIFIED  
+**Date**: 2025-12-18
+**Status**: ROOT CAUSE IDENTIFIED
 **Analyst**: Transformation Portal Architect
 
 ---
@@ -126,7 +126,7 @@ python production_depth_validation_fixed.py \
    - **RGB edges**: Almost none (uniform glass/water)
    - **Depth edges**: FP from inference noise (1021 pixels)
    - **Conclusion**: Metric correctly identifies these as low-edge-content scenes
-   
+
 2. **Structure images** (interiors, facades):
    - **RGB edges**: Rich structural boundaries (doors, windows, countertops)
    - **Depth edges**: Massive FN (millions of missed pixels)
@@ -156,7 +156,7 @@ python production_depth_validation_fixed.py \
 - **Large images** (>4000px): 2/3 pass lenient threshold (Edge F1 ≥ 0.375)
 - **Chamfer = 65533.8**: Saturation value indicating **no valid edge pairs detected**
 
-**Root Cause Hypothesis**: 
+**Root Cause Hypothesis**:
 Depth Anything V2 Large operates at native resolution **518×518** (from model config). When fed 512×512 images:
 1. Minimal padding to 518×518 → almost no context for boundary detection
 2. Single-tile inference → no multi-scale fusion
@@ -210,27 +210,27 @@ Glass and ocean scenes are inherently low-edge-content:
 def preprocess_small_images(image: np.ndarray, min_size: int = 1024) -> Tuple[np.ndarray, Optional[Tuple[int, int]]]:
     """
     Upscale images <min_size to min_size before depth inference.
-    
+
     Args:
         image: RGB image (H, W, 3)
         min_size: Minimum dimension (default: 1024px)
-        
+
     Returns:
         (upscaled_image, original_size) or (image, None) if no upscaling needed
     """
     h, w = image.shape[:2]
-    
+
     if h < min_size or w < min_size:
         # Compute upscale factor
         scale = max(min_size / h, min_size / w)
         new_h, new_w = int(h * scale), int(w * scale)
-        
+
         # Upscale with Lanczos (high-quality)
         upscaled = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
-        
+
         logger.info(f"Upscaled {h}×{w} → {new_h}×{new_w} before depth inference (min_size={min_size})")
         return upscaled, (h, w)
-    
+
     return image, None
 
 
@@ -238,16 +238,16 @@ def preprocess_small_images(image: np.ndarray, min_size: int = 1024) -> Tuple[np
 def estimate_depth(self, rgb: np.ndarray, ...) -> np.ndarray:
     # NEW: Preprocess small images
     rgb_processed, original_size = preprocess_small_images(rgb, min_size=1024)
-    
+
     # Existing tiling and inference logic
     depth = self._infer_tiled(rgb_processed, ...)
-    
+
     # NEW: Downscale depth back to original size if upscaled
     if original_size:
         h_orig, w_orig = original_size
         depth = cv2.resize(depth, (w_orig, h_orig), interpolation=cv2.INTER_LINEAR)
         logger.info(f"Downscaled depth to original size: {h_orig}×{w_orig}")
-    
+
     return depth
 ```
 
@@ -298,11 +298,11 @@ Increase Depth Anything V2 input resolution:
 
 ## What NOT to Do
 
-**❌ Do not** integrate Materials V3 now (lose attribution)  
-**❌ Do not** loosen thresholds before proving preprocessing fixes small images  
-**❌ Do not** run 15-20 image suite until 512×512 fix validated  
-**❌ Do not** change tiling/blending (infrastructure verified correct)  
-**❌ Do not** re-enable global anchor by default (confirmed not the cause)  
+**❌ Do not** integrate Materials V3 now (lose attribution)
+**❌ Do not** loosen thresholds before proving preprocessing fixes small images
+**❌ Do not** run 15-20 image suite until 512×512 fix validated
+**❌ Do not** change tiling/blending (infrastructure verified correct)
+**❌ Do not** re-enable global anchor by default (confirmed not the cause)
 
 ---
 

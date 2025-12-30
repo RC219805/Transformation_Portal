@@ -1,10 +1,10 @@
 # Quality Tiers: Interior Luxury Real Estate Processing
 
-**Last Updated:** December 12, 2025  
-**Pipeline:** lux_depth_v2  
+**Last Updated:** December 12, 2025
+**Pipeline:** lux_depth_v2
 **Validated On:** 750 Picacho Kitchen (81MP, 16-bit TIFF)
 
-**📖 New User?** Start with the [Phase 2 User Guide](PHASE2_USER_GUIDE.md) for a complete walkthrough with examples.  
+**📖 New User?** Start with the [Phase 2 User Guide](PHASE2_USER_GUIDE.md) for a complete walkthrough with examples.
 **⚡ Quick Reference:** See the [Quick Reference Card](QUICK_REFERENCE_PHASE2.md) for one-page CLI cheat sheet.
 
 ---
@@ -238,8 +238,8 @@ lux-depth-v2 \
 
 ## Performance Benchmarks
 
-**Test Image:** 750 Picacho Kitchen (12,000 × 6,750 px, 81 MP, 16-bit TIFF)  
-**Hardware:** Apple M4 Max, 128 GB RAM, MPS acceleration  
+**Test Image:** 750 Picacho Kitchen (12,000 × 6,750 px, 81 MP, 16-bit TIFF)
+**Hardware:** Apple M4 Max, 128 GB RAM, MPS acceleration
 **Depth Map:** Depth Anything V2 Large, 16-bit TIFF
 
 | Tier | Time | Throughput | Color Δ | Luma Δ | PNG Size |

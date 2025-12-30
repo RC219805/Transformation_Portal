@@ -32,6 +32,7 @@ from PIL.ExifTags import TAGS
 # Optional scipy for advanced processing
 try:
     from scipy.ndimage import gaussian_filter
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
@@ -42,6 +43,7 @@ try:
     import torch
     import torch.nn.functional as F
     from torch import nn, Tensor
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -52,6 +54,7 @@ except ImportError:
 # Optional TIFF support
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -61,6 +64,7 @@ logger = logging.getLogger(__name__)
 
 class OutputFormat(Enum):
     """Supported output formats."""
+
     TIFF_16BIT = "16bit_tiff"
     TIFF_32BIT = "32bit_tiff"
     PNG_16BIT = "16bit_png"
@@ -71,6 +75,7 @@ class OutputFormat(Enum):
 
 class EnhancementLevel(Enum):
     """Enhancement intensity levels."""
+
     SUBTLE = "subtle"
     BALANCED = "balanced"
     STRONG = "strong"
@@ -80,6 +85,7 @@ class EnhancementLevel(Enum):
 @dataclass
 class InferenceConfig:
     """Configuration for production inference."""
+
     # Model configuration
     model_path: Path = field(default_factory=lambda: Path("weights/750_picacho/best_model.pth"))
     device: str = "auto"
@@ -97,14 +103,16 @@ class InferenceConfig:
     apply_color_grading: bool = True
 
     # Material-specific strengths
-    material_strengths: Dict[str, float] = field(default_factory=lambda: {
-        "stone": 0.8,
-        "glass": 0.9,
-        "water": 0.85,
-        "wood": 0.75,
-        "metal": 0.85,
-        "fabric": 0.7,
-    })
+    material_strengths: Dict[str, float] = field(
+        default_factory=lambda: {
+            "stone": 0.8,
+            "glass": 0.9,
+            "water": 0.85,
+            "wood": 0.75,
+            "metal": 0.85,
+            "fabric": 0.7,
+        }
+    )
 
     # Output configuration
     output_format: OutputFormat = OutputFormat.TIFF_16BIT
@@ -131,6 +139,7 @@ class InferenceConfig:
 @dataclass
 class EnhancedOutput:
     """Result of enhancement processing."""
+
     source_path: Path = field(default_factory=Path)
     output_path: Path = field(default_factory=Path)
     image: Optional[np.ndarray] = None  # (H, W, C) in 0-65535 for 16-bit
@@ -140,11 +149,7 @@ class EnhancedOutput:
     enhancement_params: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def save(
-        self,
-        output_path: Optional[Path] = None,
-        format: Optional[OutputFormat] = None
-    ) -> Path:
+    def save(self, output_path: Optional[Path] = None, format: Optional[OutputFormat] = None) -> Path:
         """Save enhanced image to file."""
         output_path = output_path or self.output_path
         output_path = Path(output_path)
@@ -180,13 +185,7 @@ class EnhancedOutput:
                 "Software": "Transformation_Portal 750 Picacho Enhancement",
             }
 
-            tifffile.imwrite(
-                output_path,
-                image_16bit,
-                photometric="rgb",
-                metadata=metadata,
-                compression="lzw"
-            )
+            tifffile.imwrite(output_path, image_16bit, photometric="rgb", metadata=metadata, compression="lzw")
         else:
             # Fallback to PIL (limited 16-bit support)
             image_16bit = self._to_16bit()
@@ -204,12 +203,7 @@ class EnhancedOutput:
 
         if TIFFFILE_AVAILABLE:
             image_float = self.image.astype(np.float32) / 65535.0
-            tifffile.imwrite(
-                output_path,
-                image_float,
-                photometric="rgb",
-                compression="lzw"
-            )
+            tifffile.imwrite(output_path, image_float, photometric="rgb", compression="lzw")
         else:
             logger.warning("tifffile not available for 32-bit TIFF")
             return self._save_tiff_16bit(output_path)
@@ -248,12 +242,7 @@ class EnhancedOutput:
         if "original_exif" in self.metadata:
             exif = self.metadata["original_exif"]
 
-        pil_image.save(
-            output_path,
-            quality=quality,
-            progressive=True,
-            exif=exif
-        )
+        pil_image.save(output_path, quality=quality, progressive=True, exif=exif)
 
         return output_path
 
@@ -315,11 +304,7 @@ class PicachoInference:
         device: Compute device
     """
 
-    def __init__(
-        self,
-        config: Optional[InferenceConfig] = None,
-        model_path: Optional[Path] = None
-    ):
+    def __init__(self, config: Optional[InferenceConfig] = None, model_path: Optional[Path] = None):
         """
         Initialize inference pipeline.
 
@@ -371,19 +356,13 @@ class PicachoInference:
         logger.info(f"Loading model from {self.config.model_path}")
 
         try:
-            checkpoint = torch.load(
-                self.config.model_path,
-                map_location=self.device,
-                weights_only=True
-            )
+            checkpoint = torch.load(self.config.model_path, map_location=self.device, weights_only=True)
 
             # Try to reconstruct model architecture
             model_state = checkpoint.get("model_state", checkpoint)
 
             # Check if it's a ModuleDict-style model
-            if isinstance(model_state, dict) and all(
-                isinstance(v, dict) for v in model_state.values()
-            ):
+            if isinstance(model_state, dict) and all(isinstance(v, dict) for v in model_state.values()):
                 # Load multi-module model
                 self._load_multi_module_model(model_state)
             else:
@@ -404,16 +383,18 @@ class PicachoInference:
                 AtmosphericSynthesizer,
                 MaterialTranscendence,
                 SpatialHarmonics,
-                EnhancementConfig
+                EnhancementConfig,
             )
 
             config = EnhancementConfig()
-            self.model = nn.ModuleDict({
-                "caustics": CausticGenerator(config.quantum_caustics),
-                "atmosphere": AtmosphericSynthesizer(config.neural_atmosphere),
-                "materials": MaterialTranscendence(config.material_transcendence),
-                "harmonics": SpatialHarmonics(config.spatial_harmonics),
-            })
+            self.model = nn.ModuleDict(
+                {
+                    "caustics": CausticGenerator(config.quantum_caustics),
+                    "atmosphere": AtmosphericSynthesizer(config.neural_atmosphere),
+                    "materials": MaterialTranscendence(config.material_transcendence),
+                    "harmonics": SpatialHarmonics(config.spatial_harmonics),
+                }
+            )
 
             # Load state dicts
             for name, state in model_state.items():
@@ -437,6 +418,7 @@ class PicachoInference:
 
     def _create_simple_model(self) -> "nn.Module":
         """Create simple enhancement model."""
+
         class SimpleEnhancer(nn.Module):
             def __init__(self, in_channels: int = 3, features: int = 64):
                 super().__init__()
@@ -463,7 +445,7 @@ class PicachoInference:
         self,
         image: Union[Path, Image.Image, np.ndarray],
         output_path: Optional[Path] = None,
-        materials: Optional[List[str]] = None
+        materials: Optional[List[str]] = None,
     ) -> EnhancedOutput:
         """
         Process a single image with property-specific enhancements.
@@ -534,11 +516,7 @@ class PicachoInference:
             metadata=metadata,
         )
 
-    def process_batch(
-        self,
-        images: List[Union[Path, Image.Image]],
-        output_dir: Optional[Path] = None
-    ) -> List[EnhancedOutput]:
+    def process_batch(self, images: List[Union[Path, Image.Image]], output_dir: Optional[Path] = None) -> List[EnhancedOutput]:
         """
         Process multiple images.
 
@@ -569,10 +547,7 @@ class PicachoInference:
 
         return results
 
-    def _load_image(
-        self,
-        image: Union[Path, Image.Image, np.ndarray]
-    ) -> Tuple[Image.Image, Optional[Dict]]:
+    def _load_image(self, image: Union[Path, Image.Image, np.ndarray]) -> Tuple[Image.Image, Optional[Dict]]:
         """Load image and extract metadata."""
         metadata = None
 
@@ -596,22 +571,14 @@ class PicachoInference:
 
         return pil_image, metadata
 
-    def _process_full(
-        self,
-        image: np.ndarray,
-        materials: Optional[List[str]] = None
-    ) -> np.ndarray:
+    def _process_full(self, image: np.ndarray, materials: Optional[List[str]] = None) -> np.ndarray:
         """Process entire image at once."""
         if self.model is not None and TORCH_AVAILABLE:
             return self._process_with_model(image, materials)
         else:
             return self._process_fallback(image, materials)
 
-    def _process_tiled(
-        self,
-        image: np.ndarray,
-        materials: Optional[List[str]] = None
-    ) -> np.ndarray:
+    def _process_tiled(self, image: np.ndarray, materials: Optional[List[str]] = None) -> np.ndarray:
         """Process image in tiles for memory efficiency."""
         h, w = image.shape[:2]
         tile_size = self.config.tile_size
@@ -672,11 +639,7 @@ class PicachoInference:
         mask = np.outer(profile, profile)
         return mask.astype(np.float32)
 
-    def _process_with_model(
-        self,
-        image: np.ndarray,
-        materials: Optional[List[str]] = None
-    ) -> np.ndarray:
+    def _process_with_model(self, image: np.ndarray, materials: Optional[List[str]] = None) -> np.ndarray:
         """Process image using loaded model."""
         # Convert to tensor
         img_tensor = torch.from_numpy(image).float()
@@ -740,16 +703,8 @@ class PicachoInference:
 
     def _compute_normals(self, depth: Tensor) -> Tensor:
         """Compute surface normals from depth."""
-        sobel_x = torch.tensor(
-            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
-            dtype=depth.dtype,
-            device=depth.device
-        ).view(1, 1, 3, 3)
-        sobel_y = torch.tensor(
-            [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
-            dtype=depth.dtype,
-            device=depth.device
-        ).view(1, 1, 3, 3)
+        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=depth.dtype, device=depth.device).view(1, 1, 3, 3)
+        sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=depth.dtype, device=depth.device).view(1, 1, 3, 3)
 
         dx = F.conv2d(depth, sobel_x, padding=1)
         dy = F.conv2d(depth, sobel_y, padding=1)
@@ -760,11 +715,7 @@ class PicachoInference:
 
         return normals
 
-    def _process_fallback(
-        self,
-        image: np.ndarray,
-        materials: Optional[List[str]] = None
-    ) -> np.ndarray:
+    def _process_fallback(self, image: np.ndarray, materials: Optional[List[str]] = None) -> np.ndarray:
         """Fallback processing without model."""
         # Convert to float
         if image.dtype == np.uint8:
@@ -798,11 +749,7 @@ class PicachoInference:
         # Clip and return
         return np.clip(enhanced, 0, 1)
 
-    def _apply_material_enhancements(
-        self,
-        image: np.ndarray,
-        materials: List[str]
-    ) -> np.ndarray:
+    def _apply_material_enhancements(self, image: np.ndarray, materials: List[str]) -> np.ndarray:
         """Apply material-specific enhancements."""
         enhanced = image.copy()
 
@@ -819,12 +766,12 @@ class PicachoInference:
 
             elif material == "water":
                 # Enhance blue tones and reflections
-                enhanced[:, :, 2] *= (1 + strength * 0.1)  # Blue channel
+                enhanced[:, :, 2] *= 1 + strength * 0.1  # Blue channel
 
             elif material == "wood":
                 # Enhance warmth and grain
-                enhanced[:, :, 0] *= (1 + strength * 0.08)  # Red channel
-                enhanced[:, :, 1] *= (1 + strength * 0.05)  # Green channel
+                enhanced[:, :, 0] *= 1 + strength * 0.08  # Red channel
+                enhanced[:, :, 1] *= 1 + strength * 0.05  # Green channel
 
             elif material == "metal":
                 # Enhance contrast and highlights
@@ -889,7 +836,4 @@ class PicachoInference:
         }
 
     def __repr__(self) -> str:
-        return (
-            f"PicachoInference(model_loaded={self.model is not None}, "
-            f"device={self.device})"
-        )
+        return f"PicachoInference(model_loaded={self.model is not None}, device={self.device})"

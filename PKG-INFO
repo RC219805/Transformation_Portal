@@ -187,7 +187,7 @@ Transformation Portal supports a wide range of image and video formats across it
 
 **Universal Support** (All image pipelines):
 - **PNG** (`.png`) - Lossless, alpha channel support
-- **JPEG** (`.jpg`, `.jpeg`) - Lossy, widely compatible  
+- **JPEG** (`.jpg`, `.jpeg`) - Lossy, widely compatible
 - **TIFF** (`.tif`, `.tiff`) - 16-bit precision with metadata preservation
 - **WebP** (`.webp`) - Modern compression
 - **BMP** (`.bmp`) - Uncompressed bitmap

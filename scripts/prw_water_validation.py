@@ -45,6 +45,7 @@ from lux_depth_v2.materials_v3 import MaterialsV3Engine, MaterialsV3Config
 # SciPy dependency handling (optional for edge alignment)
 try:
     from scipy import ndimage
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
@@ -55,6 +56,7 @@ except ImportError:
 @dataclass
 class ValidationResult:
     """Single validation test result (PR-W4 two-stage gating schema)."""
+
     image_path: str
     scene_type: str  # label: pool|ocean
     should_detect: bool  # from ground truth
@@ -117,14 +119,14 @@ class WaterValidationHarness:
     def validate_dataset(
         self,
         ground_truth: dict,  # Full ground truth JSON (v0 schema)
-        ground_truth_path: Path  # Path to ground_truth.json file
+        ground_truth_path: Path,  # Path to ground_truth.json file
     ) -> List[ValidationResult]:
         """Run validation on dataset using new schema."""
         results = []
 
         # Check for holdout directory override (Phase B: holdout set support)
-        holdout_dir = os.environ.get('WATER_HOLDOUT_DIR')
-        is_holdout = ground_truth.get('holdout_version') is not None
+        holdout_dir = os.environ.get("WATER_HOLDOUT_DIR")
+        is_holdout = ground_truth.get("holdout_version") is not None
 
         if holdout_dir and is_holdout:
             # Use environment variable for holdout images
@@ -151,7 +153,7 @@ class WaterValidationHarness:
                 label=img_info.get("label", "unknown"),
                 should_detect=img_info.get("should_detect", True),
                 difficulty=img_info.get("difficulty", "medium"),
-                tags=img_info.get("tags", [])
+                tags=img_info.get("tags", []),
             )
             results.append(result)
 
@@ -164,13 +166,13 @@ class WaterValidationHarness:
         label: str,
         should_detect: bool,
         difficulty: str,
-        tags: List[str]
+        tags: List[str],
     ) -> ValidationResult:
         """Validate single image (new schema)."""
         # Set per-image deterministic seed (using stable CRC32 hash)
         if self.seed is not None:
             # Stable hash across runs (not process-salted like hash())
-            stable_hash = zlib.crc32(str(img_path).encode('utf-8')) & 0xFFFFFFFF
+            stable_hash = zlib.crc32(str(img_path).encode("utf-8")) & 0xFFFFFFFF
             per_image = (self.seed ^ stable_hash) & 0xFFFFFFFF
             np.random.seed(per_image)
 
@@ -187,15 +189,12 @@ class WaterValidationHarness:
 
         if self.engine.config.water_detection_enabled:
             from lux_depth_v2.water_candidate import WaterCandidateDetector, SceneContext
+
             detector = WaterCandidateDetector()
             # Call with same signature as Materials V3 will use
-            detector_result = detector.detect(
-                rgb01,
-                depth01=depth,
-                scene_context=SceneContext.UNKNOWN
-            )
+            detector_result = detector.detect(rgb01, depth01=depth, scene_context=SceneContext.UNKNOWN)
             # PR-W1: detector returns WaterCandidateResult dataclass (not dict)
-            water_mask = detector_result.mask if hasattr(detector_result, 'mask') else None
+            water_mask = detector_result.mask if hasattr(detector_result, "mask") else None
             # Note: detector_confidence and detector_coverage not used
             # (we use pipeline results for reporting)
 
@@ -210,8 +209,8 @@ class WaterValidationHarness:
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         # Extract water candidate from materials_v3 metadata
-        water_dict = result.get('materials_v3', {}).get('water_candidate', {})
-        detected = water_dict.get('present', False)
+        water_dict = result.get("materials_v3", {}).get("water_candidate", {})
+        detected = water_dict.get("present", False)
 
         # Use detector results for mask-based metrics
         # Use pipeline results for coverage/confidence reporting
@@ -222,31 +221,31 @@ class WaterValidationHarness:
         stability = self._compute_stability(rgb01, depth)
 
         # False trigger: should_detect=false but detected
-        detected = water_dict.get('present', False)
-        is_false_trigger = (not should_detect and detected)
+        detected = water_dict.get("present", False)
+        is_false_trigger = not should_detect and detected
         is_fp = is_false_trigger  # legacy alias, same semantics
 
         # PR-W4: Extract two-stage gating telemetry
-        confidence_raw = water_dict.get('confidence_raw', water_dict.get('confidence', 0.0))
-        confidence_after_suppressors = water_dict.get('confidence_after_suppressors', water_dict.get('confidence', 0.0))
-        confidence_final = water_dict.get('confidence_final', water_dict.get('confidence', 0.0))
-        saturation_boost_applied = water_dict.get('saturation_boost_applied', False)
-        candidate_stage_passed = water_dict.get('candidate_stage_passed', False)
-        injection_stage_passed = water_dict.get('injection_stage_passed', False)
+        confidence_raw = water_dict.get("confidence_raw", water_dict.get("confidence", 0.0))
+        confidence_after_suppressors = water_dict.get("confidence_after_suppressors", water_dict.get("confidence", 0.0))
+        confidence_final = water_dict.get("confidence_final", water_dict.get("confidence", 0.0))
+        saturation_boost_applied = water_dict.get("saturation_boost_applied", False)
+        candidate_stage_passed = water_dict.get("candidate_stage_passed", False)
+        injection_stage_passed = water_dict.get("injection_stage_passed", False)
 
         # Phase A: Extract suppressor telemetry
-        suppressors_applied = water_dict.get('suppressors_applied', [])
-        suppressor_telemetry = water_dict.get('suppressor_telemetry', None)
+        suppressors_applied = water_dict.get("suppressors_applied", [])
+        suppressor_telemetry = water_dict.get("suppressor_telemetry", None)
 
         # Extract individual detector telemetry for easier querying
         glass_detector = None
         flat_surface_detector = None
         if suppressor_telemetry:
-            glass_detector = suppressor_telemetry.get('glass_detector', None)
-            flat_surface_detector = suppressor_telemetry.get('flat_surface_detector', None)
+            glass_detector = suppressor_telemetry.get("glass_detector", None)
+            flat_surface_detector = suppressor_telemetry.get("flat_surface_detector", None)
 
         # PR-W4: Coverage metrics
-        coverage = water_dict.get('coverage', 0.0)
+        coverage = water_dict.get("coverage", 0.0)
         coverage_all = coverage  # Raw coverage (always present)
         coverage_detected = coverage if detected else 0.0  # Coverage only when detected
 
@@ -258,15 +257,15 @@ class WaterValidationHarness:
             tags=tags,
             detected=detected,
             coverage=coverage,  # Legacy field (for backward compatibility)
-            coverage_px=water_dict.get('coverage_px', 0),
+            coverage_px=water_dict.get("coverage_px", 0),
             coverage_all=coverage_all,
             coverage_detected=coverage_detected,
             confidence=confidence_final,  # Legacy field (use final confidence)
             confidence_raw=confidence_raw,
             confidence_after_suppressors=confidence_after_suppressors,
             confidence_final=confidence_final,
-            source=water_dict.get('source', 'none'),
-            implementation=water_dict.get('implementation', 'unknown_v0'),
+            source=water_dict.get("source", "none"),
+            implementation=water_dict.get("implementation", "unknown_v0"),
             edge_alignment_score=edge_score,
             boundary_px=boundary_px,
             stability_score=stability,
@@ -279,12 +278,10 @@ class WaterValidationHarness:
             suppressor_telemetry=suppressor_telemetry,
             glass_detector=glass_detector,
             flat_surface_detector=flat_surface_detector,
-            processing_time_ms=elapsed_ms
+            processing_time_ms=elapsed_ms,
         )
 
-    def _compute_edge_alignment(
-        self, rgb01: np.ndarray, mask: Optional[np.ndarray]
-    ) -> float:
+    def _compute_edge_alignment(self, rgb01: np.ndarray, mask: Optional[np.ndarray]) -> float:
         """
         Primary metric: edge alignment vs image gradients.
 
@@ -323,7 +320,7 @@ class WaterValidationHarness:
         h, w = rgb01.shape[:2]
         seg_result = {"materials": {}, "confidence": {}}
         baseline_report = self.engine.process(rgb01, seg_result, depth_map=depth)
-        baseline_coverage = baseline_report.get('materials_v3', {}).get('water_candidate', {}).get('coverage', 0.0)
+        baseline_coverage = baseline_report.get("materials_v3", {}).get("water_candidate", {}).get("coverage", 0.0)
 
         # Deterministic perturbations (per-image seed from path hash handled in validate_single)
         # For now, use seed + 1 as per previous implementation
@@ -338,7 +335,7 @@ class WaterValidationHarness:
         noisy = np.clip(noisy, 0, 1)
         noisy_seg = {"materials": {}, "confidence": {}}
         noisy_report = self.engine.process(noisy, noisy_seg, depth_map=depth)
-        noisy_coverage = noisy_report.get('materials_v3', {}).get('water_candidate', {}).get('coverage', 0.0)
+        noisy_coverage = noisy_report.get("materials_v3", {}).get("water_candidate", {}).get("coverage", 0.0)
 
         # Stability = similarity across perturbations
         diffs = [
@@ -365,9 +362,7 @@ class WaterValidationHarness:
         boundary = self._extract_boundary(mask)
         return int(np.sum(boundary))
 
-    def generate_report(
-        self, results: List[ValidationResult], output_path: Path, ground_truth: dict
-    ):
+    def generate_report(self, results: List[ValidationResult], output_path: Path, ground_truth: dict):
         """Generate JSON validation report (v0 schema)."""
         # Filter by label
         pool_results = [r for r in results if r.scene_type == "pool"]
@@ -405,64 +400,54 @@ class WaterValidationHarness:
             "ocean_images": len(ocean_results),
             "should_detect_true": len(should_detect_true),
             "should_detect_false": len(should_detect_false),
-
             # Recall
             "pool_recall": float(pool_recall),
             "ocean_recall": float(ocean_recall),
-
             # Coverage stats (mean + median)
             "pool_avg_coverage": float(np.mean(pool_coverages)) if pool_coverages else 0.0,
             "pool_median_coverage": float(np.median(pool_coverages)) if pool_coverages else 0.0,
             "ocean_avg_coverage": float(np.mean(ocean_coverages)) if ocean_coverages else 0.0,
             "ocean_median_coverage": float(np.median(ocean_coverages)) if ocean_coverages else 0.0,
-
             # PR-W4: New coverage metrics
             "pool_avg_coverage_all": float(np.mean(pool_coverages_all)) if pool_coverages_all else 0.0,
             "pool_avg_coverage_detected": float(np.mean(pool_coverages_detected)) if pool_coverages_detected else 0.0,
             "ocean_avg_coverage_all": float(np.mean(ocean_coverages_all)) if ocean_coverages_all else 0.0,
             "ocean_avg_coverage_detected": float(np.mean(ocean_coverages_detected)) if ocean_coverages_detected else 0.0,
-
             # Confidence
             "pool_avg_confidence": float(np.mean([r.confidence for r in pool_detected])) if pool_detected else 0.0,
             "ocean_avg_confidence": float(np.mean([r.confidence for r in ocean_detected])) if ocean_detected else 0.0,
-
             # PR-W4: Three-stage confidence tracking
-            "pool_avg_confidence_raw": (
-                float(np.mean([r.confidence_raw for r in pool_detected]))
-                if pool_detected else 0.0),
+            "pool_avg_confidence_raw": (float(np.mean([r.confidence_raw for r in pool_detected])) if pool_detected else 0.0),
             "pool_avg_confidence_after_suppressors": (
-                float(np.mean([r.confidence_after_suppressors for r in pool_detected]))
-                if pool_detected else 0.0),
+                float(np.mean([r.confidence_after_suppressors for r in pool_detected])) if pool_detected else 0.0
+            ),
             "pool_avg_confidence_final": (
-                float(np.mean([r.confidence_final for r in pool_detected]))
-                if pool_detected else 0.0),
+                float(np.mean([r.confidence_final for r in pool_detected])) if pool_detected else 0.0
+            ),
             "ocean_avg_confidence_raw": (
-                float(np.mean([r.confidence_raw for r in ocean_detected]))
-                if ocean_detected else 0.0),
+                float(np.mean([r.confidence_raw for r in ocean_detected])) if ocean_detected else 0.0
+            ),
             "ocean_avg_confidence_after_suppressors": (
-                float(np.mean([r.confidence_after_suppressors for r in ocean_detected]))
-                if ocean_detected else 0.0),
+                float(np.mean([r.confidence_after_suppressors for r in ocean_detected])) if ocean_detected else 0.0
+            ),
             "ocean_avg_confidence_final": (
-                float(np.mean([r.confidence_final for r in ocean_detected]))
-                if ocean_detected else 0.0),
-
+                float(np.mean([r.confidence_final for r in ocean_detected])) if ocean_detected else 0.0
+            ),
             # Edge alignment (primary metric)
-            "pool_avg_edge_alignment": (float(np.mean([r.edge_alignment_score for r in pool_detected]))
-                                        if pool_detected else 0.0),
-            "ocean_avg_edge_alignment": (float(np.mean([r.edge_alignment_score for r in ocean_detected]))
-                                         if ocean_detected else 0.0),
-
+            "pool_avg_edge_alignment": (
+                float(np.mean([r.edge_alignment_score for r in pool_detected])) if pool_detected else 0.0
+            ),
+            "ocean_avg_edge_alignment": (
+                float(np.mean([r.edge_alignment_score for r in ocean_detected])) if ocean_detected else 0.0
+            ),
             # Stability
             "pool_avg_stability": float(np.mean([r.stability_score for r in pool_true])) if pool_true else 0.0,
             "ocean_avg_stability": float(np.mean([r.stability_score for r in ocean_true])) if ocean_true else 0.0,
-
             # False triggers (should_detect=false but detected)
             "false_trigger_count": sum(r.is_false_trigger for r in results),
             "false_trigger_rate": float(sum(r.is_false_trigger for r in results) / max(len(should_detect_false), 1)),
-
             # Performance
             "overall_avg_processing_time_ms": float(np.mean([r.processing_time_ms for r in results])),
-
             # Deprecated (kept for compatibility) - same as false_trigger_*
             "false_positive_count": sum(r.is_false_positive for r in results),
             "false_positive_rate": float(sum(r.is_false_positive for r in results) / max(len(should_detect_false), 1)),
@@ -471,36 +456,26 @@ class WaterValidationHarness:
         # Self-check: ensure summary aggregates match per-image flags (prevent silent drift)
         assert summary["false_positive_count"] == summary["false_trigger_count"], (
             f"Summary inconsistency: false_positive_count={summary['false_positive_count']} "
-            f"!= false_trigger_count={summary['false_trigger_count']}")
+            f"!= false_trigger_count={summary['false_trigger_count']}"
+        )
         assert abs(summary["false_positive_rate"] - summary["false_trigger_rate"]) < 1e-9, (
             f"Summary inconsistency: false_positive_rate={summary['false_positive_rate']} "
-            f"!= false_trigger_rate={summary['false_trigger_rate']}")
+            f"!= false_trigger_rate={summary['false_trigger_rate']}"
+        )
 
-        report = {
-            "summary": summary,
-            "results": [vars(r) for r in results]
-        }
+        report = {"summary": summary, "results": [vars(r) for r in results]}
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(report, f, indent=2)
 
         print(f"✅ Validation report written to {output_path}")
         print("\n📊 Summary:")
-        print(
-            f"  Total images: {len(results)} "
-            f"({len(should_detect_true)} water, {len(should_detect_false)} hard negatives)"
-        )
+        print(f"  Total images: {len(results)} ({len(should_detect_true)} water, {len(should_detect_false)} hard negatives)")
         print(f"  Pool recall: {pool_recall:.1%} ({len(pool_detected)}/{len(pool_true)} detected)")
-        print(
-            f"    - Avg coverage: {summary['pool_avg_coverage']:.2%}, "
-            f"median: {summary['pool_median_coverage']:.2%}"
-        )
+        print(f"    - Avg coverage: {summary['pool_avg_coverage']:.2%}, median: {summary['pool_median_coverage']:.2%}")
         print(f"    - Avg edge alignment: {summary['pool_avg_edge_alignment']:.3f}")
         print(f"  Ocean recall: {ocean_recall:.1%} ({len(ocean_detected)}/{len(ocean_true)} detected)")
-        print(
-            f"    - Avg coverage: {summary['ocean_avg_coverage']:.2%}, "
-            f"median: {summary['ocean_median_coverage']:.2%}"
-        )
+        print(f"    - Avg coverage: {summary['ocean_avg_coverage']:.2%}, median: {summary['ocean_median_coverage']:.2%}")
         print(f"    - Avg edge alignment: {summary['ocean_avg_edge_alignment']:.3f}")
         print(
             f"  False trigger rate: {summary['false_trigger_rate']:.1%} "
@@ -515,20 +490,24 @@ def main():
         epilog=(
             "Example: python prw_water_validation.py "
             "--ground-truth data/water_v0/ground_truth.json --output report.json --seed 42"
-        )
+        ),
     )
     parser.add_argument(
-        "--ground-truth", type=Path, required=True,
-        help="Ground truth JSON (v0 schema with root, labels, images)"
+        "--ground-truth", type=Path, required=True, help="Ground truth JSON (v0 schema with root, labels, images)"
     )
-    parser.add_argument("--output", type=Path, default=Path("water_validation_report.json"),
-                        help="Output JSON path (default: water_validation_report.json)")
-    parser.add_argument("--subset-file", type=Path, default=None,
-                        help="Text file with image paths (one per line) to validate subset (for CI)")
-    parser.add_argument("--seed", type=int, default=None,
-                        help="Random seed for deterministic stability tests (recommended for CI)")
-    parser.add_argument("--no-scipy-warning", action="store_true",
-                        help="Suppress SciPy warning (for CI)")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("water_validation_report.json"),
+        help="Output JSON path (default: water_validation_report.json)",
+    )
+    parser.add_argument(
+        "--subset-file", type=Path, default=None, help="Text file with image paths (one per line) to validate subset (for CI)"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Random seed for deterministic stability tests (recommended for CI)"
+    )
+    parser.add_argument("--no-scipy-warning", action="store_true", help="Suppress SciPy warning (for CI)")
     args = parser.parse_args()
 
     # Suppress SciPy warning if requested
@@ -553,10 +532,7 @@ def main():
         with open(args.subset_file) as f:
             subset_paths = {line.strip() for line in f if line.strip()}
         original_count = len(ground_truth["images"])
-        ground_truth["images"] = {
-            path: info for path, info in ground_truth["images"].items()
-            if path in subset_paths
-        }
+        ground_truth["images"] = {path: info for path, info in ground_truth["images"].items() if path in subset_paths}
         print(f"📋 Subset filter: {args.subset_file}")
         print(f"   Kept {len(ground_truth['images'])}/{original_count} images")
 
@@ -571,7 +547,7 @@ def main():
     config = MaterialsV3Config(
         enabled=True,  # CRITICAL: master gate for Materials V3
         water_detection_enabled=True,
-        water_edge_refinement_enabled=True
+        water_edge_refinement_enabled=True,
     )
     harness = WaterValidationHarness(config, seed=args.seed)
     results = harness.validate_dataset(ground_truth, ground_truth_path=Path(args.ground_truth))

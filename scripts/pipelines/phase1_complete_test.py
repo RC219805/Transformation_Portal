@@ -20,10 +20,7 @@ from PIL import Image
 import tifffile
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -132,12 +129,13 @@ def test_depth_processing_on_real_image():
         logger.info("  ✓ Depth map generated")
         logger.info(f"  Output shape: {depth_map.shape}")
         logger.info(f"  Depth range: [{depth_map.min():.3f}, {depth_map.max():.3f}]")
-        logger.info(f"  Inference time: {inference_time*1000:.1f}ms")
+        logger.info(f"  Inference time: {inference_time * 1000:.1f}ms")
         logger.info(f"  Throughput: {(test_image.width * test_image.height) / inference_time / 1e6:.2f} megapixels/sec")
 
     except Exception as e:
         logger.error(f"Depth generation failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -161,6 +159,7 @@ def test_depth_processing_on_real_image():
 
         # Apply colormap
         import cv2
+
         depth_colored = cv2.applyColorMap(depth_normalized, cv2.COLORMAP_INFERNO)
         depth_colored = cv2.cvtColor(depth_colored, cv2.COLOR_BGR2RGB)
 
@@ -184,10 +183,7 @@ def test_depth_processing_on_real_image():
         # Zone-based segmentation
         num_zones = 4
         depth_sorted = np.sort(depth_map.flatten())
-        zone_thresholds = [
-            depth_sorted[int(len(depth_sorted) * i / num_zones)]
-            for i in range(1, num_zones)
-        ]
+        zone_thresholds = [depth_sorted[int(len(depth_sorted) * i / num_zones)] for i in range(1, num_zones)]
 
         logger.info(f"  Zone thresholds: {[f'{t:.2f}' for t in zone_thresholds]}")
 

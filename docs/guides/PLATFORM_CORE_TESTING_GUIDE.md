@@ -1,8 +1,8 @@
 # Platform Core Testing Guide
 
-**Status**: 🔒 **LOCKED** - These standards are non-negotiable  
-**Version**: 1.0  
-**Date**: December 10, 2025  
+**Status**: 🔒 **LOCKED** - These standards are non-negotiable
+**Version**: 1.0
+**Date**: December 10, 2025
 **Context**: Established after Architecture Hardening completion
 
 ---
@@ -201,10 +201,10 @@ def test_batch_retry_moves_failed_to_completed():
     # GIVEN: A job with 1 failed item
     job = create_job_with_failed_item()
     assert len(job.get_failed_items()) == 1  # Pre-condition
-    
+
     # WHEN: We retry with a working processor
     retried = processor.retry_failed(job)
-    
+
     # THEN: Failed item moves to completed
     assert len(retried.get_completed_items()) == 1  # Post-condition
     assert len(retried.get_failed_items()) == 0
@@ -261,10 +261,10 @@ def test_path_validator_rejects_traversal(dangerous_path, reason):
 ```python
 def test_path_validator_rejects_parent_traversal():
     # ... test ../
-    
+
 def test_path_validator_rejects_nested_traversal():
     # ... test ../../
-    
+
 # Lots of duplication!
 ```
 
@@ -286,14 +286,14 @@ def test_depth_processing_no_regression():
     # Baseline from Phase 1 validation: 45-65ms on M4 Max
     baseline_ms = 200  # Conservative for CI (CPU)
     tolerance = 1.05   # Allow 5% variance
-    
+
     pipeline = LuxDepthPipeline.from_preset("interior_luxury")
     test_image = load_test_image("sample_interior.jpg")
-    
+
     start = time.perf_counter()
     result = pipeline.process(test_image)
     duration_ms = (time.perf_counter() - start) * 1000
-    
+
     assert duration_ms < baseline_ms * tolerance, \
         f"Performance regression: {duration_ms}ms > {baseline_ms * tolerance}ms"
 ```
@@ -376,7 +376,7 @@ tests/
 
 ### Naming Conventions
 
-**Test files**: `test_<module>.py`  
+**Test files**: `test_<module>.py`
 **Test functions**: `test_<behavior>_<expected_outcome>`
 
 **Examples**:
@@ -462,7 +462,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Run performance tests
         run: pytest -m performance --benchmark-only
-      
+
       - name: Compare to baseline
         run: |
           python scripts/compare_performance.py \
@@ -632,9 +632,9 @@ def test_process():
     # Assert starting state
     assert processor.is_ready()
     assert data.is_valid()
-    
+
     result = processor.process(data)
-    
+
     # Assert ending state
     assert result.success
     assert result.processed_items == len(data)
@@ -642,7 +642,7 @@ def test_process():
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-12-10  
-**Approved By**: Transformation Portal Architect  
+**Document Version**: 1.0
+**Last Updated**: 2025-12-10
+**Approved By**: Transformation Portal Architect
 **Status**: 🔒 **LOCKED** - These standards are non-negotiable

@@ -49,17 +49,14 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("meta_pipeline")
 
 
 @dataclass
 class MetaPipelineConfig:
     """Unified configuration for all three pipeline systems."""
+
     # I/O
     input_dir: Path
     output_dir: Path
@@ -155,7 +152,7 @@ class WorkflowExecutor:
             return None
 
         try:
-            with open(manifest_path, 'r', encoding='utf-8') as f:
+            with open(manifest_path, "r", encoding="utf-8") as f:
                 manifest = json.load(f)
 
             # Extract final output path from manifest
@@ -197,12 +194,17 @@ class ArchHeroWorkflow(WorkflowExecutor):
         cmd_enhance = [
             sys.executable,
             str(self.scripts_dir / "tiff_enhancement_pipeline.py"),
-            "--input-dir", str(self.config.input_dir),
-            "--output-dir", str(enhanced_output),
-            "--preset", self.config.enhancement_preset,
-            "--tone-curve", self.config.enhancement_tone_curve,
-            "--workers", str(self.config.enhancement_workers),
-            "--depth-effects"
+            "--input-dir",
+            str(self.config.input_dir),
+            "--output-dir",
+            str(enhanced_output),
+            "--preset",
+            self.config.enhancement_preset,
+            "--tone-curve",
+            self.config.enhancement_tone_curve,
+            "--workers",
+            str(self.config.enhancement_workers),
+            "--depth-effects",
         ] + self.config.enhancement_depth_effects
 
         if self.config.enhancement_skip_stages:
@@ -224,10 +226,7 @@ class ArchHeroWorkflow(WorkflowExecutor):
                 return False
 
             # Collect both .tif and .tiff files efficiently (case-insensitive, deduplicated)
-            enhanced_images = [
-                p for p in enhanced_dir.iterdir()
-                if p.is_file() and p.suffix.lower() in {".ti", ".tiff"}
-            ]
+            enhanced_images = [p for p in enhanced_dir.iterdir() if p.is_file() and p.suffix.lower() in {".ti", ".tiff"}]
 
             log.info(f"Found {len(enhanced_images)} enhanced images")
 
@@ -242,9 +241,12 @@ class ArchHeroWorkflow(WorkflowExecutor):
                     "materialize",
                     str(img_path),
                     str(output_path),
-                    "--albedo", str(self.config.material_albedo),
-                    "--quality", self.config.material_quality,
-                    "--proc-scale", str(self.config.material_proc_scale)
+                    "--albedo",
+                    str(self.config.material_albedo),
+                    "--quality",
+                    self.config.material_quality,
+                    "--proc-scale",
+                    str(self.config.material_proc_scale),
                 ]
 
                 if self.config.material_normal:
@@ -327,11 +329,15 @@ class VideoEnhanceWorkflow(WorkflowExecutor):
         cmd_enhance = [
             sys.executable,
             str(self.scripts_dir / "tiff_enhancement_pipeline.py"),
-            "--input-dir", str(source_dir),
-            "--output-dir", str(final_output),
-            "--preset", self.config.enhancement_preset,
-            "--workers", str(self.config.enhancement_workers),
-            "--depth-effects"
+            "--input-dir",
+            str(source_dir),
+            "--output-dir",
+            str(final_output),
+            "--preset",
+            self.config.enhancement_preset,
+            "--workers",
+            str(self.config.enhancement_workers),
+            "--depth-effects",
         ] + self.config.enhancement_depth_effects
 
         log.info(f"Command: {' '.join(cmd_enhance)}")
@@ -370,11 +376,15 @@ class FullStackWorkflow(WorkflowExecutor):
         cmd_enhance = [
             sys.executable,
             str(self.scripts_dir / "tiff_enhancement_pipeline.py"),
-            "--input-dir", str(self.config.input_dir),
-            "--output-dir", str(enhanced_output),
-            "--preset", self.config.enhancement_preset,
-            "--workers", str(self.config.enhancement_workers),
-            "--depth-effects"
+            "--input-dir",
+            str(self.config.input_dir),
+            "--output-dir",
+            str(enhanced_output),
+            "--preset",
+            self.config.enhancement_preset,
+            "--workers",
+            str(self.config.enhancement_workers),
+            "--depth-effects",
         ] + self.config.enhancement_depth_effects
 
         if not self.config.dry_run:
@@ -424,12 +434,17 @@ class EnhancementOnlyWorkflow(WorkflowExecutor):
         cmd_enhance = [
             sys.executable,
             str(self.scripts_dir / "tiff_enhancement_pipeline.py"),
-            "--input-dir", str(self.config.input_dir),
-            "--output-dir", str(self.config.output_dir),
-            "--preset", self.config.enhancement_preset,
-            "--tone-curve", self.config.enhancement_tone_curve,
-            "--workers", str(self.config.enhancement_workers),
-            "--depth-effects"
+            "--input-dir",
+            str(self.config.input_dir),
+            "--output-dir",
+            str(self.config.output_dir),
+            "--preset",
+            self.config.enhancement_preset,
+            "--tone-curve",
+            self.config.enhancement_tone_curve,
+            "--workers",
+            str(self.config.enhancement_workers),
+            "--depth-effects",
         ] + self.config.enhancement_depth_effects
 
         if self.config.enhancement_skip_stages:
@@ -438,12 +453,7 @@ class EnhancementOnlyWorkflow(WorkflowExecutor):
         log.info(f"Command: {' '.join(cmd_enhance)}")
 
         if not self.config.dry_run:
-            result = subprocess.run(
-                cmd_enhance,
-                check=True,
-                capture_output=True,
-                text=True
-            )
+            result = subprocess.run(cmd_enhance, check=True, capture_output=True, text=True)
             log.info(f"Enhancement pipeline exited with return code: {result.returncode}")
             if result.stdout:
                 log.info(f"Enhancement pipeline stdout:\n{result.stdout}")
@@ -464,7 +474,7 @@ WORKFLOWS: Dict[str, type] = {
     "arch-hero": ArchHeroWorkflow,
     "video-enhance": VideoEnhanceWorkflow,
     "full-stack": FullStackWorkflow,
-    "enhancement-only": EnhancementOnlyWorkflow
+    "enhancement-only": EnhancementOnlyWorkflow,
 }
 
 
@@ -472,27 +482,22 @@ def build_parser() -> argparse.ArgumentParser:
     """Build CLI argument parser."""
     ap = argparse.ArgumentParser(
         description="Meta-pipeline orchestrator for unified image processing",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    ap.add_argument("workflow", choices=list(WORKFLOWS.keys()),
-                    help="Workflow pattern to execute")
-    ap.add_argument("--input", type=Path, required=True, dest="input_dir",
-                    help="Input directory")
-    ap.add_argument("--output", type=Path, required=True, dest="output_dir",
-                    help="Output directory")
+    ap.add_argument("workflow", choices=list(WORKFLOWS.keys()), help="Workflow pattern to execute")
+    ap.add_argument("--input", type=Path, required=True, dest="input_dir", help="Input directory")
+    ap.add_argument("--output", type=Path, required=True, dest="output_dir", help="Output directory")
 
     # Enhancement parameters
     enh = ap.add_argument_group("Enhancement Pipeline")
-    enh.add_argument("--enhancement-preset", default="dramatic",
-                     choices=["natural", "punchy", "dramatic", "golden", "vibrant"])
-    enh.add_argument("--enhancement-tone-curve", default="agx",
-                     choices=["agx", "agx-base", "agx-medium", "agx-high", "hable"])
-    enh.add_argument("--depth-effects", nargs="+", default=["haze", "clarity"],
-                     choices=["haze", "clarity", "do"])
+    enh.add_argument(
+        "--enhancement-preset", default="dramatic", choices=["natural", "punchy", "dramatic", "golden", "vibrant"]
+    )
+    enh.add_argument("--enhancement-tone-curve", default="agx", choices=["agx", "agx-base", "agx-medium", "agx-high", "hable"])
+    enh.add_argument("--depth-effects", nargs="+", default=["haze", "clarity"], choices=["haze", "clarity", "do"])
     enh.add_argument("--enhancement-workers", type=int, default=6)
-    enh.add_argument("--skip-stages", nargs="+", choices=["1", "2", "3", "4", "5"],
-                     default=[])
+    enh.add_argument("--skip-stages", nargs="+", choices=["1", "2", "3", "4", "5"], default=[])
 
     # Material parameters
     mat = ap.add_argument_group("PBR Material Pipeline")
@@ -502,8 +507,7 @@ def build_parser() -> argparse.ArgumentParser:
     mat.add_argument("--material-metallic", type=Path, default=None)
     mat.add_argument("--material-ao", type=Path, default=None)
     mat.add_argument("--material-mask", type=Path, default=None)
-    mat.add_argument("--material-quality", default="preview",
-                     choices=["draft", "preview", "final"])
+    mat.add_argument("--material-quality", default="preview", choices=["draft", "preview", "final"])
     mat.add_argument("--material-proc-scale", type=float, default=0.75)
 
     # Grading parameters
@@ -548,7 +552,7 @@ def main(argv=None):
             grading_contrast=args.grading_contrast,
             grading_saturation=args.grading_saturation,
             keep_intermediates=args.keep_intermediates,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
         )
 
         # Select and execute workflow
@@ -564,6 +568,7 @@ def main(argv=None):
     except Exception as e:
         log.error(f"Workflow failed: {e}")
         import traceback
+
         log.debug(traceback.format_exc())
         return 1
 

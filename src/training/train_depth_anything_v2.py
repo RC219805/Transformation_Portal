@@ -29,6 +29,7 @@ import sys
 try:
     import torch
     import torch.nn as nn
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -37,6 +38,7 @@ except ImportError:
 
 try:
     from transformers import AutoModelForDepthEstimation
+
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
@@ -85,6 +87,7 @@ class DepthAnythingV2Wrapper(nn.Module):
             self.model = AutoModelForDepthEstimation.from_pretrained(model_name)
         else:
             from transformers import AutoConfig
+
             config = AutoConfig.from_pretrained(model_name)
             self.model = AutoModelForDepthEstimation.from_config(config)
 
@@ -156,11 +159,14 @@ def create_loss_function(config: dict) -> nn.Module:
     """
     loss_config = config.get("loss", {})
 
-    weights = loss_config.get("weights", {
-        "scale_invariant": 1.0,
-        "gradient": 0.5,
-        "ssim": 0.3,
-    })
+    weights = loss_config.get(
+        "weights",
+        {
+            "scale_invariant": 1.0,
+            "gradient": 0.5,
+            "ssim": 0.3,
+        },
+    )
 
     return CombinedDepthLoss(weights=weights)
 
@@ -220,9 +226,7 @@ def create_training_config(config: dict) -> TrainingConfig:
         mode=checkpoint_config.get("mode", "min"),
         # Early stopping
         early_stopping_patience=(
-            early_stopping_config.get("patience", 10)
-            if early_stopping_config.get("enabled", True)
-            else 0
+            early_stopping_config.get("patience", 10) if early_stopping_config.get("enabled", True) else 0
         ),
         # Logging
         log_every_n_steps=logging_config.get("log_every_n_steps", 50),
@@ -350,7 +354,7 @@ def main(args: argparse.Namespace) -> int:
     logger.info("=" * 60)
     logger.info(f"Best {training_config.monitor_metric}: {trainer.best_metric:.4f}")
     logger.info(f"Final train loss: {history['train_loss'][-1]:.4f}")
-    if history['val_loss']:
+    if history["val_loss"]:
         logger.info(f"Final val loss: {history['val_loss'][-1]:.4f}")
     logger.info(f"Checkpoints saved to: {training_config.save_dir}")
     logger.info(f"Logs saved to: {training_config.log_dir}")
@@ -364,36 +368,20 @@ def parse_args() -> argparse.Namespace:
     Returns:
         Parsed arguments
     """
-    parser = argparse.ArgumentParser(
-        description="Train Depth Anything V2 for architectural depth estimation"
-    )
+    parser = argparse.ArgumentParser(description="Train Depth Anything V2 for architectural depth estimation")
 
     parser.add_argument(
         "--config",
         type=str,
         default="config/training/depth_anything_v2_large_finetune.yaml",
-        help="Path to training configuration file"
+        help="Path to training configuration file",
     )
 
-    parser.add_argument(
-        "--resume",
-        type=str,
-        default=None,
-        help="Path to checkpoint to resume from"
-    )
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
 
-    parser.add_argument(
-        "--distributed",
-        action="store_true",
-        help="Use distributed training"
-    )
+    parser.add_argument("--distributed", action="store_true", help="Use distributed training")
 
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed"
-    )
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
     return parser.parse_args()
 
@@ -408,5 +396,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n\nTraining failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

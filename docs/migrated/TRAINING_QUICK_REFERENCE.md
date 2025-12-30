@@ -10,8 +10,8 @@
 cd Transformation_Portal && ./scripts/train_with_750picacho.sh
 ```
 
-**Time:** 2.5-3.5 hours (GPU) or 12-18 hours (CPU)  
-**Output:** Trained models in `weights/hyper_reality_750picacho/`  
+**Time:** 2.5-3.5 hours (GPU) or 12-18 hours (CPU)
+**Output:** Trained models in `weights/hyper_reality_750picacho/`
 **Quality:** 103-107/100 (vs 78/100 baseline)
 
 ---
@@ -186,16 +186,16 @@ tail -f weights/hyper_reality_750picacho/training.log
 
 ### Visual Improvements
 
-✅ Sharper details and textures  
-✅ Better material rendering (wood, metal, glass)  
-✅ Improved lighting and shadows  
-✅ Enhanced depth perception  
-✅ Realistic caustics and atmospheric effects  
+✅ Sharper details and textures
+✅ Better material rendering (wood, metal, glass)
+✅ Improved lighting and shadows
+✅ Enhanced depth perception
+✅ Realistic caustics and atmospheric effects
 
 ---
 
-**Last Updated:** 2025-11-19  
-**Status:** ✅ Infrastructure Complete & Validated  
+**Last Updated:** 2025-11-19
+**Status:** ✅ Infrastructure Complete & Validated
 **Next Action:** Run `./scripts/train_with_750picacho.sh`
 
 ---

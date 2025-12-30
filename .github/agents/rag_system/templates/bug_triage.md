@@ -8,7 +8,7 @@
 
 **Bug Title**: `{BUG_TITLE}`
 
-**Severity**: 
+**Severity**:
 - [ ] Critical (system crash, data loss)
 - [ ] High (feature broken, no workaround)
 - [ ] Medium (feature degraded, workaround exists)
@@ -50,14 +50,14 @@
 ```
 
 ### Environment
-- **OS**: `{macOS/Linux/Windows}` 
+- **OS**: `{macOS/Linux/Windows}`
 - **OS Version**: `{14.1/Ubuntu 22.04/Windows 11}`
 - **Python Version**: `{3.10/3.11/3.12}`
 - **Package Versions**:
   ```
   {PASTE_OUTPUT_OF: pip list | grep -E "(torch|PIL|numpy|ffmpeg)"}
   ```
-- **Hardware**: 
+- **Hardware**:
   - CPU: `{CPU_MODEL}`
   - GPU: `{GPU_MODEL}` (or None)
   - RAM: `{TOTAL_RAM_GB}GB`
@@ -131,8 +131,8 @@
 {DETAILED_EXPLANATION_OF_WHY_ERROR_HAPPENS}
 
 Example:
-The error occurs because the depth estimation model tries to load CoreML 
-weights on a non-Apple Silicon system. The code doesn't check for MPS 
+The error occurs because the depth estimation model tries to load CoreML
+weights on a non-Apple Silicon system. The code doesn't check for MPS
 availability before attempting CoreML initialization, causing a runtime error.
 ```
 
@@ -197,7 +197,7 @@ availability before attempting CoreML initialization, causing a runtime error.
 {FIXED_CODE}
 ```
 
-**Explanation**: 
+**Explanation**:
 ```
 {WHY_THIS_FIX_WORKS}
 ```
@@ -266,16 +266,16 @@ from {module} import {function_or_class}
 def test_bug_{bug_id}_fixed():
     """
     Regression test for bug #{BUG_ID}: {BUG_TITLE}
-    
+
     Previously failed with: {ERROR_MESSAGE}
     Now should: {EXPECTED_BEHAVIOR}
     """
     # Setup
     {TEST_SETUP}
-    
+
     # Execute (should not raise)
     result = {function_or_class}({PARAMETERS})
-    
+
     # Verify
     assert result is not None
     assert {SPECIFIC_ASSERTION}
@@ -418,7 +418,7 @@ def test_works_without_tifffile(monkeypatch):
     # Mock tifffile import to raise ImportError
     import sys
     monkeypatch.setitem(sys.modules, 'tifffile', None)
-    
+
     # Should fall back to Pillow without crashing
     result = process_image(test_image_path)
     assert result is not None
@@ -462,13 +462,13 @@ def build_safe_command(input_path: Path, output_path: Path, filters: str) -> Lis
 try:
     if not input_path.exists():
         raise FileNotFoundError(f"Input file not found: {input_path}")
-    
+
     if not validate_filter_graph(filter_graph):
         raise ValueError(f"Invalid filter graph: {filter_graph}")
-    
+
     cmd = build_safe_command(input_path, output_path, filter_graph)
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    
+
 except subprocess.CalledProcessError as e:
     logger.error(f"FFmpeg failed: {e.stderr}")
     raise FFmpegError(f"Processing failed: {e.stderr}")
@@ -493,35 +493,35 @@ result = apply_effect(image)  # OOM on 8K+ images
 def process_large_image(image_path: Path, tile_size: int = 2048) -> np.ndarray:
     """Process large images using tiling to reduce memory usage."""
     from PIL import Image
-    
+
     with Image.open(image_path) as img:
         width, height = img.size
-        
+
         # If image is small enough, process normally
         if width <= tile_size and height <= tile_size:
             return apply_effect(np.array(img))
-        
+
         # Otherwise, process in tiles
         result = np.zeros((height, width, 3), dtype=np.uint8)
-        
+
         for y in range(0, height, tile_size):
             for x in range(0, width, tile_size):
                 # Extract tile
                 tile_width = min(tile_size, width - x)
                 tile_height = min(tile_size, height - y)
-                
+
                 tile = img.crop((x, y, x + tile_width, y + tile_height))
                 tile_array = np.array(tile)
-                
+
                 # Process tile
                 processed_tile = apply_effect(tile_array)
-                
+
                 # Store result
                 result[y:y+tile_height, x:x+tile_width] = processed_tile
-                
+
                 # Free memory
                 del tile, tile_array, processed_tile
-        
+
         return result
 ```
 
@@ -546,7 +546,7 @@ import torch
 
 def load_depth_model(model_name: str = "depth_anything_v2"):
     """Load depth model with platform-appropriate backend."""
-    
+
     # Check for Apple Silicon with MPS
     if platform.system() == "Darwin" and torch.backends.mps.is_available():
         try:
@@ -554,12 +554,12 @@ def load_depth_model(model_name: str = "depth_anything_v2"):
             return load_coreml_model(model_name)
         except Exception as e:
             logger.warning(f"CoreML loading failed: {e}, falling back to PyTorch")
-    
+
     # Check for CUDA
     if torch.cuda.is_available():
         from depth_pipeline.models import load_cuda_model
         return load_cuda_model(model_name)
-    
+
     # CPU fallback
     logger.info("Using CPU backend (slower)")
     from depth_pipeline.models import load_cpu_model
@@ -587,22 +587,22 @@ def process_with_metadata(input_path: Path, output_path: Path):
     """Process image while preserving all metadata."""
     from PIL import Image
     import piexif
-    
+
     # Load with metadata
     image = Image.open(input_path)
     original_info = image.info.copy()
-    
+
     # Extract EXIF if available
     exif_dict = None
     if 'exif' in original_info:
         exif_dict = piexif.load(original_info['exif'])
-    
+
     # Process
     processed = apply_filters(image)
-    
+
     # Restore metadata
     processed.info = original_info
-    
+
     # Save with EXIF
     if exif_dict:
         exif_bytes = piexif.dump(exif_dict)
@@ -695,6 +695,6 @@ Error while opening filter 'lut3d'
 
 ---
 
-**Template Version**: 1.0  
-**Last Updated**: 2025-11-06  
+**Template Version**: 1.0
+**Last Updated**: 2025-11-06
 **Maintained By**: Transformation Portal RAG System

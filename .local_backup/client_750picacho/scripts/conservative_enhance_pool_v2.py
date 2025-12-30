@@ -18,6 +18,7 @@ CORRECTIONS IN V2:
 6. More subtle water correction to preserve transparency
 7. Added luminance-aware processing to protect highlights
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +27,7 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import tifffile
+
     TIFFFILE_AVAILABLE = True
 except ImportError:
     TIFFFILE_AVAILABLE = False
@@ -44,28 +46,28 @@ OUTPUT_DIR = Path("processed_images/Conservative")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Exposure & Tone (CORRECTED - more conservative)
-GAMMA_CORRECTION = 2.2                # Linear → sRGB (CRITICAL!)
-GLOBAL_EXPOSURE_LIFT = 0.15           # +0.15 EV (reduced from 0.25)
-SHADOW_LIFT_STOPS = 0.25              # +0.25 stops (reduced from 0.35)
-SHADOW_THRESHOLD = 0.25               # Luminance < 0.25 is shadow
-HIGHLIGHT_PROTECTION = 0.88           # Protect pixels > 0.88 (more protection)
-MIDTONE_CONTRAST = 1.08               # +8% contrast (reduced from 1.10)
+GAMMA_CORRECTION = 2.2  # Linear → sRGB (CRITICAL!)
+GLOBAL_EXPOSURE_LIFT = 0.15  # +0.15 EV (reduced from 0.25)
+SHADOW_LIFT_STOPS = 0.25  # +0.25 stops (reduced from 0.35)
+SHADOW_THRESHOLD = 0.25  # Luminance < 0.25 is shadow
+HIGHLIGHT_PROTECTION = 0.88  # Protect pixels > 0.88 (more protection)
+MIDTONE_CONTRAST = 1.08  # +8% contrast (reduced from 1.10)
 
 # Color & Saturation (CORRECTED - more subtle)
-GLOBAL_SATURATION = 1.03              # +3% saturation (reduced from 1.06)
-VEGETATION_SAT_BOOST = 1.02           # +2% green saturation (reduced from 1.05)
+GLOBAL_SATURATION = 1.03  # +3% saturation (reduced from 1.06)
+VEGETATION_SAT_BOOST = 1.02  # +2% green saturation (reduced from 1.05)
 
 # Pool Water Color Correction (CORRECTED - more subtle)
-WATER_GREEN_BOOST = 1.05              # +5% green (reduced from 1.08)
-WATER_BLUE_REDUCTION = 0.98           # -2% blue (reduced from 0.96)
-WATER_RED_ADJUSTMENT = 0.99           # -1% red (reduced from 0.98)
+WATER_GREEN_BOOST = 1.05  # +5% green (reduced from 1.08)
+WATER_BLUE_REDUCTION = 0.98  # -2% blue (reduced from 0.96)
+WATER_RED_ADJUSTMENT = 0.99  # -1% red (reduced from 0.98)
 
 # Material Enhancement (CORRECTED - minimal)
-CLARITY_STRENGTH = 0.08               # 8% clarity (reduced from 0.12)
-CLARITY_RADIUS = 64                   # Radius for high-pass filter
+CLARITY_STRENGTH = 0.08  # 8% clarity (reduced from 0.12)
+CLARITY_RADIUS = 64  # Radius for high-pass filter
 
 # Output
-OUTPUT_BIT_DEPTH = 16                 # 16-bit TIFF
+OUTPUT_BIT_DEPTH = 16  # 16-bit TIFF
 
 # ============================================================================
 # LOAD IMAGE
@@ -98,7 +100,7 @@ if TIFFFILE_AVAILABLE:
         TIFFFILE_AVAILABLE = False
 
 if not TIFFFILE_AVAILABLE:
-    img = Image.open(INPUT).convert('RGB')
+    img = Image.open(INPUT).convert("RGB")
     rgb_linear = np.array(img, dtype=np.float32) / 255.0
 
 print(f"  Range: [{rgb_linear.min():.3f}, {rgb_linear.max():.3f}]")
@@ -111,7 +113,7 @@ original_luminance = rgb_linear.mean()
 # ============================================================================
 print(f"\n[2/9] Converting linear to sRGB (gamma {GAMMA_CORRECTION})...")
 
-rgb = np.power(np.clip(rgb_linear, 0, 1), 1/GAMMA_CORRECTION)
+rgb = np.power(np.clip(rgb_linear, 0, 1), 1 / GAMMA_CORRECTION)
 
 print("  ✓ Gamma corrected")
 print(f"  ✓ Luminance after gamma: {rgb.mean():.3f}")
@@ -122,11 +124,11 @@ print(f"  ✓ Luminance after gamma: {rgb.mean():.3f}")
 print("\n[3/9] Lifting exposure...")
 
 # Calculate luminance for highlight protection
-luminance = 0.2126 * rgb[:,:,0] + 0.7152 * rgb[:,:,1] + 0.0722 * rgb[:,:,2]
+luminance = 0.2126 * rgb[:, :, 0] + 0.7152 * rgb[:, :, 1] + 0.0722 * rgb[:, :, 2]
 highlight_mask = luminance > HIGHLIGHT_PROTECTION
 
 # Calculate exposure multiplier
-exposure_multiplier = 2 ** GLOBAL_EXPOSURE_LIFT
+exposure_multiplier = 2**GLOBAL_EXPOSURE_LIFT
 
 # Apply exposure with highlight protection
 exposure_protect = np.ones_like(luminance)
@@ -150,7 +152,7 @@ print(f"  ✓ Highlights protected: {highlight_pixels:,} pixels ({highlight_perc
 print("\n[4/9] Recovering shadow detail...")
 
 # Calculate luminance
-luminance = 0.2126 * rgb_exposed[:,:,0] + 0.7152 * rgb_exposed[:,:,1] + 0.0722 * rgb_exposed[:,:,2]
+luminance = 0.2126 * rgb_exposed[:, :, 0] + 0.7152 * rgb_exposed[:, :, 1] + 0.0722 * rgb_exposed[:, :, 2]
 shadow_mask = luminance < SHADOW_THRESHOLD
 
 # Create smooth shadow lift mask
@@ -158,7 +160,7 @@ shadow_lift_mask = np.clip((SHADOW_THRESHOLD - luminance) / SHADOW_THRESHOLD, 0,
 shadow_lift_mask = gaussian_filter(shadow_lift_mask, sigma=5.0)  # More smoothing
 
 # Apply shadow lift
-shadow_lift_multiplier = 2 ** SHADOW_LIFT_STOPS
+shadow_lift_multiplier = 2**SHADOW_LIFT_STOPS
 shadow_lift_3d = np.stack([shadow_lift_mask] * 3, axis=2)
 rgb_exposed = rgb_exposed * (1 + shadow_lift_3d * (shadow_lift_multiplier - 1))
 rgb_exposed = np.clip(rgb_exposed, 0, 1)
@@ -187,7 +189,7 @@ print(f"  ✓ Midtone contrast: {MIDTONE_CONTRAST:.2f}×")
 print("\n[6/9] Correcting pool water color...")
 
 # Detect pool water (blue-dominant pixels)
-r, g, b = rgb_contrast[:,:,0], rgb_contrast[:,:,1], rgb_contrast[:,:,2]
+r, g, b = rgb_contrast[:, :, 0], rgb_contrast[:, :, 1], rgb_contrast[:, :, 2]
 water_mask = (b > r * 1.1) & (b > g * 1.0) & (b > 0.3) & (b < 0.9)
 
 # Smooth mask with larger sigma for more gradual transitions
@@ -208,7 +210,9 @@ water_pixels = water_mask.sum()
 water_percentage = (water_pixels / water_mask.size) * 100
 
 print(f"  ✓ Water regions: {water_pixels:,} pixels ({water_percentage:.1f}%)")
-print(f"  ✓ Color shift (70% strength): R {WATER_RED_ADJUSTMENT:.2f}×, G {WATER_GREEN_BOOST:.2f}×, B {WATER_BLUE_REDUCTION:.2f}×")
+print(
+    f"  ✓ Color shift (70% strength): R {WATER_RED_ADJUSTMENT:.2f}×, G {WATER_GREEN_BOOST:.2f}×, B {WATER_BLUE_REDUCTION:.2f}×"
+)
 
 # ============================================================================
 # STEP 7: SATURATION BOOST (CORRECTED - more subtle)
@@ -225,7 +229,7 @@ img_saturated = enhancer.enhance(GLOBAL_SATURATION)
 
 # Detect vegetation (green-dominant)
 rgb_sat = np.array(img_saturated, dtype=np.float32) / 255.0
-r, g, b = rgb_sat[:,:,0], rgb_sat[:,:,1], rgb_sat[:,:,2]
+r, g, b = rgb_sat[:, :, 0], rgb_sat[:, :, 1], rgb_sat[:, :, 2]
 vegetation_mask = (g > r * 1.1) & (g > b * 1.05) & (g > 0.2)
 vegetation_mask_smooth = gaussian_filter(vegetation_mask.astype(np.float32), sigma=8.0)
 
@@ -233,11 +237,11 @@ vegetation_mask_smooth = gaussian_filter(vegetation_mask.astype(np.float32), sig
 vegetation_mask_smooth = vegetation_mask_smooth * 0.6
 
 # Boost vegetation saturation (subtle)
-hsv = np.array(img_saturated.convert('HSV'), dtype=np.float32)
-hsv[:,:,1] = hsv[:,:,1] * (1 + vegetation_mask_smooth * (VEGETATION_SAT_BOOST - 1))
-hsv[:,:,1] = np.clip(hsv[:,:,1], 0, 255)
+hsv = np.array(img_saturated.convert("HSV"), dtype=np.float32)
+hsv[:, :, 1] = hsv[:, :, 1] * (1 + vegetation_mask_smooth * (VEGETATION_SAT_BOOST - 1))
+hsv[:, :, 1] = np.clip(hsv[:, :, 1], 0, 255)
 
-img_final = Image.fromarray(hsv.astype(np.uint8), mode='HSV').convert('RGB')
+img_final = Image.fromarray(hsv.astype(np.uint8), mode="HSV").convert("RGB")
 rgb_sat = np.array(img_final, dtype=np.float32) / 255.0
 
 vegetation_pixels = vegetation_mask.sum()
@@ -275,11 +279,11 @@ rgb_16bit = (rgb_clarity * 65535).astype(np.uint16)
 output_path = OUTPUT_DIR / "750Picacho_Pool_Enhanced_v2.ti"
 
 if TIFFFILE_AVAILABLE:
-    tifffile.imwrite(output_path, rgb_16bit, compression='lzw')
+    tifffile.imwrite(output_path, rgb_16bit, compression="lzw")
     print(f"  ✓ Saved with tifffile: {output_path}")
 else:
     img_output = Image.fromarray(rgb_16bit)
-    img_output.save(output_path, compression='tiff_lzw')
+    img_output.save(output_path, compression="tiff_lzw")
     print(f"  ✓ Saved with PIL: {output_path}")
 
 # Save comparison metrics

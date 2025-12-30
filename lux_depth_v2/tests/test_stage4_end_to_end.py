@@ -69,9 +69,7 @@ def mock_onnx_env(monkeypatch):
     """Set up mocked ONNX environment."""
     import lux_depth_v2.backends.efficientsam_backend as backend_mod
 
-    monkeypatch.setattr(
-        backend_mod, "ort", type("ort", (), {"InferenceSession": MockONNXSession})
-    )
+    monkeypatch.setattr(backend_mod, "ort", type("ort", (), {"InferenceSession": MockONNXSession}))
 
 
 def test_stage4_complete_pipeline_with_real_backend(mock_onnx_env, tmp_path):
@@ -133,7 +131,7 @@ def test_stage4_complete_pipeline_with_real_backend(mock_onnx_env, tmp_path):
     assert isinstance(result, dict)
     # Should have at least water (our default edge refinement class)
     assert len(result) > 0
-    
+
     # Check one of the masks
     sample_mask = next(iter(result.values()))
     assert sample_mask.shape == (1, 1, 64, 64)

@@ -1,4 +1,5 @@
 """Sphinx configuration for lux_depth_v2 documentation."""
+
 import os
 import sys
 from pathlib import Path

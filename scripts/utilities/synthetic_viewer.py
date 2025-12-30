@@ -155,9 +155,7 @@ class DigitalConsciousness:
                 moments.append(entry)
                 continue
             if not isinstance(entry, Mapping):  # pragma: no cover - safety net
-                raise TypeError(
-                    "video_stream entries must be mappings or JourneyMoment instances"
-                )
+                raise TypeError("video_stream entries must be mappings or JourneyMoment instances")
 
             moment = JourneyMoment(
                 technical=float(entry.get("technical", 0.0)),
@@ -270,9 +268,7 @@ class TrainedOnMillionsOfLuxuryViewings:
         )
 
     @staticmethod
-    def _score_channel(
-        base_value: float, emphasis: float, dynamism: float, profile: ArchetypeProfile
-    ) -> float:
+    def _score_channel(base_value: float, emphasis: float, dynamism: float, profile: ArchetypeProfile) -> float:
         raw = base_value * emphasis
         raw += dynamism * profile.variability_bonus
         raw += profile.baseline_bias
@@ -308,9 +304,7 @@ class SyntheticViewer:
             desire_quotient=fmean(score.desire_quotient for score in scores),
         )
 
-    def experience_content(
-        self, video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney
-    ) -> ACUScore:
+    def experience_content(self, video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney) -> ACUScore:
         """Experience a video stream and return the consensus ``ACUScore``."""
 
         journey = self.consciousness.traverse(video_stream)

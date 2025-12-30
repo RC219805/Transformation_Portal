@@ -1,8 +1,8 @@
 # 750 Picacho Pool Enhancement - V3 Recommendations
 
-**Analysis Date:** November 6, 2025  
-**Current Version:** `conservative_enhance_pool_v2.py`  
-**Status:** ❌ **FAILED - Critical Issues Identified**  
+**Analysis Date:** November 6, 2025
+**Current Version:** `conservative_enhance_pool_v2.py`
+**Status:** ❌ **FAILED - Critical Issues Identified**
 **Next Version:** `conservative_enhance_pool_v3.py` (recommendations below)
 
 ---
@@ -173,19 +173,19 @@ rgb = np.power(np.clip(rgb_linear, 0, 1), 1/GAMMA_CORRECTION)
 def apply_tone_mapping(rgb_linear, method='agx', exposure_compensation=0.0):
     """
     Tone map LINEAR rendering to display-referred sRGB.
-    
+
     Args:
         rgb_linear: Linear RGB values [0-1+] (may contain values >1 for HDR)
         method: 'agx', 'filmic', or 'aces'
         exposure_compensation: Pre-tone-map exposure adjustment in stops
-    
+
     Returns:
         rgb_srgb: Display-referred sRGB [0-1]
     """
     # Apply exposure compensation in LINEAR space
     if exposure_compensation != 0.0:
         rgb_linear = rgb_linear * (2 ** exposure_compensation)
-    
+
     # Tone map with highlight preservation
     if method == 'agx':
         # AgX tone mapping (Blender 3.0+)
@@ -209,22 +209,22 @@ def apply_agx_tone_map(rgb_linear):
     # AgX constants (tuned for photorealistic rendering)
     MIN_EV = -10.0
     MAX_EV = 6.5
-    
+
     # Convert to log space
     rgb_log = np.log2(rgb_linear + 1e-10)
-    
+
     # Compress dynamic range
     rgb_log = np.clip(rgb_log, MIN_EV, MAX_EV)
     rgb_log = (rgb_log - MIN_EV) / (MAX_EV - MIN_EV)
-    
+
     # Apply S-curve for smooth highlights
     # Using cubic hermite spline for smooth rolloff
     def smoothstep(x):
         x = np.clip(x, 0, 1)
         return x * x * (3.0 - 2.0 * x)
-    
+
     rgb_compressed = smoothstep(rgb_log)
-    
+
     # Convert to sRGB gamma
     return np.power(rgb_compressed, 1/2.2)
 ```
@@ -280,14 +280,14 @@ def enhance_pool_water_v3(rgb, strength=0.5):
     """
     Enhance pool water with jewel-toned turquoise quality.
     Preserves transparency and reflections.
-    
+
     Target color shift:
     - Cyan enhancement (boost G+B, reduce R)
     - Maintain luminance for transparency
     - Preserve highlights for sparkle
     """
     r, g, b = rgb[:,:,0], rgb[:,:,1], rgb[:,:,2]
-    
+
     # Detect pool water (blue-dominant, mid-brightness)
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
     water_mask = (
@@ -297,32 +297,32 @@ def enhance_pool_water_v3(rgb, strength=0.5):
         (luminance < 0.8) &       # Not too bright (preserve highlights)
         (b > 0.3) & (b < 0.9)     # Blue channel range
     )
-    
+
     # Smooth mask aggressively to avoid halos
     from scipy.ndimage import gaussian_filter
     water_mask_smooth = gaussian_filter(water_mask.astype(np.float32), sigma=20.0)
-    
+
     # Color shift for jewel-toned turquoise
     # Strategy: Enhance cyan (increase B, maintain G, reduce R)
     water_r = r * 0.95           # Reduce red (removes muddiness)
     water_g = g * 1.00           # Maintain green
     water_b = b * 1.15           # Boost blue (jewel tone)
-    
+
     # Luminance preservation (maintain transparency perception)
     original_lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
     adjusted_lum = 0.2126 * water_r + 0.7152 * water_g + 0.0722 * water_b
     luminance_ratio = original_lum / (adjusted_lum + 1e-6)
-    
+
     water_r *= luminance_ratio
     water_g *= luminance_ratio
     water_b *= luminance_ratio
-    
+
     # Blend with original using smooth mask
     mask_3d = np.stack([water_mask_smooth * strength] * 3, axis=2)
     r_final = r * (1 - mask_3d[:,:,0]) + water_r * mask_3d[:,:,0]
     g_final = g * (1 - mask_3d[:,:,1]) + water_g * mask_3d[:,:,1]
     b_final = b * (1 - mask_3d[:,:,2]) + water_b * mask_3d[:,:,2]
-    
+
     return np.clip(np.stack([r_final, g_final, b_final], axis=2), 0, 1)
 
 # Usage
@@ -344,28 +344,28 @@ rgb_display = enhance_pool_water_v3(rgb_display, strength=0.5)  # 50% strength
 def protect_sky_highlights(rgb, threshold=0.75):
     """
     Preserve sky gradient detail by masking from aggressive adjustments.
-    
+
     Args:
         rgb: Display-referred sRGB [0-1]
         threshold: Luminance above which sky protection activates
     """
     r, g, b = rgb[:,:,0], rgb[:,:,1], rgb[:,:,2]
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    
+
     # Detect sky (bright, neutral, top of frame)
     height = rgb.shape[0]
     y_coords = np.arange(height)[:, np.newaxis] / height
-    
+
     sky_mask = (
         (luminance > threshold) &              # Bright
         (np.abs(r - g) < 0.1) &               # Neutral (not color cast)
         (np.abs(g - b) < 0.15) &              # Neutral
         (y_coords < 0.5)                      # Upper half of frame
     )
-    
+
     # Smooth mask
     sky_mask_smooth = gaussian_filter(sky_mask.astype(np.float32), sigma=30.0)
-    
+
     return sky_mask_smooth
 
 # Usage: apply BEFORE aggressive adjustments
@@ -385,13 +385,13 @@ rgb_display = rgb_display * adjustment_strength[:,:,np.newaxis]
 def enhance_vegetation_gentle(rgb, strength=0.3):
     """
     Gentle vegetation enhancement preserving shadow depth.
-    
+
     Args:
         rgb: Display-referred sRGB [0-1]
         strength: Enhancement strength [0-1] (0.3 recommended)
     """
     r, g, b = rgb[:,:,0], rgb[:,:,1], rgb[:,:,2]
-    
+
     # Detect vegetation (green-dominant, not too bright)
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
     veg_mask = (
@@ -400,16 +400,16 @@ def enhance_vegetation_gentle(rgb, strength=0.3):
         (g > 0.15) &               # Not too dark (exclude deep shadows)
         (luminance < 0.6)          # Not too bright
     )
-    
+
     # Smooth mask
     veg_mask_smooth = gaussian_filter(veg_mask.astype(np.float32), sigma=10.0)
-    
+
     # Gentle saturation boost ONLY (no brightness lift)
     # Convert to HSV for saturation adjustment
     hsv = rgb_to_hsv(rgb)
     hsv[:,:,1] = hsv[:,:,1] * (1 + veg_mask_smooth * strength * 0.2)  # +20% saturation max
     rgb_enhanced = hsv_to_rgb(hsv)
-    
+
     return rgb_enhanced
 
 # Usage
@@ -436,15 +436,15 @@ def apply_clarity_masked(rgb, strength=0.04, radius=96, mask_threshold=0.85):
     # Calculate luminance mask
     luminance = 0.2126 * rgb[:,:,0] + 0.7152 * rgb[:,:,1] + 0.0722 * rgb[:,:,2]
     clarity_mask = luminance < mask_threshold  # Exclude bright areas
-    
+
     # High-pass filter
     blurred = gaussian_filter(rgb, sigma=radius / 3.0)
     high_pass = rgb - blurred
-    
+
     # Apply masked clarity
     mask_3d = np.stack([clarity_mask] * 3, axis=2)
     rgb_clarity = rgb + high_pass * strength * mask_3d
-    
+
     return np.clip(rgb_clarity, 0, 1)
 ```
 
@@ -637,35 +637,35 @@ def validate_enhancement(original, enhanced):
     Automated quality validation with pass/fail thresholds.
     """
     metrics = {}
-    
+
     # Luminance analysis
     orig_lum = calculate_luminance(original).mean()
     enh_lum = calculate_luminance(enhanced).mean()
     lum_change = (enh_lum / orig_lum) - 1.0
     metrics['luminance_change'] = lum_change
     metrics['luminance_pass'] = -0.05 < lum_change < 0.25
-    
+
     # Clipping analysis
     highlight_clip = (enhanced > 0.95).sum() / enhanced.size
     shadow_clip = (enhanced < 0.05).sum() / enhanced.size
     metrics['highlight_clipping'] = highlight_clip
     metrics['shadow_clipping'] = shadow_clip
     metrics['clipping_pass'] = highlight_clip < 0.01 and shadow_clip < 0.02
-    
+
     # Saturation analysis
     orig_sat = calculate_saturation(original).mean()
     enh_sat = calculate_saturation(enhanced).mean()
     sat_change = (enh_sat / orig_sat) - 1.0
     metrics['saturation_change'] = sat_change
     metrics['saturation_pass'] = -0.05 < sat_change < 0.15
-    
+
     # Overall pass/fail
     metrics['overall_pass'] = all([
         metrics['luminance_pass'],
         metrics['clipping_pass'],
         metrics['saturation_pass']
     ])
-    
+
     return metrics
 ```
 
@@ -701,7 +701,7 @@ comparison.save('comparison_v2_vs_v3.jpg')
 3. **Validate metrics** against targets
 4. **Visual inspection** and parameter tuning
 
-**Estimated Time:** 2-3 hours  
+**Estimated Time:** 2-3 hours
 **Deliverable:** `conservative_enhance_pool_v3.py` with validation
 
 ### Short-Term (Priority 2)
@@ -710,7 +710,7 @@ comparison.save('comparison_v2_vs_v3.jpg')
 3. **Generate comparison reports** automatically
 4. **Document final parameters** for production use
 
-**Estimated Time:** 1-2 hours  
+**Estimated Time:** 1-2 hours
 **Deliverable:** Production-ready pool enhancement pipeline
 
 ### Long-Term (Priority 3)
@@ -719,7 +719,7 @@ comparison.save('comparison_v2_vs_v3.jpg')
 3. **Create location-specific LUT** for pool aesthetics
 4. **Build parameter optimization** database
 
-**Estimated Time:** 4-6 hours  
+**Estimated Time:** 4-6 hours
 **Deliverable:** Comprehensive pool rendering enhancement system
 
 ---
@@ -742,7 +742,7 @@ Version 2's failure stemmed from **fundamental color space handling errors**: tr
 
 ---
 
-**Document Status:** ✅ COMPLETE - Ready for Implementation  
-**Next Action:** Create `conservative_enhance_pool_v3.py` following recommendations  
-**Estimated Implementation Time:** 2-3 hours  
+**Document Status:** ✅ COMPLETE - Ready for Implementation
+**Next Action:** Create `conservative_enhance_pool_v3.py` following recommendations
+**Estimated Implementation Time:** 2-3 hours
 **Expected Results:** Production-quality enhancement suitable for client delivery

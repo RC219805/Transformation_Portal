@@ -27,7 +27,7 @@ def test_tiff_quality():
     from fix_tiff_16bit import save_16bit_tiff_tifffile
 
     print("\n1. Testing save_16bit_tiff_tifffile()...")
-    save_16bit_tiff_tifffile(test_array, test_path, compression='lzw')
+    save_16bit_tiff_tifffile(test_array, test_path, compression="lzw")
 
     # Verify
     loaded = tifffile.imread(test_path)

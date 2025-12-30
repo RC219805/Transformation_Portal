@@ -339,7 +339,7 @@ Once achieved, proceed to:
 - 70% structure misclassification rate
 - Texture validation healthy (87.5% recall)
 
-**Strategic Recommendation**: 
+**Strategic Recommendation**:
 Do not pursue MaterialsV3, input-size optimization, or threshold tuning until the classifier achieves ≥85% balanced accuracy. All downstream work depends on correct scene routing.
 
 **Next Action**: Fix multi-factor classifier thresholds via grid search or move to learned classifier.

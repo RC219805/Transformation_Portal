@@ -160,13 +160,13 @@ jobs:
           # Use Safety 3.x scan (replaces deprecated check)
           # Scan canonical lockfile using policy file
           safety scan --policy-file .safety-policy.yml --output json > safety-report.json || true
-          
+
           # Also check lux_depth_v2 dependencies if present
           if [ -f lux_depth_v2/requirements-repo.txt ]; then
             echo "Scanning lux_depth_v2/requirements-repo.txt..."
             safety scan --target lux_depth_v2/requirements-repo.txt --output json > safety-lux-depth-v2.json || true
           fi
-          
+
           # Display summary
           if [ -f safety-report.json ]; then
             echo "## Safety Scan Results" >> $GITHUB_STEP_SUMMARY
@@ -188,7 +188,7 @@ jobs:
               print(f'Could not parse safety report: {e}')
           "
           fi
-          
+
           # Display lux_depth_v2 scan results
           if [ -f safety-lux-depth-v2.json ]; then
             echo "## Lux Depth V2 Safety Scan" >> $GITHUB_STEP_SUMMARY
@@ -315,7 +315,7 @@ jobs:
               issue_number: context.issue.number,
             });
 
-            const existingComment = comments.find(c => 
+            const existingComment = comments.find(c =>
               c.user.type === 'Bot' && c.body.includes('Security Scan Results')
             );
 

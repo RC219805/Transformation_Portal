@@ -1,6 +1,6 @@
 # Security Guidelines for Lux Depth V2
 
-**Last Updated**: 2025-12-06  
+**Last Updated**: 2025-12-06
 **Security Contact**: See root SECURITY.md
 
 ---
@@ -15,9 +15,9 @@ This document outlines security considerations, mitigations, and best practices 
 
 ### CVE-2024-27763: basicsr Command Injection
 
-**Severity**: 🔴 **CRITICAL**  
-**Affected Package**: `basicsr<=1.4.x`  
-**Vulnerability**: Command injection via crafted file paths  
+**Severity**: 🔴 **CRITICAL**
+**Affected Package**: `basicsr<=1.4.x`
+**Vulnerability**: Command injection via crafted file paths
 **CVSS Score**: 9.8 (Critical)
 
 #### Mitigation
@@ -49,7 +49,7 @@ The `service.py` module exposes a FastAPI REST API endpoint. **Production deploy
 
 ### 2.1 Input Validation
 
-**Risk**: Path traversal, arbitrary file access  
+**Risk**: Path traversal, arbitrary file access
 **Severity**: 🔴 **CRITICAL**
 
 #### Required: Path Validation
@@ -64,15 +64,15 @@ ALLOWED_BASE_DIR = Path("/data/uploads").resolve()
 def validate_filepath(user_input: str) -> Path:
     """Validate and sanitize file paths to prevent directory traversal."""
     path = Path(user_input).resolve()
-    
+
     # Prevent path traversal attacks
     if not path.is_relative_to(ALLOWED_BASE_DIR):
         raise ValueError(f"Path traversal attempt detected: {user_input}")
-    
+
     # Prevent symlink attacks
     if path.is_symlink():
         raise ValueError(f"Symlinks are not allowed: {user_input}")
-    
+
     return path
 ```
 
@@ -80,7 +80,7 @@ def validate_filepath(user_input: str) -> Path:
 
 ### 2.2 Authentication & Authorization
 
-**Risk**: Unauthorized access, data exfiltration  
+**Risk**: Unauthorized access, data exfiltration
 **Severity**: 🔴 **CRITICAL**
 
 #### Recommended: API Key Authentication
@@ -116,7 +116,7 @@ lux-depth-v2-service --service --port 8088
 
 ### 2.3 Rate Limiting
 
-**Risk**: Denial of service, resource exhaustion  
+**Risk**: Denial of service, resource exhaustion
 **Severity**: 🟡 **HIGH**
 
 #### Required: Request Rate Limiting
@@ -141,7 +141,7 @@ async def process_endpoint(request: Request):
 
 ### 2.4 File Upload Limits
 
-**Risk**: Denial of service via large uploads  
+**Risk**: Denial of service via large uploads
 **Severity**: 🟡 **HIGH**
 
 #### Required: Request Size Limits
@@ -154,7 +154,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, max_size: int = 100_000_000):  # 100MB default
         super().__init__(app)
         self.max_size = max_size
-    
+
     async def dispatch(self, request: Request, call_next):
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > self.max_size:
@@ -168,7 +168,7 @@ app.add_middleware(RequestSizeLimitMiddleware, max_size=100_000_000)
 
 ### 2.5 HTTPS/TLS
 
-**Risk**: Man-in-the-middle attacks, credential interception  
+**Risk**: Man-in-the-middle attacks, credential interception
 **Severity**: 🔴 **CRITICAL** (for production)
 
 #### Required for Production: Enable HTTPS
@@ -193,7 +193,7 @@ uvicorn lux_depth_v2.service:app \
 
 ### 3.1 Image File Validation
 
-**Risk**: Malicious image files, code execution  
+**Risk**: Malicious image files, code execution
 **Severity**: 🟡 **HIGH**
 
 #### Recommended: File Format Validation
@@ -210,7 +210,7 @@ def validate_image_file(file_path: Path) -> None:
     mime = magic.from_file(str(file_path), mime=True)
     if mime not in ALLOWED_FORMATS:
         raise ValueError(f"Unsupported file type: {mime}")
-    
+
     # Verify image can be opened (detects corrupted/malicious files)
     try:
         with Image.open(file_path) as img:
@@ -223,7 +223,7 @@ def validate_image_file(file_path: Path) -> None:
 
 ### 3.2 Configuration Injection
 
-**Risk**: Code injection via YAML/JSON configs  
+**Risk**: Code injection via YAML/JSON configs
 **Severity**: 🟡 **HIGH**
 
 #### Safe Configuration Loading
@@ -236,7 +236,7 @@ def safe_load_config(config_path: Path) -> dict:
     with open(config_path, "r") as f:
         # Use safe_load to prevent YAML code execution
         return yaml.safe_load(f)
-    
+
     # Never use yaml.load() or pickle.load() on untrusted input!
 ```
 
@@ -339,6 +339,6 @@ bandit -r lux_depth_v2/ -ll
 
 ---
 
-**Version**: 1.0  
-**Effective Date**: 2025-12-06  
+**Version**: 1.0
+**Effective Date**: 2025-12-06
 **Next Review**: 2025-03-06 (quarterly)

@@ -1,8 +1,8 @@
 # Water Detection - Next Steps Roadmap
 
-**Date**: 2025-12-15  
-**Current State**: Baseline governance established, path resolution complete  
-**Baseline**: baseline_ci_current_v1.json (83.3% pool recall, 0% FT rate)  
+**Date**: 2025-12-15
+**Current State**: Baseline governance established, path resolution complete
+**Baseline**: baseline_ci_current_v1.json (83.3% pool recall, 0% FT rate)
 **Status**: ✅ Clean, reproducible state with known limitations
 
 ---
@@ -66,7 +66,7 @@ class ValidationResult:
 
 #### 2. Add Structured "Error Artifact" Path
 
-**Current behavior**: Harness failure → no outputs/water_validation_current.json → regression check warns "missing file"  
+**Current behavior**: Harness failure → no outputs/water_validation_current.json → regression check warns "missing file"
 **Problem**: Warn-only job becomes "no-signal" on harness failure
 
 **Fix** (in .github/workflows/ci-consolidated.yml):
@@ -300,7 +300,7 @@ Phase C (Multi-Scale Fix)  → Requires A + B complete
 Phase D (ADE20K)           → Requires C complete (optional)
 ```
 
-**Critical path**: A → B → C (telemetry, holdout, multi-scale)  
+**Critical path**: A → B → C (telemetry, holdout, multi-scale)
 **Optional upgrade**: D (ADE20K after C)
 
 ---
@@ -333,9 +333,9 @@ Phase D (ADE20K)           → Requires C complete (optional)
 
 ## Timeline Estimate
 
-**Phase A** (Telemetry): 1-2 days  
-**Phase B** (Holdout): 2-3 days (image collection + manifest creation)  
-**Phase C** (Multi-Scale): 3-5 days (implementation + validation)  
+**Phase A** (Telemetry): 1-2 days
+**Phase B** (Holdout): 2-3 days (image collection + manifest creation)
+**Phase C** (Multi-Scale): 3-5 days (implementation + validation)
 **Phase D** (ADE20K): 5-7 days (optional, after C)
 
 **Total to baseline v2**: ~7-10 days (A + B + C, assuming no major blockers)
@@ -351,7 +351,7 @@ Phase D (ADE20K)           → Requires C complete (optional)
 
 ---
 
-**Status**: ✅ Roadmap defined with clear phases, dependencies, and acceptance criteria  
-**Next Action**: Begin Phase A.1 (export suppressor telemetry to validation JSON)  
-**Date**: 2025-12-15  
+**Status**: ✅ Roadmap defined with clear phases, dependencies, and acceptance criteria
+**Next Action**: Begin Phase A.1 (export suppressor telemetry to validation JSON)
+**Date**: 2025-12-15
 **Approved By**: Governance cleanup session

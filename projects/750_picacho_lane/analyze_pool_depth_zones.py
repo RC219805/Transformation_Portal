@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Configure matplotlib for non-interactive backend
-plt.switch_backend('Agg')
+plt.switch_backend("Agg")
 
 
 def analyze_depth_zones(depth_map_path, output_dir):
@@ -27,11 +27,7 @@ def analyze_depth_zones(depth_map_path, output_dir):
     print()
 
     # Define zone boundaries
-    zones = [
-        ("Foreground (Pool)", 0.0, 0.33),
-        ("Midground (Landscape)", 0.33, 0.67),
-        ("Background (Sky)", 0.67, 1.0)
-    ]
+    zones = [("Foreground (Pool)", 0.0, 0.33), ("Midground (Landscape)", 0.33, 0.67), ("Background (Sky)", 0.67, 1.0)]
 
     # Analyze zones
     print("=" * 70)
@@ -62,23 +58,22 @@ def analyze_depth_zones(depth_map_path, output_dir):
     # 1. Depth histogram with zone boundaries
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    ax.hist(depth.flatten(), bins=100, color='steelblue', alpha=0.7, edgecolor='black')
+    ax.hist(depth.flatten(), bins=100, color="steelblue", alpha=0.7, edgecolor="black")
 
     # Add zone boundary lines
-    colors = ['red', 'orange', 'green']
+    colors = ["red", "orange", "green"]
     for i, (zone_name, z_min, z_max) in enumerate(zones):
         if i < len(zones) - 1:
-            ax.axvline(z_max, color=colors[i], linestyle='--', linewidth=2,
-                       label=f'{zone_name} boundary')
+            ax.axvline(z_max, color=colors[i], linestyle="--", linewidth=2, label=f"{zone_name} boundary")
 
-    ax.set_xlabel('Depth Value (0=near, 1=far)', fontsize=12)
-    ax.set_ylabel('Pixel Count', fontsize=12)
-    ax.set_title('Depth Distribution - 750 Picacho Luxury Pool', fontsize=14, fontweight='bold')
+    ax.set_xlabel("Depth Value (0=near, 1=far)", fontsize=12)
+    ax.set_ylabel("Pixel Count", fontsize=12)
+    ax.set_title("Depth Distribution - 750 Picacho Luxury Pool", fontsize=14, fontweight="bold")
     ax.legend(fontsize=10)
     ax.grid(alpha=0.3)
 
-    histogram_path = output_dir / 'depth_histogram_zones.png'
-    plt.savefig(histogram_path, dpi=150, bbox_inches='tight')
+    histogram_path = output_dir / "depth_histogram_zones.png"
+    plt.savefig(histogram_path, dpi=150, bbox_inches="tight")
     print(f"✓ Saved depth histogram: {histogram_path.name}")
     plt.close()
 
@@ -86,14 +81,14 @@ def analyze_depth_zones(depth_map_path, output_dir):
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
 
     # Original depth map
-    im0 = axes[0, 0].imshow(depth, cmap='turbo')
-    axes[0, 0].set_title('Full Depth Map', fontsize=12, fontweight='bold')
-    axes[0, 0].axis('off')
+    im0 = axes[0, 0].imshow(depth, cmap="turbo")
+    axes[0, 0].set_title("Full Depth Map", fontsize=12, fontweight="bold")
+    axes[0, 0].axis("off")
     plt.colorbar(im0, ax=axes[0, 0], fraction=0.046)
 
     # Zone masks
-    zone_titles = ['Foreground Zone (Pool)', 'Midground Zone (Landscape)', 'Background Zone (Sky)']
-    zone_cmaps = ['Blues', 'Greens', 'Reds']
+    zone_titles = ["Foreground Zone (Pool)", "Midground Zone (Landscape)", "Background Zone (Sky)"]
+    zone_cmaps = ["Blues", "Greens", "Reds"]
 
     for i, (zone_name, z_min, z_max) in enumerate(zones):
         ax_idx = [(0, 1), (1, 0), (1, 1)][i]
@@ -101,21 +96,20 @@ def analyze_depth_zones(depth_map_path, output_dir):
         zone_depth = np.where(mask, depth, np.nan)
 
         im = axes[ax_idx].imshow(zone_depth, cmap=zone_cmaps[i])
-        axes[ax_idx].set_title(zone_titles[i], fontsize=12, fontweight='bold')
-        axes[ax_idx].axis('off')
+        axes[ax_idx].set_title(zone_titles[i], fontsize=12, fontweight="bold")
+        axes[ax_idx].axis("off")
         plt.colorbar(im, ax=axes[ax_idx], fraction=0.046)
 
-    plt.suptitle('Depth Zone Segmentation - 750 Picacho Pool',
-                 fontsize=16, fontweight='bold', y=0.98)
+    plt.suptitle("Depth Zone Segmentation - 750 Picacho Pool", fontsize=16, fontweight="bold", y=0.98)
 
-    segmentation_path = output_dir / 'depth_zone_segmentation.png'
-    plt.savefig(segmentation_path, dpi=150, bbox_inches='tight')
+    segmentation_path = output_dir / "depth_zone_segmentation.png"
+    plt.savefig(segmentation_path, dpi=150, bbox_inches="tight")
     print(f"✓ Saved zone segmentation: {segmentation_path.name}")
     plt.close()
 
     # 3. Depth statistics summary
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.axis('off')
+    ax.axis("off")
 
     # Create statistics table
     stats_data = []
@@ -127,29 +121,25 @@ def analyze_depth_zones(depth_map_path, output_dir):
         zone_depth = depth[mask]
 
         if len(zone_depth) > 0:
-            stats_data.append([
-                zone_name,
-                f"[{z_min:.2f}, {z_max:.2f}]",
-                f"{percentage:.1f}%",
-                f"{zone_depth.mean():.3f}",
-                f"{zone_depth.std():.3f}"
-            ])
+            stats_data.append(
+                [
+                    zone_name,
+                    f"[{z_min:.2f}, {z_max:.2f}]",
+                    f"{percentage:.1f}%",
+                    f"{zone_depth.mean():.3f}",
+                    f"{zone_depth.std():.3f}",
+                ]
+            )
 
     # Add overall statistics
-    stats_data.append([
-        "Full Image",
-        "[0.00, 1.00]",
-        "100.0%",
-        f"{depth.mean():.3f}",
-        f"{depth.std():.3f}"
-    ])
+    stats_data.append(["Full Image", "[0.00, 1.00]", "100.0%", f"{depth.mean():.3f}", f"{depth.std():.3f}"])
 
     table = ax.table(
         cellText=stats_data,
-        colLabels=['Zone', 'Depth Range', 'Coverage', 'Mean', 'Std Dev'],
-        cellLoc='center',
-        loc='center',
-        colWidths=[0.3, 0.2, 0.15, 0.15, 0.15]
+        colLabels=["Zone", "Depth Range", "Coverage", "Mean", "Std Dev"],
+        cellLoc="center",
+        loc="center",
+        colWidths=[0.3, 0.2, 0.15, 0.15, 0.15],
     )
 
     table.auto_set_font_size(False)
@@ -158,20 +148,19 @@ def analyze_depth_zones(depth_map_path, output_dir):
 
     # Style the header
     for i in range(5):
-        table[(0, i)].set_facecolor('#4472C4')
-        table[(0, i)].set_text_props(weight='bold', color='white')
+        table[(0, i)].set_facecolor("#4472C4")
+        table[(0, i)].set_text_props(weight="bold", color="white")
 
     # Style the data rows
-    colors_rows = ['#E7E6E6', '#F2F2F2', '#E7E6E6', '#D9D9D9']
+    colors_rows = ["#E7E6E6", "#F2F2F2", "#E7E6E6", "#D9D9D9"]
     for i, color in enumerate(colors_rows, start=1):
         for j in range(5):
             table[(i, j)].set_facecolor(color)
 
-    ax.set_title('Depth Zone Statistics - 750 Picacho Luxury Pool\n',
-                 fontsize=14, fontweight='bold', pad=20)
+    ax.set_title("Depth Zone Statistics - 750 Picacho Luxury Pool\n", fontsize=14, fontweight="bold", pad=20)
 
-    stats_path = output_dir / 'depth_statistics_table.png'
-    plt.savefig(stats_path, dpi=150, bbox_inches='tight')
+    stats_path = output_dir / "depth_statistics_table.png"
+    plt.savefig(stats_path, dpi=150, bbox_inches="tight")
     print(f"✓ Saved statistics table: {stats_path.name}")
     plt.close()
 

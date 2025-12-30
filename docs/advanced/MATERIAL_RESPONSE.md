@@ -1,7 +1,7 @@
 # Materials v2 User Guide
 
-**Version:** 2.0  
-**Last Updated:** 2025-12-09  
+**Version:** 2.0
+**Last Updated:** 2025-12-09
 **Status:** Production Testing
 
 ## Overview

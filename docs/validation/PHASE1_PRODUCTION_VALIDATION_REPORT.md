@@ -1,8 +1,8 @@
 # Phase 1 Production Validation Report
 
-**Date**: 2025-12-08  
-**Version**: 1.0  
-**Validation Engineer**: Transformation Portal Architect  
+**Date**: 2025-12-08
+**Version**: 1.0
+**Validation Engineer**: Transformation Portal Architect
 **System**: Apple M4 Max, 64GB unified memory, macOS
 
 ---
@@ -11,11 +11,11 @@
 
 Phase 1 stability architecture has been validated through comprehensive testing. **Key findings**:
 
-✅ **Test Suite**: 27/27 Phase 1 stability tests passing (100%)  
-✅ **Materials v2**: 16/18 integration tests passing (89%)  
-⚠️ **Production Run**: 5.5/6 completions (92%) - upscaling bottleneck identified  
-✅ **Single Image**: 100% success rate with 21-second processing time  
-✅ **Orchestrator**: Checkpoint management and fault isolation verified  
+✅ **Test Suite**: 27/27 Phase 1 stability tests passing (100%)
+✅ **Materials v2**: 16/18 integration tests passing (89%)
+⚠️ **Production Run**: 5.5/6 completions (92%) - upscaling bottleneck identified
+✅ **Single Image**: 100% success rate with 21-second processing time
+✅ **Orchestrator**: Checkpoint management and fault isolation verified
 
 **Overall Assessment**: **PASSED with Performance Advisory**
 
@@ -123,13 +123,13 @@ python3 -m lux_depth_v2.cli \
 - Image 5 (PrimaryBathroom): 196 seconds (3.3 minutes)
 - Image 6 (PrimaryBedroom): **>30 minutes** (stuck in upscaling)
 
-**Average per-image**: ~173 seconds (excluding stuck image)  
-**Total successful**: ~14.4 minutes for 5 images  
+**Average per-image**: ~173 seconds (excluding stuck image)
+**Total successful**: ~14.4 minutes for 5 images
 **Throughput**: ~20 images/hour (with 4× upscaling)
 
 **Performance Bottleneck Identified**: 🔍
 
-The 6th image (PrimaryBedroom) stalled during 4× upscaling phase. CPU usage remained at 17.3%, suggesting a compute-bound operation (likely tiled upscaling with MPS backend). 
+The 6th image (PrimaryBedroom) stalled during 4× upscaling phase. CPU usage remained at 17.3%, suggesting a compute-bound operation (likely tiled upscaling with MPS backend).
 
 **Root Cause Hypothesis**:
 - 4× upscaling on large images (>100MP input → >1.6GP output) may trigger MPS memory pressure
@@ -165,8 +165,8 @@ python3 -m lux_depth_v2.cli \
 
 **Results**: ✅ **100% success**
 
-**Timing**: 21 seconds (pool image, 2× upscaling)  
-**Output**: 2 files (master16.tif, upscaled16.tif)  
+**Timing**: 21 seconds (pool image, 2× upscaling)
+**Output**: 2 files (master16.tif, upscaled16.tif)
 **Quality**: Pre-flight validation passed, no depth map available (uniform weights used)
 
 **Architect's Assessment**: Single-image processing is **fast and reliable**. The 2× upscaling mode is production-ready for time-sensitive workflows.
@@ -184,7 +184,7 @@ python3 -m lux_depth_v2.cli \
 
 **Bottleneck**: 4× upscaling on large images (>100MP)
 
-**Recommendation**: 
+**Recommendation**:
 - Phase 2: Optimize TorchUpscaler tiling strategy for MPS backend
 - Phase 2: Add MPS memory monitoring to detect stalls
 - Short-term: Use 2× upscaling for time-critical production workflows
@@ -193,7 +193,7 @@ python3 -m lux_depth_v2.cli \
 
 ### 2.2 Resource Utilization
 
-**Memory**: 
+**Memory**:
 - Peak usage: ~50GB (MPS unified memory)
 - No crashes or OOM errors observed
 - Resource monitor operated correctly
@@ -262,7 +262,7 @@ cli.py: error: unrecognized arguments: --materials-v2 --confidence-threshold 0.6
 
 **Impact**: Materials v2 cannot be tested via CLI in current release.
 
-**Recommendation**: 
+**Recommendation**:
 - **Phase 1.1 Critical**: Expose Materials v2 CLI flags in `lux_depth_v2/cli.py`
 - Add to CLI argparse: `--materials-v2`, `--confidence-threshold`, `--cache-masks`, `--seg-backend`
 - Update Phase 1.1 release notes to document Materials v2 usage
@@ -408,13 +408,13 @@ Based on validation data:
 
 Adjusting for real-world constraints:
 
-✅ **Phase 1 Stability Tests**: 27/27 passing (100%) - **PASS**  
-✅ **Materials v2 Core**: 16/18 passing (89%) - **PASS** (test issues, not code)  
-⚠️ **Production Batch**: 5.5/6 completions (92%) - **PASS WITH ADVISORY** (bottleneck identified)  
-✅ **Single Image**: 100% success - **PASS**  
-✅ **Orchestrator**: Checkpoint, fault isolation, resource monitoring - **PASS**  
-⚠️ **Materials v2 CLI**: Not exposed - **DEFERRED TO PHASE 1.1**  
-✅ **Bottleneck Identification**: Upscaling performance - **PASS**  
+✅ **Phase 1 Stability Tests**: 27/27 passing (100%) - **PASS**
+✅ **Materials v2 Core**: 16/18 passing (89%) - **PASS** (test issues, not code)
+⚠️ **Production Batch**: 5.5/6 completions (92%) - **PASS WITH ADVISORY** (bottleneck identified)
+✅ **Single Image**: 100% success - **PASS**
+✅ **Orchestrator**: Checkpoint, fault isolation, resource monitoring - **PASS**
+⚠️ **Materials v2 CLI**: Not exposed - **DEFERRED TO PHASE 1.1**
+✅ **Bottleneck Identification**: Upscaling performance - **PASS**
 ✅ **Security**: CVE-2024-27763 mitigated - **PASS**
 
 **Revised Overall**: **PASSED (6/6 critical, 2/2 advisory)**
@@ -522,11 +522,11 @@ Adjusting for real-world constraints:
 
 Phase 1 stability architecture has been **successfully validated** with **minor performance advisories**:
 
-✅ **Stability**: 27/27 tests passing - Production-ready  
-✅ **Core Functionality**: Orchestrator, checkpointing, error recovery all working  
-✅ **Security**: CVE-2024-27763 mitigated via safe upscaler backend  
-⚠️ **Performance**: 4× upscaling bottleneck identified (Phase 2 target)  
-⚠️ **Materials v2**: CLI integration incomplete (Phase 1.1 critical path)  
+✅ **Stability**: 27/27 tests passing - Production-ready
+✅ **Core Functionality**: Orchestrator, checkpointing, error recovery all working
+✅ **Security**: CVE-2024-27763 mitigated via safe upscaler backend
+⚠️ **Performance**: 4× upscaling bottleneck identified (Phase 2 target)
+⚠️ **Materials v2**: CLI integration incomplete (Phase 1.1 critical path)
 
 **Recommendation**: **Proceed with Phase 1.1 release** after exposing Materials v2 CLI flags (2-3 hour task).
 
@@ -536,7 +536,7 @@ Phase 1 stability architecture has been **successfully validated** with **minor 
 
 **Phase 1 Validation Status**: ✅ **PASSED WITH ADVISORIES**
 
-**Production Readiness**: 
+**Production Readiness**:
 - ✅ Core stability architecture: **READY**
 - ⚠️ Performance optimization: **PHASE 2 REQUIRED**
 - ⚠️ Materials v2 exposure: **PHASE 1.1 BLOCKER**
@@ -550,8 +550,8 @@ Phase 1 stability architecture has been **successfully validated** with **minor 
 
 ---
 
-**Validated By**: Transformation Portal Architect  
-**Date**: 2025-12-08  
+**Validated By**: Transformation Portal Architect
+**Date**: 2025-12-08
 **Next Review**: Phase 2 kick-off (after Phase 1.1 release)
 
 ---

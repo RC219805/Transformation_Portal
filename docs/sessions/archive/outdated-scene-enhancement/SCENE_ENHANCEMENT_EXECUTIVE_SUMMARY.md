@@ -1,18 +1,18 @@
 # Scene Description Enhancement - Executive Summary
 
-**Document:** Architectural Analysis of Pool Scene Intelligence Integration  
-**Date:** 2025-12-12  
-**Status:** Strategic Recommendation - Immediate Action Required  
+**Document:** Architectural Analysis of Pool Scene Intelligence Integration
+**Date:** 2025-12-12
+**Status:** Strategic Recommendation - Immediate Action Required
 **Full Report:** [docs/architecture/SCENE_DESCRIPTION_ENHANCEMENT_ROADMAP.md](architecture/SCENE_DESCRIPTION_ENHANCEMENT_ROADMAP.md)
 
 ---
 
 ## TL;DR
 
-**Problem:** Current material segmentation confidence is catastrophically low (Pool: 9.9%, Kitchen: 16.6%)  
-**Root Cause:** Heuristic backend lacks semantic understanding; SegFormer-B5 is downloaded but NOT activated  
-**Solution:** Three-phase enhancement roadmap with immediate 40-60% quality improvement  
-**Effort:** 2-4 hours for Phase 1 (activating existing SegFormer model)  
+**Problem:** Current material segmentation confidence is catastrophically low (Pool: 9.9%, Kitchen: 16.6%)
+**Root Cause:** Heuristic backend lacks semantic understanding; SegFormer-B5 is downloaded but NOT activated
+**Solution:** Three-phase enhancement roadmap with immediate 40-60% quality improvement
+**Effort:** 2-4 hours for Phase 1 (activating existing SegFormer model)
 **Risk:** LOW (model already in dependencies, minimal code change)
 
 ---
@@ -85,8 +85,8 @@ segmentation=SegmentationConfig(
 | Material property schema (JSON) | 4-6h | Material response: +30-40% | LOW | P0 |
 | Hybrid depth zones | 3-4h | Depth accuracy: +20-30% | LOW | P0 |
 
-**Total Effort:** 9-14 hours (2 days)  
-**Quality Improvement:** 40-60%  
+**Total Effort:** 9-14 hours (2 days)
+**Quality Improvement:** 40-60%
 **Processing Time Impact:** +0.5-1.0s
 
 ### Phase 2: SAM Integration (Weeks 2-4)
@@ -98,8 +98,8 @@ segmentation=SegmentationConfig(
 | Expanded materials (18-24) | 16-20h | Material precision: 3-4x | MED | P1 |
 | Lighting metadata | 8-12h | Tone mapping: +20-30% | LOW | P1 |
 
-**Total Effort:** 64-86 hours (2-3 weeks)  
-**Cumulative Quality Improvement:** 70-90%  
+**Total Effort:** 64-86 hours (2-3 weeks)
+**Cumulative Quality Improvement:** 70-90%
 **Processing Time Impact:** +1.5-2.5s (EfficientSAM)
 
 ### Phase 3: Long-Term Architecture (Months 2-3)
@@ -108,14 +108,14 @@ segmentation=SegmentationConfig(
 - Scene intelligence engine (80-120h)
 - Custom ControlNet (optional, 120-180h)
 
-**Total Effort:** 260-380 hours  
+**Total Effort:** 260-380 hours
 **Impact:** Foundation for next-generation capabilities
 
 ---
 
 ## Material Property Schema (Phase 1 Enhancement)
 
-**Current:** Material classes are strings with implicit properties  
+**Current:** Material classes are strings with implicit properties
 **Proposed:** Explicit physics-based properties for precision tuning
 
 ### Example: Pool Scene Materials
@@ -128,7 +128,7 @@ MATERIAL_SCHEMA = {
         albedo=(0.95, 0.95, 0.92),  # Warm white
         clarity_boost=0.8,     # Reduce over-sharpening
     ),
-    
+
     "pool_tile_mosaic": MaterialProperties(
         roughness=0.15,        # Smooth, glossy
         specular=0.7,          # High highlights
@@ -136,7 +136,7 @@ MATERIAL_SCHEMA = {
         clarity_boost=1.3,     # Enhance detail
         saturation_mult=1.15,  # Vibrant blues
     ),
-    
+
     "pool_water_surface": MaterialProperties(
         roughness=0.05,        # Mirror-like
         specular=0.9,          # Maximum highlights
@@ -144,7 +144,7 @@ MATERIAL_SCHEMA = {
         ior=1.33,             # Water refractive index
         clarity_boost=1.5,     # Sharp reflections
     ),
-    
+
     "vegetation_trees": MaterialProperties(
         roughness=0.7,         # Textured
         albedo=(0.15, 0.45, 0.18),  # Foliage green
@@ -227,10 +227,10 @@ else:
 if lighting.time_of_day == "twilight" and lighting.has_mixed_lighting:
     # Warm foreground (interior spill)
     temp_fg = +0.013  # Orange shift
-    
+
     # Cool background (sky/pool)
     temp_bg = -0.005  # Blue shift
-    
+
     # Balance saturation
     sat_fg = 1.045    # Enhance warm tones
     sat_bg = 1.01     # Preserve sky neutrality
@@ -271,22 +271,22 @@ if lighting.time_of_day == "twilight" and lighting.has_mixed_lighting:
 
 ### Phase 1 (LOW RISK)
 
-**Risk:** SegFormer VRAM exhaustion on 4GB GPUs  
-**Likelihood:** 15%  
+**Risk:** SegFormer VRAM exhaustion on 4GB GPUs
+**Likelihood:** 15%
 **Mitigation:** Auto-downscale to 1536px on low-VRAM systems
 
-**Risk:** Model download fails  
-**Likelihood:** 5%  
+**Risk:** Model download fails
+**Likelihood:** 5%
 **Mitigation:** Graceful fallback to heuristic + clear error message
 
 ### Phase 2 (MEDIUM RISK)
 
-**Risk:** SAM processing time exceeds APEX budget  
-**Likelihood:** 25%  
+**Risk:** SAM processing time exceeds APEX budget
+**Likelihood:** 25%
 **Mitigation:** Use EfficientSAM (not SAM-HQ) for APEX quality
 
-**Risk:** CLIP material classification is inaccurate  
-**Likelihood:** 20%  
+**Risk:** CLIP material classification is inaccurate
+**Likelihood:** 20%
 **Mitigation:** Confidence gating (>0.5 threshold) + SegFormer fallback
 
 ---
@@ -369,12 +369,12 @@ if lighting.time_of_day == "twilight" and lighting.has_mixed_lighting:
 
 ## Contact
 
-**Architect:** Transformation Portal Architect  
-**Full Technical Report:** `docs/architecture/SCENE_DESCRIPTION_ENHANCEMENT_ROADMAP.md`  
+**Architect:** Transformation Portal Architect
+**Full Technical Report:** `docs/architecture/SCENE_DESCRIPTION_ENHANCEMENT_ROADMAP.md`
 **Implementation Tracking:** [Create GitHub Issue/Project Board]
 
 ---
 
-**Status:** Awaiting approval for Phase 1 implementation  
-**Target Start Date:** 2025-12-13 (tomorrow)  
+**Status:** Awaiting approval for Phase 1 implementation
+**Target Start Date:** 2025-12-13 (tomorrow)
 **Expected Completion:** 2025-12-15 (2 business days)

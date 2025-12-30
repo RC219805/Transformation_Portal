@@ -229,7 +229,7 @@ done
 All requirements from the original problem statement met:
 
 ✅ Layered .in files with version ranges
-✅ Pinned .txt files for deterministic builds  
+✅ Pinned .txt files for deterministic builds
 ✅ Two-phase compilation (global resolution + layer-specific)
 ✅ Makefile automation
 ✅ pyproject.toml integration with dynamic dependencies

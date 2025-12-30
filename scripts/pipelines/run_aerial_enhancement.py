@@ -1,4 +1,5 @@
 """Apply MBAR board materials to the 750 Picacho Lane aerial photograph."""
+
 from pathlib import Path
 
 from board_material_aerial_enhancer import enhance_aerial
@@ -19,9 +20,9 @@ result = enhance_aerial(
     input_path,
     output_path,
     analysis_max_dim=1280,  # Fast clustering on downsampled image
-    k=8,                     # 8 color clusters for material assignment
-    seed=22,                 # Reproducible results
-    target_width=4096,       # 4K deliverable
+    k=8,  # 8 color clusters for material assignment
+    seed=22,  # Reproducible results
+    target_width=4096,  # 4K deliverable
 )
 # pylint: enable=duplicate-code
 

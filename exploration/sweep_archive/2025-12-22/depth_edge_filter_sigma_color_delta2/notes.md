@@ -1,10 +1,10 @@
 # depth_edge_filter_sigma_color_delta2
 
-**Date**: 2025-12-22 01:18:32  
-**Sweep Type**: Single-Parameter (Phase 1)  
-**Parameter**: `depth.edge_filter_sigma_color`  
-**Value**: 100  
-**Delta ID**: delta-2 
+**Date**: 2025-12-22 01:18:32
+**Sweep Type**: Single-Parameter (Phase 1)
+**Parameter**: `depth.edge_filter_sigma_color`
+**Value**: 100
+**Delta ID**: delta-2
 
 ## Expected Impact
 

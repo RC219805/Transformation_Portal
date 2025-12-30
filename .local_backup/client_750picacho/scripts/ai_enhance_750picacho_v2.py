@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """AI Enhancement for 750 Picacho - Fixed dimensions"""
+
 from pathlib import Path
 
 import torch
@@ -48,18 +49,12 @@ print(f"  ✓ Saved: {canny_output}")
 
 # Load models
 print("\n[3/6] Loading ControlNet...")
-controlnet = ControlNetModel.from_pretrained(
-    "lllyasviel/sd-controlnet-canny",
-    torch_dtype=torch.float32
-).to(device)
+controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny", torch_dtype=torch.float32).to(device)
 print("  ✓ ControlNet ready")
 
 print("\n[4/6] Loading Stable Diffusion...")
 pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5",
-    controlnet=controlnet,
-    torch_dtype=torch.float32,
-    safety_checker=None
+    "runwayml/stable-diffusion-v1-5", controlnet=controlnet, torch_dtype=torch.float32, safety_checker=None
 ).to(device)
 pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
 print("  ✓ Pipeline ready")

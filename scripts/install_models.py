@@ -49,6 +49,7 @@ from typing import Optional, Tuple
 
 try:
     from tqdm import tqdm
+
     HAS_TQDM = True
 except ImportError:
     HAS_TQDM = False
@@ -139,15 +140,9 @@ class DownloadProgressBar:
         self.pbar = None
 
         if HAS_TQDM:
-            self.pbar = tqdm(
-                total=total,
-                unit='B',
-                unit_scale=True,
-                miniters=1,
-                desc=desc
-            )
+            self.pbar = tqdm(total=total, unit="B", unit_scale=True, miniters=1, desc=desc)
         else:
-            print(f"Downloading {desc}...", end='', flush=True)
+            print(f"Downloading {desc}...", end="", flush=True)
 
     def update(self, n: int):
         if self.pbar:
@@ -197,8 +192,8 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     print("  Verifying checksum...")
     sha256 = hashlib.sha256()
 
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
             sha256.update(chunk)
 
     actual = sha256.hexdigest()
@@ -214,11 +209,7 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
 
 
 def download_file_with_retry(
-    url: str,
-    output_path: Path,
-    description: str,
-    expected_sha256: Optional[str] = None,
-    max_retries: int = 3
+    url: str, output_path: Path, description: str, expected_sha256: Optional[str] = None, max_retries: int = 3
 ) -> bool:
     """Download file with retry logic and checksum verification."""
 
@@ -268,11 +259,7 @@ def check_huggingface_model(model_id: str) -> Tuple[bool, Optional[str]]:
         from huggingface_hub import snapshot_download
 
         # Try to find cached model
-        cache_dir = snapshot_download(
-            repo_id=model_id,
-            allow_patterns=["*.json"],
-            local_files_only=True
-        )
+        cache_dir = snapshot_download(repo_id=model_id, allow_patterns=["*.json"], local_files_only=True)
         return True, cache_dir
     except Exception:
         return False, None
@@ -293,6 +280,7 @@ def estimate_download_time(size_mb: int, speed_mbps: float = 10.0) -> str:
 # ============================================================================
 # Installation Functions
 # ============================================================================
+
 
 def install_depth_models(install_all: bool = False, dry_run: bool = False) -> int:
     """Install Depth Anything V2 models."""
@@ -370,20 +358,15 @@ def install_realesrgan_weights(force: bool = False, dry_run: bool = False) -> in
             continue
 
         # Check disk space
-        if not check_disk_space(config['size_mb']):
+        if not check_disk_space(config["size_mb"]):
             print("  ✗ Insufficient disk space, skipping")
             continue
 
         # Prompt for download
         response = input(f"  Download {model_name}? [y/N]: ").lower().strip()
 
-        if response == 'y':
-            success = download_file_with_retry(
-                config['url'],
-                model_path,
-                model_name,
-                config['sha256']
-            )
+        if response == "y":
+            success = download_file_with_retry(config["url"], model_path, model_name, config["sha256"])
 
             if success:
                 installed += 1
@@ -470,6 +453,7 @@ def install_stable_diffusion_models(dry_run: bool = False) -> int:
 # Main
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Install machine learning models for Transformation Portal",
@@ -487,24 +471,12 @@ Examples:
 
   # Force re-download existing models
   python scripts/install_models.py --force
-        """
+        """,
     )
 
-    parser.add_argument(
-        '--all',
-        action='store_true',
-        help='Install all models including optional ones'
-    )
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Show what would be downloaded without downloading'
-    )
-    parser.add_argument(
-        '--force',
-        action='store_true',
-        help='Force re-download even if files exist'
-    )
+    parser.add_argument("--all", action="store_true", help="Install all models including optional ones")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be downloaded without downloading")
+    parser.add_argument("--force", action="store_true", help="Force re-download even if files exist")
 
     args = parser.parse_args()
 
@@ -573,5 +545,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

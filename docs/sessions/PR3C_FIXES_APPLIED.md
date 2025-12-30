@@ -1,7 +1,7 @@
 # PR-3C Critical Fixes Applied
 
-**Date**: 2025-12-13  
-**Session**: Stage 6 A/B Test Preparation  
+**Date**: 2025-12-13
+**Session**: Stage 6 A/B Test Preparation
 **Status**: ✅ Ready for execution
 
 ---
@@ -41,7 +41,7 @@ result = pipe.process_one(input_path)
 
 ### 2. ✅ Mask extraction (BLOCKER)
 
-**Problem**:  
+**Problem**:
 Original script tried to load masks from disk:
 ```python
 load_mask_from_output(output_dir, class_name)
@@ -49,7 +49,7 @@ load_mask_from_output(output_dir, class_name)
 
 But `pipeline.py` **does not write per-class mask PNGs** anywhere—it only writes final images and reports. The function would always return `None`, making all boundary metrics meaningless.
 
-**Fix**:  
+**Fix**:
 Extract masks **in-memory** directly from the segmenter:
 
 ```python
@@ -57,24 +57,24 @@ def run_segmentation_only(input_path, preset, target_classes):
     # Build config from preset
     cfg = PipelineConfig()
     cfg.apply_preset(preset)
-    
+
     # Load image
     rgb01, _ = io_utils.read_rgb_any(input_path)
     rgb_t = torch_ops.to_torch_rgb(rgb01, device)
-    
+
     # Create segmenter (respects backend_v3/fusion from preset)
     seg = create_material_segmenter(cfg.segmentation, device)
-    
+
     # Run segmentation
     masks_dict_torch = seg.predict(rgb_t)  # dict[str, torch.Tensor] (1,1,H,W)
-    
+
     # Extract to numpy
     masks = {}
     for cls in target_classes:
         if cls in masks_dict_torch:
             mask_np = masks_dict_torch[cls][0, 0].cpu().numpy()
             masks[cls] = mask_np
-    
+
     return masks, rgb01, runtime_sec
 ```
 
@@ -84,7 +84,7 @@ def run_segmentation_only(input_path, preset, target_classes):
 
 ### 3. ✅ A/B comparability (INVALID TEST)
 
-**Problem**:  
+**Problem**:
 Aerial scene used:
 ```python
 baseline_preset = Preset.INTERIOR_LUXURY_MAX_QUALITY
@@ -105,7 +105,7 @@ canary_preset   = Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM
 
 ### 4. ✅ Promotion logic (WRONG METRIC)
 
-**Problem**:  
+**Problem**:
 Original logic treated BF1 (boundary F1 between canary and baseline) as an "improvement" signal:
 ```python
 if BF1 >= 0.95:
@@ -114,7 +114,7 @@ if BF1 >= 0.95:
 
 But BF1 computed as `pred=canary, ref=baseline` measures **similarity to baseline**, not "better edges." High BF1 means "nothing changed."
 
-**Fix**:  
+**Fix**:
 Use **edge alignment vs image gradients** as the improvement signal:
 
 ```python
@@ -202,7 +202,7 @@ Otherwise: **keep canary-only** and proceed with Materials V3 PR-3B/PR-4.
 3. If promotion gate passes (≥3/5 scenes improved):
    - Run visual diff validation
    - If no artifacts → promote FUSED to default APEX
-   
+
 4. If promotion gate fails:
    - Keep canary-only
    - Proceed with Materials V3 PR-3B (edge-aware gating + taxonomy)

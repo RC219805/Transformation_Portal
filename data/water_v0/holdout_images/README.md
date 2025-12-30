@@ -1,6 +1,6 @@
 # Holdout Images Directory
 
-**Purpose**: Real-world architectural glass negatives for Phase C completion gate  
+**Purpose**: Real-world architectural glass negatives for Phase C completion gate
 **Status**: Awaiting acquisition (15 images required)
 
 ## Usage

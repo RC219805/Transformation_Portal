@@ -44,16 +44,18 @@ class DepthRefiner:
         # Check for OpenCV availability
         try:
             import cv2
+
             self.cv2 = cv2
             self.has_cv2 = True
 
             # Check for ximgproc (guided filter)
             try:
                 # Try to access guidedFilter function
-                if hasattr(cv2, 'ximgproc'):
+                if hasattr(cv2, "ximgproc"):
                     import cv2.ximgproc as ximgproc
+
                     # Verify guidedFilter is available
-                    if hasattr(ximgproc, 'guidedFilter'):
+                    if hasattr(ximgproc, "guidedFilter"):
                         self.ximgproc = ximgproc
                         self.has_ximgproc = True
                         logger.debug("OpenCV ximgproc.guidedFilter available")
@@ -137,9 +139,7 @@ class DepthRefiner:
             Filtered depth map (H, W), float32 [0, 1]
         """
         # Normalize to uint8 for OpenCV
-        depth_norm = self.cv2.normalize(
-            depth_map, None, 0, 255, self.cv2.NORM_MINMAX
-        ).astype(np.uint8)
+        depth_norm = self.cv2.normalize(depth_map, None, 0, 255, self.cv2.NORM_MINMAX).astype(np.uint8)
 
         # Apply bilateral filter
         filtered = self.cv2.bilateralFilter(
@@ -190,13 +190,8 @@ class DepthRefiner:
 
         if self.has_ximgproc:
             # Use true guided filter
-            filtered = self.ximgproc.guidedFilter(
-                rgb_guide, p, self.config.guided_radius, self.config.guided_eps
-            )
-            logger.debug(
-                f"Guided filter: radius={self.config.guided_radius}, "
-                f"eps={self.config.guided_eps}"
-            )
+            filtered = self.ximgproc.guidedFilter(rgb_guide, p, self.config.guided_radius, self.config.guided_eps)
+            logger.debug(f"Guided filter: radius={self.config.guided_radius}, eps={self.config.guided_eps}")
         else:
             # Fallback to bilateral filter with similar parameters
             depth_uint8 = (depth_map * 255).astype(np.uint8)
@@ -207,10 +202,7 @@ class DepthRefiner:
                 sigmaSpace=self.config.guided_radius,
             )
             filtered = filtered_uint8.astype(np.float32) / 255.0
-            logger.debug(
-                f"Bilateral filter fallback (no ximgproc): "
-                f"radius={self.config.guided_radius}"
-            )
+            logger.debug(f"Bilateral filter fallback (no ximgproc): radius={self.config.guided_radius}")
 
         return filtered
 
@@ -236,27 +228,25 @@ class DepthRefiner:
         gray = self.cv2.cvtColor(rgb_image, self.cv2.COLOR_RGB2GRAY)
 
         # Detect edges using Canny
-        edges = self.cv2.Canny(
-            gray,
-            self.config.edge_canny_low,
-            self.config.edge_canny_high,
-        ).astype(np.float32) / 255.0
+        edges = (
+            self.cv2.Canny(
+                gray,
+                self.config.edge_canny_low,
+                self.config.edge_canny_high,
+            ).astype(np.float32)
+            / 255.0
+        )
 
         # Smooth depth map (non-edge regions)
         kernel_size = int(self.config.edge_blend_sigma * 2) * 2 + 1
-        smoothed = self.cv2.GaussianBlur(
-            depth_map, (kernel_size, kernel_size), self.config.edge_blend_sigma
-        )
+        smoothed = self.cv2.GaussianBlur(depth_map, (kernel_size, kernel_size), self.config.edge_blend_sigma)
 
         # Blend: preserve depth at edges, use smoothed elsewhere
         result = depth_map * edges + smoothed * (1.0 - edges)
 
         edge_pixels = (edges > 0).sum()
         total_pixels = edges.size
-        logger.debug(
-            f"Edge enhancement: {edge_pixels}/{total_pixels} edge pixels "
-            f"({100*edge_pixels/total_pixels:.1f}%)"
-        )
+        logger.debug(f"Edge enhancement: {edge_pixels}/{total_pixels} edge pixels ({100 * edge_pixels / total_pixels:.1f}%)")
 
         return result
 
@@ -299,15 +289,18 @@ class DepthRefiner:
 
         # Simple 4-neighbor averaging for low-gradient regions
         # Pad depth map to handle boundaries
-        padded = np.pad(depth_map, ((1, 1), (1, 1)), mode='edge')
+        padded = np.pad(depth_map, ((1, 1), (1, 1)), mode="edge")
 
         # Compute average of 4 neighbors
         neighbors_avg = (
-            padded[0:-2, 1:-1] +  # top
-            padded[2:, 1:-1] +    # bottom
-            padded[1:-1, 0:-2] +  # left
-            padded[1:-1, 2:]      # right
-        ) / 4.0
+            (
+                padded[0:-2, 1:-1]  # top
+                + padded[2:, 1:-1]  # bottom
+                + padded[1:-1, 0:-2]  # left
+                + padded[1:-1, 2:]  # right
+            )
+            / 4.0
+        )
 
         # Apply smoothing only where gradient is low
         smooth = np.where(low_gradient_mask, neighbors_avg, depth_map)
@@ -316,7 +309,7 @@ class DepthRefiner:
         total_pixels = low_gradient_mask.size
         logger.debug(
             f"Gradient smoothing: {smooth_pixels}/{total_pixels} pixels smoothed "
-            f"({100*smooth_pixels/total_pixels:.1f}%), "
+            f"({100 * smooth_pixels / total_pixels:.1f}%), "
             f"threshold={self.config.gradient_threshold}"
         )
 
@@ -340,9 +333,7 @@ class DepthRefiner:
         }
 
 
-def create_refinement_preset(
-    preset_name: str = "balanced"
-) -> RefinementConfig:
+def create_refinement_preset(preset_name: str = "balanced") -> RefinementConfig:
     """Create a preset refinement configuration.
 
     Args:
@@ -412,10 +403,7 @@ def create_refinement_preset(
     }
 
     if preset_name not in presets:
-        logger.warning(
-            f"Unknown preset '{preset_name}', using 'balanced'. "
-            f"Available: {list(presets.keys())}"
-        )
+        logger.warning(f"Unknown preset '{preset_name}', using 'balanced'. Available: {list(presets.keys())}")
         preset_name = "balanced"
 
     return presets[preset_name]

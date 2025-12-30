@@ -22,7 +22,7 @@
 
 **Solution**: Added `pytest.skip()` calls inside the `ci_safe_config` fixtures to ensure tests skip gracefully when PyTorch is unavailable. This follows pytest best practices for conditional test execution.
 
-**Files Modified**: 
+**Files Modified**:
 - `tests/test_materials_v3_edge_cases.py` - Added fixture-level skip checks (lines 75, 415)
 
 **Verification**:
@@ -36,20 +36,20 @@
 
 ### PyTorch Dependency Skip
 
-**Status**: CONDITIONAL SKIP  
-**Reason**: All MaterialsV3 edge case tests require PyTorch for `LuxPipelineV2`  
-**Impact**: Tests skip gracefully in CI environments without PyTorch, pass in environments with PyTorch  
-**Implementation**: `@pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch is required for LuxPipelineV2")`  
+**Status**: CONDITIONAL SKIP
+**Reason**: All MaterialsV3 edge case tests require PyTorch for `LuxPipelineV2`
+**Impact**: Tests skip gracefully in CI environments without PyTorch, pass in environments with PyTorch
+**Implementation**: `@pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch is required for LuxPipelineV2")`
 **Code Location**: `tests/test_materials_v3_edge_cases.py:42-45, 394-397`
 
 **Decision**: All tests in `TestMaterialsV3EdgeCases` and `TestMaterialsV3EdgeCasesMetadata` are marked to skip when PyTorch is unavailable. This follows the repository's existing pattern for handling optional ML dependencies (see `test_depth_anything_v2_onnx.py`).
 
 ### `test_missing_depth_map_continues` - Edge Case Test
 
-**Status**: CONDITIONAL SKIP (within PyTorch-available tests)  
-**Reason**: No depth adapter available in test configuration - requires depth processing pipeline to be enabled  
-**Impact**: Low - test validates graceful handling when depth maps are unavailable, which is already covered by other fallback tests  
-**Resolution**: 
+**Status**: CONDITIONAL SKIP (within PyTorch-available tests)
+**Reason**: No depth adapter available in test configuration - requires depth processing pipeline to be enabled
+**Impact**: Low - test validates graceful handling when depth maps are unavailable, which is already covered by other fallback tests
+**Resolution**:
 - [ ] Option 1: Add mock depth adapter for CI environment
 - [ ] Option 2: Mark as manual test (run locally before releases with full pipeline)
 - [x] Option 3: Document as optional, non-blocking (skip when depth adapter not configured)
@@ -149,5 +149,5 @@ Tests are integrated into GitHub Actions workflow:
 
 ---
 
-_Maintained by: Transformation Portal Specialist_  
+_Maintained by: Transformation Portal Specialist_
 _Last Test Run: December 21, 2025_

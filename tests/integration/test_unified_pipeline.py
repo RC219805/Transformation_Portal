@@ -17,14 +17,12 @@ from PIL import Image
 # Check if scipy.ndimage is available (required by pipeline)
 try:
     import scipy.ndimage  # noqa: F401
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
 
-pytestmark = pytest.mark.skipif(
-    not HAS_SCIPY,
-    reason="scipy is required for unified pipeline"
-)
+pytestmark = pytest.mark.skipif(not HAS_SCIPY, reason="scipy is required for unified pipeline")
 
 
 @pytest.fixture
@@ -43,7 +41,7 @@ def sample_image():
     for j in range(800):
         arr[:, j, 1] = int(255 * j / 800)
     arr[:, :, 2] = 128
-    return Image.fromarray(arr, 'RGB')
+    return Image.fromarray(arr, "RGB")
 
 
 @pytest.fixture
@@ -107,9 +105,9 @@ class TestConfigLoader:
 
         recipe = load_recipe(sample_recipe)
 
-        assert recipe['name'] == "Test Recipe"
-        assert 'stages' in recipe
-        assert 'material_response' in recipe['stages']
+        assert recipe["name"] == "Test Recipe"
+        assert "stages" in recipe
+        assert "material_response" in recipe["stages"]
 
     def test_load_nonexistent_recipe(self, temp_dir):
         """Test error on nonexistent recipe."""
@@ -133,24 +131,24 @@ class TestConfigLoader:
         from transformation_portal.config_loader import validate_recipe
 
         invalid_recipe = {
-            'stages': ['color_grading'],
+            "stages": ["color_grading"],
         }
         is_valid, errors = validate_recipe(invalid_recipe)
 
         assert not is_valid
-        assert any('name' in e.lower() for e in errors)
+        assert any("name" in e.lower() for e in errors)
 
     def test_validate_recipe_missing_stages(self, temp_dir):
         """Test validation fails with missing stages."""
         from transformation_portal.config_loader import validate_recipe
 
         invalid_recipe = {
-            'name': 'Test',
+            "name": "Test",
         }
         is_valid, errors = validate_recipe(invalid_recipe)
 
         assert not is_valid
-        assert any('stages' in e.lower() for e in errors)
+        assert any("stages" in e.lower() for e in errors)
 
     def test_list_recipes(self, temp_dir, sample_recipe):
         """Test listing recipes in directory."""
@@ -159,14 +157,14 @@ class TestConfigLoader:
         recipes = list_recipes(temp_dir)
 
         assert len(recipes) == 1
-        assert recipes[0]['name'] == "Test Recipe"
+        assert recipes[0]["name"] == "Test Recipe"
 
     def test_environment_variable_expansion(self, temp_dir):
         """Test environment variable expansion in recipes."""
         import os
         from transformation_portal.config_loader import load_recipe
 
-        os.environ['TEST_LUT_PATH'] = '/custom/luts'
+        os.environ["TEST_LUT_PATH"] = "/custom/luts"
 
         recipe_content = """
 name: "Env Test"
@@ -180,7 +178,7 @@ color_grading:
 
         recipe = load_recipe(recipe_path)
 
-        assert '/custom/luts' in recipe['color_grading']['lut']
+        assert "/custom/luts" in recipe["color_grading"]["lut"]
 
 
 class TestUnifiedPipeline:
@@ -202,16 +200,16 @@ class TestUnifiedPipeline:
         pipeline = UnifiedPipeline.from_recipe(sample_recipe)
         stage_names = [s.name for s in pipeline.stages]
 
-        assert 'material_response' in stage_names
-        assert 'color_grading' in stage_names
-        assert 'photo_finishing' in stage_names
+        assert "material_response" in stage_names
+        assert "color_grading" in stage_names
+        assert "photo_finishing" in stage_names
 
     def test_process_single(self, sample_recipe, sample_image_file, temp_dir):
         """Test processing a single image."""
         from transformation_portal.pipeline_unified import UnifiedPipeline
 
         pipeline = UnifiedPipeline.from_recipe(sample_recipe)
-        pipeline.recipe['_output_dir'] = str(temp_dir / "output")
+        pipeline.recipe["_output_dir"] = str(temp_dir / "output")
 
         result = pipeline.process_single(sample_image_file)
 
@@ -237,11 +235,7 @@ class TestUnifiedPipeline:
 
         pipeline = UnifiedPipeline.from_recipe(sample_recipe)
 
-        result = pipeline.process_batch(
-            str(sample_image_file),
-            temp_dir / "output",
-            dry_run=True
-        )
+        result = pipeline.process_batch(str(sample_image_file), temp_dir / "output", dry_run=True)
 
         assert result.dry_run
         assert len(result.results) == 1
@@ -257,11 +251,7 @@ class TestUnifiedPipeline:
 
         pipeline = UnifiedPipeline.from_recipe(sample_recipe)
 
-        result = pipeline.process_batch(
-            str(temp_dir / "test_*.jpg"),
-            temp_dir / "output",
-            dry_run=False
-        )
+        result = pipeline.process_batch(str(temp_dir / "test_*.jpg"), temp_dir / "output", dry_run=False)
 
         assert result.successful_count == 3
         assert result.failed_count == 0
@@ -381,7 +371,7 @@ class TestBuiltInRecipes:
         is_valid, errors = validate_recipe(recipe)
 
         assert is_valid, f"Validation errors: {errors}"
-        assert recipe['name'] == "Signature Estate"
+        assert recipe["name"] == "Signature Estate"
 
     def test_golden_hour_courtyard_recipe(self):
         """Test golden_hour_courtyard.yaml is valid."""
@@ -395,7 +385,7 @@ class TestBuiltInRecipes:
         is_valid, errors = validate_recipe(recipe)
 
         assert is_valid, f"Validation errors: {errors}"
-        assert recipe['name'] == "Golden Hour Courtyard"
+        assert recipe["name"] == "Golden Hour Courtyard"
 
     def test_interior_neutral_luxe_recipe(self):
         """Test interior_neutral_luxe.yaml is valid."""
@@ -409,7 +399,7 @@ class TestBuiltInRecipes:
         is_valid, errors = validate_recipe(recipe)
 
         assert is_valid, f"Validation errors: {errors}"
-        assert recipe['name'] == "Interior Neutral Luxe"
+        assert recipe["name"] == "Interior Neutral Luxe"
 
     def test_video_cinematic_hdr_recipe(self):
         """Test video_cinematic_hdr.yaml is valid."""
@@ -423,7 +413,7 @@ class TestBuiltInRecipes:
         is_valid, errors = validate_recipe(recipe)
 
         assert is_valid, f"Validation errors: {errors}"
-        assert recipe['name'] == "Video Cinematic HDR"
+        assert recipe["name"] == "Video Cinematic HDR"
 
 
 class TestEndToEnd:
@@ -470,11 +460,11 @@ output:
 
         # Load and validate recipe
         recipe = load_recipe(recipe_path)
-        assert recipe['name'] == "E2E Test Recipe"
+        assert recipe["name"] == "E2E Test Recipe"
 
         # Process image
         pipeline = UnifiedPipeline.from_recipe(recipe_path)
-        pipeline.recipe['_output_dir'] = str(temp_dir / "output")
+        pipeline.recipe["_output_dir"] = str(temp_dir / "output")
 
         result = pipeline.process_single(input_path)
 
@@ -486,7 +476,7 @@ output:
         # Verify output image is valid
         output_image = Image.open(result.output_path)
         assert output_image.size == sample_image.size
-        assert output_image.mode == 'RGB'
+        assert output_image.mode == "RGB"
 
     def test_pipeline_with_disabled_stages(self, temp_dir, sample_image):
         """Test pipeline with some stages disabled."""
@@ -514,12 +504,12 @@ output:
         from transformation_portal.pipeline_unified import UnifiedPipeline
 
         pipeline = UnifiedPipeline.from_recipe(recipe_path)
-        pipeline.recipe['_output_dir'] = str(temp_dir / "output")
+        pipeline.recipe["_output_dir"] = str(temp_dir / "output")
 
         result = pipeline.process_single(input_path)
 
         assert result.success
-        assert 'color_grading' in result.stages_executed
+        assert "color_grading" in result.stages_executed
 
 
 if __name__ == "__main__":

@@ -32,22 +32,22 @@ echo ""
 # Run matrix
 for img in "${IMAGES[@]}"; do
   img_name=$(basename "$img" .tif)
-  
+
   for level in "${LEVELS[@]}"; do
     output_dir="$BENCHMARK_DIR/${img_name}_png${level}"
-    
+
     echo "----------------------------------------"
     echo "Testing: $img_name | Compression: $level"
     echo "Output: $output_dir"
     echo "----------------------------------------"
-    
+
     lux-depth-v2 \
       --input "$img" \
       --output-dir "$output_dir" \
       --marketing-png-compression ${level} \
       --preset exterior_showcase \
       2>&1 | grep -E "(Done|ERROR|WARNING)" || true
-    
+
     echo ""
   done
 done

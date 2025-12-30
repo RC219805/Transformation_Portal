@@ -132,14 +132,14 @@ if $DRY_RUN; then
     log_info "Run without --dry-run to perform actual installation"
 else
     cd "$REPO_ROOT"
-    
+
     # Run the Python hook installer
     # Note: The install command doesn't support --verbose, but we can get
     # additional output from the status command if verbose is enabled
     python3 "$GIT_HOOKS_PY" install
-    
+
     INSTALL_STATUS=$?
-    
+
     if [[ $INSTALL_STATUS -eq 0 ]]; then
         log_success "Git hooks installed successfully"
     else

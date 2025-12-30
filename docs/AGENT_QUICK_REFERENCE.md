@@ -10,43 +10,43 @@
 
 ### 🎨 Pipeline Development
 ```
-@transformation-portal-specialist Add a depth-based atmospheric haze effect 
+@transformation-portal-specialist Add a depth-based atmospheric haze effect
 to the ArchitecturalDepthPipeline that increases with distance
 ```
 
 ### ⚡ Performance Optimization
 ```
-@transformation-portal-specialist The batch processor uses 18GB RAM for 4K 
+@transformation-portal-specialist The batch processor uses 18GB RAM for 4K
 images. Optimize memory usage while maintaining quality
 ```
 
 ### 🐛 Troubleshooting
 ```
-@transformation-portal-specialist Getting "CUDA out of memory" when 
+@transformation-portal-specialist Getting "CUDA out of memory" when
 processing more than 5 images. What's the best solution?
 ```
 
 ### 🎬 Video Processing
 ```
-@transformation-portal-specialist Create a new video grading preset for 
+@transformation-portal-specialist Create a new video grading preset for
 beachfront properties with warm sunset tones
 ```
 
 ### 🧪 Testing
 ```
-@transformation-portal-specialist Write comprehensive tests for the new 
+@transformation-portal-specialist Write comprehensive tests for the new
 zone-based tone mapping feature including edge cases
 ```
 
 ### 🎯 Material Response
 ```
-@transformation-portal-specialist Implement a new material detection algorithm 
+@transformation-portal-specialist Implement a new material detection algorithm
 for identifying glass surfaces in architectural renders
 ```
 
 ### 🔧 FFmpeg Workflows
 ```
-@transformation-portal-specialist Build an FFmpeg filter graph for HDR 
+@transformation-portal-specialist Build an FFmpeg filter graph for HDR
 (PQ) to SDR conversion with proper tone mapping
 ```
 

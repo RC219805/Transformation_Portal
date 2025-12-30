@@ -6,11 +6,11 @@ Complete list of all files created during Phase 2 Task 1 execution.
 
 ## Summary
 
-**Total Files**: 29  
-**Test Scripts**: 3  
-**Test Images**: 2  
-**Results & Reports**: 5  
-**Output Images**: 20  
+**Total Files**: 29
+**Test Scripts**: 3
+**Test Images**: 2
+**Results & Reports**: 5
+**Output Images**: 20
 
 ---
 

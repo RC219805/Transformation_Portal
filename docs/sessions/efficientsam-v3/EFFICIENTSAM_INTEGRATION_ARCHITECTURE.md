@@ -1,9 +1,9 @@
 # EfficientSAM Integration Architecture - Decision Document
 
-**Date**: 2025-12-12  
-**Architect**: Transformation Portal Architect  
-**Status**: RECOMMENDATION - NOT APPROVED FOR IMPLEMENTATION  
-**Risk Level**: MEDIUM-HIGH  
+**Date**: 2025-12-12
+**Architect**: Transformation Portal Architect
+**Status**: RECOMMENDATION - NOT APPROVED FOR IMPLEMENTATION
+**Risk Level**: MEDIUM-HIGH
 
 ---
 
@@ -163,14 +163,14 @@ SegFormer-B5 → Coarse material masks
 class SegmentationConfig:
     # Existing fields
     backend: str = "auto"  # auto|onnx|segformer|efficientSAM|sam_refine|heuristic
-    
+
     # EfficientSAM configuration
     efficientSAM_model: Optional[str] = None  # Path to checkpoint
     efficientSAM_variant: str = "s"  # s|ti|distilled
     efficientSAM_prompt_strategy: str = "grid"  # grid|edge_aware|adaptive
     efficientSAM_grid_density: int = 16  # Grid size (16x16 for 512px)
     efficientSAM_edge_threshold: float = 0.1  # Edge detection threshold
-    
+
     # CLIP configuration (for EfficientSAM material classification)
     clip_enabled: bool = False
     clip_model: str = "ViT-B/32"  # ViT-B/32|ViT-L/14
@@ -182,7 +182,7 @@ class SegmentationConfig:
         "stone": "stone surface, marble, granite, concrete",
         "sky": "clear sky, blue sky, clouds",
     })
-    
+
     # Hybrid mode (SegFormer + EfficientSAM)
     sam_refine_mode: bool = False  # Use SAM for boundary refinement only
     sam_refine_threshold: float = 0.5  # Min SegFormer confidence to refine
@@ -244,7 +244,7 @@ def validate_efficientsam_config(cfg: SegmentationConfig):
      - **Business value**: Better coverage of luxury real estate materials (ceramic, stucco, tile, etc.)
      - **Technical effort**: 16-24h (similar to EfficientSAM)
      - **Risk**: Lower (CLIP is proven for zero-shot classification)
-   
+
    - **Lighting Condition Detection** (Task 4): Enables adaptive tone mapping/color grading
      - **Business value**: Better handling of golden hour, dawn, twilight scenes
      - **Technical effort**: 12-14h
@@ -385,6 +385,6 @@ def validate_efficientsam_config(cfg: SegmentationConfig):
 
 ---
 
-**Signed**: Transformation Portal Architect  
-**Date**: 2025-12-12  
+**Signed**: Transformation Portal Architect
+**Date**: 2025-12-12
 **Next Review**: After Phase 2 Tasks 2+4 completion (CLIP + Lighting)

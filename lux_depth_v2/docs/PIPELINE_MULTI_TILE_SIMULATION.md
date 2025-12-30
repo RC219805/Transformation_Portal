@@ -1,17 +1,17 @@
 # LuxPipelineV2 Multi-Tile Performance Simulation
 
-**Last Updated:** 2025-12-23  
-**Purpose:** Performance prediction model for 4K+ images with multi-tile processing  
-**Baseline Data:** Single-tile 750 Picacho Kitchen (0.459s) + Glass/Stone validation (3.63-6.9s)  
+**Last Updated:** 2025-12-23
+**Purpose:** Performance prediction model for 4K+ images with multi-tile processing
+**Baseline Data:** Single-tile 750 Picacho Kitchen (0.459s) + Glass/Stone validation (3.63-6.9s)
 **Target:** 4K image (4096×2160) with 4-tile processing
 
 ---
 
 ## Executive Summary
 
-**Baseline (Single Tile):** 0.459s (minimal features)  
-**Predicted 4K (4 Tiles, Standard):** 2.8-3.5s  
-**Predicted 4K (4 Tiles, Ultra):** 5.5-7.2s  
+**Baseline (Single Tile):** 0.459s (minimal features)
+**Predicted 4K (4 Tiles, Standard):** 2.8-3.5s
+**Predicted 4K (4 Tiles, Ultra):** 5.5-7.2s
 **Primary Scaling Factors:** Materials V2 (linear), Tile Count (linear), Export (sublinear)
 
 ---
@@ -324,8 +324,8 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ \
   --enable-materials-v3 true \
   --upscaler-backend torch
 ```
-**Use Case:** Production batch processing  
-**Quality:** High  
+**Use Case:** Production batch processing
+**Quality:** High
 **Cost:** Moderate GPU usage
 
 ### Scenario 2: Disable Export Marketing (3.65s - 24% faster)
@@ -335,8 +335,8 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ \
   --tile-size 2048 \
   --export-marketing false
 ```
-**Use Case:** Internal review  
-**Savings:** 1.13s per image  
+**Use Case:** Internal review
+**Savings:** 1.13s per image
 **Quality Impact:** Minimal (master TIFF retained)
 
 ### Scenario 3: Disable Materials V2 (3.14s - 34% faster)
@@ -346,8 +346,8 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ \
   --tile-size 2048 \
   --enable-materials-v2 false
 ```
-**Use Case:** Quick batch processing  
-**Savings:** 1.64s per image  
+**Use Case:** Quick batch processing
+**Savings:** 1.64s per image
 **Quality Impact:** Moderate (V3 still active)
 
 ### Scenario 4: Quick Preview (0.96s - 80% faster)
@@ -359,8 +359,8 @@ lux-depth-v2 --preset quick_preview \
   --export-marketing false \
   --write-upscaled false
 ```
-**Use Case:** Real-time design iteration  
-**Savings:** 3.82s per image  
+**Use Case:** Real-time design iteration
+**Savings:** 3.82s per image
 **Quality Impact:** Grading-only, suitable for previews
 
 ---
@@ -388,8 +388,8 @@ lux-depth-v2 --preset quick_preview \
 | Grading | 0.6GB | 0.6GB | 0.6GB | 0.6GB | 0.6GB |
 | AI Upscaler | 1.5GB | 1.5GB | 1.6GB | 1.6GB | **1.6GB** ⚠️ |
 
-**Peak VRAM:** 1.6GB @ Tile 4 AI Upscaler  
-**Average VRAM:** 0.8GB across all stages  
+**Peak VRAM:** 1.6GB @ Tile 4 AI Upscaler
+**Average VRAM:** 0.8GB across all stages
 **Whole-Image Equivalent:** 6.4GB (4× reduction via tiling)
 
 ---

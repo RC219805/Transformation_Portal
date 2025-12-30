@@ -1,7 +1,7 @@
 # Stage 6.5 Complete: EfficientSAM V3 Observability Integration
 
-**Date**: December 13, 2025  
-**Branch**: `main`  
+**Date**: December 13, 2025
+**Branch**: `main`
 **Commit**: `fd19288`
 
 ---
@@ -330,6 +330,6 @@ This transforms Stage 6 from "guess if it worked" to "prove it with numbers."
 
 ---
 
-**Stage 6.5 Status**: ✅ Complete  
-**Next**: Stage 6 A/B execution → decision on APEX default fusion  
+**Stage 6.5 Status**: ✅ Complete
+**Next**: Stage 6 A/B execution → decision on APEX default fusion
 **Branch**: `main` (stable, all tests passing)

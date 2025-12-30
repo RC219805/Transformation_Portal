@@ -26,6 +26,7 @@ import numpy as np
 # Try to import torch
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -34,6 +35,7 @@ except ImportError:
 # Try to import matplotlib for visualization
 try:
     import matplotlib.pyplot as plt
+
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
@@ -55,6 +57,7 @@ class DepthMetrics:
         delta3: Threshold accuracy δ < 1.25³
         num_samples: Number of samples evaluated
     """
+
     abs_rel: float = 0.0
     sq_rel: float = 0.0
     rmse: float = 0.0
@@ -236,8 +239,8 @@ class DepthMetricCalculator:
         # Threshold accuracy
         ratio = np.maximum(pred / target, target / pred)
         self.delta1_sum += np.sum(ratio < 1.25)
-        self.delta2_sum += np.sum(ratio < 1.25 ** 2)
-        self.delta3_sum += np.sum(ratio < 1.25 ** 3)
+        self.delta2_sum += np.sum(ratio < 1.25**2)
+        self.delta3_sum += np.sum(ratio < 1.25**3)
 
         self.num_pixels += n
 
@@ -434,7 +437,7 @@ def create_metric_table(
         Formatted table string
     """
     if names is None:
-        names = [f"Model {i+1}" for i in range(len(metrics_list))]
+        names = [f"Model {i + 1}" for i in range(len(metrics_list))]
 
     # Header
     header = f"{'Model':<20} {'Abs Rel':>10} {'Sq Rel':>10} {'RMSE':>10} {'δ<1.25':>10} {'δ<1.25²':>10} {'δ<1.25³':>10}"

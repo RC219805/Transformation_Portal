@@ -28,21 +28,15 @@ from PIL import Image
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Run DepthAnything V2 Small F16 (Core ML) on all images in a folder."
-    )
+    parser = argparse.ArgumentParser(description="Run DepthAnything V2 Small F16 (Core ML) on all images in a folder.")
     parser.add_argument(
-        "--model-path", type=str, default="DepthAnythingV2SmallF16.mlpackage",
-        help="Path to the .mlpackage CoreML model (e.g., DepthAnythingV2SmallF16.mlpackage)"
+        "--model-path",
+        type=str,
+        default="DepthAnythingV2SmallF16.mlpackage",
+        help="Path to the .mlpackage CoreML model (e.g., DepthAnythingV2SmallF16.mlpackage)",
     )
-    parser.add_argument(
-        "--in-dir", type=str, required=True,
-        help="Input directory containing images"
-    )
-    parser.add_argument(
-        "--out-dir", type=str, required=True,
-        help="Output directory for depth results"
-    )
+    parser.add_argument("--in-dir", type=str, required=True, help="Input directory containing images")
+    parser.add_argument("--out-dir", type=str, required=True, help="Output directory for depth results")
     return parser.parse_args()
 
 
@@ -64,8 +58,7 @@ def main():
     print("Loaded model:", os.path.basename(MODEL_PATH))
 
     # Gather input files
-    exts = (".ti", ".tif", ".jpg", ".jpeg", ".png", ".webp",
-            ".TIF", ".TIFF", ".JPG", ".JPEG", ".PNG", ".WEBP")
+    exts = (".ti", ".tif", ".jpg", ".jpeg", ".png", ".webp", ".TIF", ".TIFF", ".JPG", ".JPEG", ".PNG", ".WEBP")
     paths = sorted([p for p in glob.glob(os.path.join(IN_DIR, "*")) if p.endswith(exts)])
     if not paths:
         raise SystemExit(f"No input images found in {IN_DIR}")

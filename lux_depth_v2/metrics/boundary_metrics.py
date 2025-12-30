@@ -23,7 +23,7 @@ from scipy.ndimage import distance_transform_edt, binary_dilation, binary_erosio
 @dataclass
 class BoundaryMetrics:
     """Boundary-focused metrics for segmentation quality.
-    
+
     Attributes
     ----------
     boundary_f1 : float
@@ -43,7 +43,7 @@ class BoundaryMetrics:
     boundary_pixels : int
         Number of pixels in boundary band
     """
-    
+
     boundary_f1: float
     boundary_precision: float
     boundary_recall: float
@@ -52,7 +52,7 @@ class BoundaryMetrics:
     trimap_iou_background: float
     edge_alignment: float = 0.0
     boundary_pixels: int = 0
-    
+
     def to_dict(self) -> dict:
         return {
             "boundary_f1": float(self.boundary_f1),
@@ -73,7 +73,7 @@ def extract_boundary_band(
     mode: str = "both",
 ) -> np.ndarray:
     """Extract boundary band from a binary mask.
-    
+
     Parameters
     ----------
     mask : np.ndarray
@@ -82,27 +82,27 @@ def extract_boundary_band(
         Width of boundary band in pixels
     mode : str
         'both' (inside+outside), 'inside' (dilation only), 'outside' (erosion only)
-    
+
     Returns
     -------
     np.ndarray
         Boolean mask of boundary pixels
     """
     mask_bin = mask.astype(bool, copy=False) if mask.dtype != bool else mask
-    
+
     if mode == "inside":
         dilated = binary_dilation(mask_bin, iterations=band_width_px)
         return dilated & ~mask_bin
-    
+
     elif mode == "outside":
         eroded = binary_erosion(mask_bin, iterations=band_width_px)
         return mask_bin & ~eroded
-    
+
     elif mode == "both":
         dilated = binary_dilation(mask_bin, iterations=band_width_px)
         eroded = binary_erosion(mask_bin, iterations=band_width_px)
-        return (dilated & ~eroded)
-    
+        return dilated & ~eroded
+
     else:
         raise ValueError(f"Unknown mode: {mode}")
 
@@ -115,7 +115,7 @@ def compute_boundary_f1(
     mode: str = "both",
 ) -> Tuple[float, float, float, int]:
     """Compute boundary F1 score.
-    
+
     Parameters
     ----------
     pred_mask : np.ndarray
@@ -126,7 +126,7 @@ def compute_boundary_f1(
         Boundary band width in pixels
     mode : str
         Boundary extraction mode
-    
+
     Returns
     -------
     boundary_f1 : float
@@ -135,37 +135,35 @@ def compute_boundary_f1(
     boundary_pixels : int
     """
     if pred_mask.shape != ref_mask.shape:
-        raise ValueError(
-            f"Shape mismatch: pred {pred_mask.shape} vs ref {ref_mask.shape}"
-        )
-    
+        raise ValueError(f"Shape mismatch: pred {pred_mask.shape} vs ref {ref_mask.shape}")
+
     # Binarize if needed
     pred_bin = (pred_mask >= 0.5) if pred_mask.dtype != bool else pred_mask
     ref_bin = (ref_mask >= 0.5) if ref_mask.dtype != bool else ref_mask
-    
+
     # Extract boundary bands
     pred_boundary = extract_boundary_band(pred_bin, band_width_px=band_width_px, mode=mode)
     ref_boundary = extract_boundary_band(ref_bin, band_width_px=band_width_px, mode=mode)
-    
+
     boundary_pixels = int(ref_boundary.sum())
-    
+
     if boundary_pixels == 0:
         # Degenerate case: no reference boundary
         return 1.0, 1.0, 1.0, 0
-    
+
     # Precision/recall on boundary pixels
     tp = (pred_boundary & ref_boundary).sum()
     fp = (pred_boundary & ~ref_boundary).sum()
     fn = (~pred_boundary & ref_boundary).sum()
-    
+
     precision = float(tp) / float(tp + fp) if (tp + fp) > 0 else 0.0
     recall = float(tp) / float(tp + fn) if (tp + fn) > 0 else 0.0
-    
+
     if precision + recall == 0:
         f1 = 0.0
     else:
         f1 = 2 * precision * recall / (precision + recall)
-    
+
     return f1, precision, recall, boundary_pixels
 
 
@@ -176,7 +174,7 @@ def compute_trimap_iou(
     band_width_px: int = 5,
 ) -> Tuple[float, float, float]:
     """Compute IoU separately for core, boundary, and background regions.
-    
+
     Parameters
     ----------
     pred_mask : np.ndarray
@@ -185,7 +183,7 @@ def compute_trimap_iou(
         Reference mask (bool or float [0,1])
     band_width_px : int
         Boundary band width
-    
+
     Returns
     -------
     iou_core : float
@@ -193,19 +191,17 @@ def compute_trimap_iou(
     iou_background : float
     """
     if pred_mask.shape != ref_mask.shape:
-        raise ValueError(
-            f"Shape mismatch: pred {pred_mask.shape} vs ref {ref_mask.shape}"
-        )
-    
+        raise ValueError(f"Shape mismatch: pred {pred_mask.shape} vs ref {ref_mask.shape}")
+
     # Binarize
     pred_bin = (pred_mask >= 0.5) if pred_mask.dtype != bool else pred_mask
     ref_bin = (ref_mask >= 0.5) if ref_mask.dtype != bool else ref_mask
-    
+
     # Define trimap regions from reference
     ref_core = binary_erosion(ref_bin, iterations=band_width_px)
     ref_boundary = extract_boundary_band(ref_bin, band_width_px=band_width_px, mode="both")
     ref_background = ~(ref_core | ref_boundary)
-    
+
     def _iou_region(pred: np.ndarray, ref: np.ndarray, region_mask: np.ndarray) -> float:
         """IoU restricted to a region."""
         pred_r = pred & region_mask
@@ -213,11 +209,11 @@ def compute_trimap_iou(
         inter = (pred_r & ref_r).sum()
         union = (pred_r | ref_r).sum()
         return float(inter) / float(union) if union > 0 else 1.0
-    
+
     iou_core = _iou_region(pred_bin, ref_bin, ref_core)
     iou_boundary = _iou_region(pred_bin, ref_bin, ref_boundary)
     iou_background = _iou_region(pred_bin, ref_bin, ref_background)
-    
+
     return iou_core, iou_boundary, iou_background
 
 
@@ -228,7 +224,7 @@ def compute_edge_alignment(
     band_width_px: int = 5,
 ) -> float:
     """Compute correlation between mask boundary and image gradients.
-    
+
     Parameters
     ----------
     pred_mask : np.ndarray
@@ -237,29 +233,27 @@ def compute_edge_alignment(
         Image gradient magnitude (HxW, float)
     band_width_px : int
         Boundary band width
-    
+
     Returns
     -------
     float
         Correlation coefficient [0,1] (1 = perfect alignment)
     """
     if pred_mask.shape != image_gradients.shape:
-        raise ValueError(
-            f"Shape mismatch: mask {pred_mask.shape} vs gradients {image_gradients.shape}"
-        )
-    
+        raise ValueError(f"Shape mismatch: mask {pred_mask.shape} vs gradients {image_gradients.shape}")
+
     pred_bin = (pred_mask >= 0.5) if pred_mask.dtype != bool else pred_mask
     boundary = extract_boundary_band(pred_bin, band_width_px=band_width_px, mode="both")
-    
+
     if boundary.sum() == 0:
         return 0.0
-    
+
     # Gradient values at boundary pixels
     grad_at_boundary = image_gradients[boundary]
-    
+
     # Normalize to [0,1]
     grad_norm = grad_at_boundary / (grad_at_boundary.max() + 1e-8)
-    
+
     # Mean gradient strength at boundary (higher is better)
     return float(grad_norm.mean())
 
@@ -272,7 +266,7 @@ def compute_full_boundary_metrics(
     band_width_px: int = 5,
 ) -> BoundaryMetrics:
     """Compute all boundary metrics in one call.
-    
+
     Parameters
     ----------
     pred_mask : np.ndarray
@@ -283,25 +277,19 @@ def compute_full_boundary_metrics(
         Image gradient magnitude (for edge alignment)
     band_width_px : int
         Boundary band width
-    
+
     Returns
     -------
     BoundaryMetrics
     """
-    f1, prec, rec, bpx = compute_boundary_f1(
-        pred_mask, ref_mask, band_width_px=band_width_px
-    )
-    
-    iou_core, iou_boundary, iou_bg = compute_trimap_iou(
-        pred_mask, ref_mask, band_width_px=band_width_px
-    )
-    
+    f1, prec, rec, bpx = compute_boundary_f1(pred_mask, ref_mask, band_width_px=band_width_px)
+
+    iou_core, iou_boundary, iou_bg = compute_trimap_iou(pred_mask, ref_mask, band_width_px=band_width_px)
+
     edge_align = 0.0
     if image_gradients is not None:
-        edge_align = compute_edge_alignment(
-            pred_mask, image_gradients, band_width_px=band_width_px
-        )
-    
+        edge_align = compute_edge_alignment(pred_mask, image_gradients, band_width_px=band_width_px)
+
     return BoundaryMetrics(
         boundary_f1=f1,
         boundary_precision=prec,

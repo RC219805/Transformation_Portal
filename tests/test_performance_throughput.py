@@ -20,6 +20,7 @@ Performance Targets (from docs):
     - GPU (Max): 400 images/hour (~9s per image)
     - Memory: < 2GB RSS per image
 """
+
 import json
 import time
 from pathlib import Path
@@ -39,6 +40,7 @@ torch = pytest.importorskip("torch", reason="PyTorch not installed")
 try:
     from lux_depth_v2.config import PipelineConfig, Preset, DepthMode
     from lux_depth_v2.pipeline import LuxPipelineV2
+
     LUX_DEPTH_AVAILABLE = True
 except ImportError:
     LUX_DEPTH_AVAILABLE = False
@@ -68,7 +70,7 @@ def synthetic_test_images(tmp_path) -> List[Path]:
 @pytest.fixture
 def pipeline_config_standard(tmp_path):
     """Standard quality pipeline configuration (CPU-optimized).
-    
+
     Note: Disables material segmentation for CI offline mode.
     CI sets TRANSFORMERS_OFFLINE=1 and HF_HUB_OFFLINE=1, preventing
     SegFormer model downloads. This is intentional - throughput validation
@@ -82,23 +84,23 @@ def pipeline_config_standard(tmp_path):
     config.apply_preset()
     config.device = "cpu"  # Force CPU for reproducibility
     config.upscale = 2  # Faster for testing
-    
+
     # CI offline-safe configuration (no HF downloads)
     config.segmentation.backend = "none"  # No SegFormer downloads
     config.depth.mode = DepthMode.OPTIONAL  # No Depth-Anything downloads
-    
+
     # Output configuration - unique per test
     config.output_dir = str(tmp_path / "output")
     config.skip_existing = False  # Force equal work per run
     config.overwrite = True  # Allow re-processing
-    
+
     return config
 
 
 @pytest.fixture
 def pipeline_config_max(tmp_path):
     """Max quality pipeline configuration (GPU-optimized if available).
-    
+
     Note: Disables material segmentation for CI offline mode.
     See pipeline_config_standard for rationale.
     """
@@ -110,16 +112,16 @@ def pipeline_config_max(tmp_path):
     config.apply_preset()
     config.device = "auto"  # Use GPU if available
     config.upscale = 4
-    
+
     # CI offline-safe configuration (no HF downloads)
     config.segmentation.backend = "none"  # No SegFormer downloads
     config.depth.mode = DepthMode.OPTIONAL  # No Depth-Anything downloads
-    
+
     # Output configuration - unique per test
     config.output_dir = str(tmp_path / "output")
     config.skip_existing = False  # Force equal work per run
     config.overwrite = True  # Allow re-processing
-    
+
     return config
 
 
@@ -129,7 +131,7 @@ def measure_batch_throughput(
     tmp_path: Path,
     batch_tag: str = "default",
     warmup: int = 0,
-    metrics_out: Optional[str] = None
+    metrics_out: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Measure batch processing throughput.
 
@@ -159,10 +161,10 @@ def measure_batch_throughput(
     config.output_dir = str(tmp_path / f"out_{batch_tag}")
     config.skip_existing = False
     config.overwrite = True
-    
+
     # Initialize pipeline
     pipeline = LuxPipelineV2(cfg=config)
-    
+
     # CRITICAL: Set depth mode AFTER pipeline init
     # Pipeline.__init__ calls apply_preset() which would override our setting
     pipeline.cfg.depth.mode = DepthMode.OPTIONAL
@@ -202,13 +204,13 @@ def measure_batch_throughput(
         "quality": batch_tag,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
-    
+
     # Write metrics JSON if requested
     if metrics_out:
         metrics_path = Path(metrics_out)
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         metrics_path.write_text(json.dumps(metrics, indent=2))
-    
+
     return metrics
 
 
@@ -219,12 +221,7 @@ class TestThroughputPerformance:
     @pytest.mark.performance
     @pytest.mark.throughput
     @pytest.mark.skipif(not LUX_DEPTH_AVAILABLE, reason="lux_depth_v2 not available")
-    def test_throughput_standard_quality(
-        self,
-        synthetic_test_images,
-        pipeline_config_standard,
-        tmp_path
-    ):
+    def test_throughput_standard_quality(self, synthetic_test_images, pipeline_config_standard, tmp_path):
         """Benchmark standard quality throughput (CPU baseline).
 
         Target: > 100 images/hour (< 36s per image)
@@ -237,7 +234,7 @@ class TestThroughputPerformance:
             tmp_path=tmp_path,
             batch_tag="standard_quality",
             warmup=1,
-            metrics_out="bench/results/throughput_metrics.json"
+            metrics_out="bench/results/throughput_metrics.json",
         )
 
         # Save results for baseline comparison
@@ -254,34 +251,27 @@ class TestThroughputPerformance:
         # We set a loose threshold to avoid false negatives
         min_throughput = 50  # images/hour (conservative for CI)
         assert metrics["images_per_hour"] >= min_throughput, (
-            f"Throughput {metrics['images_per_hour']:.1f} images/hour "
-            f"below minimum {min_throughput} images/hour"
+            f"Throughput {metrics['images_per_hour']:.1f} images/hour below minimum {min_throughput} images/hour"
         )
 
         # Memory constraint: < 2GB
         max_memory_mb = 2000
         assert metrics["rss_final_mb"] < max_memory_mb, (
-            f"Peak memory {metrics['rss_final_mb']:.1f}MB "
-            f"exceeds limit {max_memory_mb}MB"
+            f"Peak memory {metrics['rss_final_mb']:.1f}MB exceeds limit {max_memory_mb}MB"
         )
 
         # Log metrics for visibility
         print("\n📊 Standard Quality Throughput:")
-        print("  Images/hour: {:.1f}".format(metrics['images_per_hour']))
-        print("  Seconds/image: {:.2f}".format(metrics['seconds_per_image']))
-        print("  Memory peak: {:.1f}MB".format(metrics['rss_final_mb']))
+        print("  Images/hour: {:.1f}".format(metrics["images_per_hour"]))
+        print("  Seconds/image: {:.2f}".format(metrics["seconds_per_image"]))
+        print("  Memory peak: {:.1f}MB".format(metrics["rss_final_mb"]))
 
     @pytest.mark.ml
     @pytest.mark.performance
     @pytest.mark.throughput
     @pytest.mark.slow
     @pytest.mark.skipif(not LUX_DEPTH_AVAILABLE, reason="lux_depth_v2 not available")
-    def test_throughput_max_quality(
-        self,
-        synthetic_test_images,
-        pipeline_config_max,
-        tmp_path
-    ):
+    def test_throughput_max_quality(self, synthetic_test_images, pipeline_config_max, tmp_path):
         """Benchmark max quality throughput (GPU-accelerated if available).
 
         Target (GPU): > 300 images/hour (< 12s per image)
@@ -289,11 +279,7 @@ class TestThroughputPerformance:
         """
         # Run throughput measurement
         metrics = measure_batch_throughput(
-            images=synthetic_test_images,
-            config=pipeline_config_max,
-            tmp_path=tmp_path,
-            batch_tag="max_quality",
-            warmup=1
+            images=synthetic_test_images, config=pipeline_config_max, tmp_path=tmp_path, batch_tag="max_quality", warmup=1
         )
 
         # Save results for baseline comparison
@@ -307,14 +293,12 @@ class TestThroughputPerformance:
 
         # Adaptive threshold based on available hardware
         # GPU: expect high throughput, CPU: expect lower but acceptable throughput
-        has_gpu = torch.cuda.is_available() or (
-            hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
-        )
+        has_gpu = torch.cuda.is_available() or (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
 
         if has_gpu:
             min_throughput = 100  # images/hour (conservative GPU target)
         else:
-            min_throughput = 30   # images/hour (conservative CPU target)
+            min_throughput = 30  # images/hour (conservative CPU target)
 
         assert metrics["images_per_hour"] >= min_throughput, (
             f"Throughput {metrics['images_per_hour']:.1f} images/hour "
@@ -324,15 +308,14 @@ class TestThroughputPerformance:
         # Memory constraint: < 3GB for max quality
         max_memory_mb = 3000
         assert metrics["rss_final_mb"] < max_memory_mb, (
-            f"Peak memory {metrics['rss_final_mb']:.1f}MB "
-            f"exceeds limit {max_memory_mb}MB"
+            f"Peak memory {metrics['rss_final_mb']:.1f}MB exceeds limit {max_memory_mb}MB"
         )
 
         # Log metrics for visibility
-        print("\n📊 Max Quality Throughput ({}):".format('GPU' if has_gpu else 'CPU'))
-        print("  Images/hour: {:.1f}".format(metrics['images_per_hour']))
-        print("  Seconds/image: {:.2f}".format(metrics['seconds_per_image']))
-        print("  Memory peak: {:.1f}MB".format(metrics['rss_final_mb']))
+        print("\n📊 Max Quality Throughput ({}):".format("GPU" if has_gpu else "CPU"))
+        print("  Images/hour: {:.1f}".format(metrics["images_per_hour"]))
+        print("  Seconds/image: {:.2f}".format(metrics["seconds_per_image"]))
+        print("  Memory peak: {:.1f}MB".format(metrics["rss_final_mb"]))
 
     @pytest.mark.ml
     @pytest.mark.performance
@@ -354,11 +337,11 @@ class TestThroughputPerformance:
                 config=pipeline_config_standard,
                 tmp_path=tmp_path,
                 batch_tag=f"bs{batch_size}",  # Unique dir per batch size
-                warmup=0
+                warmup=0,
             )
             throughputs.append(metrics["images_per_hour"])
 
-            print("\nBatch size {}: {:.1f} images/hour".format(batch_size, metrics['images_per_hour']))
+            print("\nBatch size {}: {:.1f} images/hour".format(batch_size, metrics["images_per_hour"]))
 
         # Throughput should be relatively stable (within 20% variation)
         # Small batches may have initialization overhead

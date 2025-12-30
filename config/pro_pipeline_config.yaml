@@ -1,6 +1,6 @@
 # Professional Pipeline Configuration
 # ===================================
-# 
+#
 # This configuration file defines presets and parameters for the
 # Transformation Portal Professional Pipeline.
 #
@@ -35,7 +35,7 @@ stages:
     zone_tone_mapping:
       enabled: false
       operator: agx  # agx, reinhard, filmic
-  
+
   # Stage 2: AI Enhancement
   ai:
     model: stable-diffusion-xl-1.0  # sdxl, sd-1.5
@@ -50,7 +50,7 @@ stages:
       enabled: false
       method: realesrgan  # realesrgan, lanczos, bicubic
       scale: 4
-  
+
   # Stage 3: Material Response
   material:
     strength: 0.65
@@ -62,7 +62,7 @@ stages:
       - stone
     preserve_highlights: true
     micro_contrast: 0.08
-  
+
   # Stage 4: Color Grading
   grading:
     lut:
@@ -76,7 +76,7 @@ stages:
     vibrance: 0.05
     temperature: 0  # -100 to 100 (warm to cool)
     tint: 0  # -100 to 100 (green to magenta)
-  
+
   # Stage 5: Finishing
   finishing:
     sharpen:
@@ -132,7 +132,7 @@ presets:
           amount: 0.14
         clarity:
           amount: 0.18
-  
+
   interior-dramatic:
     description: "High-contrast dramatic interior rendering"
     stages:
@@ -157,7 +157,7 @@ presets:
           amount: 0.15
         micro_contrast:
           amount: 0.04
-  
+
   exterior-golden-hour:
     description: "Warm golden hour aesthetic for exteriors"
     stages:
@@ -183,7 +183,7 @@ presets:
         glow:
           enabled: true
           amount: 0.12
-  
+
   aerial-estate:
     description: "Aerial photography enhancement with depth perspective"
     stages:
@@ -216,7 +216,7 @@ presets:
           amount: 0.20
         sharpen:
           amount: 0.16
-  
+
   pool-luxury:
     description: "Pool and water feature enhancement"
     stages:
@@ -246,7 +246,7 @@ presets:
           amount: 0.22
         sharpen:
           amount: 0.18
-  
+
   kitchen-bright:
     description: "Bright, clean kitchen enhancement"
     stages:
@@ -270,7 +270,7 @@ presets:
           amount: 0.10
         sharpen:
           amount: 0.12
-  
+
   bedroom-cozy:
     description: "Warm, cozy bedroom aesthetic"
     stages:
@@ -291,7 +291,7 @@ presets:
         glow:
           enabled: true
           amount: 0.08
-  
+
   bathroom-spa:
     description: "Spa-like bathroom enhancement"
     stages:
@@ -317,7 +317,7 @@ presets:
         enabled: true
         clarity:
           amount: 0.16
-  
+
   courtyard-natural:
     description: "Natural outdoor courtyard aesthetic"
     stages:
@@ -348,13 +348,13 @@ performance:
     chunk_size: 4
     use_multiprocessing: true
     max_workers: 6
-  
+
   # Memory management
   memory:
     max_image_size: 8192  # Maximum dimension
     cache_size_mb: 2048
     aggressive_cleanup: false
-  
+
   # GPU settings
   gpu:
     prefer_fp16: true  # Use half precision for speed
@@ -367,21 +367,21 @@ output:
   naming:
     suffix: "_{preset}"  # Can include {preset}, {stage}, {timestamp}
     preserve_original_name: true
-  
+
   # Quality settings
   jpeg:
     quality: 95
     optimize: true
     progressive: true
-  
+
   png:
     compress_level: 6
     optimize: true
-  
+
   tiff:
     compression: tiff_adobe_deflate
     predictor: 2
-  
+
   # Metadata
   metadata:
     preserve_exif: true

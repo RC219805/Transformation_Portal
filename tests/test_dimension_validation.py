@@ -14,6 +14,7 @@ try:
     import typer
 
     from transformation_portal.pipelines.lux_render_pipeline import validate_sd_dimensions
+
     HAS_DEPENDENCIES = True
 except ImportError:
     HAS_DEPENDENCIES = False
@@ -43,7 +44,7 @@ class TestDimensionValidation:
         """Test that invalid dimensions raise error when auto_correct=False."""
         invalid_dims = [
             (1024, 770),  # Not multiple of 64
-            (800, 600),   # Not multiple of 64
+            (800, 600),  # Not multiple of 64
             (1000, 1000),  # Not multiple of 64
         ]
 
@@ -60,7 +61,7 @@ class TestDimensionValidation:
         """Test automatic dimension correction."""
         test_cases = [
             ((1024, 770), (1024, 768)),  # Round down to 768
-            ((800, 600), (768, 576)),    # Round down to nearest 64
+            ((800, 600), (768, 576)),  # Round down to nearest 64
             ((1000, 1000), (960, 960)),  # Round down both
         ]
 
@@ -136,8 +137,8 @@ class TestDimensionValidationIntegration:
         """Test dimensions from realistic workflows."""
         # Common aspect ratios that should work
         working_dims = [
-            (768, 512),   # 3:2 landscape (common)
-            (512, 768),   # 2:3 portrait (common)
+            (768, 512),  # 3:2 landscape (common)
+            (512, 768),  # 2:3 portrait (common)
             (1024, 576),  # 16:9 widescreen
             (1024, 768),  # 4:3 standard
         ]
@@ -171,10 +172,7 @@ try:
     from hypothesis import given
     from hypothesis import strategies as st
 
-    @given(
-        width=st.integers(min_value=64, max_value=2048),
-        height=st.integers(min_value=64, max_value=2048)
-    )
+    @given(width=st.integers(min_value=64, max_value=2048), height=st.integers(min_value=64, max_value=2048))
     def test_dimension_validation_always_returns_valid(width, height):
         """Property test: validation always returns multiples of 64."""
         result_w, result_h = validate_sd_dimensions(width, height, auto_correct=True)

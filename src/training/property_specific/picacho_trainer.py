@@ -36,6 +36,7 @@ try:
     import torch.nn.functional as F
     from torch.utils.data import Dataset, DataLoader
     from torchvision import transforms
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -49,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 class TrainingStage(Enum):
     """Training stages for property-specific enhancement."""
+
     MATERIAL_LEARNING = "stage1_material"
     ARCHITECTURAL_REFINEMENT = "stage2_architectural"
     FULL_RESOLUTION = "stage3_full_resolution"
@@ -57,6 +59,7 @@ class TrainingStage(Enum):
 @dataclass
 class TrainingConfig:
     """Configuration for property-specific training."""
+
     # Model configuration
     model_name: str = "750_picacho_enhancer"
     base_model: str = "hyper_reality_v3"
@@ -167,34 +170,18 @@ class TrainingConfig:
         training_config = data.get("training", {})
 
         config_data["model_name"] = data.get("name", defaults.model_name)
-        config_data["stage1_epochs"] = training_config.get("stage1", {}).get(
-            "epochs", defaults.stage1_epochs
-        )
-        config_data["stage2_epochs"] = training_config.get("stage2", {}).get(
-            "epochs", defaults.stage2_epochs
-        )
-        config_data["stage3_epochs"] = training_config.get("stage3", {}).get(
-            "epochs", defaults.stage3_epochs
-        )
-        config_data["stage1_lr"] = training_config.get("stage1", {}).get(
-            "learning_rate", defaults.stage1_lr
-        )
-        config_data["stage2_lr"] = training_config.get("stage2", {}).get(
-            "learning_rate", defaults.stage2_lr
-        )
-        config_data["stage3_lr"] = training_config.get("stage3", {}).get(
-            "learning_rate", defaults.stage3_lr
-        )
+        config_data["stage1_epochs"] = training_config.get("stage1", {}).get("epochs", defaults.stage1_epochs)
+        config_data["stage2_epochs"] = training_config.get("stage2", {}).get("epochs", defaults.stage2_epochs)
+        config_data["stage3_epochs"] = training_config.get("stage3", {}).get("epochs", defaults.stage3_epochs)
+        config_data["stage1_lr"] = training_config.get("stage1", {}).get("learning_rate", defaults.stage1_lr)
+        config_data["stage2_lr"] = training_config.get("stage2", {}).get("learning_rate", defaults.stage2_lr)
+        config_data["stage3_lr"] = training_config.get("stage3", {}).get("learning_rate", defaults.stage3_lr)
 
         # Paths
         if "output" in data:
-            config_data["checkpoint_dir"] = Path(data["output"].get(
-                "checkpoint_dir", str(defaults.checkpoint_dir)
-            ))
+            config_data["checkpoint_dir"] = Path(data["output"].get("checkpoint_dir", str(defaults.checkpoint_dir)))
         if "data" in data:
-            config_data["data_dir"] = Path(data["data"].get(
-                "directory", str(defaults.data_dir)
-            ))
+            config_data["data_dir"] = Path(data["data"].get("directory", str(defaults.data_dir)))
 
         return cls(**config_data)
 
@@ -208,7 +195,7 @@ class PropertyEnhancementDataset(Dataset if TORCH_AVAILABLE else object):
         split: str = "train",
         resolution: int = 512,
         include_depth: bool = True,
-        transform: Optional[Callable] = None
+        transform: Optional[Callable] = None,
     ):
         """
         Initialize dataset.
@@ -231,10 +218,11 @@ class PropertyEnhancementDataset(Dataset if TORCH_AVAILABLE else object):
 
         # Base transforms
         self.to_tensor = transforms.ToTensor() if TORCH_AVAILABLE else None
-        self.resize = transforms.Resize(
-            (resolution, resolution),
-            interpolation=transforms.InterpolationMode.LANCZOS
-        ) if TORCH_AVAILABLE else None
+        self.resize = (
+            transforms.Resize((resolution, resolution), interpolation=transforms.InterpolationMode.LANCZOS)
+            if TORCH_AVAILABLE
+            else None
+        )
 
     def _load_samples(self) -> List[Dict[str, Path]]:
         """Load sample paths from metadata."""
@@ -298,10 +286,7 @@ class PropertyEnhancementDataset(Dataset if TORCH_AVAILABLE else object):
         if "depth" in sample:
             depth = Image.open(sample["depth"])
             if self.resize:
-                depth = depth.resize(
-                    (self.resolution, self.resolution),
-                    Image.Resampling.BILINEAR
-                )
+                depth = depth.resize((self.resolution, self.resolution), Image.Resampling.BILINEAR)
             depth_array = np.array(depth).astype(np.float32)
             # Normalize 16-bit to 0-1
             if depth_array.max() > 1:
@@ -325,7 +310,7 @@ class MaterialAwareLoss(nn.Module if TORCH_AVAILABLE else object):
         perceptual_weight: float = 1.0,
         style_weight: float = 0.5,
         depth_weight: float = 0.3,
-        material_weight: float = 0.5
+        material_weight: float = 0.5,
     ):
         """
         Initialize loss function.
@@ -355,6 +340,7 @@ class MaterialAwareLoss(nn.Module if TORCH_AVAILABLE else object):
         """Initialize VGG feature extractor."""
         try:
             from torchvision.models import vgg19, VGG19_Weights
+
             vgg = vgg19(weights=VGG19_Weights.IMAGENET1K_V1).features
             # Use layers for perceptual loss
             self.vgg = nn.Sequential(*list(vgg.children())[:16])
@@ -371,7 +357,7 @@ class MaterialAwareLoss(nn.Module if TORCH_AVAILABLE else object):
         target: Tensor,
         depth_pred: Optional[Tensor] = None,
         depth_target: Optional[Tensor] = None,
-        materials: Optional[List[str]] = None
+        materials: Optional[List[str]] = None,
     ) -> Dict[str, Tensor]:
         """
         Compute combined loss.
@@ -396,9 +382,7 @@ class MaterialAwareLoss(nn.Module if TORCH_AVAILABLE else object):
             with torch.no_grad():
                 target_features = self.vgg(target)
             pred_features = self.vgg(pred)
-            losses["perceptual"] = F.mse_loss(
-                pred_features, target_features
-            ) * self.perceptual_weight
+            losses["perceptual"] = F.mse_loss(pred_features, target_features) * self.perceptual_weight
         else:
             losses["perceptual"] = torch.tensor(0.0, device=pred.device)
 
@@ -419,9 +403,7 @@ class MaterialAwareLoss(nn.Module if TORCH_AVAILABLE else object):
 
         # Material-specific losses
         if materials and self.material_weight > 0:
-            losses["material"] = self._material_loss(
-                pred, target, materials
-            ) * self.material_weight
+            losses["material"] = self._material_loss(pred, target, materials) * self.material_weight
         else:
             losses["material"] = torch.tensor(0.0, device=pred.device)
 
@@ -437,12 +419,7 @@ class MaterialAwareLoss(nn.Module if TORCH_AVAILABLE else object):
         gram = torch.bmm(features, features.transpose(1, 2))
         return gram / (c * h * w)
 
-    def _material_loss(
-        self,
-        pred: Tensor,
-        target: Tensor,
-        materials: List[str]
-    ) -> Tensor:
+    def _material_loss(self, pred: Tensor, target: Tensor, materials: List[str]) -> Tensor:
         """Compute material-specific loss component."""
         loss = torch.tensor(0.0, device=pred.device)
 
@@ -455,11 +432,11 @@ class MaterialAwareLoss(nn.Module if TORCH_AVAILABLE else object):
         # Enhanced edge-aware loss for materials that benefit from texture
         if any(m in ["stone", "wood", "fabric"] for m in materials):
             # Sobel edge detection
-            sobel_x = torch.tensor(
-                [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
-                dtype=pred.dtype,
-                device=pred.device
-            ).view(1, 1, 3, 3).repeat(3, 1, 1, 1)
+            sobel_x = (
+                torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=pred.dtype, device=pred.device)
+                .view(1, 1, 3, 3)
+                .repeat(3, 1, 1, 1)
+            )
 
             pred_edges = F.conv2d(pred, sobel_x, padding=1, groups=3)
             target_edges = F.conv2d(target, sobel_x, padding=1, groups=3)
@@ -483,11 +460,7 @@ class PicachoTrainer:
         device: Compute device
     """
 
-    def __init__(
-        self,
-        config: Optional[TrainingConfig] = None,
-        config_path: Optional[Path] = None
-    ):
+    def __init__(self, config: Optional[TrainingConfig] = None, config_path: Optional[Path] = None):
         """
         Initialize trainer.
 
@@ -556,16 +529,18 @@ class PicachoTrainer:
                 AtmosphericSynthesizer,
                 MaterialTranscendence,
                 SpatialHarmonics,
-                EnhancementConfig
+                EnhancementConfig,
             )
 
             config = EnhancementConfig()
-            self.model = nn.ModuleDict({
-                "caustics": CausticGenerator(config.quantum_caustics),
-                "atmosphere": AtmosphericSynthesizer(config.neural_atmosphere),
-                "materials": MaterialTranscendence(config.material_transcendence),
-                "harmonics": SpatialHarmonics(config.spatial_harmonics),
-            })
+            self.model = nn.ModuleDict(
+                {
+                    "caustics": CausticGenerator(config.quantum_caustics),
+                    "atmosphere": AtmosphericSynthesizer(config.neural_atmosphere),
+                    "materials": MaterialTranscendence(config.material_transcendence),
+                    "harmonics": SpatialHarmonics(config.spatial_harmonics),
+                }
+            )
 
         except ImportError:
             # Fallback to simple UNet-like model
@@ -604,10 +579,7 @@ class PicachoTrainer:
     def _count_parameters(self) -> int:
         """Count trainable parameters."""
         if isinstance(self.model, nn.ModuleDict):
-            return sum(
-                p.numel() for m in self.model.values()
-                for p in m.parameters() if p.requires_grad
-            )
+            return sum(p.numel() for m in self.model.values() for p in m.parameters() if p.requires_grad)
         return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
     def _init_optimizer(self, lr: float) -> None:
@@ -618,24 +590,15 @@ class PicachoTrainer:
             params = self.model.parameters()
 
         if self.config.optimizer == "adamw":
-            self.optimizer = torch.optim.AdamW(
-                params,
-                lr=lr,
-                weight_decay=self.config.weight_decay
-            )
+            self.optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=self.config.weight_decay)
         else:
             self.optimizer = torch.optim.Adam(params, lr=lr)
 
         # Scheduler
         if self.config.scheduler == "cosine":
-            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer,
-                T_max=self._get_stage_epochs()
-            )
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self._get_stage_epochs())
         else:
-            self.scheduler = torch.optim.lr_scheduler.StepLR(
-                self.optimizer, step_size=10, gamma=0.5
-            )
+            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.5)
 
         # Mixed precision scaler
         if self.config.use_mixed_precision and self.device == "cuda":
@@ -739,14 +702,10 @@ class PicachoTrainer:
 
         # Create dataloaders
         train_loader = self._create_dataloader(
-            split="train",
-            resolution=stage_config["resolution"],
-            batch_size=stage_config["batch_size"]
+            split="train", resolution=stage_config["resolution"], batch_size=stage_config["batch_size"]
         )
         val_loader = self._create_dataloader(
-            split="val",
-            resolution=stage_config["resolution"],
-            batch_size=stage_config["batch_size"]
+            split="val", resolution=stage_config["resolution"], batch_size=stage_config["batch_size"]
         )
 
         logger.info(f"Resolution: {stage_config['resolution']}px")
@@ -817,10 +776,7 @@ class PicachoTrainer:
 
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    self._get_parameters(),
-                    self.config.gradient_clip
-                )
+                torch.nn.utils.clip_grad_norm_(self._get_parameters(), self.config.gradient_clip)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
@@ -829,10 +785,7 @@ class PicachoTrainer:
                 loss = losses["total"]
 
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self._get_parameters(),
-                    self.config.gradient_clip
-                )
+                torch.nn.utils.clip_grad_norm_(self._get_parameters(), self.config.gradient_clip)
                 self.optimizer.step()
 
             total_loss += loss.item()
@@ -917,16 +870,8 @@ class PicachoTrainer:
 
     def _compute_normals(self, depth: Tensor) -> Tensor:
         """Compute surface normals from depth."""
-        sobel_x = torch.tensor(
-            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
-            dtype=depth.dtype,
-            device=depth.device
-        ).view(1, 1, 3, 3)
-        sobel_y = torch.tensor(
-            [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
-            dtype=depth.dtype,
-            device=depth.device
-        ).view(1, 1, 3, 3)
+        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=depth.dtype, device=depth.device).view(1, 1, 3, 3)
+        sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=depth.dtype, device=depth.device).view(1, 1, 3, 3)
 
         dx = F.conv2d(depth, sobel_x, padding=1)
         dy = F.conv2d(depth, sobel_y, padding=1)
@@ -943,18 +888,10 @@ class PicachoTrainer:
             return [p for m in self.model.values() for p in m.parameters()]
         return list(self.model.parameters())
 
-    def _create_dataloader(
-        self,
-        split: str,
-        resolution: int,
-        batch_size: int
-    ) -> DataLoader:
+    def _create_dataloader(self, split: str, resolution: int, batch_size: int) -> DataLoader:
         """Create dataloader for split."""
         dataset = PropertyEnhancementDataset(
-            data_dir=self.config.data_dir,
-            split=split,
-            resolution=resolution,
-            include_depth=True
+            data_dir=self.config.data_dir, split=split, resolution=resolution, include_depth=True
         )
 
         return DataLoader(
@@ -962,7 +899,7 @@ class PicachoTrainer:
             batch_size=batch_size,
             shuffle=(split == "train"),
             num_workers=self.config.num_workers,
-            pin_memory=self.config.pin_memory
+            pin_memory=self.config.pin_memory,
         )
 
     def _save_checkpoint(self, is_best: bool = False, final: bool = False) -> None:
@@ -999,11 +936,7 @@ class PicachoTrainer:
         return {
             "model_name": self.config.model_name,
             "property": "750 Picacho Lane",
-            "total_epochs": sum([
-                self.config.stage1_epochs,
-                self.config.stage2_epochs,
-                self.config.stage3_epochs
-            ]),
+            "total_epochs": sum([self.config.stage1_epochs, self.config.stage2_epochs, self.config.stage3_epochs]),
             "best_val_loss": self.best_val_loss,
             "final_train_loss": self.history["train_loss"][-1] if self.history["train_loss"] else None,
             "checkpoint_dir": str(self.config.checkpoint_dir),
@@ -1012,7 +945,4 @@ class PicachoTrainer:
         }
 
     def __repr__(self) -> str:
-        return (
-            f"PicachoTrainer(stage={self.current_stage.value}, "
-            f"device={self.device})"
-        )
+        return f"PicachoTrainer(stage={self.current_stage.value}, device={self.device})"

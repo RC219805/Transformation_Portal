@@ -1,7 +1,7 @@
 # Materials v2 User Guide
 
-**Version**: 2.0  
-**Date**: 2025-12-08  
+**Version**: 2.0
+**Date**: 2025-12-08
 **Status**: Production-Ready (Feature-Gated)
 
 ---
@@ -462,19 +462,19 @@ Run test batch with Materials v2, compare to v1 visually.
 
 ## FAQ
 
-**Q: Should I always use Materials v2?**  
+**Q: Should I always use Materials v2?**
 A: Materials v2 is recommended for production. It's faster and provides better quality control via confidence gating.
 
-**Q: What's the overhead of Materials v2?**  
+**Q: What's the overhead of Materials v2?**
 A: <5% overall (2-3x faster segmentation offsets confidence gating overhead).
 
-**Q: Can I use Materials v2 with Phase 1 orchestrator?**  
+**Q: Can I use Materials v2 with Phase 1 orchestrator?**
 A: Yes! Materials v2 integrates seamlessly with Phase 1 checkpointing and error recovery.
 
-**Q: Does caching work with different presets?**  
+**Q: Does caching work with different presets?**
 A: Yes! Segmentation is cached independently of post-processing presets.
 
-**Q: How do I know if segmentation is high quality?**  
+**Q: How do I know if segmentation is high quality?**
 A: Check `confidence_avg >= 0.6` and `high_confidence_pct >= 0.7` in the report.
 
 ---
@@ -489,6 +489,6 @@ For issues or questions:
 
 ---
 
-**Author**: Transformation Portal Architect  
-**Date**: 2025-12-08  
+**Author**: Transformation Portal Architect
+**Date**: 2025-12-08
 **Version**: 2.0

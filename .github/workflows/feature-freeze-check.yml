@@ -24,7 +24,7 @@ jobs:
           FREEZE_START="2025-12-20"
           FREEZE_END="2026-01-10"
           TODAY=$(date +%Y-%m-%d)
-          
+
           if [[ "$TODAY" > "$FREEZE_START" && "$TODAY" < "$FREEZE_END" ]]; then
             echo "freeze_active=true" >> $GITHUB_OUTPUT
             echo "⚠️  Feature freeze active: $FREEZE_START to $FREEZE_END"
@@ -32,7 +32,7 @@ jobs:
             echo "freeze_active=false" >> $GITHUB_OUTPUT
             echo "✅ Feature freeze not active"
           fi
-      
+
       - name: Require freeze-approved label
         if: steps.freeze_check.outputs.freeze_active == 'true'
         uses: actions/github-script@v8
@@ -43,16 +43,16 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
+
             const hasApproval = labels.some(label => label.name === 'freeze-approved');
-            
+
             // Auto-exempt test/CI infrastructure changes
             const { data: files } = await github.rest.pulls.listFiles({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
             });
-            
+
             const testInfraPatterns = [
               /^pytest\.ini$/,
               /^pyproject\.toml$/,  // Only if pytest/test config changes
@@ -63,17 +63,17 @@ jobs:
               /^tox\.ini$/,
               /^\.pre-commit-config\.yaml$/,
             ];
-            
-            const allFilesAreTestInfra = files.every(file => 
+
+            const allFilesAreTestInfra = files.every(file =>
               testInfraPatterns.some(pattern => pattern.test(file.filename))
             );
-            
+
             if (allFilesAreTestInfra && files.length > 0) {
               console.log('✅ Auto-exempt: PR only modifies test/CI infrastructure');
               console.log(`Files: ${files.map(f => f.filename).join(', ')}`);
               return;
             }
-            
+
             if (!hasApproval) {
               core.setFailed(
                 '❌ Feature freeze active (Dec 20, 2025 - Jan 10, 2026)\n\n' +
@@ -96,7 +96,7 @@ jobs:
             } else {
               console.log('✅ PR has freeze-approved label');
             }
-      
+
       - name: Post freeze reminder comment (first time)
         if: steps.freeze_check.outputs.freeze_active == 'true' && github.event.action == 'opened'
         uses: actions/github-script@v8

@@ -76,6 +76,7 @@ logger = logging.getLogger("rag_system.knowledge_feedback")
 
 class TestStatus(Enum):
     """Test execution status."""
+
     PASSED = "passed"
     FAILED = "failed"
     SKIPPED = "skipped"
@@ -86,6 +87,7 @@ class TestStatus(Enum):
 
 class MetricType(Enum):
     """Types of quality metrics."""
+
     COVERAGE_LINE = "coverage_line"
     COVERAGE_BRANCH = "coverage_branch"
     LINT_SCORE = "lint_score"
@@ -114,9 +116,7 @@ class TestResult:
     stack_trace: Optional[str] = None
 
     # Context
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     commit_sha: Optional[str] = None
     branch: Optional[str] = None
     ci_run_id: Optional[str] = None
@@ -158,9 +158,7 @@ class QualityMetric:
     file_path: Optional[str] = None
 
     # Context
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     commit_sha: Optional[str] = None
 
     # Thresholds
@@ -200,12 +198,8 @@ class KnowledgeEntry:
     content: str
 
     # Metadata
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    updated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     source: str = "ci_pipeline"
 
     # Relationships
@@ -445,16 +439,18 @@ class TestResultIngester:
                         error_message = longrepr[:500]
                         stack_trace = longrepr
 
-                results.append(TestResult(
-                    test_id=nodeid,
-                    name=name,
-                    status=status,
-                    duration_seconds=duration,
-                    file_path=file_path,
-                    class_name=class_name,
-                    error_message=error_message,
-                    stack_trace=stack_trace,
-                ))
+                results.append(
+                    TestResult(
+                        test_id=nodeid,
+                        name=name,
+                        status=status,
+                        duration_seconds=duration,
+                        file_path=file_path,
+                        class_name=class_name,
+                        error_message=error_message,
+                        stack_trace=stack_trace,
+                    )
+                )
 
             logger.info(f"Ingested {len(results)} test results from pytest JSON")
 
@@ -475,35 +471,41 @@ class TestResultIngester:
             line_rate = float(root.get("line-rate", 0))
             branch_rate = float(root.get("branch-rate", 0))
 
-            metrics.append(QualityMetric(
-                metric_type=MetricType.COVERAGE_LINE,
-                value=line_rate * 100,
-                unit="percent",
-                module="overall",
-                threshold_warning=70.0,
-                threshold_error=50.0,
-            ))
+            metrics.append(
+                QualityMetric(
+                    metric_type=MetricType.COVERAGE_LINE,
+                    value=line_rate * 100,
+                    unit="percent",
+                    module="overall",
+                    threshold_warning=70.0,
+                    threshold_error=50.0,
+                )
+            )
 
-            metrics.append(QualityMetric(
-                metric_type=MetricType.COVERAGE_BRANCH,
-                value=branch_rate * 100,
-                unit="percent",
-                module="overall",
-                threshold_warning=60.0,
-                threshold_error=40.0,
-            ))
+            metrics.append(
+                QualityMetric(
+                    metric_type=MetricType.COVERAGE_BRANCH,
+                    value=branch_rate * 100,
+                    unit="percent",
+                    module="overall",
+                    threshold_warning=60.0,
+                    threshold_error=40.0,
+                )
+            )
 
             # Per-package coverage
             for package in root.findall(".//package"):
                 pkg_name = package.get("name", "")
                 pkg_line_rate = float(package.get("line-rate", 0))
 
-                metrics.append(QualityMetric(
-                    metric_type=MetricType.COVERAGE_LINE,
-                    value=pkg_line_rate * 100,
-                    unit="percent",
-                    module=pkg_name,
-                ))
+                metrics.append(
+                    QualityMetric(
+                        metric_type=MetricType.COVERAGE_LINE,
+                        value=pkg_line_rate * 100,
+                        unit="percent",
+                        module=pkg_name,
+                    )
+                )
 
             logger.info(f"Ingested {len(metrics)} coverage metrics")
 
@@ -546,10 +548,7 @@ class QualityMetricsTracker:
         cutoff = datetime.now(timezone.utc) - timedelta(days=self.config.retention_days)
         cutoff_str = cutoff.isoformat()
 
-        self.metrics_history = [
-            m for m in self.metrics_history
-            if m.get("timestamp", "") > cutoff_str
-        ]
+        self.metrics_history = [m for m in self.metrics_history if m.get("timestamp", "") > cutoff_str]
 
         with open(self.storage_path, "w") as f:
             json.dump(self.metrics_history, f, indent=2)
@@ -587,10 +586,13 @@ class QualityMetricsTracker:
 
         # Filter relevant metrics
         filtered = [
-            m for m in self.metrics_history
-            if (m.get("metric_type") == metric_type.value and
-                m.get("timestamp", "") > cutoff_str and
-                (module is None or m.get("module") == module))
+            m
+            for m in self.metrics_history
+            if (
+                m.get("metric_type") == metric_type.value
+                and m.get("timestamp", "") > cutoff_str
+                and (module is None or m.get("module") == module)
+            )
         ]
 
         if not filtered:
@@ -608,13 +610,11 @@ class QualityMetricsTracker:
 
         # Determine trend
         if len(values) >= 3:
-            first_half_avg = statistics.mean(values[:len(values)//2])
-            second_half_avg = statistics.mean(values[len(values)//2:])
+            first_half_avg = statistics.mean(values[: len(values) // 2])
+            second_half_avg = statistics.mean(values[len(values) // 2 :])
 
             change = second_half_avg - first_half_avg
-            change_percent = (
-                (change / first_half_avg * 100) if first_half_avg != 0 else 0
-            )
+            change_percent = (change / first_half_avg * 100) if first_half_avg != 0 else 0
 
             if change_percent > 5:
                 trend = "improving"
@@ -647,29 +647,33 @@ class QualityMetricsTracker:
 
         for metric in metrics:
             if metric.threshold_error and metric.value < metric.threshold_error:
-                violations.append({
-                    "metric": metric.metric_type.value,
-                    "module": metric.module,
-                    "value": metric.value,
-                    "threshold": metric.threshold_error,
-                    "severity": "error",
-                    "message": (
-                        f"{metric.metric_type.value} ({metric.value:.1f}%) "
-                        f"below error threshold ({metric.threshold_error}%)"
-                    ),
-                })
+                violations.append(
+                    {
+                        "metric": metric.metric_type.value,
+                        "module": metric.module,
+                        "value": metric.value,
+                        "threshold": metric.threshold_error,
+                        "severity": "error",
+                        "message": (
+                            f"{metric.metric_type.value} ({metric.value:.1f}%) "
+                            f"below error threshold ({metric.threshold_error}%)"
+                        ),
+                    }
+                )
             elif metric.threshold_warning and metric.value < metric.threshold_warning:
-                violations.append({
-                    "metric": metric.metric_type.value,
-                    "module": metric.module,
-                    "value": metric.value,
-                    "threshold": metric.threshold_warning,
-                    "severity": "warning",
-                    "message": (
-                        f"{metric.metric_type.value} ({metric.value:.1f}%) "
-                        f"below warning threshold ({metric.threshold_warning}%)"
-                    ),
-                })
+                violations.append(
+                    {
+                        "metric": metric.metric_type.value,
+                        "module": metric.module,
+                        "value": metric.value,
+                        "threshold": metric.threshold_warning,
+                        "severity": "warning",
+                        "message": (
+                            f"{metric.metric_type.value} ({metric.value:.1f}%) "
+                            f"below warning threshold ({metric.threshold_warning}%)"
+                        ),
+                    }
+                )
 
         return violations
 
@@ -823,8 +827,7 @@ class FailureAnalyzer:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Only save statistics, not built-in patterns
-        custom = [p for p in self.patterns if p.pattern_id not in
-                  [bp.pattern_id for bp in self.BUILTIN_PATTERNS]]
+        custom = [p for p in self.patterns if p.pattern_id not in [bp.pattern_id for bp in self.BUILTIN_PATTERNS]]
 
         data = {
             "custom_patterns": [asdict(p) for p in custom],
@@ -855,11 +858,7 @@ class FailureAnalyzer:
             return []
 
         matches = []
-        error_text = (
-            f"{result.error_type or ''} "
-            f"{result.error_message or ''} "
-            f"{result.stack_trace or ''}"
-        )
+        error_text = f"{result.error_type or ''} {result.error_message or ''} {result.stack_trace or ''}"
 
         for pattern in self.patterns:
             if re.search(pattern.error_regex, error_text, re.IGNORECASE):
@@ -869,15 +868,17 @@ class FailureAnalyzer:
                 if result.test_id not in pattern.affected_tests:
                     pattern.affected_tests.append(result.test_id)
 
-                matches.append({
-                    "pattern_id": pattern.pattern_id,
-                    "pattern_name": pattern.name,
-                    "description": pattern.description,
-                    "resolution_hints": pattern.resolution_hints,
-                    "related_docs": pattern.related_docs,
-                    "occurrence_count": pattern.occurrence_count,
-                    "confidence": self._calculate_confidence(pattern, result),
-                })
+                matches.append(
+                    {
+                        "pattern_id": pattern.pattern_id,
+                        "pattern_name": pattern.name,
+                        "description": pattern.description,
+                        "resolution_hints": pattern.resolution_hints,
+                        "related_docs": pattern.related_docs,
+                        "occurrence_count": pattern.occurrence_count,
+                        "confidence": self._calculate_confidence(pattern, result),
+                    }
+                )
 
         if matches:
             self._save_patterns()
@@ -912,10 +913,7 @@ class FailureAnalyzer:
         results: List[TestResult],
     ) -> Dict[str, Any]:
         """Generate a summary of failures with pattern analysis."""
-        failures = [
-            r for r in results
-            if r.status in (TestStatus.FAILED, TestStatus.ERROR)
-        ]
+        failures = [r for r in results if r.status in (TestStatus.FAILED, TestStatus.ERROR)]
 
         if not failures:
             return {"status": "all_passed", "failure_count": 0}
@@ -988,7 +986,7 @@ class KnowledgeUpdater:
                 self.entries.values(),
                 key=lambda e: e.updated_at,
             )
-            for entry in sorted_entries[:len(self.entries) - self.config.max_entries]:
+            for entry in sorted_entries[: len(self.entries) - self.config.max_entries]:
                 del self.entries[entry.entry_id]
 
         data = {
@@ -1057,9 +1055,7 @@ class KnowledgeUpdater:
                     "",
                     "Resolution Hints:",
                 ]
-                content_lines.extend(
-                    f"- {hint}" for hint in match["resolution_hints"]
-                )
+                content_lines.extend(f"- {hint}" for hint in match["resolution_hints"])
 
                 entry = KnowledgeEntry(
                     entry_id=entry_id,
@@ -1117,18 +1113,20 @@ class KnowledgeUpdater:
         chunks = []
 
         for entry in self.entries.values():
-            chunks.append({
-                "chunk_id": entry.entry_id,
-                "content": entry.content,
-                "file_path": f"knowledge/{entry.entry_type}/{entry.entry_id}",
-                "chunk_type": "knowledge",
-                "metadata": {
-                    "entry_type": entry.entry_type,
-                    "keywords": entry.keywords,
-                    "source": entry.source,
-                    "related_files": entry.related_files,
-                },
-            })
+            chunks.append(
+                {
+                    "chunk_id": entry.entry_id,
+                    "content": entry.content,
+                    "file_path": f"knowledge/{entry.entry_type}/{entry.entry_id}",
+                    "chunk_type": "knowledge",
+                    "metadata": {
+                        "entry_type": entry.entry_type,
+                        "keywords": entry.keywords,
+                        "source": entry.source,
+                        "related_files": entry.related_files,
+                    },
+                }
+            )
 
         return chunks
 
@@ -1190,30 +1188,36 @@ class FeedbackReporter:
 
         # Add failure patterns if any
         if failure_summary.get("top_patterns"):
-            lines.extend([
-                "### 🔍 Detected Failure Patterns",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### 🔍 Detected Failure Patterns",
+                    "",
+                ]
+            )
             for pattern_name, count in failure_summary["top_patterns"]:
                 lines.append(f"- **{pattern_name}**: {count} occurrences")
             lines.append("")
 
         # Add resolution hints
         if failure_summary.get("resolution_hints"):
-            lines.extend([
-                "### 💡 Resolution Hints",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### 💡 Resolution Hints",
+                    "",
+                ]
+            )
             for hint in failure_summary["resolution_hints"][:5]:
                 lines.append(f"- {hint}")
             lines.append("")
 
         # Add affected files
         if failure_summary.get("affected_files"):
-            lines.extend([
-                "### 📁 Affected Files",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### 📁 Affected Files",
+                    "",
+                ]
+            )
             for file_path in failure_summary["affected_files"][:10]:
                 lines.append(f"- `{file_path}`")
 
@@ -1237,30 +1241,28 @@ class FeedbackReporter:
         branch_trends = tracker.get_trends(MetricType.COVERAGE_BRANCH, days, "overall")
 
         if line_trends.get("status") == "ok":
-            trend_emoji = {"improving": "📈", "declining": "📉", "stable": "➡️"}.get(
-                line_trends["trend"], "❓"
+            trend_emoji = {"improving": "📈", "declining": "📉", "stable": "➡️"}.get(line_trends["trend"], "❓")
+            lines.extend(
+                [
+                    "### Line Coverage",
+                    f"- **Current:** {line_trends['current']:.1f}%",
+                    f"- **Average:** {line_trends['average']:.1f}%",
+                    f"- **Trend:** {trend_emoji} {line_trends['trend']} ({line_trends['change_percent']:+.1f}%)",
+                    "",
+                ]
             )
-            lines.extend([
-                "### Line Coverage",
-                f"- **Current:** {line_trends['current']:.1f}%",
-                f"- **Average:** {line_trends['average']:.1f}%",
-                f"- **Trend:** {trend_emoji} {line_trends['trend']} "
-                f"({line_trends['change_percent']:+.1f}%)",
-                "",
-            ])
 
         if branch_trends.get("status") == "ok":
-            trend_emoji = {"improving": "📈", "declining": "📉", "stable": "➡️"}.get(
-                branch_trends["trend"], "❓"
+            trend_emoji = {"improving": "📈", "declining": "📉", "stable": "➡️"}.get(branch_trends["trend"], "❓")
+            lines.extend(
+                [
+                    "### Branch Coverage",
+                    f"- **Current:** {branch_trends['current']:.1f}%",
+                    f"- **Average:** {branch_trends['average']:.1f}%",
+                    f"- **Trend:** {trend_emoji} {branch_trends['trend']} ({branch_trends['change_percent']:+.1f}%)",
+                    "",
+                ]
             )
-            lines.extend([
-                "### Branch Coverage",
-                f"- **Current:** {branch_trends['current']:.1f}%",
-                f"- **Average:** {branch_trends['average']:.1f}%",
-                f"- **Trend:** {trend_emoji} {branch_trends['trend']} "
-                f"({branch_trends['change_percent']:+.1f}%)",
-                "",
-            ])
 
         return "\n".join(lines)
 
@@ -1352,10 +1354,7 @@ class KnowledgeEngine:
         entries_added = self.updater.add_test_results(results)
 
         # Analyze failures and add patterns
-        failures = [
-            r for r in results
-            if r.status in (TestStatus.FAILED, TestStatus.ERROR)
-        ]
+        failures = [r for r in results if r.status in (TestStatus.FAILED, TestStatus.ERROR)]
         patterns_added = self.updater.add_failure_patterns(failures, self.analyzer)
 
         # Track metrics
@@ -1409,9 +1408,7 @@ class KnowledgeEngine:
         elif report_type == "pr_context":
             results = kwargs.get("results", [])
             changed_files = kwargs.get("changed_files", [])
-            return self.reporter.generate_pr_context(
-                results, self.updater, changed_files
-            )
+            return self.reporter.generate_pr_context(results, self.updater, changed_files)
 
         else:
             return f"Unknown report type: {report_type}"
@@ -1435,9 +1432,7 @@ def main():
     """CLI entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Transformation Portal - Knowledge Engine Feedback Loop"
-    )
+    parser = argparse.ArgumentParser(description="Transformation Portal - Knowledge Engine Feedback Loop")
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -1486,14 +1481,11 @@ def main():
         print(f"  Knowledge entries: {result['entries_added']}")
         print(f"  Patterns detected: {result['patterns_detected']}")
 
-        if result['failure_summary'].get('failure_count', 0) > 0:
-            print(
-                f"\n⚠ Failures detected: "
-                f"{result['failure_summary']['failure_count']}"
-            )
+        if result["failure_summary"].get("failure_count", 0) > 0:
+            print(f"\n⚠ Failures detected: {result['failure_summary']['failure_count']}")
 
     elif args.command == "query":
-        results = engine.query(args.query, getattr(args, 'type', None))
+        results = engine.query(args.query, getattr(args, "type", None))
         print(f"\n🔍 Found {len(results)} relevant entries:\n")
         for entry in results:
             print(f"[{entry['type']}] {entry['entry_id']}")

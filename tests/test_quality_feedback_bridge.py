@@ -35,6 +35,7 @@ from transformation_portal.pipelines.quality_feedback_bridge import (
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def sample_image_np():
     """Create a sample RGB image as numpy array."""
@@ -43,11 +44,14 @@ def sample_image_np():
     g = np.linspace(0.3, 0.7, h)[:, np.newaxis]
     b = np.ones((h, w)) * 0.5
 
-    image = np.stack([
-        np.broadcast_to(r, (h, w)),
-        np.broadcast_to(g, (h, w)),
-        b,
-    ], axis=2).astype(np.float32)
+    image = np.stack(
+        [
+            np.broadcast_to(r, (h, w)),
+            np.broadcast_to(g, (h, w)),
+            b,
+        ],
+        axis=2,
+    ).astype(np.float32)
 
     return image
 
@@ -56,7 +60,7 @@ def sample_image_np():
 def sample_image_pil(sample_image_np):
     """Create a sample PIL Image."""
     img_uint8 = (sample_image_np * 255).astype(np.uint8)
-    return Image.fromarray(img_uint8, mode='RGB')
+    return Image.fromarray(img_uint8, mode="RGB")
 
 
 @pytest.fixture
@@ -91,6 +95,7 @@ def quality_bridge():
 # Quality Targets Tests
 # =============================================================================
 
+
 class TestQualityTargets:
     """Tests for QualityTargets configuration."""
 
@@ -124,6 +129,7 @@ class TestQualityTargets:
 # =============================================================================
 # Metrics Dataclass Tests
 # =============================================================================
+
 
 class TestHeuristicMetrics:
     """Tests for HeuristicMetrics dataclass."""
@@ -234,6 +240,7 @@ class TestUnifiedQualityMetrics:
 # QualityFeedbackBridge Tests
 # =============================================================================
 
+
 class TestQualityFeedbackBridge:
     """Tests for QualityFeedbackBridge class."""
 
@@ -242,7 +249,7 @@ class TestQualityFeedbackBridge:
         bridge = QualityFeedbackBridge()
 
         assert bridge.hybrid_mode is True
-        assert bridge.lpips_network == 'alex'
+        assert bridge.lpips_network == "alex"
         assert bridge.enable_material_fidelity is True
         assert bridge._perceptual_assessor is None
 
@@ -292,9 +299,7 @@ class TestQualityAssessment:
         assert isinstance(metrics, UnifiedQualityMetrics)
         assert metrics.heuristic_composite > 0
 
-    def test_assess_with_reference(
-        self, quality_bridge, sample_image_np, modified_image_np
-    ):
+    def test_assess_with_reference(self, quality_bridge, sample_image_np, modified_image_np):
         """Test assessment with reference image for LPIPS comparison."""
         metrics = quality_bridge.assess(
             enhanced=modified_image_np,
@@ -313,9 +318,7 @@ class TestQualityAssessment:
 
         assert metrics.processing_time_ms > 0
 
-    def test_assess_records_pipeline_config(
-        self, quality_bridge, sample_image_np
-    ):
+    def test_assess_records_pipeline_config(self, quality_bridge, sample_image_np):
         """Test that assessment records pipeline configuration."""
         metrics = quality_bridge.assess(
             enhanced=sample_image_np,
@@ -407,6 +410,7 @@ class TestHeuristicMetricComputation:
 # RAG Callback Tests
 # =============================================================================
 
+
 class TestRAGCallback:
     """Tests for RAG callback functionality."""
 
@@ -489,12 +493,10 @@ class TestRAGIndexing:
         metrics = UnifiedQualityMetrics(image_id="test_fail")
 
         # Mock Path.mkdir to simulate a permission error (more robust than relying on OS)
-        with patch('transformation_portal.pipelines.quality_feedback_bridge.Path.mkdir') as mock_mkdir:
+        with patch("transformation_portal.pipelines.quality_feedback_bridge.Path.mkdir") as mock_mkdir:
             mock_mkdir.side_effect = PermissionError("Permission denied")
 
-            result = index_quality_metrics_to_rag(
-                metrics, "/mock/path/that/fails"
-            )
+            result = index_quality_metrics_to_rag(metrics, "/mock/path/that/fails")
 
         # Should return False on failure
         assert result is False
@@ -503,6 +505,7 @@ class TestRAGIndexing:
 # =============================================================================
 # Pipeline Integration Tests
 # =============================================================================
+
 
 class TestPipelineCallback:
     """Tests for pipeline callback creation."""
@@ -537,6 +540,7 @@ class TestPipelineCallback:
 # 750 Picacho Preset Tests
 # =============================================================================
 
+
 class TestPicachoPreset:
     """Tests for 750 Picacho preset recognition."""
 
@@ -565,6 +569,7 @@ class TestPicachoPreset:
 # Error Handling Tests
 # =============================================================================
 
+
 class TestErrorHandling:
     """Tests for error handling scenarios."""
 
@@ -588,7 +593,7 @@ class TestErrorHandling:
         assert result.max() <= 1.0
         assert result.dtype == np.float32
 
-    @patch('transformation_portal.pipelines.quality_feedback_bridge._check_torch_available')
+    @patch("transformation_portal.pipelines.quality_feedback_bridge._check_torch_available")
     def test_torch_unavailable_fallback(self, mock_torch, sample_image_np):
         """Test graceful fallback when torch is unavailable."""
         mock_torch.return_value = False
@@ -604,12 +609,11 @@ class TestErrorHandling:
 # Integration Tests
 # =============================================================================
 
+
 class TestBridgeIntegration:
     """Integration tests for QualityFeedbackBridge."""
 
-    def test_full_assessment_workflow(
-        self, sample_image_np, modified_image_np, temp_output_dir
-    ):
+    def test_full_assessment_workflow(self, sample_image_np, modified_image_np, temp_output_dir):
         """Test complete assessment workflow."""
         # Create bridge with RAG indexing
         callback = create_rag_indexing_callback(str(temp_output_dir))
@@ -638,9 +642,7 @@ class TestBridgeIntegration:
         json_files = list(temp_output_dir.glob("*.json"))
         assert len(json_files) >= 1
 
-    def test_assessment_preserves_image_data(
-        self, quality_bridge, sample_image_np
-    ):
+    def test_assessment_preserves_image_data(self, quality_bridge, sample_image_np):
         """Test that assessment doesn't modify input image."""
         original_copy = sample_image_np.copy()
 

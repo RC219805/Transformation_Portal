@@ -27,10 +27,12 @@ from . import material_profiles
 try:
     import sys
     from pathlib import Path as _Path
+
     _repo_root = _Path(__file__).parent.parent
     if str(_repo_root / "src") not in sys.path:
         sys.path.insert(0, str(_repo_root / "src"))
     from transformation_portal.core.storage import ExportManager, ExportConfig
+
     EXPORT_MANAGER_AVAILABLE = True
 except ImportError:
     ExportManager = None
@@ -41,6 +43,7 @@ except ImportError:
 try:
     from .materials_v2 import MaterialsV2Engine, MaterialsV2Config, SegmentationResult
     from .cache_manager import MaskCacheManager
+
     MATERIALS_V2_AVAILABLE = True
 except ImportError:
     MATERIALS_V2_AVAILABLE = False
@@ -52,6 +55,7 @@ except ImportError:
 # Materials v3 imports (lazy load, disabled by default)
 try:
     from .materials_v3 import MaterialsV3Engine, MaterialsV3Config
+
     MATERIALS_V3_AVAILABLE = True
 except ImportError:
     MATERIALS_V3_AVAILABLE = False
@@ -112,7 +116,9 @@ def _resize_mods(mods: material_profiles.MaterialMods, size_hw: Tuple[int, int])
     )
 
 
-def _slice_mods(mods: material_profiles.MaterialMods, ya0: int, xa0: int, ya1: int, xa1: int) -> material_profiles.MaterialMods:
+def _slice_mods(
+    mods: material_profiles.MaterialMods, ya0: int, xa0: int, ya1: int, xa1: int
+) -> material_profiles.MaterialMods:
     """Slice mod maps to a tile region."""
     return material_profiles.MaterialMods(
         temp_offset=mods.temp_offset[:, :, ya0:ya1, xa0:xa1],
@@ -138,7 +144,7 @@ class LuxPipelineV2:
 
         # PRODUCTION SAFETY: Validate dependencies before starting
         self._validate_dependencies()
-        
+
         # PRODUCTION SAFETY: Warn if validate_ai is disabled
         if not cfg.validate_ai:
             self.logger.warning(
@@ -150,14 +156,16 @@ class LuxPipelineV2:
         self.device = torch_ops.pick_device(cfg.device)
         torch_ops.configure_torch(cfg.cudnn_benchmark)
 
-        self.autocast = (str(cfg.precision).lower() == "fp16" and self.device.type == "cuda")
+        self.autocast = str(cfg.precision).lower() == "fp16" and self.device.type == "cuda"
 
         # Backends
         self.upscaler = upscaling.create_upscaler(cfg, self.device)
         self.segmenter = create_material_segmenter(cfg.segmentation, self.device)
 
         # Post tiler
-        self.tiler = torch_ops.Tiler(tile=int(cfg.post_tile), overlap=int(cfg.post_overlap)) if int(cfg.post_tile) > 0 else None
+        self.tiler = (
+            torch_ops.Tiler(tile=int(cfg.post_tile), overlap=int(cfg.post_overlap)) if int(cfg.post_tile) > 0 else None
+        )
 
         # Materials v2 integration
         self.materials_v2_engine = None
@@ -165,17 +173,12 @@ class LuxPipelineV2:
         if MATERIALS_V2_AVAILABLE and cfg.materials_v2 and cfg.materials_v2.enabled:
             try:
                 self.materials_v2_engine = MaterialsV2Engine(
-                    config=cfg.materials_v2,
-                    device=str(self.device),
-                    logger=self.logger
+                    config=cfg.materials_v2, device=str(self.device), logger=self.logger
                 )
-                
+
                 if cfg.materials_v2.cache_enabled and cfg.materials_v2.cache_dir:
-                    self.mask_cache_manager = MaskCacheManager(
-                        cache_dir=Path(cfg.materials_v2.cache_dir),
-                        logger=self.logger
-                    )
-                
+                    self.mask_cache_manager = MaskCacheManager(cache_dir=Path(cfg.materials_v2.cache_dir), logger=self.logger)
+
                 self.logger.info(
                     f"Materials v2 enabled | "
                     f"backend={cfg.materials_v2.backend} "
@@ -190,16 +193,14 @@ class LuxPipelineV2:
         # Materials v3 integration (opt-in, disabled by default)
         # KILLSWITCH: Respect DISABLE_MATERIALS_V3 environment variable
         self.materials_v3_engine = None
-        disable_materials_v3 = os.getenv('DISABLE_MATERIALS_V3', '').lower() in ('1', 'true', 'yes')
-        
+        disable_materials_v3 = os.getenv("DISABLE_MATERIALS_V3", "").lower() in ("1", "true", "yes")
+
         if disable_materials_v3:
             self.logger.info("Materials V3 disabled via DISABLE_MATERIALS_V3 environment variable")
         elif MATERIALS_V3_AVAILABLE and cfg.materials_v3 and cfg.materials_v3.enabled:
             try:
-                self.materials_v3_engine = MaterialsV3Engine(
-                    config=cfg.materials_v3
-                )
-                
+                self.materials_v3_engine = MaterialsV3Engine(config=cfg.materials_v3)
+
                 self.logger.info(
                     f"Materials V3 enabled | "
                     f"taxonomy={cfg.materials_v3.taxonomy} "
@@ -216,21 +217,15 @@ class LuxPipelineV2:
 
         # Phase 2 Slice 2/3: ExportManager (deferred to JIT if autotune enabled)
         self.export_manager = None
-        self._export_manager_autotune_enabled = (
-            cfg.phase2 and cfg.phase2.autotune_export if cfg.phase2 else False
-        )
-        
+        self._export_manager_autotune_enabled = cfg.phase2 and cfg.phase2.autotune_export if cfg.phase2 else False
+
         if not self._export_manager_autotune_enabled and EXPORT_MANAGER_AVAILABLE and cfg.output_dir:
             # Static config: build ExportManager at init (backward compatible)
             try:
                 from transformation_portal.core.storage.export_manager import MarketingExportConfig
-                marketing_cfg = MarketingExportConfig(
-                    png_compression_level=cfg.marketing_png_compression
-                )
-                export_config = ExportConfig(
-                    output_dir=Path(cfg.output_dir),
-                    marketing_config=marketing_cfg
-                )
+
+                marketing_cfg = MarketingExportConfig(png_compression_level=cfg.marketing_png_compression)
+                export_config = ExportConfig(output_dir=Path(cfg.output_dir), marketing_config=marketing_cfg)
                 self.export_manager = ExportManager(export_config, io_utils)
                 self.logger.info("ExportManager initialized (static config)")
             except Exception as e:
@@ -248,17 +243,18 @@ class LuxPipelineV2:
         """PRODUCTION SAFETY: Validate dependencies against vulnerable packages."""
         try:
             import importlib.metadata
+
             # Check for vulnerable packages
             vulnerable_packages = ["basicsr", "realesrgan", "gfpgan"]
             found_vulnerable = []
-            
+
             for pkg in vulnerable_packages:
                 try:
                     version = importlib.metadata.version(pkg)
                     found_vulnerable.append(f"{pkg}=={version}")
                 except importlib.metadata.PackageNotFoundError:
                     pass
-            
+
             if found_vulnerable:
                 msg = (
                     f"⚠️  SECURITY WARNING: Vulnerable packages detected: {', '.join(found_vulnerable)}\n"
@@ -274,18 +270,15 @@ class LuxPipelineV2:
     def _collect_reproducibility_metadata(self) -> Dict[str, object]:
         """Collect reproducibility metadata for production stamping."""
         metadata: Dict[str, object] = {}
-        
+
         # Git commit hash
         try:
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                capture_output=True, text=True, timeout=2, check=False
-            )
+            result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=2, check=False)
             if result.returncode == 0:
                 metadata["git_commit"] = result.stdout.strip()
         except Exception:
             pass
-        
+
         # Config hash (deterministic)
         try:
             cfg_dict = asdict(self.cfg)
@@ -293,10 +286,11 @@ class LuxPipelineV2:
             metadata["config_hash"] = hashlib.sha256(cfg_json.encode()).hexdigest()[:16]
         except Exception:
             pass
-        
+
         # Device info
         try:
             import torch
+
             metadata["device"] = str(self.device)
             if torch.cuda.is_available() and self.device.type == "cuda":
                 metadata["gpu_name"] = torch.cuda.get_device_name(self.device)
@@ -305,29 +299,30 @@ class LuxPipelineV2:
                 metadata["gpu_name"] = "Apple Silicon (MPS)"
         except Exception:
             metadata["device"] = str(getattr(self, "device", "unknown"))
-        
+
         # Python version
         metadata["python_version"] = platform.python_version()
-        
+
         # PyTorch version
         try:
             import torch
+
             metadata["torch_version"] = torch.__version__
         except Exception:
             pass
-        
+
         # Model versions
         metadata["upscaler_backend"] = self.cfg.upscaler_backend
         if self.cfg.model_path:
             metadata["model_path"] = str(self.cfg.model_path)
             metadata["model_sha256"] = self.cfg.model_sha256 or "not_specified"
-        
+
         # Tiling settings
         metadata["post_tile"] = self.cfg.post_tile
         metadata["post_overlap"] = self.cfg.post_overlap
         metadata["upscale_tile"] = self.cfg.tile
         metadata["upscale_tile_pad"] = self.cfg.tile_pad
-        
+
         return metadata
 
     def _sync_for_timing(self) -> None:
@@ -336,6 +331,7 @@ class LuxPipelineV2:
             return
         try:
             import torch
+
             d = str(getattr(self, "device", "")).lower()
             if "cuda" in d and torch.cuda.is_available():
                 torch.cuda.synchronize()
@@ -414,7 +410,12 @@ class LuxPipelineV2:
             preview_path = out_dir / f"{stem}_preview.jpg"
             report_path = out_dir / f"{stem}_report.json"
 
-        if cfg.skip_existing and master_path.exists() and up_path.exists() and (marketing_path.exists() or not cfg.save_marketing_png):
+        if (
+            cfg.skip_existing
+            and master_path.exists()
+            and up_path.exists()
+            and (marketing_path.exists() or not cfg.save_marketing_png)
+        ):
             self.logger.info(f"skip_existing: {img_path.name}")
             return {"status": "skipped", "image": str(img_path)}
 
@@ -424,10 +425,8 @@ class LuxPipelineV2:
             H, W = rgb01.shape[:2]
         float_gb = (H * W * 3 * 4) / 1e9
         if float_gb > float(cfg.warn_float_gb):
-            self.logger.warning(
-                f"Large image {W}x{H} may stress RAM/VRAM: ~{float_gb:.2f} GB per float32 RGB buffer"
-            )
-        
+            self.logger.warning(f"Large image {W}x{H} may stress RAM/VRAM: ~{float_gb:.2f} GB per float32 RGB buffer")
+
         # Phase 2 Slice 3: Build ExportManager JIT with autotune (if enabled)
         if self._export_manager_autotune_enabled and self.export_manager is None and EXPORT_MANAGER_AVAILABLE:
             with self._stage(report, "export/autotune"):
@@ -436,14 +435,11 @@ class LuxPipelineV2:
                         autotune_export_config,
                         compute_image_stats,
                     )
-                    
+
                     # Compute image stats
                     use_complexity = cfg.phase2.autotune_use_complexity if cfg.phase2 else True
-                    image_stats = compute_image_stats(
-                        img_path,
-                        rgb_array=rgb01 if use_complexity else None
-                    )
-                    
+                    image_stats = compute_image_stats(img_path, rgb_array=rgb01 if use_complexity else None)
+
                     # Autotune export config
                     export_config = autotune_export_config(
                         output_dir=Path(cfg.output_dir),
@@ -453,9 +449,9 @@ class LuxPipelineV2:
                         enable_adaptive=True,
                         marketing_png_compression=cfg.marketing_png_compression,
                     )
-                    
+
                     self.export_manager = ExportManager(export_config, io_utils)
-                    
+
                     # Store autotune metadata for report
                     report["export_autotune"] = {
                         "enabled": True,
@@ -472,8 +468,10 @@ class LuxPipelineV2:
                             "use_atomic_report_writes": export_config.use_atomic_report_writes,
                         },
                     }
-                    
-                    complexity_str = f"{image_stats.scene_complexity:.3f}" if image_stats.scene_complexity is not None else "N/A"
+
+                    complexity_str = (
+                        f"{image_stats.scene_complexity:.3f}" if image_stats.scene_complexity is not None else "N/A"
+                    )
                     self.logger.info(
                         f"ExportManager autotuned | {image_stats.megapixels:.1f}MP "
                         f"complexity={complexity_str} "
@@ -493,10 +491,10 @@ class LuxPipelineV2:
         with self._stage(report, "io/read_depth"):
             if depth_path is None:
                 depth_path = _find_depth(cfg.depth_dir, stem)
-            
+
             depth01 = None
             depth_provenance = {}  # Commit 3: Depth provenance tracking
-            
+
             # Try to load existing depth
             if depth_path and Path(depth_path).exists():
                 depth01 = io_utils.read_depth_u16(Path(depth_path))
@@ -511,38 +509,32 @@ class LuxPipelineV2:
             # REQUIRED mode: fail fast if depth missing
             elif cfg.depth.mode == DepthMode.REQUIRED or cfg.strict_depth:
                 raise FileNotFoundError(
-                    f"Depth required but missing for {img_path.name} "
-                    f"(DepthMode.REQUIRED or strict_depth=True)"
+                    f"Depth required but missing for {img_path.name} (DepthMode.REQUIRED or strict_depth=True)"
                 )
             # Auto-generate if missing and mode=AUTO
             elif cfg.depth.mode == DepthMode.AUTO:
                 self.logger.info(f"Depth missing for {img_path.name}, auto-generating (mode=AUTO)...")
-                
+
                 # Import depth inference here (lazy load)
                 try:
                     from .depth_inference import create_tiled_estimator
                     from .depth_cache_manager import DepthCacheManager
-                    
+
                     # Initialize cache if enabled
                     cache_mgr = None
                     if cfg.depth.enable_cache:
-                        cache_mgr = DepthCacheManager(
-                            cache_dir=Path(cfg.depth.cache_dir),
-                            logger=self.logger
-                        )
-                    
+                        cache_mgr = DepthCacheManager(cache_dir=Path(cfg.depth.cache_dir), logger=self.logger)
+
                     # Generate config fingerprint for cache key
                     params_fingerprint = cfg._cfg_fingerprint()
-                    
+
                     # Check cache
                     cache_key = None
                     if cache_mgr:
                         cache_key = cache_mgr.compute_cache_key(
-                            img_path=img_path,
-                            model_name=cfg.depth.auto_model,
-                            params_fingerprint=params_fingerprint
+                            img_path=img_path, model_name=cfg.depth.auto_model, params_fingerprint=params_fingerprint
                         )
-                        
+
                         if cache_mgr.is_cached(cache_key):
                             cached = cache_mgr.load(cache_key)
                             if cached:
@@ -556,12 +548,13 @@ class LuxPipelineV2:
                                     "runtime_ms": None,
                                 }
                                 self.logger.info(f"✓ Depth loaded from cache: {cache_key}")
-                    
+
                     # Generate if not cached
                     if depth01 is None:
                         import time as time_module
+
                         t0_depth = time_module.perf_counter()
-                        
+
                         # Create tiled estimator
                         estimator = create_tiled_estimator(
                             tile_size=cfg.depth.auto_tile_size,
@@ -571,22 +564,20 @@ class LuxPipelineV2:
                             use_edge_snapping=cfg.depth.auto_use_edge_snapping,
                             model_name=cfg.depth.auto_model,
                         )
-                        
+
                         # Estimate depth
                         depth01 = estimator.estimate_depth(rgb01)
-                        
+
                         runtime_ms = (time_module.perf_counter() - t0_depth) * 1000
-                        
+
                         # Compute confidence proxy (edge alignment)
                         confidence_proxy = None
                         try:
                             confidence_proxy = estimator.compute_edge_alignment(rgb01, depth01)
                         except Exception as exc:
                             # Best-effort metric: log and continue without confidence proxy
-                            self.logger.warning(
-                                "Failed to compute edge-alignment confidence proxy: %s", exc
-                            )
-                        
+                            self.logger.warning("Failed to compute edge-alignment confidence proxy: %s", exc)
+
                         depth_provenance = {
                             "source": "generated",  # AUTO generated this run
                             "path": None,
@@ -595,7 +586,7 @@ class LuxPipelineV2:
                             "cache_key": cache_key,
                             "runtime_ms": runtime_ms,
                         }
-                        
+
                         # Save to cache
                         if cache_mgr and cache_key:
                             cache_mgr.save(
@@ -610,12 +601,10 @@ class LuxPipelineV2:
                                 confidence_proxy=confidence_proxy or 0.0,
                             )
                             self.logger.info(f"✓ Depth saved to cache: {cache_key}")
-                        
+
                         conf_str = f"{confidence_proxy:.3f}" if confidence_proxy is not None else "N/A"
-                        self.logger.info(
-                            f"✓ Depth autogenerated: {runtime_ms:.1f}ms, confidence={conf_str}"
-                        )
-                
+                        self.logger.info(f"✓ Depth autogenerated: {runtime_ms:.1f}ms, confidence={conf_str}")
+
                 except ImportError as e:
                     self.logger.error(f"Depth auto-generation failed (missing dependencies): {e}")
                     strict = cfg.strict_depth or (cfg.depth.mode == DepthMode.REQUIRED)
@@ -666,10 +655,10 @@ class LuxPipelineV2:
         with self._stage(report, "material/segmentation"):
             mods0: Optional[material_profiles.MaterialMods] = None
             masks = None  # Initialize for Materials V3 access
-            
+
             # Run segmentation if either legacy material OR Materials V3 is enabled
-            run_segmentation = (cfg.enable_material or self.materials_v3_engine is not None)
-            
+            run_segmentation = cfg.enable_material or self.materials_v3_engine is not None
+
             if run_segmentation and self.segmenter is not None:
                 try:
                     masks = self.segmenter.predict(rgb_t)
@@ -680,12 +669,12 @@ class LuxPipelineV2:
                     self.logger.exception(f"Material segmentation failed for {img_path.name}: {e}")
                     mods0 = None
                     masks = None
-        
+
         # Stage 3b: Materials v2 integration (NEW)
         materials_v2_result = None
         materials_v2_metadata = {}
         materials_precedence = []  # Week 2: Materials precedence tracking
-        
+
         if self.materials_v2_engine is not None:
             with self._stage(report, "material/materials_v2"):
                 try:
@@ -693,7 +682,7 @@ class LuxPipelineV2:
                     cfg_fingerprint = cfg._cfg_fingerprint()
                     task_id = f"{stem}_materials_v2_{cfg_fingerprint}"
                     materials_precedence.append("materials_v2")
-                    
+
                     # Check cache first
                     cached_result = None
                     if self.mask_cache_manager is not None:
@@ -708,30 +697,30 @@ class LuxPipelineV2:
                                     cached_result = cached_data
                         except Exception as e:
                             self.logger.debug(f"Cache lookup failed: {e}")
-                    
+
                     # Generate if not cached
                     if cached_result is None:
                         # Perform segmentation
                         materials_v2_result = self.materials_v2_engine.segment_with_confidence(
                             image=rgb01_input,  # Use immutable input
-                            task_id=task_id
+                            task_id=task_id,
                         )
-                        
+
                         # Store metadata
                         materials_v2_metadata = {
-                            'confidence_avg': materials_v2_result.metrics.confidence_avg,
-                            'confidence_min': materials_v2_result.metrics.confidence_min,
-                            'confidence_max': materials_v2_result.metrics.confidence_max,
-                            'high_confidence_pct': materials_v2_result.metrics.high_confidence_pct,
-                            'low_confidence_pct': materials_v2_result.metrics.low_confidence_pct,
-                            'coverage_ratio': materials_v2_result.metrics.coverage_ratio,
-                            'material_counts': materials_v2_result.metrics.material_counts,
-                            'is_high_quality': materials_v2_result.metrics.is_high_quality(),
-                            'original_size': materials_v2_result.original_size,
-                            'segmentation_size': materials_v2_result.segmentation_size,
-                            'upsampled': materials_v2_result.upsampled,
+                            "confidence_avg": materials_v2_result.metrics.confidence_avg,
+                            "confidence_min": materials_v2_result.metrics.confidence_min,
+                            "confidence_max": materials_v2_result.metrics.confidence_max,
+                            "high_confidence_pct": materials_v2_result.metrics.high_confidence_pct,
+                            "low_confidence_pct": materials_v2_result.metrics.low_confidence_pct,
+                            "coverage_ratio": materials_v2_result.metrics.coverage_ratio,
+                            "material_counts": materials_v2_result.metrics.material_counts,
+                            "is_high_quality": materials_v2_result.metrics.is_high_quality(),
+                            "original_size": materials_v2_result.original_size,
+                            "segmentation_size": materials_v2_result.segmentation_size,
+                            "upsampled": materials_v2_result.upsampled,
                         }
-                        
+
                         # Save to cache if enabled
                         if self.mask_cache_manager is not None:
                             try:
@@ -741,7 +730,7 @@ class LuxPipelineV2:
                                     input_hash=input_hash,
                                     masks=materials_v2_result.masks,
                                     confidences=materials_v2_result.confidences,
-                                    metadata=materials_v2_metadata
+                                    metadata=materials_v2_metadata,
                                 )
                                 self.logger.debug(f"Materials v2 saved to cache: {task_id}")
                             except Exception as e:
@@ -749,35 +738,33 @@ class LuxPipelineV2:
                     else:
                         # Use cached result
                         materials_v2_result = cached_result
-                        materials_v2_metadata = cached_result.get('metadata', {}) if isinstance(cached_result, dict) else {}
-                    
+                        materials_v2_metadata = cached_result.get("metadata", {}) if isinstance(cached_result, dict) else {}
+
                 except Exception as e:
                     # Graceful fallback: log warning and continue without Materials v2
                     self.logger.warning(f"Materials v2 failed for {img_path.name}: {e}; continuing without")
                     materials_v2_result = None
-                    materials_v2_metadata = {'error': str(e), 'fallback': True}
+                    materials_v2_metadata = {"error": str(e), "fallback": True}
 
         # Stage 3c: Materials V3 integration (NEW: PR-3A plan mode + PR-4B pixel ops)
         materials_v3_metadata = {}
         materials_v3_response_plan = {}
         materials_v3_pixel_ops = {}
-        
+
         if self.materials_v3_engine is not None:
             with self._stage(report, "material/materials_v3"):
                 try:
                     # Week 2: Explicit precedence - prefer V2 masks when available
-                    seg_result_for_v3 = {
-                        'materials': {}
-                    }
-                    
+                    seg_result_for_v3 = {"materials": {}}
+
                     # Priority 1: Use Materials V2 masks if available
-                    if materials_v2_result is not None and hasattr(materials_v2_result, 'masks'):
+                    if materials_v2_result is not None and hasattr(materials_v2_result, "masks"):
                         materials_precedence.append("materials_v3_using_v2_masks")
                         # Convert V2 masks to V3 format
                         for material_name, mask_v2 in materials_v2_result.masks.items():
-                            seg_result_for_v3['materials'][material_name] = mask_v2.astype(np.float32)
+                            seg_result_for_v3["materials"][material_name] = mask_v2.astype(np.float32)
                         self.logger.info(f"Materials V3 using V2 masks ({len(seg_result_for_v3['materials'])} materials)")
-                    
+
                     # Priority 2: Fallback to legacy segmenter masks
                     elif masks is not None and self.segmenter is not None:
                         materials_precedence.append("materials_v3_using_legacy_masks")
@@ -791,34 +778,34 @@ class LuxPipelineV2:
                                     mask_np = mask_np[0, 0]
                                 elif mask_np.ndim == 3:  # (1,H,W)
                                     mask_np = mask_np[0]
-                                seg_result_for_v3['materials'][material_name] = mask_np.astype(np.float32)
+                                seg_result_for_v3["materials"][material_name] = mask_np.astype(np.float32)
                             except Exception as e:
                                 self.logger.debug(f"Failed to convert mask {material_name}: {e}")
                         self.logger.info(f"Materials V3 using legacy masks ({len(seg_result_for_v3['materials'])} materials)")
                     else:
                         materials_precedence.append("materials_v3_no_masks")
-                    
+
                     # Call Materials V3 engine (plan mode + optional pixel ops)
                     v3_result = self.materials_v3_engine.process(
                         image=rgb01_input,  # Use immutable input for analysis
                         segmentation_result=seg_result_for_v3,
-                        depth_map=depth01 if depth01 is not None else None
+                        depth_map=depth01 if depth01 is not None else None,
                     )
-                    
+
                     # Extract metadata from V3 result
                     # FIX: V3 engine emits 'materials_v3', not 'materials_v3_metadata'
-                    if 'materials_v3' in v3_result:
-                        materials_v3_metadata = v3_result['materials_v3']
-                    elif 'materials_v3_metadata' in v3_result:
+                    if "materials_v3" in v3_result:
+                        materials_v3_metadata = v3_result["materials_v3"]
+                    elif "materials_v3_metadata" in v3_result:
                         # Fallback for backward compatibility
-                        materials_v3_metadata = v3_result['materials_v3_metadata']
-                    
-                    if 'materials_v3_response_plan' in v3_result:
-                        materials_v3_response_plan = v3_result['materials_v3_response_plan']
-                    
-                    if 'materials_v3_pixel_ops' in v3_result:
-                        materials_v3_pixel_ops = v3_result['materials_v3_pixel_ops']
-                    
+                        materials_v3_metadata = v3_result["materials_v3_metadata"]
+
+                    if "materials_v3_response_plan" in v3_result:
+                        materials_v3_response_plan = v3_result["materials_v3_response_plan"]
+
+                    if "materials_v3_pixel_ops" in v3_result:
+                        materials_v3_pixel_ops = v3_result["materials_v3_pixel_ops"]
+
                     # Apply pixel operations if enabled (PR-4B)
                     # This modifies rgb01_work in-place if glass response is applied
                     enhanced_rgb01, pixel_ops_stats = self.materials_v3_engine.apply_glass_response_if_enabled(
@@ -826,38 +813,40 @@ class LuxPipelineV2:
                         segmentation_result=v3_result,
                         response_plan=materials_v3_response_plan,
                     )
-                    
+
                     # If pixel ops were applied, rebuild rgb_t for downstream grading/upscaling
-                    if pixel_ops_stats.get('enabled', False):
+                    if pixel_ops_stats.get("enabled", False):
                         rgb01_work = enhanced_rgb01  # Update work copy
                         rgb_t = torch_ops.to_torch_rgb(rgb01_work, self.device)
-                        self.logger.info(f"Materials V3 pixel ops applied to {img_path.name}: {pixel_ops_stats.get('applied_to', [])}")
+                        self.logger.info(
+                            f"Materials V3 pixel ops applied to {img_path.name}: {pixel_ops_stats.get('applied_to', [])}"
+                        )
                         materials_v3_pixel_ops = pixel_ops_stats
-                    
+
                     # Apply stone pixel operations if enabled (PR-4D)
                     enhanced_rgb01_stone, stone_ops_stats = self.materials_v3_engine.apply_stone_response_if_enabled(
                         image=rgb01_work,  # Use mutable work copy
                         segmentation_result=v3_result,
                         response_plan=materials_v3_response_plan,
                     )
-                    
+
                     # If stone ops were applied, rebuild rgb_t
-                    if stone_ops_stats.get('applied', False):
+                    if stone_ops_stats.get("applied", False):
                         rgb01_work = enhanced_rgb01_stone  # Update work copy
                         rgb_t = torch_ops.to_torch_rgb(rgb01_work, self.device)
                         self.logger.info(f"Materials V3 stone ops applied to {img_path.name}: {stone_ops_stats}")
                         # Merge stone stats into materials_v3_pixel_ops
                         if materials_v3_pixel_ops:
-                            materials_v3_pixel_ops['stone'] = stone_ops_stats
+                            materials_v3_pixel_ops["stone"] = stone_ops_stats
                         else:
-                            materials_v3_pixel_ops = {'stone': stone_ops_stats}
-                    
+                            materials_v3_pixel_ops = {"stone": stone_ops_stats}
+
                     self.logger.debug(f"Materials V3 processed: {img_path.name}")
-                    
+
                 except Exception as e:
                     # Graceful fallback: log warning and continue without Materials V3
                     self.logger.warning(f"Materials V3 failed for {img_path.name}: {e}; continuing without")
-                    materials_v3_metadata = {'error': str(e), 'fallback': True}
+                    materials_v3_metadata = {"error": str(e), "fallback": True}
 
         # Grade at original resolution
         with self._stage(report, "grade/master"):
@@ -868,7 +857,7 @@ class LuxPipelineV2:
                     master_t = torch_ops.material_highlight_compress(master_t, mods0.highlight_compress, knee=0.85)
 
             master01 = torch_ops.from_torch_rgb(master_t)
-        
+
         # Write master and preview only if enabled
         if cfg.write_outputs:
             with self._stage(report, "export_master"):
@@ -883,6 +872,7 @@ class LuxPipelineV2:
                 if cfg.save_preview_jpg:
                     try:
                         import cv2
+
                         scale = float(cfg.preview_scale)
                         if 0 < scale < 1.0:
                             ph, pw = int(round(H * scale)), int(round(W * scale))
@@ -904,12 +894,14 @@ class LuxPipelineV2:
                     self.logger.debug("Materials v2 resources released before upscaling")
                 except Exception as e:
                     self.logger.debug(f"Materials v2 cleanup failed: {e}")
-        
+
         # Upscaling path
         with self._stage(report, "upscale/base"):
             # Base upsample: GPU bicubic
             with torch_ops.maybe_autocast(self.autocast, self.device):
-                base_up = torch_ops.resize(master_t, (H * cfg.upscale, W * cfg.upscale), mode="bicubic", autocast=True).clamp(0.0, 1.0)
+                base_up = torch_ops.resize(master_t, (H * cfg.upscale, W * cfg.upscale), mode="bicubic", autocast=True).clamp(
+                    0.0, 1.0
+                )
 
         ai_up = base_up
         ai_status = "none"
@@ -924,7 +916,7 @@ class LuxPipelineV2:
                     ai_status = "fallback_bicubic"
 
         # Validate AI upscaler drift (optional)
-        use_ai_details = (cfg.upscaler_backend != "none")
+        use_ai_details = cfg.upscaler_backend != "none"
         color_diff = None
         luma_diff = None
         if cfg.validate_ai and use_ai_details:
@@ -985,7 +977,7 @@ class LuxPipelineV2:
                         self.export_manager.write_upscaled(stem, out01)
                     else:
                         io_utils.atomic_write_rgb16_tiff(up_path, out01)
-            
+
             with self._stage(report, "export_marketing"):
                 if cfg.save_marketing_png:
                     if self.export_manager:
@@ -997,53 +989,55 @@ class LuxPipelineV2:
         marketing_metadata = None
         if self.export_manager and cfg.save_marketing_png:
             marketing_metadata = self.export_manager.get_marketing_metadata()
-        
+
         # Update report with final status
-        report.update({
-            "status": "ok",
-            # Week 1: Depth provenance (prevents silent quality degradation)
-            "depth_provenance": depth_provenance,
-            "depth_provided": depth01 is not None,
-            "depth_source": depth_provenance.get("source"),
-            "depth_model": depth_provenance.get("model"),
-            "depth_confidence_proxy": depth_provenance.get("confidence_proxy"),
-            "depth_cache_key": depth_provenance.get("cache_key"),
-            "depth_runtime_ms": depth_provenance.get("runtime_ms"),
-            "zone_weights": w.source,
-            # Materials V3 depth conditioning
-            "materials_v3_depth_used": bool(depth01 is not None and self.materials_v3_engine is not None),
-            # Week 2: Materials precedence tracking
-            "materials_precedence": materials_precedence if materials_precedence else None,
-            "material_mods": mods0.source if mods0 is not None else None,
-            "materials_v2_enabled": bool(self.materials_v2_engine),
-            "materials_v2_metadata": materials_v2_metadata if materials_v2_metadata else None,
-            "materials_v3_enabled": bool(self.materials_v3_engine),
-            "materials_v3_metadata": materials_v3_metadata if materials_v3_metadata else None,
-            "materials_v3_response_plan": materials_v3_response_plan if materials_v3_response_plan else None,
-            "materials_v3_pixel_ops": materials_v3_pixel_ops if materials_v3_pixel_ops else None,
-            "upscaler": ai_status,
-            "ai_color_diff": color_diff,
-            "ai_luma_diff": luma_diff,
-            "timing_s": round(time.time() - t0, 3),
-            "config": _config_to_json(cfg),
-            "write_outputs": bool(cfg.write_outputs),
-            "marketing_export": marketing_metadata,
-        })
+        report.update(
+            {
+                "status": "ok",
+                # Week 1: Depth provenance (prevents silent quality degradation)
+                "depth_provenance": depth_provenance,
+                "depth_provided": depth01 is not None,
+                "depth_source": depth_provenance.get("source"),
+                "depth_model": depth_provenance.get("model"),
+                "depth_confidence_proxy": depth_provenance.get("confidence_proxy"),
+                "depth_cache_key": depth_provenance.get("cache_key"),
+                "depth_runtime_ms": depth_provenance.get("runtime_ms"),
+                "zone_weights": w.source,
+                # Materials V3 depth conditioning
+                "materials_v3_depth_used": bool(depth01 is not None and self.materials_v3_engine is not None),
+                # Week 2: Materials precedence tracking
+                "materials_precedence": materials_precedence if materials_precedence else None,
+                "material_mods": mods0.source if mods0 is not None else None,
+                "materials_v2_enabled": bool(self.materials_v2_engine),
+                "materials_v2_metadata": materials_v2_metadata if materials_v2_metadata else None,
+                "materials_v3_enabled": bool(self.materials_v3_engine),
+                "materials_v3_metadata": materials_v3_metadata if materials_v3_metadata else None,
+                "materials_v3_response_plan": materials_v3_response_plan if materials_v3_response_plan else None,
+                "materials_v3_pixel_ops": materials_v3_pixel_ops if materials_v3_pixel_ops else None,
+                "upscaler": ai_status,
+                "ai_color_diff": color_diff,
+                "ai_luma_diff": luma_diff,
+                "timing_s": round(time.time() - t0, 3),
+                "config": _config_to_json(cfg),
+                "write_outputs": bool(cfg.write_outputs),
+                "marketing_export": marketing_metadata,
+            }
+        )
 
         # Backward compatibility alias
         report["stage_times"] = report.get("stage_times_sec", {})
-        
+
         # Phase 2 timing instrumentation:
         # - timing_s: total execution time (float, preserved for backward compatibility)
         # - timing_stages_s: per-stage timings (dict[str, float])
         report["timing_stages_s"] = report.get("stage_times_sec", {})
-        
+
         # Optional: structured timing object for future use
         report["timing"] = {
             "total_s": report["timing_s"],
             "stages_s": report.get("stage_times_sec", {}),
         }
-        
+
         # PRODUCTION: Add reproducibility stamping
         report["reproducibility"] = self._repro_metadata.copy()
         report["reproducibility"]["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
@@ -1063,20 +1057,20 @@ class LuxPipelineV2:
 
         # Always include depth provenance for observability (Commit 3)
         report["depth"] = depth_provenance
-        
+
         return report
 
     def process_image(self, image_path: Union[str, Path], **kwargs: Any) -> Dict[str, object]:
         """
         Backwards-compatible entrypoint for performance/throughput harnesses.
-        
+
         Routes to process_one() which is the canonical single-image entrypoint.
         This alias prevents API drift from breaking perf tests.
-        
+
         Args:
             image_path: Path to input image (str or Path)
             **kwargs: Additional arguments passed to process_one()
-        
+
         Returns:
             Processing report dict from process_one()
         """
@@ -1096,6 +1090,7 @@ class LuxPipelineV2:
         results: List[Dict[str, object]] = []
         try:
             from tqdm import tqdm  # type: ignore
+
             it = tqdm(files, desc="LuxDepthV2", unit="img")
         except Exception:
             it = files

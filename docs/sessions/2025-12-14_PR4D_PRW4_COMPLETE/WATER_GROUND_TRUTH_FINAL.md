@@ -106,19 +106,19 @@ WaterCandidateDetector.detect() returns:
     "total_images": 40,
     "pool_images": 20,
     "ocean_images": 20,
-    
+
     "pool_recall": 0.90,
     "pool_avg_coverage": 0.78,
     "pool_avg_confidence": 0.68,
     "pool_avg_edge_alignment": 0.62,
     "pool_avg_stability": 0.80,
-    
+
     "ocean_recall": 0.85,
     "ocean_avg_coverage": 0.65,
     "ocean_avg_confidence": 0.58,
     "ocean_avg_edge_alignment": 0.55,
     "ocean_avg_stability": 0.75,
-    
+
     "overall_avg_processing_time_ms": 32.1
   },
   "results": [...]
@@ -213,7 +213,7 @@ if warnings:
     "pool/pool_0007.jpg": {"label": "pool", "difficulty": "hard", "tags": ["infinity-edge"]},
     "pool/pool_0008.jpg": {"label": "pool", "difficulty": "easy", "tags": []},
     "pool/pool_0009.jpg": {"label": "pool", "difficulty": "medium", "tags": ["indoor"]},
-    
+
     "ocean/ocean_0001.jpg": {"label": "ocean", "difficulty": "easy", "tags": []},
     "ocean/ocean_0003.jpg": {"label": "ocean", "difficulty": "hard", "tags": ["gray"]},
     "ocean/ocean_0004.jpg": {"label": "ocean", "difficulty": "hard", "tags": ["waves"]},
@@ -240,12 +240,12 @@ class ValidationResult:
     ground_truth_label: str  # "pool" or "ocean"
     difficulty: str
     tags: list
-    
+
     # Detector output
     detector_present: bool
     detector_coverage: float
     detector_confidence: float
-    
+
     # Computed metrics
     is_detected: bool  # True if detector.present == True
     edge_alignment_score: float
@@ -259,17 +259,17 @@ class ValidationResult:
 def generate_report(results, output_path):
     pool_results = [r for r in results if r.ground_truth_label == "pool"]
     ocean_results = [r for r in results if r.ground_truth_label == "ocean"]
-    
+
     summary = {
         "pool_recall": sum(r.is_detected for r in pool_results) / len(pool_results),
         "pool_avg_coverage": np.mean([r.detector_coverage for r in pool_results if r.is_detected]),
         "pool_avg_edge_alignment": np.mean([r.edge_alignment_score for r in pool_results if r.is_detected]),
-        
+
         "ocean_recall": sum(r.is_detected for r in ocean_results) / len(ocean_results),
         "ocean_avg_coverage": np.mean([r.detector_coverage for r in ocean_results if r.is_detected]),
         "ocean_avg_edge_alignment": np.mean([r.edge_alignment_score for r in ocean_results if r.is_detected]),
     }
-    
+
     # ... rest of report ...
 ```
 
@@ -304,7 +304,7 @@ def generate_report(results, output_path):
     "pool/pool_0018.jpg": {"label": "pool", "difficulty": "hard", "notes": "Mosaic tile", "tags": ["tile"]},
     "pool/pool_0019.jpg": {"label": "pool", "difficulty": "easy", "notes": "Resort, clear", "tags": []},
     "pool/pool_0020.jpg": {"label": "pool", "difficulty": "medium", "notes": "Curved edge", "tags": []},
-    
+
     "ocean/ocean_0001.jpg": {"label": "ocean", "difficulty": "easy", "notes": "Calm, sunny", "tags": []},
     "ocean/ocean_0002.jpg": {"label": "ocean", "difficulty": "medium", "notes": "Overcast", "tags": ["overcast"]},
     "ocean/ocean_0003.jpg": {"label": "ocean", "difficulty": "hard", "notes": "Gray water", "tags": ["gray"]},

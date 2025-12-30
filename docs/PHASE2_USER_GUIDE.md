@@ -1,7 +1,7 @@
 # Phase 2 User Guide: Intelligent Material & Lighting Detection
 
-**Last Updated:** December 12, 2025  
-**Pipeline:** lux_depth_v2  
+**Last Updated:** December 12, 2025
+**Pipeline:** lux_depth_v2
 **Status:** Production-Ready
 
 ---

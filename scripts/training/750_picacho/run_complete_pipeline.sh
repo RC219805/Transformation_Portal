@@ -125,14 +125,14 @@ run_stage() {
     local stage_script=$3
     shift 3
     local stage_args=("$@")
-    
+
     echo ""
     echo "------------------------------------------------------------------------"
     echo -e "${YELLOW}STAGE $stage_num: $stage_name${NC}"
     echo "------------------------------------------------------------------------"
-    
+
     STAGE_START=$(date +%s)
-    
+
     if python "$stage_script" "${stage_args[@]}"; then
         STAGE_END=$(date +%s)
         STAGE_DURATION=$((STAGE_END - STAGE_START))

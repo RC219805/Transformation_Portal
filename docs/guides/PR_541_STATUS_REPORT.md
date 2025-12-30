@@ -1,8 +1,8 @@
 # PR #541 Status Report
 **Platform Core Extraction with lux_depth_v2 Pilot Migration**
 
-**Generated**: 2025-12-09 17:15 UTC  
-**PR Link**: https://github.com/RC219805/Transformation_Portal/pull/541  
+**Generated**: 2025-12-09 17:15 UTC
+**PR Link**: https://github.com/RC219805/Transformation_Portal/pull/541
 **Branch**: `platform-core-pr2-pilot` → `main`
 
 ---
@@ -44,9 +44,9 @@ PR #541 introduces Platform Core unified infrastructure with successful lux_dept
 ### ❌ Failing Checks (2)
 
 #### 1. Architecture Hardening (Security + Guardrails) ⚠️ CRITICAL
-**Status**: FAILED  
-**Duration**: 48s  
-**Workflow**: `.github/workflows/hardening.yml`  
+**Status**: FAILED
+**Duration**: 48s
+**Workflow**: `.github/workflows/hardening.yml`
 **URL**: https://github.com/RC219805/Transformation_Portal/actions/runs/20072095705/job/57576763452
 
 **Root Cause**: Ruff linting errors in `lux_depth_v2/hardening/safe_io.py`
@@ -76,10 +76,10 @@ result = core_validator.validate_file(p, strict=True)  # ← 'result' assigned b
 ---
 
 #### 2. Core Tests (Python 3.10, 3.11, 3.12) ⚠️ CRITICAL
-**Status**: FAILED (all 3 matrix jobs)  
-**Duration**: 1m16s (Python 3.10)  
-**Workflow**: `.github/workflows/ci.yml`  
-**URLs**: 
+**Status**: FAILED (all 3 matrix jobs)
+**Duration**: 1m16s (Python 3.10)
+**Workflow**: `.github/workflows/ci.yml`
+**URLs**:
 - Python 3.10: https://github.com/RC219805/Transformation_Portal/actions/runs/20072095715/job/57577226191
 - Python 3.11: https://github.com/RC219805/Transformation_Portal/actions/runs/20072095715/job/57577226144
 - Python 3.12: https://github.com/RC219805/Transformation_Portal/actions/runs/20072095715/job/57577226155
@@ -288,7 +288,7 @@ After fixes are pushed, GitHub Actions will automatically re-run failing checks.
    - Consolidate requirements files into `pyproject.toml`
 
 ### Process Recommendations
-1. **Dependency Management**: 
+1. **Dependency Management**:
    - Move to `pyproject.toml` with `[project.dependencies]` and `[project.optional-dependencies]`
    - Eliminate separate `requirements-*.txt` files
    - Use `pip install -e .[dev,ci,test]` pattern
@@ -355,7 +355,7 @@ Once these fixes are applied and checks pass (**~30 minutes total**), the PR wil
 
 ---
 
-**Report Status**: COMPLETE ✅  
-**Action Required**: YES ⚠️  
-**Estimated Time to Resolution**: 30 minutes  
+**Report Status**: COMPLETE ✅
+**Action Required**: YES ⚠️
+**Estimated Time to Resolution**: 30 minutes
 **Risk Level**: LOW (fixes are straightforward)

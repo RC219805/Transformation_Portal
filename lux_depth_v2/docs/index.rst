@@ -30,12 +30,12 @@ Quick Start
        device="auto",
        upscale=4,
    )
-   
+
    pipeline = LuxPipelineV2(config)
-   
+
    # Process all images in directory
    results = pipeline.process_directory()
-   
+
    # Or process single image
    result = pipeline.process_one("input/image.jpg")
 
@@ -47,13 +47,13 @@ Core dependencies:
 .. code-block:: bash
 
    pip install torch torchvision numpy opencv-python tifffile
-   
+
    # For Real-ESRGAN upscaling
    pip install realesrgan basicsr
-   
+
    # For ONNX backends
    pip install onnxruntime
-   
+
    # For material segmentation
    pip install transformers
 
@@ -63,7 +63,7 @@ Contents
 .. toctree::
    :maxdepth: 2
    :caption: User Guide
-   
+
    guides/installation
    guides/quickstart
    guides/presets
@@ -75,7 +75,7 @@ Contents
 .. toctree::
    :maxdepth: 2
    :caption: API Reference
-   
+
    api/config
    api/pipeline
    api/torch_ops
@@ -88,7 +88,7 @@ Contents
 .. toctree::
    :maxdepth: 1
    :caption: Development
-   
+
    development/testing
    development/contributing
 

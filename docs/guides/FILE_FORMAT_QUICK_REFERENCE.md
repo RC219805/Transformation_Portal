@@ -87,7 +87,7 @@ Best for professional/commercial work:
 **Solution**: `pip install -e ".[tiff]"`
 
 ### "FFmpeg not found"
-**Solution**: 
+**Solution**:
 - Linux: `sudo apt install ffmpeg`
 - macOS: `brew install ffmpeg`
 - Windows: Download from ffmpeg.org

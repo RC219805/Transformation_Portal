@@ -234,21 +234,21 @@ cli_config = DA3CLIConfig(
     backend_url="http://localhost:8008",
     backend_port=8008,
     backend_host="127.0.0.1",
-    
+
     # Export format (hyphen-separated combinations)
     export_format="mini_npz-glb",
-    
+
     # Reference view strategy for multi-view
     ref_view_strategy="saddle_balanced",  # first, middle, saddle_balanced, saddle_sim_range
-    
+
     # Ray-based pose estimation
     use_ray_pose=False,
-    
+
     # GLB export settings
     conf_thresh_percentile=40.0,
     num_max_points=1_000_000,
     show_cameras=True,
-    
+
     # Feature visualization
     feat_vis_fps=15,
     export_feat="",  # Comma-separated layer indices

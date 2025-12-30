@@ -25,6 +25,7 @@ from typing import Dict
 @dataclass
 class MockConfig:
     """Mock segmentation config for testing."""
+
     fusion_mode: FusionMode = FusionMode.CONFIDENCE_WEIGHTED
     fusion_min_iou: float = 0.30
     fusion_core_thresh: float = 0.70
@@ -122,7 +123,7 @@ def test_fusion_respects_iou_gating():
             # Return a mask in a completely different region
             h, w = base_mask.shape[2], base_mask.shape[3]
             refined = torch_ops.torch.zeros_like(base_mask)
-            refined[0, 0, 0:h // 8, 0:w // 8] = 1.0  # Top-left corner only
+            refined[0, 0, 0 : h // 8, 0 : w // 8] = 1.0  # Top-left corner only
             return refined
 
     cfg = MockConfig(
@@ -170,9 +171,7 @@ def test_fusion_disabled_when_provider_is_none():
     cfg = MockConfig(fusion_mode=FusionMode.CONFIDENCE_WEIGHTED)
     base_segmenter = SimpleMockSegmenter()
 
-    fused_segmenter = FusedMaterialSegmenter(
-        base_segmenter, cfg, device, refinement_provider=None
-    )
+    fused_segmenter = FusedMaterialSegmenter(base_segmenter, cfg, device, refinement_provider=None)
 
     rgb = torch_ops.torch.rand(1, 3, 64, 64, device=device)
     masks = fused_segmenter.predict(rgb)

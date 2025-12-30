@@ -459,6 +459,6 @@ lux-depth-v2-storage --help
 
 ---
 
-**Quick Reference Version:** 1.0  
-**Last Updated:** 2025-12-08  
+**Quick Reference Version:** 1.0
+**Last Updated:** 2025-12-08
 **Status:** Ready for Use (Phase 1 implementation starting)

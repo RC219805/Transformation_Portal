@@ -17,7 +17,7 @@ The edge refinement module implements research-backed post-processing techniques
 ### 1. Bilateral Filtering (Tomasi & Manduchi, 1998)
 **Purpose**: Edge-preserving smoothing that reduces noise without blurring boundaries.
 
-**Mechanism**: 
+**Mechanism**:
 - Combines spatial proximity and value similarity
 - Smooths similar regions while preserving sharp transitions
 - Non-linear filter that adapts to local structure
@@ -27,7 +27,7 @@ The edge refinement module implements research-backed post-processing techniques
 - `sigma_color`: Filter sigma in depth value space (default: 75)
 - `sigma_space`: Filter sigma in pixel space (default: 75)
 
-**Use Cases**: 
+**Use Cases**:
 - Reduce depth map noise from model inference
 - Smooth flat surfaces (walls, floors) while preserving object boundaries
 - First-stage refinement before edge-specific operations
@@ -129,27 +129,27 @@ refined_depth = refiner.refine(
 class RefinementConfig:
     # Global enable
     enable_refinement: bool = False
-    
+
     # Pipeline stages (executed in order)
     stages: List[str] = ["guided", "bilateral", "edge"]
-    
+
     # Bilateral filtering
     enable_bilateral: bool = True
     bilateral_d: int = 9
     bilateral_sigma_color: float = 75.0
     bilateral_sigma_space: float = 75.0
-    
+
     # Guided filter
     enable_guided: bool = True
     guided_radius: int = 8
     guided_eps: float = 0.01
-    
+
     # Edge enhancement
     enable_edge: bool = True
     edge_canny_low: float = 50.0
     edge_canny_high: float = 150.0
     edge_blend_sigma: float = 7.0
-    
+
     # Gradient smoothing
     enable_gradient: bool = False
     gradient_threshold: float = 0.1
@@ -305,39 +305,39 @@ np.save("depth_refined.npy", refined_depth)
 
 ### Bilateral Filter Tuning
 
-**Problem**: Too much smoothing, losing detail  
+**Problem**: Too much smoothing, losing detail
 **Solution**: Decrease `bilateral_sigma_color` (try 50 or 25)
 
-**Problem**: Not enough smoothing, still noisy  
+**Problem**: Not enough smoothing, still noisy
 **Solution**: Increase `bilateral_sigma_space` (try 100 or 150)
 
-**Problem**: Edges getting blurred  
+**Problem**: Edges getting blurred
 **Solution**: Decrease `bilateral_d` (try 5 or 7)
 
 ---
 
 ### Guided Filter Tuning
 
-**Problem**: Over-smoothing, losing edges  
+**Problem**: Over-smoothing, losing edges
 **Solution**: Decrease `guided_eps` (try 0.005 or 0.001)
 
-**Problem**: RGB edges transferring incorrectly  
+**Problem**: RGB edges transferring incorrectly
 **Solution**: Increase `guided_eps` (try 0.02 or 0.05)
 
-**Problem**: Not enough smoothing range  
+**Problem**: Not enough smoothing range
 **Solution**: Increase `guided_radius` (try 12 or 16)
 
 ---
 
 ### Edge Enhancement Tuning
 
-**Problem**: Too many false edges detected  
+**Problem**: Too many false edges detected
 **Solution**: Increase `edge_canny_low` and `edge_canny_high` (try 70/180)
 
-**Problem**: Missing important edges  
+**Problem**: Missing important edges
 **Solution**: Decrease thresholds (try 30/100)
 
-**Problem**: Halo artifacts around edges  
+**Problem**: Halo artifacts around edges
 **Solution**: Decrease `edge_blend_sigma` (try 5 or 3)
 
 ---

@@ -1,8 +1,8 @@
 # Lux Depth V2 - Aerial Source TIFF Test Results
 
-**Test Date:** December 6, 2025  
-**Test Image:** V2_750Picacho_Aerial.tiff  
-**Module:** lux_depth_v2 (Production-Ready with Applied Fixes)  
+**Test Date:** December 6, 2025
+**Test Image:** V2_750Picacho_Aerial.tiff
+**Module:** lux_depth_v2 (Production-Ready with Applied Fixes)
 **Status:** ✅ SUCCESSFUL
 
 ---
@@ -256,7 +256,7 @@
        upscaler_backend="none",  # Or "realesrgan" for AI upscaling
    )
    cfg.segmentation.backend = "heuristic"
-   
+
    pipe = LuxPipelineV2(cfg)
    pipe.process_directory()  # Batch process all images
    ```
@@ -293,7 +293,7 @@ The **Lux Depth V2** module successfully processed the Aerial source TIFF with:
 
 ---
 
-**Test Date:** December 6, 2025  
-**Tester:** AI Assistant  
-**Module Version:** V2 (Production-Ready)  
+**Test Date:** December 6, 2025
+**Tester:** AI Assistant
+**Module Version:** V2 (Production-Ready)
 **Test Status:** ✅ COMPLETE SUCCESS

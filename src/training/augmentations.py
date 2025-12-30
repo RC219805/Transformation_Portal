@@ -24,6 +24,7 @@ import numpy as np
 # Try to import torch for tensor operations
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -32,6 +33,7 @@ except ImportError:
 # Try to import PIL for image operations
 try:
     from PIL import Image, ImageEnhance, ImageFilter
+
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
@@ -39,6 +41,7 @@ except ImportError:
 # Try to import cv2 for advanced transforms
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
@@ -62,6 +65,7 @@ class AugmentationConfig:
         gaussian_blur_prob: Probability of Gaussian blur
         normalize: Whether to apply ImageNet normalization
     """
+
     horizontal_flip: float = 0.5
     rotation_degrees: float = 10.0
     brightness: float = 0.2
@@ -115,10 +119,7 @@ class GeometricAugmentation:
 
         # Random rotation
         if self.config.rotation_degrees > 0:
-            angle = random.uniform(
-                -self.config.rotation_degrees,
-                self.config.rotation_degrees
-            )
+            angle = random.uniform(-self.config.rotation_degrees, self.config.rotation_degrees)
             image = self._rotate(image, angle)
             depth_squeezed = self._rotate(depth_squeezed, angle, is_depth=True)
 
@@ -130,9 +131,7 @@ class GeometricAugmentation:
 
         # Random crop (if specified)
         if self.config.crop_size is not None:
-            image, depth_squeezed = self._random_crop(
-                image, depth_squeezed, self.config.crop_size
-            )
+            image, depth_squeezed = self._random_crop(image, depth_squeezed, self.config.crop_size)
 
         return image, depth_squeezed
 
@@ -228,8 +227,8 @@ class GeometricAugmentation:
         y = random.randint(0, h - crop_h)
         x = random.randint(0, w - crop_w)
 
-        image_cropped = image[y:y + crop_h, x:x + crop_w]
-        depth_cropped = depth[y:y + crop_h, x:x + crop_w]
+        image_cropped = image[y : y + crop_h, x : x + crop_w]
+        depth_cropped = depth[y : y + crop_h, x : x + crop_w]
 
         return image_cropped, depth_cropped
 
@@ -437,29 +436,24 @@ class ArchitecturalAugmentation:
         margin = 0.05  # 5% margin for perspective shift
 
         # Source points (corners)
-        src_pts = np.float32([
-            [0, 0],
-            [w, 0],
-            [w, h],
-            [0, h]
-        ])
+        src_pts = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
 
         # Destination points (with random perspective)
-        dst_pts = np.float32([
-            [random.uniform(0, margin * w), random.uniform(0, margin * h)],
-            [random.uniform(w * (1 - margin), w), random.uniform(0, margin * h)],
-            [random.uniform(w * (1 - margin), w), random.uniform(h * (1 - margin), h)],
-            [random.uniform(0, margin * w), random.uniform(h * (1 - margin), h)]
-        ])
+        dst_pts = np.float32(
+            [
+                [random.uniform(0, margin * w), random.uniform(0, margin * h)],
+                [random.uniform(w * (1 - margin), w), random.uniform(0, margin * h)],
+                [random.uniform(w * (1 - margin), w), random.uniform(h * (1 - margin), h)],
+                [random.uniform(0, margin * w), random.uniform(h * (1 - margin), h)],
+            ]
+        )
 
         # Get perspective transform matrix
         matrix = cv2.getPerspectiveTransform(src_pts, dst_pts)
 
         # Apply transformation
         image_transformed = cv2.warpPerspective(image, matrix, (w, h))
-        depth_transformed = cv2.warpPerspective(
-            depth, matrix, (w, h), flags=cv2.INTER_NEAREST
-        )
+        depth_transformed = cv2.warpPerspective(depth, matrix, (w, h), flags=cv2.INTER_NEAREST)
 
         return image_transformed, depth_transformed
 

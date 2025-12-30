@@ -1,6 +1,6 @@
 # High-Fidelity Depth: Validated Implementation Status
-**Date**: 2025-12-18  
-**Status**: PHASE 1 SCAFFOLDING COMPLETE - VALIDATION REQUIRED  
+**Date**: 2025-12-18
+**Status**: PHASE 1 SCAFFOLDING COMPLETE - VALIDATION REQUIRED
 **Next**: Prove core claims, implement missing pieces
 
 ---
@@ -67,12 +67,12 @@ the entire tiled approach delivers **ZERO** fidelity improvement—it's just mar
 #### Claim 3: "20,000+ Unique Levels" ⚠️ MISLEADING METRIC
 **Documentation says**: *"Target: 20,000+ unique levels"*
 
-**Reality**: Unique value count is easy to game with stretching/quantization. 
+**Reality**: Unique value count is easy to game with stretching/quantization.
 The old pipeline already hit 65,536 unique values but still had smooth ramps.
 
-**User feedback**: 
-> "Hitting 65,536 unique values is easy—but it does not mean the map contains 
-> 65K levels of meaningful scene depth. If the prediction is low-res and smooth, 
+**User feedback**:
+> "Hitting 65,536 unique values is easy—but it does not mean the map contains
+> 65K levels of meaningful scene depth. If the prediction is low-res and smooth,
 > those levels are mostly interpolated ramps."
 
 **Fix**: De-emphasize unique levels in quality score. Primary metrics should be:
@@ -139,11 +139,11 @@ def snap_edges_to_rgb(depth, rgb, sigma_spatial=5, sigma_color=0.1):
 
 ### Contradiction 1: Edge Enhancement Policy
 **Old docs** (`DEPTH_MAP_QUALITY_DIAGNOSIS_AND_FIX.md`):
-> "Edge Enhancement: **skipped to preserve smoothness**"  
+> "Edge Enhancement: **skipped to preserve smoothness**"
 > "Smooth gradients are CORRECT for architectural scenes"
 
 **New docs** (`HIGH_FIDELITY_DEPTH_SUMMARY.md`):
-> "Soft boundaries are a CRITICAL failure"  
+> "Soft boundaries are a CRITICAL failure"
 > "Target: edge width ≤3px for sharp masking"
 
 **Resolution needed**: Update old docs to clarify:
@@ -299,8 +299,8 @@ But before calling this "done":
 
 ### ❌ **VALIDATION FAILED - DO NOT DEPLOY**
 
-**Test**: A/B comparison on 3 luxury interior images (750 Picacho)  
-**Configuration**: Tiled (1024×1024) + Global Anchor + Edge Snapping  
+**Test**: A/B comparison on 3 luxury interior images (750 Picacho)
+**Configuration**: Tiled (1024×1024) + Global Anchor + Edge Snapping
 **Duration**: 104 seconds total processing
 
 ### Measured Results vs Forecast
@@ -370,7 +370,7 @@ outputs/ab_validation_750_Picacho/
 
 #### Claim 2: "5-10x Edge Fidelity Improvement" ❌ **DISPROVEN**
 
-**Original forecast**: 5-10x improvement in edge alignment  
+**Original forecast**: 5-10x improvement in edge alignment
 **Measured result**: **-5x degradation** (0.031 → -0.104)
 
 **Evidence**:
@@ -391,8 +391,8 @@ outputs/ab_validation_750_Picacho/
 
 ## Updated Bottom Line (Post-Validation)
 
-**Architecture scaffolding**: ✅ Sound (tiled + global + edge snapping)  
-**Implementation quality**: ✅ Code is correct  
+**Architecture scaffolding**: ✅ Sound (tiled + global + edge snapping)
+**Implementation quality**: ✅ Code is correct
 **Measured performance**: ❌ **FAILED** validation on real images
 
 **Honest assessment**:
@@ -410,6 +410,6 @@ outputs/ab_validation_750_Picacho/
 
 ---
 
-**Validation Date**: 2025-12-17  
-**Validation ID**: ab_validation_750_Picacho_20251217  
+**Validation Date**: 2025-12-17
+**Validation ID**: ab_validation_750_Picacho_20251217
 **Next Review**: After component isolation and parameter tuning

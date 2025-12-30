@@ -90,7 +90,7 @@ high_fidelity_depth/test_resolution_policy.py::test_roundtrip_dimension_preserva
 ### Scene Classification
 - **Threshold**: ratio > 3.0 → texture_dominated
 - **Ratio**: raw_edge_count / structure_edge_count
-- **Examples**: 
+- **Examples**:
   - Glass building: ratio ~41,000+ (extreme texture)
   - Interior kitchen: ratio ~1.2 (low texture)
 

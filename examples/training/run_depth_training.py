@@ -225,7 +225,7 @@ def main():
         print("Training Complete!")
         print("=" * 60)
         print(f"\nFinal train loss: {history['train_loss'][-1]:.4f}")
-        if history['val_loss']:
+        if history["val_loss"]:
             print(f"Final val loss: {history['val_loss'][-1]:.4f}")
             print(f"Final val RMSE: {history['val_rmse'][-1]:.4f}")
 
@@ -263,7 +263,7 @@ def create_demo_data(output_dir: Path, num_samples: int = 20) -> None:
         image = np.random.randint(100, 200, (h, w, 3), dtype=np.uint8)
 
         # Simple depth map
-        y, x = np.meshgrid(np.linspace(0, 1, h), np.linspace(0, 1, w), indexing='ij')
+        y, x = np.meshgrid(np.linspace(0, 1, h), np.linspace(0, 1, w), indexing="ij")
         depth = (x + y) * 50 + np.random.randn(h, w) * 2
         depth = depth.astype(np.float32)
 

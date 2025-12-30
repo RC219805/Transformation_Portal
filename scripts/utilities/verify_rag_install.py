@@ -59,14 +59,8 @@ def check_python(args) -> Tuple[bool, str]:
     msgs: List[str] = []
     ver = sys.version.split()[0]
     in_venv = (
-        hasattr(
-            sys,
-            "real_prefix") or (
-            getattr(
-                sys,
-                "base_prefix",
-                "") != sys.prefix) or bool(
-                    os.environ.get("VIRTUAL_ENV")))
+        hasattr(sys, "real_prefix") or (getattr(sys, "base_prefix", "") != sys.prefix) or bool(os.environ.get("VIRTUAL_ENV"))
+    )
     msgs.append(f"Python: {ver}")
     msgs.append(f"Virtualenv active: {in_venv} (sys.prefix={sys.prefix})")
 
@@ -84,6 +78,7 @@ def check_python(args) -> Tuple[bool, str]:
 def check_torch(args) -> Tuple[bool, str]:
     try:
         import torch  # type: ignore
+
         msgs = [f"Torch: {torch.__version__}"]
         mps_built = getattr(torch.backends.mps, "is_built", lambda: False)()
         mps_avail = getattr(torch.backends.mps, "is_available", lambda: False)()
@@ -111,13 +106,14 @@ def check_torch(args) -> Tuple[bool, str]:
 def check_faiss(args) -> Tuple[bool, str]:
     try:
         import faiss  # type: ignore
+
         msgs = [f"FAISS: {getattr(faiss, '__version__', 'unknown')}"]
         # Minimal index roundtrip
         import numpy as np
+
         d = 4
         idx = faiss.IndexFlatL2(d)
-        x = np.array([[0.0, 0.1, 0.2, 0.3],
-                      [0.9, 0.8, 0.7, 0.6]], dtype="float32")
+        x = np.array([[0.0, 0.1, 0.2, 0.3], [0.9, 0.8, 0.7, 0.6]], dtype="float32")
         idx.add(x)
         distances, indices = idx.search(x, 1)
         ok = indices.shape == (2, 1)
@@ -130,6 +126,7 @@ def check_faiss(args) -> Tuple[bool, str]:
 def check_sentence_transformers(args) -> Tuple[bool, str]:
     try:
         import sentence_transformers  # type: ignore
+
         ver = getattr(sentence_transformers, "__version__", "unknown")
         return True, f"Sentence-Transformers: {ver} (import OK)"
     except Exception as e:
@@ -189,6 +186,7 @@ def check_rag_imports(args, repo_root: Path) -> Tuple[bool, str]:
         from github.agents.rag_system.retriever import HybridRetriever  # type: ignore
         from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore
         from github.agents.rag_system.citation import CitationGenerator  # type: ignore
+
         return True, "RAG modules import OK (github.agents.rag_system.*)"
     except ModuleNotFoundError as e:
         if args.fix_imports:
@@ -200,6 +198,7 @@ def check_rag_imports(args, repo_root: Path) -> Tuple[bool, str]:
                 from github.agents.rag_system.retriever import HybridRetriever  # type: ignore  # noqa: F401
                 from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore  # noqa: F401
                 from github.agents.rag_system.citation import CitationGenerator  # type: ignore  # noqa: F401
+
                 return True, f"RAG modules import OK after fix.\n{msg}"
             except Exception as e2:
                 return False, f"RAG modules still not importable after fix: {e2}"
@@ -212,9 +211,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", default=REPO_DEFAULT, help="Repository root path")
     parser.add_argument(
-        "--fix-imports",
-        action="store_true",
-        help="Create 'github'->'.github' symlink and missing __init__.py files if needed")
+        "--fix-imports", action="store_true", help="Create 'github'->'.github' symlink and missing __init__.py files if needed"
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 

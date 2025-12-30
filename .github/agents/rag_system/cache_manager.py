@@ -326,9 +326,7 @@ class CacheManager:
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                self.file_hashes = {
-                    k: FileHashEntry(**v) for k, v in data.items()
-                }
+                self.file_hashes = {k: FileHashEntry(**v) for k, v in data.items()}
                 logger.debug(f"Loaded {len(self.file_hashes)} file hashes")
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Failed to load file hashes: {e}")
@@ -456,9 +454,7 @@ class CacheManager:
             invalidated = self._check_invalidation(current_files)
 
             if invalidated:
-                logger.info(
-                    f"{len(invalidated)} files invalidated, cache needs refresh"
-                )
+                logger.info(f"{len(invalidated)} files invalidated, cache needs refresh")
                 self.metadata.invalidations += len(invalidated)
                 # Still return cached chunks - caller decides whether to use them
                 chunks = self.load_chunks()
@@ -672,7 +668,7 @@ class CacheManager:
         backups = sorted(backup_dir.glob(pattern), reverse=True)
 
         # Remove excess backups
-        for old_backup in backups[self.config.backup_count:]:
+        for old_backup in backups[self.config.backup_count :]:
             try:
                 old_backup.unlink()
                 logger.debug(f"Pruned backup: {old_backup}")
@@ -764,10 +760,7 @@ class CacheManager:
             "cache_hits": self.metadata.cache_hits,
             "cache_misses": self.metadata.cache_misses,
             "invalidations": self.metadata.invalidations,
-            "hit_rate": (
-                self.metadata.cache_hits
-                / max(1, self.metadata.cache_hits + self.metadata.cache_misses)
-            ),
+            "hit_rate": (self.metadata.cache_hits / max(1, self.metadata.cache_hits + self.metadata.cache_misses)),
             "created_at": self.metadata.created_at,
             "updated_at": self.metadata.updated_at,
             "cache_version": self.metadata.cache_version,
@@ -894,9 +887,7 @@ def get_cache_status(cache_dir: str = ".rag_cache") -> Dict[str, Any]:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="RAG System Cache Manager CLI"
-    )
+    parser = argparse.ArgumentParser(description="RAG System Cache Manager CLI")
     parser.add_argument(
         "--cache-dir",
         default=".rag_cache",

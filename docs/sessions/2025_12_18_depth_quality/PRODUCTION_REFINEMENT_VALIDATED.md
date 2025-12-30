@@ -1,6 +1,6 @@
 # Production-Grade Depth Refinement: Validation Complete
-**Date**: 2025-12-18  
-**Status**: ✅ VALIDATED WITH MEASURED IMPROVEMENTS  
+**Date**: 2025-12-18
+**Status**: ✅ VALIDATED WITH MEASURED IMPROVEMENTS
 **Critical Fixes Applied**: All 4 identified errors corrected
 
 ---
@@ -14,16 +14,16 @@ Successfully implemented and validated all production-grade refinements identifi
 ## Critical Errors Fixed
 
 ### ❌ Error #1: Edge Metric Bug (0.09 Anomaly)
-**Problem**: Computing Sobel gradients on uint8-quantized depth  
-**Impact**: Reported edge gradient of 0.09 (nonsense value)  
-**Fix**: Compute on float32 [0, 1], then scale to "0-255 equivalent"  
+**Problem**: Computing Sobel gradients on uint8-quantized depth
+**Impact**: Reported edge gradient of 0.09 (nonsense value)
+**Fix**: Compute on float32 [0, 1], then scale to "0-255 equivalent"
 **Result**: ✅ Metrics now credible (baseline: 0.69-1.61, not 0.09)
 
 ---
 
 ### ❌ Error #2: Guided Filter Skipped
-**Problem**: Documentation claimed "guided filter applied" but code skipped it  
-**Impact**: No edge-aware refinement despite being "best ROI"  
+**Problem**: Documentation claimed "guided filter applied" but code skipped it
+**Impact**: No edge-aware refinement despite being "best ROI"
 **Fix**: Implemented priority cascade:
 1. cv2.ximgproc.guidedFilter (best quality)
 2. cv2.ximgproc.jointBilateralFilter (RGB-guided fallback)
@@ -34,8 +34,8 @@ Successfully implemented and validated all production-grade refinements identifi
 ---
 
 ### ❌ Error #3: "65,536 Unique Levels" as Sole Metric
-**Problem**: Headline metric easily gamed by stretching/quantization  
-**Impact**: Misleading quality assessment  
+**Problem**: Headline metric easily gamed by stretching/quantization
+**Impact**: Misleading quality assessment
 **Fix**: Track comprehensive statistics:
 - Unique levels (diagnostic only, not KPI)
 - **Effective bits** (log2 of unique levels)
@@ -47,9 +47,9 @@ Successfully implemented and validated all production-grade refinements identifi
 ---
 
 ### ❌ Error #4: Missing CLAHE Enhancement
-**Problem**: CLAHE shown to drive ~20-40x unique level improvement but not applied  
-**Impact**: Flat regions (walls, ceilings) lack detail  
-**Fix**: Added CLAHE stage with architectural defaults (clip=2.0, grid=8×8)  
+**Problem**: CLAHE shown to drive ~20-40x unique level improvement but not applied
+**Impact**: Flat regions (walls, ceilings) lack detail
+**Fix**: Added CLAHE stage with architectural defaults (clip=2.0, grid=8×8)
 **Result**: ✅ Flat region detail recovery
 
 ---
@@ -129,7 +129,7 @@ Successfully implemented and validated all production-grade refinements identifi
    ```python
    # In TiledDepthEstimator.estimate_depth()
    from lux_depth_v2.depth_refinement import refine_depth_production
-   
+
    # After tiling + global anchor
    depth = refine_depth_production(depth, rgb, use_clahe=True, use_edge_filter=True, use_edge_snap=True)
    ```
@@ -238,6 +238,6 @@ Flat ratio:          [reported] ← Low-gradient regions
 
 ---
 
-**Status**: ✅ PRODUCTION REFINEMENT VALIDATED  
-**Measured Improvement**: +86-107% edge sharpness, +5.6% overhead  
+**Status**: ✅ PRODUCTION REFINEMENT VALIDATED
+**Measured Improvement**: +86-107% edge sharpness, +5.6% overhead
 **Next**: Integrate with tiled inference for full high-fidelity pipeline

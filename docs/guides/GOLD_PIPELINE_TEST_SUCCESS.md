@@ -1,7 +1,7 @@
 # Gold Standard Pipeline - Test Success Report
 
-**Date**: December 5, 2025  
-**Test**: 750 Picacho Pool 16-bit TIFF Processing  
+**Date**: December 5, 2025
+**Test**: 750 Picacho Pool 16-bit TIFF Processing
 **Status**: ✅ **SUCCESS**
 
 ---
@@ -42,12 +42,12 @@ Scene: Luxury pool and outdoor entertainment area
 ## Bugs Identified and Fixed
 
 ### **1. JSON Serialization Error** (CRITICAL)
-**Symptom**: 
+**Symptom**:
 ```
 TypeError: Object of type PosixPath is not JSON serializable
 ```
 
-**Root Cause**:  
+**Root Cause**:
 The `_serialize_config()` function only converted top-level `Path` objects to strings, but `dataclasses.asdict()` creates nested dictionaries that can contain `Path` objects at any depth.
 
 **Fix Applied** (Line 1104-1116):
@@ -65,7 +65,7 @@ def _serialize_config(cfg: Config) -> Dict[str, Any]:
             return type(obj)(convert_paths(item) for item in obj)
         else:
             return obj
-    
+
     return convert_paths(d)
 ```
 
@@ -74,13 +74,13 @@ def _serialize_config(cfg: Config) -> Dict[str, Any]:
 ---
 
 ### **2. Silent OpenCV Write Failures** (MEDIUM)
-**Symptom**:  
+**Symptom**:
 ```
-OpenCV(4.12.0) error: (-2:Unspecified error) could not find a writer 
+OpenCV(4.12.0) error: (-2:Unspecified error) could not find a writer
 for the specified extension in function 'imwrite_'
 ```
 
-**Root Cause**:  
+**Root Cause**:
 `cv2.imwrite()` returns a boolean success indicator, but the code didn't check it. If the write failed, the pipeline would continue silently, potentially corrupting the output directory state.
 
 **Fix Applied** (Lines 336-353):
@@ -150,15 +150,15 @@ Surfaces:        wood, metal, glass, stone
 ## Quality Verification
 
 ### **Depth-Aware Processing**
-✅ Depth maps successfully loaded and applied  
-✅ Zone-based enhancements (foreground/midground/background)  
-✅ Depth weights synthesized correctly  
+✅ Depth maps successfully loaded and applied
+✅ Zone-based enhancements (foreground/midground/background)
+✅ Depth weights synthesized correctly
 ✅ Material masks detected (wood, metal, glass, stone)
 
 ### **16-bit Fidelity**
-✅ Source 16-bit precision preserved throughout pipeline  
-✅ MASTER output maintains full dynamic range  
-✅ No banding or posterization artifacts  
+✅ Source 16-bit precision preserved throughout pipeline
+✅ MASTER output maintains full dynamic range
+✅ No banding or posterization artifacts
 ✅ Float32 intermediate processing ensures no precision loss
 
 ### **Output Quality Metrics** (from report JSON)
@@ -226,27 +226,27 @@ Surfaces:        wood, metal, glass, stone
 
 ### **Advantages of Gold Standard Pipeline**
 
-1. **Explicit Material Handling**  
+1. **Explicit Material Handling**
    - Previous: Auto-detect materials (prone to false positives)
    - Gold Standard: User-provided masks only (quality-first, no guessing)
 
-2. **Robust Error Handling**  
+2. **Robust Error Handling**
    - Previous: Silent failures possible
    - Gold Standard: Explicit checks, fast-fail with clear errors
 
-3. **Complete Metadata & Reporting**  
+3. **Complete Metadata & Reporting**
    - Previous: Minimal or no JSON output
    - Gold Standard: Per-image + batch reports with full metrics
 
-4. **Flexible AI Backend**  
+4. **Flexible AI Backend**
    - Previous: Tightly coupled to Real-ESRGAN
    - Gold Standard: `none | realesrgan | onnx` (can disable for testing)
 
-5. **Depth Asset Separation**  
+5. **Depth Asset Separation**
    - Previous: Inline depth inference (slow, fragile)
    - Gold Standard: Pre-computed depth maps (fast, reliable, repeatable)
 
-6. **16-bit Throughout**  
+6. **16-bit Throughout**
    - Previous: Some conversions to 8-bit for previews
    - Gold Standard: Maintains 16-bit until final export formats
 
@@ -256,19 +256,19 @@ Surfaces:        wood, metal, glass, stone
 
 ### **For Production Workflows**
 
-1. **Pre-compute Depth Maps**  
+1. **Pre-compute Depth Maps**
    Run `generate_depth_maps_750_picacho.py` once per property to create depth assets. Store in `output_<property>_Depth_Maps/` directory.
 
-2. **Material Mask Creation**  
+2. **Material Mask Creation**
    Use photoshop/GIMP to create 8-bit grayscale masks:
    - `<stem>_material_wood.png`
    - `<stem>_material_metal.png`
    - `<stem>_material_glass.png`
    - `<stem>_material_stone.png`
-   
+
    Only include surfaces that are visually significant (>5% of image).
 
-3. **Batch Processing**  
+3. **Batch Processing**
    Use `--input-dir` instead of `--input` for directory-level processing:
    ```bash
    python3 gold_standard_lux_depth_pipeline.py \
@@ -280,13 +280,13 @@ Surfaces:        wood, metal, glass, stone
      --device cuda
    ```
 
-4. **Quality Validation**  
+4. **Quality Validation**
    After batch processing, review `_batch_report.json` and per-image `*_report.json` files. Check:
    - `clip_hi` / `clip_lo` should be < 0.001 (minimal clipping)
    - `warnings` array should be empty
    - `elapsed_sec` should be reasonable (< 600s per image)
 
-5. **LUT Application** (Optional)  
+5. **LUT Application** (Optional)
    For specific looks, add:
    ```bash
    --lut-path assets/luts/film_emulation/Kodak_2393.cube \
@@ -370,13 +370,13 @@ The Gold Standard Depth-Aware 16-bit Luxury Enhancement Pipeline has been **succ
 
 ---
 
-**Test Environment**:  
+**Test Environment**:
 - macOS (Apple Silicon / Intel)
 - Python 3.11.14
 - OpenCV 4.12.0
 - tifffile 2024.x
 - NumPy 1.26.x
 
-**Test Operator**: GitHub Copilot CLI  
-**Validation**: Automated + Visual Review  
+**Test Operator**: GitHub Copilot CLI
+**Validation**: Automated + Visual Review
 **Sign-off**: ✅ Ready for Production

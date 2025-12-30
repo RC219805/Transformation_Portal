@@ -1,8 +1,8 @@
 # Validation Dataset Architecture
 
-**Document Version**: 1.0  
-**Date**: 2025-12-19  
-**Authored By**: Transformation Portal Architect  
+**Document Version**: 1.0
+**Date**: 2025-12-19
+**Authored By**: Transformation Portal Architect
 **Purpose**: Stratified validation dataset for depth classifier threshold tuning
 
 ---
@@ -260,5 +260,5 @@ python generate_validation_report.py \
 
 ---
 
-**Status**: ✓ Dataset Ready for Validation  
+**Status**: ✓ Dataset Ready for Validation
 **Next Action**: Run `production_depth_validation_fixed.py` on expanded dataset

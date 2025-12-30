@@ -40,6 +40,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 # Inlined Utilities (from arch_util.py)
 # ============================================================================
 
+
 @torch.no_grad()
 def default_init_weights(module_list, scale=1, bias_fill=0, **kwargs):
     """Initialize network weights.
@@ -112,6 +113,7 @@ def pixel_unshuffle(x, scale):
 # ============================================================================
 # RRDBNet Architecture Classes
 # ============================================================================
+
 
 class ResidualDenseBlock(nn.Module):
     """Residual Dense Block.
@@ -219,7 +221,7 @@ class RRDBNet(nn.Module):
         body_feat = self.conv_body(self.body(feat))
         feat = feat + body_feat
         # upsample
-        feat = self.lrelu(self.conv_up1(F.interpolate(feat, scale_factor=2, mode='nearest')))
-        feat = self.lrelu(self.conv_up2(F.interpolate(feat, scale_factor=2, mode='nearest')))
+        feat = self.lrelu(self.conv_up1(F.interpolate(feat, scale_factor=2, mode="nearest")))
+        feat = self.lrelu(self.conv_up2(F.interpolate(feat, scale_factor=2, mode="nearest")))
         out = self.conv_last(self.lrelu(self.conv_hr(feat)))
         return out

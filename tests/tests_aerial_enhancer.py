@@ -26,9 +26,12 @@ def create_test_image(width=32, height=32, colors=((1, 0, 0), (0, 1, 0))):
 
 def dummy_rule(name: str):
     """Create dummy material rule scoring red/green."""
+
     def score_fn(stats: ClusterStats):
         return float(stats.mean_rgb[0] > 0.5) if name == "red" else float(stats.mean_rgb[1] > 0.5)
+
     return MaterialRule(name=name, texture=None, blend=0.5, score_fn=score_fn, min_score=0.0)
+
 
 # --------------------------
 # 1. _kmeans reproducibility
@@ -42,6 +45,7 @@ def test_kmeans_reproducible():
     centroids1 = _kmeans(arr, k=3, rng=rng1, iterations=10)
     centroids2 = _kmeans(arr, k=3, rng=rng2, iterations=10)
     assert np.allclose(centroids1, centroids2)
+
 
 # --------------------------
 # 2. _cluster_stats correctness
@@ -59,6 +63,7 @@ def test_cluster_stats():
     np.testing.assert_array_almost_equal(stats[0].mean_rgb, [1, 0, 0])
     np.testing.assert_array_almost_equal(stats[1].mean_rgb, [0, 1, 0])
 
+
 # --------------------------
 # 3. assign_materials logic
 # --------------------------
@@ -74,6 +79,7 @@ def test_assign_materials():
     assert 0 in assignments and assignments[0].name == "red"
     assert 1 in assignments and assignments[1].name == "green"
 
+
 # --------------------------
 # 4. _soft_mask Gaussian blending
 # --------------------------
@@ -86,6 +92,7 @@ def test_soft_mask_blur():
     assert soft.min() >= 0.0 and soft.max() <= 1.0
     assert soft[4, 4] < 1.0  # edges blurred
     assert soft[7, 7] > 0.9  # center remains high
+
 
 # --------------------------
 # 5. end-to-end enhance_aerial
@@ -112,7 +119,7 @@ def test_enhance_aerial(tmp_path):
         target_width=16,
         textures=textures,
         palette_path=None,
-        save_palette=None
+        save_palette=None,
     )
     assert out.exists()
     out_img = Image.open(out)

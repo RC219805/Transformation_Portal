@@ -46,7 +46,7 @@ def auto_white_balance(img):
     return Image.fromarray(img_array.astype(np.uint8))
 
 
-def enhance_luxury_interior(image_path, output_dir, preset='signature', auto_wb=False):
+def enhance_luxury_interior(image_path, output_dir, preset="signature", auto_wb=False):
     """
     Process high-resolution TIFF for luxury real estate delivery.
 
@@ -63,8 +63,8 @@ def enhance_luxury_interior(image_path, output_dir, preset='signature', auto_wb=
     print(f"  Dimensions: {img.size}, Mode: {img.mode}")
 
     # Convert to RGB if needed
-    if img.mode not in ('RGB', 'RGBA'):
-        img = img.convert('RGB')
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGB")
 
     # Apply auto white balance if requested
     if auto_wb:
@@ -73,40 +73,40 @@ def enhance_luxury_interior(image_path, output_dir, preset='signature', auto_wb=
 
     # Enhancement parameters for luxury interiors
     params = {
-        'signature': {
-            'contrast': 1.12,
-            'brightness': 1.02,
-            'saturation': 1.08,
-            'sharpness': 1.25,
+        "signature": {
+            "contrast": 1.12,
+            "brightness": 1.02,
+            "saturation": 1.08,
+            "sharpness": 1.25,
         },
-        'natural': {
-            'contrast': 1.08,
-            'brightness': 1.01,
-            'saturation': 1.05,
-            'sharpness': 1.15,
+        "natural": {
+            "contrast": 1.08,
+            "brightness": 1.01,
+            "saturation": 1.05,
+            "sharpness": 1.15,
         },
-        'dramatic': {
-            'contrast': 1.18,
-            'brightness': 0.98,
-            'saturation': 1.12,
-            'sharpness': 1.35,
+        "dramatic": {
+            "contrast": 1.18,
+            "brightness": 0.98,
+            "saturation": 1.12,
+            "sharpness": 1.35,
         },
-        'seaview': {
-            'contrast': 1.15,      # Enhanced clarity for architectural details
-            'brightness': 1.04,    # Slight lift to brighten darker interiors
-            'saturation': 0.98,    # Reduce saturation to counteract warm cast
-            'sharpness': 1.30,     # Strong sharpness for high-res JPEGs
-            'warmth_reduction': True,  # Flag for targeted warm cast reduction
-        }
+        "seaview": {
+            "contrast": 1.15,  # Enhanced clarity for architectural details
+            "brightness": 1.04,  # Slight lift to brighten darker interiors
+            "saturation": 0.98,  # Reduce saturation to counteract warm cast
+            "sharpness": 1.30,  # Strong sharpness for high-res JPEGs
+            "warmth_reduction": True,  # Flag for targeted warm cast reduction
+        },
     }
 
-    p = params.get(preset, params['signature'])
+    p = params.get(preset, params["signature"])
 
     # Apply enhancements
     print(f"  Applying '{preset}' preset...")
 
     # Seaview-specific: Reduce warm cast before other enhancements
-    if p.get('warmth_reduction', False):
+    if p.get("warmth_reduction", False):
         print("  Reducing warm cast...")
         img_array = np.array(img, dtype=np.float32)
         # Reduce red channel by 5%, increase blue by 5%
@@ -116,36 +116,37 @@ def enhance_luxury_interior(image_path, output_dir, preset='signature', auto_wb=
 
     # Contrast
     enhancer = ImageEnhance.Contrast(img)
-    img = enhancer.enhance(p['contrast'])
+    img = enhancer.enhance(p["contrast"])
 
     # Brightness
     enhancer = ImageEnhance.Brightness(img)
-    img = enhancer.enhance(p['brightness'])
+    img = enhancer.enhance(p["brightness"])
 
     # Color saturation
     enhancer = ImageEnhance.Color(img)
-    img = enhancer.enhance(p['saturation'])
+    img = enhancer.enhance(p["saturation"])
 
     # Sharpness
     enhancer = ImageEnhance.Sharpness(img)
-    img = enhancer.enhance(p['sharpness'])
+    img = enhancer.enhance(p["sharpness"])
 
     # Optional: Slight unsharp mask for clarity
     img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=3))
 
     # Save with maximum quality
-    wb_suffix = '_awb' if auto_wb else ''
+    wb_suffix = "_awb" if auto_wb else ""
     output_path = output_dir / f"{image_path.stem}_{preset}{wb_suffix}_enhanced.tif"
 
     # Try to preserve 16-bit if tifffile is available
     try:
         import tifffile
-        img_array = np.array(img, dtype=np.uint16 if img.mode == 'I;16' else np.uint8)
-        tifffile.imwrite(output_path, img_array, compression='adobe_deflate')
+
+        img_array = np.array(img, dtype=np.uint16 if img.mode == "I;16" else np.uint8)
+        tifffile.imwrite(output_path, img_array, compression="adobe_deflate")
         print(f"  Saved (16-bit): {output_path.name}")
     except ImportError:
         # Fallback to PIL
-        img.save(output_path, 'TIFF', compression='tiff_adobe_deflate', quality=100)
+        img.save(output_path, "TIFF", compression="tiff_adobe_deflate", quality=100)
         print(f"  Saved (PIL): {output_path.name}")
 
     return output_path
@@ -154,14 +155,18 @@ def enhance_luxury_interior(image_path, output_dir, preset='signature', auto_wb=
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description='Process luxury interior TIFFs for UHNW clients')
-    parser.add_argument('input_dir', type=str, help='Input directory with TIFF files')
-    parser.add_argument('--output', '-o', type=str, help='Output directory (default: auto-generated)')
-    parser.add_argument('--preset', '-p', choices=['signature', 'natural', 'dramatic', 'seaview'],
-                        default='signature', help='Enhancement preset')
-    parser.add_argument('--pattern', default='*.tif', help='File pattern to process')
-    parser.add_argument('--auto-wb', action='store_true',
-                        help='Apply automatic white balance (gray world algorithm)')
+    parser = argparse.ArgumentParser(description="Process luxury interior TIFFs for UHNW clients")
+    parser.add_argument("input_dir", type=str, help="Input directory with TIFF files")
+    parser.add_argument("--output", "-o", type=str, help="Output directory (default: auto-generated)")
+    parser.add_argument(
+        "--preset",
+        "-p",
+        choices=["signature", "natural", "dramatic", "seaview"],
+        default="signature",
+        help="Enhancement preset",
+    )
+    parser.add_argument("--pattern", default="*.tif", help="File pattern to process")
+    parser.add_argument("--auto-wb", action="store_true", help="Apply automatic white balance (gray world algorithm)")
 
     args = parser.parse_args()
 
@@ -174,15 +179,15 @@ def main():
     if args.output:
         output_dir = Path(args.output)
     else:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = Path('output_images') / f'montecito_shores_{timestamp}'
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = Path("output_images") / f"montecito_shores_{timestamp}"
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Find images
     images = list(input_dir.glob(args.pattern))
     # Filter out macOS resource fork files
-    images = [img for img in images if not img.name.startswith('._')]
+    images = [img for img in images if not img.name.startswith("._")]
 
     if not images:
         print(f"No images found matching '{args.pattern}' in {input_dir}")
@@ -202,7 +207,7 @@ def main():
     failed = []
 
     for i, img_path in enumerate(images, 1):
-        print(f"[{i}/{len(images)}]", end=' ')
+        print(f"[{i}/{len(images)}]", end=" ")
         try:
             output_path = enhance_luxury_interior(img_path, output_dir, args.preset, args.auto_wb)
             processed.append(output_path)
@@ -222,8 +227,8 @@ def main():
         for path, error in failed:
             print(f"  - {path.name}: {error}")
 
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

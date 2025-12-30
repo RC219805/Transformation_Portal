@@ -1,8 +1,8 @@
 # Luxury Estate Master Pipeline - Documentation
 ## Elite HDR Processing for 750 Picacho
 
-**Version:** 1.0.0  
-**Date:** 2025-11-10  
+**Version:** 1.0.0
+**Date:** 2025-11-10
 **Author:** Transformation Portal
 
 ---
@@ -342,7 +342,7 @@ color_grading:
 - **Location Aesthetic:**
   - `California/Montecito_Golden_Hour_HDR.cube`
   - `Mediterranean/Spanish_Colonial_Warm_HDR.cube`
-  
+
 - **Film Emulation:**
   - `Kodak/Kodak_2393_D55_HDR.cube`
   - `FilmConvert/FilmConvert_Nitrate_HDR.cube`
@@ -714,10 +714,10 @@ pipeline = LuxuryEstateMasterPipeline(preset)
 
 ## License & Credits
 
-**Pipeline:** Transformation Portal  
-**Depth Estimation:** Depth Anything V2 (MIT License)  
-**Tone Mapping:** AgX (OCIO), Filmic (Hable)  
-**AI Models:** Stable Diffusion (CreativeML), ControlNet (Apache 2.0)  
+**Pipeline:** Transformation Portal
+**Depth Estimation:** Depth Anything V2 (MIT License)
+**Tone Mapping:** AgX (OCIO), Filmic (Hable)
+**AI Models:** Stable Diffusion (CreativeML), ControlNet (Apache 2.0)
 **Upscaling:** Real-ESRGAN (BSD 3-Clause)
 
 ---
@@ -731,5 +731,5 @@ For issues, questions, or feature requests:
 
 ---
 
-**Last Updated:** 2025-11-10  
+**Last Updated:** 2025-11-10
 **Version:** 1.0.0

@@ -1,8 +1,8 @@
 # Lux Depth V2 Integration Plan
 
-**Status**: Architecture Review  
-**Date**: 2025-12-06  
-**Author**: Transformation Portal Architect  
+**Status**: Architecture Review
+**Date**: 2025-12-06
+**Author**: Transformation Portal Architect
 **Review Stage**: Pre-Integration Security & Architecture Assessment
 
 ---
@@ -36,7 +36,7 @@ This document outlines the architectural strategy for integrating the `lux_depth
 
 ### 1.2 Lux Depth V2 Module Analysis
 
-**Location**: `/Users/rc/Transformation_Portal/lux_depth_v2/`  
+**Location**: `/Users/rc/Transformation_Portal/lux_depth_v2/`
 **Status**: Already present in repository with comprehensive enhancements
 
 **Strengths**:
@@ -86,8 +86,8 @@ transformers>=4.40            # Optional SegFormer backend
 
 #### ⚠️ **CRITICAL: basicsr Dependency Vulnerability**
 
-**CVE-2024-27763**: Command injection vulnerability in basicsr  
-**Risk**: Remote code execution via crafted inputs  
+**CVE-2024-27763**: Command injection vulnerability in basicsr
+**Risk**: Remote code execution via crafted inputs
 **Current Status**: Repository already excludes basicsr via `requirements/constraints.txt`
 
 **Finding**: lux_depth_v2's `requirements.txt` lists `basicsr>=1.4` (vulnerable version)
@@ -114,7 +114,7 @@ The `service.py` module exposes a REST API endpoint. **Security requirements**:
    ```python
    # REQUIRED: Path traversal protection
    from pathlib import Path
-   
+
    def validate_filepath(user_input: str) -> Path:
        path = Path(user_input).resolve()
        if not path.is_relative_to(ALLOWED_BASE_DIR):
@@ -252,17 +252,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
+
       - name: Install dependencies
         run: |
           pip install -r requirements-ci.txt
           pip install -r lux_depth_v2/requirements-repo.txt
-      
+
       - name: Run lux_depth_v2 tests
         run: |
           cd lux_depth_v2
           pytest tests/ -v --cov=. --cov-report=xml
-      
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
@@ -315,9 +315,9 @@ Add to "Module Structure" section:
 
 Production depth-aware rendering pipeline with pluggable material segmentation.
 
-**Location**: `lux_depth_v2/`  
-**Purpose**: GPU-accelerated 16-bit depth processing with real-time API  
-**Integration**: Standalone module with repository dependency alignment  
+**Location**: `lux_depth_v2/`
+**Purpose**: GPU-accelerated 16-bit depth processing with real-time API
+**Integration**: Standalone module with repository dependency alignment
 **Documentation**: Sphinx-based API reference in `lux_depth_v2/docs/`
 
 **Key Components**:
@@ -761,6 +761,6 @@ The integration of lux_depth_v2 into Transformation Portal follows a **security-
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-12-06  
+**Document Version**: 1.0
+**Last Updated**: 2025-12-06
 **Next Review**: After Phase 1 completion

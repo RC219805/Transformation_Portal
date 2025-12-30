@@ -1,6 +1,6 @@
 # PR-3C Implementation Complete: Boundary Metrics Integration
 
-**Date**: December 13, 2025  
+**Date**: December 13, 2025
 **Status**: ✅ Complete — Ready for Stage 6 A/B Rerun
 
 ---
@@ -243,5 +243,5 @@ The next LLM turn should be:
 
 ---
 
-**Status**: ✅ PR-3C Implementation Complete  
+**Status**: ✅ PR-3C Implementation Complete
 **Next**: Run Stage 6 A/B with Boundary Metrics → Promotion Decision

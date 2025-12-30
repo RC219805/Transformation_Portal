@@ -25,35 +25,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from training.property_specific.picacho_analyzer import PicachoAnalyzer
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Analyze 750 Picacho Lane property images"
-    )
-    parser.add_argument(
-        "--property-dir",
-        type=Path,
-        default=None,
-        help="Path to property images directory"
-    )
+    parser = argparse.ArgumentParser(description="Analyze 750 Picacho Lane property images")
+    parser.add_argument("--property-dir", type=Path, default=None, help="Path to property images directory")
     parser.add_argument(
         "--output",
         type=Path,
         default=Path("output/750_picacho/property_analysis.json"),
-        help="Output path for analysis report"
+        help="Output path for analysis report",
     )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose output"
-    )
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()
 
@@ -91,9 +77,7 @@ def main():
     print(f"✓ Report saved to: {args.output}")
 
     print("\nMaterials detected:")
-    for material, coverage in sorted(
-        report.property_materials.items(), key=lambda x: -x[1]
-    )[:5]:
+    for material, coverage in sorted(report.property_materials.items(), key=lambda x: -x[1])[:5]:
         print(f"  • {material}: {coverage:.1%}")
 
     print("\nRoom distribution:")

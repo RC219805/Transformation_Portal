@@ -113,11 +113,11 @@ class TestResolutionStrategy:
         """Test that all expected resolution strategies are defined."""
         from security.auto_resolver import ResolutionStrategy
 
-        assert hasattr(ResolutionStrategy, 'CONSTRAINT_BLOCK')
-        assert hasattr(ResolutionStrategy, 'VENDOR_REPLACE')
-        assert hasattr(ResolutionStrategy, 'UPGRADE')
-        assert hasattr(ResolutionStrategy, 'REMOVE')
-        assert hasattr(ResolutionStrategy, 'WORKAROUND')
+        assert hasattr(ResolutionStrategy, "CONSTRAINT_BLOCK")
+        assert hasattr(ResolutionStrategy, "VENDOR_REPLACE")
+        assert hasattr(ResolutionStrategy, "UPGRADE")
+        assert hasattr(ResolutionStrategy, "REMOVE")
+        assert hasattr(ResolutionStrategy, "WORKAROUND")
 
 
 class TestPatternLearner:
@@ -139,10 +139,7 @@ class TestPatternLearner:
         learner = PatternLearner(tmp_path)
 
         # Find the basicsr pattern
-        basicsr_patterns = [
-            p for p in learner.patterns
-            if p.pattern_id == "basicsr_cve_2024_27763"
-        ]
+        basicsr_patterns = [p for p in learner.patterns if p.pattern_id == "basicsr_cve_2024_27763"]
 
         assert len(basicsr_patterns) == 1
         assert basicsr_patterns[0].confidence_base == 0.95
@@ -155,10 +152,10 @@ class TestConfidenceScorer:
         """Test that confidence levels are properly defined."""
         from security.auto_resolver import ConfidenceLevel
 
-        assert hasattr(ConfidenceLevel, 'HIGH')
-        assert hasattr(ConfidenceLevel, 'MEDIUM')
-        assert hasattr(ConfidenceLevel, 'LOW')
-        assert hasattr(ConfidenceLevel, 'UNCERTAIN')
+        assert hasattr(ConfidenceLevel, "HIGH")
+        assert hasattr(ConfidenceLevel, "MEDIUM")
+        assert hasattr(ConfidenceLevel, "LOW")
+        assert hasattr(ConfidenceLevel, "UNCERTAIN")
 
 
 class TestResolutionPattern:
@@ -192,9 +189,7 @@ class TestAutoFixer:
 
     def test_invalid_package_rejected_in_generate_commands(self, tmp_path):
         """Test that invalid packages are rejected in command generation."""
-        from security.auto_resolver import (
-            AutoFixer, ResolutionPattern, ResolutionStrategy
-        )
+        from security.auto_resolver import AutoFixer, ResolutionPattern, ResolutionStrategy
 
         fixer = AutoFixer(tmp_path)
 

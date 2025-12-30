@@ -1,8 +1,8 @@
 # DA3 Feature Gap Analysis & Integration Roadmap
 
-**Document Version:** 1.0  
-**Date:** December 19, 2025  
-**Author:** Transformation Portal Architect  
+**Document Version:** 1.0
+**Date:** December 19, 2025
+**Author:** Transformation Portal Architect
 **Status:** Strategic Planning
 
 ---
@@ -96,17 +96,17 @@ class ModelVariant(str, Enum):
     # Existing models
     GIANT = "depth-anything-3-giant"
     LARGE = "depth-anything-3-large"
-    
+
     # Versioned models (bug fixes, better street scenes)
     GIANT_V1_1 = "depth-anything-3-giant-1.1"
     LARGE_V1_1 = "depth-anything-3-large-1.1"
     NESTED_GIANT_LARGE_V1_1 = "depth-anything-3-nested-giant-large-1.1"
-    
+
 @dataclass
 class DA3Config:
     # Optional: Auto-upgrade to latest version
     auto_upgrade_to_latest: bool = False
-    
+
     def _resolve_model_version(self, variant: ModelVariant) -> str:
         """Resolve model variant to specific version."""
         if self.auto_upgrade_to_latest:
@@ -179,18 +179,18 @@ def convert_to_metric_depth(
     scale_factor: float = 300.0,
 ) -> np.ndarray:
     """Convert DA3METRIC model output to metric depth (meters).
-    
+
     Based on official DA3 formula:
         metric_depth = focal * net_output / 300.0
-    
+
     Args:
         depth_map: Raw depth output from DA3METRIC model (H, W)
         focal_length: Camera focal length in pixels (fx or fy)
         scale_factor: Model-specific scale factor (default: 300.0 for DA3METRIC-LARGE)
-    
+
     Returns:
         Depth map in meters (H, W)
-    
+
     Example:
         >>> from lux_depth_v3.postprocessing import convert_to_metric_depth
         >>> # Depth from DA3METRIC-LARGE
@@ -198,7 +198,7 @@ def convert_to_metric_depth(
         >>> focal = 1000.0  # pixels
         >>> metric_depth = convert_to_metric_depth(raw_depth, focal)
         >>> print(f"Room depth: {metric_depth.mean():.2f}m")
-    
+
     Notes:
         - Only valid for DA3METRIC-* models
         - Focal length should match image resolution
@@ -206,7 +206,7 @@ def convert_to_metric_depth(
     """
     if depth_map.ndim != 2:
         raise ValueError(f"Expected 2D depth map, got shape {depth_map.shape}")
-    
+
     return focal_length * depth_map / scale_factor
 
 
@@ -216,19 +216,19 @@ def estimate_focal_length(
     focal_length_mm: float = 50.0,  # Standard lens
 ) -> float:
     """Estimate focal length in pixels from image dimensions.
-    
+
     Args:
         image_width: Image width in pixels
         sensor_width_mm: Camera sensor width (default: 35mm full-frame)
         focal_length_mm: Lens focal length in mm (default: 50mm standard lens)
-    
+
     Returns:
         Focal length in pixels
-    
+
     Example:
         >>> focal_px = estimate_focal_length(image_width=1920)
         >>> print(f"Estimated focal length: {focal_px:.1f} pixels")
-    
+
     Notes:
         - Defaults assume full-frame DSLR with 50mm lens
         - For smartphones: sensor_width_mm ≈ 6-8mm, focal_length_mm ≈ 4-6mm
@@ -239,7 +239,7 @@ def estimate_focal_length(
 
 class Postprocessor:
     """Enhanced postprocessor with metric depth support."""
-    
+
     def convert_metric_depth(
         self,
         result: DepthResult,
@@ -247,15 +247,15 @@ class Postprocessor:
         auto_estimate_focal: bool = True,
     ) -> DepthResult:
         """Convert depth result to metric units.
-        
+
         Args:
             result: Depth result from DA3METRIC model
             focal_length: Focal length in pixels (optional)
             auto_estimate_focal: Estimate focal if not provided
-        
+
         Returns:
             DepthResult with depth_map in meters
-        
+
         Raises:
             ValueError: If depth result is not from DA3METRIC model
         """
@@ -264,7 +264,7 @@ class Postprocessor:
                 "Metric depth conversion only valid for DA3METRIC models. "
                 f"Got: {result.metadata.get('model')}"
             )
-        
+
         if focal_length is None:
             if auto_estimate_focal:
                 h, w = result.depth_map.shape
@@ -276,16 +276,16 @@ class Postprocessor:
                 )
             else:
                 raise ValueError("focal_length required for metric conversion")
-        
+
         metric_depth = convert_to_metric_depth(result.depth_map, focal_length)
-        
+
         result.depth_map = metric_depth
         result.metadata["metric_conversion"] = {
             "focal_length_px": focal_length,
             "scale_factor": 300.0,
             "units": "meters",
         }
-        
+
         return result
 ```
 
@@ -356,7 +356,7 @@ MODEL_LICENSE_MAP = {
     ModelVariant.SMALL: ModelLicense.APACHE_2_0,
     ModelVariant.METRIC_LARGE: ModelLicense.APACHE_2_0,
     ModelVariant.MONO_LARGE: ModelLicense.APACHE_2_0,
-    
+
     # Non-commercial only (CC BY-NC 4.0)
     ModelVariant.GIANT: ModelLicense.CC_BY_NC_4_0,
     ModelVariant.LARGE: ModelLicense.CC_BY_NC_4_0,
@@ -377,20 +377,20 @@ def validate_commercial_use(
     strict: bool = False,
 ) -> None:
     """Validate model license for commercial use.
-    
+
     Args:
         variant: Model variant to check
         commercial_use: Whether this is commercial use
         strict: Raise error instead of warning
-    
+
     Raises:
         ValueError: If strict=True and license incompatible with commercial use
-    
+
     Warnings:
         UserWarning: If commercial use with CC-BY-NC model
     """
     license_type = get_model_license(variant)
-    
+
     if commercial_use and license_type == ModelLicense.CC_BY_NC_4_0:
         message = (
             f"\n{'='*70}\n"
@@ -410,7 +410,7 @@ def validate_commercial_use(
             f"License details: https://creativecommons.org/licenses/by-nc/4.0/\n"
             f"{'='*70}\n"
         )
-        
+
         if strict:
             raise ValueError(message)
         else:
@@ -421,11 +421,11 @@ def validate_commercial_use(
 @dataclass
 class DA3Config:
     model: ModelVariant = ModelVariant.METRIC_LARGE
-    
+
     # License validation
     commercial_use: bool = False
     strict_license_check: bool = False
-    
+
     def __post_init__(self):
         """Validate license on initialization."""
         validate_commercial_use(
@@ -442,7 +442,7 @@ class DA3Config:
 @app.command()
 def process(
     # ... existing params
-    
+
     commercial_use: bool = typer.Option(
         False,
         "--commercial-use",
@@ -530,21 +530,21 @@ def check_xformers_available() -> bool:
 
 def check_gpu_xformers_compatible() -> Tuple[bool, str]:
     """Check if GPU supports xformers.
-    
+
     Returns:
         (is_compatible, reason)
     """
     if not torch.cuda.is_available():
         return False, "No CUDA GPU available"
-    
+
     # Check compute capability (xformers requires ≥6.0)
     device = torch.cuda.current_device()
     capability = torch.cuda.get_device_capability(device)
     compute_capability = float(f"{capability[0]}.{capability[1]}")
-    
+
     if compute_capability < 6.0:
         return False, f"Compute capability {compute_capability} < 6.0 required"
-    
+
     return True, "Compatible"
 
 
@@ -557,7 +557,7 @@ class DepthAnything3Wrapper:
         fallback_on_xformers_error: bool = True,
     ):
         """Initialize DA3 wrapper with XFormers support detection.
-        
+
         Args:
             model_name: DA3 model name
             device: Device to use
@@ -568,31 +568,31 @@ class DepthAnything3Wrapper:
         self.device = self._resolve_device(device)
         self.enable_xformers = enable_xformers
         self.fallback_on_xformers_error = fallback_on_xformers_error
-        
+
         # XFormers compatibility check
         self._xformers_available = check_xformers_available()
         self._xformers_compatible, self._xformers_reason = check_gpu_xformers_compatible()
-        
+
         self._log_xformers_status()
         self._init_model()
-    
+
     def _log_xformers_status(self):
         """Log XFormers availability and compatibility."""
         if self.device == "cpu":
             logger.info("XFormers not needed for CPU inference")
             return
-        
+
         if not self.enable_xformers:
             logger.info("XFormers disabled by user")
             return
-        
+
         if not self._xformers_available:
             logger.warning(
                 "XFormers not installed. Install with: pip install xformers\n"
                 "Fallback to standard attention (may be slower)."
             )
             return
-        
+
         if not self._xformers_compatible:
             logger.warning(
                 f"XFormers installed but GPU incompatible: {self._xformers_reason}\n"
@@ -600,9 +600,9 @@ class DepthAnything3Wrapper:
                 f"See: https://github.com/ByteDance-Seed/Depth-Anything-3/issues/11"
             )
             return
-        
+
         logger.info("✅ XFormers enabled for optimized attention")
-    
+
     def _init_model(self):
         """Initialize model with XFormers fallback."""
         try:
@@ -620,7 +620,7 @@ class DepthAnything3Wrapper:
                     device=self.device,
                     enable_xformers=False,
                 )
-        
+
         except Exception as e:
             if "xformers" in str(e).lower() and self.fallback_on_xformers_error:
                 logger.warning(
@@ -708,7 +708,7 @@ class DepthAnything3Wrapper:
 # streaming.py (new module)
 class DA3StreamingWrapper:
     """Wrapper for DA3-Streaming (ultra-long videos)."""
-    
+
     def __init__(
         self,
         model_name: str,
@@ -717,7 +717,7 @@ class DA3StreamingWrapper:
         max_memory_gb: int = 12,
     ):
         """Initialize streaming wrapper.
-        
+
         Args:
             model_name: DA3 model name
             window_size: Frames per window
@@ -741,7 +741,7 @@ class DA3StreamingWrapper:
                 "  pip install -e ."
             )
             self.available = False
-    
+
     def process_video(
         self,
         video_path: Path,
@@ -751,14 +751,14 @@ class DA3StreamingWrapper:
         """Process ultra-long video with streaming."""
         if not self.available:
             raise RuntimeError("DA3-Streaming not installed")
-        
+
         # Use streaming API
         results = self.estimator.process_video(
             video_path=str(video_path),
             output_dir=str(output_dir),
             export_format=export_format,
         )
-        
+
         return results
 ```
 
@@ -899,7 +899,7 @@ def gradio(
             "DA3 CLI not found. Install with:\n"
             "  pip install depth-anything-3"
         )
-    
+
     # Pass through to official CLI
     subprocess.run(["da3", "gradio", "-m", model, "-p", str(port)])
 
@@ -912,7 +912,7 @@ def gallery(
     """Launch gallery server for visualizing results."""
     if not check_da3_cli_available():
         raise RuntimeError("DA3 CLI not found")
-    
+
     subprocess.run(["da3", "gallery", str(output_dir), "-p", str(port)])
 ```
 
@@ -1221,7 +1221,6 @@ This analysis ensures that `lux_depth_v3/` remains focused on luxury real estate
 
 ---
 
-**Document Status:** Ready for Review  
-**Next Review:** After Sprint 1 completion  
+**Document Status:** Ready for Review
+**Next Review:** After Sprint 1 completion
 **Owner:** Transformation Portal Architect
-

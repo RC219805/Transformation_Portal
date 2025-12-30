@@ -15,15 +15,13 @@ from PIL import Image
 # Check if tqdm is available (required by depth/pipeline.py)
 try:
     import tqdm  # noqa: F401
+
     TQDM_AVAILABLE = True
 except ImportError:
     TQDM_AVAILABLE = False
 
 # Skip all tests in this module if tqdm is not available
-pytestmark = pytest.mark.skipif(
-    not TQDM_AVAILABLE,
-    reason="tqdm is required for depth pipeline module"
-)
+pytestmark = pytest.mark.skipif(not TQDM_AVAILABLE, reason="tqdm is required for depth pipeline module")
 
 # Guard the import - only import if tqdm is available
 if TQDM_AVAILABLE:
@@ -70,16 +68,16 @@ def mock_depth_model():
         h, w = image.shape[:2]
         depth = np.random.rand(h, w).astype(np.float32)
         return {
-            'depth': depth,
-            'depth_raw': depth.copy(),
-            'metadata': {
-                'inference_time_ms': 10.0,
-                'backend': 'mock',
-            }
+            "depth": depth,
+            "depth_raw": depth.copy(),
+            "metadata": {
+                "inference_time_ms": 10.0,
+                "backend": "mock",
+            },
         }
 
     mock_model.estimate_depth.side_effect = mock_estimate_depth
-    mock_model.variant = Mock(name='SMALL')
+    mock_model.variant = Mock(name="SMALL")
     return mock_model
 
 
@@ -87,35 +85,35 @@ def mock_depth_model():
 def pipeline_config():
     """Minimal pipeline configuration for testing."""
     return {
-        'depth_model': {
-            'variant': 'small',
-            'backend': 'pytorch_mps',
-            'precision': 'fp16',
-            'cache_size': 10,
-            'enable_disk_cache': False,
+        "depth_model": {
+            "variant": "small",
+            "backend": "pytorch_mps",
+            "precision": "fp16",
+            "cache_size": 10,
+            "enable_disk_cache": False,
         },
-        'processing': {
-            'depth_aware_denoise': {'enabled': False},
-            'zone_tone_mapping': {'enabled': False},
-            'atmospheric_effects': {
-                'enabled': True,
-                'haze_density': 0.01,
-                'haze_color': [0.7, 0.8, 0.9],
-                'desaturation_strength': 0.2,
+        "processing": {
+            "depth_aware_denoise": {"enabled": False},
+            "zone_tone_mapping": {"enabled": False},
+            "atmospheric_effects": {
+                "enabled": True,
+                "haze_density": 0.01,
+                "haze_color": [0.7, 0.8, 0.9],
+                "desaturation_strength": 0.2,
             },
-            'depth_guided_filters': {'enabled': False},
+            "depth_guided_filters": {"enabled": False},
         },
-        'output': {
-            'output_format': 'png',
-            'depth_colormap': 'turbo',
-        }
+        "output": {
+            "output_format": "png",
+            "depth_colormap": "turbo",
+        },
     }
 
 
 @pytest.fixture
 def pipeline(pipeline_config, mock_depth_model):
     """Create a pipeline with mocked depth model."""
-    with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model', return_value=mock_depth_model):
+    with patch("transformation_portal.depth.pipeline.DepthAnythingV2Model", return_value=mock_depth_model):
         pipeline = ArchitecturalDepthPipeline(pipeline_config)
         return pipeline
 
@@ -127,11 +125,11 @@ class TestNumbaIntegration:
         """Test Numba availability info."""
         info = get_numba_info()
 
-        assert 'available' in info
-        assert 'version' in info
-        assert isinstance(info['available'], bool)
+        assert "available" in info
+        assert "version" in info
+        assert isinstance(info["available"], bool)
 
-        if info['available']:
+        if info["available"]:
             print(f"\nNumba available: {info['version']}")
             print(f"Threading layer: {info['threading_layer']}")
             print(f"Parallel enabled: {info['parallel_enabled']}")
@@ -210,12 +208,12 @@ class TestStreamingProcessing:
             results.append(result)
 
             # Verify result structure
-            assert 'image' in result
-            assert 'depth' in result
-            assert 'metadata' in result
+            assert "image" in result
+            assert "depth" in result
+            assert "metadata" in result
 
             # Check that files were saved immediately
-            input_path = Path(result['metadata']['input_path'])
+            input_path = Path(result["metadata"]["input_path"])
             stem = input_path.stem
 
             enhanced_path = output_dir / f"{stem}_enhanced.png"
@@ -267,9 +265,9 @@ class TestPipelineParallelism:
             results.append(result)
 
             # Verify result structure
-            assert 'image' in result
-            assert 'depth' in result
-            assert 'metadata' in result
+            assert "image" in result
+            assert "depth" in result
+            assert "metadata" in result
 
         # Verify all images were processed
         assert len(results) == 3
@@ -281,29 +279,33 @@ class TestPipelineParallelism:
         # Sequential processing
         seq_output = temp_output_dir / "sequential"
         seq_output.mkdir(exist_ok=True)
-        seq_results = list(pipeline.batch_process_streaming(
-            dummy_images[:2],
-            seq_output,
-            save_depth=False,
-            save_visualization=False,
-        ))
+        seq_results = list(
+            pipeline.batch_process_streaming(
+                dummy_images[:2],
+                seq_output,
+                save_depth=False,
+                save_visualization=False,
+            )
+        )
 
         # Pipelined processing
         pipe_output = temp_output_dir / "pipelined"
         pipe_output.mkdir(exist_ok=True)
-        pipe_results = list(pipeline.batch_process_pipelined(
-            dummy_images[:2],
-            pipe_output,
-            save_depth=False,
-            save_visualization=False,
-        ))
+        pipe_results = list(
+            pipeline.batch_process_pipelined(
+                dummy_images[:2],
+                pipe_output,
+                save_depth=False,
+                save_visualization=False,
+            )
+        )
 
         # Should process same number of images
         assert len(seq_results) == len(pipe_results)
 
         # Depth maps should be similar (allowing for cache differences)
         for seq_res, pipe_res in zip(seq_results, pipe_results):
-            assert seq_res['depth'].shape == pipe_res['depth'].shape
+            assert seq_res["depth"].shape == pipe_res["depth"].shape
 
         print("\n✓ Pipelined and sequential results are consistent")
 
@@ -322,10 +324,10 @@ class TestProgressiveProcessing:
         )
 
         # Should return highest quality level
-        assert 'image' in result
-        assert 'depth' in result
-        assert 'metadata' in result
-        assert result['metadata']['processing_scale'] == 1.0
+        assert "image" in result
+        assert "depth" in result
+        assert "metadata" in result
+        assert result["metadata"]["processing_scale"] == 1.0
 
         print("\n✓ Progressive processing (highest quality) completed")
 
@@ -343,13 +345,13 @@ class TestProgressiveProcessing:
         assert len(results) == 3
 
         # Check scales
-        assert results[0]['metadata']['processing_scale'] == 0.25
-        assert results[1]['metadata']['processing_scale'] == 0.5
-        assert results[2]['metadata']['processing_scale'] == 1.0
+        assert results[0]["metadata"]["processing_scale"] == 0.25
+        assert results[1]["metadata"]["processing_scale"] == 0.5
+        assert results[2]["metadata"]["processing_scale"] == 1.0
 
         # All should have same final resolution (upscaled)
         for result in results:
-            assert result['image'].shape == results[-1]['image'].shape
+            assert result["image"].shape == results[-1]["image"].shape
 
         print(f"\n✓ Progressive processing (all {len(results)} levels) completed")
 
@@ -363,12 +365,12 @@ class TestProgressiveProcessing:
             return_all_levels=False,
         )
 
-        assert 'image' in result
-        assert 'metadata' in result
-        assert result['metadata']['processing_scale'] == 0.25
+        assert "image" in result
+        assert "metadata" in result
+        assert result["metadata"]["processing_scale"] == 0.25
 
         # Processing should be faster than full resolution
-        assert result['metadata']['processing_time_sec'] > 0
+        assert result["metadata"]["processing_time_sec"] > 0
 
         print(f"\n✓ Preview-only processing completed in {result['metadata']['processing_time_sec']:.3f}s")
 
@@ -401,9 +403,9 @@ class TestBackwardCompatibility:
 
         result = pipeline.process_render(dummy_images[0])
 
-        assert 'image' in result
-        assert 'depth' in result
-        assert 'metadata' in result
+        assert "image" in result
+        assert "depth" in result
+        assert "metadata" in result
 
         print("\n✓ Original process_render() still works")
 
@@ -418,10 +420,10 @@ def test_phase3_integration_summary():
     print("✓ Pipeline parallelism: IMPLEMENTED")
     print("✓ Streaming processing: IMPLEMENTED")
     print("✓ Progressive rendering: IMPLEMENTED")
-    numba_status = "AVAILABLE" if info['available'] else "NOT AVAILABLE (fallback active)"
+    numba_status = "AVAILABLE" if info["available"] else "NOT AVAILABLE (fallback active)"
     print(f"✓ Numba JIT acceleration: {numba_status}")
 
-    if info['available']:
+    if info["available"]:
         print(f"  - Numba version: {info['version']}")
         print(f"  - Threading layer: {info['threading_layer']}")
         print(f"  - Parallel mode: {info['parallel_enabled']}")

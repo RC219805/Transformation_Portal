@@ -1,6 +1,6 @@
 name: Depth Quality Smoke Test
 
-on: 
+on:
   push:
     paths:
       - 'high_fidelity_depth/**'
@@ -17,27 +17,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           pip install pytest opencv-python-headless
-      
+
       - name: Run resolution policy tests
         run: |
           export PYTHONPATH="${PYTHONPATH}:${PWD}"
           python high_fidelity_depth/test_resolution_policy.py
-      
+
       - name: Run structure edge tests
         run: |
           export PYTHONPATH="${PYTHONPATH}:${PWD}"
           python high_fidelity_depth/test_structure_edges.py
-      
+
       - name: Verify imports
         run: |
           export PYTHONPATH="${PYTHONPATH}:${PWD}"

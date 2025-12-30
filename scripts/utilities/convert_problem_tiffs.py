@@ -8,6 +8,7 @@ named <origstem>_conv.png next to each original. Uses tifffile for robust loadin
 Usage:
     python convert_problem_tiffs.py /path/to/images
 """
+
 import sys
 from pathlib import Path
 
@@ -65,7 +66,7 @@ def to_image_array(arr: np.ndarray) -> np.ndarray:
                 arr = arr.astype(np.uint8)
     else:
         # fallback: cast to uint8 via normalization
-        arr = normalize_float_to_uint8(arr.astype('float32'))
+        arr = normalize_float_to_uint8(arr.astype("float32"))
     return arr
 
 

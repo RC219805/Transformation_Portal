@@ -27,6 +27,7 @@ from PIL import Image
 # Optional scipy for image processing
 try:
     from scipy.ndimage import gaussian_filter, uniform_filter, convolve
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
@@ -38,6 +39,7 @@ except ImportError:
 try:
     import torch
     from torch import Tensor
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -48,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 class DepthModelVariant(Enum):
     """Available Depth Anything V2 model variants."""
+
     SMALL = "small"
     BASE = "base"
     LARGE = "large"
@@ -55,6 +58,7 @@ class DepthModelVariant(Enum):
 
 class DepthBackend(Enum):
     """Available compute backends."""
+
     PYTORCH_CPU = "pytorch_cpu"
     PYTORCH_MPS = "pytorch_mps"
     PYTORCH_CUDA = "pytorch_cuda"
@@ -65,11 +69,10 @@ class DepthBackend(Enum):
 @dataclass
 class DepthSynthesisConfig:
     """Configuration for depth synthesis pipeline."""
+
     # Model configuration
     primary_model: DepthModelVariant = DepthModelVariant.LARGE
-    ensemble_models: List[DepthModelVariant] = field(
-        default_factory=lambda: [DepthModelVariant.LARGE, DepthModelVariant.BASE]
-    )
+    ensemble_models: List[DepthModelVariant] = field(default_factory=lambda: [DepthModelVariant.LARGE, DepthModelVariant.BASE])
     use_ensemble: bool = True
     ensemble_weights: List[float] = field(default_factory=lambda: [0.7, 0.3])
 
@@ -116,6 +119,7 @@ class DepthSynthesisConfig:
 @dataclass
 class SynthesizedDepth:
     """Result of depth synthesis for a single image."""
+
     source_path: Path = field(default_factory=Path)
     depth_map: Optional[np.ndarray] = None  # (H, W) float32, 0=near, 1=far
     confidence_map: Optional[np.ndarray] = None  # (H, W) float32
@@ -130,9 +134,7 @@ class SynthesizedDepth:
         if self.depth_map is None:
             raise ValueError("No depth map available")
 
-        depth_normalized = (self.depth_map - self.depth_map.min()) / (
-            self.depth_map.max() - self.depth_map.min() + 1e-8
-        )
+        depth_normalized = (self.depth_map - self.depth_map.min()) / (self.depth_map.max() - self.depth_map.min() + 1e-8)
         depth_16bit = (depth_normalized * 65535).astype(np.uint16)
         return depth_16bit
 
@@ -149,22 +151,19 @@ class SynthesizedDepth:
 
         try:
             import matplotlib.pyplot as plt
+
             cmap = plt.get_cmap(colormap)
         except ImportError:
             # Fallback to simple grayscale-to-color
             return self._simple_colorize()
 
-        depth_normalized = (self.depth_map - self.depth_map.min()) / (
-            self.depth_map.max() - self.depth_map.min() + 1e-8
-        )
+        depth_normalized = (self.depth_map - self.depth_map.min()) / (self.depth_map.max() - self.depth_map.min() + 1e-8)
         colored = cmap(depth_normalized)[:, :, :3]
         return (colored * 255).astype(np.uint8)
 
     def _simple_colorize(self) -> np.ndarray:
         """Simple colorization without matplotlib."""
-        depth_normalized = (self.depth_map - self.depth_map.min()) / (
-            self.depth_map.max() - self.depth_map.min() + 1e-8
-        )
+        depth_normalized = (self.depth_map - self.depth_map.min()) / (self.depth_map.max() - self.depth_map.min() + 1e-8)
         # Blue (near) to Yellow (far)
         r = (depth_normalized * 255).astype(np.uint8)
         g = (depth_normalized * 255).astype(np.uint8)
@@ -177,7 +176,7 @@ class SynthesizedDepth:
         prefix: str = "",
         save_16bit: bool = True,
         save_float32: bool = True,
-        save_colorized: bool = True
+        save_colorized: bool = True,
     ) -> Dict[str, Path]:
         """Save depth maps in multiple formats."""
         output_dir = Path(output_dir)
@@ -196,6 +195,7 @@ class SynthesizedDepth:
         if save_float32:
             try:
                 import tifffile
+
                 tiff_path = output_dir / f"{stem}_depth_float32.tiff"
                 tifffile.imwrite(tiff_path, self.to_float32_tiff())
                 saved_paths["float32_tiff"] = tiff_path
@@ -260,10 +260,7 @@ class DepthSynthesis:
         logger.info(f"  Device: {self.device}")
 
         # Load models based on configuration
-        models_to_load = (
-            self.config.ensemble_models if self.config.use_ensemble
-            else [self.config.primary_model]
-        )
+        models_to_load = self.config.ensemble_models if self.config.use_ensemble else [self.config.primary_model]
 
         for variant in models_to_load:
             try:
@@ -284,7 +281,7 @@ class DepthSynthesis:
             from transformation_portal.depth.models.depth_anything_v2 import (
                 DepthAnythingV2Model,
                 ModelVariant as DAModelVariant,
-                ModelBackend as DABackend
+                ModelBackend as DABackend,
             )
 
             variant_map = {
@@ -301,32 +298,27 @@ class DepthSynthesis:
             return DepthAnythingV2Model(
                 variant=variant_map.get(variant, DAModelVariant.SMALL),
                 backend=backend_map.get(self.config.backend, DABackend.PYTORCH_CPU),
-                precision=self.config.precision
+                precision=self.config.precision,
             )
 
         except ImportError:
             # Fallback: try loading from transformers
             try:
                 from transformers import pipeline
+
                 model_names = {
                     DepthModelVariant.SMALL: "depth-anything/Depth-Anything-V2-Small-hf",
                     DepthModelVariant.BASE: "depth-anything/Depth-Anything-V2-Base-hf",
                     DepthModelVariant.LARGE: "depth-anything/Depth-Anything-V2-Large-hf",
                 }
                 return pipeline(
-                    "depth-estimation",
-                    model=model_names[variant],
-                    device=self.device if self.device != "mps" else -1
+                    "depth-estimation", model=model_names[variant], device=self.device if self.device != "mps" else -1
                 )
             except Exception as e:
                 logger.warning(f"Could not load model {variant.value}: {e}")
                 return None
 
-    def synthesize(
-        self,
-        image: Union[Path, Image.Image, np.ndarray],
-        apply_priors: bool = True
-    ) -> SynthesizedDepth:
+    def synthesize(self, image: Union[Path, Image.Image, np.ndarray], apply_priors: bool = True) -> SynthesizedDepth:
         """
         Synthesize depth map for a single image.
 
@@ -382,13 +374,11 @@ class DepthSynthesis:
                 "ensemble": self.config.use_ensemble,
                 "architectural_priors": apply_priors,
                 "edge_enhancement": self.config.edge_enhancement,
-            }
+            },
         )
 
     def synthesize_all(
-        self,
-        images: List[Union[Path, Image.Image]],
-        output_dir: Optional[Path] = None
+        self, images: List[Union[Path, Image.Image]], output_dir: Optional[Path] = None
     ) -> List[SynthesizedDepth]:
         """
         Synthesize depth maps for multiple images.
@@ -436,12 +426,9 @@ class DepthSynthesis:
 
         # Create variant to weight mapping
         variant_weights = {
-            DepthModelVariant.LARGE: self.config.ensemble_weights[0] if len(
-                self.config.ensemble_weights) > 0 else 0.7,
-            DepthModelVariant.BASE: self.config.ensemble_weights[1] if len(
-                self.config.ensemble_weights) > 1 else 0.3,
-            DepthModelVariant.SMALL: self.config.ensemble_weights[2] if len(
-                self.config.ensemble_weights) > 2 else 0.2,
+            DepthModelVariant.LARGE: self.config.ensemble_weights[0] if len(self.config.ensemble_weights) > 0 else 0.7,
+            DepthModelVariant.BASE: self.config.ensemble_weights[1] if len(self.config.ensemble_weights) > 1 else 0.3,
+            DepthModelVariant.SMALL: self.config.ensemble_weights[2] if len(self.config.ensemble_weights) > 2 else 0.2,
         }
 
         for variant, model in self.models.items():
@@ -515,25 +502,18 @@ class DepthSynthesis:
     def _simple_blur(self, image: np.ndarray, kernel_size: int = 5) -> np.ndarray:
         """Simple box blur fallback when scipy is not available."""
         from PIL import ImageFilter
+
         pil_img = Image.fromarray((image * 255).astype(np.uint8))
         blurred = pil_img.filter(ImageFilter.BoxBlur(kernel_size // 2))
         return np.array(blurred).astype(np.float32) / 255.0
 
-    def _resize_depth(
-        self,
-        depth: np.ndarray,
-        target_size: Tuple[int, int]
-    ) -> np.ndarray:
+    def _resize_depth(self, depth: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
         """Resize depth map to target size."""
         pil_depth = Image.fromarray(depth)
         pil_depth = pil_depth.resize(target_size, Image.Resampling.BILINEAR)
         return np.array(pil_depth)
 
-    def _apply_architectural_priors(
-        self,
-        depth: np.ndarray,
-        image: Image.Image
-    ) -> np.ndarray:
+    def _apply_architectural_priors(self, depth: np.ndarray, image: Image.Image) -> np.ndarray:
         """Apply architectural priors to improve depth estimation."""
         h, w = depth.shape
 
@@ -544,16 +524,14 @@ class DepthSynthesis:
         # Prior 2: Vignette (edges often farther in interior shots)
         x_coords = np.linspace(-1, 1, w)[np.newaxis, :]
         y_norm = np.linspace(-1, 1, h)[:, np.newaxis]
-        vignette = np.sqrt(x_coords ** 2 + y_norm ** 2) / np.sqrt(2)
+        vignette = np.sqrt(x_coords**2 + y_norm**2) / np.sqrt(2)
 
         # Combine priors with learned depth
         # Weight: 80% learned, 10% vertical, 10% vignette
         depth_prior = depth * 0.8 + y_coords * 0.1 + (1 - vignette) * 0.1
 
         # Renormalize
-        depth_prior = (depth_prior - depth_prior.min()) / (
-            depth_prior.max() - depth_prior.min() + 1e-8
-        )
+        depth_prior = (depth_prior - depth_prior.min()) / (depth_prior.max() - depth_prior.min() + 1e-8)
 
         return depth_prior.astype(np.float32)
 
@@ -577,7 +555,7 @@ class DepthSynthesis:
             gx = self._simple_convolve(gray, sobel_x)
             gy = self._simple_convolve(gray, sobel_y)
 
-        edges = np.sqrt(gx ** 2 + gy ** 2)
+        edges = np.sqrt(gx**2 + gy**2)
         edges = (edges - edges.min()) / (edges.max() - edges.min() + 1e-8)
 
         return edges.astype(np.float32)
@@ -589,22 +567,18 @@ class DepthSynthesis:
         pad_h, pad_w = kh // 2, kw // 2
 
         # Pad image
-        padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='edge')
+        padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode="edge")
 
         # Simple loop-based convolution for small kernels
         result = np.zeros_like(image)
         for i in range(h):
             for j in range(w):
-                patch = padded[i:i + kh, j:j + kw]
+                patch = padded[i : i + kh, j : j + kw]
                 result[i, j] = np.sum(patch * kernel)
 
         return result
 
-    def _enhance_depth_edges(
-        self,
-        depth: np.ndarray,
-        edges: np.ndarray
-    ) -> np.ndarray:
+    def _enhance_depth_edges(self, depth: np.ndarray, edges: np.ndarray) -> np.ndarray:
         """Enhance depth discontinuities at detected edges."""
         strength = self.config.edge_enhancement
 
@@ -630,13 +604,13 @@ class DepthSynthesis:
         if SCIPY_AVAILABLE and uniform_filter is not None:
             # Compute local mean and variance
             local_mean = uniform_filter(depth, size=5)
-            local_sq_mean = uniform_filter(depth ** 2, size=5)
-            local_var = local_sq_mean - local_mean ** 2
+            local_sq_mean = uniform_filter(depth**2, size=5)
+            local_var = local_sq_mean - local_mean**2
         else:
             # Simple fallback: use gradient magnitude as inverse confidence
             gx = np.gradient(depth, axis=1)
             gy = np.gradient(depth, axis=0)
-            local_var = gx ** 2 + gy ** 2
+            local_var = gx**2 + gy**2
 
         # Invert: low variance = high confidence
         confidence = 1.0 - np.clip(local_var * 10, 0, 1)
@@ -653,7 +627,4 @@ class DepthSynthesis:
         }
 
     def __repr__(self) -> str:
-        return (
-            f"DepthSynthesis(backend={self.config.backend.value}, "
-            f"models={len(self.models)}, device={self.device})"
-        )
+        return f"DepthSynthesis(backend={self.config.backend.value}, models={len(self.models)}, device={self.device})"

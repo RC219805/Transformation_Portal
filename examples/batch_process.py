@@ -21,32 +21,15 @@ from transformation_portal.depth import ArchitecturalDepthPipeline
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Batch process architectural renders')
-    parser.add_argument('input_dir', type=str, help='Input directory')
-    parser.add_argument('output_dir', type=str, help='Output directory')
+    parser = argparse.ArgumentParser(description="Batch process architectural renders")
+    parser.add_argument("input_dir", type=str, help="Input directory")
+    parser.add_argument("output_dir", type=str, help="Output directory")
     parser.add_argument(
-        '--preset',
-        type=str,
-        choices=['default', 'interior', 'exterior'],
-        default='default',
-        help='Configuration preset'
+        "--preset", type=str, choices=["default", "interior", "exterior"], default="default", help="Configuration preset"
     )
-    parser.add_argument(
-        '--pattern',
-        type=str,
-        default='*.jpg',
-        help='File pattern (e.g., "*.png", "render_*.jpg")'
-    )
-    parser.add_argument(
-        '--no-depth',
-        action='store_true',
-        help='Skip saving depth maps'
-    )
-    parser.add_argument(
-        '--no-viz',
-        action='store_true',
-        help='Skip depth visualizations'
-    )
+    parser.add_argument("--pattern", type=str, default="*.jpg", help='File pattern (e.g., "*.png", "render_*.jpg")')
+    parser.add_argument("--no-depth", action="store_true", help="Skip saving depth maps")
+    parser.add_argument("--no-viz", action="store_true", help="Skip depth visualizations")
 
     args = parser.parse_args()
 
@@ -66,9 +49,9 @@ def main():
 
     # Load pipeline
     config_map = {
-        'default': 'config/default_config.yaml',
-        'interior': 'config/interior_preset.yaml',
-        'exterior': 'config/exterior_preset.yaml',
+        "default": "config/default_config.yaml",
+        "interior": "config/interior_preset.yaml",
+        "exterior": "config/exterior_preset.yaml",
     }
     config_path = config_map[args.preset]
 
@@ -91,5 +74,5 @@ def main():
     print(f"  Cache hit rate: {stats['cache_stats']['hit_rate']:.2%}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,8 +1,8 @@
 # Validation Architecture: From Framework to Quality Breakthrough
 
-**Status**: Design Document  
-**Author**: Transformation Portal Architect  
-**Date**: 2025-12-08  
+**Status**: Design Document
+**Author**: Transformation Portal Architect
+**Date**: 2025-12-08
 **Context**: Strategic plan to establish commercial proof for Lux Depth V2
 
 ---
@@ -190,7 +190,7 @@ golden_images:
       ssim_min_delta: -0.01      # Max allowed drop
       psnr_min_delta: -0.5       # Max allowed drop in dB
       nima_min_delta: -0.1       # Max allowed aesthetic drop
-  
+
   - name: texture_loss
     source: texture_loss.tif
     preset: interior_luxury
@@ -215,21 +215,21 @@ on:
 jobs:
   golden_image_validation:
     runs-on: ubuntu-latest-gpu  # GPU runner for realistic performance
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true  # Pull golden images from LFS
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           pip install -e ".[validation]"
-      
+
       - name: Run golden image validation
         id: validate
         run: |
@@ -237,19 +237,19 @@ jobs:
             --registry tests/golden_images/registry.yaml \
             --baseline-branch origin/main \
             --output-report golden_validation_report.md
-      
+
       - name: Upload validation report
         uses: actions/upload-artifact@v4
         with:
           name: golden-validation-report
           path: golden_validation_report.md
-      
+
       - name: Check for regressions
         run: |
           python -m lux_depth_v2.validation.regression_checker \
             --report golden_validation_report.md \
             --fail-on-regression
-      
+
       - name: Post PR comment
         if: always()
         uses: actions/github-script@v7
@@ -318,31 +318,31 @@ class StageProfile:
 
 class PipelineProfiler:
     """Fine-grained profiling for Lux Depth V2 pipeline."""
-    
+
     def __init__(self, enable_gpu_sync: bool = True):
         self.enable_gpu_sync = enable_gpu_sync
         self.stages: List[StageProfile] = []
-    
+
     @contextmanager
     def stage(self, name: str):
         """Profile a pipeline stage."""
         # Pre-stage sync
         if self.enable_gpu_sync:
             self._sync_device()
-        
+
         start = time.perf_counter()
         start_gpu_mem = self._get_gpu_memory()
-        
+
         try:
             yield
         finally:
             # Post-stage sync
             if self.enable_gpu_sync:
                 self._sync_device()
-            
+
             duration = time.perf_counter() - start
             end_gpu_mem = self._get_gpu_memory()
-            
+
             self.stages.append(StageProfile(
                 name=name,
                 duration_s=duration,
@@ -351,11 +351,11 @@ class PipelineProfiler:
                 gpu_mem_mb=end_gpu_mem,
                 io_wait_s=self._get_io_wait()
             ))
-    
+
     def generate_report(self) -> Dict:
         """Generate performance report with bottleneck analysis."""
         total_time = sum(s.duration_s for s in self.stages)
-        
+
         return {
             "total_duration_s": total_time,
             "stages": [
@@ -429,7 +429,7 @@ def evaluate_consistency(
     backend: str = "auto"
 ) -> Dict[str, float]:
     """Measure segmentation mask stability across multiple runs.
-    
+
     Returns:
         Consistency metrics:
         - iou_mean: Average IoU between consecutive runs
@@ -440,13 +440,13 @@ def evaluate_consistency(
     for _ in range(num_runs):
         mask = run_segmentation(image_path, backend=backend)
         masks.append(mask)
-    
+
     # Pairwise IoU
     ious = []
     for i in range(len(masks) - 1):
         iou = compute_iou(masks[i], masks[i+1])
         ious.append(iou)
-    
+
     return {
         "iou_mean": np.mean(ious),
         "iou_std": np.std(ious),
@@ -463,19 +463,19 @@ from typing import Dict
 @dataclass
 class SegmentationImpact:
     """Quality impact of material segmentation."""
-    
+
     # Overall metrics
     lpips_without_seg: float
     lpips_with_seg: float
     lpips_improvement: float  # Negative = better
-    
+
     nima_without_seg: float
     nima_with_seg: float
     nima_improvement: float  # Positive = better
-    
+
     # Per-surface metrics
     surface_impacts: Dict[str, Dict[str, float]]  # surface -> {metric: value}
-    
+
     # Segmentation quality
     segmentation_consistency: float
     segmentation_coverage: float  # Fraction of image segmented
@@ -486,34 +486,34 @@ def measure_segmentation_impact(
     preset: str
 ) -> SegmentationImpact:
     """Run pipeline with and without segmentation, measure quality delta."""
-    
+
     # Baseline: segmentation disabled
     output_no_seg = run_pipeline(
         image_path,
         preset=preset,
         segmentation_backend="none"
     )
-    
+
     # With segmentation
     output_with_seg = run_pipeline(
         image_path,
         preset=preset,
         segmentation_backend="auto"
     )
-    
+
     # Compute metrics
     lpips_no_seg = compute_lpips(output_no_seg, reference)
     lpips_with_seg = compute_lpips(output_with_seg, reference)
-    
+
     nima_no_seg = compute_nima(output_no_seg)
     nima_with_seg = compute_nima(output_with_seg)
-    
+
     # Per-surface analysis
     surface_impacts = analyze_per_surface_impact(
         output_no_seg, output_with_seg, reference,
         segmentation_mask=get_segmentation_mask(image_path)
     )
-    
+
     return SegmentationImpact(
         lpips_without_seg=lpips_no_seg,
         lpips_with_seg=lpips_with_seg,
@@ -602,7 +602,7 @@ async def metrics():
 async def track_requests(request: Request, call_next):
     """Middleware to track request metrics."""
     preset = request.query_params.get("preset", "unknown")
-    
+
     start_time = time.time()
     try:
         response = await call_next(request)
@@ -630,52 +630,52 @@ from datetime import datetime
 @dataclass
 class RequestTrace:
     """Full audit trail for a single request."""
-    
+
     trace_id: str  # UUID
     timestamp: str  # ISO 8601
-    
+
     # Input
     input_image_hash: str  # SHA256
     input_width: int
     input_height: int
-    
+
     # Configuration
     config_hash: str  # Hash of full pipeline config
     preset: str
     segmentation_backend: str
     upscaler_backend: str
-    
+
     # Model versions
     model_versions: dict  # {model_name: version/hash}
-    
+
     # Performance
     total_duration_s: float
     stage_timings: dict  # {stage_name: duration_s}
     peak_memory_mb: float
-    
+
     # Output
     output_image_hash: str  # SHA256
     output_width: int
     output_height: int
-    
+
     # Quality metrics (if computed)
     quality_metrics: dict  # {metric_name: value}
-    
+
     # Status
     success: bool
     error: str | None
 
 class RequestTracer:
     """Traceability system for production requests."""
-    
+
     def __init__(self, trace_dir: Path):
         self.trace_dir = trace_dir
         self.trace_dir.mkdir(parents=True, exist_ok=True)
-    
+
     def create_trace(self, input_path: Path, config: dict) -> RequestTrace:
         """Initialize trace for new request."""
         trace_id = self._generate_trace_id()
-        
+
         return RequestTrace(
             trace_id=trace_id,
             timestamp=datetime.utcnow().isoformat(),
@@ -684,13 +684,13 @@ class RequestTracer:
             preset=config.get("preset", "unknown"),
             # ... populate other fields
         )
-    
+
     def save_trace(self, trace: RequestTrace) -> None:
         """Persist trace to disk."""
         trace_file = self.trace_dir / f"{trace.trace_id}.json"
         with open(trace_file, 'w') as f:
             json.dump(asdict(trace), f, indent=2)
-    
+
     def query_traces(
         self,
         preset: str | None = None,
@@ -1048,27 +1048,27 @@ INPUT IMAGE
 
 ### Technical Risks
 
-**Risk**: Baseline tools (Topaz, Adobe) unavailable or require licensing  
+**Risk**: Baseline tools (Topaz, Adobe) unavailable or require licensing
 **Mitigation**: Use open-source alternatives (Real-ESRGAN, waifu2x) as secondary baselines; focus on internal consistency metrics if external baselines unavailable
 
-**Risk**: GPU runner availability limited in GitHub Actions  
+**Risk**: GPU runner availability limited in GitHub Actions
 **Mitigation**: Use self-hosted runners or defer to scheduled weekly runs instead of per-PR validation
 
-**Risk**: Segmentation consistency low (<0.90 IoU)  
+**Risk**: Segmentation consistency low (<0.90 IoU)
 **Mitigation**: Identify root cause (randomness in model, preprocessing variance); disable segmentation in presets until resolved
 
-**Risk**: Metric disagreement (LPIPS improves, SSIM regresses)  
+**Risk**: Metric disagreement (LPIPS improves, SSIM regresses)
 **Mitigation**: Weighted scoring handles trade-offs; manual review for edge cases; adjust weights based on use case priority
 
 ### Operational Risks
 
-**Risk**: False positives in quality gates block valid PRs  
+**Risk**: False positives in quality gates block valid PRs
 **Mitigation**: Configurable thresholds + manual override capability; weekly threshold review meetings
 
-**Risk**: Benchmark results not reproducible across machines  
+**Risk**: Benchmark results not reproducible across machines
 **Mitigation**: Containerized benchmark environment (Docker); pinned dependencies; checksummed datasets
 
-**Risk**: Monitoring data volume exceeds budget  
+**Risk**: Monitoring data volume exceeds budget
 **Mitigation**: Sampling (trace 10% of requests); retention policies (7 days detailed, 90 days aggregated)
 
 ---
@@ -1098,6 +1098,6 @@ The 10-week roadmap delivers incremental value at each phase while building towa
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-12-08  
+**Document Version**: 1.0
+**Last Updated**: 2025-12-08
 **Next Review**: After Phase 2 completion (Week 4)

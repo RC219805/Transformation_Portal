@@ -1,7 +1,7 @@
 # Immediate Next Steps — Priority-Ordered Action Plan
 
-**Generated**: 2025-12-19  
-**Context**: Post-validation session review  
+**Generated**: 2025-12-19
+**Context**: Post-validation session review
 **Status**: Partial 50-image run completed (46/50), baseline validated (18-image)
 
 ---
@@ -145,7 +145,7 @@ predictions = {}
 for mf in metrics_dir.glob("*_metrics.json"):
     with open(mf) as f:
         data = json.load(f)
-    
+
     filename = mf.stem.replace('_metrics', '')
     predictions[filename] = data.get('scene_type', 'unknown')
 
@@ -221,9 +221,9 @@ echo "=== Input Size Sweep: Structure Scenes ==="
 
 for input_size in 768 896 1022; do
     echo -e "\n--- Testing input_size=$input_size ---"
-    
+
     OUTPUT_DIR="outputs/structure_sweep_${input_size}_$(date +%Y%m%d_%H%M%S)"
-    
+
     python3 production_depth_validation_fixed.py \
         --input-dir data/validation_structure_only \
         --output-dir "$OUTPUT_DIR" \
@@ -232,7 +232,7 @@ for input_size in 768 896 1022; do
         --overlap 128 \
         --no-anchor \
         --generate-report
-    
+
     # Quick summary
     if [ -f "$OUTPUT_DIR/validation_report.json" ]; then
         python3 -c "
@@ -262,12 +262,12 @@ print("-" * 48)
 for report in sorted(glob.glob("outputs/structure_sweep_*/validation_report.json")):
     with open(report) as f:
         r = json.load(f)
-    
+
     input_size = report.split('_')[2]  # Extract from path
     lenient_pct = r['quality']['lenient']['pass_rate'] * 100
     strict_pct = r['quality']['strict']['pass_rate'] * 100
     edge_f1 = r.get('avg_edge_f1', 0.0)
-    
+
     print(f"{input_size:<12} {lenient_pct:>10.1f}% {strict_pct:>10.1f}% {edge_f1:>12.3f}")
 
 print("\nTarget: Lenient ≥60% on structure scenes")
@@ -351,4 +351,3 @@ echo "✓ Baseline frozen and archived"
 ---
 
 **Next Session Entry Point**: Start with Priority 1, Step 1.1 (model pre-cache).
-

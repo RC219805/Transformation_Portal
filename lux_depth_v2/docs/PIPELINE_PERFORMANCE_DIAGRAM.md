@@ -1,17 +1,17 @@
 # LuxPipelineV2 Performance-Aware Flow Diagram
 
-**Last Updated:** 2025-12-23  
-**Author:** Pipeline Performance Team  
-**Purpose:** Performance dashboard with VRAM, CPU, and timing metrics per stage  
+**Last Updated:** 2025-12-23
+**Author:** Pipeline Performance Team
+**Purpose:** Performance dashboard with VRAM, CPU, and timing metrics per stage
 **Data Source:** Production profiling (4K images, M4 Max / NVIDIA A100)
 
 ---
 
 ## Quick Reference
 
-**For Performance Tuning:** Jump to [Performance Metrics Overlay](#performance-metrics-overlay) and [Bottleneck Analysis](#bottleneck-analysis)  
-**For Memory Optimization:** See [Memory Hotspots](#memory-hotspots) and [VRAM Peak Usage](#vram-peak-usage)  
-**For Real-Time Monitoring:** Check [Live Metrics Integration](#live-metrics-integration)  
+**For Performance Tuning:** Jump to [Performance Metrics Overlay](#performance-metrics-overlay) and [Bottleneck Analysis](#bottleneck-analysis)
+**For Memory Optimization:** See [Memory Hotspots](#memory-hotspots) and [VRAM Peak Usage](#vram-peak-usage)
+**For Real-Time Monitoring:** Check [Live Metrics Integration](#live-metrics-integration)
 **For Preset Selection:** Review [Performance by Preset](#performance-by-preset)
 
 ---
@@ -454,7 +454,7 @@ import torch.profiler as profiler
 pipeline = LuxPipelineV2.from_config('config/interior_luxury.yaml')
 with profiler.profile(activities=[profiler.ProfilerActivity.CPU, profiler.ProfilerActivity.CUDA]) as prof:
     pipeline.process_one('test.jpg', 'output/')
-    
+
 print(prof.key_averages().table(sort_by='cuda_time_total', row_limit=10))
 "
 ```

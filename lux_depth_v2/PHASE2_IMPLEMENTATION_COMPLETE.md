@@ -1,7 +1,7 @@
 # Lux Depth V2 - Phase 2 Implementation Complete ✅
 
-**Date Completed**: 2025-12-12  
-**Implementation Approach**: Pragmatic Foundation (CLIP + Lighting + Enhanced Heuristics)  
+**Date Completed**: 2025-12-12
+**Implementation Approach**: Pragmatic Foundation (CLIP + Lighting + Enhanced Heuristics)
 **Status**: PRODUCTION-READY with ML Backend Stubs
 
 ---
@@ -33,8 +33,8 @@ Phase 2 successfully delivers **production-ready material segmentation and light
 
 ### 1. CLIP Material Classifier (`materials_v2.py`)
 
-**Class**: `CLIPMaterialClassifier`  
-**Model**: OpenAI CLIP ViT-B/32 (~350MB, auto-downloaded)  
+**Class**: `CLIPMaterialClassifier`
+**Model**: OpenAI CLIP ViT-B/32 (~350MB, auto-downloaded)
 **Material Classes**: 28 (comprehensive luxury real estate taxonomy)
 
 #### Key Features:
@@ -88,8 +88,8 @@ refined_masks = classifier.fuse_with_segformer(rgb, segformer_masks, segformer_c
 
 ### 2. Lighting Condition Detector (`lighting_detector.py`)
 
-**Class**: `LightingConditionDetector`  
-**Method**: Heuristic analysis (no ML model required)  
+**Class**: `LightingConditionDetector`
+**Method**: Heuristic analysis (no ML model required)
 **Time-of-Day Classes**: 9 (dawn, sunrise, morning, midday, afternoon, golden_hour, twilight, night, overcast)
 
 #### Key Features:
@@ -105,16 +105,16 @@ refined_masks = classifier.fuse_with_segformer(rgb, segformer_masks, segformer_c
 class LightingCondition:
     time_of_day: TimeOfDay          # Classification result
     confidence: float               # [0, 1]
-    
+
     # Sky characteristics
     sky_coverage: float             # % of image that is sky
     sky_color_temp: float           # Estimated temperature (K)
     sky_brightness: float           # Average sky luminance
-    
+
     # Directional lighting
     has_strong_shadows: bool
     shadow_direction: Optional[str] # "top", "left", "right", "bottom"
-    
+
     # Color characteristics
     dominant_hue: float             # [0, 360] degrees
     warmth: float                   # [-1, 1] cool to warm
@@ -312,11 +312,11 @@ clip>=1.0                    # OpenAI CLIP for zero-shot classification
 # lux_depth_v2/material_segmentation.py already has:
 class EfficientSAMSegmenter(MaterialSegmenter):
     """EfficientSAM for high-precision boundaries (PHASE 2 - STUB)."""
-    
+
     def __init__(self, cfg, device):
         # TODO: Load EfficientSAM model
         pass
-    
+
     def predict(self, rgb):
         # TODO: Generate masks with prompts
         pass
@@ -365,13 +365,13 @@ adapted_tone_config = lighting.adapt_tone_mapping(condition, base_config)
 config = MaterialsV2Config(
     enabled=True,
     backend='heuristic',  # Phase 1 default
-    
+
     # Phase 2 - CLIP integration
     clip_enabled=True,              # Enable CLIP classification
     clip_model='ViT-B/32',          # CLIP model variant
     clip_hybrid_fusion=True,        # Enable SegFormer+CLIP fusion
     clip_fusion_alpha=0.5,          # Fusion weight
-    
+
     # Phase 2 - Expanded taxonomy
     use_expanded_taxonomy=True,     # Enable 28 classes
 )
@@ -449,12 +449,12 @@ config = MaterialsV2Config(
 
 ## Sign-Off
 
-**Phase 2 Implementation**: ✅ COMPLETE  
-**Production Status**: READY  
-**Test Coverage**: 100% (31/31 tests passing)  
+**Phase 2 Implementation**: ✅ COMPLETE
+**Production Status**: READY
+**Test Coverage**: 100% (31/31 tests passing)
 
-**Implemented By**: GitHub Copilot  
-**Date**: December 12, 2025  
+**Implemented By**: GitHub Copilot
+**Date**: December 12, 2025
 **Next Phase**: EfficientSAM Integration (Future Work)
 
 **Key Achievements**:

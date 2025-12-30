@@ -19,7 +19,7 @@ color_grading:
   # Using Kodak 2393 LUT at lower intensity for softer outdoor look
   lut: "assets/luts/film_emulation/Kodak/Kodak_2393_D55.cube"
   lut_strength: 0.35          # Lower than Signature Estate for outdoor softness
-  
+
   # Adjustments optimized for pool exteriors
   contrast: 0.92              # Softer contrast for calm water look (1.0 - 0.08)
   saturation: 0.88            # Slight desaturation for luxury look (0.95 - 0.07 avg pool/blue reduction)

@@ -2,8 +2,8 @@
 
 ## Status: ✅ MERGED
 
-**PR #557:** https://github.com/RC219805/Transformation_Portal/pull/557  
-**Merged:** ~5 hours ago  
+**PR #557:** https://github.com/RC219805/Transformation_Portal/pull/557
+**Merged:** ~5 hours ago
 **Branch:** `fix/pr-w4-stable-hash-followup` → `main`
 
 ---
@@ -138,9 +138,9 @@ $ pytest tests/test_prw_water_validation_deterministic.py::test_stability_determ
 
 ## Conclusion
 
-✅ **PR-W4 follow-up is complete and merged.**  
-✅ **All critical determinism issues resolved.**  
-✅ **Foundation ready for PR-W1 (real detector).**  
+✅ **PR-W4 follow-up is complete and merged.**
+✅ **All critical determinism issues resolved.**
+✅ **Foundation ready for PR-W1 (real detector).**
 ✅ **CI/CD pipeline is now stable and reliable.**
 
 The water detection validation infrastructure is now production-ready for the next phase: implementing the real heuristic detector (PR-W1) with confidence that the validation harness will provide reliable, reproducible metrics.

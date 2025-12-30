@@ -56,7 +56,7 @@ From `docs/PR_WATER_MASK_STRUCTURE.md` PR-W4 section:
 edge_score = self._compute_edge_alignment(rgb01, water_mask) if water_mask is not None else 0.0
 ```
 
-**Evidence**: 
+**Evidence**:
 - Test `test_edge_alignment_with_detector_enabled()` verifies `edge_score > 0.0` when mask available
 - Test `test_edge_alignment_with_strong_edges()` validates computation correctness
 - Harness calls detector directly to access mask for validation

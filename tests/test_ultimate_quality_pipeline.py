@@ -17,16 +17,14 @@ import pytest
 # Check if scipy is available
 try:
     from scipy.ndimage import gaussian_filter
+
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
     gaussian_filter = None  # type: ignore
 
 # Skip all tests in this module if scipy is not available
-pytestmark = pytest.mark.skipif(
-    not SCIPY_AVAILABLE,
-    reason="scipy is required for ultimate_quality_pipeline tests"
-)
+pytestmark = pytest.mark.skipif(not SCIPY_AVAILABLE, reason="scipy is required for ultimate_quality_pipeline tests")
 
 
 def safe_normalize_depth(depth_array: np.ndarray) -> np.ndarray:
@@ -55,11 +53,7 @@ def safe_normalize_depth(depth_array: np.ndarray) -> np.ndarray:
         return np.full_like(depth_array, 0.5)
 
 
-def apply_depth_aware_clarity(
-    image_array: np.ndarray,
-    depth_map: np.ndarray,
-    strength: float = 0.3
-) -> np.ndarray:
+def apply_depth_aware_clarity(image_array: np.ndarray, depth_map: np.ndarray, strength: float = 0.3) -> np.ndarray:
     """
     Apply depth-aware clarity enhancement.
 
@@ -88,9 +82,7 @@ def apply_luxury_color_grade(image_array: np.ndarray) -> np.ndarray:
     """
     Apply luxury color grading optimized for architectural renders.
     """
-    luminance = (0.2126 * image_array[:, :, 0]
-                 + 0.7152 * image_array[:, :, 1]
-                 + 0.0722 * image_array[:, :, 2])
+    luminance = 0.2126 * image_array[:, :, 0] + 0.7152 * image_array[:, :, 1] + 0.0722 * image_array[:, :, 2]
 
     result = image_array.copy()
 
@@ -107,10 +99,9 @@ def apply_luxury_color_grade(image_array: np.ndarray) -> np.ndarray:
     midtone_mask = (luminance >= 0.3) & (luminance <= 0.7)
     saturation_boost = 1.08
     for c in range(3):
-        result[midtone_mask, c] = (luminance[midtone_mask]
-                                   + (result[midtone_mask, c]
-                                      - luminance[midtone_mask])
-                                   * saturation_boost)
+        result[midtone_mask, c] = (
+            luminance[midtone_mask] + (result[midtone_mask, c] - luminance[midtone_mask]) * saturation_boost
+        )
 
     return np.clip(result, 0, 1)
 
@@ -165,8 +156,9 @@ class TestNeutralGrayBug:
         result = apply_luxury_color_grade(result)
 
         # Check that colors are NOT all equal (not neutral gray)
-        is_neutral = (np.allclose(result[:, :, 0], result[:, :, 1], atol=0.01)
-                      and np.allclose(result[:, :, 1], result[:, :, 2], atol=0.01))
+        is_neutral = np.allclose(result[:, :, 0], result[:, :, 1], atol=0.01) and np.allclose(
+            result[:, :, 1], result[:, :, 2], atol=0.01
+        )
         assert not is_neutral, "Output should NOT be neutral gray"
 
     def test_color_preserved_with_uniform_depth(self):
@@ -186,8 +178,9 @@ class TestNeutralGrayBug:
         result = apply_luxury_color_grade(result)
 
         # Check that colors are NOT all equal (not neutral gray)
-        is_neutral = (np.allclose(result[:, :, 0], result[:, :, 1], atol=0.01)
-                      and np.allclose(result[:, :, 1], result[:, :, 2], atol=0.01))
+        is_neutral = np.allclose(result[:, :, 0], result[:, :, 1], atol=0.01) and np.allclose(
+            result[:, :, 1], result[:, :, 2], atol=0.01
+        )
         assert not is_neutral, "Output should NOT be neutral gray (bug fix verification)"
 
         # Verify color channels are still distinct from each other

@@ -44,6 +44,7 @@ log = logging.getLogger(__name__)
 # Prompt Types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PointPrompt:
     """
@@ -59,6 +60,7 @@ class PointPrompt:
         1 for foreground, 0 for background. Some EfficientSAM variants
         use this to bias the mask toward / away from the point.
     """
+
     x: float
     y: float
     label: int = 1
@@ -77,6 +79,7 @@ class BoxPrompt:
     This should represent a *tight-ish* bounding box around the object
     or region of interest.
     """
+
     x0: float
     y0: float
     x1: float
@@ -92,6 +95,7 @@ Prompt = Union[PointPrompt, BoxPrompt]
 # ---------------------------------------------------------------------------
 # Backend Implementation Skeleton
 # ---------------------------------------------------------------------------
+
 
 class EfficientSAMNotAvailable(RuntimeError):
     """Raised when EfficientSAM cannot be used (missing onnxruntime or model)."""
@@ -165,7 +169,7 @@ class EfficientSAMBackend:
         """
         if ort is None:
             return False
-        
+
         try:
             resolved = self._resolve_model_path()
             return resolved.exists()
@@ -199,14 +203,11 @@ class EfficientSAMBackend:
         """
         if not self.available:
             raise EfficientSAMNotAvailable(
-                "EfficientSAM is not available: onnxruntime is not installed "
-                "or no model is configured."
+                "EfficientSAM is not available: onnxruntime is not installed or no model is configured."
             )
 
         if image.ndim != 3 or image.shape[2] != 3:
-            raise ValueError(
-                f"Expected image of shape (H, W, 3), got {image.shape}"
-            )
+            raise ValueError(f"Expected image of shape (H, W, 3), got {image.shape}")
 
         if len(prompts) == 0:
             raise ValueError("At least one prompt (point or box) is required.")
@@ -218,18 +219,14 @@ class EfficientSAMBackend:
         input_tensor, prompt_tensors = self._preprocess(image, prompts)
 
         # Prepare ONNX feed dict
-        onnx_inputs = self._prepare_onnx_inputs(
-            input_tensor, prompt_tensors, h_orig, w_orig
-        )
+        onnx_inputs = self._prepare_onnx_inputs(input_tensor, prompt_tensors, h_orig, w_orig)
 
         # Run inference
         try:
             outputs = session.run(self._output_names, onnx_inputs)
         except Exception as exc:
             log.error(f"EfficientSAM ONNX inference failed: {exc}")
-            raise EfficientSAMNotAvailable(
-                f"ONNX inference failed: {exc}"
-            ) from exc
+            raise EfficientSAMNotAvailable(f"ONNX inference failed: {exc}") from exc
 
         # Parse outputs and postprocess
         mask = self._postprocess_outputs(outputs, h_orig, w_orig)
@@ -253,15 +250,12 @@ class EfficientSAMBackend:
             return self._session
 
         if ort is None:
-            raise EfficientSAMNotAvailable(
-                "onnxruntime is not installed; cannot initialize EfficientSAM."
-            )
+            raise EfficientSAMNotAvailable("onnxruntime is not installed; cannot initialize EfficientSAM.")
 
         model_path = self._resolve_model_path()
         if not model_path.exists():
             raise EfficientSAMNotAvailable(
-                f"EfficientSAM model not found at {model_path}. "
-                "Download or configure the ONNX path before using this backend."
+                f"EfficientSAM model not found at {model_path}. Download or configure the ONNX path before using this backend."
             )
 
         providers = self._resolve_providers()
@@ -278,9 +272,7 @@ class EfficientSAMBackend:
                 providers=providers,
             )
         except Exception as exc:  # pragma: no cover - environment-specific
-            raise EfficientSAMNotAvailable(
-                f"Failed to create EfficientSAM ONNX session: {exc}"
-            ) from exc
+            raise EfficientSAMNotAvailable(f"Failed to create EfficientSAM ONNX session: {exc}") from exc
 
         # Introspect model I/O for safer runtime usage
         self._input_names = [i.name for i in self._session.get_inputs()]
@@ -320,9 +312,7 @@ class EfficientSAMBackend:
                 auto_download=self.auto_download,
             )
         except ModelDownloadError as exc:
-            raise EfficientSAMNotAvailable(
-                f"Could not resolve model {self.model_name}: {exc}"
-            ) from exc
+            raise EfficientSAMNotAvailable(f"Could not resolve model {self.model_name}: {exc}") from exc
 
     def _resolve_providers(self) -> Sequence[str]:
         """
@@ -360,15 +350,13 @@ class EfficientSAMBackend:
         """
         # Convert HxWx3 to 1x3xHxW (NCHW)
         img_nchw = np.transpose(image, (2, 0, 1))[None, :, :, :]  # (1,3,H,W)
-        
-        feed = {
-            "batched_images": img_nchw.astype(np.float32)
-        }
+
+        feed = {"batched_images": img_nchw.astype(np.float32)}
 
         # Convert prompts to batched point format: [1, 1, N, 2] coords + [1, 1, N] labels
         point_coords_list = []
         point_labels_list = []
-        
+
         # Box prompts → convert to center point (simplest, most reliable)
         if "boxes" in prompt_tensors:
             boxes = prompt_tensors["boxes"]  # (N, 4) normalized [x0,y0,x1,y1]
@@ -376,13 +364,12 @@ class EfficientSAMBackend:
                 x0, y0, x1, y1 = box
                 cx = (x0 + x1) * 0.5
                 cy = (y0 + y1) * 0.5
-                
+
                 # Use center point as single FG prompt
                 # This is simpler and more reliable than multi-point strategies
                 point_coords_list.append([cx * w_orig, cy * h_orig])
                 point_labels_list.append(1.0)
 
-        
         # Point prompts → convert normalized to pixel coords
         if "points" in prompt_tensors:
             points = prompt_tensors["points"]  # (N, 3) [x, y, label] normalized
@@ -390,19 +377,19 @@ class EfficientSAMBackend:
                 x, y, label = pt
                 point_coords_list.append([x * w_orig, y * h_orig])
                 point_labels_list.append(float(label))
-        
+
         # Build batched tensors: [1, 1, N, 2] and [1, 1, N]
         if len(point_coords_list) == 0:
             # Fallback: use image center as single FG point
             point_coords_list = [[w_orig * 0.5, h_orig * 0.5]]
             point_labels_list = [1.0]
-        
+
         coords = np.asarray(point_coords_list, dtype=np.float32).reshape(1, 1, -1, 2)
         labels = np.asarray(point_labels_list, dtype=np.float32).reshape(1, 1, -1)
-        
+
         feed["batched_point_coords"] = coords
         feed["batched_point_labels"] = labels
-        
+
         return feed
 
     def _postprocess_outputs(
@@ -430,14 +417,14 @@ class EfficientSAMBackend:
 
         # First output is output_masks (logits): [1, 1, num_masks, H, W]
         mask_logits = outputs[0]
-        
+
         # Second output is iou_predictions: [1, 1, num_masks]
         iou_preds = outputs[1] if len(outputs) > 1 else None
 
         # Handle efficientsam_s shape: [1, 1, num_masks, H, W]
         if mask_logits.ndim == 5:
             logits_3d = mask_logits[0, 0]  # [num_masks, H, W]
-            
+
             # Select best mask using IoU predictions
             if iou_preds is not None and iou_preds.size > 0:
                 iou_flat = iou_preds.flatten()
@@ -466,12 +453,12 @@ class EfficientSAMBackend:
             # Use cv2 for efficient resize if available
             try:
                 import cv2
-                mask = cv2.resize(
-                    mask, (w_orig, h_orig), interpolation=cv2.INTER_LINEAR
-                )
+
+                mask = cv2.resize(mask, (w_orig, h_orig), interpolation=cv2.INTER_LINEAR)
             except ImportError:
                 # Fallback to scipy
                 from scipy.ndimage import zoom
+
                 scale_y = h_orig / h_out
                 scale_x = w_orig / w_out
                 mask = zoom(mask, (scale_y, scale_x), order=1)

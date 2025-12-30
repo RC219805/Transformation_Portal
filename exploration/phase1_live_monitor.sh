@@ -49,12 +49,12 @@ show_progress() {
     log_metric "Elapsed time: $(calculate_duration)"
     log_metric "Sweeps completed: ${GREEN}${SWEEPS_COMPLETED}${NC}"
     log_metric "Sweeps failed: ${RED}${SWEEPS_FAILED}${NC}"
-    
+
     # Count output directories
     if [ -d "$SWEEP_ROOT" ]; then
         local run_count=$(find "$SWEEP_ROOT" -maxdepth 1 -type d -name "*delta*" 2>/dev/null | wc -l | tr -d ' ')
         log_metric "Run directories created: $run_count"
-        
+
         # Show latest outputs
         local latest=$(find "$SWEEP_ROOT" -maxdepth 2 -type f -name "*.tif" -o -name "*_report.json" 2>/dev/null | tail -5)
         if [ ! -z "$latest" ]; then

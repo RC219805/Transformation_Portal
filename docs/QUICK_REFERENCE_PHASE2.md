@@ -332,5 +332,5 @@ params = detector.get_adaptive_params(lighting)
 
 ---
 
-**Last Updated:** December 12, 2025  
+**Last Updated:** December 12, 2025
 **Version:** Phase 2 Production (CLIP + Lighting Detection)

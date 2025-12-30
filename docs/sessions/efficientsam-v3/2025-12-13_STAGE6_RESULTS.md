@@ -112,7 +112,7 @@ Generated 3 triptych crops per "win" scene (512×512 px):
 
 **Conclusion**: Even when fusion applied, **final output is nearly identical**.
 
-**Hypothesis**: 
+**Hypothesis**:
 
 * Fusion weight (`alpha_edge=0.7, alpha_core=0.3`) may be too conservative
 * OR refined masks are so similar to base that blending has minimal effect

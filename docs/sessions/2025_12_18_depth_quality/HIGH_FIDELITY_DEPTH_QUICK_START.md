@@ -1,5 +1,5 @@
 # High-Fidelity Depth Pipeline - Quick Reference
-**Version**: 1.0.0  
+**Version**: 1.0.0
 **Date**: 2025-12-18
 
 ---
@@ -8,8 +8,8 @@
 
 Production-grade tile-based depth inference with scale reconciliation for luxury real estate rendering.
 
-**Location**: `high_fidelity_depth/`  
-**Lines of Code**: 1,038 lines  
+**Location**: `high_fidelity_depth/`
+**Lines of Code**: 1,038 lines
 **Test Coverage**: 8/8 unit tests pass
 
 ---
@@ -74,19 +74,19 @@ class DepthConfig:
     # Model
     model_name: str = "depth-anything/Depth-Anything-V2-Large-hf"
     device: str = "auto"  # auto | cuda | mps | cpu
-    
+
     # Tiling
     tile_size: int = 1024  # Size of each tile (512-1536 recommended)
     overlap: int = 128     # Overlap between tiles (64-256 recommended)
-    
+
     # Scale reconciliation (CRITICAL)
     reconcile_scales: bool = True  # Must be True to prevent seams
     reconcile_method: str = "robust"  # robust | percentile
-    
+
     # Fusion
     fusion_mode: str = "weighted"  # weighted | median
     blend_window: str = "hann"  # hann | cosine | linear
-    
+
     # Validation
     validate_seams: bool = True
     seam_energy_threshold: float = 1.2  # Max boundary gradient ratio
@@ -281,7 +281,7 @@ normals_rgb = (normals + 1.0) / 2.0
 ```python
 class HighFidelityDepthEstimator:
     def __init__(self, config: DepthConfig)
-    
+
     def estimate_depth(
         self,
         image: np.ndarray,
@@ -289,11 +289,11 @@ class HighFidelityDepthEstimator:
     ) -> np.ndarray:
         """
         Estimate high-fidelity depth.
-        
+
         Args:
             image: RGB image (uint8 or float32)
             use_global_anchor: Use global depth for scale reconciliation
-            
+
         Returns:
             Depth map as float32 [0, 1]
         """

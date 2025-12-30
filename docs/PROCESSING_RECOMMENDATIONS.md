@@ -1,14 +1,14 @@
 # Processing Recommendations Quick Reference
 
-**Last Updated**: 2025-12-08  
+**Last Updated**: 2025-12-08
 **Based On**: 750 Picacho empirical processing analysis
 
 ## TL;DR
 
-✅ **Safe Zone**: 12-24MP images (80-163MB 16-bit TIFF)  
-⚠️ **Warning**: 25-35MP (may OOM on MPS)  
-❌ **Unsafe**: >35MP (use CPU fallback)  
-💾 **Disk Space**: 2.5GB minimum per 20MP image  
+✅ **Safe Zone**: 12-24MP images (80-163MB 16-bit TIFF)
+⚠️ **Warning**: 25-35MP (may OOM on MPS)
+❌ **Unsafe**: >35MP (use CPU fallback)
+💾 **Disk Space**: 2.5GB minimum per 20MP image
 ⏱️ **Expected Time**: ~6 seconds per megapixel
 
 ---
@@ -104,7 +104,7 @@ Before starting a batch:
    ```bash
    # Check MPS availability
    python -c "import torch; print('MPS:', torch.backends.mps.is_available())"
-   
+
    # Check memory pressure
    memory_pressure  # macOS only
    ```

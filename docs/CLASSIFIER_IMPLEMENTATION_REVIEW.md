@@ -1,5 +1,5 @@
 # Classifier Implementation Review
-**Date**: 2025-12-19  
+**Date**: 2025-12-19
 **Status**: ✅ ALL CRITICAL FIXES IMPLEMENTED
 
 ## Executive Summary
@@ -72,7 +72,7 @@ return scene_type, {
 def compute_high_frequency_energy(depth_map: np.ndarray, sigma: float = 15.0) -> float:
     """
     Compute high-frequency energy (texture artifacts) in depth map.
-    
+
     Valid: Large near-to-far depth range (global variance high) but smooth gradients → low HF energy
     Artifact: Ripples/speckles copied from texture (global variance moderate) → high HF energy
     """
@@ -81,13 +81,13 @@ def compute_high_frequency_energy(depth_map: np.ndarray, sigma: float = 15.0) ->
         depth_map, (ksize, ksize), sigmaX=sigma, sigmaY=sigma,
         borderType=cv2.BORDER_REFLECT_101
     )
-    
+
     # High-frequency residual (texture artifacts, ripples, speckles)
     depth_highfreq = depth_map - depth_lowfreq
-    
+
     # Variance of HF residual
     hf_energy = float(np.var(depth_highfreq))
-    
+
     return hf_energy
 ```
 
@@ -146,15 +146,15 @@ if scene_type == 'texture_dominated':
     smooth_hf = hf_energy < 0.002  # Allow some geometric structure
     reasonable_edges = edge_f1 >= 0.20 and edge_ratio < 15.0
     not_flat = depth_range > 0.05
-    
+
     # Lenient: (smooth HF AND not flat) OR reasonable edges
     lenient_pass = (smooth_hf and not_flat) or reasonable_edges
-    
+
     # Strict: smooth HF AND not flat AND good edges
     very_smooth_hf = hf_energy < 0.001
     good_edges = edge_f1 >= 0.30 and edge_ratio < 10.0
     strict_pass = very_smooth_hf and not_flat and good_edges
-    
+
     gate_type = 'smoothness_hf_balanced'
 ```
 
@@ -164,7 +164,7 @@ elif scene_type == 'structure_dominated':
     # Edge alignment gates
     lenient_pass = edge_f1 >= 0.30 and chamfer_distance < 15.0
     strict_pass = edge_f1 >= 0.60 and chamfer_distance < 5.0
-    
+
     gate_type = 'edge_alignment'
 ```
 
@@ -194,7 +194,7 @@ def extract_structure_edges(
 ) -> np.ndarray:
     """
     Extract structural edges with texture suppression via bilateral filtering.
-    
+
     The bilateral filter removes texture/noise while preserving object boundaries.
     """
     # Convert to grayscale if needed
@@ -202,17 +202,17 @@ def extract_structure_edges(
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         gray = image.copy()
-    
+
     # Apply bilateral filter to suppress texture
     filtered = cv2.bilateralFilter(
         gray, d=bilateral_d,
         sigmaColor=bilateral_sigma_color,
         sigmaSpace=bilateral_sigma_space
     )
-    
+
     # Extract edges from texture-suppressed image
     edges = cv2.Canny(filtered, canny_low, canny_high)
-    
+
     return edges
 ```
 
@@ -250,7 +250,7 @@ def validate_metrics_dict(metrics_dict: dict, image_name: str):
             raise KeyError(f"Missing required metric '{key}' for image {image_name}")
         if metrics_dict[key] is None:
             raise ValueError(f"Metric '{key}' is None for image {image_name}")
-    
+
     # Type checks for critical flags
     if not isinstance(metrics_dict['lenient_pass'], bool):
         raise TypeError(f"lenient_pass must be bool, got {type(metrics_dict['lenient_pass'])}")
@@ -368,18 +368,18 @@ metrics_dict = {
 ## 🎯 Remaining Risks (Controlled)
 
 ### 1. Classifier Generalization
-**Risk**: Current thresholds tuned on 18-image pilot set  
-**Mitigation**: Expand to 50-60 images (in progress)  
+**Risk**: Current thresholds tuned on 18-image pilot set
+**Mitigation**: Expand to 50-60 images (in progress)
 **Status**: Known limitation, not blocker
 
 ### 2. Filename Hints in Production
-**Risk**: Filename-based weak supervision won't generalize to customer uploads  
-**Current State**: Implemented but should be **feature-flagged** for evaluation only  
+**Risk**: Filename-based weak supervision won't generalize to customer uploads
+**Current State**: Implemented but should be **feature-flagged** for evaluation only
 **Recommendation**: Add `--use_filename_hints` flag (default False) in next iteration
 
 ### 3. Structure Scene Performance
-**Risk**: Structure scenes still fail strict gates (edge fidelity limited by model operating point)  
-**Mitigation**: DA V2 input-size sweep planned  
+**Risk**: Structure scenes still fail strict gates (edge fidelity limited by model operating point)
+**Mitigation**: DA V2 input-size sweep planned
 **Status**: Known, correct next step
 
 ---

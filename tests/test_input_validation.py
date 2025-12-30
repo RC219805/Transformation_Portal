@@ -37,32 +37,32 @@ from transformation_portal.utils.input_validation import (
 @pytest.fixture
 def small_rgb_image():
     """Create a small valid RGB image."""
-    return Image.new('RGB', (100, 100), color='red')
+    return Image.new("RGB", (100, 100), color="red")
 
 
 @pytest.fixture
 def large_rgb_image():
     """Create a larger valid RGB image."""
-    return Image.new('RGB', (1920, 1080), color='blue')
+    return Image.new("RGB", (1920, 1080), color="blue")
 
 
 @pytest.fixture
 def rgba_image():
     """Create an RGBA image with alpha channel."""
-    return Image.new('RGBA', (100, 100), color=(255, 0, 0, 128))
+    return Image.new("RGBA", (100, 100), color=(255, 0, 0, 128))
 
 
 @pytest.fixture
 def grayscale_image():
     """Create a grayscale image."""
-    return Image.new('L', (100, 100), color=128)
+    return Image.new("L", (100, 100), color=128)
 
 
 @pytest.fixture
 def temp_image_file(small_rgb_image):
     """Create a temporary image file."""
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
-        small_rgb_image.save(f.name, 'JPEG')
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        small_rgb_image.save(f.name, "JPEG")
         yield Path(f.name)
     Path(f.name).unlink(missing_ok=True)
 
@@ -70,8 +70,8 @@ def temp_image_file(small_rgb_image):
 @pytest.fixture
 def temp_png_file(small_rgb_image):
     """Create a temporary PNG file."""
-    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
-        small_rgb_image.save(f.name, 'PNG')
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        small_rgb_image.save(f.name, "PNG")
         yield Path(f.name)
     Path(f.name).unlink(missing_ok=True)
 
@@ -79,8 +79,8 @@ def temp_png_file(small_rgb_image):
 @pytest.fixture
 def temp_large_image_file(large_rgb_image):
     """Create a temporary large image file."""
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
-        large_rgb_image.save(f.name, 'JPEG')
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        large_rgb_image.save(f.name, "JPEG")
         yield Path(f.name)
     Path(f.name).unlink(missing_ok=True)
 
@@ -174,12 +174,12 @@ class TestImageValidatorFiles:
 
     def test_unsupported_format(self, small_rgb_image):
         """Test validation with unsupported format."""
-        with tempfile.NamedTemporaryFile(suffix='.bmp', delete=False) as f:
-            small_rgb_image.save(f.name, 'BMP')
+        with tempfile.NamedTemporaryFile(suffix=".bmp", delete=False) as f:
+            small_rgb_image.save(f.name, "BMP")
             path = Path(f.name)
 
         try:
-            validator = ImageValidator(allowed_formats={'JPEG', 'PNG'})
+            validator = ImageValidator(allowed_formats={"JPEG", "PNG"})
             result = validator.validate(path)
             assert not result.is_valid
             assert any(e.code == "UNSUPPORTED_FORMAT" for e in result.errors)
@@ -189,10 +189,10 @@ class TestImageValidatorFiles:
     def test_file_too_large(self):
         """Test validation of file exceeding size limit."""
         # Create a moderately large image
-        large_img = Image.new('RGB', (3000, 3000), color='white')
+        large_img = Image.new("RGB", (3000, 3000), color="white")
 
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
-            large_img.save(f.name, 'PNG')
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            large_img.save(f.name, "PNG")
             path = Path(f.name)
 
         try:
@@ -233,7 +233,7 @@ class TestImageValidatorPIL:
 
     def test_image_too_small(self):
         """Test validation of image below minimum size."""
-        small_img = Image.new('RGB', (50, 50))
+        small_img = Image.new("RGB", (50, 50))
         validator = ImageValidator(min_width=100, min_height=100)
         result = validator.validate(small_img)
         assert not result.is_valid
@@ -243,7 +243,7 @@ class TestImageValidatorPIL:
         """Test validation of image above maximum size."""
         # Don't actually create a huge image, just check logic
         validator = ImageValidator(max_width=100, max_height=100)
-        large_img = Image.new('RGB', (200, 200))
+        large_img = Image.new("RGB", (200, 200))
         result = validator.validate(large_img)
         assert not result.is_valid
         assert any("TOO_LARGE" in e.code for e in result.errors)
@@ -257,7 +257,7 @@ class TestImageValidatorPIL:
 
     def test_unusual_aspect_ratio_warning(self):
         """Test warning for unusual aspect ratio."""
-        wide_img = Image.new('RGB', (1000, 100))
+        wide_img = Image.new("RGB", (1000, 100))
         validator = ImageValidator()
         result = validator.validate(wide_img)
         assert result.is_valid  # Still valid, just warning
@@ -361,10 +361,12 @@ class TestBatchValidator:
     def test_batch_with_invalid(self, temp_image_file):
         """Test batch validation with some invalid paths."""
         validator = BatchValidator()
-        results = validator.validate_batch([
-            temp_image_file,
-            Path("/nonexistent/file.jpg"),
-        ])
+        results = validator.validate_batch(
+            [
+                temp_image_file,
+                Path("/nonexistent/file.jpg"),
+            ]
+        )
 
         assert len(results) == 2
         assert not validator.all_valid
@@ -418,9 +420,9 @@ class TestConvenienceFunctions:
 
     def test_validate_image_strict_fails_small(self):
         """Test validate_image_strict fails for small images."""
-        small_img = Image.new('RGB', (100, 100))
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
-            small_img.save(f.name, 'JPEG')
+        small_img = Image.new("RGB", (100, 100))
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            small_img.save(f.name, "JPEG")
             path = Path(f.name)
 
         try:
@@ -505,19 +507,19 @@ class TestEdgeCases:
         """Test validation of empty (0x0) image is handled."""
         validator = ImageValidator(min_width=1, min_height=1)
         # PIL doesn't allow 0x0 images, but check dimension validation
-        tiny = Image.new('RGB', (1, 1))
+        tiny = Image.new("RGB", (1, 1))
         result = validator.validate(tiny)
         assert result.is_valid
 
     def test_custom_formats(self, small_rgb_image):
         """Test validation with custom format set."""
-        with tempfile.NamedTemporaryFile(suffix='.tiff', delete=False) as f:
-            small_rgb_image.save(f.name, 'TIFF')
+        with tempfile.NamedTemporaryFile(suffix=".tiff", delete=False) as f:
+            small_rgb_image.save(f.name, "TIFF")
             path = Path(f.name)
 
         try:
             # Only allow TIFF
-            validator = ImageValidator(allowed_formats={'TIFF'})
+            validator = ImageValidator(allowed_formats={"TIFF"})
             result = validator.validate(path)
             assert result.is_valid
         finally:

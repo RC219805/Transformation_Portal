@@ -3,16 +3,17 @@
 Ensures that preset configurations remain stable and don't silently
 change critical defaults (e.g., edge refinement opt-in status).
 """
+
 import pytest
 from lux_depth_v2.config import PipelineConfig, Preset
 
 
 class TestPresetRegressions:
     """Ensure preset defaults remain stable across refactors."""
-    
+
     def test_edge_refinement_opt_in_default(self):
         """REGRESSION: Edge refinement must be opt-in by default.
-        
+
         Critical safety check - prevents accidental enablement that could:
         - Increase processing time unexpectedly
         - Introduce visual artifacts before validation complete
@@ -24,10 +25,10 @@ class TestPresetRegressions:
                 f"Preset {preset.value} unexpectedly enabled edge refinement by default. "
                 "Edge refinement must be opt-in via --edge-refinement CLI flag."
             )
-    
+
     def test_refinement_preset_default(self):
         """REGRESSION: Default refinement preset must be 'balanced'.
-        
+
         When edge refinement IS enabled, the default preset should be
         the balanced middle-ground option, not aggressive or subtle.
         """
@@ -36,17 +37,17 @@ class TestPresetRegressions:
             f"Default refinement preset changed to '{config.refinement_preset}'. "
             "Expected 'balanced' as safe middle-ground default."
         )
-    
+
     @pytest.mark.parametrize("preset", list(Preset))
     def test_preset_determinism(self, preset):
         """REGRESSION: Preset configs must be deterministic.
-        
+
         Same preset should produce identical configuration every time.
         Non-determinism breaks reproducibility and client expectations.
         """
         config1 = PipelineConfig(preset=preset)
         config2 = PipelineConfig(preset=preset)
-        
+
         # Critical fields must match exactly
         assert config1.material_strength == config2.material_strength, (
             f"Preset {preset.value} is non-deterministic (material_strength)"
@@ -57,10 +58,10 @@ class TestPresetRegressions:
         assert config1.detail_strength == config2.detail_strength, (
             f"Preset {preset.value} is non-deterministic (detail_strength)"
         )
-    
+
     def test_no_preset_enables_edge_by_default(self):
         """CRITICAL: No preset should enable edge refinement without explicit flag.
-        
+
         This is the primary safety gate. Even if a preset is marked as
         "high quality" or "apex", edge refinement should remain opt-in
         until validation completes (Week 2-3).
@@ -70,7 +71,7 @@ class TestPresetRegressions:
             config = PipelineConfig(preset=preset)
             if config.enable_edge_refinement:
                 enabled_presets.append(preset.value)
-        
+
         assert len(enabled_presets) == 0, (
             f"Presets {enabled_presets} enable edge refinement by default. "
             "This violates feature freeze policy and validation gate. "
@@ -80,10 +81,10 @@ class TestPresetRegressions:
 
 class TestFeatureFreezeCompliance:
     """Ensure feature freeze constraints are maintained."""
-    
+
     def test_no_new_experimental_presets_during_freeze(self):
         """FREEZE: No new experimental presets during freeze period.
-        
+
         Freeze period: Dec 20, 2025 - Jan 10, 2026
         Only bug fixes and validation allowed.
         """
@@ -107,9 +108,9 @@ class TestFeatureFreezeCompliance:
             "architectural",
             "archival_quality",
         }
-        
+
         actual_presets = {p.value for p in Preset}
-        
+
         assert actual_presets == expected_presets, (
             f"Preset inventory changed during feature freeze. "
             f"Added: {actual_presets - expected_presets}, "
