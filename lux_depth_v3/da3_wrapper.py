@@ -272,7 +272,9 @@ class DA3CLI:
         Returns:
             Processing result
         """
-        cmd = self._build_base_cmd("auto", input_path=input_path, export_dir=str(export_dir), export_format=export_format, **kwargs)
+        cmd = self._build_base_cmd(
+            "auto", input_path=input_path, export_dir=str(export_dir), export_format=export_format, **kwargs
+        )
         return self._run_command(cmd)
 
     def process_image(self, image_path: Path, export_dir: Path, export_format: str = "mini_npz", **kwargs) -> Dict[str, Any]:
@@ -287,7 +289,9 @@ class DA3CLI:
         Returns:
             Processing result
         """
-        cmd = self._build_base_cmd("image", input_path=image_path, export_dir=str(export_dir), export_format=export_format, **kwargs)
+        cmd = self._build_base_cmd(
+            "image", input_path=image_path, export_dir=str(export_dir), export_format=export_format, **kwargs
+        )
         return self._run_command(cmd)
 
     def process_images(
@@ -335,7 +339,9 @@ class DA3CLI:
         Returns:
             Processing result
         """
-        cmd = self._build_base_cmd("video", input_path=video_path, export_dir=str(export_dir), fps=str(fps), export_format=export_format, **kwargs)
+        cmd = self._build_base_cmd(
+            "video", input_path=video_path, export_dir=str(export_dir), fps=str(fps), export_format=export_format, **kwargs
+        )
         return self._run_command(cmd)
 
     def process_colmap(
@@ -352,7 +358,9 @@ class DA3CLI:
         Returns:
             Processing result
         """
-        cmd = self._build_base_cmd("colmap", input_path=colmap_dir, export_dir=str(export_dir), export_format=export_format, **kwargs)
+        cmd = self._build_base_cmd(
+            "colmap", input_path=colmap_dir, export_dir=str(export_dir), export_format=export_format, **kwargs
+        )
         return self._run_command(cmd)
 
 
@@ -650,9 +658,7 @@ class DepthAnything3Wrapper:
         # Validate GS requirements
         api_model_name = self._resolve_api_model_name()
         if infer_gs and api_model_name not in self.GS_CAPABLE_MODELS:
-            raise ValueError(
-                f"Gaussian Splatting requires {', '.join(self.GS_CAPABLE_MODELS)}, but got {api_model_name}"
-            )
+            raise ValueError(f"Gaussian Splatting requires {', '.join(self.GS_CAPABLE_MODELS)}, but got {api_model_name}")
 
         # Validate reference view strategy
         valid_strategies = ["first", "middle", "saddle_balanced", "saddle_sim_range"]
