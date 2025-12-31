@@ -15,6 +15,7 @@ echo ""
 mkdir -p "$OUTPUT"
 
 lux-depth-v2 \
+  --allow-downloads \
   --input "$INPUT" \
   --output-dir "$OUTPUT" \
   --preset exterior_pool_apex_quality \
