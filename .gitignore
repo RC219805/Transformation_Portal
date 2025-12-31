@@ -217,6 +217,7 @@ input_images/**/*.png
 
 # Generated logs and artifacts
 logs/
+**/logs/
 artifacts/
 # But allow transformation_portal core modules
 !src/transformation_portal/core/artifacts/
@@ -257,6 +258,14 @@ input_images/750_Picacho/
 input_images/800_Picacho/
 validation_v1_baseline_pack/
 validation_v1_baseline_pack.zip
+
+# Local outputs (Picacho runs)
+750Picacho_Depth_Maps_APEX/
+750Picacho_Processed/
+750_Picacho_Depth_Maps/
+750Picacho_Depth_Maps/
+750Picacho_Depth_Maps_DAV3_*/
+750Picacho_Depth_Maps_DA3_*/
 
 # BUT KEEP Phase 2 regression baselines (production deliverables)
 !regression_baselines/
