@@ -55,6 +55,23 @@ _PERCEPTUAL_ASSESSOR_AVAILABLE: Optional[bool] = None
 _TORCH_AVAILABLE: Optional[bool] = None
 
 
+def _to_jsonable(obj: Any) -> Any:
+    """Recursively convert common non-JSON types (e.g. NumPy scalars) to Python primitives."""
+    if isinstance(obj, np.generic):
+        return obj.item()
+
+    if isinstance(obj, Path):
+        return str(obj)
+
+    if isinstance(obj, dict):
+        return {k: _to_jsonable(v) for k, v in obj.items()}
+
+    if isinstance(obj, (list, tuple)):
+        return [_to_jsonable(v) for v in obj]
+
+    return obj
+
+
 def _check_torch_available() -> bool:
     """Check if PyTorch is available (lazy check)."""
     global _TORCH_AVAILABLE
@@ -228,7 +245,7 @@ class UnifiedQualityMetrics:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        doc = {
             'image_id': self.image_id,
             'pipeline_config_name': self.pipeline_config_name,
             'timestamp': self.timestamp,
@@ -249,6 +266,7 @@ class UnifiedQualityMetrics:
                 'warnings': self.warnings,
             },
         }
+        return _to_jsonable(doc)
 
     def to_rag_document(self) -> Dict[str, Any]:
         """Convert to RAG-indexable document format."""
