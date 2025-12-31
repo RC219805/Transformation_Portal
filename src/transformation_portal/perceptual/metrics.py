@@ -74,13 +74,20 @@ class QualityMetrics:
         """
         self.substrate = substrate
         self.cache_models = cache_models
-        self.device = substrate.get_device()
+        device = substrate.get_device()
+        self.device = device if isinstance(device, torch.device) else torch.device(device)
 
         # Model cache
         self._lpips_model = None
         self._inception_model = None
 
         logger.info("Initialized QualityMetrics")
+
+    def _ensure_device(self, tensor: Tensor) -> Tensor:
+        """Move tensor to the configured device if needed."""
+        if tensor.device != self.device:
+            return tensor.to(self.device)
+        return tensor
 
     def compute_all(
         self,
@@ -129,6 +136,9 @@ class QualityMetrics:
         Returns:
             LPIPS score (lower is better, 0 = identical)
         """
+        image = self._ensure_device(image)
+        reference = self._ensure_device(reference)
+
         # Ensure 4D tensors
         if image.ndim == 3:
             image = image.unsqueeze(0)
@@ -182,6 +192,8 @@ class QualityMetrics:
         Returns:
             PSNR score (higher is better, typically 20-50 dB)
         """
+        image = self._ensure_device(image)
+        reference = self._ensure_device(reference)
         mse = F.mse_loss(image, reference).item()
 
         if mse == 0:
@@ -220,6 +232,9 @@ class QualityMetrics:
         Returns:
             SSIM score (higher is better, range [0, 1])
         """
+        image = self._ensure_device(image)
+        reference = self._ensure_device(reference)
+
         # Ensure 4D
         if image.ndim == 3:
             image = image.unsqueeze(0)
@@ -261,6 +276,8 @@ class QualityMetrics:
         Returns:
             MSE score (lower is better)
         """
+        image = self._ensure_device(image)
+        reference = self._ensure_device(reference)
         mse = F.mse_loss(image, reference).item()
 
         # Normalize (assuming max MSE = 1.0 for [0,1] images)
