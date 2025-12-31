@@ -83,7 +83,7 @@ class DA3InferenceEngine:
 
         # Initialize backend if requested
         if self.config.cli.use_backend:
-            model_dir = str(self.config.cache_dir / "models" / self.config.model_variant.value)
+            model_dir = self.config.model_variant.info.huggingface_id
             self.backend = DA3Backend(
                 model_dir=model_dir,
                 device=str(self.device),
@@ -135,34 +135,8 @@ class DA3InferenceEngine:
         self._model_cache_path.mkdir(parents=True, exist_ok=True)
 
     def _get_model_name_from_variant(self) -> str:
-        """Convert ModelVariant enum to DA3 API model name."""
-        variant_to_name = {
-            # v1.1 models (DA3 API doesn't use version suffixes)
-            ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1: "da3nested-giant-large",
-            ModelVariant.DA3_GIANT_V1_1: "da3-giant",
-            ModelVariant.DA3_LARGE_V1_1: "da3-large",
-            # v1.0 models (deprecated)
-            ModelVariant.DA3_NESTED_GIANT_LARGE: "da3nested-giant-large",
-            ModelVariant.DA3_GIANT: "da3-giant",
-            ModelVariant.DA3_LARGE: "da3-large",
-            # Legacy enums (backward compatibility)
-            ModelVariant.NESTED_GIANT_LARGE: "da3nested-giant-large",
-            ModelVariant.GIANT: "da3-giant",
-            ModelVariant.LARGE: "da3-large",
-            ModelVariant.BASE: "da3-base",
-            ModelVariant.SMALL: "da3-small",
-            # Apache-licensed models
-            ModelVariant.DA3_BASE: "da3-base",
-            ModelVariant.DA3_SMALL: "da3-small",
-            ModelVariant.DA3_METRIC_LARGE: "da3metric-large",
-            ModelVariant.DA3_MONO_LARGE: "da3mono-large",
-            ModelVariant.METRIC_LARGE: "da3metric-large",
-            ModelVariant.MONO_LARGE: "da3mono-large",
-        }
-        return variant_to_name.get(
-            self.config.model_variant,
-            "da3-large",  # Default fallback
-        )
+        """Resolve the configured ModelVariant to a HuggingFace model id."""
+        return self.config.model_variant.info.huggingface_id
 
     def start_backend(self, timeout: int = 30):
         """Start backend service (CLI mode only).
@@ -267,7 +241,7 @@ class DA3InferenceEngine:
             from lux_depth_v3.metric_depth import convert_to_metric_depth
 
             # Get model name
-            model_name = self.config.model_variant.value.info.name
+            model_name = self.config.model_variant.info.display_name
 
             # Determine image width if needed for FOV estimation
             image_width = None
@@ -309,33 +283,72 @@ class DA3InferenceEngine:
         if self.cli is None:
             raise RuntimeError("CLI mode not initialized")
 
-        # Determine input type
-        if len(images) == 1:
-            result = self.cli.process_image(image_path=images[0], export_dir=export_dir or Path("output"), **kwargs)
-        else:
-            # For multiple images, create temp directory
-            import tempfile
+        export_dir_resolved = export_dir or Path("output")
+        export_dir_resolved.mkdir(parents=True, exist_ok=True)
 
-            with tempfile.TemporaryDirectory() as tmpdir:
-                # Symlink images to temp dir
-                tmppath = Path(tmpdir)
+        # For multiple images, create a temp directory so we can preserve ordering
+        # and avoid relying on the source directory layout.
+        import tempfile
+
+        input_path: Path
+        tmp_ctx = tempfile.TemporaryDirectory() if len(images) > 1 else None
+        try:
+            if tmp_ctx is None:
+                input_path = images[0]
+            else:
+                tmppath = Path(tmp_ctx.name)
                 for i, img_path in enumerate(images):
                     (tmppath / f"{i:04d}{img_path.suffix}").symlink_to(img_path)
+                input_path = tmppath
 
-                result = self.cli.process_images(images_dir=tmppath, export_dir=export_dir or Path("output"), **kwargs)
+            # Ensure we export an NPZ so we can load depth back into memory
+            export_format = str(kwargs.pop("export_format", self.config.cli.export_format))
+            if "mini_npz" not in export_format and "npz" not in export_format:
+                export_format = f"mini_npz-{export_format}"
 
-        # Load results from export_dir
-        # This is a simplified version - actual implementation would parse
-        # the exported files based on export_format
-        depth = np.zeros((1, 100, 100))  # Placeholder
+            result = self.cli.process_auto(
+                input_path=input_path,
+                export_dir=export_dir_resolved,
+                export_format=export_format,
+                model_dir=self.config.model_variant.info.huggingface_id,
+                device=str(self.device),
+                **kwargs,
+            )
 
-        prediction = DA3Prediction(depth=depth, conf=None, extrinsics=None, intrinsics=None, processed_images=None, aux=result)
+            # Load results (prefer full NPZ if requested)
+            npz_path_candidates: List[Path] = []
+            if "npz" in export_format:
+                npz_path_candidates.append(export_dir_resolved / "exports" / "npz" / "results.npz")
+            if "mini_npz" in export_format:
+                npz_path_candidates.append(export_dir_resolved / "exports" / "mini_npz" / "results.npz")
+
+            npz_path = next((p for p in npz_path_candidates if p.exists()), None)
+            if npz_path is None:
+                raise RuntimeError(f"DA3 CLI did not produce an NPZ in {export_dir_resolved}")
+
+            data = np.load(npz_path)
+            depth = data["depth"]
+            conf = data["conf"] if "conf" in data else None
+            extrinsics = data["extrinsics"] if "extrinsics" in data else None
+            intrinsics = data["intrinsics"] if "intrinsics" in data else None
+
+            prediction = DA3Prediction(
+                depth=depth,
+                conf=conf,
+                extrinsics=extrinsics,
+                intrinsics=intrinsics,
+                processed_images=None,
+                aux={**result, "npz_path": str(npz_path)},
+            )
+        finally:
+            if tmp_ctx is not None:
+                tmp_ctx.cleanup()
 
         # Convert to metric depth if requested
         if convert_to_metric:
             from lux_depth_v3.metric_depth import convert_to_metric_depth
 
-            model_name = self.config.model_variant.value.info.name
+            model_name = self.config.model_variant.info.display_name
 
             # Determine image width for FOV estimation
             image_width = None
@@ -434,15 +447,20 @@ class DA3InferenceEngine:
         if self.use_cli:
             results = self._inference_cli(inputs)
         else:
-            # Ensure model is loaded for native mode
-            if self.model is None:
-                self.load_model()
-
-            # Run inference based on mode
-            if self.config.inference_mode == InferenceMode.MULTI_VIEW:
-                results = self._inference_multiview(inputs)
+            # Prefer the official DA3 Python API wrapper when available.
+            if getattr(self, "wrapper", None) is not None and getattr(self.wrapper, "available", False):
+                results = self._inference_api(inputs)
             else:
-                results = self._inference_monocular(inputs)
+                # Fallback to the legacy placeholder implementation.
+                # Ensure model is loaded for native mode
+                if self.model is None:
+                    self.load_model()
+
+                # Run inference based on mode
+                if self.config.inference_mode == InferenceMode.MULTI_VIEW:
+                    results = self._inference_multiview(inputs)
+                else:
+                    results = self._inference_monocular(inputs)
 
         return results[0] if single_input else results
 
@@ -522,35 +540,97 @@ class DA3InferenceEngine:
         """
         results = []
 
-        # Find npz files in export directory
-        npz_files = sorted(export_dir.glob("*.npz"))
+        export_tokens = set(self.config.cli.export_format.split("-"))
+        npz_candidates: List[Path] = []
+        if "npz" in export_tokens:
+            npz_candidates.append(export_dir / "exports" / "npz" / "results.npz")
+        if "mini_npz" in export_tokens:
+            npz_candidates.append(export_dir / "exports" / "mini_npz" / "results.npz")
 
-        for i, (npz_file, img_input) in enumerate(zip(npz_files, inputs)):
-            # Load depth from npz
-            data = np.load(npz_file)
+        npz_path = next((p for p in npz_candidates if p.exists()), None)
+        if npz_path is None:
+            raise RuntimeError(f"DA3 CLI did not produce an NPZ in {export_dir}")
 
-            # DA3 CLI outputs "depth" key in npz
-            if "depth" in data:
-                depth_map = data["depth"]
-            else:
-                raise RuntimeError(f"No 'depth' key in {npz_file}")
+        data = np.load(npz_path)
+        if "depth" not in data:
+            raise RuntimeError(f"No 'depth' key in {npz_path}")
 
-            # Load original image
+        depth = data["depth"]
+        if depth.ndim == 2:
+            depth = depth[np.newaxis, ...]
+
+        if depth.shape[0] != len(inputs):
+            raise RuntimeError(f"DA3 CLI returned {depth.shape[0]} depth maps for {len(inputs)} inputs")
+
+        conf = data["conf"] if "conf" in data else None
+        extrinsics = data["extrinsics"] if "extrinsics" in data else None
+        intrinsics = data["intrinsics"] if "intrinsics" in data else None
+
+        for i, img_input in enumerate(inputs):
             image = img_input.load()
+            depth_map = depth[i]
 
-            # Create result
-            result = DepthResult(
-                depth_map=depth_map,
-                original_image=image,
-                metadata={
-                    "model_variant": self.config.model_variant.value,
-                    "inference_mode": "cli",
-                    "input_path": str(img_input.path) if img_input.path else None,
-                    "cli_output": str(npz_file),
-                },
-            )
+            metadata = {
+                **(img_input.metadata or {}),
+                "model_variant": self.config.model_variant.info.display_name,
+                "model_hf_id": self.config.model_variant.info.huggingface_id,
+                "inference_mode": "cli",
+                "input_path": str(img_input.path) if img_input.path else None,
+                "cli_output": str(npz_path),
+            }
+            if conf is not None:
+                conf_map = conf[i] if conf.ndim == 3 else conf
+                metadata["conf_range"] = (float(conf_map.min()), float(conf_map.max()))
+            if extrinsics is not None:
+                metadata["extrinsics"] = extrinsics[i].tolist() if extrinsics.ndim == 3 else extrinsics.tolist()
+            if intrinsics is not None:
+                metadata["intrinsics"] = intrinsics[i].tolist() if intrinsics.ndim == 3 else intrinsics.tolist()
 
-            results.append(result)
+            results.append(DepthResult(depth_map=depth_map, original_image=image, metadata=metadata))
+
+        return results
+
+    def _inference_api(self, inputs: List[ImageInput]) -> List[DepthResult]:
+        """Run inference via the official DA3 Python API wrapper."""
+        if getattr(self, "wrapper", None) is None or not getattr(self.wrapper, "available", False):
+            raise RuntimeError("DA3 Python API not available")
+
+        api_kwargs = self.config.api.to_api_kwargs()
+
+        prediction = self.wrapper.inference(image=inputs, export_dir=None, **api_kwargs)
+
+        depth = prediction.depth
+        if depth.ndim == 2:
+            depth = depth[np.newaxis, ...]
+
+        if depth.shape[0] != len(inputs):
+            raise RuntimeError(f"DA3 returned {depth.shape[0]} depth maps for {len(inputs)} inputs")
+
+        conf = prediction.conf
+        extrinsics = prediction.extrinsics
+        intrinsics = prediction.intrinsics
+
+        results: List[DepthResult] = []
+        for i, img_input in enumerate(inputs):
+            image = img_input.load()
+            depth_map = depth[i]
+
+            metadata = {
+                **(img_input.metadata or {}),
+                "model_variant": self.config.model_variant.info.display_name,
+                "model_hf_id": self.config.model_variant.info.huggingface_id,
+                "inference_mode": "api",
+                "input_path": str(img_input.path) if img_input.path else None,
+            }
+            if conf is not None:
+                conf_map = conf[i] if conf.ndim == 3 else conf
+                metadata["conf_range"] = (float(conf_map.min()), float(conf_map.max()))
+            if extrinsics is not None:
+                metadata["extrinsics"] = extrinsics[i].tolist() if extrinsics.ndim == 3 else extrinsics.tolist()
+            if intrinsics is not None:
+                metadata["intrinsics"] = intrinsics[i].tolist() if intrinsics.ndim == 3 else intrinsics.tolist()
+
+            results.append(DepthResult(depth_map=depth_map, original_image=image, metadata=metadata))
 
         return results
 
