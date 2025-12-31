@@ -16,6 +16,7 @@ Test Coverage:
 
 import pytest
 import numpy as np
+import os
 from pathlib import Path
 from PIL import Image
 
@@ -31,6 +32,10 @@ from lux_depth_v3 import (
 from lux_depth_v3.reference_view import select_reference_view
 from lux_depth_v3.metric_depth import convert_to_metric_depth, get_depth_statistics
 from lux_depth_v3.license import validate_license
+
+# NOTE: DA3 end-to-end inference requires large model downloads and can be slow.
+# Gate these tests behind an explicit env var so `pytest` remains fast/offline by default.
+RUN_DA3_E2E = os.environ.get("RUN_DA3_E2E", "").lower() in {"1", "true", "yes"}
 
 
 # Test data
@@ -244,8 +249,14 @@ class TestEndToEndWorkflow:
     def test_single_image_inference(self, test_images_dir, tmp_path):
         """Test single image depth estimation."""
         pytest.importorskip("depth_anything_3", reason="DA3 not installed")
+        if not RUN_DA3_E2E:
+            pytest.skip("Set RUN_DA3_E2E=1 to run DA3 end-to-end inference tests")
 
-        engine = DA3InferenceEngine(model_variant=ModelVariant.DA3_LARGE_V1_1, device="cpu")
+        from lux_depth_v3.config import DA3Config
+
+        config = DA3Config(model_variant=ModelVariant.DA3_LARGE_V1_1)
+        config.device.device = "cpu"
+        engine = DA3InferenceEngine(config)
 
         image_path = list(test_images_dir.glob("*.jpg"))[0]
 
@@ -257,10 +268,16 @@ class TestEndToEndWorkflow:
     def test_multi_view_inference(self, test_images_dir, tmp_path):
         """Test multi-view depth with reference selection."""
         pytest.importorskip("depth_anything_3", reason="DA3 not installed")
+        if not RUN_DA3_E2E:
+            pytest.skip("Set RUN_DA3_E2E=1 to run DA3 end-to-end inference tests")
 
         config = DA3APIConfig(ref_view_strategy=RefViewStrategy.SADDLE_BALANCED, use_ray_pose=False)
 
-        engine = DA3InferenceEngine(model_variant=ModelVariant.DA3_LARGE_V1_1, api_config=config, device="cpu")
+        from lux_depth_v3.config import DA3Config
+
+        da3_config = DA3Config(model_variant=ModelVariant.DA3_LARGE_V1_1, api=config)
+        da3_config.device.device = "cpu"
+        engine = DA3InferenceEngine(da3_config)
 
         images = list(test_images_dir.glob("*.jpg"))
 
@@ -273,8 +290,14 @@ class TestEndToEndWorkflow:
     def test_metric_depth_workflow(self, test_images_dir, test_intrinsics, tmp_path):
         """Test complete metric depth workflow."""
         pytest.importorskip("depth_anything_3", reason="DA3 not installed")
+        if not RUN_DA3_E2E:
+            pytest.skip("Set RUN_DA3_E2E=1 to run DA3 end-to-end inference tests")
 
-        engine = DA3InferenceEngine(model_variant=ModelVariant.DA3_METRIC_LARGE, device="cpu")
+        from lux_depth_v3.config import DA3Config
+
+        config = DA3Config(model_variant=ModelVariant.DA3_METRIC_LARGE)
+        config.device.device = "cpu"
+        engine = DA3InferenceEngine(config)
 
         image_path = list(test_images_dir.glob("*.jpg"))[0]
 
@@ -294,14 +317,20 @@ class TestExportFormats:
     def test_export_formats(self, test_images_dir, tmp_path):
         """Test all export formats."""
         pytest.importorskip("depth_anything_3", reason="DA3 not installed")
+        if not RUN_DA3_E2E:
+            pytest.skip("Set RUN_DA3_E2E=1 to run DA3 end-to-end inference tests")
 
-        engine = DA3InferenceEngine(model_variant=ModelVariant.DA3_LARGE_V1_1, device="cpu")
+        from lux_depth_v3.config import DA3Config
+
+        config = DA3Config(model_variant=ModelVariant.DA3_LARGE_V1_1)
+        config.device.device = "cpu"
+        engine = DA3InferenceEngine(config)
 
         image_path = list(test_images_dir.glob("*.jpg"))[0]
         export_dir = tmp_path / "output"
 
         config = DA3APIConfig(export_format="mini_npz-glb")
-        engine.api_config = config
+        engine.config.api = config
 
         result = engine.infer(images=[image_path], export_dir=export_dir)
 
