@@ -35,17 +35,17 @@ for file in 750Picacho_Source_TIFFs/*.tif*; do
     if [ ! -f "$file" ]; then
         continue
     fi
-    
+
     TOTAL=$((TOTAL + 1))
     basename=$(basename "$file" .tif)
     basename=$(basename "$basename" .tiff)
-    
+
     echo "------------------------------------------------------------" | tee -a "$LOG_FILE"
     echo "[$TOTAL] Processing: $basename" | tee -a "$LOG_FILE"
     echo "------------------------------------------------------------" | tee -a "$LOG_FILE"
-    
+
     OUTPUT_DIR="$OUTPUT_BASE/$basename"
-    
+
     if lux-depth-v2 \
       --input "$file" \
       --output-dir "$OUTPUT_DIR" \
@@ -76,7 +76,7 @@ for file in 750Picacho_Source_TIFFs/*.tif*; do
         FAILED=$((FAILED + 1))
         echo "❌ FAILED: $basename" | tee -a "$LOG_FILE"
     fi
-    
+
     echo "" | tee -a "$LOG_FILE"
 done
 
@@ -99,4 +99,3 @@ fi
 
 echo "" | tee -a "$LOG_FILE"
 echo "Log saved to: $LOG_FILE" | tee -a "$LOG_FILE"
-

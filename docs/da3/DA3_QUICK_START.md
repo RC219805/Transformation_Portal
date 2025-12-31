@@ -1,7 +1,7 @@
 # DA3 Geometry Evaluation - Quick Start
 
-**Purpose**: Test if DA3 provides better global geometry than DA2 APEX on 750 Picacho scenes  
-**Time**: 90 minutes  
+**Purpose**: Test if DA3 provides better global geometry than DA2 APEX on 750 Picacho scenes
+**Time**: 90 minutes
 **License**: Non-commercial R&D only
 
 ---
@@ -133,13 +133,13 @@ SegFormer MaterialsV2 ← Keep
 
 ## Processing Settings
 
-**Resolution**: `--process-res 1024` (upper_bound_resize)  
+**Resolution**: `--process-res 1024` (upper_bound_resize)
 **Why**: Preserves detail while capping max resolution. DA3 at lower res will lose edge detail vs APEX.
 
-**Export**: `mini_npz-glb`  
+**Export**: `mini_npz-glb`
 **Why**: NPZ for arrays (depth/conf), GLB for visual QA
 
-**Backend**: Yes (keeps model loaded for 6 images)  
+**Backend**: Yes (keeps model loaded for 6 images)
 **Why**: 10-20x speedup vs reloading model each time
 
 ---

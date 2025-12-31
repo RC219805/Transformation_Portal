@@ -1,7 +1,7 @@
 # DA3 Wrapper Critical Fixes - Production Contract Alignment
 
-**Created**: 2025-12-31  
-**Status**: BLOCKING - Must fix before 750 Picacho R&D evaluation  
+**Created**: 2025-12-31
+**Status**: BLOCKING - Must fix before 750 Picacho R&D evaluation
 **Severity**: High - Current wrapper will fail or silently misbehave
 
 ## Executive Summary
@@ -43,20 +43,20 @@ def _resolve_hf_id(self) -> str:
     # If already an HF ID (contains slash), use as-is
     if "/" in self.model_name:
         return self.model_name
-    
+
     # Map our names to HF IDs
     api_name = self.VARIANT_TO_API_NAME.get(self.model_name, self.model_name)
-    
+
     if api_name in self.AVAILABLE_MODELS:
         return self.AVAILABLE_MODELS[api_name]["hf_id"]
-    
+
     # Fallback: assume it's a valid API name
     return f"depth-anything/{self.model_name.upper()}"
 
 def _load_model(self):
     """Load DA3 model using official from_pretrained() path."""
     hf_id = self._resolve_hf_id()
-    
+
     logger.info(f"Loading DA3 model from HuggingFace: {hf_id}")
     model = self.DepthAnything3.from_pretrained(hf_id)
     model = model.to(self.device)
@@ -133,15 +133,15 @@ def process_auto(self, input_path: Path, export_dir: Path, export_format: str = 
     """Auto-detect input type and process."""
     # Build command with POSITIONAL input path
     cmd = ["da3", "auto", str(input_path)]
-    
+
     # Add required flags
     cmd.extend(["--export-dir", str(export_dir)])
     cmd.extend(["--export-format", export_format])
-    
+
     # Add backend flag if configured
     if self.backend is not None:
         cmd.append("--use-backend")  # Boolean flag, no URL argument
-    
+
     # Add optional kwargs
     for key, value in kwargs.items():
         if value is not None:
@@ -151,7 +151,7 @@ def process_auto(self, input_path: Path, export_dir: Path, export_format: str = 
                     cmd.append(flag)
             else:
                 cmd.extend([flag, str(value)])
-    
+
     return self._run_command(cmd)
 ```
 
@@ -181,13 +181,13 @@ def is_running(self) -> bool:
 ```python
 def is_running(self) -> bool:
     """Check if backend process is alive.
-    
+
     Note: DA3 backend does not expose a documented health endpoint.
     We only check if the process is still running.
     """
     if self._process is None:
         return False
-    
+
     # Check if process is still alive
     return self._process.poll() is None
 ```
@@ -198,23 +198,23 @@ def start(self, timeout: int = 30) -> None:
     """Start backend service."""
     if self.is_running():
         return
-    
+
     # Start backend WITHOUT pipe buffering
     cmd = ["da3", "backend", "--model-dir", self.model_dir]
-    
+
     print(f"Starting DA3 backend: {' '.join(cmd)}")
     self._process = subprocess.Popen(
         cmd,
         stdout=subprocess.DEVNULL,  # Don't buffer (prevents deadlock)
         stderr=subprocess.DEVNULL,
     )
-    
+
     # Simple wait - no health endpoint check
     time.sleep(5)  # Give backend time to initialize
-    
+
     if not self.is_running():
         raise RuntimeError("Backend process died during startup")
-    
+
     print("Backend started (process running)")
 ```
 
@@ -285,11 +285,11 @@ class DepthAnything3(nn.Module):  # ❌ Name collision with official API
 ```python
 class DepthAnything3Placeholder(nn.Module):
     """Placeholder for testing when official DA3 API not available.
-    
+
     DO NOT USE IN PRODUCTION. Install official API:
     pip install depth-anything-3
     """
-    
+
     def __init__(self, model_name: str, device: str = "cpu", dtype: torch.dtype = torch.float32):
         super().__init__()
         logger.warning(f"Using DepthAnything3Placeholder for {model_name} - NOT REAL DA3 MODEL")
@@ -332,7 +332,7 @@ def __init__(
 # Non-commercial models (CC-BY-NC-4.0)
 NC_MODELS = {
     "da3nested-giant-large",
-    "da3-giant", 
+    "da3-giant",
     "da3-large",
 }
 
@@ -344,20 +344,20 @@ def __init__(
     validate_license_strict: bool = False,
 ):
     """Initialize DA3 wrapper.
-    
+
     Raises:
         RuntimeError: If commercial_use=True with NC-licensed model in strict mode
     """
     self.model_name = model_name
     self.device = device
-    
+
     # LICENSE ENFORCEMENT
     api_name = self.VARIANT_TO_API_NAME.get(model_name, model_name)
     is_nc_model = api_name in self.NC_MODELS
-    
+
     if is_nc_model:
         logger.warning(f"Model {model_name} is CC-BY-NC-4.0 (NON-COMMERCIAL ONLY)")
-        
+
         if commercial_use:
             msg = (
                 f"License violation: {model_name} is non-commercial (CC-BY-NC-4.0)\n"
@@ -370,7 +370,7 @@ def __init__(
                 raise RuntimeError(msg)
             else:
                 logger.error(msg)
-    
+
     # ... rest of init
 ```
 

@@ -69,17 +69,17 @@ backend: str = "heuristic"  # heuristic, onnx, segformer, efficientSAM
    - 1024px tiles (2x standard)
    - 32px padding (2x standard)
    - Guided filter enabled
-   
+
 ✅ Scene Segmentation: 100% APEX
    - SegFormer-B5 @ 2048px
    - Min confidence 0.15
    - 150+ ADE classes
-   
+
 ⚠️ Materials V2: 60% APEX (heuristic)
    - Backend: heuristic (not segformer)
    - Confidence: 0.4 (not 0.3)
    - Quality: Good but not maximum
-   
+
 ✅ Export: 100% APEX
    - Lossless PNG
    - LZW TIFF compression
@@ -165,7 +165,7 @@ lux-depth-v2 --materials-backend segformer ...
 elif p == Preset.INTERIOR_LUXURY_APEX_QUALITY:
     # Change:
     # self.depth.mode = DepthMode.REQUIRED
-    
+
     # To:
     self.depth.mode = DepthMode.AUTO  # Allow auto-generation
 ```
@@ -271,4 +271,3 @@ The 15% gap is:
 *Generated: 2025-12-30*
 *Validation: Cold run with cache invalidation*
 *Status: CONFIRMED*
-

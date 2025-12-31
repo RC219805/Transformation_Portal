@@ -297,6 +297,7 @@ archive/
 
 # Benchmark output directories
 benchmarks_*/
+bench/results/throughput_metrics.json
 
 # Phase 2 benchmark images (large TIFF files)
 assets/phase2_bench/*.tiff

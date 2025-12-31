@@ -49,6 +49,19 @@ pytestmark = [
 ]
 
 
+def _write_synthetic_depth(path: Path, size: tuple[int, int]) -> Path:
+    """Create a simple synthetic depth TIFF matching the input size."""
+    import tifffile
+
+    h, w = size
+    y = np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None]
+    x = np.linspace(0.0, 1.0, w, dtype=np.float32)[None, :]
+    depth01 = (0.6 * y + 0.4 * x).clip(0.0, 1.0)
+    depth_u16 = (depth01 * 65535.0).astype(np.uint16)
+    tifffile.imwrite(path, depth_u16)
+    return path
+
+
 @pytest.fixture
 def test_image(tmp_path):
     """Create a realistic test image for material processing."""
@@ -81,6 +94,15 @@ def test_image(tmp_path):
 
 
 @pytest.fixture
+def test_depth_path(test_image):
+    """Create a synthetic depth map matching the test image size."""
+    with Image.open(test_image) as img:
+        size = (img.height, img.width)
+    depth_path = test_image.with_name(f"{test_image.stem}_depth.tiff")
+    return _write_synthetic_depth(depth_path, size)
+
+
+@pytest.fixture
 def output_dir(tmp_path):
     """Create output directory."""
     out_dir = tmp_path / "output"
@@ -91,7 +113,7 @@ def output_dir(tmp_path):
 class TestMaterialsV3GlassPreset:
     """Test glass surface processing (PR-4B)."""
 
-    def test_glass_preset_basic(self, test_image, output_dir):
+    def test_glass_preset_basic(self, test_image, test_depth_path, output_dir):
         """Verify glass preset executes without errors."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
@@ -100,7 +122,7 @@ class TestMaterialsV3GlassPreset:
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         # Verify result structure
         assert result is not None
@@ -114,14 +136,14 @@ class TestMaterialsV3GlassPreset:
             # Should not be a fallback (no errors)
             assert v3_metadata.get("fallback", False) is False
 
-    def test_glass_preset_validate_mode(self, test_image, output_dir):
+    def test_glass_preset_validate_mode(self, test_image, test_depth_path, output_dir):
         """Test glass preset in validation mode (forced enablement)."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         assert result is not None
 
@@ -129,14 +151,14 @@ class TestMaterialsV3GlassPreset:
         if "materials_v3" in result:
             assert result["materials_v3"] is not None
 
-    def test_glass_pixel_ops_applied(self, test_image, output_dir):
+    def test_glass_pixel_ops_applied(self, test_image, test_depth_path, output_dir):
         """Verify glass pixel operations are applied when enabled."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         # Check for pixel ops metadata
         if "materials_v3_pixel_ops" in result:
@@ -151,14 +173,14 @@ class TestMaterialsV3GlassPreset:
 class TestMaterialsV3StonePreset:
     """Test stone surface processing (PR-4D)."""
 
-    def test_stone_preset_basic(self, test_image, output_dir):
+    def test_stone_preset_basic(self, test_image, test_depth_path, output_dir):
         """Verify stone preset executes without errors."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         assert result is not None
         assert isinstance(result, dict)
@@ -169,27 +191,27 @@ class TestMaterialsV3StonePreset:
             assert isinstance(v3_metadata, dict)
             assert v3_metadata.get("fallback", False) is False
 
-    def test_stone_preset_validate_mode(self, test_image, output_dir):
+    def test_stone_preset_validate_mode(self, test_image, test_depth_path, output_dir):
         """Test stone preset in validation mode."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         assert result is not None
         if "materials_v3" in result:
             assert result["materials_v3"] is not None
 
-    def test_stone_pixel_ops_applied(self, test_image, output_dir):
+    def test_stone_pixel_ops_applied(self, test_image, test_depth_path, output_dir):
         """Verify stone pixel operations are applied when enabled."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         # Check for pixel ops metadata
         if "materials_v3_pixel_ops" in result:
@@ -205,28 +227,28 @@ class TestMaterialsV3StonePreset:
 class TestMaterialsV3ResponsePlan:
     """Test MaterialsV3 response plan generation."""
 
-    def test_response_plan_generated(self, test_image, output_dir):
+    def test_response_plan_generated(self, test_image, test_depth_path, output_dir):
         """Verify MaterialsV3 generates response plan."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         # Response plan should be in result
         if "materials_v3_response_plan" in result:
             response_plan = result["materials_v3_response_plan"]
             assert isinstance(response_plan, dict)
 
-    def test_response_plan_contains_materials(self, test_image, output_dir):
+    def test_response_plan_contains_materials(self, test_image, test_depth_path, output_dir):
         """Verify response plan identifies materials."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         if "materials_v3_response_plan" in result:
             response_plan = result["materials_v3_response_plan"]
@@ -246,13 +268,14 @@ class TestMaterialsV3EdgeCasesE2E:
         small_img = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
         small_path = tmp_path / "small.jpg"
         Image.fromarray(small_img).save(small_path)
+        depth_path = _write_synthetic_depth(tmp_path / "small_depth.tiff", (64, 64))
 
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(small_path)
+        result = pipeline.process_one(small_path, depth_path=depth_path)
 
         # Should complete without errors
         assert result is not None
@@ -263,18 +286,19 @@ class TestMaterialsV3EdgeCasesE2E:
         gray = np.random.randint(0, 255, (256, 256), dtype=np.uint8)
         gray_path = tmp_path / "gray.jpg"
         Image.fromarray(gray, mode="L").save(gray_path)
+        depth_path = _write_synthetic_depth(tmp_path / "gray_depth.tiff", (256, 256))
 
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(gray_path)
+        result = pipeline.process_one(gray_path, depth_path=depth_path)
 
         # Pipeline should handle grayscale conversion
         assert result is not None
 
-    def test_with_killswitch_enabled(self, test_image, output_dir, monkeypatch):
+    def test_with_killswitch_enabled(self, test_image, test_depth_path, output_dir, monkeypatch):
         """Test MaterialsV3 respects DISABLE_MATERIALS_V3 killswitch."""
         # Enable killswitch
         monkeypatch.setenv("DISABLE_MATERIALS_V3", "true")
@@ -289,14 +313,14 @@ class TestMaterialsV3EdgeCasesE2E:
         assert pipeline.materials_v3_engine is None
 
         # Pipeline should still work (graceful degradation)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
         assert result is not None
 
 
 class TestMaterialsV3Performance:
     """Test MaterialsV3 performance characteristics."""
 
-    def test_processing_time_reasonable(self, test_image, output_dir):
+    def test_processing_time_reasonable(self, test_image, test_depth_path, output_dir):
         """Verify MaterialsV3 doesn't add excessive overhead."""
         import time
 
@@ -307,14 +331,14 @@ class TestMaterialsV3Performance:
         pipeline = LuxPipelineV2(config)
 
         start = time.time()
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
         elapsed = time.time() - start
 
         # Should complete in reasonable time (< 30 seconds for 512x512 on CPU)
         assert elapsed < 30.0, f"Processing took {elapsed:.1f}s, expected < 30s"
         assert result is not None
 
-    def test_memory_usage_stable(self, test_image, output_dir):
+    def test_memory_usage_stable(self, test_image, test_depth_path, output_dir):
         """Verify no memory leaks in MaterialsV3 processing."""
         import gc
 
@@ -326,7 +350,7 @@ class TestMaterialsV3Performance:
 
         # Process multiple times, force garbage collection
         for _ in range(3):
-            result = pipeline.process_one(test_image)
+            result = pipeline.process_one(test_image, depth_path=test_depth_path)
             assert result is not None
             gc.collect()
 
@@ -336,14 +360,14 @@ class TestMaterialsV3Performance:
 class TestMaterialsV3Metadata:
     """Test MaterialsV3 metadata output."""
 
-    def test_metadata_structure(self, test_image, output_dir):
+    def test_metadata_structure(self, test_image, test_depth_path, output_dir):
         """Verify MaterialsV3 metadata has expected structure."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         # Check metadata fields
         if "materials_v3" in result:
@@ -357,14 +381,14 @@ class TestMaterialsV3Metadata:
                 # If there's an error, should be marked as fallback
                 assert metadata.get("fallback", False) is True
 
-    def test_all_metadata_fields_present(self, test_image, output_dir):
+    def test_all_metadata_fields_present(self, test_image, test_depth_path, output_dir):
         """Verify all expected metadata fields are populated."""
         config = PipelineConfig(
             preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
         )
 
         pipeline = LuxPipelineV2(config)
-        result = pipeline.process_one(test_image)
+        result = pipeline.process_one(test_image, depth_path=test_depth_path)
 
         # Verify result is valid
         assert result is not None

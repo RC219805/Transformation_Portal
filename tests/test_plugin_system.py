@@ -401,15 +401,17 @@ class TestPluginLoader:
     def test_add_search_path(self, plugin_loader):
         """Test adding search paths."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            plugin_loader.add_search_path(Path(tmpdir))
-            assert Path(tmpdir) in plugin_loader.get_search_paths()
+            path = Path(tmpdir)
+            plugin_loader.add_search_path(path)
+            assert path.resolve() in plugin_loader.get_search_paths()
 
     def test_remove_search_path(self, plugin_loader):
         """Test removing search paths."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            plugin_loader.add_search_path(Path(tmpdir))
-            assert plugin_loader.remove_search_path(Path(tmpdir))
-            assert Path(tmpdir) not in plugin_loader.get_search_paths()
+            path = Path(tmpdir)
+            plugin_loader.add_search_path(path)
+            assert plugin_loader.remove_search_path(path)
+            assert path.resolve() not in plugin_loader.get_search_paths()
 
     def test_discover_empty_directory(self):
         """Test discovering from empty directory."""

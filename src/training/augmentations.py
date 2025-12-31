@@ -542,6 +542,8 @@ class DepthAwareAugmentation:
         Returns:
             Tuple of (augmented_image, augmented_depth)
         """
+        target_size = self.config.crop_size or image.shape[:2]
+
         # Ensure correct data types
         image = self._ensure_float(image)
         depth = self._ensure_float(depth)
@@ -555,6 +557,11 @@ class DepthAwareAugmentation:
 
             # Apply architectural augmentations
             image, depth = self.architectural(image, depth)
+
+        if image.shape[:2] != target_size:
+            image = self._resize_to(image, target_size, is_depth=False)
+        if depth.shape[:2] != target_size:
+            depth = self._resize_to(depth, target_size, is_depth=True)
 
         # Normalize
         if self.config.normalize:
@@ -603,6 +610,41 @@ class DepthAwareAugmentation:
         if d_max - d_min > 1e-8:
             depth = (depth - d_min) / (d_max - d_min)
         return depth
+
+    def _resize_to(
+        self,
+        arr: np.ndarray,
+        size: Tuple[int, int],
+        is_depth: bool = False,
+    ) -> np.ndarray:
+        """Resize array to target size."""
+        if arr.shape[:2] == size:
+            return arr
+
+        if CV2_AVAILABLE:
+            interpolation = cv2.INTER_NEAREST if is_depth else cv2.INTER_LINEAR
+            return cv2.resize(arr, (size[1], size[0]), interpolation=interpolation)
+
+        if PIL_AVAILABLE:
+            resample = Image.NEAREST if is_depth else Image.BILINEAR
+            if arr.ndim == 3 and arr.shape[2] == 3:
+                if arr.dtype == np.uint8:
+                    pil_image = Image.fromarray(arr)
+                    is_float = False
+                else:
+                    pil_image = Image.fromarray((arr * 255).astype(np.uint8))
+                    is_float = True
+                resized = pil_image.resize((size[1], size[0]), resample=resample)
+                result = np.array(resized)
+                if is_float:
+                    result = result.astype(np.float32) / 255.0
+                return result
+
+            pil_image = Image.fromarray(arr.astype(np.float32))
+            resized = pil_image.resize((size[1], size[0]), resample=resample)
+            return np.array(resized).astype(arr.dtype)
+
+        return arr
 
     def to_tensor(
         self,
