@@ -338,3 +338,16 @@ lux_depth_v2/docs/archive_sprint_planning/
 
 # Safety scan reports (uploaded as workflow artifacts)
 safety-report.json
+
+# Local clones / R&D installs
+external/
+
+# Local outputs + logs (Picacho)
+750Picacho_Depth_Maps_APEX/
+750Picacho_Depth_Maps_DA3*/
+750Picacho_Processed/
+*.log
+
+# Local caches
+.mask_cache/
+.depth_cache/
