@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
@@ -41,6 +42,22 @@ class ImageInfo:
     height: int
     dtype: str
     bit_depth: int
+
+@dataclass
+class DepthInfo:
+    """Metadata about a loaded depth file (before/after coercion + normalization)."""
+
+    file_format: str  # e.g. 'png', 'tif', 'tiff'
+    source_dtype: str  # dtype as loaded from disk (e.g. 'uint16', 'uint8')
+    dtype: str  # dtype after coercion (expected 'uint16')
+    shape: Tuple[int, int]  # (H, W)
+    channels: int  # 1 for grayscale, >1 if source was multi-channel
+    channel_collapsed: bool  # True if we collapsed identical channels to 2D
+    u16_min: int
+    u16_max: int
+    p1: float  # 1st percentile used for robust normalization
+    p99: float  # 99th percentile used for robust normalization
+
 
 
 def ensure_deps() -> None:
@@ -109,36 +126,159 @@ def read_rgb_any(path: Path) -> Tuple[np.ndarray, ImageInfo]:
     return rgb01, info
 
 
-def read_depth_u16(path: Path) -> np.ndarray:
-    """Read a depth map into float32 0..1 normalized.
+def _collapse_depth_channels(d: np.ndarray, path: Path) -> Tuple[np.ndarray, int, bool]:
+    """Ensure depth is 2D. If multi-channel, only accept identical channels.
+    
+    Handles both channel-last (H,W,C) and channel-first (C,H,W) layouts.
+    For RGB/RGBA, requires all color channels to be identical (alpha ignored).
+    Rejects stacks or other unexpected shapes to avoid silent misinterpretation.
+    """
+    if d.ndim == 2:
+        return d, 1, False
+    if d.ndim != 3:
+        raise ValueError(
+            f"Depth must be 2D or 3D, got shape={d.shape}: {path}. "
+            "This looks like a stack or unsupported layout."
+        )
 
-    Supports 16-bit depth TIFF and 16-bit grayscale PNG depth maps.
+    # Try channel-last (H,W,C) - most common for PNG/TIFF
+    if d.shape[-1] in (1, 3, 4):
+        channels = d.shape[-1]
+        if channels == 1:
+            return d[..., 0], 1, True
+        # RGB/RGBA: verify channels are identical (grayscale saved as RGB)
+        c0 = d[..., 0]
+        if not np.array_equal(c0, d[..., 1]) or not np.array_equal(c0, d[..., 2]):
+            raise ValueError(
+                f"Depth must be single-channel; got multi-channel with differing channels: {path} "
+                f"(shape={d.shape}, dtype={d.dtype}). "
+                "This looks like an RGB image or colormap, not a depth map."
+            )
+        return c0, channels, True
+
+    # Try channel-first (C,H,W) - sometimes seen in TIFF
+    if d.shape[0] in (1, 3, 4):
+        channels = d.shape[0]
+        if channels == 1:
+            return d[0, ...], 1, True
+        # RGB/RGBA: verify channels are identical
+        c0 = d[0, ...]
+        if not np.array_equal(c0, d[1, ...]) or not np.array_equal(c0, d[2, ...]):
+            raise ValueError(
+                f"Depth must be single-channel; got multi-channel with differing channels: {path} "
+                f"(shape={d.shape}, dtype={d.dtype}). "
+                "This looks like an RGB image or colormap, not a depth map."
+            )
+        return c0, channels, True
+
+    raise ValueError(
+        f"Depth must be 2D or a 1/3/4-channel image, got shape {d.shape}: {path}. "
+        "Unexpected channel dimension - cannot determine layout."
+    )
+
+
+def read_depth_u16_with_info(
+    path: Path,
+    expected_hw: Optional[Tuple[int, int]] = None,
+) -> Tuple[np.ndarray, DepthInfo]:
+    """
+    Read depth from TIFF/PNG and return (depth01, info).
+
+    Depth is normalized to float32 0..1 using robust percentiles (p1, p99).
     """
     ensure_deps()
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(str(p))
 
+    ext = p.suffix.lower()
     if _is_tiff(p):
         d = tifffile.imread(str(p))
-    else:
+        file_format = ext.lstrip(".")
+    elif ext == ".png":
         d = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
         if d is None:
-            raise RuntimeError(f"Failed to read depth: {p}")
+            raise RuntimeError(f"Failed to read depth PNG: {p}")
+        file_format = "png"
+    else:
+        raise ValueError(f"Unsupported depth file extension '{p.suffix}' for {p}")
 
+    source_dtype = str(d.dtype)
+    d, channels, channel_collapsed = _collapse_depth_channels(d, p)
     if d.ndim != 2:
-        d = d[..., 0]
+        raise ValueError(f"Depth must be 2D after channel handling, got shape={d.shape} for {p}")
+
+    # Handle uint8 depth with warning (common export mistake)
     if d.dtype == np.uint8:
-        # Promote 8-bit depth into 16-bit range for consistent percentile normalization.
-        d = (d.astype(np.uint16) * 257).astype(np.uint16)
+        warnings.warn(
+            f"Depth map is 8-bit (uint8) for {p}. "
+            "Upscaling to 16-bit will preserve quantization artifacts. "
+            "Re-export depth as 16-bit PNG from Depth Anything 3 for best results.",
+            RuntimeWarning,
+            stacklevel=2
+        )
+        d = d.astype(np.uint16) * 257  # 0-255 -> 0-65535
+    # Coerce other integer types to uint16
     elif d.dtype != np.uint16:
+        # Reject obviously wrong types
+        if np.issubdtype(d.dtype, np.floating):
+            raise TypeError(
+                f"Depth must be uint16/uint8 integer, got floating point {d.dtype}: {p}. "
+                "Depth maps should be integer grayscale."
+            )
+        if np.issubdtype(d.dtype, np.signedinteger):
+            if d.min() < 0:
+                raise ValueError(
+                    f"Depth has negative values (dtype={d.dtype}, min={d.min()}): {p}. "
+                    "Depth maps must be non-negative."
+                )
+        # Prevent overflow when casting to uint16
+        max_val = int(d.max())
+        if max_val > 65535:
+            raise ValueError(
+                f"Depth values exceed uint16 range (max={max_val} > 65535) for {p}. "
+                f"dtype={d.dtype}. Cannot safely cast to 16-bit."
+            )
+        # Cast other integer types (uint32, int16, etc.) to uint16
         d = d.astype(np.uint16)
+    if expected_hw is not None:
+        eh, ew = expected_hw
+        if d.shape != (eh, ew):
+            raise ValueError(f"Depth shape mismatch for {p}: got {d.shape}, expected {(eh, ew)}")
+
     # robust percentile normalization (like V1)
     df = d.astype(np.float32)
-    lo, hi = np.percentile(df, 1.0), np.percentile(df, 99.0)
-    if hi <= lo + 1.0:
-        return np.zeros_like(df, dtype=np.float32)
-    return ((df - lo) / (hi - lo)).clip(0.0, 1.0).astype(np.float32)
+    if df.size == 0:
+        depth01 = np.zeros_like(df, dtype=np.float32)
+        p1 = 0.0
+        p99 = 0.0
+    else:
+        p1 = float(np.percentile(df, 1.0))
+        p99 = float(np.percentile(df, 99.0))
+        if p99 <= p1 + 1.0:
+            depth01 = np.zeros_like(df, dtype=np.float32)
+        else:
+            depth01 = ((df - p1) / (p99 - p1)).clip(0.0, 1.0).astype(np.float32)
+
+    info = DepthInfo(
+        file_format=file_format,
+        source_dtype=source_dtype,
+        dtype=str(d.dtype),
+        shape=(int(d.shape[0]), int(d.shape[1])),
+        channels=int(channels),
+        channel_collapsed=bool(channel_collapsed),
+        u16_min=int(np.min(d)) if d.size else 0,
+        u16_max=int(np.max(d)) if d.size else 0,
+        p1=float(p1),
+        p99=float(p99),
+    )
+    return depth01, info
+
+
+def read_depth_u16(path: Path, expected_hw: Optional[Tuple[int, int]] = None) -> np.ndarray:
+    """Read depth TIFF/PNG into float32 0..1 normalized."""
+    depth01, _ = read_depth_u16_with_info(path, expected_hw=expected_hw)
+    return depth01
 
 
 def read_mask_any(path: Path) -> np.ndarray:
@@ -172,6 +312,8 @@ def read_mask_any(path: Path) -> np.ndarray:
 def atomic_write_rgb16_tiff(path: Path, rgb01: np.ndarray, compression: str = "deflate") -> None:
     """Write uint16 RGB TIFF atomically."""
     ensure_deps()
+    validate_tiff_compression(compression)
+    
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
 
@@ -209,7 +351,9 @@ def atomic_write_png8(path: Path, rgb01: np.ndarray, compression: int = 6) -> No
     bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
     # Keep .png extension for OpenCV to recognize the format
     tmp = p.parent / (p.stem + ".tmp" + p.suffix)
-    cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_PNG_COMPRESSION, int(compression)])
+    success = cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_PNG_COMPRESSION, int(compression)])
+    if not success:
+        raise RuntimeError(f"Failed to write PNG to {tmp}")
     os.replace(str(tmp), str(p))
 
 
@@ -221,7 +365,9 @@ def atomic_write_jpg8(path: Path, rgb01: np.ndarray, quality: int = 92) -> None:
     bgr = cv2.cvtColor(rgb8, cv2.COLOR_RGB2BGR)
     # Keep .jpg extension for OpenCV to recognize the format
     tmp = p.parent / (p.stem + ".tmp" + p.suffix)
-    cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_JPEG_QUALITY, int(quality)])
+    success = cv2.imwrite(str(tmp), bgr, [cv2.IMWRITE_JPEG_QUALITY, int(quality)])
+    if not success:
+        raise RuntimeError(f"Failed to write JPEG to {tmp}")
     os.replace(str(tmp), str(p))
 
 
