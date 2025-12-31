@@ -74,35 +74,35 @@ for idx in "${!SCENES[@]}"; do
     IFS="|" read -r SCENE_TYPE PRESET SOURCE_PATH <<< "${SCENES[$idx]}"
     BASENAME=$(basename "${SOURCE_PATH}" .tif | sed 's/_UltraQuality$//')
     NUM=$((idx + 1))
-    
+
     echo "----------------------------------------------------------------------" | tee -a "$MAIN_LOG"
     echo "[$NUM/${#SCENES[@]}] Processing: ${BASENAME}" | tee -a "$MAIN_LOG"
     echo "    Type:   ${SCENE_TYPE}" | tee -a "$MAIN_LOG"
     echo "    Preset: ${PRESET}" | tee -a "$MAIN_LOG"
     echo "    Source: ${SOURCE_PATH}" | tee -a "$MAIN_LOG"
     echo "----------------------------------------------------------------------" | tee -a "$MAIN_LOG"
-    
+
     if [ ! -f "${SOURCE_PATH}" ]; then
         echo "    ❌ SKIP: Source file not found" | tee -a "$MAIN_LOG"
         echo "" | tee -a "$MAIN_LOG"
         FAILED=$((FAILED + 1))
         continue
     fi
-    
+
     SCENE_OUTPUT="${OUTPUT_DIR}/${SCENE_TYPE}"
     mkdir -p "${SCENE_OUTPUT}"
-    
+
     SCENE_LOG="${LOG_DIR}/${BASENAME}_depth_${TIMESTAMP}.log"
-    
+
     # Use balanced refinement for pool (avoid aggressive edge artifacts on water)
     REFINEMENT="balanced"
     if [[ "$BASENAME" == *Pool* ]]; then
         echo "    ℹ Pool scene detected - using conservative refinement" | tee -a "$MAIN_LOG"
         REFINEMENT="balanced"
     fi
-    
+
     echo "    Starting APEX-100 depth generation..." | tee -a "$MAIN_LOG"
-    
+
     if lux-depth-v2 \
         --input "${SOURCE_PATH}" \
         --output-dir "${SCENE_OUTPUT}" \
@@ -110,10 +110,10 @@ for idx in "${!SCENES[@]}"; do
         "${DEPTH_CONFIG[@]}" \
         --refinement-preset "${REFINEMENT}" \
         2>&1 | tee "${SCENE_LOG}"; then
-        
+
         echo "    ✅ SUCCESS: ${BASENAME}" | tee -a "$MAIN_LOG"
         SUCCESS=$((SUCCESS + 1))
-        
+
         # Log key quality indicators from output
         if grep -q "MaterialsV2Engine initialized | backend=segformer" "${SCENE_LOG}"; then
             echo "       ✓ MaterialsV2 SegFormer backend confirmed" | tee -a "$MAIN_LOG"
@@ -125,7 +125,7 @@ for idx in "${!SCENES[@]}"; do
         echo "    ❌ FAILED: ${BASENAME}" | tee -a "$MAIN_LOG"
         FAILED=$((FAILED + 1))
     fi
-    
+
     echo "" | tee -a "$MAIN_LOG"
 done
 

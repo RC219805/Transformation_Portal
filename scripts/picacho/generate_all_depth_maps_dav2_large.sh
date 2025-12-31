@@ -42,23 +42,23 @@ echo "" | tee -a "$LOG_FILE"
 for i in "${!SOURCE_FILES[@]}"; do
     FILE="${SOURCE_FILES[$i]}"
     NUM=$((i + 1))
-    
+
     echo "----------------------------------------" | tee -a "$LOG_FILE"
     echo "[$NUM/$TOTAL] Processing: $FILE" | tee -a "$LOG_FILE"
     echo "----------------------------------------" | tee -a "$LOG_FILE"
-    
+
     INPUT_PATH="${SOURCE_DIR}/${FILE}"
-    
+
     if [ ! -f "$INPUT_PATH" ]; then
         echo "⚠️  ERROR: File not found: $INPUT_PATH" | tee -a "$LOG_FILE"
         FAILED=$((FAILED + 1))
         continue
     fi
-    
+
     # Determine scene-specific preset
     PRESET="interior_luxury_max_quality"
     SCENE_TYPE="interior"
-    
+
     if [[ "$FILE" == *"Aerial"* ]]; then
         PRESET="exterior_showcase_max_quality"
         SCENE_TYPE="exterior"
@@ -66,18 +66,18 @@ for i in "${!SOURCE_FILES[@]}"; do
         PRESET="exterior_showcase_max_quality"
         SCENE_TYPE="exterior"
     fi
-    
+
     echo "Scene type: $SCENE_TYPE" | tee -a "$LOG_FILE"
     echo "Preset: $PRESET" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
-    
+
     # Create scene-specific output directory
     SCENE_OUTPUT="${OUTPUT_DIR}/${SCENE_TYPE}"
     mkdir -p "$SCENE_OUTPUT"
-    
+
     # Execute lux-depth-v2 with APEX settings
     echo "Starting depth generation..." | tee -a "$LOG_FILE"
-    
+
     if lux-depth-v2 \
         --input "$INPUT_PATH" \
         --output-dir "$SCENE_OUTPUT" \
@@ -100,14 +100,14 @@ for i in "${!SOURCE_FILES[@]}"; do
         --depth-cache \
         --tiff-compression lzw \
         2>&1 | tee -a "$LOG_FILE"; then
-        
+
         echo "✅ SUCCESS: $FILE" | tee -a "$LOG_FILE"
         SUCCESS=$((SUCCESS + 1))
     else
         echo "❌ FAILED: $FILE" | tee -a "$LOG_FILE"
         FAILED=$((FAILED + 1))
     fi
-    
+
     echo "" | tee -a "$LOG_FILE"
 done
 
