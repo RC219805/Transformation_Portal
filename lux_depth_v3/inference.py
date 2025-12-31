@@ -32,6 +32,8 @@ from lux_depth_v3.da3_wrapper import (
     check_da3_cli_available,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class DA3InferenceEngine:
     """Inference engine for Depth Anything 3 models.
@@ -56,7 +58,14 @@ class DA3InferenceEngine:
         self.dtype = config.device.get_dtype()
 
         # Validate license before initializing
-        from lux_depth_v3.license import validate_license
+        # (Import lazily so environments that vendor/modify this package get a clearer error.)
+        try:
+            from lux_depth_v3.license import validate_license
+        except ImportError as e:
+            raise ImportError(
+                "Missing lux_depth_v3.license module. If you intentionally removed license gating, "
+                "either restore lux_depth_v3/license.py or remove the license validation call."
+            ) from e
 
         validate_license(config.model_variant, commercial_use=commercial_use, strict=validate_license_strict)
 
@@ -100,31 +109,23 @@ class DA3InferenceEngine:
 
     def _init_native_mode(self):
         """Initialize native Python API mode."""
-        # Try to use official DA3 API wrapper
-        try:
-            from lux_depth_v3.da3_wrapper import DepthAnything3Wrapper
+        # Note: use the module-level `DepthAnything3Wrapper` so tests can patch it.
+        model_name = self._get_model_name_from_variant()
 
-            # Get model name from variant
-            model_name = self._get_model_name_from_variant()
+        self.wrapper = DepthAnything3Wrapper(
+            model_name=model_name,
+            device=str(self.device),
+            commercial_use=self.commercial_use,
+            validate_license_strict=self.validate_license_strict,
+        )
 
-            self.wrapper = DepthAnything3Wrapper(
-                model_name=model_name,
-                device=str(self.device),
-                commercial_use=self.commercial_use,
-                validate_license_strict=self.validate_license_strict,
-            )
-
-            if self.wrapper.available:
-                print(f"DA3 Python API mode initialized with {model_name}")
-                self.model = self.wrapper.model
-            else:
-                print("DA3 API not available, using fallback mode")
-                self.wrapper = None
-                self.model = None
-        except ImportError:
+        if getattr(self.wrapper, "available", False):
+            logger.info("DA3 Python API mode initialized with %s", model_name)
+            self.model = self.wrapper.model
+        else:
+            logger.warning("DA3 API not available, using fallback mode")
             self.wrapper = None
             self.model = None
-            print("DA3 wrapper not available")
 
         self.preprocessor = Preprocessor(self.config.preprocessing)
         self.backend = None
@@ -248,8 +249,8 @@ class DA3InferenceEngine:
             if fov_degrees is not None and len(images) > 0:
                 from PIL import Image
 
-                img = Image.open(images[0])
-                image_width = img.width
+                with Image.open(images[0]) as img:
+                    image_width = img.width
 
             metric_result = convert_to_metric_depth(
                 depth=prediction.depth,
@@ -298,7 +299,15 @@ class DA3InferenceEngine:
             else:
                 tmppath = Path(tmp_ctx.name)
                 for i, img_path in enumerate(images):
-                    (tmppath / f"{i:04d}{img_path.suffix}").symlink_to(img_path)
+                    dst = tmppath / f"{i:04d}{img_path.suffix}"
+                    # Prefer symlinks (fast), but fall back to a physical copy when the platform
+                    # or filesystem disallows symlinks.
+                    try:
+                        dst.symlink_to(img_path)
+                    except OSError:
+                        import shutil
+
+                        shutil.copy2(img_path, dst)
                 input_path = tmppath
 
             # Ensure we export an NPZ so we can load depth back into memory
@@ -355,8 +364,8 @@ class DA3InferenceEngine:
             if fov_degrees is not None and len(images) > 0:
                 from PIL import Image
 
-                img = Image.open(images[0])
-                image_width = img.width
+                with Image.open(images[0]) as img:
+                    image_width = img.width
 
             metric_result = convert_to_metric_depth(
                 depth=prediction.depth,
@@ -447,8 +456,14 @@ class DA3InferenceEngine:
         if self.use_cli:
             results = self._inference_cli(inputs)
         else:
-            # Prefer the official DA3 Python API wrapper when available.
-            if getattr(self, "wrapper", None) is not None and getattr(self.wrapper, "available", False):
+            # Prefer the official DA3 Python API wrapper only when its model is loaded.
+            # This prevents unit tests (and offline environments) from inadvertently
+            # triggering HuggingFace downloads during `engine.inference(...)`.
+            if (
+                getattr(self, "wrapper", None) is not None
+                and getattr(self.wrapper, "available", False)
+                and getattr(self.wrapper, "model", None) is not None
+            ):
                 results = self._inference_api(inputs)
             else:
                 # Fallback to the legacy placeholder implementation.
@@ -753,7 +768,9 @@ class DA3InferenceEngine:
         # Process outputs
         results = []
         for i, img_input in enumerate(inputs):
-            depth_map = depth_output["depths"][i].cpu().numpy()
+            # Some backends return per-view depths shaped (1, H, W). Squeeze to (H, W)
+            # so downstream unpadding/resizing (which expects 2D) behaves correctly.
+            depth_map = depth_output["depths"][i].squeeze().cpu().numpy()
 
             # Unpad and resize
             metadata = metadata_list[i]

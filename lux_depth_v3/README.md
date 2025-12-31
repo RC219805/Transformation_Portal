@@ -91,6 +91,15 @@ cd lux_depth_v3
 pip install -r requirements.txt
 ```
 
+#### Editable install (offline / no PyPI access)
+
+If your environment cannot reach PyPI, editable installs may fail during PEP 517 build isolation (it tries to download build requirements). Use:
+
+```bash
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install --no-build-isolation --no-deps -e lux_depth_v3
+```
+
 ### Model Caching (Recommended)
 
 Pre-cache DA3 models for offline operation and faster startup:

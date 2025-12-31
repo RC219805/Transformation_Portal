@@ -65,7 +65,7 @@ all = [
 ]
 
 [project.scripts]
-lux-depth-v3 = "cli:main"
+lux-depth-v3 = "lux_depth_v3.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/RC219805/Transformation_Portal"
@@ -73,24 +73,13 @@ Documentation = "https://github.com/RC219805/Transformation_Portal/tree/main/lux
 Repository = "https://github.com/RC219805/Transformation_Portal"
 Issues = "https://github.com/RC219805/Transformation_Portal/issues"
 
+
 [tool.setuptools]
-packages = []
-py-modules = [
-    "cli",
-    "config",
-    "da3_wrapper",
-    "export",
-    "inference",
-    "input_manager",
-    "license",
-    "metric_depth",
-    "model_cache",
-    "postprocessing",
-    "preprocessing",
-    "reference_view",
-    "service",
-    "validation",
-]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lux_depth_v3*"]
 
 [tool.setuptools.package-data]
 lux_depth_v3 = ["*.md", "*.txt"]

@@ -7,26 +7,32 @@ This module provides three integration modes:
 
 The Python API mode is recommended for most use cases as it provides full access
 to all DA3 features including Gaussian Splatting, pose estimation, and feature extraction.
+
+Notes on dependencies
+---------------------
+Some third‑party packages are *optional* and should not be imported at module import time.
+This file therefore avoids unconditional imports of heavy/optional deps such as OpenCV
+and requests.
 """
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Any, List, Union, Tuple
-from pathlib import Path
 from dataclasses import dataclass
-import importlib.util
-import subprocess
-import shutil
-import json
-import time
-import requests
-import signal
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import atexit
+import importlib.util
 import logging
 import os
+import shutil
+import signal
+import subprocess
+import time
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 import numpy as np
-import cv2
 from PIL import Image
 import torch
 import torch.nn as nn
@@ -41,6 +47,7 @@ def check_da3_cli_available() -> bool:
     importable, which would cause `da3` to crash at runtime. We treat that as
     unavailable to avoid false positives.
     """
+
     if shutil.which("da3") is None:
         return False
     return importlib.util.find_spec("depth_anything_3") is not None
@@ -68,7 +75,7 @@ class DA3Prediction:
 
     def __post_init__(self):
         """Validate shapes."""
-        if self.depth.ndim not in [2, 3]:
+        if self.depth.ndim not in (2, 3):
             raise ValueError(f"Depth must be 2D or 3D, got shape {self.depth.shape}")
 
         if self.conf is not None and self.conf.shape != self.depth.shape:
@@ -92,7 +99,7 @@ class DA3Backend:
         """Initialize backend manager.
 
         Args:
-            model_dir: Path to DA3 model directory
+            model_dir: Path to DA3 model directory or HF id (as supported by the CLI)
             device: Device to use (cuda, mps, cpu)
             port: Port for backend service
             host: Host address for backend
@@ -116,13 +123,15 @@ class DA3Backend:
             RuntimeError: If backend fails to start
         """
         if self.is_running():
-            print(f"Backend already running at {self.get_url()}")
+            logger.info("Backend already running at %s", self.get_url())
             return
 
         if not check_da3_cli_available():
-            raise RuntimeError("DA3 CLI not found. Install from: https://github.com/DepthAnything/Depth-Anything-V3")
+            raise RuntimeError(
+                "DA3 CLI not found or not usable. Ensure the `da3` entrypoint is on PATH and "
+                "the `depth_anything_3` package is importable."
+            )
 
-        # Start backend process
         cmd = [
             "da3",
             "backend",
@@ -136,43 +145,46 @@ class DA3Backend:
             self.host,
         ]
 
-        print(f"Starting DA3 backend: {' '.join(cmd)}")
+        logger.info("Starting DA3 backend: %s", " ".join(cmd))
         env = os.environ.copy()
         env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
+        # Keep output quiet by default. For debugging, change DEVNULL to PIPE.
         self._process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, env=env)
 
-        # Wait for service to be ready
         start_time = time.time()
         while time.time() - start_time < timeout:
             if self.is_running():
-                print(f"Backend started at {self.get_url()}")
+                logger.info("Backend started at %s", self.get_url())
                 return
             time.sleep(0.5)
 
-        # Timeout - kill process and raise
         self.stop()
         raise RuntimeError(f"Backend failed to start within {timeout}s")
 
     def stop(self) -> None:
         """Stop backend service."""
-        if self._process is not None:
-            print("Stopping DA3 backend...")
-            try:
-                self._process.send_signal(signal.SIGTERM)
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait()
+        if self._process is None:
+            return
+
+        logger.info("Stopping DA3 backend...")
+        try:
+            self._process.send_signal(signal.SIGTERM)
+            self._process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self._process.kill()
+            self._process.wait()
+        finally:
             self._process = None
-            print("Backend stopped")
+        logger.info("Backend stopped")
 
     def is_running(self) -> bool:
         """Check if backend is running and healthy."""
+        url = f"{self.get_url()}/status"
         try:
-            response = requests.get(f"{self.get_url()}/status", timeout=1)
-            return response.status_code == 200
-        except (requests.RequestException, ConnectionError):
+            with urlopen(url, timeout=1) as resp:
+                return int(getattr(resp, "status", 0)) == 200
+        except (HTTPError, URLError, TimeoutError, ConnectionError, OSError):
             return False
 
     def get_url(self) -> str:
@@ -194,57 +206,39 @@ class DA3CLI:
             backend: Optional backend service for acceleration
         """
         if not check_da3_cli_available():
-            raise RuntimeError("DA3 CLI not found. Install from: https://github.com/DepthAnything/Depth-Anything-V3")
+            raise RuntimeError(
+                "DA3 CLI not found or not usable. Ensure the `da3` entrypoint is on PATH and "
+                "the `depth_anything_3` package is importable."
+            )
 
         self.backend = backend
 
     def _build_base_cmd(self, subcommand: str, input_path: Optional[Path] = None, **kwargs) -> List[str]:
-        """Build base command with common options.
-
-        Args:
-            subcommand: DA3 subcommand (auto, image, images, video, colmap)
-            input_path: Positional input path expected by DA3 CLI
-            **kwargs: Additional CLI arguments
-
-        Returns:
-            Command list
-        """
-        cmd = ["da3", subcommand]
+        """Build base command with common options."""
+        cmd: List[str] = ["da3", subcommand]
         if input_path is not None:
             cmd.append(str(input_path))
 
-        # Add backend URL if backend is provided
         if self.backend is not None:
             cmd.append("--use-backend")
             cmd.extend(["--backend-url", self.backend.get_url()])
 
-        # Add common options from kwargs
         for key, value in kwargs.items():
-            if value is not None:
-                # Convert snake_case to kebab-case
-                flag = f"--{key.replace('_', '-')}"
-                if isinstance(value, bool):
-                    if value:
-                        cmd.append(flag)
-                else:
-                    cmd.extend([flag, str(value)])
+            if value is None:
+                continue
+
+            flag = f"--{key.replace('_', '-')}"
+            if isinstance(value, bool):
+                if value:
+                    cmd.append(flag)
+            else:
+                cmd.extend([flag, str(value)])
 
         return cmd
 
     def _run_command(self, cmd: List[str], capture_output: bool = True) -> Dict[str, Any]:
-        """Run CLI command and parse output.
-
-        Args:
-            cmd: Command list
-            capture_output: Whether to capture stdout/stderr
-
-        Returns:
-            Result dictionary with output paths and metadata
-
-        Raises:
-            RuntimeError: If command fails
-        """
-        print(f"Running: {' '.join(cmd)}")
+        """Run CLI command and return stdout/stderr."""
+        logger.info("Running: %s", " ".join(cmd))
 
         env = os.environ.copy()
         env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
@@ -253,7 +247,6 @@ class DA3CLI:
         if result.returncode != 0:
             raise RuntimeError(f"DA3 CLI command failed:\nCommand: {' '.join(cmd)}\nError: {result.stderr}")
 
-        # Parse output - DA3 CLI typically outputs JSON or file paths
         return {
             "stdout": result.stdout,
             "stderr": result.stderr,
@@ -261,36 +254,22 @@ class DA3CLI:
         }
 
     def process_auto(self, input_path: Path, export_dir: Path, export_format: str = "mini_npz", **kwargs) -> Dict[str, Any]:
-        """Auto-detect input type and process.
-
-        Args:
-            input_path: Input file or directory
-            export_dir: Output directory
-            export_format: Export format (mini_npz, glb, etc.)
-            **kwargs: Additional CLI arguments
-
-        Returns:
-            Processing result
-        """
         cmd = self._build_base_cmd(
-            "auto", input_path=input_path, export_dir=str(export_dir), export_format=export_format, **kwargs
+            "auto",
+            input_path=input_path,
+            export_dir=str(export_dir),
+            export_format=export_format,
+            **kwargs,
         )
         return self._run_command(cmd)
 
     def process_image(self, image_path: Path, export_dir: Path, export_format: str = "mini_npz", **kwargs) -> Dict[str, Any]:
-        """Process single image.
-
-        Args:
-            image_path: Input image path
-            export_dir: Output directory
-            export_format: Export format
-            **kwargs: Additional CLI arguments
-
-        Returns:
-            Processing result
-        """
         cmd = self._build_base_cmd(
-            "image", input_path=image_path, export_dir=str(export_dir), export_format=export_format, **kwargs
+            "image",
+            input_path=image_path,
+            export_dir=str(export_dir),
+            export_format=export_format,
+            **kwargs,
         )
         return self._run_command(cmd)
 
@@ -302,18 +281,6 @@ class DA3CLI:
         image_extensions: str = "png,jpg,jpeg",
         **kwargs,
     ) -> Dict[str, Any]:
-        """Process image directory.
-
-        Args:
-            images_dir: Input directory
-            export_dir: Output directory
-            export_format: Export format
-            pattern: File pattern
-            **kwargs: Additional CLI arguments
-
-        Returns:
-            Processing result
-        """
         cmd = self._build_base_cmd(
             "images",
             input_path=images_dir,
@@ -327,67 +294,32 @@ class DA3CLI:
     def process_video(
         self, video_path: Path, export_dir: Path, fps: float = 1.0, export_format: str = "mini_npz", **kwargs
     ) -> Dict[str, Any]:
-        """Process video with frame extraction.
-
-        Args:
-            video_path: Input video path
-            export_dir: Output directory
-            fps: Frame extraction rate
-            export_format: Export format
-            **kwargs: Additional CLI arguments
-
-        Returns:
-            Processing result
-        """
         cmd = self._build_base_cmd(
-            "video", input_path=video_path, export_dir=str(export_dir), fps=str(fps), export_format=export_format, **kwargs
+            "video",
+            input_path=video_path,
+            export_dir=str(export_dir),
+            fps=str(fps),
+            export_format=export_format,
+            **kwargs,
         )
         return self._run_command(cmd)
 
     def process_colmap(
         self, colmap_dir: Path, export_dir: Path, export_format: str = "mini_npz-glb", **kwargs
     ) -> Dict[str, Any]:
-        """Process COLMAP dataset.
-
-        Args:
-            colmap_dir: COLMAP dataset directory
-            export_dir: Output directory
-            export_format: Export format (supports hyphen-separated combinations)
-            **kwargs: Additional CLI arguments
-
-        Returns:
-            Processing result
-        """
         cmd = self._build_base_cmd(
-            "colmap", input_path=colmap_dir, export_dir=str(export_dir), export_format=export_format, **kwargs
+            "colmap",
+            input_path=colmap_dir,
+            export_dir=str(export_dir),
+            export_format=export_format,
+            **kwargs,
         )
         return self._run_command(cmd)
 
 
 class DepthAnything3Wrapper:
-    """
-    Wrapper for official DepthAnything3 Python API.
+    """Wrapper for the official DepthAnything3 Python API."""
 
-    Provides Pythonic interface to DA3 models with full feature support:
-    - Monocular and multi-view depth estimation
-    - Pose-conditioned depth estimation
-    - Gaussian Splatting (3DGS)
-    - Feature extraction from intermediate layers
-    - Multiple export formats (NPZ, GLB, PLY, videos)
-    - Ray-based pose estimation
-    - Reference view selection strategies
-
-    Example:
-        >>> wrapper = DepthAnything3Wrapper(model_name="da3-large")
-        >>> prediction = wrapper.inference(
-        ...     image=["/path/to/image.jpg"],
-        ...     export_dir="output",
-        ...     export_format="mini_npz-glb"
-        ... )
-        >>> print(prediction.depth.shape)
-    """
-
-    # Available model names in official DA3 API
     AVAILABLE_MODELS = {
         "da3-giant": {
             "hf_id": "depth-anything/DA3-GIANT-1.1",
@@ -426,17 +358,13 @@ class DepthAnything3Wrapper:
         },
     }
 
-    # Mapping from our ModelVariant names to DA3 API names
     VARIANT_TO_API_NAME = {
-        # v1.1 models (use v1.0 API names - DA3 API doesn't distinguish versions in model names)
         "DA3NESTED-GIANT-LARGE-1.1": "da3nested-giant-large",
         "DA3-GIANT-1.1": "da3-giant",
         "DA3-LARGE-1.1": "da3-large",
-        # v1.0 models
         "DA3NESTED-GIANT-LARGE": "da3nested-giant-large",
         "DA3-GIANT": "da3-giant",
         "DA3-LARGE": "da3-large",
-        # Other variants
         "DA3-BASE": "da3-base",
         "DA3-SMALL": "da3-small",
         "DA3METRIC-LARGE": "da3metric-large",
@@ -452,30 +380,14 @@ class DepthAnything3Wrapper:
         commercial_use: bool = False,
         validate_license_strict: bool = False,
     ):
-        """Initialize DA3 wrapper.
-
-        Args:
-            model_name: Model variant name (da3-large, da3-giant, etc.)
-            device: Device to use (cuda/cpu/mps)
-            commercial_use: Whether this is commercial use
-            validate_license_strict: If True, raise error on license violation
-
-        Raises:
-            ImportError: If official DA3 API is not installed
-            RuntimeError: If strict license validation fails
-        """
         self.model_name = model_name
         self.device = device
 
-        # Fix OpenMP duplicate library issue before importing
-        import os
+        # Avoid OpenMP duplicate library issue (common on macOS)
+        os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
-        if os.environ.get("KMP_DUPLICATE_LIB_OK") != "TRUE":
-            os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
-        # Try to import official API
         try:
-            from depth_anything_3.api import DepthAnything3
+            from depth_anything_3.api import DepthAnything3  # type: ignore
 
             self.DepthAnything3 = DepthAnything3
             self.available = True
@@ -484,34 +396,63 @@ class DepthAnything3Wrapper:
             self.available = False
             logger.warning("Official DA3 API not available. Install with: pip install depth-anything-3")
 
-        # Initialize model if available
-        if self.available:
-            self.model = self._load_model()
-        else:
-            self.model = None
+        # Lazily loaded to avoid triggering large downloads at import/init time.
+        self.model = None
 
-    def _load_model(self):
-        """Load DA3 model using the official `from_pretrained()` contract."""
+    def load_model(
+        self,
+        *,
+        cache_dir: Optional[Union[str, Path]] = None,
+        local_files_only: Optional[bool] = None,
+        force_reload: bool = False,
+    ):
+        """Load and cache the official DA3 model weights.
+
+        By default, this method allows downloading weights from HuggingFace.
+        Set `HF_HUB_OFFLINE=1` (or pass `local_files_only=True`) to enforce
+        offline behavior.
+        """
+        if not self.available or self.DepthAnything3 is None:
+            raise RuntimeError("DA3 API not available. Install with: pip install depth-anything-3")
+
+        if self.model is not None and not force_reload:
+            return self.model
+
+        if local_files_only is None:
+            local_files_only = os.environ.get("HF_HUB_OFFLINE", "").lower() in {"1", "true", "yes"} or os.environ.get(
+                "TRANSFORMERS_OFFLINE", ""
+            ).lower() in {"1", "true", "yes"}
+
         hf_id = self._resolve_hf_id()
         api_model_name = self._resolve_api_model_name()
 
-        logger.info(f"Loading DA3 model: {self.model_name} (HF: {hf_id}, API name: {api_model_name})")
-        model = self.DepthAnything3.from_pretrained(hf_id)
+        logger.info(
+            "Loading DA3 model: %s (HF: %s, API name: %s, local_only=%s)",
+            self.model_name,
+            hf_id,
+            api_model_name,
+            local_files_only,
+        )
+
+        cache_dir_str = str(cache_dir) if cache_dir is not None else None
+        model = self.DepthAnything3.from_pretrained(hf_id, cache_dir=cache_dir_str, local_files_only=local_files_only)
         model = model.to(self.device)
-        logger.info(f"Model loaded on {self.device}")
+        self.model = model
+        logger.info("Model loaded on %s", self.device)
         return model
 
+    def _load_model(self):
+        """Backwards-compatible private loader (prefer `load_model`)."""
+        return self.load_model()
+
     def _resolve_hf_id(self) -> str:
-        """Resolve the configured model name to a HuggingFace repo id."""
         if "/" in self.model_name:
             return self.model_name
 
-        # Support our enum-style names (e.g. "DA3-LARGE-1.1")
         api_name = self._resolve_api_model_name()
         if api_name in self.AVAILABLE_MODELS:
             return self.AVAILABLE_MODELS[api_name]["hf_id"]
 
-        # Support CLI-friendly aliases used elsewhere in this repo
         cli_aliases = {
             "nested-giant-large-v1.1": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
             "nested-giant-large": "depth-anything/DA3NESTED-GIANT-LARGE",
@@ -528,145 +469,65 @@ class DepthAnything3Wrapper:
         if alias is not None:
             return alias
 
-        # Fallback: treat it as an API-style name and convert to repo id.
-        # Example: "da3-large" -> "depth-anything/DA3-LARGE"
         return f"depth-anything/{self.model_name.upper()}"
 
     def _resolve_api_model_name(self) -> str:
-        """Resolve the configured model name to the official API model key."""
         key = self.model_name.split("/")[-1] if "/" in self.model_name else self.model_name
         return self.VARIANT_TO_API_NAME.get(key, key)
 
     @classmethod
     def from_pretrained(cls, model_id: str, device: str = "cuda") -> "DepthAnything3Wrapper":
-        """
-        Load model from HuggingFace Hub.
-
-        Args:
-            model_id: HuggingFace model ID (e.g., "depth-anything/DA3-GIANT")
-            device: Device to use
-
-        Returns:
-            Initialized wrapper
-        """
-        return cls(model_name=model_id, device=device)
+        # This wrapper uses short model aliases (e.g. "da3-giant") internally.
+        # When given a HuggingFace ID, map it to our canonical alias.
+        model_name = model_id
+        if "/" in model_id:
+            key = model_id.split("/")[-1]
+            model_name = cls.VARIANT_TO_API_NAME.get(key, key)
+        return cls(model_name=model_name, device=device)
 
     def inference(
         self,
-        # Input parameters
         image: Optional[List[Union[np.ndarray, Image.Image, str, Path]]] = None,
         extrinsics: Optional[np.ndarray] = None,
         intrinsics: Optional[np.ndarray] = None,
-        # Pose alignment parameters
         align_to_input_ext_scale: bool = True,
         infer_gs: bool = False,
         use_ray_pose: bool = False,
         ref_view_strategy: str = "saddle_balanced",
-        # Rendering parameters (for gs_video)
         render_exts: Optional[np.ndarray] = None,
         render_ixts: Optional[np.ndarray] = None,
         render_hw: Optional[Tuple[int, int]] = None,
-        # Processing parameters
         process_res: int = 504,
         process_res_method: str = "upper_bound_resize",
-        # Export parameters
         export_dir: Optional[Union[str, Path]] = None,
         export_format: str = "mini_npz",
         export_feat_layers: Optional[List[int]] = None,
-        # GLB export parameters
         conf_thresh_percentile: float = 40.0,
         num_max_points: int = 1_000_000,
         show_cameras: bool = True,
-        # Feature visualization parameters
         feat_vis_fps: int = 15,
-        # Additional export kwargs
         export_kwargs: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> DA3Prediction:
-        """
-        Run depth inference with full DA3 capabilities.
-
-        Args:
-            image: List of images (arrays, PIL Images, or paths)
-            extrinsics: Camera extrinsics (N, 4, 4) for pose-conditioned inference
-            intrinsics: Camera intrinsics (N, 3, 3) for pose-conditioned inference
-            align_to_input_ext_scale: Align predicted poses to input scale
-            infer_gs: Enable Gaussian Splatting branch (requires GS-capable model)
-            use_ray_pose: Use ray-based pose estimation
-            ref_view_strategy: Reference view selection strategy
-                - "first": Use first view as reference
-                - "middle": Use middle view as reference
-                - "saddle_balanced": Balanced saddle point strategy
-                - "saddle_sim_range": Saddle point with similarity range
-            render_exts: Rendering extrinsics for gs_video (M, 4, 4)
-            render_ixts: Rendering intrinsics for gs_video (M, 3, 3)
-            render_hw: Rendering resolution for gs_video (height, width)
-            process_res: Processing resolution (affects quality/speed tradeoff)
-            process_res_method: Resize method ("upper_bound_resize" or "lower_bound_resize")
-            export_dir: Export directory path (creates if doesn't exist)
-            export_format: Export format(s) separated by "-" (e.g., "mini_npz-glb-gs_ply")
-                - "mini_npz": Minimal NPZ (depth + conf)
-                - "full_npz": Full NPZ (depth + conf + poses + images)
-                - "glb": GLTF binary 3D mesh
-                - "gs_ply": Gaussian Splatting PLY
-                - "gs_video": Gaussian Splatting video
-                - "depth_vis": Depth visualization video
-                - "feat_vis": Feature visualization video
-            export_feat_layers: Layers to export features from (e.g., [0, 3, 6, 9])
-            conf_thresh_percentile: GLB confidence threshold percentile (0-100)
-            num_max_points: GLB max points for point cloud
-            show_cameras: GLB show camera frustums in visualization
-            feat_vis_fps: Feature visualization video FPS
-            export_kwargs: Additional export arguments per format
-
-        Returns:
-            DA3Prediction object with depth, confidence, poses, and auxiliary data
-
-        Raises:
-            RuntimeError: If DA3 API is not available
-            ValueError: If invalid parameters are provided
-
-        Example:
-            >>> # Basic monocular depth
-            >>> pred = wrapper.inference(
-            ...     image=["image.jpg"],
-            ...     export_dir="output"
-            ... )
-
-            >>> # Multi-view with poses
-            >>> pred = wrapper.inference(
-            ...     image=["img1.jpg", "img2.jpg", "img3.jpg"],
-            ...     extrinsics=camera_extrinsics,  # (3, 4, 4)
-            ...     intrinsics=camera_intrinsics,  # (3, 3, 3)
-            ...     export_format="mini_npz-glb"
-            ... )
-
-            >>> # Gaussian Splatting workflow
-            >>> pred = wrapper.inference(
-            ...     image=image_list,
-            ...     infer_gs=True,
-            ...     export_format="gs_ply-gs_video",
-            ...     render_exts=render_poses,
-            ...     render_hw=(1080, 1920)
-            ... )
-        """
         if not self.available:
             raise RuntimeError("DA3 API not available. Install with: pip install depth-anything-3")
 
-        # Validate inputs and track original dimensions
+        if self.model is None:
+            self.load_model()
+
+        if image is None or len(image) == 0:
+            raise ValueError("No images provided for inference")
+
         image_prepared, original_sizes = self._prepare_images_with_sizes(image)
 
-        # Validate GS requirements
         api_model_name = self._resolve_api_model_name()
         if infer_gs and api_model_name not in self.GS_CAPABLE_MODELS:
             raise ValueError(f"Gaussian Splatting requires {', '.join(self.GS_CAPABLE_MODELS)}, but got {api_model_name}")
 
-        # Validate reference view strategy
         valid_strategies = ["first", "middle", "saddle_balanced", "saddle_sim_range"]
         if ref_view_strategy not in valid_strategies:
             raise ValueError(f"Invalid ref_view_strategy: {ref_view_strategy}. Must be one of {valid_strategies}")
 
-        # Call official API
-        logger.info(f"Running DA3 inference on {len(image_prepared)} images")
+        logger.info("Running DA3 inference on %d images", len(image_prepared))
         prediction = self.model.inference(
             image=image_prepared,
             extrinsics=extrinsics,
@@ -690,15 +551,12 @@ class DepthAnything3Wrapper:
             export_kwargs=export_kwargs or {},
         )
 
-        # Upsample depth maps to original resolutions
         depth_upsampled = self._upsample_depth_to_native(prediction.depth, original_sizes)
 
-        # Upsample confidence maps if present
         conf_upsampled = None
         if hasattr(prediction, "conf") and prediction.conf is not None:
             conf_upsampled = self._upsample_depth_to_native(prediction.conf, original_sizes)
 
-        # Wrap in our dataclass
         return DA3Prediction(
             depth=depth_upsampled,
             conf=conf_upsampled,
@@ -708,133 +566,179 @@ class DepthAnything3Wrapper:
             aux=getattr(prediction, "aux", None),
         )
 
-    def _prepare_images_with_sizes(
-        self, images: List[Union[np.ndarray, Image.Image, str, Path]]
-    ) -> Tuple[List[Union[np.ndarray, Image.Image, str]], List[Tuple[int, int]]]:
-        """Convert Path objects and ImageInput to formats for API compatibility,
-        and track original image sizes.
+    def _prepare_images(
+        self,
+        images: List[Union[np.ndarray, Image.Image, str, Path]],
+    ) -> List[Union[np.ndarray, Image.Image, str]]:
+        """Convert inputs to values accepted by the official DA3 API.
 
-        Returns:
-            Tuple of (prepared_images, original_sizes)
-            where original_sizes is a list of (height, width) tuples
+        This is a *pure* conversion step (no filesystem IO). It is used by tests
+        and by `_prepare_images_with_sizes`.
         """
-        # Import here to avoid circular dependency
         from lux_depth_v3.input_manager import ImageInput
 
-        prepared = []
-        sizes = []
+        prepared: List[Union[np.ndarray, Image.Image, str]] = []
 
         for img in images:
             if isinstance(img, ImageInput):
-                # Handle ImageInput objects
                 if img.path is not None:
-                    # Load to get size
-                    pil_img = Image.open(img.path)
-                    sizes.append((pil_img.height, pil_img.width))
                     prepared.append(str(img.path))
                 elif img.array is not None:
-                    h, w = img.array.shape[:2]
-                    sizes.append((h, w))
                     prepared.append(img.array)
                 else:
                     raise ValueError("ImageInput has neither path nor array")
+
             elif isinstance(img, Path):
-                pil_img = Image.open(img)
-                sizes.append((pil_img.height, pil_img.width))
                 prepared.append(str(img))
+
             elif isinstance(img, str):
-                pil_img = Image.open(img)
-                sizes.append((pil_img.height, pil_img.width))
                 prepared.append(img)
+
+            elif isinstance(img, Image.Image):
+                prepared.append(img)
+
+            elif isinstance(img, np.ndarray):
+                prepared.append(img)
+
+            # Test utilities sometimes pass mocks with an ndarray spec. Treat any
+            # "array-like" input (has `.shape`) as a valid ndarray-like object.
+            elif hasattr(img, "shape"):
+                prepared.append(img)  # type: ignore[arg-type]
+
+            else:
+                raise ValueError(f"Unsupported image type: {type(img)}")
+
+        return prepared
+
+    def _prepare_images_with_sizes(
+        self,
+        images: List[Union[np.ndarray, Image.Image, str, Path]],
+    ) -> Tuple[List[Union[np.ndarray, Image.Image, str]], List[Optional[Tuple[int, int]]]]:
+        """Convert inputs to API-compatible values and track original sizes.
+
+        Size detection is best-effort:
+        - If an image is provided as an array/PIL image, the size is always known.
+        - If an image is provided as a path/string, we only read its size if the
+          file exists and is readable.
+        """
+        from lux_depth_v3.input_manager import ImageInput
+
+        prepared = self._prepare_images(images)
+        sizes: List[Optional[Tuple[int, int]]] = []
+
+        for img in images:
+            if isinstance(img, ImageInput):
+                if img.path is not None:
+                    try:
+                        if img.path.exists():
+                            with Image.open(img.path) as pil_img:
+                                sizes.append((pil_img.height, pil_img.width))
+                        else:
+                            sizes.append(None)
+                    except Exception:
+                        sizes.append(None)
+                elif img.array is not None:
+                    h, w = img.array.shape[:2]
+                    sizes.append((h, w))
+                else:
+                    raise ValueError("ImageInput has neither path nor array")
+
+            elif isinstance(img, Path):
+                try:
+                    if img.exists():
+                        with Image.open(img) as pil_img:
+                            sizes.append((pil_img.height, pil_img.width))
+                    else:
+                        sizes.append(None)
+                except Exception:
+                    sizes.append(None)
+
+            elif isinstance(img, str):
+                try:
+                    p = Path(img)
+                    if p.exists():
+                        with Image.open(p) as pil_img:
+                            sizes.append((pil_img.height, pil_img.width))
+                    else:
+                        sizes.append(None)
+                except Exception:
+                    sizes.append(None)
+
             elif isinstance(img, Image.Image):
                 sizes.append((img.height, img.width))
-                prepared.append(img)
+
             elif isinstance(img, np.ndarray):
                 h, w = img.shape[:2]
                 sizes.append((h, w))
-                prepared.append(img)
+
+            elif hasattr(img, "shape"):
+                try:
+                    shape = img.shape  # type: ignore[attr-defined]
+                    sizes.append((int(shape[0]), int(shape[1])))
+                except Exception:
+                    sizes.append(None)
+
             else:
                 raise ValueError(f"Unsupported image type: {type(img)}")
 
         return prepared, sizes
 
-    def _upsample_depth_to_native(self, depth: np.ndarray, original_sizes: List[Tuple[int, int]]) -> np.ndarray:
-        """Upsample depth maps to native resolution using bicubic interpolation.
+    def _upsample_depth_to_native(self, depth: np.ndarray, original_sizes: List[Optional[Tuple[int, int]]]) -> np.ndarray:
+        """Upsample depth/conf maps to native resolution.
 
-        Args:
-            depth: Depth array, shape (N, H_low, W_low) or (H_low, W_low)
-            original_sizes: List of (height, width) tuples for each image
-
-        Returns:
-            Upsampled depth array, shape (N, H_orig, W_orig) or (H_orig, W_orig)
+        Prefers OpenCV if available (faster); otherwise falls back to torch bicubic.
         """
-        import cv2
-
-        # Handle single image case
         is_batched = depth.ndim == 3
         if not is_batched:
-            depth = depth[np.newaxis, ...]  # Add batch dimension
+            depth = depth[np.newaxis, ...]
 
         if len(original_sizes) != depth.shape[0]:
             raise ValueError(f"Mismatch: {len(original_sizes)} original sizes but {depth.shape[0]} depth maps")
 
-        upsampled = []
-        for i, (h_orig, w_orig) in enumerate(original_sizes):
-            depth_map = depth[i]  # (H_low, W_low)
+        upsampled: List[np.ndarray] = []
+        for i, size in enumerate(original_sizes):
+            depth_map = depth[i].astype(np.float32, copy=False)
+            if size is None:
+                upsampled.append(depth_map)
+                continue
+
+            h_orig, w_orig = size
             h_low, w_low = depth_map.shape
 
-            # Skip upsampling if already at native resolution
             if (h_low, w_low) == (h_orig, w_orig):
                 upsampled.append(depth_map)
                 continue
 
-            # Upsample using bicubic interpolation
-            depth_upsampled = cv2.resize(depth_map, (w_orig, h_orig), interpolation=cv2.INTER_CUBIC)
-            upsampled.append(depth_upsampled)
+            # Fast path: OpenCV if present
+            try:
+                import cv2  # type: ignore
 
-            logger.debug(f"Upsampled depth {i}: {depth_map.shape} -> {depth_upsampled.shape}")
+                depth_up = cv2.resize(depth_map, (w_orig, h_orig), interpolation=cv2.INTER_CUBIC)
+                upsampled.append(depth_up.astype(np.float32, copy=False))
+                continue
+            except Exception:
+                pass
 
-        # Stack back to array
+            # Fallback: torch bicubic (always available since torch is a hard dep)
+            import torch.nn.functional as F
+
+            t = torch.from_numpy(depth_map).unsqueeze(0).unsqueeze(0).float()
+            t_up = F.interpolate(t, size=(h_orig, w_orig), mode="bicubic", align_corners=False)
+            upsampled.append(t_up.squeeze(0).squeeze(0).cpu().numpy())
+
+            logger.debug("Upsampled depth %d: %s -> %s", i, (h_low, w_low), (h_orig, w_orig))
+
         result = np.stack(upsampled, axis=0)
-
-        # Remove batch dimension if input was single image
         if not is_batched:
             result = result[0]
-
-        return result
-
-    def _prepare_images(
-        self, images: List[Union[np.ndarray, Image.Image, str, Path]]
-    ) -> List[Union[np.ndarray, Image.Image, str]]:
-        """Convert Path objects and ImageInput to formats for API compatibility.
-
-        DEPRECATED: Use _prepare_images_with_sizes() instead for proper upsampling.
-        """
-        # Import here to avoid circular dependency
-        from lux_depth_v3.input_manager import ImageInput
-
-        result = []
-        for img in images:
-            if isinstance(img, ImageInput):
-                # Handle ImageInput objects
-                if img.path is not None:
-                    result.append(str(img.path))
-                elif img.array is not None:
-                    result.append(img.array)
-                else:
-                    raise ValueError("ImageInput has neither path nor array")
-            elif isinstance(img, Path):
-                result.append(str(img))
-            else:
-                result.append(img)
         return result
 
 
 class DepthAnything3(nn.Module):
     """Placeholder for Depth Anything 3 model.
 
-    This will be replaced with the official implementation when available.
-    For now, it provides a compatible interface for testing.
+    This is only used as a last-resort fallback for testing when the official
+    DA3 API is not installed.
     """
 
     def __init__(
@@ -848,8 +752,6 @@ class DepthAnything3(nn.Module):
         self.device_str = device
         self.dtype = dtype
 
-        # Placeholder: very simple network that preserves dimensions
-        # In reality, this would be the full DA3 architecture
         self.conv1 = nn.Conv2d(3, 64, 3, padding=1)
         self.conv2 = nn.Conv2d(64, 1, 3, padding=1)
         self.sigmoid = nn.Sigmoid()
@@ -863,27 +765,12 @@ class DepthAnything3(nn.Module):
         device: str = "cpu",
         dtype: torch.dtype = torch.float32,
         cache_dir: Optional[str] = None,
-    ) -> DepthAnything3:
-        """Load pretrained DA3 model.
-
-        Args:
-            model_name: Model variant name
-            device: Device to load model on
-            dtype: Model precision
-            cache_dir: Cache directory for model weights
-
-        Returns:
-            Loaded model
-        """
-        print(f"[DA3 Wrapper] Loading placeholder model: {model_name}")
-        print("[DA3 Wrapper] This is a placeholder - replace with official DA3 API")
-
-        model = cls(model_name, device, dtype)
-
-        # In production, this would download and load pretrained weights
-        # For now, we initialize with random weights
-
-        return model
+    ) -> "DepthAnything3":
+        logger.warning(
+            "[DA3 Wrapper] Loading placeholder model: %s (this is NOT the official DA3 implementation)",
+            model_name,
+        )
+        return cls(model_name, device, dtype)
 
     def inference(
         self,
@@ -891,42 +778,25 @@ class DepthAnything3(nn.Module):
         mode: str = "monocular",
         poses: Optional[torch.Tensor] = None,
     ) -> Dict[str, Any]:
-        """Run depth inference.
-
-        Args:
-            images: Input images (B, C, H, W)
-            mode: Inference mode ("monocular" or "multi_view")
-            poses: Camera poses (B, 4, 4) for multi-view
-
-        Returns:
-            Dictionary with depth predictions
-        """
-        # Ensure model is in eval mode
         self.eval()
 
-        # Forward pass through placeholder network
-        x = self.conv1(images)
-        x = torch.relu(x)
-        depth = self.conv2(x)
-        depth = self.sigmoid(depth)
+        x = torch.relu(self.conv1(images))
+        depth = self.sigmoid(self.conv2(x))  # (B, 1, H, W)
 
-        result = {
-            "depth": depth,
-        }
+        result: Dict[str, Any] = {"depth": depth}
 
-        # Multi-view mode adds point cloud
         if mode == "multi_view" and poses is not None:
-            # Placeholder: in reality, this would use poses to create 3D reconstruction
             batch_size = images.shape[0]
-            result["depths"] = [depth[i] for i in range(batch_size)]
-            result["point_cloud"] = None  # Would be computed from depth + poses
+            # Provide per-view depth maps shaped (H, W) for downstream compatibility.
+            result["depths"] = [depth[i, 0] for i in range(batch_size)]
+            result["point_cloud"] = None
 
         return result
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass (for compatibility)."""
-        x = self.conv1(x)
-        x = torch.relu(x)
-        depth = self.conv2(x)
-        depth = self.sigmoid(depth)
-        return depth
+        x = torch.relu(self.conv1(x))
+        return self.sigmoid(self.conv2(x))
+
+
+# Backwards-compatible alias (some scripts expect this name).
+DA3Wrapper = DepthAnything3Wrapper

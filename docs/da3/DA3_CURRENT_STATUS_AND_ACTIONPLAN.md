@@ -1,5 +1,5 @@
 # DA3 Current Status & Action Plan
-**Created**: 2025-12-31  
+**Created**: 2025-12-31
 **Purpose**: Production-minded assessment before 750 Picacho R&D evaluation
 
 ---
@@ -58,8 +58,8 @@
 
 ### Path A: Skip DA3 Evaluation (RECOMMENDED)
 
-**Timeline**: Immediate  
-**Effort**: Zero  
+**Timeline**: Immediate
+**Effort**: Zero
 **Risk**: Zero
 
 **Rationale**:
@@ -77,8 +77,8 @@
 
 ### Path B: Fix DA3 and Run Evaluation (R&D Investment)
 
-**Timeline**: 2-4 hours  
-**Effort**: High  
+**Timeline**: 2-4 hours
+**Effort**: High
 **Risk**: Medium (time investment, may still fail)
 
 **Required Steps**:

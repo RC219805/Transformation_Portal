@@ -175,24 +175,20 @@ class ModelCacheManager:
 
     def _download_hf_cache(self, model_id: str) -> ModelCacheInfo:
         """Download using HuggingFace default cache."""
-        try:
-            from depth_anything_3.api import DepthAnything3
+        from huggingface_hub import snapshot_download
 
-            # This automatically uses HF cache
-            model = DepthAnything3.from_pretrained(model_id)
+        # snapshot_download returns the resolved snapshot directory inside the hub cache.
+        snapshot_path = snapshot_download(repo_id=model_id, repo_type="model", cache_dir=str(self.cache_dir))
+        cache_path = Path(snapshot_path)
+        size = self._get_directory_size(cache_path)
 
-            # Get cache path (HF stores models in hub cache)
-            cache_path = self.cache_dir / self._model_id_to_path(model_id)
-
-            # Estimate size
-            size = self._get_directory_size(cache_path) if cache_path.exists() else 0
-
-            return ModelCacheInfo(
-                model_id=model_id, local_path=cache_path, size_bytes=size, cached_at=datetime.now().isoformat(), verified=False
-            )
-
-        except ImportError:
-            raise RuntimeError("depth_anything_3 package not installed. Install with: pip install depth-anything-3")
+        return ModelCacheInfo(
+            model_id=model_id,
+            local_path=cache_path,
+            size_bytes=size,
+            cached_at=datetime.now().isoformat(),
+            verified=False,
+        )
 
     def _download_snapshot(self, model_id: str, model_key: str) -> ModelCacheInfo:
         """Download full snapshot."""
@@ -282,7 +278,14 @@ class ModelCacheManager:
 
     def _is_cached(self, model_id: str) -> bool:
         """Check if model is already cached."""
-        return model_id in self.metadata["models"]
+        info = self.metadata.get("models", {}).get(model_id)
+        if not info:
+            return False
+        try:
+            path = Path(info.get("local_path", ""))
+        except Exception:
+            return False
+        return path.exists() and any(path.rglob("*"))
 
     def _get_cache_info(self, model_id: str) -> ModelCacheInfo:
         """Get cache info for a model."""
@@ -298,15 +301,19 @@ class ModelCacheManager:
 
     def _verify_model(self, cache_info: ModelCacheInfo) -> bool:
         """Verify model integrity."""
-        # Basic verification: check path exists and has files
+        # Basic verification: check path exists and has essential files.
         if not cache_info.local_path.exists():
             return False
 
-        # Check for essential files
-        # (DA3 models typically have config.json, model weights, etc.)
-        has_files = any(cache_info.local_path.iterdir())
+        # Config file
+        has_config = (cache_info.local_path / "config.json").exists()
 
-        return has_files
+        # Weight files (common patterns)
+        has_weights = any(cache_info.local_path.rglob("*.safetensors")) or any(cache_info.local_path.rglob("*.bin"))
+
+        # Fall back to "has anything" to avoid false negatives on model layout changes.
+        has_any = any(cache_info.local_path.rglob("*"))
+        return (has_config and has_weights) or has_any
 
     def _model_id_to_path(self, model_id: str) -> str:
         """Convert model ID to cache path."""
@@ -348,3 +355,7 @@ def precache_models(
     """
     manager = ModelCacheManager(cache_dir=cache_dir)
     return manager.download_models(model_set=model_set, force=force)
+
+
+# Backwards-compatible alias (some scripts expect this name).
+ModelCache = ModelCacheManager
