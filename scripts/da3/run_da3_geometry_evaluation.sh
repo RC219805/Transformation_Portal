@@ -7,9 +7,9 @@
 # NON-COMMERCIAL R&D ONLY
 #
 
-set -e  # Exit on error
+set -euo pipefail
 
-REPO_ROOT="/Users/rc/Transformation_Portal"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 # Colors for output
@@ -32,15 +32,16 @@ if ! command -v da3 &> /dev/null; then
     echo -e "${RED}✗ da3 CLI not found${NC}"
     echo ""
     echo "Install DA3:"
-    echo "  pip uninstall depth-anything-3 -y"
-    echo "  git clone https://github.com/DepthAnything/Depth-Anything-V3.git depth_anything_3_official"
-    echo "  cd depth_anything_3_official && pip install -e ."
+    echo "  pip uninstall -y depth-anything-3 || true"
+    echo "  mkdir -p external"
+    echo "  git clone https://github.com/ByteDance-Seed/depth-anything-3 external/depth-anything-3"
+    echo "  pip install -e external/depth-anything-3"
     exit 1
 fi
 
 if ! python -c "from depth_anything_3.api import DepthAnything3" 2>/dev/null; then
     echo -e "${RED}✗ DA3 Python API not importable${NC}"
-    echo "Reinstall with: cd depth_anything_3_official && pip install -e ."
+    echo "Reinstall with: pip install -e external/depth-anything-3"
     exit 1
 fi
 
