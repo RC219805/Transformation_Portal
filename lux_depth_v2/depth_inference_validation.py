@@ -172,7 +172,10 @@ class TiledDepthEstimator:
             # Load model directly to bypass HF's 518px resize
             from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
-            self.image_processor = AutoImageProcessor.from_pretrained(self.config.model_name)
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                self.config.model_name,
+                use_fast=False,  # Explicit for APEX determinism
+            )
             self.model = AutoModelForDepthEstimation.from_pretrained(self.config.model_name)
             self.model.to(self.device)
             self.model.eval()
