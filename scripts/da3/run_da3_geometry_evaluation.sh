@@ -101,12 +101,12 @@ for tiff in "$SOURCE_DIR"/*.tif*; do
     [ -f "$tiff" ] || continue
     base=$(basename "$tiff" | sed 's/\.[^.]*$//')
     output_png="$INPUT_DIR/${base}.png"
-    
+
     if [ -f "$output_png" ]; then
         echo "  ⊙ Skip (exists): ${base}.png"
         continue
     fi
-    
+
     echo "  Converting: ${base}.png"
     magick "$tiff" \
         -colorspace sRGB \
@@ -133,31 +133,31 @@ run_da3_model() {
     local MODEL=$1
     local MODEL_NAME=$2
     local SCENES=("${@:3}")
-    
+
     echo ""
     echo "============================================================"
     echo "Model: $MODEL_NAME"
     echo "============================================================"
-    
+
     OUT_DIR="$OUT_BASE/$MODEL_NAME"
     mkdir -p "$OUT_DIR"
-    
+
     # Start backend
     echo "Starting DA3 backend..."
     da3 backend --model-dir "$MODEL" --gallery-dir "$OUT_DIR" &> /tmp/da3_backend_${MODEL_NAME}.log &
     BACKEND_PID=$!
-    
+
     # Wait for backend to initialize
     sleep 15
-    
+
     if ! kill -0 $BACKEND_PID 2>/dev/null; then
         echo -e "${RED}✗ Backend failed to start${NC}"
         cat /tmp/da3_backend_${MODEL_NAME}.log
         return 1
     fi
-    
+
     echo "Backend running (PID: $BACKEND_PID)"
-    
+
     # Process scenes
     local processed=0
     for img in "${SCENES[@]}"; do
@@ -165,18 +165,18 @@ run_da3_model() {
             echo "  ⊙ Skip (not found): $(basename $img)"
             continue
         fi
-        
+
         base=$(basename "$img" .png)
         scene_out="$OUT_DIR/$base"
-        
+
         if [ -d "$scene_out" ] && [ -f "$scene_out/output.npz" ]; then
             echo "  ⊙ Skip (exists): $base"
             ((processed++))
             continue
         fi
-        
+
         echo "  Processing: $base"
-        
+
         if da3 auto "$img" \
             --export-dir "$scene_out" \
             --export-format mini_npz-glb \
@@ -190,12 +190,12 @@ run_da3_model() {
             echo -e "    ${RED}✗ Failed (see /tmp/da3_${MODEL_NAME}_${base}.log)${NC}"
         fi
     done
-    
+
     # Stop backend
     echo "Stopping backend..."
     kill $BACKEND_PID 2>/dev/null || true
     wait $BACKEND_PID 2>/dev/null || true
-    
+
     echo -e "${GREEN}✓ Processed $processed scenes with $MODEL_NAME${NC}"
 }
 
@@ -253,36 +253,36 @@ for model_name in models:
     model_dir = outputs / model_name
     if not model_dir.exists():
         continue
-    
+
     print(f"\nProcessing: {model_name}")
-    
+
     for scene_dir in model_dir.iterdir():
         if not scene_dir.is_dir():
             continue
-        
+
         scene_name = scene_dir.name
         npz_file = scene_dir / "output.npz"
-        
+
         if not npz_file.exists():
             continue
-        
+
         # Load depth and confidence
         data = np.load(npz_file)
         depth = data['depth']
         conf = data.get('conf', None)
-        
+
         # Create visualization
         fig, axes = plt.subplots(1, 3 if conf is not None else 2, figsize=(15, 5))
-        
+
         axes[0].imshow(depth, cmap='turbo')
         axes[0].set_title(f'{scene_name} - Depth')
         axes[0].axis('off')
-        
+
         if conf is not None:
             axes[1].imshow(conf, cmap='viridis')
             axes[1].set_title(f'{scene_name} - Confidence')
             axes[1].axis('off')
-            
+
             # Low confidence mask
             axes[2].imshow(conf < 0.3, cmap='gray')
             axes[2].set_title(f'{scene_name} - Low Conf Mask (<0.3)')
@@ -293,12 +293,12 @@ for model_name in models:
             axes[1].set_title('Depth Distribution')
             axes[1].set_xlabel('Depth Value')
             axes[1].set_ylabel('Frequency')
-        
+
         plt.tight_layout()
         out_path = comparisons / f"{model_name}_{scene_name}_analysis.png"
         plt.savefig(out_path, dpi=150, bbox_inches='tight')
         plt.close()
-        
+
         print(f"  ✓ {scene_name}: depth {depth.shape}, conf {conf.shape if conf is not None else 'N/A'}")
 
 print("\n✓ Visualizations saved to 750Picacho_DA3_RnD/comparisons/")
@@ -443,9 +443,9 @@ Input → DA3 Global Anchor (+ confidence)
 ```
 
 **Next Steps**:
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ---
 

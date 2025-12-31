@@ -102,8 +102,13 @@ class MemoryPool:
         """
         key = (shape, dtype)
         if key in self.available and self.available[key]:
-            tensor = self.available[key].pop()
-            return tensor
+            while self.available[key]:
+                tensor = self.available[key].pop()
+                tensor_size = tensor.element_size() * tensor.numel()
+                self.allocated_bytes = max(self.allocated_bytes - tensor_size, 0)
+                if tensor.device == self.device:
+                    return tensor
+            del self.available[key]
         return None
 
     def put(self, tensor: Tensor) -> bool:
@@ -116,6 +121,13 @@ class MemoryPool:
         Returns:
             True if cached, False if pool is full
         """
+        if tensor.device != self.device:
+            logger.debug(
+                "Skipping pool cache for tensor on %s (pool device %s)",
+                tensor.device,
+                self.device,
+            )
+            return False
         tensor_size = tensor.element_size() * tensor.numel()
 
         # Check if pool has space

@@ -33,7 +33,7 @@ import math
 import os
 import time
 from collections import OrderedDict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
@@ -715,18 +715,35 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
 
     if opts.workers > 1:
         # Use multiprocessing
-        with ProcessPoolExecutor(max_workers=opts.workers) as ex:
-            futures = {ex.submit(_process_single, dp, opts): dp for dp in depth_maps}
-            for fut in as_completed(futures):
-                base, out_path, err = fut.result()
-                done += 1
-                if err:
-                    errors.append((base, err))
-                    _log.warning("Base %s failed: %s", base, err)
-                else:
-                    _log.info("Processed %s -> %s", base, out_path)
-                if progress:
-                    progress(done, total, base)
+        try:
+            with ProcessPoolExecutor(max_workers=opts.workers) as ex:
+                futures = {ex.submit(_process_single, dp, opts): dp for dp in depth_maps}
+                for fut in as_completed(futures):
+                    base, out_path, err = fut.result()
+                    done += 1
+                    if err:
+                        errors.append((base, err))
+                        _log.warning("Base %s failed: %s", base, err)
+                    else:
+                        _log.info("Processed %s -> %s", base, out_path)
+                    if progress:
+                        progress(done, total, base)
+        except PermissionError as exc:
+            # Some restricted/sandboxed environments (notably on macOS) disallow querying
+            # semaphore sysconf limits needed by ProcessPoolExecutor.
+            _log.warning("ProcessPoolExecutor unavailable (%s). Falling back to ThreadPoolExecutor.", exc)
+            with ThreadPoolExecutor(max_workers=opts.workers) as ex:
+                futures = {ex.submit(_process_single, dp, opts): dp for dp in depth_maps}
+                for fut in as_completed(futures):
+                    base, out_path, err = fut.result()
+                    done += 1
+                    if err:
+                        errors.append((base, err))
+                        _log.warning("Base %s failed: %s", base, err)
+                    else:
+                        _log.info("Processed %s -> %s", base, out_path)
+                    if progress:
+                        progress(done, total, base)
     else:
         for dp in depth_maps:
             base, out_path, err = _process_single(dp, opts)

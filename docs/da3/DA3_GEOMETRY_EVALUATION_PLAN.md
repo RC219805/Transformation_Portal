@@ -1,6 +1,6 @@
 # DA3 Geometry Engine Evaluation Plan
-**Created**: 2025-12-31  
-**Purpose**: Answer specific architectural geometry questions for 750 Picacho  
+**Created**: 2025-12-31
+**Purpose**: Answer specific architectural geometry questions for 750 Picacho
 **Timeline**: 90 minutes (focused R&D test)
 
 ---
@@ -126,14 +126,14 @@ sleep 10  # Let backend initialize
 for img in 750Picacho_DA3_RnD/inputs_png/*.png; do
     base=$(basename "$img" .png)
     echo "Processing: $base with DA3NESTED-GIANT-LARGE-1.1"
-    
+
     da3 auto "$img" \
         --export-dir "$OUT_DIR/$base" \
         --export-format mini_npz-glb \
         --use-backend \
         --process-res 1024 \
         --process-res-method upper_bound_resize
-    
+
     echo "✓ Completed: $base"
 done
 
@@ -158,14 +158,14 @@ for scene in "${FOCUS_SCENES[@]}"; do
     img="750Picacho_DA3_RnD/inputs_png/${scene}.png"
     if [ -f "$img" ]; then
         echo "Processing: $scene with DA3METRIC-LARGE"
-        
+
         da3 auto "$img" \
             --export-dir "$OUT_DIR/$scene" \
             --export-format mini_npz-glb \
             --use-backend \
             --process-res 1024 \
             --process-res-method upper_bound_resize
-        
+
         echo "✓ Completed: $scene"
     fi
 done
@@ -187,14 +187,14 @@ for scene in "${FOCUS_SCENES[@]}"; do
     img="750Picacho_DA3_RnD/inputs_png/${scene}.png"
     if [ -f "$img" ]; then
         echo "Processing: $scene with DA3MONO-LARGE"
-        
+
         da3 auto "$img" \
             --export-dir "$OUT_DIR/$scene" \
             --export-format mini_npz-glb \
             --use-backend \
             --process-res 1024 \
             --process-res-method upper_bound_resize
-        
+
         echo "✓ Completed: $scene"
     fi
 done
@@ -222,7 +222,7 @@ for img_path in input_dir.glob("*.png"):
     scene_name = img_path.stem
     out_scene_dir = output_dir / scene_name
     out_scene_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Run inference
     prediction = model.inference(
         [str(img_path)],
@@ -231,13 +231,13 @@ for img_path in input_dir.glob("*.png"):
         process_res=1024,
         process_res_method="upper_bound_resize"
     )
-    
+
     print(f"✓ {scene_name}: depth shape {prediction.depth.shape}")
-    
+
     # Access depth and confidence for downstream processing
     depth = prediction.depth[0]  # (H, W)
     conf = prediction.conf[0] if prediction.conf is not None else None
-    
+
     # Save as 16-bit TIFF for lux-depth comparison
     # (convert DA3 normalized depth to 16-bit range)
     depth_16bit = (depth * 65535).astype(np.uint16)
@@ -342,10 +342,10 @@ SegFormer MaterialsV2 → Final output
 def create_da3_global_anchor(image_path, model="da3metric-large"):
     """Generate DA3 global depth + confidence."""
     from depth_anything_3.api import DepthAnything3
-    
+
     model = DepthAnything3.from_pretrained(f"depth-anything/{model.upper()}")
     pred = model.inference([image_path], process_res=1024)
-    
+
     return {
         'depth': pred.depth[0],
         'confidence': pred.conf[0] if pred.conf else None
@@ -354,11 +354,11 @@ def create_da3_global_anchor(image_path, model="da3metric-large"):
 def fuse_da3_apex(da3_anchor, apex_tiled, conf_threshold=0.3):
     """Weighted fusion favoring DA3 global shape, APEX detail."""
     conf = da3_anchor['confidence']
-    
+
     if conf is None:
         # No confidence, simple blend
         return 0.6 * da3_anchor['depth'] + 0.4 * apex_tiled
-    
+
     # High conf: blend both
     # Low conf: trust DA3, reduce APEX sharpening
     blend_weight = np.clip(conf, 0.3, 1.0)

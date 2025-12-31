@@ -14,7 +14,7 @@ import multiprocessing as mp
 import queue
 import threading
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -193,7 +193,8 @@ class ParallelProcessor:
         results = [None] * len(items)
         completed = 0
 
-        with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
+        def run_with_executor(executor):
+            nonlocal completed
             future_to_idx = {executor.submit(self._safe_process, process_fn, item): idx for idx, item in enumerate(items)}
 
             for future in as_completed(future_to_idx):
@@ -212,6 +213,15 @@ class ParallelProcessor:
                 completed += 1
                 if progress_callback:
                     progress_callback(completed, len(items))
+
+        try:
+            with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
+                run_with_executor(executor)
+        except PermissionError:
+            # Some restricted/sandboxed environments (notably on macOS) disallow querying
+            # semaphore sysconf limits needed by ProcessPoolExecutor. Fall back to threads.
+            with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+                run_with_executor(executor)
 
         return results
 

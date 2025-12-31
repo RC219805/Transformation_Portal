@@ -385,7 +385,9 @@ class HighFidelityDepthEstimator:
 
         # Enforce minimum tile size (should never trigger with proper padding)
         valid_tiles = []
-        min_size = 256
+        # Minimum tile size safeguard: treat any tile smaller than the configured tile size
+        # (or 256px, whichever is smaller) as a sliver.
+        min_size = min(256, tile_size)
         for tile, y0, y1, x0, x1 in tiles:
             th, tw = tile.shape[:2]
             if th >= min_size and tw >= min_size:
@@ -772,6 +774,10 @@ class HighFidelityDepthEstimator:
         logger.debug(f"Created blend weight: {tile_size}×{tile_size}, overlap={overlap}, taper=Hann")
 
         return weight
+
+    # Backwards-compatible alias (older tests/utilities expect this name).
+    def _make_blend_window(self, tile_size: int, overlap: int) -> np.ndarray:
+        return self._create_blend_weight(tile_size, overlap)
 
     def _blend_tiles(
         self, tile_depths: List[Tuple[np.ndarray, int, int, int, int]], output_shape: Tuple[int, int]

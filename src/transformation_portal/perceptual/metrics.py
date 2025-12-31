@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Dict, Any
 import logging
+import os
+from pathlib import Path
 
 import torch
 from torch import Tensor
@@ -72,13 +74,20 @@ class QualityMetrics:
         """
         self.substrate = substrate
         self.cache_models = cache_models
-        self.device = substrate.get_device()
+        device = substrate.get_device()
+        self.device = device if isinstance(device, torch.device) else torch.device(device)
 
         # Model cache
         self._lpips_model = None
         self._inception_model = None
 
         logger.info("Initialized QualityMetrics")
+
+    def _ensure_device(self, tensor: Tensor) -> Tensor:
+        """Move tensor to the configured device if needed."""
+        if tensor.device != self.device:
+            return tensor.to(self.device)
+        return tensor
 
     def compute_all(
         self,
@@ -127,6 +136,9 @@ class QualityMetrics:
         Returns:
             LPIPS score (lower is better, 0 = identical)
         """
+        image = self._ensure_device(image)
+        reference = self._ensure_device(reference)
+
         # Ensure 4D tensors
         if image.ndim == 3:
             image = image.unsqueeze(0)
@@ -180,6 +192,8 @@ class QualityMetrics:
         Returns:
             PSNR score (higher is better, typically 20-50 dB)
         """
+        image = self._ensure_device(image)
+        reference = self._ensure_device(reference)
         mse = F.mse_loss(image, reference).item()
 
         if mse == 0:
@@ -218,6 +232,9 @@ class QualityMetrics:
         Returns:
             SSIM score (higher is better, range [0, 1])
         """
+        image = self._ensure_device(image)
+        reference = self._ensure_device(reference)
+
         # Ensure 4D
         if image.ndim == 3:
             image = image.unsqueeze(0)
@@ -259,6 +276,8 @@ class QualityMetrics:
         Returns:
             MSE score (lower is better)
         """
+        image = self._ensure_device(image)
+        reference = self._ensure_device(reference)
         mse = F.mse_loss(image, reference).item()
 
         # Normalize (assuming max MSE = 1.0 for [0,1] images)
@@ -297,14 +316,33 @@ class QualityMetrics:
             # Convert to grayscale
             gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
 
-            # Compute BRISQUE (requires opencv-contrib-python)
-            score = cv2.quality.QualityBRISQUE_compute(gray, "")[0]
+            # Compute BRISQUE (requires opencv-contrib-python + BRISQUE model files).
+            #
+            # OpenCV's BRISQUE implementation requires two data files:
+            # - A trained model file
+            # - A feature range file
+            #
+            # Since these are not bundled with this repo (and CI/offline environments
+            # should not download them), treat BRISQUE as "optional" and fall back
+            # to a lightweight sharpness proxy unless explicit file paths are provided.
+            model_path = os.environ.get("TP_BRISQUE_MODEL_PATH") or os.environ.get("BRISQUE_MODEL_PATH")
+            range_path = os.environ.get("TP_BRISQUE_RANGE_PATH") or os.environ.get("BRISQUE_RANGE_PATH")
+
+            if not model_path or not range_path or not Path(model_path).exists() or not Path(range_path).exists():
+                raise FileNotFoundError(
+                    "BRISQUE model/range files not configured. Set TP_BRISQUE_MODEL_PATH and "
+                    "TP_BRISQUE_RANGE_PATH (or BRISQUE_MODEL_PATH/BRISQUE_RANGE_PATH)."
+                )
+
+            score = cv2.quality.QualityBRISQUE_compute(gray, model_path, range_path)[0]
 
             # Normalize (BRISQUE typically [0, 100], lower is better)
             normalized = 1.0 - min(score / 100.0, 1.0)
 
-        except (ImportError, AttributeError):
-            logger.warning("BRISQUE not available, using simplified version")
+        except Exception as e:
+            # BRISQUE is an optional metric: be robust to missing optional deps,
+            # missing model files, or OpenCV API changes.
+            logger.warning("BRISQUE not available (%s), using simplified version", e)
             # Fallback: use simple variance-based quality
             score = self._simple_sharpness_metric(image)
             normalized = score

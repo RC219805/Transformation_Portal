@@ -2,8 +2,8 @@
 
 ## Executive Summary
 
-**Main branch**: Clean, synced with origin  
-**Latest commit**: `021b3db` - feat(lux-depth-v2): 100% APEX Quality - MaterialsV2 SegFormer Backend (#628)  
+**Main branch**: Clean, synced with origin
+**Latest commit**: `021b3db` - feat(lux-depth-v2): 100% APEX Quality - MaterialsV2 SegFormer Backend (#628)
 **Quality status**: Production-ready APEX pipeline operational
 
 ---
@@ -15,7 +15,7 @@
 
 #### What Changed
 - **MaterialsV2 SegFormer Backend**: Full integration complete
-  - Backend selection: `--materials-v2-backend segformer` 
+  - Backend selection: `--materials-v2-backend segformer`
   - High-resolution segmentation: 2048px long-side
   - Confidence tuning: CLI-configurable thresholds
   - Cache key fingerprinting: Prevents heuristic/segformer collision
@@ -121,7 +121,7 @@ lux-depth-v2 \
 - `mono-large` (DA3MONO-LARGE, Apache-2.0)
 - See: `lux-depth-v3 api-process --help`
 
-**Generated Script**: `scripts/da3/generate_apex_depth_maps_dav3_1.1.sh`  
+**Generated Script**: `scripts/da3/generate_apex_depth_maps_dav3_1.1.sh`
 Uses DA3 `large-v1.1` for all 6 source TIFFs (interiors + exteriors).
 
 ---
@@ -171,23 +171,23 @@ projects/750_picacho_lane/Final_Production_UltraQuality/
 ## Known Limitations & Next Steps
 
 ### 1. DA3 Installation Blocker
-**Issue**: `da3` entrypoint exists but `import depth_anything_3` fails  
-**Solution**: Install the official repo (see: `docs/da3/DA3_QUICK_START.md`)  
+**Issue**: `da3` entrypoint exists but `import depth_anything_3` fails
+**Solution**: Install the official repo (see: `docs/da3/DA3_QUICK_START.md`)
 **Status**: Scripts live in `scripts/da3/`
 
 ### 2. Pool Scene Validation
-**Status**: APEX-100 validated on Kitchen (interior); Pool (exterior/water) pending  
-**Risk**: Water planes + reflections are hardest depth case  
+**Status**: APEX-100 validated on Kitchen (interior); Pool (exterior/water) pending
+**Risk**: Water planes + reflections are hardest depth case
 **Mitigation**: Use `--refinement-preset balanced` (not aggressive) for pool
 
 ### 3. Tile Seam Artifact (1022→1024 resize)
-**Impact**: Minor ringing at tile boundaries in some gradients  
-**Severity**: Low (not visible in most scenes)  
+**Impact**: Minor ringing at tile boundaries in some gradients
+**Severity**: Low (not visible in most scenes)
 **Fix**: Pad input tiles +1px (reflect) or accept minor interpolation
 
 ### 4. Transformers Warning (SegFormer config)
-**Warning**: `feature_extractor_type`, `reduce_labels` ignored  
-**Impact**: Noise only (no quality degradation)  
+**Warning**: `feature_extractor_type`, `reduce_labels` ignored
+**Impact**: Noise only (no quality degradation)
 **Fix**: Update processor config or pin transformers version
 
 ---
@@ -353,15 +353,15 @@ Untracked files:
 ## Summary
 
 ### What's Ready for Production
-✅ lux_depth_v2 APEX pipeline (100% quality, SegFormer materials)  
-✅ CI/CD hardened (Safety, Quality Gate, dependency automation)  
-✅ 16-bit TIFF depth export operational  
+✅ lux_depth_v2 APEX pipeline (100% quality, SegFormer materials)
+✅ CI/CD hardened (Safety, Quality Gate, dependency automation)
+✅ 16-bit TIFF depth export operational
 ✅ Cache system stable (depth + materials)
 
 ### What Needs Completion
-⏳ DA3 package installation (git+https://...)  
-⏳ Pool scene APEX validation  
-⏳ DAV2 vs DA3 large-v1.1 quality comparison  
+⏳ DA3 package installation (git+https://...)
+⏳ Pool scene APEX validation
+⏳ DAV2 vs DA3 large-v1.1 quality comparison
 ⏳ Batch processing all 6 source TIFFs
 
 ### Risk Assessment
@@ -371,6 +371,6 @@ Untracked files:
 
 ---
 
-**Generated**: 2025-12-31 04:55 UTC  
-**Repository**: `/Users/rc/Transformation_Portal`  
+**Generated**: 2025-12-31 04:55 UTC
+**Repository**: `/Users/rc/Transformation_Portal`
 **Main HEAD**: `021b3db`
