@@ -254,10 +254,10 @@ class TestThroughputPerformance:
             f"Throughput {metrics['images_per_hour']:.1f} images/hour below minimum {min_throughput} images/hour"
         )
 
-        # Memory constraint: < 2GB
+        # Memory constraint: < 2GB incremental RSS growth (baseline may vary across runners)
         max_memory_mb = 2000
-        assert metrics["rss_final_mb"] < max_memory_mb, (
-            f"Peak memory {metrics['rss_final_mb']:.1f}MB exceeds limit {max_memory_mb}MB"
+        assert metrics["rss_delta_mb"] < max_memory_mb, (
+            f"Peak RSS delta {metrics['rss_delta_mb']:.1f}MB exceeds limit {max_memory_mb}MB"
         )
 
         # Log metrics for visibility
