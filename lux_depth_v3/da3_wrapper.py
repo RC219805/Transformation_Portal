@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Dict, Optional, Any, List, Union, Tuple
 from pathlib import Path
 from dataclasses import dataclass
+import importlib.util
 import subprocess
 import shutil
 import json
@@ -22,6 +23,7 @@ import requests
 import signal
 import atexit
 import logging
+import os
 
 import numpy as np
 import cv2
@@ -33,8 +35,15 @@ logger = logging.getLogger(__name__)
 
 
 def check_da3_cli_available() -> bool:
-    """Check if da3 CLI is available in PATH."""
-    return shutil.which("da3") is not None
+    """Check if the DA3 CLI is available and usable in this environment.
+
+    Note: A stale `da3` entrypoint can exist even when `depth_anything_3` is not
+    importable, which would cause `da3` to crash at runtime. We treat that as
+    unavailable to avoid false positives.
+    """
+    if shutil.which("da3") is None:
+        return False
+    return importlib.util.find_spec("depth_anything_3") is not None
 
 
 @dataclass
@@ -128,12 +137,10 @@ class DA3Backend:
         ]
 
         print(f"Starting DA3 backend: {' '.join(cmd)}")
-        self._process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        env = os.environ.copy()
+        env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
+        self._process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, env=env)
 
         # Wait for service to be ready
         start_time = time.time()
@@ -191,21 +198,25 @@ class DA3CLI:
 
         self.backend = backend
 
-    def _build_base_cmd(self, subcommand: str, **kwargs) -> List[str]:
+    def _build_base_cmd(self, subcommand: str, input_path: Optional[Path] = None, **kwargs) -> List[str]:
         """Build base command with common options.
 
         Args:
             subcommand: DA3 subcommand (auto, image, images, video, colmap)
+            input_path: Positional input path expected by DA3 CLI
             **kwargs: Additional CLI arguments
 
         Returns:
             Command list
         """
         cmd = ["da3", subcommand]
+        if input_path is not None:
+            cmd.append(str(input_path))
 
         # Add backend URL if backend is provided
         if self.backend is not None:
-            cmd.extend(["--use-backend", self.backend.get_url()])
+            cmd.append("--use-backend")
+            cmd.extend(["--backend-url", self.backend.get_url()])
 
         # Add common options from kwargs
         for key, value in kwargs.items():
@@ -235,11 +246,9 @@ class DA3CLI:
         """
         print(f"Running: {' '.join(cmd)}")
 
-        result = subprocess.run(
-            cmd,
-            capture_output=capture_output,
-            text=True,
-        )
+        env = os.environ.copy()
+        env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+        result = subprocess.run(cmd, capture_output=capture_output, text=True, env=env)
 
         if result.returncode != 0:
             raise RuntimeError(f"DA3 CLI command failed:\nCommand: {' '.join(cmd)}\nError: {result.stderr}")
@@ -263,9 +272,7 @@ class DA3CLI:
         Returns:
             Processing result
         """
-        cmd = self._build_base_cmd(
-            "auto", input_path=str(input_path), export_dir=str(export_dir), export_format=export_format, **kwargs
-        )
+        cmd = self._build_base_cmd("auto", input_path=input_path, export_dir=str(export_dir), export_format=export_format, **kwargs)
         return self._run_command(cmd)
 
     def process_image(self, image_path: Path, export_dir: Path, export_format: str = "mini_npz", **kwargs) -> Dict[str, Any]:
@@ -280,13 +287,16 @@ class DA3CLI:
         Returns:
             Processing result
         """
-        cmd = self._build_base_cmd(
-            "image", image_path=str(image_path), export_dir=str(export_dir), export_format=export_format, **kwargs
-        )
+        cmd = self._build_base_cmd("image", input_path=image_path, export_dir=str(export_dir), export_format=export_format, **kwargs)
         return self._run_command(cmd)
 
     def process_images(
-        self, images_dir: Path, export_dir: Path, export_format: str = "mini_npz", pattern: str = "*.jpg", **kwargs
+        self,
+        images_dir: Path,
+        export_dir: Path,
+        export_format: str = "mini_npz",
+        image_extensions: str = "png,jpg,jpeg",
+        **kwargs,
     ) -> Dict[str, Any]:
         """Process image directory.
 
@@ -302,10 +312,10 @@ class DA3CLI:
         """
         cmd = self._build_base_cmd(
             "images",
-            images_dir=str(images_dir),
+            input_path=images_dir,
             export_dir=str(export_dir),
             export_format=export_format,
-            pattern=pattern,
+            image_extensions=image_extensions,
             **kwargs,
         )
         return self._run_command(cmd)
@@ -325,14 +335,7 @@ class DA3CLI:
         Returns:
             Processing result
         """
-        cmd = self._build_base_cmd(
-            "video",
-            video_path=str(video_path),
-            export_dir=str(export_dir),
-            fps=str(fps),
-            export_format=export_format,
-            **kwargs,
-        )
+        cmd = self._build_base_cmd("video", input_path=video_path, export_dir=str(export_dir), fps=str(fps), export_format=export_format, **kwargs)
         return self._run_command(cmd)
 
     def process_colmap(
@@ -349,9 +352,7 @@ class DA3CLI:
         Returns:
             Processing result
         """
-        cmd = self._build_base_cmd(
-            "colmap", colmap_dir=str(colmap_dir), export_dir=str(export_dir), export_format=export_format, **kwargs
-        )
+        cmd = self._build_base_cmd("colmap", input_path=colmap_dir, export_dir=str(export_dir), export_format=export_format, **kwargs)
         return self._run_command(cmd)
 
 
@@ -381,12 +382,12 @@ class DepthAnything3Wrapper:
     # Available model names in official DA3 API
     AVAILABLE_MODELS = {
         "da3-giant": {
-            "hf_id": "depth-anything/DA3-GIANT",
-            "gs_capable": False,
+            "hf_id": "depth-anything/DA3-GIANT-1.1",
+            "gs_capable": True,
             "description": "1.15B params, any-view with GS support",
         },
         "da3-large": {
-            "hf_id": "depth-anything/DA3-LARGE",
+            "hf_id": "depth-anything/DA3-LARGE-1.1",
             "gs_capable": False,
             "description": "0.35B params, recommended general use",
         },
@@ -411,7 +412,7 @@ class DepthAnything3Wrapper:
             "description": "0.35B params, metric depth + sky segmentation",
         },
         "da3nested-giant-large": {
-            "hf_id": "depth-anything/DA3NESTED-GIANT-LARGE",
+            "hf_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
             "gs_capable": True,
             "description": "1.40B params, all features (any-view + metric + GS)",
         },
@@ -482,15 +483,51 @@ class DepthAnything3Wrapper:
             self.model = None
 
     def _load_model(self):
-        """Load DA3 model using official API."""
-        # Map our model name to DA3 API name if needed
-        api_model_name = self.VARIANT_TO_API_NAME.get(self.model_name, self.model_name)
+        """Load DA3 model using the official `from_pretrained()` contract."""
+        hf_id = self._resolve_hf_id()
+        api_model_name = self._resolve_api_model_name()
 
-        logger.info(f"Loading DA3 model: {self.model_name} (API name: {api_model_name})")
-        model = self.DepthAnything3(model_name=api_model_name)
+        logger.info(f"Loading DA3 model: {self.model_name} (HF: {hf_id}, API name: {api_model_name})")
+        model = self.DepthAnything3.from_pretrained(hf_id)
         model = model.to(self.device)
         logger.info(f"Model loaded on {self.device}")
         return model
+
+    def _resolve_hf_id(self) -> str:
+        """Resolve the configured model name to a HuggingFace repo id."""
+        if "/" in self.model_name:
+            return self.model_name
+
+        # Support our enum-style names (e.g. "DA3-LARGE-1.1")
+        api_name = self._resolve_api_model_name()
+        if api_name in self.AVAILABLE_MODELS:
+            return self.AVAILABLE_MODELS[api_name]["hf_id"]
+
+        # Support CLI-friendly aliases used elsewhere in this repo
+        cli_aliases = {
+            "nested-giant-large-v1.1": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+            "nested-giant-large": "depth-anything/DA3NESTED-GIANT-LARGE",
+            "giant-v1.1": "depth-anything/DA3-GIANT-1.1",
+            "giant": "depth-anything/DA3-GIANT",
+            "large-v1.1": "depth-anything/DA3-LARGE-1.1",
+            "large": "depth-anything/DA3-LARGE",
+            "base": "depth-anything/DA3-BASE",
+            "small": "depth-anything/DA3-SMALL",
+            "metric-large": "depth-anything/DA3METRIC-LARGE",
+            "mono-large": "depth-anything/DA3MONO-LARGE",
+        }
+        alias = cli_aliases.get(self.model_name.lower())
+        if alias is not None:
+            return alias
+
+        # Fallback: treat it as an API-style name and convert to repo id.
+        # Example: "da3-large" -> "depth-anything/DA3-LARGE"
+        return f"depth-anything/{self.model_name.upper()}"
+
+    def _resolve_api_model_name(self) -> str:
+        """Resolve the configured model name to the official API model key."""
+        key = self.model_name.split("/")[-1] if "/" in self.model_name else self.model_name
+        return self.VARIANT_TO_API_NAME.get(key, key)
 
     @classmethod
     def from_pretrained(cls, model_id: str, device: str = "cuda") -> "DepthAnything3Wrapper":
@@ -504,12 +541,7 @@ class DepthAnything3Wrapper:
         Returns:
             Initialized wrapper
         """
-        # Extract model name from ID
-        model_name = model_id.split("/")[-1].lower()
-        # Normalize to expected format
-        if not model_name.startswith("da3"):
-            model_name = f"da3-{model_name}"
-        return cls(model_name=model_name, device=device)
+        return cls(model_name=model_id, device=device)
 
     def inference(
         self,
@@ -616,8 +648,11 @@ class DepthAnything3Wrapper:
         image_prepared, original_sizes = self._prepare_images_with_sizes(image)
 
         # Validate GS requirements
-        if infer_gs and self.model_name not in self.GS_CAPABLE_MODELS:
-            raise ValueError(f"Gaussian Splatting requires {', '.join(self.GS_CAPABLE_MODELS)}, but got {self.model_name}")
+        api_model_name = self._resolve_api_model_name()
+        if infer_gs and api_model_name not in self.GS_CAPABLE_MODELS:
+            raise ValueError(
+                f"Gaussian Splatting requires {', '.join(self.GS_CAPABLE_MODELS)}, but got {api_model_name}"
+            )
 
         # Validate reference view strategy
         valid_strategies = ["first", "middle", "saddle_balanced", "saddle_sim_range"]
