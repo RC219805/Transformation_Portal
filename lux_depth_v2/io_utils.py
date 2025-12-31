@@ -110,15 +110,28 @@ def read_rgb_any(path: Path) -> Tuple[np.ndarray, ImageInfo]:
 
 
 def read_depth_u16(path: Path) -> np.ndarray:
-    """Read 16-bit depth TIFF into float32 0..1 normalized."""
+    """Read a depth map into float32 0..1 normalized.
+
+    Supports 16-bit depth TIFF and 16-bit grayscale PNG depth maps.
+    """
     ensure_deps()
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(str(p))
-    d = tifffile.imread(str(p))
+
+    if _is_tiff(p):
+        d = tifffile.imread(str(p))
+    else:
+        d = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
+        if d is None:
+            raise RuntimeError(f"Failed to read depth: {p}")
+
     if d.ndim != 2:
         d = d[..., 0]
-    if d.dtype != np.uint16:
+    if d.dtype == np.uint8:
+        # Promote 8-bit depth into 16-bit range for consistent percentile normalization.
+        d = (d.astype(np.uint16) * 257).astype(np.uint16)
+    elif d.dtype != np.uint16:
         d = d.astype(np.uint16)
     # robust percentile normalization (like V1)
     df = d.astype(np.float32)
