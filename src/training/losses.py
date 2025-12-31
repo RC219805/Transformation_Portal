@@ -51,7 +51,7 @@ class ScaleInvariantLoss(_BaseModule):
     is ambiguous.
 
     The loss is computed as:
-        L = sqrt(1/n * sum(d_i^2) - λ/n^2 * (sum(d_i))^2)
+        L = 1/n * sum(d_i^2) - λ/n^2 * (sum(d_i))^2
 
     where d_i = log(pred_i) - log(gt_i) and λ controls the scale invariance.
 
@@ -98,6 +98,13 @@ class ScaleInvariantLoss(_BaseModule):
         # Apply mask if provided
         if mask is None:
             mask = (target > self.eps) & (pred > self.eps)
+        else:
+            if mask.dim() == 4 and mask.shape[1] == 1:
+                mask = mask.squeeze(1)
+            if mask.shape != pred.shape:
+                raise ValueError("Mask shape must match prediction/target shape")
+            if mask.dtype is not torch.bool:
+                mask = mask.bool()
 
         # Log difference
         log_pred = torch.log(pred.clamp(min=self.eps))
@@ -114,7 +121,8 @@ class ScaleInvariantLoss(_BaseModule):
         diff_sq = (diff**2).mean()
         diff_mean_sq = (diff.mean()) ** 2
 
-        loss = torch.sqrt(diff_sq - self.variance_focus * diff_mean_sq + self.eps)
+        variance_term = diff_sq - self.variance_focus * diff_mean_sq
+        loss = torch.clamp(variance_term, min=0.0)
 
         return loss
 
@@ -163,8 +171,10 @@ class GradientLoss(_BaseModule):
         if x.dim() == 3:
             x = x.unsqueeze(1)
 
-        grad_x = F.conv2d(x, self.sobel_x, padding=1)
-        grad_y = F.conv2d(x, self.sobel_y, padding=1)
+        sobel_x = self.sobel_x if self.sobel_x.device == x.device else self.sobel_x.to(x.device)
+        sobel_y = self.sobel_y if self.sobel_y.device == x.device else self.sobel_y.to(x.device)
+        grad_x = F.conv2d(x, sobel_x, padding=1)
+        grad_y = F.conv2d(x, sobel_y, padding=1)
 
         return grad_x, grad_y
 
@@ -301,21 +311,23 @@ class SSIMLoss(_BaseModule):
         pred_norm = self._normalize(pred)
         target_norm = self._normalize(target)
 
+        window = self.window if self.window.device == pred.device else self.window.to(pred.device)
+
         # Compute local means
-        mu_pred = F.conv2d(pred_norm, self.window, padding=self.window_size // 2, groups=self.channels)
-        mu_target = F.conv2d(target_norm, self.window, padding=self.window_size // 2, groups=self.channels)
+        mu_pred = F.conv2d(pred_norm, window, padding=self.window_size // 2, groups=self.channels)
+        mu_target = F.conv2d(target_norm, window, padding=self.window_size // 2, groups=self.channels)
 
         mu_pred_sq = mu_pred**2
         mu_target_sq = mu_target**2
         mu_pred_target = mu_pred * mu_target
 
         # Compute local variances and covariance
-        sigma_pred_sq = F.conv2d(pred_norm**2, self.window, padding=self.window_size // 2, groups=self.channels) - mu_pred_sq
+        sigma_pred_sq = F.conv2d(pred_norm**2, window, padding=self.window_size // 2, groups=self.channels) - mu_pred_sq
         sigma_target_sq = (
-            F.conv2d(target_norm**2, self.window, padding=self.window_size // 2, groups=self.channels) - mu_target_sq
+            F.conv2d(target_norm**2, window, padding=self.window_size // 2, groups=self.channels) - mu_target_sq
         )
         sigma_pred_target = (
-            F.conv2d(pred_norm * target_norm, self.window, padding=self.window_size // 2, groups=self.channels)
+            F.conv2d(pred_norm * target_norm, window, padding=self.window_size // 2, groups=self.channels)
             - mu_pred_target
         )
 
