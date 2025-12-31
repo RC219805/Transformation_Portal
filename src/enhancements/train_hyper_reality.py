@@ -473,6 +473,7 @@ class HyperRealityTrainer:
         self.current_epoch = 0
         self.best_val_loss = float("inf")
         self.training_history = {"train_loss": [], "val_loss": [], "mse": [], "perceptual": [], "style": [], "lpips": []}
+
     def _init_models(self):
         """Initialize all enhancement models"""
         enhancement_config = EnhancementConfig()

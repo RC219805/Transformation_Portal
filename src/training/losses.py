@@ -323,12 +323,9 @@ class SSIMLoss(_BaseModule):
 
         # Compute local variances and covariance
         sigma_pred_sq = F.conv2d(pred_norm**2, window, padding=self.window_size // 2, groups=self.channels) - mu_pred_sq
-        sigma_target_sq = (
-            F.conv2d(target_norm**2, window, padding=self.window_size // 2, groups=self.channels) - mu_target_sq
-        )
+        sigma_target_sq = F.conv2d(target_norm**2, window, padding=self.window_size // 2, groups=self.channels) - mu_target_sq
         sigma_pred_target = (
-            F.conv2d(pred_norm * target_norm, window, padding=self.window_size // 2, groups=self.channels)
-            - mu_pred_target
+            F.conv2d(pred_norm * target_norm, window, padding=self.window_size // 2, groups=self.channels) - mu_pred_target
         )
 
         # SSIM formula
