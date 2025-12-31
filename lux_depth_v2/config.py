@@ -1160,6 +1160,9 @@ class PipelineConfig:
             "segmentation_min_confidence": self.segmentation.min_confidence,
             "depth_zones_mode": self.depth_zones.mode,
             "materials_v2_enabled": self.materials_v2.enabled if self.materials_v2 else False,
+            "materials_v2_backend": self.materials_v2.backend if self.materials_v2 else None,
+            "materials_v2_confidence": self.materials_v2.confidence.confidence_threshold if self.materials_v2 else None,
+            "materials_v2_max_seg_side": self.materials_v2.segmentation.max_segmentation_side if self.materials_v2 else None,
             "materials_v3_enabled": self.materials_v3.enabled if self.materials_v3 else False,
             # Depth contract parameters (cache invalidation fix)
             "strict_depth": self.strict_depth,
