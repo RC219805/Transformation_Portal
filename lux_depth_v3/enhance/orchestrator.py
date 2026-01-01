@@ -210,7 +210,7 @@ class EnhanceOrchestrator:
                         "image": str(image_input.path),
                     }
                 elif self.config.depth_fallback == "v2-auto":
-                    logger.warning(f"Depth failed, V2 will auto-generate depth")
+                    logger.warning("Depth failed, V2 will auto-generate depth")
                     # Clear depth_dir for this image so V2 uses its own depth
                     # Also clean up any partially written depth file
                     if depth_path and depth_path.exists():
@@ -235,7 +235,7 @@ class EnhanceOrchestrator:
 
         # Stage B: Run V2 enhancement
         logger.info(f"Stage B: Running V2 enhancement for {stem}...")
-        v2_start_time = time.time()
+        # v2_start_time tracked for potential future timing metrics
 
         # Check if V2 outputs exist
         v2_report_path = find_v2_report(self.v2_dir, stem)
