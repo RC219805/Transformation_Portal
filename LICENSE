@@ -1,0 +1,54 @@
+# Transformation Portal License
+
+Copyright (c) 2024-2026 Richard Cheetham / Carolwood Estates · RACLuxe Division
+
+## Attribution License
+
+Professional and commercial use permitted with attribution.
+
+Permission is hereby granted to use, copy, modify, and distribute this software and associated documentation files (the "Software") for commercial and professional purposes, subject to the following conditions:
+
+### Required Attribution
+
+1. **Copyright Notice**: This copyright notice and permission notice shall be included in all copies or substantial portions of the Software.
+
+2. **Attribution Requirement**: Any use of this Software must include clear attribution to:
+   - Author: Richard Cheetham
+   - Brand: Carolwood Estates · RACLuxe Division
+   - Repository: https://github.com/RC219805/Transformation_Portal
+
+3. **Documentation**: Attribution must be visible in:
+   - Product documentation
+   - About pages or credits sections
+   - Any public-facing interface utilizing the Software
+
+### Limitations
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Third-Party Component Licenses
+
+This software incorporates components with their own licenses:
+
+### Depth Anything V2
+- **Small Model**: Apache 2.0 License
+- **Base/Large Models**: CC-BY-NC-4.0 (Non-commercial use only)
+- Source: https://github.com/DepthAnything/Depth-Anything-V2
+
+### LUT Collection
+- **Film Emulation LUTs**: Attribution required to original creators
+- **Location Aesthetic LUTs**: Proprietary with attribution requirements
+- **Material Response LUTs**: Proprietary technology by RACLuxe Division
+
+### Machine Learning Dependencies
+Various ML components (PyTorch, Diffusers, ControlNet, etc.) are used under their respective open-source licenses. See `requirements.txt` and `pyproject.toml` for complete dependency list and license information.
+
+## Contact
+
+For licensing inquiries, commercial partnerships, or special arrangements:
+- Email: info@racluxe.com
+- GitHub: https://github.com/RC219805
+
+---
+
+Last Updated: January 1, 2026

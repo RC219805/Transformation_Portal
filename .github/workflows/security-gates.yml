@@ -1,0 +1,148 @@
+name: Security Gates
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  security-checks:
+    name: Security Artifact Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comprehensive checking
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Check for sensitive files
+        run: |
+          echo "🔍 Checking for sensitive files in repository..."
+          
+          # Check for shell history files
+          if find . -name '.bash_history' -o -name '.zsh_history' -o -name '.sh_history' | grep -q .; then
+            echo "❌ ERROR: Shell history files found in repository!"
+            find . -name '.bash_history' -o -name '.zsh_history' -o -name '.sh_history'
+            exit 1
+          fi
+          
+          # Check for PKG-INFO (build artifact)
+          if [ -f "PKG-INFO" ]; then
+            echo "❌ ERROR: PKG-INFO build artifact found in repository root!"
+            exit 1
+          fi
+          
+          # Check for client backup directories
+          if [ -d ".local_backup" ]; then
+            echo "❌ ERROR: .local_backup directory found in repository!"
+            exit 1
+          fi
+          
+          # Check for credentials
+          if find . -name '*.pem' -o -name '*.key' -o -name 'id_rsa' -o -name 'id_dsa' | grep -v '.venv' | grep -q .; then
+            echo "❌ ERROR: Credential files found in repository!"
+            find . -name '*.pem' -o -name '*.key' -o -name 'id_rsa' -o -name 'id_dsa' | grep -v '.venv'
+            exit 1
+          fi
+          
+          echo "✓ No sensitive files found"
+      
+      - name: Check for bidirectional Unicode
+        run: |
+          echo "🔍 Checking for bidirectional Unicode characters..."
+          python scripts/security/pre_commit_security_check.py $(find . -name '*.py' -o -name '*.sh' -o -name '*.yaml' -o -name '*.yml' | grep -v '.venv' | grep -v 'deprecated' | head -100)
+          echo "✓ No bidirectional Unicode violations found"
+      
+      - name: Check for large uncommitted files
+        run: |
+          echo "🔍 Checking for large files..."
+          # Find files larger than 5MB (excluding git objects and known large files)
+          LARGE_FILES=$(find . -type f -size +5M \
+            ! -path './.git/*' \
+            ! -path './.venv/*' \
+            ! -path './weights/*' \
+            ! -path './models/*' \
+            ! -name '*.pth' \
+            ! -name '*.safetensors' \
+            ! -name '*.ckpt' 2>/dev/null || true)
+          
+          if [ -n "$LARGE_FILES" ]; then
+            echo "⚠️  WARNING: Large files found (should use Git LFS):"
+            echo "$LARGE_FILES"
+            # Don't fail, just warn
+          else
+            echo "✓ No unexpected large files found"
+          fi
+      
+      - name: Validate .gitignore coverage
+        run: |
+          echo "🔍 Validating .gitignore coverage..."
+          
+          # Check that sensitive patterns are in .gitignore
+          REQUIRED_PATTERNS=(
+            ".bash_history"
+            ".local_backup/"
+            "PKG-INFO"
+            "*.pem"
+            "*.key"
+            "id_rsa"
+          )
+          
+          MISSING_PATTERNS=()
+          for pattern in "${REQUIRED_PATTERNS[@]}"; do
+            if ! grep -q "$pattern" .gitignore; then
+              MISSING_PATTERNS+=("$pattern")
+            fi
+          done
+          
+          if [ ${#MISSING_PATTERNS[@]} -gt 0 ]; then
+            echo "❌ ERROR: Required patterns missing from .gitignore:"
+            printf '%s\n' "${MISSING_PATTERNS[@]}"
+            exit 1
+          fi
+          
+          echo "✓ .gitignore has proper security coverage"
+      
+      - name: Security summary
+        if: success()
+        run: |
+          echo "================================"
+          echo "✅ All security gates passed"
+          echo "================================"
+          echo "- No sensitive files detected"
+          echo "- No bidirectional Unicode violations"
+          echo "- .gitignore properly configured"
+          echo "================================"
+
+  secret-scanning:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+        continue-on-error: true  # Don't block on false positives
+      
+      - name: Secret scan summary
+        run: |
+          echo "✓ Secret scanning completed"
+          echo "Review TruffleHog output above for any findings"

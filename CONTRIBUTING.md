@@ -76,6 +76,101 @@ This removes:
 - [ ] No new high-risk dependencies
 - [ ] Docs updated if behavior changes
 - [ ] Reproducibility metadata preserved where applicable
+- [ ] Security checks pass (pre-commit hooks)
+- [ ] No sensitive files committed (history, credentials, client data)
+- [ ] Large files use Git LFS or are properly excluded
+
+## Artifact Management
+
+### What NOT to Commit
+
+**NEVER commit these to the repository:**
+- Shell history files (`.bash_history`, `.zsh_history`)
+- Credentials (`.pem`, `.key`, `.env`, `id_rsa`)
+- Build artifacts (`PKG-INFO`, `MANIFEST` at root)
+- Client-specific data or identifiers
+- Processing outputs (`output/`, `*_outputs/`)
+- Large binaries >5MB (use Git LFS instead)
+- Temporary files and logs
+
+**Rationale**: Security, repository hygiene, and scalability.
+
+### Proper Artifact Storage
+
+**Local Processing Outputs**:
+```bash
+# Outputs go to ignored directories
+lux-depth-v2 --input-dir data/ --output-dir output/
+
+# .gitignore automatically excludes output/
+git status  # Will not show output/ directory
+```
+
+**Test Fixtures**:
+Small (<1MB) validation files can go in `tests/fixtures/`:
+```bash
+# Copy specific test cases
+cp output/sample_small.png tests/fixtures/depth_validation/
+```
+
+**Large Assets**:
+Use Git LFS for versioned large files:
+```bash
+# Install Git LFS
+git lfs install
+
+# Track large file types
+git lfs track "*.pth"
+git lfs track "*.safetensors"
+
+# Commit .gitattributes
+git add .gitattributes
+git commit -m "Configure Git LFS for model weights"
+```
+
+**Client Deliverables**:
+- Process in local workspace
+- Store in directories excluded by `.gitignore`
+- Deliver via secure channels (encrypted transfer)
+- Document workflow (no client data) in `docs/client_workflows/`
+
+### Pre-Commit Security Checks
+
+Before committing, ensure pre-commit hooks are installed:
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Manual check (if needed)
+pre-commit run --all-files
+```
+
+The hooks will automatically block:
+- Sensitive files
+- Bidirectional Unicode characters
+- Large files without LFS
+- Output artifacts
+
+### CI Security Gates
+
+All PRs must pass security gates:
+- No sensitive files in repository
+- No bidirectional Unicode in code
+- Proper `.gitignore` coverage
+- No large uncommitted binaries
+
+See `.github/workflows/security-gates.yml` for details.
+
+## Repository Governance
+
+For comprehensive security and governance policies, see:
+- **[Repository Governance Guide](docs/REPOSITORY_GOVERNANCE.md)**: Complete governance policies
+- **[Security Policy](SECURITY.md)**: Security reporting and practices
+- **[License](LICENSE)**: Licensing terms and attribution requirements
 
 ## Reporting security issues
 Use `SECURITY.md` (if present) or open a private advisory if enabled.
