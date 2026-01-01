@@ -18,6 +18,12 @@ from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.input_manager import ImageInput
 from lux_depth_v3.enhance.depth_writer import write_depth_u16_png
 from lux_depth_v3.enhance.v2_runner import V2Runner, find_v2_report
+from lux_depth_v3.enhance.security import (
+    sanitize_file_stem,
+    validate_device_spec,
+    validate_quantization_method,
+    validate_depth_fallback,
+)
 from lux_depth_v3.enhance.manifest import (
     CombinedManifest,
     InputMetadata,
@@ -60,6 +66,18 @@ class EnhanceConfig:
 
     # Timeout
     v2_timeout: Optional[float] = 600.0  # 10 minutes default
+
+    def __post_init__(self):
+        """Validate configuration parameters."""
+        # Validate device specifications
+        validate_device_spec(self.depth_device)
+        validate_device_spec(self.v2_device)
+
+        # Validate depth quantization method
+        validate_quantization_method(self.depth_quantization)
+
+        # Validate depth fallback policy
+        validate_depth_fallback(self.depth_fallback)
 
 
 class EnhanceOrchestrator:
@@ -116,7 +134,13 @@ class EnhanceOrchestrator:
         Returns:
             Dictionary with processing results and paths
         """
-        stem = image_input.path.stem
+        # Sanitize file stem to prevent path traversal attacks
+        raw_stem = image_input.path.stem
+        stem = sanitize_file_stem(raw_stem)
+
+        if stem != raw_stem:
+            logger.warning(f"File stem sanitized: '{raw_stem}' -> '{stem}'")
+
         logger.info(f"Processing {stem}...")
 
         # Paths
@@ -186,7 +210,7 @@ class EnhanceOrchestrator:
                         "image": str(image_input.path),
                     }
                 elif self.config.depth_fallback == "v2-auto":
-                    logger.warning(f"Depth failed, V2 will auto-generate depth")
+                    logger.warning("Depth failed, V2 will auto-generate depth")
                     # Clear depth_dir for this image so V2 uses its own depth
                     # Also clean up any partially written depth file
                     if depth_path and depth_path.exists():
@@ -211,7 +235,7 @@ class EnhanceOrchestrator:
 
         # Stage B: Run V2 enhancement
         logger.info(f"Stage B: Running V2 enhancement for {stem}...")
-        v2_start_time = time.time()
+        # v2_start_time tracked for potential future timing metrics
 
         # Check if V2 outputs exist
         v2_report_path = find_v2_report(self.v2_dir, stem)
