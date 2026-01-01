@@ -940,6 +940,215 @@ def cache_stats():
     typer.echo(f"Last Updated: {stats.get('last_updated', 'Never')}")
 
 
+@app.command()
+def enhance(
+    # Input/Output
+    input_dir: Path = typer.Option(
+        ...,
+        "--input-dir",
+        "-i",
+        help="Input directory with images",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+    ),
+    output_dir: Path = typer.Option(
+        Path("output"),
+        "--output-dir",
+        "-o",
+        help="Root output directory (will create depth/, v2/, manifests/, logs/ subdirs)",
+    ),
+    # Model configuration
+    model: ModelVariant = typer.Option(
+        ModelVariant.METRIC_LARGE,
+        "--model",
+        "-m",
+        help="DA3 model variant for depth estimation",
+    ),
+    preset: Optional[Preset] = typer.Option(
+        None,
+        "--preset",
+        "-p",
+        help="V3 preset configuration",
+    ),
+    # V2 configuration
+    v2_preset: str = typer.Option(
+        "production_ultra",
+        "--v2-preset",
+        help="V2 enhancement preset",
+    ),
+    v2_device: str = typer.Option(
+        "auto",
+        "--v2-device",
+        help="Device for V2 enhancement (auto, cuda, cpu)",
+    ),
+    v2_upscaler: str = typer.Option(
+        "torch",
+        "--v2-upscaler",
+        help="V2 upscaler backend (torch, onnx, none)",
+    ),
+    # Depth configuration
+    depth_device: str = typer.Option(
+        "auto",
+        "--depth-device",
+        help="Device for depth estimation (auto, cuda, mps, cpu)",
+    ),
+    depth_quantization: str = typer.Option(
+        "p1p99",
+        "--depth-quantization",
+        help="Depth quantization method (p1p99, p0.5p99.5, minmax)",
+    ),
+    # Execution control
+    execution_mode: str = typer.Option(
+        "sequential",
+        "--execution-mode",
+        help="Execution mode (sequential or pipelined)",
+    ),
+    depth_fallback: str = typer.Option(
+        "fail",
+        "--depth-fallback",
+        help="Depth failure policy (fail, skip, v2-auto)",
+    ),
+    force_depth: bool = typer.Option(
+        False,
+        "--force-depth",
+        help="Force depth regeneration even if exists",
+    ),
+    force_v2: bool = typer.Option(
+        False,
+        "--force-v2",
+        help="Force V2 re-enhancement even if outputs exist",
+    ),
+    # License
+    non_commercial_ok: bool = typer.Option(
+        False,
+        "--non-commercial-ok",
+        help="Acknowledge non-commercial use of DA3 (required for CC-BY-NC models)",
+    ),
+    # Timeout
+    v2_timeout: Optional[float] = typer.Option(
+        600.0,
+        "--v2-timeout",
+        help="Timeout for V2 enhancement in seconds (default: 600)",
+    ),
+    # Verbosity
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose logging",
+    ),
+):
+    """Orchestrate V3 depth + V2 enhancement pipeline.
+
+    This command runs a two-stage pipeline:
+      1. Stage A (V3): Generate depth assets using Depth Anything 3
+      2. Stage B (V2): Consume depth → weights → grade → upscale → export → report
+
+    Output structure:
+      <output_dir>/
+        depth/         - DA3 depth maps ({stem}_depth.png, uint16)
+        v2/           - V2 enhancement outputs (16-bit TIFFs, etc.)
+        manifests/    - Combined manifests linking DA3 + V2 ({stem}_combined.json)
+        logs/         - Processing logs
+
+    Examples:
+      # Basic usage (requires --non-commercial-ok for DA3)
+      lux-depth-v3 enhance -i renders/ -o output/ --non-commercial-ok
+
+      # Production quality with specific V2 preset
+      lux-depth-v3 enhance -i renders/ -o output/ \\
+          --v2-preset production_ultra --non-commercial-ok
+
+      # Resume from previous run (skip existing outputs)
+      lux-depth-v3 enhance -i renders/ -o output/ --non-commercial-ok
+
+      # Force complete regeneration
+      lux-depth-v3 enhance -i renders/ -o output/ \\
+          --force-depth --force-v2 --non-commercial-ok
+    """
+    import logging
+    from lux_depth_v3.enhance import EnhanceOrchestrator, EnhanceConfig
+
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO if verbose else logging.WARNING,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    # Validate license acknowledgement
+    if not non_commercial_ok:
+        typer.echo("ERROR: DA3 models require license acknowledgement.")
+        typer.echo("For non-commercial use, add: --non-commercial-ok")
+        typer.echo("For commercial use, contact Depth Anything team for licensing.")
+        raise typer.Exit(1)
+
+    # Display configuration
+    if verbose:
+        typer.echo("\n🚀 V3 + V2 Enhancement Pipeline")
+        typer.echo("=" * 70)
+        typer.echo(f"Input: {input_dir}")
+        typer.echo(f"Output: {output_dir}")
+        typer.echo(f"\nStage A (V3 Depth):")
+        typer.echo(f"  Model: {model.value}")
+        typer.echo(f"  Device: {depth_device}")
+        typer.echo(f"  Quantization: {depth_quantization}")
+        typer.echo(f"\nStage B (V2 Enhancement):")
+        typer.echo(f"  Preset: {v2_preset}")
+        typer.echo(f"  Device: {v2_device}")
+        typer.echo(f"  Upscaler: {v2_upscaler}")
+        typer.echo(f"\nExecution:")
+        typer.echo(f"  Mode: {execution_mode}")
+        typer.echo(f"  Depth fallback: {depth_fallback}")
+        typer.echo("=" * 70 + "\n")
+
+    # Create configuration
+    config = EnhanceConfig(
+        model_variant=model,
+        preset=preset,
+        v2_preset=v2_preset,
+        v2_device=v2_device,
+        v2_upscaler_backend=v2_upscaler,
+        depth_device=depth_device,
+        depth_quantization=depth_quantization,
+        execution_mode=execution_mode,
+        depth_fallback=depth_fallback,
+        force_depth=force_depth,
+        force_v2=force_v2,
+        non_commercial_ok=non_commercial_ok,
+        v2_timeout=v2_timeout,
+    )
+
+    # Initialize orchestrator
+    typer.echo("Initializing orchestrator...")
+    orchestrator = EnhanceOrchestrator(config, output_dir)
+
+    # Process batch
+    typer.echo("Processing images...")
+    results = orchestrator.enhance_batch(input_dir)
+
+    # Summary
+    typer.echo("\n📊 Processing Summary")
+    typer.echo("=" * 70)
+    succeeded = sum(1 for r in results if r["status"] == "ok")
+    failed = sum(1 for r in results if r["status"] == "error")
+    skipped = sum(1 for r in results if r["status"] == "skipped")
+
+    typer.echo(f"✓ Succeeded: {succeeded}")
+    typer.echo(f"✗ Failed: {failed}")
+    typer.echo(f"⊘ Skipped: {skipped}")
+    typer.echo(f"Total: {len(results)}")
+
+    if failed > 0:
+        typer.echo("\nFailed images:")
+        for r in results:
+            if r["status"] == "error":
+                typer.echo(f"  - {r['image']}: {r.get('error', 'Unknown error')}")
+
+    typer.echo(f"\nOutput directory: {output_dir}")
+    typer.echo("=" * 70)
+
+
 def main():
     """Main entry point for CLI."""
     app()
