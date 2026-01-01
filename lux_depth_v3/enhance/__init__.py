@@ -20,8 +20,7 @@ __all__ = [
 
 def __getattr__(name):
     """Lazy import to avoid heavy dependencies on module import."""
-    if name in ["CombinedManifest", "DepthMetadata", "V2Metadata", 
-                "TimingMetadata", "ReproMetadata", "InputMetadata"]:
+    if name in ["CombinedManifest", "DepthMetadata", "V2Metadata", "TimingMetadata", "ReproMetadata", "InputMetadata"]:
         from lux_depth_v3.enhance.manifest import (
             CombinedManifest,
             DepthMetadata,
@@ -30,11 +29,14 @@ def __getattr__(name):
             ReproMetadata,
             InputMetadata,
         )
+
         return locals()[name]
     elif name in ["EnhanceOrchestrator", "EnhanceConfig"]:
         from lux_depth_v3.enhance.orchestrator import EnhanceOrchestrator, EnhanceConfig
+
         return locals()[name]
     elif name == "write_depth_u16_png":
         from lux_depth_v3.enhance.depth_writer import write_depth_u16_png
+
         return write_depth_u16_png
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

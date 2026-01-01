@@ -279,7 +279,7 @@ V2RunnerError: Cannot find lux_depth_v2 module.
 Depth generation failed: timeout
 ```
 
-**Solution**: 
+**Solution**:
 - Check GPU availability
 - Reduce image resolution
 - Use faster model variant (`base` instead of `giant`)

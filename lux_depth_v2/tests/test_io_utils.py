@@ -78,6 +78,25 @@ class TestReadDepthU16:
         assert np.all(depth >= 0.0)
         assert np.all(depth <= 1.0)
 
+    def test_read_depth_png16_matches_tiff(self, temp_dir):
+        """16-bit PNG depth should load equivalently to 16-bit TIFF depth."""
+        depth16 = np.linspace(0, 65535, 64 * 64, dtype=np.uint16).reshape(64, 64)
+
+        png_path = temp_dir / "test_depth.png"
+        tif_path = temp_dir / "test_depth.tif"
+
+        assert cv2.imwrite(str(png_path), depth16), "Failed to write 16-bit PNG depth"
+        tifffile.imwrite(str(tif_path), depth16)
+
+        depth_png = io_utils.read_depth_u16(png_path)
+        depth_tif = io_utils.read_depth_u16(tif_path)
+
+        assert depth_png.shape == (64, 64)
+        assert depth_png.dtype == np.float32
+        assert np.all(depth_png >= 0.0)
+        assert np.all(depth_png <= 1.0)
+        assert np.allclose(depth_png, depth_tif, atol=1e-6)
+
     def test_read_depth_nonexistent(self, temp_dir):
         """Test reading nonexistent depth file raises error."""
         fake_path = temp_dir / "nonexistent_depth.tif"

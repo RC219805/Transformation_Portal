@@ -290,13 +290,21 @@ class VGGFeatureExtractor(nn.Module):
 
         self.features.eval()
         self.features.to(device)
+        self._device = device
 
         # ImageNet normalization
         self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
+    def _ensure_device(self, x: torch.Tensor) -> None:
+        """Ensure module is on the same device as inputs."""
+        if x.device != self._device:
+            self.to(x.device)
+            self._device = x.device
+
     def forward(self, x):
         """Extract multi-scale VGG features"""
+        self._ensure_device(x)
         # Normalize input
         if self.use_input_norm:
             x = (x - self.mean.to(x.device)) / self.std.to(x.device)
@@ -404,6 +412,22 @@ class StyleLoss(nn.Module):
         return loss / len(self.weights)
 
 
+class _LPIPSWrapper(nn.Module):
+    """Ensure LPIPS inputs follow the module device."""
+
+    def __init__(self, lpips_fn: nn.Module, device: torch.device):
+        super().__init__()
+        self.lpips_fn = lpips_fn
+        self.device = device
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        if x.device != self.device:
+            x = x.to(self.device)
+        if y.device != self.device:
+            y = y.to(self.device)
+        return self.lpips_fn(x, y)
+
+
 class HyperRealityTrainer:
     """Main training pipeline for hyper-reality models"""
 
@@ -417,16 +441,17 @@ class HyperRealityTrainer:
         self._init_models()
 
         # Initialize loss functions
-        self.mse_loss = nn.MSELoss()
-        self.perceptual_loss = PerceptualLoss()
-        self.style_loss = StyleLoss()
+        self.mse_loss = nn.MSELoss().to(device)
+        self.perceptual_loss = PerceptualLoss().to(device)
+        self.style_loss = StyleLoss().to(device)
 
         # Initialize LPIPS loss if available
         self.lpips_fn = None
         if LPIPS_AVAILABLE:
             try:
-                self.lpips_fn = lpips.LPIPS(net="vgg").to(device)
-                self.lpips_fn.eval()  # LPIPS should be in eval mode
+                lpips_fn = lpips.LPIPS(net="vgg").to(device)
+                lpips_fn.eval()  # LPIPS should be in eval mode
+                self.lpips_fn = _LPIPSWrapper(lpips_fn, device)
                 print("✓ LPIPS loss initialized (using VGG backbone)")
             except Exception as e:
                 print(f"⚠ LPIPS initialization failed: {e}")

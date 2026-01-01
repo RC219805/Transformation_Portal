@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EnhanceConfig:
     """Configuration for enhance orchestrator."""
+
     # Model config
     model_variant: ModelVariant = ModelVariant.METRIC_LARGE
     preset: Optional[Preset] = None
@@ -315,19 +316,19 @@ class EnhanceOrchestrator:
                 results.append(result)
             except Exception as e:
                 logger.error(f"Failed to process {img_path}: {e}")
-                results.append({
-                    "status": "error",
-                    "image": str(img_path),
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "status": "error",
+                        "image": str(img_path),
+                        "error": str(e),
+                    }
+                )
 
         # Summary
         succeeded = sum(1 for r in results if r["status"] == "ok")
         failed = sum(1 for r in results if r["status"] == "error")
         skipped = sum(1 for r in results if r["status"] == "skipped")
 
-        logger.info(
-            f"Batch complete: {succeeded} succeeded, {failed} failed, {skipped} skipped"
-        )
+        logger.info(f"Batch complete: {succeeded} succeeded, {failed} failed, {skipped} skipped")
 
         return results

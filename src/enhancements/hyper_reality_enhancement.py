@@ -164,6 +164,12 @@ class CausticGenerator(nn.Module):
     def forward(self, x: torch.Tensor, depth: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Generate quantum caustic patterns"""
 
+        device = next(self.parameters()).device
+        if x.device != device:
+            x = x.to(device)
+        if depth is not None and depth.device != device:
+            depth = depth.to(device)
+
         b, c, h, w = x.shape
 
         # Generate base wave patterns

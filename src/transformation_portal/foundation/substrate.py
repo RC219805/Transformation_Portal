@@ -133,6 +133,10 @@ class ComputationalSubstrate:
         )
         self.device_info = self.device_manager.detect_devices()
         self.device = self.device_info.primary_device
+        if not isinstance(self.device, torch.device):
+            self.device = torch.device(self.device)
+        if self.device.type in {"mps", "cuda"} and self.device.index is None:
+            self.device = torch.device(self.device.type, 0)
 
         # Initialize tensor processor
         tensor_config = TensorConfig(
@@ -192,11 +196,17 @@ class ComputationalSubstrate:
 
         # Test tensor allocation
         test_tensor = self.allocate_tensor((100, 100), dtype=torch.float32)
-        assert test_tensor.device == self.device, "Tensor not on correct device"
+        if test_tensor.device != self.device:
+            raise AssertionError(
+                f"Tensor not on correct device: tensor={test_tensor.device} expected={self.device}"
+            )
 
         # Test computation
         result = test_tensor * 2.0
-        assert result.device == self.device, "Computation moved tensor"
+        if result.device != self.device:
+            raise AssertionError(
+                f"Computation moved tensor: tensor={result.device} expected={self.device}"
+            )
 
         # Clean up
         del test_tensor, result

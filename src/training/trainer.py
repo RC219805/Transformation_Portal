@@ -238,6 +238,8 @@ class DepthTrainer:
 
         # Loss function
         self.loss_fn = loss_fn or CombinedDepthLoss()
+        if isinstance(self.loss_fn, nn.Module):
+            self.loss_fn = self.loss_fn.to(self.device)
 
         # Optimizer
         self.optimizer = optimizer or torch.optim.AdamW(

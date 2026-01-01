@@ -23,6 +23,7 @@ MANIFEST_SCHEMA_VERSION = "lux-depth-v3.enhance.v1"
 @dataclass
 class InputMetadata:
     """Input image metadata."""
+
     image_path: str
     image_sha256: str
 
@@ -30,6 +31,7 @@ class InputMetadata:
 @dataclass
 class DepthMetadata:
     """Depth generation metadata."""
+
     backend: str  # "da3"
     model: str  # e.g., "DepthAnything3-Large-Metric"
     license: str  # e.g., "CC-BY-NC"
@@ -44,6 +46,7 @@ class DepthMetadata:
 @dataclass
 class V2Metadata:
     """V2 enhancement metadata."""
+
     preset: str
     strict_depth: bool
     output_dir: str  # "v2/"
@@ -55,6 +58,7 @@ class V2Metadata:
 @dataclass
 class TimingMetadata:
     """Timing breakdown."""
+
     depth_s: float
     v2_s: float
     total_s: float
@@ -63,6 +67,7 @@ class TimingMetadata:
 @dataclass
 class ReproMetadata:
     """Reproducibility metadata."""
+
     v3_git: Optional[str] = None
     v2_git: Optional[str] = None
     python: str = field(default_factory=lambda: sys.version.split()[0])
@@ -72,6 +77,7 @@ class ReproMetadata:
 @dataclass
 class CombinedManifest:
     """Combined manifest linking V3 depth and V2 enhancement."""
+
     schema: str = MANIFEST_SCHEMA_VERSION
     input: Optional[InputMetadata] = None
     depth: Optional[DepthMetadata] = None
@@ -91,7 +97,7 @@ class CombinedManifest:
         """Write manifest to JSON file."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write(self.to_json())
         logger.info(f"Wrote manifest to {path}")
 
@@ -138,14 +144,14 @@ class CombinedManifest:
     def load(cls, path: Path) -> CombinedManifest:
         """Load manifest from JSON file."""
         path = Path(path)
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             return cls.from_json(f.read())
 
 
 def compute_file_sha256(path: Path) -> str:
     """Compute SHA256 hash of file."""
     sha256 = hashlib.sha256()
-    with open(path, 'rb') as f:
+    with open(path, "rb") as f:
         while chunk := f.read(8192):
             sha256.update(chunk)
     return sha256.hexdigest()
@@ -155,7 +161,7 @@ def get_git_revision(repo_path: Path) -> Optional[str]:
     """Get current git revision for reproducibility."""
     try:
         result = subprocess.run(
-            ['git', 'rev-parse', 'HEAD'],
+            ["git", "rev-parse", "HEAD"],
             cwd=repo_path,
             capture_output=True,
             text=True,

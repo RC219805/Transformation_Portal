@@ -129,6 +129,21 @@ from ..utils.image_utils import load_image, np_to_pil, pil_to_np
 logger = logging.getLogger(__name__)
 
 
+def _json_default(obj: object) -> object:
+    """`json.dump` fallback serializer for common ML / pathlib types."""
+    if isinstance(obj, np.generic):
+        return obj.item()
+
+    if isinstance(obj, Path):
+        return str(obj)
+
+    if HAS_TORCH and torch is not None:
+        if isinstance(obj, torch.Tensor):
+            return obj.item() if obj.ndim == 0 else obj.detach().cpu().tolist()
+
+    return str(obj)
+
+
 # =============================================================================
 # Enums and Constants
 # =============================================================================
@@ -2050,7 +2065,7 @@ class Rendering4KPipeline:
             if unified_metrics is not None:
                 report['unified_metrics'] = unified_metrics.to_dict()
             with open(report_path, 'w') as f:
-                json.dump(report, f, indent=2, default=str)
+                json.dump(report, f, indent=2, ensure_ascii=False, default=_json_default)
             outputs['quality_report'] = report_path
             logger.info(f"  Quality Report: {report_path.name}")
 
@@ -2059,7 +2074,13 @@ class Rendering4KPipeline:
                 self.config.quality_feedback.rag_indexing_enabled):
             rag_path = output_dir / f"{stem}_unified_quality.json"
             with open(rag_path, 'w') as f:
-                json.dump(unified_metrics.to_rag_document(), f, indent=2)
+                json.dump(
+                    unified_metrics.to_rag_document(),
+                    f,
+                    indent=2,
+                    ensure_ascii=False,
+                    default=_json_default,
+                )
             outputs['unified_quality_doc'] = rag_path
             logger.info(f"  Unified Quality Doc: {rag_path.name}")
 

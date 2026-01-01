@@ -5,6 +5,7 @@ PY := $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else comma
 
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \
+	tests/test_installation.py \
 	tests/test_material_response.py \
 	tests/test_board_material_aerial_enhancer.py \
 	tests/test_coastal_estate_render.py \

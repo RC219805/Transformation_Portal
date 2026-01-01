@@ -46,8 +46,7 @@ def write_depth_u16_png(
     if depth.ndim == 3:
         if depth.shape[2] != 1:
             logger.warning(
-                f"Depth has {depth.shape[2]} channels, taking first channel only. "
-                "V2 requires single-channel depth."
+                f"Depth has {depth.shape[2]} channels, taking first channel only. V2 requires single-channel depth."
             )
         depth = depth[:, :, 0]
 
@@ -102,7 +101,7 @@ def write_depth_u16_png(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Write single-channel PNG (mode='I;16' for 16-bit grayscale)
-    img = Image.fromarray(depth_u16, mode='I;16')
+    img = Image.fromarray(depth_u16, mode="I;16")
     img.save(str(path))
 
     logger.info(f"Wrote depth to {path} (shape={depth_u16.shape}, dtype=uint16)")
@@ -110,10 +109,8 @@ def write_depth_u16_png(
     # Optional verification
     if debug_verify:
         verify_depth = np.array(Image.open(path))
-        assert verify_depth.shape == depth_u16.shape, \
-            f"Shape mismatch: wrote {depth_u16.shape}, read {verify_depth.shape}"
-        assert verify_depth.dtype == np.uint16, \
-            f"Dtype mismatch: expected uint16, got {verify_depth.dtype}"
+        assert verify_depth.shape == depth_u16.shape, f"Shape mismatch: wrote {depth_u16.shape}, read {verify_depth.shape}"
+        assert verify_depth.dtype == np.uint16, f"Dtype mismatch: expected uint16, got {verify_depth.dtype}"
         logger.debug(f"Verified depth write: shape={verify_depth.shape}, dtype={verify_depth.dtype}")
 
     return float(p1), float(p99)

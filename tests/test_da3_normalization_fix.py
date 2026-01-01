@@ -103,7 +103,7 @@ def test_da3_normalization_fix():
         da3_result = engine.infer([image_input])
         depth_raw = da3_result.depth[0]
 
-        print(f"\nRaw depth: min={depth_raw.min():.6f}, max={depth_raw.max():.6f}, range={depth_raw.ptp():.6f}")
+        print(f"\nRaw depth: min={depth_raw.min():.6f}, max={depth_raw.max():.6f}, range={np.ptp(depth_raw):.6f}")
 
         # Apply both normalizations
         depth_old = normalize_depth_old(depth_raw)

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class V2RunnerError(Exception):
     """Error running V2 enhancement pipeline."""
+
     pass
 
 
@@ -49,12 +50,10 @@ class V2Runner:
                 # Try to import to verify it's available
                 try:
                     import lux_depth_v2  # noqa: F401
+
                     self.v2_module_path = None  # Will use module import
                 except ImportError:
-                    raise V2RunnerError(
-                        "Cannot find lux_depth_v2 module. "
-                        "Ensure it's installed or specify v2_module_path."
-                    )
+                    raise V2RunnerError("Cannot find lux_depth_v2 module. Ensure it's installed or specify v2_module_path.")
 
     def run(
         self,
@@ -92,11 +91,16 @@ class V2Runner:
             self.python_exe,
             "-m",
             "lux_depth_v2.cli",
-            "--input", str(input_path),
-            "--output-dir", str(output_dir),
-            "--preset", preset,
-            "--device", device,
-            "--upscaler-backend", upscaler_backend,
+            "--input",
+            str(input_path),
+            "--output-dir",
+            str(output_dir),
+            "--preset",
+            preset,
+            "--device",
+            device,
+            "--upscaler-backend",
+            upscaler_backend,
         ]
 
         # Only include --depth-dir if it's a valid path (not None)
@@ -123,7 +127,7 @@ class V2Runner:
             # Write logs if requested
             if log_file:
                 log_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(log_file, 'w') as f:
+                with open(log_file, "w") as f:
                     f.write("=== STDOUT ===\n")
                     f.write(result.stdout)
                     f.write("\n=== STDERR ===\n")

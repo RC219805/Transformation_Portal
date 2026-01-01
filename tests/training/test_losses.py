@@ -311,7 +311,7 @@ class TestCombinedDepthLoss:
 
         loss_fn = CombinedDepthLoss()
 
-        pred = torch.rand(2, 1, 32, 32, requires_grad=True) + 0.1
+        pred = (torch.rand(2, 1, 32, 32) + 0.1).requires_grad_(True)
         target = torch.rand(2, 1, 32, 32) + 0.1
 
         total_loss, _ = loss_fn(pred, target)
@@ -348,7 +348,7 @@ class TestLossGradients:
     @pytest.fixture
     def sample_data(self):
         """Create sample prediction and target."""
-        pred = torch.rand(2, 1, 32, 32, requires_grad=True) + 0.1
+        pred = (torch.rand(2, 1, 32, 32) + 0.1).requires_grad_(True)
         target = torch.rand(2, 1, 32, 32) + 0.1
         return pred, target
 

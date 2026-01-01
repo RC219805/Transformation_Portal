@@ -196,9 +196,15 @@ class PerformanceProfiler:
 
         vm = psutil.virtual_memory()
 
+        # psutil can raise in restricted/sandboxed environments (e.g. sysctl permissions on macOS).
+        try:
+            cpu_percent = float(self.process.cpu_percent())
+        except Exception:
+            cpu_percent = 0.0
+
         snapshot = SystemSnapshot(
             timestamp=time.time(),
-            cpu_percent=self.process.cpu_percent(),
+            cpu_percent=cpu_percent,
             memory_mb=mem_mb,
             memory_percent=vm.percent,
             available_memory_mb=vm.available / 1024**2,

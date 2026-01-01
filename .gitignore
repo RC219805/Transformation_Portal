@@ -266,6 +266,7 @@ validation_v1_baseline_pack.zip
 750Picacho_Depth_Maps/
 750Picacho_Depth_Maps_DAV3_*/
 750Picacho_Depth_Maps_DA3_*/
+750Picacho_Depth_Maps_APEX_CANARY*/
 
 # BUT KEEP Phase 2 regression baselines (production deliverables)
 !regression_baselines/
@@ -297,6 +298,7 @@ archive/
 
 # Benchmark output directories
 benchmarks_*/
+bench/results/throughput_metrics.json
 
 # Phase 2 benchmark images (large TIFF files)
 assets/phase2_bench/*.tiff
