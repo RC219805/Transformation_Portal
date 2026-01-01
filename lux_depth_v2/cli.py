@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
 
 from .config import PipelineConfig, Preset
 from .logging_utils import setup_logging
@@ -11,11 +12,16 @@ from .pipeline import LuxPipelineV2
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Gold Standard Lux Depth Pipeline V2 (GPU-accelerated, modular).")
 
+    # Phase 1: Preset Governance (ROI hardening)
+    p.add_argument("--list-presets", action="store_true", help="List all available presets and exit.")
+    p.add_argument("--list-stable", action="store_true", help="List stable (production-ready) presets and exit.")
+    p.add_argument("--describe-preset", type=str, default=None, help="Show detailed info for a preset and exit.")
+
     # IO
     p.add_argument("--input", type=str, default=None, help="Single input image path.")
     p.add_argument("--input-dir", type=str, default=None, help="Input directory of images.")
     p.add_argument("--depth-dir", type=str, default=None, help="Depth directory (depth TIFFs and optional zone masks).")
-    p.add_argument("--output-dir", type=str, required=True, help="Output directory.")
+    p.add_argument("--output-dir", type=str, default=None, help="Output directory.")  # Make optional for info commands
 
     # Look
     p.add_argument("--preset", type=str, default=Preset.PHOTO_REALISTIC.value, choices=[e.value for e in Preset])
@@ -218,9 +224,109 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def validate_cli_inputs(args, logger) -> bool:
+    """Validate CLI inputs early to fail fast.
+    
+    Args:
+        args: Parsed arguments
+        logger: Logger instance
+        
+    Returns:
+        True if validation passes, False otherwise
+    """
+    # Skip validation for info commands
+    if args.list_presets or args.list_stable or args.describe_preset:
+        return True
+    
+    # Check that output-dir is provided for processing commands
+    if not args.output_dir and not args.service:
+        logger.error("--output-dir is required for processing commands")
+        logger.info("Use --list-presets or --describe-preset <name> for preset information")
+        return False
+    
+    # Check that at least one input is provided
+    if not args.input and not args.input_dir and not args.service:
+        logger.error("Must provide --input or --input-dir (or use --service mode)")
+        return False
+    
+    # Validate input paths exist
+    if args.input:
+        input_path = Path(args.input)
+        if not input_path.exists():
+            logger.error(f"Input file does not exist: {input_path}")
+            return False
+        if not input_path.is_file():
+            logger.error(f"Input path is not a file: {input_path}")
+            return False
+        
+        # Check file extension
+        allowed_exts = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+        if input_path.suffix.lower() not in allowed_exts:
+            logger.error(f"Unsupported file format: {input_path.suffix}")
+            logger.info(f"Allowed formats: {', '.join(allowed_exts)}")
+            return False
+    
+    if args.input_dir:
+        input_dir = Path(args.input_dir)
+        if not input_dir.exists():
+            logger.error(f"Input directory does not exist: {input_dir}")
+            return False
+        if not input_dir.is_dir():
+            logger.error(f"Input path is not a directory: {input_dir}")
+            return False
+    
+    # Validate output directory is writable
+    if args.output_dir:
+        output_dir = Path(args.output_dir)
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Cannot create output directory: {e}")
+            return False
+    
+    return True
+
+
 def main() -> None:
     args = build_parser().parse_args()
     logger = setup_logging("INFO")
+
+    # Phase 1: Preset Governance - Handle info commands first
+    if args.list_presets or args.list_stable:
+        from .preset_registry import get_registry
+        
+        registry = get_registry()
+        
+        if args.list_stable:
+            presets = registry.get_stable_presets()
+            print("\n=== Stable (Production-Ready) Presets ===\n")
+        else:
+            presets = registry.list_presets()
+            print("\n=== All Available Presets ===\n")
+        
+        print(registry.format_preset_list(presets, show_details=False))
+        print("\nUse --describe-preset <name> for detailed information.")
+        return
+    
+    if args.describe_preset:
+        from .preset_registry import get_registry
+        
+        registry = get_registry()
+        preset_meta = registry.get_preset(args.describe_preset)
+        
+        if preset_meta is None:
+            logger.error(f"Preset not found: {args.describe_preset}")
+            logger.info("Use --list-presets to see available presets.")
+            sys.exit(1)
+        
+        print()
+        print(registry.format_preset_detail(preset_meta))
+        print()
+        return
+    
+    # Phase 1: Early validation (fail fast)
+    if not validate_cli_inputs(args, logger):
+        sys.exit(1)
 
     # Handle EfficientSAM utilities (download/check)
     if args.check_efficientsam:

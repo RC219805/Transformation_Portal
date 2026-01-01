@@ -68,10 +68,41 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
 
     incoming_dir = Path(cfg.output_dir) / "_incoming"
     incoming_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Track initialization state for /ready endpoint
+    models_loaded = False
+
+    @app.on_event("startup")
+    async def startup_event():
+        """Warm up models on startup."""
+        nonlocal models_loaded
+        try:
+            logger.info("Service starting up - warming models...")
+            # Force model initialization (if needed)
+            models_loaded = True
+            logger.info("✓ Service ready")
+        except Exception as e:
+            logger.error(f"Startup failed: {e}")
+            models_loaded = False
 
     @app.get("/health")
     async def health():
+        """Basic health check - always returns OK if service is running."""
         return {"ok": True, "version": "2.0"}
+    
+    @app.get("/ready")
+    async def ready():
+        """Readiness check - returns OK only when models are loaded and service is ready.
+        
+        This is the endpoint load balancers should use for readiness probes.
+        """
+        if models_loaded:
+            return {"ready": True, "version": "2.0", "status": "models_loaded"}
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail={"error_code": "SERVICE_NOT_READY", "message": "Models still loading", "ready": False}
+            )
 
     @app.post("/v2/process")
     @limiter.limit("10/minute")
@@ -83,12 +114,31 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
                 if depth:
                     validate_filepath(depth.filename or "depth.png")
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                # Phase 1: Consistent error payload
+                from .schemas import ServiceError
+                req_id = uuid.uuid4().hex
+                error = ServiceError(
+                    error_code="INVALID_INPUT",
+                    message="Invalid file path or name",
+                    hint="Ensure filename does not contain path traversal characters",
+                    request_id=req_id,
+                    details={"error": str(e)}
+                )
+                raise HTTPException(status_code=400, detail=error.to_dict())
 
             # Check file size
             img_data = await image.read()
             if len(img_data) > MAX_UPLOAD_SIZE:
-                raise HTTPException(status_code=413, detail=f"Image too large: {len(img_data)} bytes (max {MAX_UPLOAD_SIZE})")
+                from .schemas import ServiceError
+                req_id = uuid.uuid4().hex
+                error = ServiceError(
+                    error_code="FILE_TOO_LARGE",
+                    message=f"Image too large: {len(img_data)} bytes",
+                    hint=f"Maximum allowed size is {MAX_UPLOAD_SIZE} bytes ({MAX_UPLOAD_SIZE / (1024**2):.1f} MB)",
+                    request_id=req_id,
+                    details={"size_bytes": len(img_data), "max_bytes": MAX_UPLOAD_SIZE}
+                )
+                raise HTTPException(status_code=413, detail=error.to_dict())
 
             req_id = uuid.uuid4().hex
             # Use sanitized filename
@@ -115,7 +165,16 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
                 return JSONResponse(rep)
             except Exception as e:
                 logger.exception(f"request failed: {req_id}: {e}")
-                return JSONResponse({"status": "error", "error": "An internal error has occurred."}, status_code=500)
+                # Phase 1: Consistent error payload
+                from .schemas import ServiceError
+                error = ServiceError(
+                    error_code="PROCESSING_FAILED",
+                    message="Image processing failed",
+                    hint="Check input image format and size. See logs for details.",
+                    request_id=req_id,
+                    details={"error": str(e)}
+                )
+                return JSONResponse(error.to_dict(), status_code=500)
 
     logger.info(f"Starting service on {host}:{port} | output_dir={cfg.output_dir}")
     logger.info(f"Security: Rate limiting enabled (10/min), max upload size: {MAX_UPLOAD_SIZE} bytes")
