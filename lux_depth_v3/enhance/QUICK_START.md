@@ -81,7 +81,7 @@ lux-depth-v3 enhance \
   -i renders/ \
   -o preview_output/ \
   --model base \
-  --v2-preset preview_fast \
+  --v2-preset interior_luxury \
   --v2-upscaler none \
   --non-commercial-ok
 ```

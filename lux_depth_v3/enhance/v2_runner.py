@@ -93,12 +93,15 @@ class V2Runner:
             "-m",
             "lux_depth_v2.cli",
             "--input", str(input_path),
-            "--depth-dir", str(depth_dir),
             "--output-dir", str(output_dir),
             "--preset", preset,
             "--device", device,
             "--upscaler-backend", upscaler_backend,
         ]
+
+        # Only include --depth-dir if it's a valid path (not None)
+        if depth_dir is not None:
+            cmd.extend(["--depth-dir", str(depth_dir)])
 
         if extra_args:
             cmd.extend(extra_args)
@@ -152,6 +155,9 @@ class V2Runner:
             runtime_s = time.time() - start_time
             error_msg = f"V2 timed out after {timeout}s"
             logger.error(error_msg)
+            # Note: subprocess.run with timeout does not automatically kill the process
+            # The process may still be running as a zombie process
+            logger.warning("V2 process may still be running after timeout")
             return {
                 "status": "error",
                 "runtime_s": runtime_s,

@@ -9,7 +9,7 @@ Writes depth maps in uint16 PNG format matching V2's expected input contract:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 import logging
 
 import numpy as np
@@ -57,8 +57,21 @@ def write_depth_u16_png(
 
     # Convert to uint16 if needed
     if depth.dtype == np.uint16:
+        # Already quantized: preserve raw uint16 values but compute true statistics
         depth_u16 = depth
-        p1, p99 = 0.0, 65535.0  # Already quantized
+        depth_f32 = depth.astype(np.float32)
+
+        if method == "p1p99":
+            p1 = float(np.percentile(depth_f32, 1.0))
+            p99 = float(np.percentile(depth_f32, 99.0))
+        elif method == "p0.5p99.5":
+            p1 = float(np.percentile(depth_f32, 0.5))
+            p99 = float(np.percentile(depth_f32, 99.5))
+        elif method == "minmax":
+            p1 = float(depth_f32.min())
+            p99 = float(depth_f32.max())
+        else:
+            raise ValueError(f"Unknown quantization method: {method}")
     else:
         # Quantize float depth to uint16
         depth_f32 = depth.astype(np.float32)

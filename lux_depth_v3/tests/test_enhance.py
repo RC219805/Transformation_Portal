@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import json
-import tempfile
-import shutil
 
 import pytest
 import numpy as np
-from PIL import Image
 
 from lux_depth_v3.enhance.depth_writer import write_depth_u16_png, read_depth_u16_png
 from lux_depth_v3.enhance.manifest import (
@@ -273,6 +269,9 @@ class TestEnhanceOrchestrator:
 
         config = EnhanceConfig(non_commercial_ok=True)
         orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+        # Verify orchestrator is created
+        assert isinstance(orchestrator, EnhanceOrchestrator)
 
         # Verify output directories created
         assert (tmp_path / "depth").exists()

@@ -7,16 +7,14 @@ Two-stage pipeline:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import time
 import logging
 
-import numpy as np
-
 from lux_depth_v3.config import DA3Config, ModelVariant, Preset
-from lux_depth_v3.inference import DA3InferenceEngine, DepthResult
+from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.input_manager import InputManager, ImageInput
 from lux_depth_v3.enhance.depth_writer import write_depth_u16_png
 from lux_depth_v3.enhance.v2_runner import V2Runner, find_v2_report
@@ -190,6 +188,13 @@ class EnhanceOrchestrator:
                 elif self.config.depth_fallback == "v2-auto":
                     logger.warning(f"Depth failed, V2 will auto-generate depth")
                     # Clear depth_dir for this image so V2 uses its own depth
+                    # Also clean up any partially written depth file
+                    if depth_path and depth_path.exists():
+                        try:
+                            depth_path.unlink()
+                            logger.debug(f"Removed failed depth file: {depth_path}")
+                        except Exception as unlink_exc:
+                            logger.warning(f"Could not remove failed depth file: {unlink_exc}")
                     depth_path = None
                 else:
                     raise ValueError(f"Unknown depth_fallback: {self.config.depth_fallback}")
@@ -206,13 +211,12 @@ class EnhanceOrchestrator:
 
         # Stage B: Run V2 enhancement
         logger.info(f"Stage B: Running V2 enhancement for {stem}...")
-        start_time = time.time()
+        v2_start_time = time.time()
 
         # Check if V2 outputs exist
         v2_report_path = find_v2_report(self.v2_dir, stem)
         if v2_report_path and not self.config.force_v2:
             logger.info(f"V2 outputs exist, skipping: {v2_report_path}")
-            skip_v2 = True
             v2_runtime_s = 0.0
             v2_result = {"status": "ok"}
         else:
@@ -296,7 +300,6 @@ class EnhanceOrchestrator:
             image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
 
         # Collect images
-        input_manager = InputManager()
         images = []
         for ext in image_extensions:
             images.extend(input_dir.glob(f"*{ext}"))

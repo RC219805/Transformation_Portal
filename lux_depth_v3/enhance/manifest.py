@@ -6,12 +6,11 @@ with V2 enhancement outputs, providing full provenance and reproducibility.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import json
 import hashlib
-import platform
 import subprocess
 import sys
 import logging
@@ -164,6 +163,7 @@ def get_git_revision(repo_path: Path) -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except Exception:
-        pass
+    except Exception as exc:
+        # Best-effort: failure to resolve git revision is non-fatal; return None.
+        logger.debug("Unable to determine git revision for %s: %s", repo_path, exc)
     return None
