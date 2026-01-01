@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 import json
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from datetime import datetime
 
 # Try to import dependencies - skip entire module if unavailable
@@ -206,10 +206,10 @@ class TestModelCacheManager:
         model_dir.mkdir(parents=True)
         # Add a file so rglob("*") returns something
         (model_dir / "model.safetensors").touch()
-        
+
         # Update metadata to use the real path
         mock_metadata["models"]["depth-anything/DA3-LARGE-1.1"]["local_path"] = str(model_dir)
-        
+
         metadata_file = temp_cache_dir / "lux_depth_v3_cache.json"
         with open(metadata_file, "w") as f:
             json.dump(mock_metadata, f)
@@ -322,10 +322,10 @@ class TestModelCacheManager:
         model_dir.mkdir(parents=True)
         # Add a file so rglob("*") returns something
         (model_dir / "model.safetensors").touch()
-        
+
         # Update metadata to use the real path
         mock_metadata["models"]["depth-anything/DA3-LARGE-1.1"]["local_path"] = str(model_dir)
-        
+
         metadata_file = temp_cache_dir / "lux_depth_v3_cache.json"
         with open(metadata_file, "w") as f:
             json.dump(mock_metadata, f)
@@ -393,7 +393,7 @@ class TestPrecacheModels:
         mock_manager_class.return_value = mock_manager
         mock_manager.download_models.return_value = []
 
-        results = precache_models()
+        precache_models()
 
         mock_manager_class.assert_called_once_with(cache_dir=None)
         mock_manager.download_models.assert_called_once_with(model_set="essential", force=False)
@@ -406,7 +406,7 @@ class TestPrecacheModels:
         mock_manager.download_models.return_value = []
 
         cache_dir = Path("/custom/cache")
-        results = precache_models(model_set="production", cache_dir=cache_dir, force=True)
+        precache_models(model_set="production", cache_dir=cache_dir, force=True)
 
         mock_manager_class.assert_called_once_with(cache_dir=cache_dir)
         mock_manager.download_models.assert_called_once_with(model_set="production", force=True)
