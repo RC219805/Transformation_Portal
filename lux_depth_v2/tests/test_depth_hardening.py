@@ -8,6 +8,7 @@ Covers:
 4. Channel-first (C,H,W) layout support
 5. Dtype validation (reject floats, negative ints)
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -20,6 +21,7 @@ from lux_depth_v2.io_utils import DepthInfo
 try:
     import cv2  # type: ignore
     import tifffile  # type: ignore
+
     DEPS_AVAILABLE = True
 except ImportError:
     DEPS_AVAILABLE = False
@@ -224,6 +226,7 @@ class TestUint8Handling:
 
         # Should NOT warn
         import warnings
+
         with warnings.catch_warnings():
             warnings.simplefilter("error")  # Turn warnings into errors
             try:

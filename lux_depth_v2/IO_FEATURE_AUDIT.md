@@ -53,7 +53,7 @@ def atomic_write_png8(path: Path, rgb01: np.ndarray, compression: int = 6) -> No
     os.replace(str(tmp), str(p))
 ```
 
-**Enhancement:** Added return value check to prevent silent write failures  
+**Enhancement:** Added return value check to prevent silent write failures
 **Test coverage:**
 - `test_write_png8` ✅
 - `test_write_png_compression` ✅
@@ -68,7 +68,7 @@ def atomic_write_jpg8(path: Path, rgb01: np.ndarray, quality: int = 92) -> None:
     os.replace(str(tmp), str(p))
 ```
 
-**Enhancement:** Added return value check to prevent silent write failures  
+**Enhancement:** Added return value check to prevent silent write failures
 **Test coverage:**
 - `test_write_jpg8` ✅
 - `test_write_jpg_quality` ✅ (asserts higher quality = larger files)
@@ -82,7 +82,7 @@ def atomic_write_jpg8(path: Path, rgb01: np.ndarray, quality: int = 92) -> None:
 def write_tiff16_legacy(path: Path, rgb01: np.ndarray, compression: Optional[str] = "deflate") -> None:
     """
     Write uint16 RGB TIFF (non-atomic, direct write).
-    
+
     For back-compat or when atomic writes are not needed.
     Use atomic_write_rgb16_tiff() for production writes.
     """
@@ -110,7 +110,7 @@ def write_tiff16_tiled(
 ) -> None:
     """
     Write uint16 RGB TIFF with tiling for large images.
-    
+
     Features:
     - Automatic BigTIFF decision (uncompressed size > 4GB)
     - Tile size validation
@@ -118,16 +118,16 @@ def write_tiff16_tiled(
     """
     ensure_deps()
     validate_tiff_compression(compression)
-    
+
     # Tile size validation
     if tile_size <= 0 or tile_size % 16 != 0:
         raise ValueError(f"tile_size must be positive and multiple of 16, got {tile_size}")
-    
+
     # BigTIFF decision
     h, w = rgb01.shape[:2]
     uncompressed_bytes = h * w * 3 * 2  # 3 channels, 2 bytes/pixel
     bigtiff = uncompressed_bytes > (4 * 1024**3)  # > 4GB
-    
+
     # Write with tiling
     tifffile.imwrite(
         str(path),
@@ -160,8 +160,8 @@ class ImageInfo:
     bit_depth: int
 ```
 
-**Used by:** `read_rgb_any()` return value for debugging/reporting  
-**Complements:** DepthInfo (not replaced)  
+**Used by:** `read_rgb_any()` return value for debugging/reporting
+**Complements:** DepthInfo (not replaced)
 **Test coverage:** `test_image_info_creation` ✅
 
 ---
@@ -197,7 +197,7 @@ def read_mask_any(path: Path) -> np.ndarray:
             m = m[..., 0]  # Take channel 0 (reasonable for masks)
         # Normalize to [0, 1]
         # ... implementation
-    
+
     img = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
     if img.ndim == 3:
         img = img[:, :, 0]  # Take channel 0
@@ -205,7 +205,7 @@ def read_mask_any(path: Path) -> np.ndarray:
     # ... implementation
 ```
 
-**Justification:** "Take channel 0" is reasonable convention for masks (unlike depth)  
+**Justification:** "Take channel 0" is reasonable convention for masks (unlike depth)
 **Test coverage:** `test_read_mask_*` ✅
 
 ---
@@ -219,16 +219,16 @@ def read_mask_any(path: Path) -> np.ndarray:
 def test_read_depth_png16_matches_tiff(self, temp_dir):
     """16-bit PNG depth should load equivalently to 16-bit TIFF depth."""
     depth_u16 = np.random.randint(5000, 60000, (100, 100), dtype=np.uint16)
-    
+
     png_path = temp_dir / "depth.png"
     tif_path = temp_dir / "depth.tif"
-    
+
     cv2.imwrite(str(png_path), depth_u16)
     tifffile.imwrite(str(tif_path), depth_u16)
-    
+
     png_depth = io_utils.read_depth_u16(png_path)
     tif_depth = io_utils.read_depth_u16(tif_path)
-    
+
     # Normalization should be identical
     np.testing.assert_allclose(png_depth, tif_depth, rtol=1e-5, atol=1e-7)
 ```
@@ -245,7 +245,7 @@ def test_atomic_write_removes_tmp(self, temp_dir, sample_rgb_array):
     """Test atomic write removes temporary file."""
     out_path = temp_dir / "output.tif"
     io_utils.atomic_write_rgb16_tiff(out_path, sample_rgb_array)
-    
+
     # Check no .tif.tmp files left behind (pattern: output.tif.tmp)
     assert not list(temp_dir.glob("*.tmp"))
 ```
@@ -266,7 +266,7 @@ def test_write_clamps_values(self, temp_dir):
     oob = np.array([[[-0.5, 0.5, 1.5]]], dtype=np.float32)
     out_path = temp_dir / "clamped.tif"
     io_utils.atomic_write_rgb16_tiff(out_path, oob)
-    
+
     result, _ = io_utils.read_rgb_any(out_path)
     # Values should be clamped to [0, 1]
     assert result.min() >= 0.0
@@ -285,10 +285,10 @@ def test_write_jpg_quality(self, temp_dir, sample_rgb_array):
     """Test JPG quality parameter."""
     low_path = temp_dir / "low_quality.jpg"
     high_path = temp_dir / "high_quality.jpg"
-    
+
     io_utils.atomic_write_jpg8(low_path, sample_rgb_array, quality=50)
     io_utils.atomic_write_jpg8(high_path, sample_rgb_array, quality=95)
-    
+
     # Higher quality should produce larger file
     assert high_path.stat().st_size > low_path.stat().st_size
 ```
@@ -301,7 +301,7 @@ def test_write_jpg_quality(self, temp_dir, sample_rgb_array):
 
 ### cv2.imwrite Return Value Checks (NEW) ✅
 
-**Problem:** `cv2.imwrite()` can silently fail (returns False)  
+**Problem:** `cv2.imwrite()` can silently fail (returns False)
 **Solution:** Check return value and raise RuntimeError
 
 **Files Modified:**

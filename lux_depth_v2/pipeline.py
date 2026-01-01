@@ -1076,7 +1076,6 @@ class LuxPipelineV2:
                 else:
                     self._write_json(report_path, report)
 
-
         return report
 
     def process_image(self, image_path: Union[str, Path], **kwargs: Any) -> Dict[str, object]:

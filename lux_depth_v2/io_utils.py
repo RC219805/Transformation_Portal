@@ -43,6 +43,7 @@ class ImageInfo:
     dtype: str
     bit_depth: int
 
+
 @dataclass
 class DepthInfo:
     """Metadata about a loaded depth file (before/after coercion + normalization)."""
@@ -57,7 +58,6 @@ class DepthInfo:
     u16_max: int
     p1: float  # 1st percentile used for robust normalization
     p99: float  # 99th percentile used for robust normalization
-
 
 
 def ensure_deps() -> None:
@@ -128,7 +128,7 @@ def read_rgb_any(path: Path) -> Tuple[np.ndarray, ImageInfo]:
 
 def _collapse_depth_channels(d: np.ndarray, path: Path) -> Tuple[np.ndarray, int, bool]:
     """Ensure depth is 2D. If multi-channel, only accept identical channels.
-    
+
     Handles both channel-last (H,W,C) and channel-first (C,H,W) layouts.
     For RGB/RGBA, requires all color channels to be identical (alpha ignored).
     Rejects stacks or other unexpected shapes to avoid silent misinterpretation.
@@ -137,8 +137,7 @@ def _collapse_depth_channels(d: np.ndarray, path: Path) -> Tuple[np.ndarray, int
         return d, 1, False
     if d.ndim != 3:
         raise ValueError(
-            f"Depth must be 2D or 3D, got shape={d.shape}: {path}. "
-            "This looks like a stack or unsupported layout."
+            f"Depth must be 2D or 3D, got shape={d.shape}: {path}. This looks like a stack or unsupported layout."
         )
 
     # Try channel-last (H,W,C) - most common for PNG/TIFF
@@ -215,7 +214,7 @@ def read_depth_u16_with_info(
             "Upscaling to 16-bit will preserve quantization artifacts. "
             "Re-export depth as 16-bit PNG from Depth Anything 3 for best results.",
             RuntimeWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         d = d.astype(np.uint16) * 257  # 0-255 -> 0-65535
     # Coerce other integer types to uint16
@@ -229,8 +228,7 @@ def read_depth_u16_with_info(
         if np.issubdtype(d.dtype, np.signedinteger):
             if d.min() < 0:
                 raise ValueError(
-                    f"Depth has negative values (dtype={d.dtype}, min={d.min()}): {p}. "
-                    "Depth maps must be non-negative."
+                    f"Depth has negative values (dtype={d.dtype}, min={d.min()}): {p}. Depth maps must be non-negative."
                 )
         # Prevent overflow when casting to uint16
         max_val = int(d.max())
@@ -313,7 +311,7 @@ def atomic_write_rgb16_tiff(path: Path, rgb01: np.ndarray, compression: str = "d
     """Write uint16 RGB TIFF atomically."""
     ensure_deps()
     validate_tiff_compression(compression)
-    
+
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
 
