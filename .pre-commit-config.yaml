@@ -45,4 +45,3 @@ repos:
       - id: check-merge-conflict
       - id: check-ast  # Verify Python syntax
         exclude: ^(deprecated/|src/transformation_portal/)
-
