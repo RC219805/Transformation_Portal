@@ -25,7 +25,6 @@ from . import material_profiles
 
 # Phase 2 Slice 2: ExportManager integration
 try:
-    import sys
     from pathlib import Path as _Path
 
     _repo_root = _Path(__file__).parent.parent
@@ -943,7 +942,8 @@ class LuxPipelineV2:
                 luma_diff = torch_ops.mean_abs_luma(base_up, ai_up)
                 if color_diff > cfg.ai_color_fail or luma_diff > cfg.ai_luma_fail:
                     self.logger.warning(
-                        f"AI drift FAIL {img_path.name}: rgb={color_diff:.4f} luma={luma_diff:.4f}; skipping AI detail transfer"
+                        f"AI drift FAIL {img_path.name}: rgb={color_diff:.4f} "
+                        f"luma={luma_diff:.4f}; skipping AI detail transfer"
                     )
                     use_ai_details = False
                 elif color_diff > cfg.ai_color_warn or luma_diff > cfg.ai_luma_warn:
@@ -1066,6 +1066,9 @@ class LuxPipelineV2:
             report["segmentation_v3"] = self.segmenter.get_segmentation_v3_report()
 
         # Always include depth provenance for observability (Commit 3)
+        # If depth_provenance is still empty, mark as error state for debugging
+        if not depth_provenance:
+            depth_provenance = {"source": "error"}
         report["depth"] = depth_provenance
 
         # Write report JSON only if enabled (after all fields added)

@@ -225,13 +225,15 @@ def read_depth_u16_with_info(
                 f"Depth must be uint16/uint8 integer, got floating point {d.dtype}: {p}. "
                 "Depth maps should be integer grayscale."
             )
+        # Cache min/max for performance (avoid multiple passes over large arrays)
+        d_min, d_max = d.min(), d.max()
         if np.issubdtype(d.dtype, np.signedinteger):
-            if d.min() < 0:
+            if d_min < 0:
                 raise ValueError(
-                    f"Depth has negative values (dtype={d.dtype}, min={d.min()}): {p}. Depth maps must be non-negative."
+                    f"Depth has negative values (dtype={d.dtype}, min={d_min}): {p}. Depth maps must be non-negative."
                 )
         # Prevent overflow when casting to uint16
-        max_val = int(d.max())
+        max_val = int(d_max)
         if max_val > 65535:
             raise ValueError(
                 f"Depth values exceed uint16 range (max={max_val} > 65535) for {p}. "
@@ -258,6 +260,10 @@ def read_depth_u16_with_info(
         else:
             depth01 = ((df - p1) / (p99 - p1)).clip(0.0, 1.0).astype(np.float32)
 
+    # Cache min/max for DepthInfo (reuse or compute once)
+    d_min_final = int(d.min()) if d.size else 0
+    d_max_final = int(d.max()) if d.size else 0
+
     info = DepthInfo(
         file_format=file_format,
         source_dtype=source_dtype,
@@ -265,8 +271,8 @@ def read_depth_u16_with_info(
         shape=(int(d.shape[0]), int(d.shape[1])),
         channels=int(channels),
         channel_collapsed=bool(channel_collapsed),
-        u16_min=int(np.min(d)) if d.size else 0,
-        u16_max=int(np.max(d)) if d.size else 0,
+        u16_min=d_min_final,
+        u16_max=d_max_final,
         p1=float(p1),
         p99=float(p99),
     )
