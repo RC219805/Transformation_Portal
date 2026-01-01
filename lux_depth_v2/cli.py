@@ -6,7 +6,9 @@ import sys
 
 from .config import PipelineConfig, Preset
 from .logging_utils import setup_logging
-from .pipeline import LuxPipelineV2
+
+# Defer heavy imports until needed
+# from .pipeline import LuxPipelineV2  # Moved to inside functions
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -541,6 +543,8 @@ def main() -> None:
             logger.error("Pre-flight validation failed. Use --skip-pre-flight to bypass.")
             return
 
+    # Import pipeline only when actually needed
+    from .pipeline import LuxPipelineV2
     pipe = LuxPipelineV2(cfg, logger=logger)
 
     if args.input:
