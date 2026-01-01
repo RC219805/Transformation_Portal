@@ -201,6 +201,15 @@ class TestModelCacheManager:
 
     def test_is_cached(self, temp_cache_dir, mock_metadata):
         """Test checking if model is cached."""
+        # Create actual model directory structure that _is_cached checks for
+        model_dir = temp_cache_dir / "da3-large"
+        model_dir.mkdir(parents=True)
+        # Add a file so rglob("*") returns something
+        (model_dir / "model.safetensors").touch()
+        
+        # Update metadata to use the real path
+        mock_metadata["models"]["depth-anything/DA3-LARGE-1.1"]["local_path"] = str(model_dir)
+        
         metadata_file = temp_cache_dir / "lux_depth_v3_cache.json"
         with open(metadata_file, "w") as f:
             json.dump(mock_metadata, f)
@@ -308,6 +317,15 @@ class TestModelCacheManager:
     @patch("lux_depth_v3.model_cache.ModelCacheManager._download_hf_cache")
     def test_download_model_already_cached(self, mock_download, temp_cache_dir, mock_metadata):
         """Test downloading already cached model."""
+        # Create actual model directory structure so _is_cached returns True
+        model_dir = temp_cache_dir / "da3-large"
+        model_dir.mkdir(parents=True)
+        # Add a file so rglob("*") returns something
+        (model_dir / "model.safetensors").touch()
+        
+        # Update metadata to use the real path
+        mock_metadata["models"]["depth-anything/DA3-LARGE-1.1"]["local_path"] = str(model_dir)
+        
         metadata_file = temp_cache_dir / "lux_depth_v3_cache.json"
         with open(metadata_file, "w") as f:
             json.dump(mock_metadata, f)
