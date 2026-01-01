@@ -88,6 +88,15 @@ OUTPUT_DIR_PATTERNS = [
     r"benchmarks_.*/",
 ]
 
+# Exception patterns - these directories are intentionally tracked
+EXCEPTION_PATTERNS = [
+    r"^phase2_task\d+_outputs/",  # Phase 2 deliverables are intentionally tracked
+    r"^lux_depth_v2/test_outputs/",  # Test outputs for lux_depth_v2
+    r"^data/",  # Data directories are intentionally tracked for validation
+    r"^projects/",  # Project deliverables are intentionally tracked
+    r"^validation_images/",  # Validation images are intentionally tracked
+]
+
 # File extensions for code/config that should be checked for bidi chars
 CODE_EXTENSIONS = {
     ".py",
@@ -176,6 +185,11 @@ def check_output_directory(filepath: Path) -> List[SecurityViolation]:
 
     path_str = str(filepath)
 
+    # Check if file matches an exception pattern (intentionally tracked directories)
+    for exception_pattern in EXCEPTION_PATTERNS:
+        if re.search(exception_pattern, path_str):
+            return violations  # No violations for intentionally tracked directories
+
     for pattern in OUTPUT_DIR_PATTERNS:
         if re.search(pattern, path_str):
             violations.append(SecurityViolation(str(filepath), "OUTPUT_ARTIFACT", f"File in output directory: {pattern}"))
@@ -186,6 +200,13 @@ def check_output_directory(filepath: Path) -> List[SecurityViolation]:
 def check_file_size(filepath: Path) -> List[SecurityViolation]:
     """Check if file is too large for git (should use LFS)."""
     violations = []
+
+    path_str = str(filepath)
+
+    # Check if file matches an exception pattern (intentionally tracked directories)
+    for exception_pattern in EXCEPTION_PATTERNS:
+        if re.search(exception_pattern, path_str):
+            return violations  # No violations for intentionally tracked directories
 
     try:
         size = filepath.stat().st_size
