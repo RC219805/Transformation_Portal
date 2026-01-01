@@ -39,6 +39,38 @@ client_*/
 # End Security-Sensitive Section
 # ========================================
 
+# ========================================
+# Agent Safety Rails (FORBIDDEN PATHS)
+# ========================================
+# These directories are OFF-LIMITS for autonomous agents
+# See docs/AGENT_REPO_MAP.md for rationale
+# Agents should NEVER modify these without explicit override
+
+# Historical deliverables and validation outputs
+# (Modification breaks validation and regression tests)
+phase2_task1_outputs/
+phase2_task5_outputs/
+phase2_task7_outputs/
+phase2_task8_outputs/
+phase_a_forensics_baseline/
+
+# Benchmark results and performance baselines
+# (Historical data, not for modification)
+bench/
+bench_baseline/
+bench_edge_balanced/
+benchmarks_*/
+
+# Experimental and exploratory code
+# (R&D work, not production-ready)
+experimental/
+exploration/
+forensics/
+
+# ========================================
+# End Agent Safety Rails
+# ========================================
+
 # Water detection dataset images (keep metadata only)
 # Recursive patterns to catch class subfolders (pool/, ocean/)
 data/water_*/images/**/*.jpg
