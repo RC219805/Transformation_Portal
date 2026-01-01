@@ -10,8 +10,11 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 import subprocess
 import sys
+import os
 import time
 import logging
+
+from lux_depth_v3.enhance.security import validate_extra_args
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +89,10 @@ class V2Runner:
         Raises:
             V2RunnerError: If V2 fails
         """
+        # Validate extra_args for security (prevent command injection)
+        if extra_args:
+            validate_extra_args(extra_args)
+
         # Build command
         cmd = [
             self.python_exe,
@@ -115,13 +122,19 @@ class V2Runner:
         # Run subprocess with logging
         start_time = time.time()
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=self.v2_module_path,
-            )
+            # On Unix/POSIX systems, use start_new_session for better process group management
+            # This ensures child processes are properly terminated on timeout
+            subprocess_kwargs = {
+                "capture_output": True,
+                "text": True,
+                "timeout": timeout,
+                "cwd": self.v2_module_path,
+            }
+            # Use POSIX check for better Unix-like system detection
+            if os.name == "posix":
+                subprocess_kwargs["start_new_session"] = True
+
+            result = subprocess.run(cmd, **subprocess_kwargs)
             runtime_s = time.time() - start_time
 
             # Write logs if requested

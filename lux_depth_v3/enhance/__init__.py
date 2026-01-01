@@ -15,6 +15,8 @@ __all__ = [
     "EnhanceOrchestrator",
     "EnhanceConfig",
     "write_depth_u16_png",
+    "sanitize_file_stem",
+    "validate_extra_args",
 ]
 
 
@@ -39,4 +41,12 @@ def __getattr__(name):
         from lux_depth_v3.enhance.depth_writer import write_depth_u16_png
 
         return write_depth_u16_png
+    elif name == "sanitize_file_stem":
+        from lux_depth_v3.enhance.security import sanitize_file_stem
+
+        return sanitize_file_stem
+    elif name == "validate_extra_args":
+        from lux_depth_v3.enhance.security import validate_extra_args
+
+        return validate_extra_args
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

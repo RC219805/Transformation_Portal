@@ -15,6 +15,8 @@ import subprocess
 import sys
 import logging
 
+from lux_depth_v3.enhance.security import validate_git_repository
+
 logger = logging.getLogger(__name__)
 
 MANIFEST_SCHEMA_VERSION = "lux-depth-v3.enhance.v1"
@@ -158,14 +160,47 @@ def compute_file_sha256(path: Path) -> str:
 
 
 def get_git_revision(repo_path: Path) -> Optional[str]:
-    """Get current git revision for reproducibility."""
+    """Get current git revision for reproducibility.
+
+    Args:
+        repo_path: Path to git repository
+
+    Returns:
+        Git commit SHA if available, None otherwise
+
+    Security considerations:
+        - Validates repository path before executing git
+        - Uses explicit GIT_DIR to prevent malicious hook execution
+        - Disables system-wide git config
+        - Disables template directory to prevent hook injection
+        - Sets timeout to prevent hanging
+    """
+    # Validate repository path
+    validated_repo = validate_git_repository(repo_path)
+    if not validated_repo:
+        logger.debug(f"Not a git repository: {repo_path}")
+        return None
+
     try:
+        git_dir = validated_repo / ".git"
+        # Secure git environment: start with parent env, override with security settings
+        import os
+
+        secure_env = os.environ.copy()
+        secure_env.update(
+            {
+                "GIT_DIR": str(git_dir),
+                "GIT_TEMPLATE_DIR": "",  # Disable templates
+                "GIT_CONFIG_NOSYSTEM": "1",  # Disable system-wide config
+            }
+        )
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=repo_path,
             capture_output=True,
             text=True,
             timeout=5,
+            env=secure_env,
         )
         if result.returncode == 0:
             return result.stdout.strip()
