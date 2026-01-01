@@ -91,6 +91,15 @@ cd lux_depth_v3
 pip install -r requirements.txt
 ```
 
+#### Editable install (offline / no PyPI access)
+
+If your environment cannot reach PyPI, editable installs may fail during PEP 517 build isolation (it tries to download build requirements). Use:
+
+```bash
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install --no-build-isolation --no-deps -e lux_depth_v3
+```
+
 ### Model Caching (Recommended)
 
 Pre-cache DA3 models for offline operation and faster startup:
@@ -417,6 +426,62 @@ lux-depth-v3 process \
   --multi-view \
   --model nested-giant-large
 ```
+
+#### V3 + V2 Enhancement Orchestrator ✨ NEW
+
+The **enhance** command integrates DA3 depth estimation with the production V2 enhancement pipeline:
+
+```bash
+# Basic usage (requires --non-commercial-ok for DA3)
+lux-depth-v3 enhance \
+  --input-dir renders/ \
+  --output-dir output/ \
+  --non-commercial-ok
+
+# Production quality with specific presets
+lux-depth-v3 enhance \
+  --input-dir renders/ \
+  --output-dir production_output/ \
+  --model metric-large \
+  --v2-preset production_ultra \
+  --non-commercial-ok
+
+# Resume previous run (skip existing outputs)
+lux-depth-v3 enhance \
+  --input-dir renders/ \
+  --output-dir output/ \
+  --non-commercial-ok
+
+# Force complete regeneration
+lux-depth-v3 enhance \
+  --input-dir renders/ \
+  --output-dir output/ \
+  --force-depth \
+  --force-v2 \
+  --non-commercial-ok
+
+# Multi-GPU setup (depth on GPU 0, V2 on GPU 1)
+lux-depth-v3 enhance \
+  --input-dir renders/ \
+  --output-dir output/ \
+  --depth-device cuda:0 \
+  --v2-device cuda:1 \
+  --non-commercial-ok
+```
+
+**Output Structure:**
+```
+output/
+  depth/         # DA3 depth maps (uint16 PNG)
+  v2/           # V2 enhanced outputs (16-bit TIFFs, reports)
+  manifests/    # Combined manifests linking DA3 + V2
+  logs/         # Processing logs
+```
+
+**See Also:**
+- Full guide: `lux_depth_v3/enhance/README.md`
+- Quick start: `lux_depth_v3/enhance/QUICK_START.md`
+- Python API: See orchestrator examples below
 
 ### CLI Integration Mode
 

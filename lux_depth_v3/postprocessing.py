@@ -9,12 +9,29 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import numpy as np
-from scipy import ndimage
 from scipy.ndimage import median_filter
 
 from lux_depth_v3.config import PostprocessingConfig
 from lux_depth_v3.inference import DepthResult
-from lux_depth_v3.edge_refinement import DepthRefiner
+
+# Edge refinement is optional (and may not be present in stripped-down deployments).
+try:
+    from lux_depth_v3.edge_refinement import DepthRefiner  # type: ignore
+except Exception:  # pragma: no cover
+    DepthRefiner = None  # type: ignore
+
+
+class _NoOpDepthRefiner:
+    """Fallback refiner used when the optional edge_refinement module isn't available."""
+
+    def __init__(self, *args, **kwargs):
+        self._stats = {"enabled": False, "available": False}
+
+    def refine(self, depth: np.ndarray, image: np.ndarray) -> np.ndarray:
+        return depth
+
+    def get_stats(self):
+        return dict(self._stats)
 
 
 class Postprocessor:
@@ -28,8 +45,16 @@ class Postprocessor:
         """
         self.config = config
 
-        # Initialize edge refinement module
-        self.refiner = DepthRefiner(config.refinement)
+        # Initialize edge refinement module (optional)
+        refinement_cfg = getattr(config, "refinement", None)
+        if DepthRefiner is None or refinement_cfg is None:
+            self.refiner = _NoOpDepthRefiner()
+        else:
+            try:
+                self.refiner = DepthRefiner(refinement_cfg)  # type: ignore[misc]
+            except Exception:
+                # If the refiner fails to init for any reason, degrade gracefully.
+                self.refiner = _NoOpDepthRefiner()
 
     def process(self, result: DepthResult) -> DepthResult:
         """Apply postprocessing to depth result.
@@ -66,8 +91,8 @@ class Postprocessor:
                 self.config.edge_threshold,
             )
 
-        # Edge-aware refinement (new)
-        if self.config.refinement.enable_refinement:
+        # Edge-aware refinement (optional)
+        if bool(getattr(getattr(self.config, "refinement", None), "enable_refinement", False)):
             depth = self.refiner.refine(depth, result.original_image)
 
         # Update result
