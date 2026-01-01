@@ -497,7 +497,10 @@ class LuxPipelineV2:
 
             # Try to load existing depth
             if depth_path and Path(depth_path).exists():
-                depth01 = io_utils.read_depth_u16(Path(depth_path))
+                depth01, depth_info = io_utils.read_depth_u16_with_info(
+                    Path(depth_path),
+                    expected_hw=(H, W),
+                )
                 depth_provenance = {
                     "source": "file",  # User-provided depth file
                     "path": str(depth_path),
@@ -505,7 +508,22 @@ class LuxPipelineV2:
                     "confidence_proxy": None,
                     "cache_key": None,
                     "runtime_ms": None,
+                    "file": asdict(depth_info),
                 }
+
+                # Strict mode: fail on uint8 depth (io_utils already warned)
+                if cfg.strict_depth and depth_info.source_dtype == "uint8":
+                    raise ValueError(
+                        f"Depth is 8-bit (uint8) for {img_path.name}: {depth_path}. "
+                        "Re-export as 16-bit PNG from Depth Anything 3. "
+                        "(strict_depth=True requires 16-bit depth)"
+                    )
+
+                if depth_info.channel_collapsed:
+                    self.logger.info(
+                        f"Depth file had {depth_info.channels} channels but channels were identical; "
+                        f"collapsed to 2D: {depth_path}"
+                    )
             # REQUIRED mode: fail fast if depth missing
             elif cfg.depth.mode == DepthMode.REQUIRED or cfg.strict_depth:
                 raise FileNotFoundError(
@@ -1047,6 +1065,9 @@ class LuxPipelineV2:
         if hasattr(self.segmenter, "get_segmentation_v3_report"):
             report["segmentation_v3"] = self.segmenter.get_segmentation_v3_report()
 
+        # Always include depth provenance for observability (Commit 3)
+        report["depth"] = depth_provenance
+
         # Write report JSON only if enabled (after all fields added)
         if cfg.write_outputs:
             with self._stage(report, "export_report"):
@@ -1054,9 +1075,6 @@ class LuxPipelineV2:
                     self.export_manager.write_report(stem, report)
                 else:
                     self._write_json(report_path, report)
-
-        # Always include depth provenance for observability (Commit 3)
-        report["depth"] = depth_provenance
 
         return report
 
