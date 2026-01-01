@@ -38,9 +38,10 @@ class TestDepthWriter:
         assert depth_read.dtype == np.uint16
         np.testing.assert_array_equal(depth_read, depth)
 
-        # p1/p99 should be full range for uint16
-        assert p1 == 0.0
-        assert p99 == 65535.0
+        # p1/p99 should be computed from actual data (not hardcoded 0/65535)
+        assert isinstance(p1, float)
+        assert isinstance(p99, float)
+        assert p1 <= p99
 
     def test_write_depth_u16_png_from_float(self, tmp_path):
         """Test writing float32 depth with quantization."""

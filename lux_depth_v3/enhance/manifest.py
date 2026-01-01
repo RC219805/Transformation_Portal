@@ -6,7 +6,7 @@ with V2 enhancement outputs, providing full provenance and reproducibility.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import json

@@ -15,7 +15,7 @@ import logging
 
 from lux_depth_v3.config import DA3Config, ModelVariant, Preset
 from lux_depth_v3.inference import DA3InferenceEngine
-from lux_depth_v3.input_manager import InputManager, ImageInput
+from lux_depth_v3.input_manager import ImageInput
 from lux_depth_v3.enhance.depth_writer import write_depth_u16_png
 from lux_depth_v3.enhance.v2_runner import V2Runner, find_v2_report
 from lux_depth_v3.enhance.manifest import (
@@ -126,7 +126,6 @@ class EnhanceOrchestrator:
 
         # Check resume conditions
         skip_depth = False
-        skip_v2 = False
 
         if depth_path.exists() and not self.config.force_depth:
             logger.info(f"Depth exists, skipping: {depth_path}")
