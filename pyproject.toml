@@ -96,49 +96,14 @@ luxury_video_grader = "transformation_portal.processors.luxury_video_master_grad
 lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
 luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
 
-[tool.setuptools]
-# Explicit package list for reliable editable installs
-packages = [
-    "transformation_portal",
-    "transformation_portal.analyzers",
-    "transformation_portal.atmosphere",
-    "transformation_portal.cli",
-    "transformation_portal.comfyui",
-    "transformation_portal.compat",
-    "transformation_portal.core",
-    "transformation_portal.core.artifacts",
-    "transformation_portal.core.config",
-    "transformation_portal.core.device",
-    "transformation_portal.core.observability",
-    "transformation_portal.core.security",
-    "transformation_portal.depth",
-    "transformation_portal.depth.models",
-    "transformation_portal.depth.processors",
-    "transformation_portal.depth.utils",
-    "transformation_portal.depth_intelligence",
-    "transformation_portal.diffusion",
-    "transformation_portal.enhancers",
-    "transformation_portal.events",
-    "transformation_portal.foundation",
-    "transformation_portal.hardening",
-    "transformation_portal.interfaces",
-    "transformation_portal.metrics",
-    "transformation_portal.neuroaesthetics",
-    "transformation_portal.perceptual",
-    "transformation_portal.pipelines",
-    "transformation_portal.plugins",
-    "transformation_portal.plugins.builtin",
-    "transformation_portal.processors",
-    "transformation_portal.processors.material_response",
-    "transformation_portal.rendering",
-    "transformation_portal.segmentation",
-    "transformation_portal.streaming",
-    "transformation_portal.style_transfer",
-    "transformation_portal.utils",
-    "transformation_portal.vlm",
-    "luxury_tiff_batch_processor",
-]
-package-dir = {"" = "src"}
+[tool.setuptools.package-dir]
+"" = "src"
+"lux_depth_v2" = "lux_depth_v2"
+
+[tool.setuptools.packages.find]
+where = ["src", "."]
+include = ["transformation_portal*", "luxury_tiff_batch_processor*", "lux_depth_v2*"]
+exclude = ["tests*", "docs*", "examples*", "*.tests", "*.tests.*"]
 
 [tool.pylint.main]
 # Increase limits for complex image/video processing functions
