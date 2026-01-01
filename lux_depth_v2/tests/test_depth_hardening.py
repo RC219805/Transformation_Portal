@@ -16,7 +16,6 @@ import pytest
 from pathlib import Path
 
 from lux_depth_v2 import io_utils
-from lux_depth_v2.io_utils import DepthInfo
 
 try:
     import cv2  # type: ignore
