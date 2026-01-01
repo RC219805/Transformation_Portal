@@ -142,6 +142,42 @@ docker exec lux-depth-v2-service python -c "import basicsr"
 # Expected: ImportError (correct - package not present)
 ```
 
+### Repository Security Controls
+
+**The repository enforces production-grade security gates:**
+
+**Pre-Commit Hooks** 🔒
+```bash
+# Install security-aware pre-commit hooks
+pip install pre-commit
+pre-commit install
+
+# Manually run security checks
+make security-quick
+```
+
+**Automated Security Gates** (CI/CD):
+- ✅ No shell history files (`.bash_history`, credentials)
+- ✅ No bidirectional Unicode (Trojan Source protection)
+- ✅ No large files without Git LFS (>5MB)
+- ✅ No output artifacts in commits
+- ✅ Secret scanning with TruffleHog
+- ✅ Dependency vulnerability scanning
+
+**Security Resources**:
+- 📋 [Repository Governance Guide](docs/REPOSITORY_GOVERNANCE.md) - Complete security policies
+- 🛡️ [Security Policy](SECURITY.md) - Vulnerability reporting
+- 📖 [Contributing Guide](CONTRIBUTING.md) - Artifact management best practices
+
+**Quick Security Check**:
+```bash
+# Run all security validations
+make ci  # Includes linting, tests, and security checks
+
+# Verify no sensitive files
+python scripts/security/pre_commit_security_check.py
+```
+
 ### Architecture Highlights
 
 **Service Components**:

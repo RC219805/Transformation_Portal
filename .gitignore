@@ -1,3 +1,44 @@
+# ========================================
+# Security-Sensitive Files (CRITICAL)
+# ========================================
+# Shell history may contain credentials, tokens, internal paths
+.bash_history
+.zsh_history
+.sh_history
+.history
+
+# Secrets and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.crt
+*.cer
+*.der
+.aws/
+.ssh/
+
+# Build artifacts that shouldn't be in source
+PKG-INFO
+MANIFEST
+
+# Client-specific work and backups
+.local_backup/
+.backup_local/
+.branch_cleanup_backup/
+client_*/
+*_client/
+
+# ========================================
+# End Security-Sensitive Section
+# ========================================
+
 # Water detection dataset images (keep metadata only)
 # Recursive patterns to catch class subfolders (pool/, ocean/)
 data/water_*/images/**/*.jpg
@@ -200,11 +241,6 @@ pretrained/
 # Real-ESRGAN specific
 RealESRGAN_*.pth
 realesr-*.pth
-
-# Local backup directories (client-specific work)
-.local_backup/
-.backup_local/
-.branch_cleanup_backup/
 
 # Additional PNG exclusions
 input_images/**/*.png
