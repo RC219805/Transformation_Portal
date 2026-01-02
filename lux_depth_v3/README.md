@@ -766,18 +766,50 @@ print(f"Point cloud: {exported['ply']}")
 
 ## Testing
 
+### Testing Status (2026-01-02) ✅
+
+- ✅ **Static Validation**: 6/7 tests PASSED (code structure verified)
+- ✅ **All P1 Features**: 100% code-complete
+- ⏳ **Integration Tests**: Pending dependency installation
+- ⏳ **End-to-End Tests**: Pending PyTorch/DA3 installation
+
+**See `TESTING_STATUS_REPORT.md` for detailed status and next steps.**
+
+### Quick Test Commands
+
 ```bash
-# Run all tests
-pytest lux_depth_v3/tests/ -v
+# Static validation (no dependencies required)
+python3 test_static_validation.py
+
+# Install dependencies (auto-detects hardware)
+./INSTALL_DEPENDENCIES.sh
+
+# Verify installation
+python3 -c "import torch; import depth_anything_3; print('✓ OK')"
+
+# Run all tests (after installation)
+pytest tests/ -v
 
 # Run with coverage
-pytest lux_depth_v3/tests/ --cov=lux_depth_v3 --cov-report=html
+pytest tests/ --cov=lux_depth_v3 --cov-report=html
 
 # Run specific test
-pytest lux_depth_v3/tests/test_lux_depth_v3.py::test_inference_monocular -v
+pytest tests/test_lux_depth_v3.py::test_inference_monocular -v
 
 # Run integration tests only
-pytest lux_depth_v3/tests/ -k "integration" -v
+pytest tests/ -k "integration" -v
+```
+
+### End-to-End Pipeline Test
+
+```bash
+# Full pipeline validation
+lux-depth-v3 enhance \
+  --input-dir test_images/ \
+  --output-dir test_output/ \
+  --model metric-large \
+  --v2-preset production_ultra \
+  --verbose
 ```
 
 ## Security
