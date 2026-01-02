@@ -21,6 +21,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: 'pip'
+          cache-dependency-path: lux_depth_v2/requirements-observability.txt
 
       - name: Install observability deps (fast)
         run: |
