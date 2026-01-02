@@ -1,11 +1,18 @@
 name: Issue Summarizer
 
 on:
-  issue_comment: {}
-  pull_request: {}
-  pull_request_review: {}
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
   issues:
     types: [opened, edited]
+
+concurrency:
+  group: summarizer-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   check-api-key:
@@ -26,7 +33,7 @@ jobs:
   summarize:
     runs-on: ubuntu-latest
     needs: check-api-key
-    if: needs.check-api-key.outputs.has_key == 'true'
+    if: always()
     continue-on-error: true
     permissions:
       issues: write
@@ -43,15 +50,13 @@ jobs:
         Repository maintainers can enable automated summaries by configuring the `OPENAI_API_KEY` secret.
         <!-- ai-summarizer-missing-key -->
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install OpenAI package
+        if: needs.check-api-key.outputs.has_key == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install --no-cache-dir openai
@@ -75,7 +80,6 @@ jobs:
               msg = os.environ["DIAGNOSTIC_MSG"]
               with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
                   f.write(msg)
-              # DEBUG: print only the non-sensitive message to runner logs
               print("AI summarizer skipped; diagnostic message written to RESPONSE_FILE.")
               sys.exit(0)
 
@@ -140,16 +144,8 @@ jobs:
 
           with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
               f.write(summary)
+          print(f"Summary generated: {len(summary)} chars")
           PY
-
-      - name: Debug RESPONSE_FILE (safe)
-        env:
-          RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
-        run: |
-          echo "RESPONSE_FILE size:"
-          stat -c "%s bytes" "$RESPONSE_FILE" || true
-          echo "First 5 lines of RESPONSE_FILE:"
-          head -n 5 "$RESPONSE_FILE" || true
 
       - name: Post comment only if present and not previously posted
         env:

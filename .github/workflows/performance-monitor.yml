@@ -9,8 +9,14 @@ name: Performance Monitor
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+    paths:
+      - "bench/**"
+      - "tests/test_performance*"
+      - "scripts/validate_throughput.py"
+      - "bench/baselines/**"
+      - "requirements/ml.txt"
+      - "lux_depth_v2/**"
+      - ".github/workflows/performance-monitor.yml"
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
@@ -50,29 +56,43 @@ jobs:
           pip install memory-profiler pytest-benchmark
 
       - name: Run performance benchmarks
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Benchmark core functionality (non-ML)
           # Use -k flag to match existing performance test patterns
           python -m pytest tests/ -k performance \
             --benchmark-only \
             --benchmark-json=benchmark-results.json \
-            --benchmark-sort=mean \
-            || true
+            --benchmark-sort=mean
 
       - name: Run memory profiling
+        continue-on-error: true
         run: |
           # Create inline memory test if tests/mem_test.py doesn't exist
           if [ -f tests/mem_test.py ]; then
-            python -m memory_profiler tests/mem_test.py > memory-report.txt 2>&1 || true
+            python -m memory_profiler tests/mem_test.py > memory-report.txt 2>&1
           else
             echo "No tests/mem_test.py found; skipping memory profiling." > memory-report.txt
           fi
 
       - name: Generate benchmark summary
+        if: always()
         run: |
           if [ -f benchmark-results.json ]; then
             cp benchmark-results.json current-benchmark.json
           fi
+
+      - name: Upload Performance Artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: performance-monitor-results
+          path: |
+            benchmark-results.json
+            current-benchmark.json
+            memory-report.txt
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Comment on PR with results
         if: github.event_name == 'pull_request'
@@ -82,10 +102,10 @@ jobs:
             const fs = require('fs');
             let comment = '📊 **Performance Test Results**\n\n';
             comment += '**Benchmark Summary**\n\n';
-            comment += 'See `current-benchmark.json` for detailed results.\n\n';
+            comment += 'See artifacts for detailed results.\n\n';
             comment += '**Status**\n\n';
             comment += '✅ Tests completed\n';
-            comment += 'Check for regressions > 10%\n';
+            comment += '⚠️ Note: Baseline comparison not yet implemented\n';
             if (fs.existsSync('memory-report.txt')) {
               const memReport = fs.readFileSync('memory-report.txt', 'utf8');
               comment += '**Memory Profile**\n\n```\n' + memReport + '\n```\n';
