@@ -45,6 +45,91 @@ While **lux_depth_v2** is frozen, other modules follow standard development prac
 
 ---
 
+## Quick Start for Contributors
+
+### 1. Set Up Development Environment
+
+```bash
+# Clone repository
+git clone https://github.com/RC219805/Transformation_Portal.git
+cd Transformation_Portal
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements-dev.txt
+
+# Install pre-commit hooks (automatic code quality)
+pre-commit install
+
+# Verify setup
+make test-fast
+```
+
+### 2. Development Workflow
+
+```bash
+# Create feature branch
+git checkout -b feature/your-feature-name
+
+# Make changes, write tests
+# ...
+
+# Run quality checks
+make lint              # Linting
+make test-fast         # Quick tests
+make security-quick    # Security scan
+
+# Or run all checks at once
+make ci                # Lint + test + security
+
+# Check CI/CD health before committing
+make workflow-health
+```
+
+### 3. Pre-Commit Hooks
+
+Pre-commit hooks run automatically before each commit to ensure code quality:
+
+- **Security checks**: Blocks sensitive files, large artifacts
+- **Code formatting**: Ruff auto-formats Python code
+- **Syntax validation**: Checks Python AST, YAML syntax
+- **File hygiene**: Trailing whitespace, EOF newlines
+
+**To run manually:**
+```bash
+pre-commit run --all-files
+```
+
+**To skip (emergency only):**
+```bash
+git commit --no-verify -m "Emergency fix"
+```
+
+### 4. CI/CD Monitoring
+
+Monitor workflow health to catch issues early:
+
+```bash
+# Check all workflows
+make workflow-health
+
+# Check specific workflow
+python scripts/workflow_health_check.py --workflow ci-consolidated.yml
+
+# Get JSON output for automation
+python scripts/workflow_health_check.py --json
+```
+
+**Healthy workflows**: Success rate ≥90%
+**Action required**: Success rate <70%
+
+See [CI/CD Monitoring Guide](docs/CI_CD_MONITORING.md) for details.
+
+---
+
 ## Development principles
 - Keep changes **additive** unless a breaking change is explicitly approved.
 - Prefer **small PRs** with clear scope.

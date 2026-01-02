@@ -21,7 +21,7 @@ FAST_TESTS := \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
         lock lock-prod lock-ci lock-dev verify-security security-quick security-full security-audit \
         setup-upscaling setup-swinir download-weights test-upscaling test-unified-pipeline \
-        test-lux-depth-v2 test-lux-depth-v2-fast test-all-modules
+        test-lux-depth-v2 test-lux-depth-v2-fast test-all-modules workflow-health
 
 help:
 	@echo "Targets:"
@@ -53,6 +53,7 @@ help:
 	@echo "  fix-quality        Auto-fix common quality issues"
 	@echo "  validate-ci        Validate GitHub Actions workflow configs"
 	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
+	@echo "  workflow-health    Check GitHub Actions workflow health status"
 	@echo ""
 	@echo "Dependency locking:"
 	@echo "  lock               Regenerate all requirements lockfiles (prod/ci/dev)"
@@ -314,3 +315,9 @@ test-lux-depth-v2:
 
 test-all-modules: test-fast test-lux-depth-v2-fast
 	@echo "✅ All module tests completed"
+
+# --- CI/CD Health Monitoring ---
+
+workflow-health:
+	@echo "Checking GitHub Actions workflow health..."
+	@"$(PY)" scripts/workflow_health_check.py --limit 50 || true
