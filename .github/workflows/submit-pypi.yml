@@ -64,6 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write  # Trusted publishing for Test PyPI
     if: github.event.inputs.test_pypi == 'true'
 
     steps:
@@ -73,22 +74,12 @@ jobs:
         name: dist
         path: dist/
 
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.11'
-
-    - name: Install twine
-      run: |
-        python -m pip install --upgrade pip
-        pip install twine
-
     - name: Upload to Test PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-      run: |
-        twine upload --repository testpypi dist/* --skip-existing
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        skip-existing: true
+        verbose: true
 
   pypi:
     name: Upload to PyPI
@@ -96,6 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
@@ -105,22 +97,11 @@ jobs:
         name: dist
         path: dist/
 
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.11'
-
-    - name: Install twine
-      run: |
-        python -m pip install --upgrade pip
-        pip install twine
-
     - name: Publish to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        twine upload dist/* --skip-existing
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        skip-existing: true
+        verbose: true
 
   cleanup:
     name: Cleanup
