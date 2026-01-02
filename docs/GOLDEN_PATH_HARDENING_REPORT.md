@@ -85,7 +85,7 @@ class ImageReport:
 
 #### 2. Preset Governance (preset_registry.py - 14.1KB)
 
-**Problem**: 13 presets, no central documentation. Users don't know what's stable vs. experimental.
+**Problem**: Presets lack central documentation. Users don't know what's stable vs. canary vs. experimental.
 
 **Solution**:
 
@@ -304,10 +304,10 @@ Processing images (not video)?
 ```bash
 # Preset discovery (new)
 lux-depth-v2 --list-presets
-✅ Lists 13 presets with stability markers
+✅ Lists all presets with stability markers (✅ stable, 🚧 canary, ⚠️ experimental)
 
 lux-depth-v2 --list-stable
-✅ Lists 11 stable presets
+✅ Lists stable presets (production-ready + CI baseline)
 
 lux-depth-v2 --describe-preset interior_luxury
 ✅ Shows detailed preset info
@@ -415,9 +415,9 @@ python -m py_compile lux_depth_v2/service.py
 ### What We Got for 7 Hours
 
 1. ✅ **Safety Rails** - Agents can't modify forbidden paths
-2. ✅ **Contract Enforcement** - Versioned schemas, fail-fast validation
-3. ✅ **Preset Governance** - 13 presets documented, discoverable
-4. ✅ **Service Readiness** - /ready endpoint for load balancers
+2. ✅ **Contract Enforcement** - Versioned schemas (v2.0.0), fail-fast validation
+3. ✅ **Preset Governance** - All presets documented with stability taxonomy (stable/canary/experimental)
+4. ✅ **Service Readiness** - /ready endpoint for load balancers (returns 503 when not ready)
 5. ✅ **User Guidance** - Decision trees, troubleshooting, quick ref
 6. ✅ **Zero Breaking Changes** - 100% backward compatible
 

@@ -97,9 +97,9 @@ Agents are **prohibited** from modifying these directories without explicit over
 | Endpoint | Method | Purpose | Status |
 |----------|--------|---------|--------|
 | `/health` | GET | Health check (always returns `{"ok": true}`) | ✅ Live |
+| `/ready` | GET | Readiness check (models loaded, returns 503 if not ready) | ✅ Live |
 | `/v2/process` | POST | Process single image with preset | ✅ Live |
 | `/metrics` | GET | Prometheus metrics (if observability enabled) | ⚠️ Conditional |
-| `/ready` | GET | Readiness check (models loaded) | 🚧 Proposed (Phase 1) |
 
 **Rate Limits**: 10 requests/minute per IP (configurable via `LUX_HARDEN_ENABLE_RATE_LIMIT`)
 

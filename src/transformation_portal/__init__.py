@@ -13,7 +13,18 @@ Key Components:
 - Utils: Shared utilities and helpers
 """
 
-__version__ = "0.1.0"
+from __future__ import annotations
+
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
+# Runtime version - synchronized with pyproject.toml
+# Contract surfaces (schemas) are versioned at 2.0.0; package follows contract major
+try:
+    __version__ = _pkg_version("transformation-portal")
+except PackageNotFoundError:
+    # Source-tree execution without installed metadata
+    __version__ = "2.0.0"
+
 __author__ = "RC219805"
 
 # Lazy imports for commonly used components
