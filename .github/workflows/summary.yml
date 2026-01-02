@@ -54,7 +54,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-          cache: 'pip'
 
       - name: Install OpenAI package
         if: needs.check-api-key.outputs.has_key == 'true'
@@ -63,7 +62,7 @@ jobs:
           pip install --no-cache-dir openai
 
       - name: Run summarizer (safe Option B)
-        id: summarizer
+        id: generate-summary
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
           ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
