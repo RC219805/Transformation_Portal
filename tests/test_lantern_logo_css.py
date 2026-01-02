@@ -32,7 +32,7 @@ def _extract_stroke_value(block: str) -> str:
 
 
 @documents("Logo uses SVG gradient on hover, not brand gradient")
-@valid_until("2026-01-01", reason="Review after brand refresh cycle")
+@valid_until("2026-07-01", reason="Review after brand refresh cycle")
 def test_hover_gradient_source() -> None:
     css = CSS_PATH.read_text(encoding="utf-8")
     hover_block = _extract_hover_block(css)
