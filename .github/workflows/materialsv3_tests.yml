@@ -59,8 +59,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
+        pip install -c requirements/constraints.txt -r requirements.txt
+        pip install -c requirements/constraints.txt -r requirements-dev.txt
         pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
         pip install transformers accelerate safetensors pillow
 
@@ -113,8 +113,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
+        pip install -c requirements/constraints.txt -r requirements.txt
+        pip install -c requirements/constraints.txt -r requirements-dev.txt
         pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
         pip install transformers accelerate safetensors pillow
 

@@ -1,8 +1,9 @@
 # Performance Monitor Workflow
-# Runs performance benchmarks and memory profiling
+# Runs performance benchmarks and memory profiling on main branch and schedule
 #
 # NOTE: This job uses base dependencies only (no ML extras) to avoid
 # ResolutionImpossible conflicts. ML-heavy tests run in dedicated workflows.
+# PR performance validation is handled by ci-consolidated.yml (Throughput Validation)
 #
 name: Performance Monitor
 
@@ -23,7 +24,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   performance:
@@ -56,7 +56,6 @@ jobs:
           pip install memory-profiler pytest-benchmark
 
       - name: Run performance benchmarks
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           # Benchmark core functionality (non-ML)
           # Use -k flag to match existing performance test patterns
@@ -93,26 +92,3 @@ jobs:
             memory-report.txt
           if-no-files-found: warn
           retention-days: 30
-
-      - name: Comment on PR with results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const fs = require('fs');
-            let comment = '📊 **Performance Test Results**\n\n';
-            comment += '**Benchmark Summary**\n\n';
-            comment += 'See artifacts for detailed results.\n\n';
-            comment += '**Status**\n\n';
-            comment += '✅ Tests completed\n';
-            comment += '⚠️ Note: Baseline comparison not yet implemented\n';
-            if (fs.existsSync('memory-report.txt')) {
-              const memReport = fs.readFileSync('memory-report.txt', 'utf8');
-              comment += '**Memory Profile**\n\n```\n' + memReport + '\n```\n';
-            }
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });

@@ -11,7 +11,9 @@ Implemented high-ROI CI optimizations based on external expert review, achieving
 - **Reduced noise** via path filtering and event restrictions
 - **Better artifact retention** for performance monitoring
 
-**Zero breaking changes** - all optimizations maintain existing functionality while improving efficiency.
+**Zero production breaking changes** - all optimizations maintain existing functionality while improving efficiency.
+
+**One CI behavior change**: performance-monitor.yml now runs on push/schedule only (not PRs). PR performance validation is handled by ci-consolidated.yml (Throughput Validation), eliminating duplicate checks.
 
 ---
 
