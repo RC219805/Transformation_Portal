@@ -22,17 +22,15 @@ jobs:
       has_key: ${{ steps.check.outputs.has_key }}
     steps:
       - id: check
-        shell: bash
         run: |
           if [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
-            echo "has_key=true" >> "$GITHUB_OUTPUT"
+            echo "has_key=true" >> $GITHUB_OUTPUT
           else
-            echo "has_key=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ OPENAI_API_KEY not available - skipping AI summarization"
+            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "⚠️ OPENAI_API_KEY not configured - skipping AI summarization"
           fi
 
   summarize:
-    name: Summarize
     runs-on: ubuntu-latest
     needs: check-api-key
     if: always()
@@ -42,22 +40,17 @@ jobs:
       pull-requests: write
     env:
       ISSUE_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || '' }}
-
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
       # marker used to detect previously-posted diagnostic comments
       DIAGNOSTIC_MARKER: "<!-- ai-summarizer-missing-key -->"
-
       # short, non-sensitive message to post when key is missing
       DIAGNOSTIC_MSG: |
-        AI summarizer skipped: OPENAI_API_KEY is not available to this workflow run.
-        Configure the `OPENAI_API_KEY` secret (note: secrets are not exposed to workflows triggered from forks).
+        AI summarizer skipped: OPENAI_API_KEY is not configured in CI.
+        Repository maintainers can enable automated summaries by configuring the `OPENAI_API_KEY` secret.
         <!-- ai-summarizer-missing-key -->
-
-      OPENAI_MODEL: "gpt-4o-mini"
-
     steps:
-      # Fix for setup-python cache error: create a dependency file to hash
       - name: Prepare pip cache key
-        shell: bash
         run: |
           cat > requirements-ai-summarizer.txt <<'REQ'
           openai>=1.0.0,<2
@@ -72,147 +65,103 @@ jobs:
 
       - name: Install OpenAI package
         if: needs.check-api-key.outputs.has_key == 'true'
-        shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-ai-summarizer.txt
 
-      - name: Run summarizer
+      - name: Run summarizer (safe Option B)
         id: summarizer
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          EVENT_NAME: ${{ github.event_name }}
-
-          # Provide all candidates; choose correctly in Python per event type
-          ISSUE_TITLE: ${{ github.event.issue.title || '' }}
-          ISSUE_BODY: ${{ github.event.issue.body || '' }}
-
-          PR_TITLE: ${{ github.event.pull_request.title || '' }}
-          PR_BODY: ${{ github.event.pull_request.body || '' }}
-
-          COMMENT_BODY: ${{ github.event.comment.body || '' }}
-
-          REVIEW_BODY: ${{ github.event.review.body || '' }}
+          ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.comment.body || github.event.head_commit.message || '' }}
           REVIEW_STATE: ${{ github.event.review.state || '' }}
-
-          OPENAI_MODEL: ${{ env.OPENAI_MODEL }}
-        shell: bash
+          EVENT_NAME: '${{ github.event_name }}'
         run: |
           python - <<'PY'
           import os, sys, textwrap
-
-          response_file = os.environ["RESPONSE_FILE"]
-          api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-
-          event_name = (os.getenv("EVENT_NAME") or "").strip()
-
-          issue_title = (os.getenv("ISSUE_TITLE") or "").strip()
-          issue_body  = (os.getenv("ISSUE_BODY") or "").strip()
-
-          pr_title = (os.getenv("PR_TITLE") or "").strip()
-          pr_body  = (os.getenv("PR_BODY") or "").strip()
-
-          comment_body = (os.getenv("COMMENT_BODY") or "").strip()
-
-          review_body  = (os.getenv("REVIEW_BODY") or "").strip()
-          review_state = (os.getenv("REVIEW_STATE") or "").strip()
-
-          model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
+          RESPONSE_FILE = os.environ["RESPONSE_FILE"]
+          OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
           # When the key is missing, write only a short, safe message and exit 0
-          if not api_key:
+          if not OPENAI_API_KEY:
               msg = os.environ["DIAGNOSTIC_MSG"]
-              with open(response_file, "w", encoding="utf-8") as f:
+              with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
                   f.write(msg)
-              print("AI summarizer skipped; diagnostic message written.")
+              print("AI summarizer skipped; diagnostic message written to RESPONSE_FILE.")
               sys.exit(0)
 
-          # Choose the correct payload per event (fixes your current precedence bugs)
-          if event_name == "issue_comment":
-              title = issue_title or pr_title
-              body = comment_body
-              prompt = textwrap.dedent(f"""
-              Summarize this GitHub issue/PR comment in one concise paragraph (neutral tone).
-              Thread title: {title}
-              Comment:
-              {body[:4000]}
-              """).strip()
+          # If key present: perform summarization (example; keep minimal)
+          from openai import OpenAI
+          client = OpenAI(api_key=OPENAI_API_KEY)
 
-          elif event_name == "pull_request_review":
-              title = pr_title or issue_title
-              body = review_body
+          title = (os.getenv("ISSUE_TITLE") or "").strip()
+          body  = (os.getenv("ISSUE_BODY") or "").strip()[:4000]
+          review_state = (os.getenv("REVIEW_STATE") or "").strip()
+          event_name = (os.getenv("EVENT_NAME") or "").strip()
+
+          # Adjust prompt based on event type
+          if event_name == "pull_request_review":
               prompt = textwrap.dedent(f"""
               Summarize this pull request review in one concise paragraph (neutral tone).
               Review state: {review_state}
               PR title: {title}
-              Review body:
-              {body[:4000]}
-              """).strip()
-
+              Review comment:
+              {body}
+              """)
+          elif event_name == "issue_comment":
+              prompt = textwrap.dedent(f"""
+              Summarize this GitHub issue comment in one concise paragraph (neutral tone).
+              Issue title: {title}
+              Comment:
+              {body}
+              """)
           elif event_name == "pull_request":
-              title = pr_title or issue_title
-              body = pr_body
               prompt = textwrap.dedent(f"""
               Summarize this pull request in one concise paragraph (neutral tone).
               PR title: {title}
               Description:
-              {body[:4000]}
-              """).strip()
-
+              {body}
+              """)
           elif event_name == "issues":
-              title = issue_title or pr_title
-              body = issue_body
               prompt = textwrap.dedent(f"""
               Summarize this GitHub issue in one concise paragraph (neutral tone).
               Issue title: {title}
               Description:
-              {body[:4000]}
-              """).strip()
-
+              {body}
+              """)
           else:
-              title = pr_title or issue_title
-              body = comment_body or review_body or pr_body or issue_body
               prompt = textwrap.dedent(f"""
               Summarize this GitHub event in one concise paragraph (neutral tone).
-              Event: {event_name}
               Title: {title}
               Body:
-              {body[:4000]}
-              """).strip()
-
+              {body}
+              """)
           try:
-              from openai import OpenAI
-              client = OpenAI(api_key=api_key)
-
               completion = client.chat.completions.create(
-                  model=model,
+                  model="gpt-4o-mini",
                   messages=[{"role":"user","content":prompt}],
-                  max_tokens=160,
-                  temperature=0.2
+                  max_tokens=160, temperature=0.2
               )
               summary = (completion.choices[0].message.content or "").strip()
-
           except Exception as e:
-              # Post only a non-sensitive message; keep details in logs
+              # Write a short friendly failure message (no secrets) and log detailed error to stderr
               summary = "AI summarization failed: an internal error occurred. See CI logs for details."
-              print("Detailed error (not posted):", file=sys.stderr)
+              print("Detailed error (redacted for posting):", file=sys.stderr)
               print(repr(e), file=sys.stderr)
 
-          with open(response_file, "w", encoding="utf-8") as f:
+          with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
               f.write(summary)
-
-          print(f"Summary ready: {len(summary)} chars")
+          print(f"Summary generated: {len(summary)} chars")
           PY
 
-      - name: Post comment (avoid duplicate diagnostics)
+      - name: Post comment only if present and not previously posted
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
           MARKER: ${{ env.DIAGNOSTIC_MARKER }}
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -226,16 +175,14 @@ jobs:
             exit 0
           fi
 
-          # Only de-dupe when we're about to post the diagnostic marker comment.
-          # (Fixes the bug where one diagnostic comment blocks all future real summaries.)
-          if grep -Fq "$MARKER" "$RESPONSE_FILE"; then
-            echo "Checking existing comments for diagnostic marker..."
-            EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
-            if echo "$EXISTING" | grep -Fq "$MARKER"; then
-              echo "Diagnostic comment already posted; skipping."
-              exit 0
-            fi
+          # Check existing comments for the marker so we only post once
+          echo "Checking existing comments for diagnostic marker..."
+          EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
+          if echo "$EXISTING" | grep -Fq "$MARKER"; then
+            echo "A diagnostic comment has already been posted; skipping to avoid duplicates."
+            exit 0
           fi
 
+          # Post the comment using --repo flag (no git context needed)
           echo "Posting comment to issue/PR #$ISSUE_NUMBER"
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file "$RESPONSE_FILE"
