@@ -422,3 +422,4 @@ external/
 # Local caches
 .mask_cache/
 .depth_cache/
+lux_depth_v3/test_gradient.ppm
