@@ -129,11 +129,15 @@ def test_license_validation_structure():
         print("✗ LicenseValidator class - MISSING")
         return False
 
-    if "validate_commercial_use" in content:
-        print("✓ validate_commercial_use method")
+    # Check for commercial use validation (method name is check_commercial_use)
+    if "check_commercial_use" in content:
+        print("✓ check_commercial_use method")
     else:
-        print("✗ validate_commercial_use method - MISSING")
+        print("✗ check_commercial_use method - MISSING")
         return False
+
+    if "get_commercial_alternative" in content:
+        print("✓ get_commercial_alternative method")
 
     return True
 
@@ -150,9 +154,17 @@ def test_orchestrator_structure():
     with open(orch_path, "r") as f:
         content = f.read()
 
+    # Check for EnhanceOrchestrator class
+    if "class EnhanceOrchestrator" not in content:
+        print("✗ EnhanceOrchestrator class - MISSING")
+        return False
+
+    print("✓ EnhanceOrchestrator class defined")
+
+    # Check for main processing methods
     expected_methods = [
-        "process_batch",
-        "process_single",
+        "enhance_image",
+        "enhance_batch",
     ]
 
     all_found = True
@@ -189,6 +201,29 @@ def test_documentation():
     return all_found
 
 
+def test_cli_structure():
+    """Verify CLI entry points."""
+    print("\n=== CLI Structure Test ===\n")
+
+    with open("cli.py", "r") as f:
+        content = f.read()
+
+    # Check for main commands
+    if "def enhance(" in content:
+        print("✓ enhance command defined")
+    else:
+        print("✗ enhance command - MISSING")
+        return False
+
+    if "def infer(" in content:
+        print("✓ infer command defined")
+    else:
+        print("✗ infer command - MISSING")
+        return False
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("LUX DEPTH V3 - Static Validation Tests")
@@ -201,6 +236,7 @@ if __name__ == "__main__":
         "Metric Depth": test_metric_depth_structure(),
         "License Validation": test_license_validation_structure(),
         "Orchestrator": test_orchestrator_structure(),
+        "CLI Structure": test_cli_structure(),
         "Documentation": test_documentation(),
     }
 
@@ -220,6 +256,8 @@ if __name__ == "__main__":
     if passed == total:
         print("\n✓ All static validation tests PASSED")
         print("  Code structure is correct - ready for dependency installation")
+        exit(0)
     else:
         print(f"\n✗ {total - passed} test(s) failed")
         print("  Review failures before proceeding")
+        exit(1)
