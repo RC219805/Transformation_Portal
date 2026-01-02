@@ -215,11 +215,16 @@ def test_cli_structure():
         print("✗ enhance command - MISSING")
         return False
 
-    if "def infer(" in content:
-        print("✓ infer command defined")
+    if "def process(" in content:
+        print("✓ process command defined")
     else:
-        print("✗ infer command - MISSING")
+        print("✗ process command - MISSING")
         return False
+
+    if "def api_process(" in content:
+        print("✓ api_process command defined")
+    else:
+        print("✗ api_process command - MISSING")
 
     return True
 
