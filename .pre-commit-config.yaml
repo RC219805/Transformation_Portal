@@ -10,7 +10,7 @@ repos:
         name: Security Artifact Check
         entry: python scripts/security/pre_commit_security_check.py
         language: system
-        stages: [commit]
+        stages: [pre-commit]
         always_run: true
         pass_filenames: true
         description: 'Block sensitive files, bidi Unicode, and large artifacts'
