@@ -3,7 +3,9 @@ Tests for Perceptual Baseline Calibration
 """
 
 import pytest
-import torch
+
+# Skip entire module if torch is not available
+torch = pytest.importorskip("torch", reason="PyTorch not installed")
 from PIL import Image
 
 from transformation_portal.foundation import ComputationalSubstrate, SubstrateConfig
