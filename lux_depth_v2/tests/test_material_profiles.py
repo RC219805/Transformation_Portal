@@ -169,10 +169,12 @@ class TestBuildMaterialMods:
         """Test material strength scales effect."""
         mask = torch.ones((1, 1, 32, 32), device=torch_device)
 
-        cfg_low = PipelineConfig(enable_material=True, material_strength=0.3)
+        cfg_low = PipelineConfig(enable_material=True)
+        cfg_low.material_strength = 0.3  # Set after init to avoid preset override
         mods_low = material_profiles.build_material_mods({"wood": mask}, cfg_low)
 
-        cfg_high = PipelineConfig(enable_material=True, material_strength=0.9)
+        cfg_high = PipelineConfig(enable_material=True)
+        cfg_high.material_strength = 0.9  # Set after init to avoid preset override
         mods_high = material_profiles.build_material_mods({"wood": mask}, cfg_high)
 
         # Higher strength should produce stronger effect
