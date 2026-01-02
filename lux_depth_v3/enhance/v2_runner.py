@@ -14,7 +14,7 @@ import os
 import time
 import logging
 
-from lux_depth_v3.enhance.security import validate_extra_args
+from .security import validate_extra_args
 
 logger = logging.getLogger(__name__)
 

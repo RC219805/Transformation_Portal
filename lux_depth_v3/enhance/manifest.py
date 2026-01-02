@@ -15,7 +15,7 @@ import subprocess
 import sys
 import logging
 
-from lux_depth_v3.enhance.security import validate_git_repository
+from .security import validate_git_repository
 
 logger = logging.getLogger(__name__)
 
