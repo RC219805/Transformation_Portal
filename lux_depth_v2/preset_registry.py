@@ -228,6 +228,64 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "clarity": 0.28,
         },
     ),
+
+    Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM.value: PresetMetadata(
+        name=Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM.value,
+        display_name="Exterior Pool Apex (EfficientSAM)",
+        description="Pool rendering with EfficientSAM material segmentation",
+        intended_use="Experimental - testing EfficientSAM V3 for pool/water scenes",
+        quality_tier="apex",
+        stability="canary",
+        performance={"throughput_img_hr": "60-100", "memory_gb": "6-10"},
+        parameters={
+            "segmentation_backend": "efficientsam",
+            "water_enhance": True,
+        },
+    ),
+
+    Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE.value: PresetMetadata(
+        name=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE.value,
+        display_name="Interior Luxury Apex (Materials V3 Stone)",
+        description="Apex quality with Materials V3 stone enhancement",
+        intended_use="Experimental - testing Materials V3 stone pipeline",
+        quality_tier="apex",
+        stability="canary",
+        performance={"throughput_img_hr": "30-60", "memory_gb": "8-12"},
+        parameters={
+            "materials_v3": True,
+            "stone_enhancement": True,
+        },
+    ),
+
+    Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE.value: PresetMetadata(
+        name=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE.value,
+        display_name="Interior Luxury Apex (Materials V3 Glass - Validation)",
+        description="Validation-only preset for Materials V3 glass testing",
+        intended_use="Internal validation - not for production use",
+        quality_tier="apex",
+        stability="experimental",
+        performance={"throughput_img_hr": "30-60", "memory_gb": "8-12"},
+        parameters={
+            "materials_v3": True,
+            "glass_enhancement": True,
+            "validation_mode": True,
+        },
+    ),
+
+    Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE.value: PresetMetadata(
+        name=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE.value,
+        display_name="Interior Luxury Apex (Materials V3 Stone - Validation)",
+        description="Validation-only preset for Materials V3 stone testing",
+        intended_use="Internal validation - not for production use",
+        quality_tier="apex",
+        stability="experimental",
+        performance={"throughput_img_hr": "30-60", "memory_gb": "8-12"},
+        parameters={
+            "materials_v3": True,
+            "stone_enhancement": True,
+            "validation_mode": True,
+        },
+    ),
 }
 
 
@@ -236,6 +294,26 @@ class PresetRegistry:
 
     def __init__(self):
         self.presets = PRESET_REGISTRY
+        # Verify registry completeness on initialization
+        self._verify_completeness()
+
+    def _verify_completeness(self):
+        """Verify that all Preset enum values have registry entries.
+
+        Raises:
+            RuntimeError: If any presets are missing from the registry
+        """
+        from .config import Preset
+
+        enum_presets = set(p.value for p in Preset)
+        registry_presets = set(self.presets.keys())
+        missing = enum_presets - registry_presets
+
+        if missing:
+            raise RuntimeError(
+                f"Preset registry is incomplete. Missing entries for: {sorted(missing)}. "
+                f"All Preset enum values must have corresponding PRESET_REGISTRY entries."
+            )
 
     def list_presets(self, stability_filter: Optional[str] = None) -> List[PresetMetadata]:
         """List all presets, optionally filtered by stability.

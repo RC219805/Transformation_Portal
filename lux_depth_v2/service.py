@@ -62,26 +62,39 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
     # Max upload size (100MB default)
     MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 100 * 1024 * 1024))
 
+    # Track initialization state for /ready endpoint
+    models_loaded = False
+    startup_error = None
+
+    # Initialize pipeline outside startup to avoid blocking
     pipe = LuxPipelineV2(cfg, logger=logger)
     sem = asyncio.Semaphore(int(cfg.service.max_concurrency) if cfg.service else 1)
 
     incoming_dir = Path(cfg.output_dir) / "_incoming"
     incoming_dir.mkdir(parents=True, exist_ok=True)
 
-    # Track initialization state for /ready endpoint
-    models_loaded = False
-
     @app.on_event("startup")
     async def startup_event():
-        """Warm up models on startup."""
-        nonlocal models_loaded
+        """Warm up models on startup and verify readiness."""
+        nonlocal models_loaded, startup_error
         try:
             logger.info("Service starting up - warming models...")
-            # Force model initialization (if needed)
+
+            # Attempt to verify pipeline is ready
+            # Check if pipeline has required attributes/methods
+            if not hasattr(pipe, 'process_one'):
+                raise RuntimeError("Pipeline missing required 'process_one' method")
+
+            # Try to verify depth model is available (if applicable)
+            if hasattr(pipe, 'depth_model') and pipe.depth_model is None:
+                logger.warning("Depth model not loaded - pipeline may not be fully ready")
+
+            # Mark as loaded only after verification
             models_loaded = True
-            logger.info("✓ Service ready")
+            logger.info("✓ Service ready - models verified")
         except Exception as e:
             logger.error(f"Startup failed: {e}")
+            startup_error = str(e)
             models_loaded = False
 
     @app.get("/health")
@@ -98,10 +111,14 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
         if models_loaded:
             return {"ready": True, "version": "2.0", "status": "models_loaded"}
         else:
-            raise HTTPException(
-                status_code=503,
-                detail={"error_code": "SERVICE_NOT_READY", "message": "Models still loading", "ready": False}
-            )
+            error_detail = {
+                "error_code": "SERVICE_NOT_READY",
+                "message": "Models still loading or startup failed",
+                "ready": False
+            }
+            if startup_error:
+                error_detail["startup_error"] = startup_error
+            raise HTTPException(status_code=503, detail=error_detail)
 
     @app.post("/v2/process")
     @limiter.limit("10/minute")

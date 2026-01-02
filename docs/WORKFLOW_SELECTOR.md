@@ -79,8 +79,8 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
 - Have sufficient system resources
 
 **Don't Use If:**
-- &lt;100 images (overhead not worth it)
-- Constrained memory (&lt;16GB RAM)
+- <100 images (overhead not worth it)
+- Constrained memory (<16GB RAM)
 
 **Command:**
 ```bash
