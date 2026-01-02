@@ -38,9 +38,7 @@ class TestPresetRegistryCompleteness:
 
         extra = registry_presets - enum_presets
 
-        assert len(extra) == 0, (
-            f"Preset registry has extra entries not in Preset enum: {sorted(extra)}"
-        )
+        assert len(extra) == 0, f"Preset registry has extra entries not in Preset enum: {sorted(extra)}"
 
     def test_registry_initialization_with_complete_data(self):
         """Test that PresetRegistry initializes successfully with complete data."""
@@ -54,10 +52,7 @@ class TestPresetRegistryCompleteness:
         enum_count = len(list(Preset))
         registry_count = len(PRESET_REGISTRY)
 
-        assert registry_count == enum_count, (
-            f"Preset count mismatch: enum has {enum_count}, "
-            f"registry has {registry_count}"
-        )
+        assert registry_count == enum_count, f"Preset count mismatch: enum has {enum_count}, registry has {registry_count}"
 
 
 class TestPresetRegistryFiltering:
@@ -69,8 +64,8 @@ class TestPresetRegistryFiltering:
         all_presets = registry.list_presets()
 
         assert len(all_presets) > 0
-        assert all(hasattr(p, 'name') for p in all_presets)
-        assert all(hasattr(p, 'stability') for p in all_presets)
+        assert all(hasattr(p, "name") for p in all_presets)
+        assert all(hasattr(p, "stability") for p in all_presets)
 
     def test_list_stable_presets(self):
         """Test filtering for stable presets only."""
@@ -174,19 +169,12 @@ class TestPresetMetadataFields:
 
     def test_all_presets_have_required_fields(self):
         """Verify all presets have required metadata fields."""
-        required_fields = [
-            'name', 'display_name', 'description',
-            'intended_use', 'quality_tier', 'stability'
-        ]
+        required_fields = ["name", "display_name", "description", "intended_use", "quality_tier", "stability"]
 
         for preset_name, metadata in PRESET_REGISTRY.items():
             for field in required_fields:
-                assert hasattr(metadata, field), (
-                    f"Preset '{preset_name}' missing required field '{field}'"
-                )
-                assert getattr(metadata, field) is not None, (
-                    f"Preset '{preset_name}' has None value for '{field}'"
-                )
+                assert hasattr(metadata, field), f"Preset '{preset_name}' missing required field '{field}'"
+                assert getattr(metadata, field) is not None, f"Preset '{preset_name}' has None value for '{field}'"
 
     def test_all_presets_have_valid_quality_tiers(self):
         """Verify all presets use valid quality tier values."""
@@ -194,8 +182,7 @@ class TestPresetMetadataFields:
 
         for preset_name, metadata in PRESET_REGISTRY.items():
             assert metadata.quality_tier in valid_tiers, (
-                f"Preset '{preset_name}' has invalid quality_tier: "
-                f"'{metadata.quality_tier}'. Must be one of {valid_tiers}"
+                f"Preset '{preset_name}' has invalid quality_tier: '{metadata.quality_tier}'. Must be one of {valid_tiers}"
             )
 
     def test_all_presets_have_valid_stability(self):
@@ -204,8 +191,7 @@ class TestPresetMetadataFields:
 
         for preset_name, metadata in PRESET_REGISTRY.items():
             assert metadata.stability in valid_stability, (
-                f"Preset '{preset_name}' has invalid stability: "
-                f"'{metadata.stability}'. Must be one of {valid_stability}"
+                f"Preset '{preset_name}' has invalid stability: '{metadata.stability}'. Must be one of {valid_stability}"
             )
 
 
@@ -323,6 +309,4 @@ class TestSpecificPresets:
         for name in validation_preset_names:
             preset = registry.get_preset(name)
             assert preset is not None, f"Validation preset '{name}' not found"
-            assert preset.stability == "experimental", (
-                f"Validation preset '{name}' should be marked experimental"
-            )
+            assert preset.stability == "experimental", f"Validation preset '{name}' should be marked experimental"

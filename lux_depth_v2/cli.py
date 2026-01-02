@@ -551,6 +551,7 @@ def main() -> None:
 
     # Import pipeline only when actually needed
     from .pipeline import LuxPipelineV2
+
     pipe = LuxPipelineV2(cfg, logger=logger)
 
     if args.input:

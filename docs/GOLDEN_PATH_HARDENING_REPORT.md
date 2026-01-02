@@ -1,7 +1,7 @@
 # Golden Path Hardening Implementation Summary
 
-**Date**: 2026-01-01  
-**PR**: copilot/secure-lux-depth-v2  
+**Date**: 2026-01-01
+**PR**: copilot/secure-lux-depth-v2
 **Status**: Phase 0, 1, and 5 Complete
 
 ---
@@ -59,12 +59,12 @@ This implementation delivers **high-ROI hardening** for the Transformation Porta
 class ImageReport:
     schema_version: str = "2.0.0"  # Versioned for backward compatibility
     pipeline_version: str = "2.0.0"
-    
+
     # Standardized artifact naming
     output_master16: Optional[str] = None  # *_master16.tif
     output_upscaled16: Optional[str] = None  # *_upscaled16.tif
     output_marketing: Optional[str] = None  # *_marketing.png
-    
+
     # Stage-level tracking
     stages: List[StageResult] = field(default_factory=list)
 ```
@@ -156,31 +156,31 @@ Parameters:
 ```python
 def validate_cli_inputs(args, logger) -> bool:
     """Validate CLI inputs early to fail fast."""
-    
+
     # Check output-dir is provided (unless info command)
     if not args.output_dir and not args.service:
         logger.error("--output-dir is required")
         return False
-    
+
     # Check input exists
     if args.input:
         if not Path(args.input).exists():
             logger.error(f"Input file does not exist: {args.input}")
             return False
-    
+
     # Check file extension
     allowed_exts = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".webp", ".bmp"}
     if input_path.suffix.lower() not in allowed_exts:
         logger.error(f"Unsupported file format: {input_path.suffix}")
         return False
-    
+
     # Verify output directory is writable
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         logger.error(f"Cannot create output directory: {e}")
         return False
-    
+
     return True
 ```
 
@@ -465,7 +465,7 @@ The Golden Path is now:
 
 ---
 
-**Implementation by**: GitHub Copilot (Transformation Portal Architect)  
-**Date**: 2026-01-01  
-**Branch**: copilot/secure-lux-depth-v2  
+**Implementation by**: GitHub Copilot (Transformation Portal Architect)
+**Date**: 2026-01-01
+**Branch**: copilot/secure-lux-depth-v2
 **Status**: Ready for review

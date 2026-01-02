@@ -82,11 +82,11 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
 
             # Attempt to verify pipeline is ready
             # Check if pipeline has required attributes/methods
-            if not hasattr(pipe, 'process_one'):
+            if not hasattr(pipe, "process_one"):
                 raise RuntimeError("Pipeline missing required 'process_one' method")
 
             # Try to verify depth model is available (if applicable)
-            if hasattr(pipe, 'depth_model') and pipe.depth_model is None:
+            if hasattr(pipe, "depth_model") and pipe.depth_model is None:
                 logger.warning("Depth model not loaded - pipeline may not be fully ready")
 
             # Mark as loaded only after verification
@@ -114,7 +114,7 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
             error_detail = {
                 "error_code": "SERVICE_NOT_READY",
                 "message": "Models still loading or startup failed",
-                "ready": False
+                "ready": False,
             }
             if startup_error:
                 error_detail["startup_error"] = startup_error
@@ -132,13 +132,14 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
             except ValueError as e:
                 # Phase 1: Consistent error payload
                 from .schemas import ServiceError
+
                 req_id = uuid.uuid4().hex
                 error = ServiceError(
                     error_code="INVALID_INPUT",
                     message="Invalid file path or name",
                     hint="Ensure filename does not contain path traversal characters",
                     request_id=req_id,
-                    details={"error": str(e)}
+                    details={"error": str(e)},
                 )
                 raise HTTPException(status_code=400, detail=error.to_dict())
 
@@ -146,13 +147,14 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
             img_data = await image.read()
             if len(img_data) > MAX_UPLOAD_SIZE:
                 from .schemas import ServiceError
+
                 req_id = uuid.uuid4().hex
                 error = ServiceError(
                     error_code="FILE_TOO_LARGE",
                     message=f"Image too large: {len(img_data)} bytes",
                     hint=f"Maximum allowed size is {MAX_UPLOAD_SIZE} bytes ({MAX_UPLOAD_SIZE / (1024**2):.1f} MB)",
                     request_id=req_id,
-                    details={"size_bytes": len(img_data), "max_bytes": MAX_UPLOAD_SIZE}
+                    details={"size_bytes": len(img_data), "max_bytes": MAX_UPLOAD_SIZE},
                 )
                 raise HTTPException(status_code=413, detail=error.to_dict())
 
@@ -183,12 +185,13 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
                 logger.exception(f"request failed: {req_id}: {e}")
                 # Phase 1: Consistent error payload
                 from .schemas import ServiceError
+
                 error = ServiceError(
                     error_code="PROCESSING_FAILED",
                     message="Image processing failed",
                     hint="Check input image format and size. See logs for details.",
                     request_id=req_id,
-                    details={"error": str(e)}
+                    details={"error": str(e)},
                 )
                 return JSONResponse(error.to_dict(), status_code=500)
 

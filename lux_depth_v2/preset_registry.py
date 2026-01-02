@@ -33,7 +33,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "clarity": 0.15,
         },
     ),
-
     Preset.INTERIOR_LUXURY.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY.value,
         display_name="Interior Luxury",
@@ -50,7 +49,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "warmth": 1.05,
         },
     ),
-
     Preset.INTERIOR_LUXURY_MAX_QUALITY.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_MAX_QUALITY.value,
         display_name="Interior Luxury (Max Quality)",
@@ -67,7 +65,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "detail": 0.20,
         },
     ),
-
     Preset.INTERIOR_LUXURY_APEX_QUALITY.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY.value,
         display_name="Interior Luxury (Apex Quality)",
@@ -85,7 +82,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "materials_v2": True,
         },
     ),
-
     Preset.EXTERIOR_SHOWCASE.value: PresetMetadata(
         name=Preset.EXTERIOR_SHOWCASE.value,
         display_name="Exterior Showcase",
@@ -102,7 +98,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "sky_enhance": True,
         },
     ),
-
     Preset.ARCHITECTURAL.value: PresetMetadata(
         name=Preset.ARCHITECTURAL.value,
         display_name="Architectural",
@@ -118,7 +113,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "clarity": 0.18,
         },
     ),
-
     Preset.ARCHIVAL_QUALITY.value: PresetMetadata(
         name=Preset.ARCHIVAL_QUALITY.value,
         display_name="Archival Quality",
@@ -135,7 +129,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "bit_depth": 16,
         },
     ),
-
     Preset.CI_BASELINE.value: PresetMetadata(
         name=Preset.CI_BASELINE.value,
         display_name="CI Baseline",
@@ -151,7 +144,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "upscale": 2,
         },
     ),
-
     Preset.PRODUCTION_STANDARD.value: PresetMetadata(
         name=Preset.PRODUCTION_STANDARD.value,
         display_name="Production Standard",
@@ -167,7 +159,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "clarity": 0.15,
         },
     ),
-
     Preset.PRODUCTION_ULTRA.value: PresetMetadata(
         name=Preset.PRODUCTION_ULTRA.value,
         display_name="Production Ultra",
@@ -184,7 +175,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "detail": 0.18,
         },
     ),
-
     # Canary/Experimental presets (marked as such)
     Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM.value,
@@ -199,7 +189,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "materials_v2": True,
         },
     ),
-
     Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS.value,
         display_name="Interior Luxury Apex (Materials V3 Glass)",
@@ -213,7 +202,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "glass_enhancement": True,
         },
     ),
-
     Preset.EXTERIOR_POOL_APEX_QUALITY.value: PresetMetadata(
         name=Preset.EXTERIOR_POOL_APEX_QUALITY.value,
         display_name="Exterior Pool (Apex Quality)",
@@ -228,7 +216,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "clarity": 0.28,
         },
     ),
-
     Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM.value: PresetMetadata(
         name=Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM.value,
         display_name="Exterior Pool Apex (EfficientSAM)",
@@ -242,7 +229,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "water_enhance": True,
         },
     ),
-
     Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE.value,
         display_name="Interior Luxury Apex (Materials V3 Stone)",
@@ -256,7 +242,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "stone_enhancement": True,
         },
     ),
-
     Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE.value,
         display_name="Interior Luxury Apex (Materials V3 Glass - Validation)",
@@ -271,7 +256,6 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "validation_mode": True,
         },
     ),
-
     Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE.value,
         display_name="Interior Luxury Apex (Materials V3 Stone - Validation)",
@@ -411,8 +395,7 @@ class PresetRegistry:
                 if preset.performance:
                     perf = preset.performance
                     line += (
-                        f"\n    Performance: {perf.get('throughput_img_hr', 'N/A')} img/hr, "
-                        f"{perf.get('memory_gb', 'N/A')} GB"
+                        f"\n    Performance: {perf.get('throughput_img_hr', 'N/A')} img/hr, {perf.get('memory_gb', 'N/A')} GB"
                     )
 
             lines.append(line)
