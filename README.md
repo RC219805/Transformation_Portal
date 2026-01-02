@@ -1,8 +1,10 @@
 [![CI/CD](https://github.com/RC219805/Transformation_Portal/actions/workflows/ci-consolidated.yml/badge.svg)](https://github.com/RC219805/Transformation_Portal/actions/workflows/ci-consolidated.yml)
+[![Security](https://github.com/RC219805/Transformation_Portal/actions/workflows/security-gates.yml/badge.svg)](https://github.com/RC219805/Transformation_Portal/actions/workflows/security-gates.yml)
+[![CodeQL](https://github.com/RC219805/Transformation_Portal/actions/workflows/codeql.yml/badge.svg)](https://github.com/RC219805/Transformation_Portal/actions/workflows/codeql.yml)
 [![PyPI version](https://img.shields.io/pypi/v/transformation-portal.svg)](https://pypi.org/project/transformation-portal/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
-[![Tests](https://img.shields.io/badge/tests-1348%20passed-brightgreen.svg)](https://github.com/RC219805/Transformation_Portal/actions)
+[![Tests](https://img.shields.io/badge/tests-2751%20collected-brightgreen.svg)](https://github.com/RC219805/Transformation_Portal/actions)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
