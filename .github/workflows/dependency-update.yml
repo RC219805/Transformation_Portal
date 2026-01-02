@@ -25,6 +25,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.10.15"
+          cache: 'pip'
 
       # Free up disk space before dependency operations
       - name: Free disk space

@@ -1,8 +1,9 @@
 # Performance Monitor Workflow
-# Runs performance benchmarks and memory profiling on main branch and schedule
+# Runs performance tests on main branch and schedule
 #
 # NOTE: This job uses base dependencies only (no ML extras) to avoid
-# ResolutionImpossible conflicts. ML-heavy tests run in dedicated workflows.
+# ResolutionImpossible conflicts. ML performance tests (test_performance_throughput.py)
+# are automatically skipped when torch is not available via pytest.importorskip.
 # PR performance validation is handled by ci-consolidated.yml (Throughput Validation)
 #
 name: Performance Monitor
@@ -52,17 +53,19 @@ jobs:
           # Use constraints to exclude vulnerable basicsr (CVE-2024-27763)
           # Install base package without ML extras to avoid dependency conflicts
           pip install -c requirements/constraints.txt -e .
-          # Install only the lightweight profiling dependencies
+          # Install CI test dependencies (includes pytest, hypothesis, etc.)
+          pip install -r requirements-ci.txt
+          # Install profiling dependencies
           pip install memory-profiler pytest-benchmark
 
       - name: Run performance benchmarks
         run: |
-          # Benchmark core functionality (non-ML)
-          # Use -k flag to match existing performance test patterns
-          python -m pytest tests/ -k performance \
-            --benchmark-only \
-            --benchmark-json=benchmark-results.json \
-            --benchmark-sort=mean
+          # Run performance tests (non-ML subset)
+          # Note: ML performance tests (test_performance_throughput.py) are skipped
+          # when torch is not installed via pytest.importorskip
+          python -m pytest tests/ -k performance -v \
+            --tb=short \
+            --maxfail=5
 
       - name: Run memory profiling
         continue-on-error: true
@@ -74,12 +77,11 @@ jobs:
             echo "No tests/mem_test.py found; skipping memory profiling." > memory-report.txt
           fi
 
-      - name: Generate benchmark summary
+      - name: Generate test summary
         if: always()
         run: |
-          if [ -f benchmark-results.json ]; then
-            cp benchmark-results.json current-benchmark.json
-          fi
+          echo "Performance test run completed at $(date)" > test-summary.txt
+          echo "See pytest output above for results" >> test-summary.txt
 
       - name: Upload Performance Artifacts
         if: always()
@@ -87,8 +89,7 @@ jobs:
         with:
           name: performance-monitor-results
           path: |
-            benchmark-results.json
-            current-benchmark.json
+            test-summary.txt
             memory-report.txt
           if-no-files-found: warn
           retention-days: 30
