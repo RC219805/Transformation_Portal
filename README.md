@@ -19,6 +19,20 @@ pip install -e .
 lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
 ```
 
+**Discover presets:**
+```bash
+# List all available presets
+lux-depth-v2 --list-presets
+
+# List stable (production-ready) presets only
+lux-depth-v2 --list-stable
+
+# Get detailed preset information
+lux-depth-v2 --describe-preset interior_luxury
+```
+
+**Need help choosing?** → [**WORKFLOW_SELECTOR.md**](docs/WORKFLOW_SELECTOR.md) ← **Decision guide**
+
 **That's it.** Security-hardened, production-validated, 127-400 images/hour.
 
 ---
@@ -43,9 +57,11 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
 
 **Key Resources**:
 - 📖 [**QUICKSTART.md**](QUICKSTART.md) - Get started in 2 minutes
+- 🎯 [**WORKFLOW_SELECTOR.md**](docs/WORKFLOW_SELECTOR.md) - Choose the right workflow
 - 📘 [Phase 2 User Guide](docs/PHASE2_USER_GUIDE.md) - Complete walkthrough
 - ⚡ [Quick Reference Card](docs/QUICK_REFERENCE_PHASE2.md) - CLI cheat sheet
 - 🔒 [Security Guide](lux_depth_v2/SECURITY.md) - Best practices
+- 🤖 [Agent Repository Map](docs/AGENT_REPO_MAP.md) - For autonomous agents
 
 ---
 

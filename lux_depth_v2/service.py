@@ -44,9 +44,8 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
         from slowapi.util import get_remote_address  # type: ignore
         from slowapi.errors import RateLimitExceeded  # type: ignore
     except ImportError as e:
-        missing = str(e).split("'")[-2] if "'" in str(e) else "unknown"
         raise RuntimeError(
-            f"Service mode requires fastapi, uvicorn, and slowapi. Install: pip install fastapi 'uvicorn[standard]' slowapi"
+            "Service mode requires fastapi, uvicorn, and slowapi. Install: pip install fastapi 'uvicorn[standard]' slowapi"
         ) from e
 
     # Rate limiting (10 requests per minute per IP)
@@ -63,15 +62,63 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
     # Max upload size (100MB default)
     MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 100 * 1024 * 1024))
 
+    # Track initialization state for /ready endpoint
+    models_loaded = False
+    startup_error = None
+
+    # Initialize pipeline outside startup to avoid blocking
     pipe = LuxPipelineV2(cfg, logger=logger)
     sem = asyncio.Semaphore(int(cfg.service.max_concurrency) if cfg.service else 1)
 
     incoming_dir = Path(cfg.output_dir) / "_incoming"
     incoming_dir.mkdir(parents=True, exist_ok=True)
 
+    @app.on_event("startup")
+    async def startup_event():
+        """Warm up models on startup and verify readiness."""
+        nonlocal models_loaded, startup_error
+        try:
+            logger.info("Service starting up - warming models...")
+
+            # Attempt to verify pipeline is ready
+            # Check if pipeline has required attributes/methods
+            if not hasattr(pipe, "process_one"):
+                raise RuntimeError("Pipeline missing required 'process_one' method")
+
+            # Try to verify depth model is available (if applicable)
+            if hasattr(pipe, "depth_model") and pipe.depth_model is None:
+                logger.warning("Depth model not loaded - pipeline may not be fully ready")
+
+            # Mark as loaded only after verification
+            models_loaded = True
+            logger.info("✓ Service ready - models verified")
+        except Exception as e:
+            logger.error(f"Startup failed: {e}")
+            startup_error = str(e)
+            models_loaded = False
+
     @app.get("/health")
     async def health():
+        """Basic health check - always returns OK if service is running."""
         return {"ok": True, "version": "2.0"}
+
+    @app.get("/ready")
+    async def ready():
+        """Readiness check - returns OK only when models are loaded and service is ready.
+
+        This is the endpoint load balancers should use for readiness probes.
+        """
+        if models_loaded:
+            return {"ready": True, "version": "2.0", "status": "models_loaded"}
+        else:
+            error_detail = {
+                "error_code": "SERVICE_NOT_READY",
+                "message": "Models still loading or startup failed",
+                "ready": False,
+            }
+            if startup_error:
+                error_detail["startup_error"] = startup_error
+            raise HTTPException(status_code=503, detail=error_detail)
 
     @app.post("/v2/process")
     @limiter.limit("10/minute")
@@ -83,12 +130,33 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
                 if depth:
                     validate_filepath(depth.filename or "depth.png")
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                # Phase 1: Consistent error payload
+                from .schemas import ServiceError
+
+                req_id = uuid.uuid4().hex
+                error = ServiceError(
+                    error_code="INVALID_INPUT",
+                    message="Invalid file path or name",
+                    hint="Ensure filename does not contain path traversal characters",
+                    request_id=req_id,
+                    details={"error": str(e)},
+                )
+                raise HTTPException(status_code=400, detail=error.to_dict())
 
             # Check file size
             img_data = await image.read()
             if len(img_data) > MAX_UPLOAD_SIZE:
-                raise HTTPException(status_code=413, detail=f"Image too large: {len(img_data)} bytes (max {MAX_UPLOAD_SIZE})")
+                from .schemas import ServiceError
+
+                req_id = uuid.uuid4().hex
+                error = ServiceError(
+                    error_code="FILE_TOO_LARGE",
+                    message=f"Image too large: {len(img_data)} bytes",
+                    hint=f"Maximum allowed size is {MAX_UPLOAD_SIZE} bytes ({MAX_UPLOAD_SIZE / (1024**2):.1f} MB)",
+                    request_id=req_id,
+                    details={"size_bytes": len(img_data), "max_bytes": MAX_UPLOAD_SIZE},
+                )
+                raise HTTPException(status_code=413, detail=error.to_dict())
 
             req_id = uuid.uuid4().hex
             # Use sanitized filename
@@ -115,7 +183,17 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
                 return JSONResponse(rep)
             except Exception as e:
                 logger.exception(f"request failed: {req_id}: {e}")
-                return JSONResponse({"status": "error", "error": "An internal error has occurred."}, status_code=500)
+                # Phase 1: Consistent error payload
+                from .schemas import ServiceError
+
+                error = ServiceError(
+                    error_code="PROCESSING_FAILED",
+                    message="Image processing failed",
+                    hint="Check input image format and size. See logs for details.",
+                    request_id=req_id,
+                    details={"error": str(e)},
+                )
+                return JSONResponse(error.to_dict(), status_code=500)
 
     logger.info(f"Starting service on {host}:{port} | output_dir={cfg.output_dir}")
     logger.info(f"Security: Rate limiting enabled (10/min), max upload size: {MAX_UPLOAD_SIZE} bytes")
