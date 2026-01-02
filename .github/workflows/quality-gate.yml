@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   pre-commit-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -36,7 +36,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.10"
+          python-version: "3.11"
           cache: "pip"
 
       - name: Install pre-commit
@@ -45,12 +45,12 @@ jobs:
           python -m pip install pre-commit
 
       - name: Cache pre-commit environments
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
-          key: precommit-${{ runner.os }}-py310-${{ hashFiles('.pre-commit-config.yaml') }}
+          key: precommit-${{ runner.os }}-py311-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
-            precommit-${{ runner.os }}-py310-
+            precommit-${{ runner.os }}-py311-
 
       - name: Run pre-commit (PR = diff mode, main = all files)
         shell: bash
@@ -89,7 +89,7 @@ jobs:
           else
             echo "- **Mode**: Full scan (all files)" >> $GITHUB_STEP_SUMMARY
           fi
-          echo "- **Python**: 3.10" >> $GITHUB_STEP_SUMMARY
+          echo "- **Python**: 3.11" >> $GITHUB_STEP_SUMMARY
           echo "- **Linter**: Ruff (critical errors only)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Benefits**: ~10x faster than previous flake8/pylint/autopep8" >> $GITHUB_STEP_SUMMARY

@@ -49,7 +49,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -61,7 +60,6 @@ concurrency:
 env:
   PYTHON_VERSION_PRIMARY: '3.11'
   PYTHON_VERSIONS: '["3.10", "3.11", "3.12"]'
-  PIP_NO_CACHE_DIR: '1'
   PIP_DISABLE_PIP_VERSION_CHECK: '1'
   TRANSFORMERS_OFFLINE: '1'
   HF_HUB_OFFLINE: '1'
@@ -215,6 +213,11 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION_PRIMARY }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-lint.txt
+            requirements/*.txt
 
       - name: Cache Lint Tools
         uses: actions/cache@v5
@@ -226,17 +229,8 @@ jobs:
       - name: Install Lint Tools
         run: |
           pip install --upgrade pip
-          pip install flake8 pylint autopep8 mypy
+          pip install flake8 pylint mypy
           pip install -r requirements-lint.txt
-
-      - name: Auto-fix Formatting
-        run: |
-          # Auto-fix trailing whitespace and basic formatting
-          find . -name "*.py" -type f \
-            ! -path "./deprecated/*" \
-            ! -path "./.venv/*" \
-            ! -path "./__pycache__/*" \
-            -exec autopep8 --in-place --max-line-length=127 {} \;
 
       - name: Flake8 Critical Errors
         run: |
@@ -322,6 +316,11 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-ci.txt
+            requirements/*.txt
 
       - name: Cache Dependencies
         if: github.event.inputs.skip_cache != 'true'
@@ -482,6 +481,9 @@ jobs:
       needs.test-core.result == 'success' &&
       (github.event_name == 'pull_request' || github.event_name == 'push')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -499,7 +501,7 @@ jobs:
           pip install --upgrade pip wheel
           pip install hypothesis pytest pytest-benchmark psutil
           pip install numpy opencv-python tifffile
-          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -c requirements/constraints.txt -e .
 
       - name: Run Throughput Benchmark
@@ -688,8 +690,8 @@ jobs:
           pip install --upgrade pip wheel
           pip install pytest pytest-cov hypothesis
 
-          # CPU-only PyTorch
-          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          # CPU-only PyTorch (no-cache to avoid wheel cache bloat)
+          pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
           # ML extras (with constraints to exclude vulnerable basicsr)
           # Try editable install first, fall back to requirements file
@@ -764,6 +766,9 @@ jobs:
       needs.test-core.result == 'success' &&
       github.event.inputs.run_benchmark_regression == 'true'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -780,7 +785,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install --upgrade pip wheel
-          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -c requirements/constraints.txt -r requirements/ml.txt
           pip install -c requirements/constraints.txt -e .
 
@@ -1030,7 +1035,7 @@ jobs:
           pip install --upgrade pip wheel
 
           # PyTorch CPU (required for Materials V3)
-          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
           # Transformer stack (SegFormer, CLIP)
           pip install transformers accelerate safetensors
