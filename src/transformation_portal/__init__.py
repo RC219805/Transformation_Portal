@@ -15,13 +15,14 @@ Key Components:
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
 # Runtime version - synchronized with pyproject.toml
 # Contract surfaces (schemas) are versioned at 2.0.0; package follows contract major
 try:
-    from importlib.metadata import version as _pkg_version
     __version__ = _pkg_version("transformation-portal")
-except Exception:
-    # Fallback for source-tree execution without installed metadata
+except PackageNotFoundError:
+    # Source-tree execution without installed metadata
     __version__ = "2.0.0"
 
 __author__ = "RC219805"
