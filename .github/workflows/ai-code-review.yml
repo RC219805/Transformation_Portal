@@ -14,10 +14,28 @@ permissions:
   security-events: write
 
 jobs:
+  check-api-key:
+    name: Check OpenAI API Key
+    runs-on: ubuntu-latest
+    outputs:
+      has_key: ${{ steps.check.outputs.has_key }}
+    steps:
+      - id: check
+        run: |
+          if [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "has_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "⚠️ OPENAI_API_KEY not configured - skipping AI code review"
+          fi
+
   ai-review:
     name: AI-Powered Code Review (GPT-4o Enhanced)
     runs-on: ubuntu-latest
-    if: ${{ github.event.pull_request.draft == false && secrets.OPENAI_API_KEY != '' }}
+    needs: check-api-key
+    if: |
+      github.event.pull_request.draft == false &&
+      needs.check-api-key.outputs.has_key == 'true'
     continue-on-error: true
 
     env:
