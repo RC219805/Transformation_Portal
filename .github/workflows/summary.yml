@@ -175,7 +175,6 @@ jobs:
             exit 0
           fi
 
-          # Post the comment using --body-file to avoid quoting issues.
-          # NOTE: use GH_TOKEN with minimal scope (issues:write)
+          # Post the comment using --repo flag (no git context needed)
           echo "Posting comment to issue/PR #$ISSUE_NUMBER"
-          gh issue comment "$ISSUE_NUMBER" --body-file "$RESPONSE_FILE"
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file "$RESPONSE_FILE"
