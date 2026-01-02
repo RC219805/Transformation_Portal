@@ -11,7 +11,6 @@ This ensures presets are documented, discoverable, and validated.
 from __future__ import annotations
 
 from typing import Dict, List, Optional
-from dataclasses import dataclass, field
 
 from .config import Preset
 from .schemas import PresetMetadata
@@ -34,7 +33,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "clarity": 0.15,
         },
     ),
-    
+
     Preset.INTERIOR_LUXURY.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY.value,
         display_name="Interior Luxury",
@@ -51,7 +50,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "warmth": 1.05,
         },
     ),
-    
+
     Preset.INTERIOR_LUXURY_MAX_QUALITY.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_MAX_QUALITY.value,
         display_name="Interior Luxury (Max Quality)",
@@ -68,7 +67,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "detail": 0.20,
         },
     ),
-    
+
     Preset.INTERIOR_LUXURY_APEX_QUALITY.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY.value,
         display_name="Interior Luxury (Apex Quality)",
@@ -86,7 +85,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "materials_v2": True,
         },
     ),
-    
+
     Preset.EXTERIOR_SHOWCASE.value: PresetMetadata(
         name=Preset.EXTERIOR_SHOWCASE.value,
         display_name="Exterior Showcase",
@@ -103,7 +102,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "sky_enhance": True,
         },
     ),
-    
+
     Preset.ARCHITECTURAL.value: PresetMetadata(
         name=Preset.ARCHITECTURAL.value,
         display_name="Architectural",
@@ -119,7 +118,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "clarity": 0.18,
         },
     ),
-    
+
     Preset.ARCHIVAL_QUALITY.value: PresetMetadata(
         name=Preset.ARCHIVAL_QUALITY.value,
         display_name="Archival Quality",
@@ -136,7 +135,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "bit_depth": 16,
         },
     ),
-    
+
     Preset.CI_BASELINE.value: PresetMetadata(
         name=Preset.CI_BASELINE.value,
         display_name="CI Baseline",
@@ -152,7 +151,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "upscale": 2,
         },
     ),
-    
+
     Preset.PRODUCTION_STANDARD.value: PresetMetadata(
         name=Preset.PRODUCTION_STANDARD.value,
         display_name="Production Standard",
@@ -168,7 +167,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "clarity": 0.15,
         },
     ),
-    
+
     Preset.PRODUCTION_ULTRA.value: PresetMetadata(
         name=Preset.PRODUCTION_ULTRA.value,
         display_name="Production Ultra",
@@ -185,7 +184,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "detail": 0.18,
         },
     ),
-    
+
     # Canary/Experimental presets (marked as such)
     Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM.value,
@@ -200,7 +199,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "materials_v2": True,
         },
     ),
-    
+
     Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS.value,
         display_name="Interior Luxury Apex (Materials V3 Glass)",
@@ -214,7 +213,7 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "glass_enhancement": True,
         },
     ),
-    
+
     Preset.EXTERIOR_POOL_APEX_QUALITY.value: PresetMetadata(
         name=Preset.EXTERIOR_POOL_APEX_QUALITY.value,
         display_name="Exterior Pool (Apex Quality)",
@@ -234,82 +233,82 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
 
 class PresetRegistry:
     """Preset registry for governance and discovery."""
-    
+
     def __init__(self):
         self.presets = PRESET_REGISTRY
-    
+
     def list_presets(self, stability_filter: Optional[str] = None) -> List[PresetMetadata]:
         """List all presets, optionally filtered by stability.
-        
+
         Args:
             stability_filter: Filter by stability ('stable', 'canary', 'experimental')
-            
+
         Returns:
             List of preset metadata
         """
         presets = list(self.presets.values())
-        
+
         if stability_filter:
             presets = [p for p in presets if p.stability == stability_filter]
-        
+
         return presets
-    
+
     def get_preset(self, name: str) -> Optional[PresetMetadata]:
         """Get preset metadata by name.
-        
+
         Args:
             name: Preset name
-            
+
         Returns:
             PresetMetadata if found, None otherwise
         """
         return self.presets.get(name)
-    
+
     def validate_preset(self, name: str) -> bool:
         """Validate that a preset exists.
-        
+
         Args:
             name: Preset name
-            
+
         Returns:
             True if preset exists, False otherwise
         """
         return name in self.presets
-    
+
     def get_stable_presets(self) -> List[PresetMetadata]:
         """Get only stable (production-ready) presets."""
         return self.list_presets(stability_filter="stable")
-    
+
     def get_canary_presets(self) -> List[PresetMetadata]:
         """Get canary (experimental but usable) presets."""
         return self.list_presets(stability_filter="canary")
-    
+
     def get_by_quality_tier(self, tier: str) -> List[PresetMetadata]:
         """Get presets by quality tier.
-        
+
         Args:
             tier: Quality tier ('standard', 'max', 'apex')
-            
+
         Returns:
             List of presets in that tier
         """
         return [p for p in self.presets.values() if p.quality_tier == tier]
-    
+
     def format_preset_list(self, presets: List[PresetMetadata], show_details: bool = False) -> str:
         """Format preset list for CLI display.
-        
+
         Args:
             presets: List of presets to format
             show_details: Include detailed information
-            
+
         Returns:
             Formatted string for terminal output
         """
         if not presets:
             return "No presets found."
-        
+
         lines = []
-        
+
         for preset in presets:
             # Basic info
             stability_marker = {
@@ -317,34 +316,37 @@ class PresetRegistry:
                 "canary": "🚧",
                 "experimental": "⚠️",
             }.get(preset.stability, "❓")
-            
+
             quality_marker = {
                 "standard": "⚡",
                 "max": "⭐",
                 "apex": "💎",
             }.get(preset.quality_tier, "")
-            
+
             line = f"{stability_marker} {quality_marker} {preset.name}"
-            
+
             if show_details:
                 line += f"\n    {preset.description}"
                 line += f"\n    Quality: {preset.quality_tier.upper()} | Stability: {preset.stability}"
                 line += f"\n    Use: {preset.intended_use}"
-                
+
                 if preset.performance:
                     perf = preset.performance
-                    line += f"\n    Performance: {perf.get('throughput_img_hr', 'N/A')} img/hr, {perf.get('memory_gb', 'N/A')} GB"
-            
+                    line += (
+                        f"\n    Performance: {perf.get('throughput_img_hr', 'N/A')} img/hr, "
+                        f"{perf.get('memory_gb', 'N/A')} GB"
+                    )
+
             lines.append(line)
-        
+
         return "\n\n".join(lines)
-    
+
     def format_preset_detail(self, preset: PresetMetadata) -> str:
         """Format detailed preset information.
-        
+
         Args:
             preset: Preset metadata
-            
+
         Returns:
             Formatted detail view
         """
@@ -353,39 +355,39 @@ class PresetRegistry:
             "canary": "🚧 Canary (Experimental)",
             "experimental": "⚠️ Experimental",
         }.get(preset.stability, "❓ Unknown")
-        
+
         quality_marker = {
             "standard": "⚡ Standard Quality",
             "max": "⭐ Max Quality",
             "apex": "💎 Apex Quality",
         }.get(preset.quality_tier, "")
-        
+
         lines = [
             f"=== {preset.display_name} ===",
-            f"",
+            "",
             f"Name: {preset.name}",
             f"Status: {stability_marker}",
             f"Quality: {quality_marker}",
-            f"",
-            f"Description:",
+            "",
+            "Description:",
             f"  {preset.description}",
-            f"",
-            f"Intended Use:",
+            "",
+            "Intended Use:",
             f"  {preset.intended_use}",
         ]
-        
+
         if preset.performance:
             lines.append("")
             lines.append("Performance:")
             for key, value in preset.performance.items():
                 lines.append(f"  {key}: {value}")
-        
+
         if preset.parameters:
             lines.append("")
             lines.append("Parameters:")
             for key, value in preset.parameters.items():
                 lines.append(f"  {key}: {value}")
-        
+
         return "\n".join(lines)
 
 

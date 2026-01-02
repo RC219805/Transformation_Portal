@@ -44,9 +44,8 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
         from slowapi.util import get_remote_address  # type: ignore
         from slowapi.errors import RateLimitExceeded  # type: ignore
     except ImportError as e:
-        missing = str(e).split("'")[-2] if "'" in str(e) else "unknown"
         raise RuntimeError(
-            f"Service mode requires fastapi, uvicorn, and slowapi. Install: pip install fastapi 'uvicorn[standard]' slowapi"
+            "Service mode requires fastapi, uvicorn, and slowapi. Install: pip install fastapi 'uvicorn[standard]' slowapi"
         ) from e
 
     # Rate limiting (10 requests per minute per IP)
@@ -68,7 +67,7 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
 
     incoming_dir = Path(cfg.output_dir) / "_incoming"
     incoming_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Track initialization state for /ready endpoint
     models_loaded = False
 
@@ -89,11 +88,11 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
     async def health():
         """Basic health check - always returns OK if service is running."""
         return {"ok": True, "version": "2.0"}
-    
+
     @app.get("/ready")
     async def ready():
         """Readiness check - returns OK only when models are loaded and service is ready.
-        
+
         This is the endpoint load balancers should use for readiness probes.
         """
         if models_loaded:
