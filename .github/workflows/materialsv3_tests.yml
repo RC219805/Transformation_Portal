@@ -3,8 +3,20 @@ name: MaterialsV3 Tests
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - "lux_depth_v2/materials_v3*.py"
+      - "tests/test_materials_v3_*.py"
+      - "requirements/**"
+      - "pyproject.toml"
+      - ".github/workflows/materialsv3_tests.yml"
   pull_request:
     branches: [ main, develop ]
+    paths:
+      - "lux_depth_v2/materials_v3*.py"
+      - "tests/test_materials_v3_*.py"
+      - "requirements/**"
+      - "pyproject.toml"
+      - ".github/workflows/materialsv3_tests.yml"
   schedule:
     # Run stress tests nightly at 2 AM UTC
     - cron: '0 2 * * *'
@@ -26,7 +38,8 @@ jobs:
       contents: read
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        # PR: single version for speed, Nightly: full matrix
+        python-version: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["3.10","3.11","3.12"]' || '["3.11"]') }}
 
     steps:
     - uses: actions/checkout@v6
@@ -37,13 +50,18 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
+        cache: pip
+        cache-dependency-path: |
+          pyproject.toml
+          requirements*.txt
+          requirements/**/*.txt
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
-        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install -c requirements/constraints.txt -r requirements.txt
+        pip install -c requirements/constraints.txt -r requirements-dev.txt
+        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
         pip install transformers accelerate safetensors pillow
 
     - name: Run MaterialsV3 Edge Case Tests
@@ -86,13 +104,18 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: '3.11'
+        cache: pip
+        cache-dependency-path: |
+          pyproject.toml
+          requirements*.txt
+          requirements/**/*.txt
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
-        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install -c requirements/constraints.txt -r requirements.txt
+        pip install -c requirements/constraints.txt -r requirements-dev.txt
+        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
         pip install transformers accelerate safetensors pillow
 
     - name: Run MaterialsV3 Stress Tests
@@ -121,54 +144,8 @@ jobs:
         if-no-files-found: warn
         retention-days: 7
 
-  verification:
-    name: Phase 1 Safety Verification
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        persist-credentials: false
-
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
-        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-        pip install transformers accelerate safetensors pillow
-
-    - name: Run MaterialsV3 Safety Tests
-      shell: bash
-      run: |
-        set -euo pipefail
-        mkdir -p test-results
-        JUNIT="test-results/junit-verification.xml"
-        : > "$JUNIT"  # guarantee artifact exists even if pytest fails early
-
-        pytest tests/test_materials_v3_edge_cases.py \
-          -v --tb=short -ra \
-          --durations=20 \
-          -o junit_family=xunit2 \
-          --junitxml="$JUNIT"
-
-    - name: Upload verification results
-      if: always()
-      uses: actions/upload-artifact@v6
-      with:
-        name: verification-test-results
-        path: test-results/
-        if-no-files-found: warn
-        retention-days: 7
-
     - name: Verify Exception Handling in Pipeline
+      if: always()
       run: |
         python -c "
         from pathlib import Path
