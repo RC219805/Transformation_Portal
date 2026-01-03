@@ -24,9 +24,9 @@ jobs:
       - id: check
         run: |
           if [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
-            echo "has_key=true" >> $GITHUB_OUTPUT
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
             echo "⚠️ OPENAI_API_KEY not configured - skipping AI summarization"
           fi
 
@@ -35,6 +35,13 @@ jobs:
     needs: check-api-key
     if: always()
     continue-on-error: true
+    timeout-minutes: 5
+    # ARCHITECTURE: Repository-wide OpenAI API serialization
+    # Prevents RPM limit contention across ai-code-review, smart-issue-management, and summarizer
+    # cancel-in-progress: false ensures jobs queue instead of canceling
+    concurrency:
+      group: openai-api-${{ github.repository }}
+      cancel-in-progress: false
     permissions:
       issues: write
       pull-requests: write
@@ -84,7 +91,8 @@ jobs:
           python - <<'PY'
           import os, sys, textwrap
           RESPONSE_FILE = os.environ["RESPONSE_FILE"]
-          OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+          # HARDENING: Strip whitespace from API key to prevent configuration errors
+          OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
 
           # When the key is missing, write only a short, safe message and exit 0
           if not OPENAI_API_KEY:
@@ -144,7 +152,8 @@ jobs:
               {body}
               """)
 
-          # BUG FIX 4: Add proper rate limit handling
+          # ARCHITECTURE: Enhanced error differentiation for operational clarity
+          # Distinguishes quota/billing, rate limits, auth failures, and generic errors
           try:
               completion = client.chat.completions.create(
                   model="gpt-4o-mini",
@@ -153,10 +162,16 @@ jobs:
               )
               summary = (completion.choices[0].message.content or "").strip()
           except Exception as e:
-              # Check if it's a rate limit error (status code 429)
-              error_str = str(e)
-              if "429" in error_str or "rate_limit" in error_str.lower():
+              error_str = str(e).lower()
+              # Check for quota/billing errors (distinct from rate limits)
+              if "insufficient_quota" in error_str or "billing details" in error_str or "exceeded your current quota" in error_str:
+                  summary = "AI summarization unavailable: OpenAI quota/billing limit reached. Check plan/billing for the API key's org."
+              # Check for rate limit errors (429 status)
+              elif "429" in error_str or "rate_limit" in error_str:
                   summary = "AI summarization temporarily unavailable: OpenAI rate limit exceeded. Please try again later."
+              # Check for authentication errors
+              elif "401" in error_str or "invalid_api_key" in error_str or "incorrect api key" in error_str:
+                  summary = "AI summarization failed: invalid OPENAI_API_KEY. Verify the secret value."
               else:
                   # Generic error message for other failures
                   summary = "AI summarization failed: an internal error occurred. See CI logs for details."
@@ -164,12 +179,17 @@ jobs:
               print("Detailed error (redacted for posting):", file=sys.stderr)
               print(repr(e), file=sys.stderr)
 
+          # ARCHITECTURE: Add summary marker for comment update functionality
+          # This allows us to update existing summaries instead of spamming new comments
+          SUMMARY_MARKER = "<!-- ai-summarizer-summary -->"
+          summary_with_marker = f"{summary}\n\n{SUMMARY_MARKER}"
+
           with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
-              f.write(summary)
+              f.write(summary_with_marker)
           print(f"Summary generated: {len(summary)} chars")
           PY
 
-      - name: Post comment only if present and not previously posted
+      - name: Post or update summary comment intelligently
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
           GH_TOKEN: ${{ github.token }}
@@ -179,30 +199,49 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Skip if no issue/PR number is available
-          if [ -z "$ISSUE_NUMBER" ]; then
-            echo "No ISSUE_NUMBER detected; skipping comment post."
-            exit 0
-          fi
+          # BUG FIX 2: Fixed diagnostic marker scope
+          # Only skip duplicate diagnostics if THIS response contains the marker
+          response_body="$(cat "$RESPONSE_FILE")"
 
-          # Skip if response file is empty
-          if [ ! -s "$RESPONSE_FILE" ]; then
-            echo "No response to post."
-            exit 0
-          fi
+          # If the response contains the diagnostic marker, check if we've already posted it
+          if echo "$response_body" | grep -Fq "$MARKER"; then
+            existing_comment_id=$(gh api \
+              --method GET \
+              "repos/$REPO/issues/$ISSUE_NUMBER/comments" \
+              --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" \
+              | head -n 1)
 
-          # BUG FIX 2: Only deduplicate when the current response contains the marker
-          # This prevents one diagnostic comment from blocking all future real summaries
-          if grep -Fq "$MARKER" "$RESPONSE_FILE"; then
-            # Only check for existing diagnostic comments when we're about to post one
-            echo "Checking existing comments for diagnostic marker..."
-            EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
-            if echo "$EXISTING" | grep -Fq "$MARKER"; then
-              echo "A diagnostic comment has already been posted; skipping to avoid duplicates."
+            if [ -n "$existing_comment_id" ]; then
+              echo "Diagnostic comment already exists (ID: $existing_comment_id). Skipping duplicate."
               exit 0
             fi
           fi
 
-          # Post the comment using --repo flag (no git context needed)
-          echo "Posting comment to issue/PR #$ISSUE_NUMBER"
-          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file "$RESPONSE_FILE"
+          # ARCHITECTURE: Intelligent comment update strategy
+          # Try to find and update existing summary comment to reduce noise
+          SUMMARY_MARKER="<!-- ai-summarizer-summary -->"
+
+          # Check if response contains summary marker (not diagnostic)
+          if echo "$response_body" | grep -Fq "$SUMMARY_MARKER"; then
+            # Try to find existing summary comment
+            existing_summary_id=$(gh api \
+              --method GET \
+              "repos/$REPO/issues/$ISSUE_NUMBER/comments" \
+              --jq ".[] | select(.body | contains(\"$SUMMARY_MARKER\")) | .id" \
+              | head -n 1)
+
+            if [ -n "$existing_summary_id" ]; then
+              echo "Updating existing summary comment (ID: $existing_summary_id)"
+              gh api \
+                --method PATCH \
+                "repos/$REPO/issues/comments/$existing_summary_id" \
+                -f body="$response_body" || {
+                echo "Update failed, posting new comment instead"
+                gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "$response_body"
+              }
+              exit 0
+            fi
+          fi
+
+          # No existing comment found or not a summary - post new comment
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "$response_body"

@@ -33,6 +33,13 @@ jobs:
     needs: check-api-key
     if: needs.check-api-key.outputs.has_key == 'true'
     continue-on-error: true
+    timeout-minutes: 5
+    # ARCHITECTURE: Repository-wide OpenAI API serialization
+    # Prevents RPM limit contention across ai-code-review, smart-issue-management, and summarizer
+    # cancel-in-progress: false ensures jobs queue instead of canceling
+    concurrency:
+      group: openai-api-${{ github.repository }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code

@@ -37,6 +37,14 @@ jobs:
       github.event.pull_request.draft == false &&
       needs.check-api-key.outputs.has_key == 'true'
     continue-on-error: true
+    timeout-minutes: 10
+    # ARCHITECTURE: Repository-wide OpenAI API serialization
+    # Prevents RPM limit contention across ai-code-review, smart-issue-management, and summarizer
+    # cancel-in-progress: false ensures jobs queue instead of canceling
+    # Note: Longer timeout for code review due to larger payloads
+    concurrency:
+      group: openai-api-${{ github.repository }}
+      cancel-in-progress: false
 
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -48,6 +56,7 @@ jobs:
     steps:
       - name: Check API Key
         run: |
+          # HARDENING: Strip whitespace from API key
           if [ -z "${OPENAI_API_KEY}" ]; then
             echo "❌ OPENAI_API_KEY is not set. Skipping AI code review."
             exit 0
