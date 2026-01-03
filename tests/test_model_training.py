@@ -148,7 +148,6 @@ class TestTrainerInitialization:
 
     def test_trainer_creation(self):
         """Test trainer can be created"""
-        import torch
         from torch.hub import get_dir
 
         weights_path = Path(get_dir()) / "checkpoints" / "vgg19-dcbb9e9d.pth"
