@@ -148,6 +148,13 @@ class TestTrainerInitialization:
 
     def test_trainer_creation(self):
         """Test trainer can be created"""
+        import torch
+        from torch.hub import get_dir
+
+        weights_path = Path(get_dir()) / "checkpoints" / "vgg19-dcbb9e9d.pth"
+        if not weights_path.exists():
+            pytest.skip("VGG19 weights not available offline")
+
         config = TrainingConfig(num_epochs=1, batch_size=2, checkpoint_dir="weights/test")
 
         trainer = HyperRealityTrainer(config)
