@@ -193,13 +193,19 @@ class TestLossFunctions:
             import torchvision  # noqa: F401
 
             self.has_torchvision = True
+            from torch.hub import get_dir
+
+            self.has_vgg_weights = (Path(get_dir()) / "checkpoints" / "vgg19-dcbb9e9d.pth").exists()
         except ImportError:
             self.has_torchvision = False
+            self.has_vgg_weights = False
 
     def test_vgg_feature_extractor(self):
         """Test VGG feature extraction"""
         if not self.has_torchvision:
             pytest.skip("torchvision not available")
+        if not self.has_vgg_weights:
+            pytest.skip("VGG19 weights not available offline")
 
         # Test with specific layers
         extractor = VGGFeatureExtractor(layers=[2, 7, 12])
@@ -219,6 +225,8 @@ class TestLossFunctions:
         """Test perceptual loss computation with VGG features"""
         if not self.has_torchvision:
             pytest.skip("torchvision not available")
+        if not self.has_vgg_weights:
+            pytest.skip("VGG19 weights not available offline")
 
         loss_fn = PerceptualLoss()
 
@@ -236,6 +244,8 @@ class TestLossFunctions:
         """Test style loss computation with VGG features"""
         if not self.has_torchvision:
             pytest.skip("torchvision not available")
+        if not self.has_vgg_weights:
+            pytest.skip("VGG19 weights not available offline")
 
         loss_fn = StyleLoss()
 
@@ -252,6 +262,8 @@ class TestLossFunctions:
         """Test loss can backpropagate through VGG features"""
         if not self.has_torchvision:
             pytest.skip("torchvision not available")
+        if not self.has_vgg_weights:
+            pytest.skip("VGG19 weights not available offline")
 
         loss_fn = PerceptualLoss()
 
@@ -269,6 +281,8 @@ class TestLossFunctions:
         """Test that identical images have zero perceptual loss"""
         if not self.has_torchvision:
             pytest.skip("torchvision not available")
+        if not self.has_vgg_weights:
+            pytest.skip("VGG19 weights not available offline")
 
         loss_fn = PerceptualLoss()
 
@@ -283,6 +297,8 @@ class TestLossFunctions:
         """Test that identical images have zero style loss"""
         if not self.has_torchvision:
             pytest.skip("torchvision not available")
+        if not self.has_vgg_weights:
+            pytest.skip("VGG19 weights not available offline")
 
         loss_fn = StyleLoss()
 
@@ -299,6 +315,12 @@ class TestModelCheckpoints:
 
     def test_checkpoint_saving(self):
         """Test checkpoint can be saved"""
+        from torch.hub import get_dir
+
+        weights_path = Path(get_dir()) / "checkpoints" / "vgg19-dcbb9e9d.pth"
+        if not weights_path.exists():
+            pytest.skip("VGG19 weights not available offline")
+
         with tempfile.TemporaryDirectory() as tmpdir:
             config = TrainingConfig(checkpoint_dir=tmpdir, num_epochs=2, batch_size=2)
 
@@ -316,6 +338,12 @@ class TestModelCheckpoints:
 
     def test_checkpoint_loading(self):
         """Test checkpoint can be loaded"""
+        from torch.hub import get_dir
+
+        weights_path = Path(get_dir()) / "checkpoints" / "vgg19-dcbb9e9d.pth"
+        if not weights_path.exists():
+            pytest.skip("VGG19 weights not available offline")
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Save a checkpoint
             config = TrainingConfig(checkpoint_dir=tmpdir)
@@ -333,6 +361,12 @@ class TestModelCheckpoints:
 
     def test_model_weights_loading(self):
         """Test loading weights into models"""
+        from torch.hub import get_dir
+
+        weights_path = Path(get_dir()) / "checkpoints" / "vgg19-dcbb9e9d.pth"
+        if not weights_path.exists():
+            pytest.skip("VGG19 weights not available offline")
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create and save models
             config = TrainingConfig(checkpoint_dir=tmpdir)
@@ -409,8 +443,17 @@ class TestTrainingIntegration:
 class TestDepthNormalsIntegration:
     """Test depth/normals integration in training pipeline"""
 
+    def _skip_if_no_vgg_weights(self) -> None:
+        from torch.hub import get_dir
+
+        weights_path = Path(get_dir()) / "checkpoints" / "vgg19-dcbb9e9d.pth"
+        if not weights_path.exists():
+            pytest.skip("VGG19 weights not available offline")
+
     def test_estimate_depth(self):
         """Test depth estimation helper method"""
+        self._skip_if_no_vgg_weights()
+
         with tempfile.TemporaryDirectory() as tmpdir:
             config = TrainingConfig(checkpoint_dir=tmpdir)
             trainer = HyperRealityTrainer(config)
@@ -427,6 +470,8 @@ class TestDepthNormalsIntegration:
 
     def test_compute_normals(self):
         """Test normal computation from depth"""
+        self._skip_if_no_vgg_weights()
+
         with tempfile.TemporaryDirectory() as tmpdir:
             config = TrainingConfig(checkpoint_dir=tmpdir)
             trainer = HyperRealityTrainer(config)
@@ -444,6 +489,7 @@ class TestDepthNormalsIntegration:
 
     def test_training_uses_harmonics_model(self):
         """Test that training loop uses SpatialHarmonics model with normals"""
+        self._skip_if_no_vgg_weights()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = TrainingConfig(checkpoint_dir=tmpdir)
             trainer = HyperRealityTrainer(config)
@@ -460,6 +506,7 @@ class TestDepthNormalsIntegration:
 
     def test_caustics_receives_depth(self):
         """Test that caustics model receives depth during forward pass"""
+        self._skip_if_no_vgg_weights()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = TrainingConfig(checkpoint_dir=tmpdir)
             trainer = HyperRealityTrainer(config)
@@ -537,6 +584,13 @@ def test_load_pretrained_weights_fallback():
 class TestLPIPSIntegration:
     """Test LPIPS loss integration"""
 
+    def _skip_if_no_vgg_weights(self) -> None:
+        from torch.hub import get_dir
+
+        weights_path = Path(get_dir()) / "checkpoints" / "vgg19-dcbb9e9d.pth"
+        if not weights_path.exists():
+            pytest.skip("VGG19 weights not available offline")
+
     def test_trainer_has_lpips_config(self):
         """Test that TrainingConfig has lpips_weight parameter"""
         config = TrainingConfig()
@@ -545,6 +599,7 @@ class TestLPIPSIntegration:
 
     def test_trainer_history_includes_lpips(self):
         """Test that training history tracks LPIPS loss"""
+        self._skip_if_no_vgg_weights()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = TrainingConfig(checkpoint_dir=tmpdir)
             trainer = HyperRealityTrainer(config)
@@ -554,6 +609,7 @@ class TestLPIPSIntegration:
 
     def test_trainer_lpips_fn_attribute(self):
         """Test that trainer has lpips_fn attribute"""
+        self._skip_if_no_vgg_weights()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = TrainingConfig(checkpoint_dir=tmpdir)
             trainer = HyperRealityTrainer(config)
@@ -564,6 +620,7 @@ class TestLPIPSIntegration:
     @pytest.mark.skipif(not LPIPS_AVAILABLE, reason="LPIPS not installed")
     def test_lpips_loss_computation(self):
         """Test LPIPS loss computation when available"""
+        self._skip_if_no_vgg_weights()
         with tempfile.TemporaryDirectory() as tmpdir:
             config = TrainingConfig(checkpoint_dir=tmpdir)
             trainer = HyperRealityTrainer(config)

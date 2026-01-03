@@ -408,17 +408,21 @@ class TensorProcessor:
         Returns:
             Context manager for automatic mixed precision
         """
+        from contextlib import nullcontext
+
         if self.config.enable_amp:
             if self.device.type == "cuda":
                 return torch.autocast(device_type="cuda", dtype=torch.float16)
             elif self.device.type == "mps":
                 # MPS autocast support (PyTorch 2.0+)
-                return torch.autocast(device_type="mps", dtype=torch.float16)
+                try:
+                    return torch.autocast(device_type="mps", dtype=torch.float16)
+                except RuntimeError:
+                    return nullcontext()
             else:
                 return torch.autocast(device_type="cpu", dtype=torch.bfloat16)
         else:
             # No-op context
-            from contextlib import nullcontext
             return nullcontext()
 
     def compile_function(

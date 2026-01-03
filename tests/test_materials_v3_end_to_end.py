@@ -93,6 +93,7 @@ class TestMaterialsV3EndToEnd:
             preset=Preset.INTERIOR_LUXURY,
             write_outputs=False,  # Don't write files
             enable_material=True,  # Enable segmentation so V3 can work if enabled
+            device="cpu",
         )
 
         pipe = LuxPipelineV2(cfg)
@@ -120,6 +121,7 @@ class TestMaterialsV3EndToEnd:
             preset=Preset.INTERIOR_LUXURY,
             write_outputs=False,
             enable_material=True,
+            device="cpu",
         )
         cfg.materials_v3 = MaterialsV3Config()
         cfg.materials_v3.enabled = True
@@ -157,6 +159,7 @@ class TestMaterialsV3EndToEnd:
             preset=Preset.INTERIOR_LUXURY,
             write_outputs=False,
             enable_material=True,
+            device="cpu",
         )
         cfg.materials_v3 = MaterialsV3Config()
         cfg.materials_v3.enabled = True
@@ -190,6 +193,7 @@ class TestMaterialsV3EndToEnd:
             preset=Preset.INTERIOR_LUXURY,
             write_outputs=False,
             enable_material=True,
+            device="cpu",
         )
         cfg.materials_v3 = MaterialsV3Config()
         cfg.materials_v3.enabled = True
@@ -223,6 +227,7 @@ class TestMaterialsV3EndToEnd:
             preset=Preset.INTERIOR_LUXURY,
             write_outputs=False,
             enable_material=True,
+            device="cpu",
         )
         cfg.materials_v3 = MaterialsV3Config()
         cfg.materials_v3.enabled = True
@@ -252,6 +257,7 @@ class TestMaterialsV3EndToEnd:
             preset=Preset.INTERIOR_LUXURY,
             write_outputs=False,
             enable_material=True,
+            device="cpu",
         )
         cfg.materials_v3 = MaterialsV3Config()
         cfg.materials_v3.enabled = True

@@ -7,6 +7,7 @@ Tests for High-Fidelity Depth Pipeline
 import pytest
 import numpy as np
 from pathlib import Path
+import importlib.util
 
 # Skip if cv2 not available (vision dependency)
 cv2 = pytest.importorskip("cv2")
@@ -14,6 +15,9 @@ cv2 = pytest.importorskip("cv2")
 from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
 from high_fidelity_depth.validation import validate_depth_quality, detect_edges, compute_edge_alignment
 from high_fidelity_depth.isolation_tests import run_isolation_tests
+
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None
 
 
 def create_synthetic_image(size: int = 512) -> np.ndarray:
@@ -38,7 +42,7 @@ def test_depth_config():
     assert config.reconcile_scales == True
 
 
-@pytest.mark.skipif(not __import__("importlib").util.find_spec("torch"), reason="PyTorch not available")
+@pytest.mark.skipif(not (HAS_TORCH and HAS_TRANSFORMERS), reason="PyTorch and transformers not available")
 def test_depth_estimator_initialization():
     """Test HighFidelityDepthEstimator initialization."""
     config = DepthConfig()
@@ -104,7 +108,7 @@ def test_validation_metrics():
     assert metrics.edge_count_ratio > 0
 
 
-@pytest.mark.skipif(not __import__("importlib").util.find_spec("torch"), reason="PyTorch not available")
+@pytest.mark.skipif(not (HAS_TORCH and HAS_TRANSFORMERS), reason="PyTorch and transformers not available")
 def test_tile_extraction():
     """Test tile extraction."""
     config = DepthConfig(tile_size=128, overlap=32)
@@ -121,7 +125,7 @@ def test_tile_extraction():
         assert x1 > x0
 
 
-@pytest.mark.skipif(not __import__("importlib").util.find_spec("torch"), reason="PyTorch not available")
+@pytest.mark.skipif(not (HAS_TORCH and HAS_TRANSFORMERS), reason="PyTorch and transformers not available")
 def test_blend_window():
     """Test blend window creation."""
     config = DepthConfig(tile_size=128, overlap=32)

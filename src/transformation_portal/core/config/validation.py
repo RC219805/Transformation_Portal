@@ -5,7 +5,6 @@ Validates configuration schemas and ensures consistency across pipelines.
 """
 
 from typing import Any, Dict, List
-from pathlib import Path
 
 
 class ConfigValidationError(Exception):
