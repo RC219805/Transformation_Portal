@@ -73,8 +73,11 @@ jobs:
         id: summarizer
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
+          # BUG FIX 1: Corrected fallback chain priority for content sources
+          # Priority: comment.body → review.body → issue.body → pull_request.body
+          # This ensures issue_comment events on PRs get the actual comment body, not PR body
           ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
-          ISSUE_BODY: ${{ github.event.issue.body || github.event.pull_request.body || github.event.review.body || github.event.comment.body || github.event.head_commit.message || '' }}
+          ISSUE_BODY: ${{ github.event.comment.body || github.event.review.body || github.event.issue.body || github.event.pull_request.body || github.event.head_commit.message || '' }}
           REVIEW_STATE: ${{ github.event.review.state || '' }}
           EVENT_NAME: '${{ github.event_name }}'
         run: |
@@ -91,7 +94,7 @@ jobs:
               print("AI summarizer skipped; diagnostic message written to RESPONSE_FILE.")
               sys.exit(0)
 
-          # If key present: perform summarization (example; keep minimal)
+          # If key present: perform summarization
           from openai import OpenAI
           client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -100,20 +103,22 @@ jobs:
           review_state = (os.getenv("REVIEW_STATE") or "").strip()
           event_name = (os.getenv("EVENT_NAME") or "").strip()
 
-          # Adjust prompt based on event type
+          # BUG FIX 3: Make prompts generic to match the consolidated content variable
+          # Since ISSUE_BODY now contains the correct content for all events,
+          # we use generic prompts that work with any content type
           if event_name == "pull_request_review":
               prompt = textwrap.dedent(f"""
               Summarize this pull request review in one concise paragraph (neutral tone).
               Review state: {review_state}
               PR title: {title}
-              Review comment:
+              Review content:
               {body}
               """)
           elif event_name == "issue_comment":
               prompt = textwrap.dedent(f"""
-              Summarize this GitHub issue comment in one concise paragraph (neutral tone).
-              Issue title: {title}
-              Comment:
+              Summarize this GitHub comment in one concise paragraph (neutral tone).
+              Thread title: {title}
+              Comment content:
               {body}
               """)
           elif event_name == "pull_request":
@@ -131,12 +136,15 @@ jobs:
               {body}
               """)
           else:
+              # Generic fallback for unexpected event types
               prompt = textwrap.dedent(f"""
               Summarize this GitHub event in one concise paragraph (neutral tone).
               Title: {title}
-              Body:
+              Content:
               {body}
               """)
+
+          # BUG FIX 4: Add proper rate limit handling
           try:
               completion = client.chat.completions.create(
                   model="gpt-4o-mini",
@@ -145,8 +153,14 @@ jobs:
               )
               summary = (completion.choices[0].message.content or "").strip()
           except Exception as e:
-              # Write a short friendly failure message (no secrets) and log detailed error to stderr
-              summary = "AI summarization failed: an internal error occurred. See CI logs for details."
+              # Check if it's a rate limit error (status code 429)
+              error_str = str(e)
+              if "429" in error_str or "rate_limit" in error_str.lower():
+                  summary = "AI summarization temporarily unavailable: OpenAI rate limit exceeded. Please try again later."
+              else:
+                  # Generic error message for other failures
+                  summary = "AI summarization failed: an internal error occurred. See CI logs for details."
+              # Log detailed error to stderr (visible in CI logs but not posted as comment)
               print("Detailed error (redacted for posting):", file=sys.stderr)
               print(repr(e), file=sys.stderr)
 
@@ -165,22 +179,28 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Skip if no issue/PR number is available
           if [ -z "$ISSUE_NUMBER" ]; then
             echo "No ISSUE_NUMBER detected; skipping comment post."
             exit 0
           fi
 
+          # Skip if response file is empty
           if [ ! -s "$RESPONSE_FILE" ]; then
             echo "No response to post."
             exit 0
           fi
 
-          # Check existing comments for the marker so we only post once
-          echo "Checking existing comments for diagnostic marker..."
-          EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
-          if echo "$EXISTING" | grep -Fq "$MARKER"; then
-            echo "A diagnostic comment has already been posted; skipping to avoid duplicates."
-            exit 0
+          # BUG FIX 2: Only deduplicate when the current response contains the marker
+          # This prevents one diagnostic comment from blocking all future real summaries
+          if grep -Fq "$MARKER" "$RESPONSE_FILE"; then
+            # Only check for existing diagnostic comments when we're about to post one
+            echo "Checking existing comments for diagnostic marker..."
+            EXISTING=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --jq '.[].body' 2>/dev/null || echo "")
+            if echo "$EXISTING" | grep -Fq "$MARKER"; then
+              echo "A diagnostic comment has already been posted; skipping to avoid duplicates."
+              exit 0
+            fi
           fi
 
           # Post the comment using --repo flag (no git context needed)
