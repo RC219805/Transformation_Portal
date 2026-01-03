@@ -15,6 +15,7 @@ jobs:
   check-api-key:
     name: Check OpenAI API Key
     runs-on: ubuntu-latest
+    permissions: {}  # No permissions needed - only checks secret existence
     outputs:
       has_key: ${{ steps.check.outputs.has_key }}
     steps:
