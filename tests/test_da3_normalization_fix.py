@@ -56,6 +56,7 @@ if not available:
 @pytest.mark.skipif(not available, reason="No test images available")
 def test_da3_normalization_fix():
     """Validate DA3 normalization methods (skip if DA3 not available)."""
+    pytest.importorskip("depth_anything_3", reason="DA3 not installed")
     # Check if DA3 API available (skip if not)
     try:
         from lux_depth_v3.inference import DA3InferenceEngine

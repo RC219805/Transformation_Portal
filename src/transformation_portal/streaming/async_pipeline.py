@@ -118,13 +118,14 @@ class WorkItem(Generic[T]):
     id: str
     data: T
     created_at: float = field(default_factory=time.time)
+    started_at_monotonic: float = field(default_factory=time.monotonic)
     metadata: Dict[str, Any] = field(default_factory=dict)
     stage_results: List[StageResult] = field(default_factory=list)
 
     @property
     def elapsed_time(self) -> float:
         """Total time since item was created."""
-        return time.time() - self.created_at
+        return time.monotonic() - self.started_at_monotonic
 
     def add_result(self, result: StageResult) -> None:
         """Add a stage result to this work item."""

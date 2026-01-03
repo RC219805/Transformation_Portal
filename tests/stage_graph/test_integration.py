@@ -6,6 +6,7 @@ import pytest
 import numpy as np
 from pathlib import Path
 import tempfile
+import importlib.util
 
 from src.transformation_portal.stage_graph import (
     StageContext,
@@ -18,6 +19,8 @@ from src.transformation_portal.stage_graph import (
     EnhancementStage,
     UpscalingStage,
 )
+
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None
 
 
 @pytest.fixture
@@ -65,6 +68,7 @@ def test_full_pipeline_execution(sample_image):
     assert final_image.shape[1] == sample_image.shape[1] * 2
 
 
+@pytest.mark.skipif(not HAS_TRANSFORMERS, reason="Transformers not available")
 def test_pipeline_with_caching(sample_image):
     """Test pipeline with caching enabled."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -177,6 +181,7 @@ def test_pipeline_parallel_execution(sample_image):
     assert len(execution.stage_results) == 2
 
 
+@pytest.mark.skipif(not HAS_TRANSFORMERS, reason="Transformers not available")
 def test_pipeline_cache_speedup(sample_image):
     """Test pipeline achieves significant speedup with caching."""
     with tempfile.TemporaryDirectory() as tmpdir:

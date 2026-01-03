@@ -46,30 +46,36 @@ class GitInfo:
         """
         try:
             cwd = str(repo_path) if repo_path else None
+            base_cmd = ["git"]
+            if cwd:
+                base_cmd.extend(["-C", cwd])
+
+            inside = subprocess.check_output(
+                [*base_cmd, "rev-parse", "--is-inside-work-tree"],
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+            if inside.lower() != "true":
+                return None
 
             commit = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                cwd=cwd,
+                [*base_cmd, "rev-parse", "HEAD"],
                 stderr=subprocess.DEVNULL
             ).decode().strip()
 
             branch = subprocess.check_output(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=cwd,
+                [*base_cmd, "rev-parse", "--abbrev-ref", "HEAD"],
                 stderr=subprocess.DEVNULL
             ).decode().strip()
 
             is_dirty = subprocess.run(
-                ["git", "diff-index", "--quiet", "HEAD"],
-                cwd=cwd,
+                [*base_cmd, "diff-index", "--quiet", "HEAD"],
                 check=False,
                 stderr=subprocess.DEVNULL
             ).returncode != 0
 
             try:
                 remote_url = subprocess.check_output(
-                    ["git", "config", "--get", "remote.origin.url"],
-                    cwd=cwd,
+                    [*base_cmd, "config", "--get", "remote.origin.url"],
                     stderr=subprocess.DEVNULL
                 ).decode().strip()
             except subprocess.CalledProcessError:

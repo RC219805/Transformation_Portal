@@ -76,6 +76,7 @@ class TestMaterialsV3EdgeCases:
             output_dir=output_dir,
             write_outputs=False,  # Speed up tests
         )
+        config.device = "cpu"
         # Apply preset first
         config.apply_preset()
         # Enable materials for testing (CI_BASELINE disables it)
@@ -341,6 +342,7 @@ class TestMaterialsV3EdgeCases:
             output_dir=output_dir,
             write_outputs=False,
         )
+        config.device = "cpu"
         # Override to heuristic to avoid transformers dependency
         config.segmentation.backend = "heuristic"
 

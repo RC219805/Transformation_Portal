@@ -363,8 +363,6 @@ class RecipeValidator:
         """
         import yaml
 
-        errors: List[str] = []
-
         if not recipe_path.exists():
             return (False, [f"File not found: {recipe_path}"])
 
