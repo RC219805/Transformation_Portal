@@ -1041,11 +1041,6 @@ def enhance(
         "--dry-run",
         help="Print processing plan without executing (shows what would be processed)",
     ),
-    hash_mode: str = typer.Option(
-        "if-manifest-exists",
-        "--hash-mode",
-        help="When to compute image hashes: always, if-manifest-exists, never",
-    ),
     # License
     non_commercial_ok: bool = typer.Option(
         False,
@@ -1206,6 +1201,12 @@ def enhance(
     if include or exclude or max_images:
         # Process filtered images individually
         from lux_depth_v3.input_manager import ImageInput
+        from lux_depth_v3.enhance.batch_stats import compute_batch_runtime_stats
+        from lux_depth_v3.enhance.manifest import BatchManifest
+        import datetime
+
+        batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        start_time = datetime.datetime.now().isoformat()
 
         results = []
         for img_path in tqdm(filtered_images, desc="Processing"):
@@ -1216,6 +1217,54 @@ def enhance(
             except Exception as e:
                 logging.error(f"Failed to process {img_path}: {e}")
                 results.append({"status": "error", "image": str(img_path), "error": str(e)})
+
+        # Generate batch manifest for filtered runs
+        end_time = datetime.datetime.now().isoformat()
+        succeeded = sum(1 for r in results if r.get("status") == "ok")
+        failed = sum(1 for r in results if r.get("status") == "error")
+        skipped = sum(1 for r in results if r.get("status") == "skipped")
+        runtime_stats = compute_batch_runtime_stats(results)
+
+        batch_manifest = BatchManifest(
+            batch_id=batch_id,
+            start_time=start_time,
+            end_time=end_time,
+            config={
+                "model_variant": model.value,
+                "preset": preset.value if preset else None,
+                "depth_quantization": depth_quantization,
+                "v2_preset": v2_preset,
+                "v2_upscaler_backend": v2_upscaler,
+                "execution_mode": execution_mode,
+                "depth_fallback": depth_fallback,
+                "filtered": True,
+                "include": include,
+                "exclude": exclude,
+                "max_images": max_images,
+            },
+            images=[
+                {
+                    "stem": Path(r["image"]).stem,
+                    "status": r.get("status", "unknown"),
+                    "manifest": str(r.get("manifest", "")) if r.get("status") == "ok" else None,
+                    "runtime_s": r.get("runtime_s", 0.0) if r.get("status") == "ok" else None,
+                    "error": r.get("error") if r.get("status") == "error" else None,
+                }
+                for r in results
+            ],
+            summary={
+                "total": len(results),
+                "ok": succeeded,
+                "error": failed,
+                "skipped": skipped,
+                **runtime_stats,
+            },
+        )
+
+        # Write batch manifest
+        batch_manifest_path = output_dir / "manifests" / f"batch_{batch_id}.json"
+        batch_manifest.write(batch_manifest_path)
+        typer.echo(f"Batch manifest written to {batch_manifest_path}")
     else:
         # Use default batch processing
         results = orchestrator.enhance_batch(input_dir)

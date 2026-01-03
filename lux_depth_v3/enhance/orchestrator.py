@@ -16,13 +16,7 @@ import logging
 from lux_depth_v3.config import DA3Config, ModelVariant, Preset
 from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.input_manager import ImageInput
-from .depth_writer import (
-    write_depth_u16_png,
-    atomic_write_depth_u16_png,
-    atomic_write_depth_u16_png_with_stats,
-    read_depth_u16_png,
-    DepthScalingStats,
-)
+from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .v2_runner import V2Runner, find_v2_report
 from .security import (
     sanitize_file_stem,
@@ -46,6 +40,7 @@ from .manifest import (
     get_git_revision,
     capture_environment,
 )
+from .batch_stats import compute_batch_runtime_stats
 
 logger = logging.getLogger(__name__)
 
@@ -658,8 +653,8 @@ class EnhanceOrchestrator:
         failed = sum(1 for r in results if r.get("status") == "error")
         skipped = sum(1 for r in results if r.get("status") == "skipped")
 
-        total_runtime_s = sum(r.get("timing", {}).get("total_s", 0) for r in results if "timing" in r)
-        avg_runtime_s = total_runtime_s / succeeded if succeeded > 0 else 0.0
+        # Compute runtime stats using shared utility
+        runtime_stats = compute_batch_runtime_stats(results)
 
         logger.info(f"Batch complete: {succeeded} succeeded, {failed} failed, {skipped} skipped")
 
@@ -692,9 +687,7 @@ class EnhanceOrchestrator:
                 "ok": succeeded,
                 "error": failed,
                 "skipped": skipped,
-                "total_runtime_s": total_runtime_s,
-                "avg_runtime_s": avg_runtime_s,
-                "images_per_hour": (succeeded / (total_runtime_s / 3600)) if total_runtime_s > 0 else 0.0,
+                **runtime_stats,
             },
         )
 

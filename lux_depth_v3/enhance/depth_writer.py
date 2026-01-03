@@ -227,18 +227,26 @@ def write_depth_u16_png_with_stats(
     p1 = float(np.percentile(depth_f32, p_low_percentile))
     p99 = float(np.percentile(depth_f32, p_high_percentile))
 
-    # Compute clipping fractions
-    clipped_low_frac = float((depth_f32 < p1).sum() / depth_f32.size)
-    clipped_high_frac = float((depth_f32 > p99).sum() / depth_f32.size)
-
     # Quantize to uint16
     if p99 <= p1 + 1e-6:
         logger.warning(f"Depth range too small (p1={p1:.3f}, p99={p99:.3f}), using zeros")
         depth_u16 = np.zeros_like(depth_f32, dtype=np.uint16)
+        # All values clipped to zero (low extreme)
+        clipped_low_frac = 1.0 if depth_u16.size > 0 else 0.0
+        clipped_high_frac = 0.0
     else:
         # Clip and map to [0, 65535]
         depth_normalized = np.clip((depth_f32 - p1) / (p99 - p1), 0.0, 1.0)
         depth_u16 = (depth_normalized * 65535.0 + 0.5).astype(np.uint16)
+        
+        # Compute clipping fractions from quantized output
+        # Values at 0 were clipped at low end, values at 65535 were clipped at high end
+        if depth_u16.size > 0:
+            clipped_low_frac = float(np.count_nonzero(depth_u16 == 0) / depth_u16.size)
+            clipped_high_frac = float(np.count_nonzero(depth_u16 == 65535) / depth_u16.size)
+        else:
+            clipped_low_frac = 0.0
+            clipped_high_frac = 0.0
 
     # Ensure output directory exists
     path = Path(path)
