@@ -1,7 +1,7 @@
 # ADR-002: OpenAI API Concurrency Control for GitHub Actions Workflows
 
 **Status:** Accepted
-**Date:** 2025-01-02
+**Date:** 2026-01-02
 **Decision Makers:** Transformation Portal Architect
 **Affected Components:** `.github/workflows/summary.yml`, `.github/workflows/smart-issue-management.yml`, `.github/workflows/ai-code-review.yml`
 
