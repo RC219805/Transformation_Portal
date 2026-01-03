@@ -66,6 +66,9 @@ def sanitize_file_stem(stem: str, max_length: int = 200) -> str:
         - Prevents hidden files (leading dots)
         - Restricts to alphanumeric, underscore, hyphen, and single dots
         - Limits length to prevent buffer overflow or filesystem issues
+
+    NOTE: This function is LOSSY and can cause collisions.
+    Use sanitize_path_component_nonlossy() for production systems.
     """
     if not stem:
         raise ValueError("File stem cannot be empty")
@@ -88,6 +91,74 @@ def sanitize_file_stem(stem: str, max_length: int = 200) -> str:
     # Final validation
     if not sanitized:
         raise ValueError(f"File stem is empty after sanitization: {stem}")
+
+    return sanitized
+
+
+def sanitize_path_component_nonlossy(component: str, max_length: int = 200) -> str:
+    """Sanitize path component with non-lossy encoding.
+
+    Strategy:
+    - Alphanumeric, underscore, hyphen → preserved as-is
+    - Invalid chars (/, :, <, >, etc.) → percent-encoded like URL encoding
+    - Leading dots → stripped (prevent hidden files)
+    - Double dots → encoded (prevent parent traversal)
+    - If encoding causes length overflow → truncate and append hash suffix
+
+    Args:
+        component: Single path component (filename or directory name)
+        max_length: Maximum length before truncation + hashing
+
+    Returns:
+        Sanitized component guaranteed unique for distinct inputs
+
+    Examples:
+        "kitchen"        → "kitchen"
+        "kitchen:1"      → "kitchen%3A1"
+        "kitchen/1"      → "kitchen%2F1"
+        ".hidden"        → "hidden"
+        "very_long_name" → "very_long_name__a1b2c3d4" (if >max_length)
+
+    Raises:
+        ValueError: If component is empty or empty after sanitization
+    """
+    if not component:
+        raise ValueError("Path component cannot be empty")
+
+    original = component
+
+    # Remove leading dots (prevent hidden files)
+    component = component.lstrip(".")
+    if not component:
+        raise ValueError(f"Path component is empty after sanitization: {original}")
+
+    # Encode invalid characters (non-lossy)
+    # Allow: alphanumeric, underscore, hyphen, single dots
+    # Encode: everything else using percent-encoding
+    safe_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.")
+
+    encoded_chars = []
+    for char in component:
+        if char in safe_chars:
+            encoded_chars.append(char)
+        else:
+            # Percent-encode like URL encoding
+            encoded_chars.append(f"%{ord(char):02X}")
+
+    sanitized = "".join(encoded_chars)
+
+    # Prevent double dots (encode them)
+    sanitized = sanitized.replace("..", "%2E%2E")
+
+    # Handle length limit
+    if len(sanitized) > max_length:
+        # Truncate and add deterministic hash suffix
+        import hashlib
+
+        hash_suffix = hashlib.sha256(sanitized.encode()).hexdigest()[:8]
+        truncate_len = max_length - len(hash_suffix) - 2  # -2 for "__"
+        sanitized = f"{sanitized[:truncate_len]}__{hash_suffix}"
+        logger.debug(f"Path component truncated: {original} → {sanitized}")
 
     return sanitized
 

@@ -23,6 +23,80 @@ MANIFEST_SCHEMA_VERSION = "lux-depth-v3.enhance.v1"
 
 
 @dataclass
+class ConfigFingerprint:
+    """Fingerprint of all configuration parameters that affect outputs.
+
+    Used for cache validation: if config changes, outputs must be regenerated.
+    """
+
+    # Depth config
+    model_variant: str
+    depth_quantization: str
+    depth_device: str
+    preset: Optional[str]
+
+    # V2 config
+    v2_preset: str
+    v2_device: str
+    v2_upscaler_backend: str
+
+    # Execution config (affects quality/timing but not visual output)
+    # Omitted: execution_mode, force_depth, force_v2, timeout
+
+    def to_sha256(self) -> str:
+        """Compute deterministic SHA256 hash of config.
+
+        Returns:
+            64-character hex string (SHA256)
+        """
+        # Convert to dict, sort keys for determinism
+        config_dict = {
+            "model_variant": self.model_variant,
+            "depth_quantization": self.depth_quantization,
+            "depth_device": self.depth_device,
+            "preset": self.preset or "",
+            "v2_preset": self.v2_preset,
+            "v2_device": self.v2_device,
+            "v2_upscaler_backend": self.v2_upscaler_backend,
+        }
+
+        # JSON dump with sorted keys for reproducibility
+        json_str = json.dumps(config_dict, sort_keys=True, separators=(",", ":"))
+
+        # SHA256 hash
+        return hashlib.sha256(json_str.encode()).hexdigest()
+
+    def depth_only(self) -> str:
+        """Compute fingerprint of depth-only parameters.
+
+        Returns:
+            SHA256 hash of depth config subset
+        """
+        depth_config = {
+            "model_variant": self.model_variant,
+            "depth_quantization": self.depth_quantization,
+            "depth_device": self.depth_device,
+            "preset": self.preset or "",
+        }
+        json_str = json.dumps(depth_config, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(json_str.encode()).hexdigest()
+
+    def v2_only(self) -> str:
+        """Compute fingerprint of V2-only parameters.
+
+        Returns:
+            SHA256 hash of V2 config subset
+        """
+        v2_config = {
+            "v2_preset": self.v2_preset,
+            "v2_device": self.v2_device,
+            "v2_upscaler_backend": self.v2_upscaler_backend,
+        }
+        json_str = json.dumps(v2_config, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(json_str.encode()).hexdigest()
+
+
+@dataclass
 class InputMetadata:
     """Input image metadata."""
 
@@ -86,6 +160,7 @@ class CombinedManifest:
     v2: Optional[V2Metadata] = None
     timing: Optional[TimingMetadata] = None
     repro: Optional[ReproMetadata] = None
+    config_fingerprint: Optional[str] = None  # NEW: SHA256 of config
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
