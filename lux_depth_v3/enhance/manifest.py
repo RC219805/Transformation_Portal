@@ -174,6 +174,28 @@ class EnvironmentMetadata:
 
 
 @dataclass
+class BatchManifest:
+    """Batch-level processing summary for entire image set."""
+
+    schema: str = "lux-depth-v3.batch.v1"
+    batch_id: str = ""
+    start_time: str = ""
+    end_time: str = ""
+    config: Dict[str, Any] = field(default_factory=dict)
+    images: List[Dict[str, Any]] = field(default_factory=list)
+    summary: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return asdict(self)
+
+    def write(self, path: Path) -> None:
+        """Write batch manifest to JSON file atomically."""
+        atomic_write_json(path, self.to_dict())
+        logger.info(f"Wrote batch manifest to {path}")
+
+
+@dataclass
 class ReproMetadata:
     """Reproducibility metadata."""
 

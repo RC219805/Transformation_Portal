@@ -41,6 +41,7 @@ from .manifest import (
     TimingMetadata,
     ReproMetadata,
     EnvironmentMetadata,
+    BatchManifest,
     compute_file_sha256,
     get_git_revision,
     capture_environment,
@@ -614,8 +615,14 @@ class EnhanceOrchestrator:
         Returns:
             List of results for each image
         """
+        import datetime
+
         if image_extensions is None:
             image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
+
+        # Generate batch ID
+        batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        start_time = datetime.datetime.now().isoformat()
 
         # Collect images (including nested directories)
         images = []
@@ -624,6 +631,7 @@ class EnhanceOrchestrator:
             images.extend(input_dir.rglob(f"*{ext.upper()}"))
 
         logger.info(f"Found {len(images)} images in {input_dir} (including subdirectories)")
+        logger.info(f"Batch ID: {batch_id}")
 
         # Process images with explicit input_root (stateless)
         results = []
@@ -643,11 +651,56 @@ class EnhanceOrchestrator:
                     }
                 )
 
-        # Summary
-        succeeded = sum(1 for r in results if r["status"] == "ok")
-        failed = sum(1 for r in results if r["status"] == "error")
-        skipped = sum(1 for r in results if r["status"] == "skipped")
+        # Compute end time and summary
+        end_time = datetime.datetime.now().isoformat()
+
+        succeeded = sum(1 for r in results if r.get("status") == "ok")
+        failed = sum(1 for r in results if r.get("status") == "error")
+        skipped = sum(1 for r in results if r.get("status") == "skipped")
+
+        total_runtime_s = sum(r.get("timing", {}).get("total_s", 0) for r in results if "timing" in r)
+        avg_runtime_s = total_runtime_s / succeeded if succeeded > 0 else 0.0
 
         logger.info(f"Batch complete: {succeeded} succeeded, {failed} failed, {skipped} skipped")
+
+        # Build batch manifest
+        batch_manifest = BatchManifest(
+            batch_id=batch_id,
+            start_time=start_time,
+            end_time=end_time,
+            config={
+                "model_variant": self.config.model_variant.value,
+                "preset": self.config.preset.value if self.config.preset else None,
+                "depth_quantization": self.config.depth_quantization,
+                "v2_preset": self.config.v2_preset,
+                "v2_upscaler_backend": self.config.v2_upscaler_backend,
+                "execution_mode": self.config.execution_mode,
+                "depth_fallback": self.config.depth_fallback,
+            },
+            images=[
+                {
+                    "stem": Path(r["image"]).stem,
+                    "status": r.get("status", "unknown"),
+                    "manifest": str(r.get("manifest", "")) if r.get("status") == "ok" else None,
+                    "runtime_s": r.get("runtime_s", 0.0) if r.get("status") == "ok" else None,
+                    "error": r.get("error") if r.get("status") == "error" else None,
+                }
+                for r in results
+            ],
+            summary={
+                "total": len(results),
+                "ok": succeeded,
+                "error": failed,
+                "skipped": skipped,
+                "total_runtime_s": total_runtime_s,
+                "avg_runtime_s": avg_runtime_s,
+                "images_per_hour": (succeeded / (total_runtime_s / 3600)) if total_runtime_s > 0 else 0.0,
+            },
+        )
+
+        # Write batch manifest
+        batch_manifest_path = self.manifests_dir / f"batch_{batch_id}.json"
+        batch_manifest.write(batch_manifest_path)
+        logger.info(f"Batch summary written to {batch_manifest_path}")
 
         return results
