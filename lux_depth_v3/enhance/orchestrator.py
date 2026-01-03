@@ -16,7 +16,13 @@ import logging
 from lux_depth_v3.config import DA3Config, ModelVariant, Preset
 from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.input_manager import ImageInput
-from .depth_writer import write_depth_u16_png, atomic_write_depth_u16_png, read_depth_u16_png
+from .depth_writer import (
+    write_depth_u16_png,
+    atomic_write_depth_u16_png,
+    atomic_write_depth_u16_png_with_stats,
+    read_depth_u16_png,
+    DepthScalingStats,
+)
 from .v2_runner import V2Runner, find_v2_report
 from .security import (
     sanitize_file_stem,
@@ -30,11 +36,14 @@ from .manifest import (
     ConfigFingerprint,
     InputMetadata,
     DepthMetadata,
+    DepthScalingMetadata,
     V2Metadata,
     TimingMetadata,
     ReproMetadata,
+    EnvironmentMetadata,
     compute_file_sha256,
     get_git_revision,
+    capture_environment,
 )
 
 logger = logging.getLogger(__name__)
@@ -175,6 +184,14 @@ class EnhanceOrchestrator:
         # Track git revisions for reproducibility
         self.v3_git = get_git_revision(Path(__file__).parent.parent)
         self.v2_git = get_git_revision(self.output_root.parent / "lux_depth_v2")
+
+        # Capture environment once at initialization (cached)
+        self.environment = capture_environment()
+        logger.info(
+            f"Environment: Python {self.environment.python}, "
+            f"Torch {self.environment.torch or 'N/A'}, "
+            f"OS {self.environment.os_platform or 'N/A'}"
+        )
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         """Compute fingerprint of current configuration.
@@ -423,15 +440,15 @@ class EnhanceOrchestrator:
                 depth_result = self.inference_engine.predict(normalized_input)
                 depth_runtime_s = time.time() - start_time
 
-                # Write depth atomically
-                p1, p99 = atomic_write_depth_u16_png(
+                # Write depth atomically with detailed statistics
+                p1, p99, depth_stats = atomic_write_depth_u16_png_with_stats(
                     depth_path,
                     depth_result.depth,
                     method=self.config.depth_quantization,
                     debug_verify=self.config.verify_depth_writes,
                 )
 
-                # Create depth metadata
+                # Create enhanced depth metadata with detailed scaling stats
                 depth_metadata = DepthMetadata(
                     backend="da3",
                     model=self.config.model_variant.value,
@@ -441,11 +458,19 @@ class EnhanceOrchestrator:
                     dtype="uint16",
                     shape=list(depth_result.depth.shape[:2]),
                     scaling={
-                        "method": self.config.depth_quantization,
-                        "p1": p1,
-                        "p99": p99,
+                        "method": depth_stats.method,
+                        "p_low_percentile": depth_stats.p_low_percentile,
+                        "p_high_percentile": depth_stats.p_high_percentile,
+                        "v_low_value": depth_stats.v_low_value,
+                        "v_high_value": depth_stats.v_high_value,
+                        "clipped_low_frac": depth_stats.clipped_low_frac,
+                        "clipped_high_frac": depth_stats.clipped_high_frac,
+                        "invalid_frac": depth_stats.invalid_frac,
                     },
                     runtime_ms=depth_runtime_s * 1000,
+                    representation="depth",  # DA3 outputs depth, not inverse depth
+                    convention="higher_is_farther",  # DA3 convention
+                    unit="relative",  # DA3 outputs relative depth
                 )
 
                 logger.info(f"Depth generated in {depth_runtime_s:.2f}s")
@@ -557,7 +582,8 @@ class EnhanceOrchestrator:
                 v2_git=self.v2_git,
                 device=self.config.depth_device,
             ),
-            config_fingerprint=config_fp.to_sha256(),  # NEW: Add config fingerprint
+            config_fingerprint=config_fp.to_sha256(),  # Config fingerprint for cache validation
+            environment=self.environment,  # NEW: Toolchain environment for reproducibility
         )
 
         # Write manifest

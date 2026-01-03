@@ -108,6 +108,20 @@ class InputMetadata:
 
 
 @dataclass
+class DepthScalingMetadata:
+    """Detailed depth quantization metadata for provenance and debugging."""
+
+    method: str  # "p1p99", "p0.5p99.5", "minmax"
+    p_low_percentile: float  # e.g., 1.0 for p1p99
+    p_high_percentile: float  # e.g., 99.0 for p1p99
+    v_low_value: float  # Actual depth value at p_low
+    v_high_value: float  # Actual depth value at p_high
+    clipped_low_frac: float  # Fraction of pixels clipped at low end
+    clipped_high_frac: float  # Fraction of pixels clipped at high end
+    invalid_frac: float  # Fraction of NaN/Inf pixels (pre-cleaning)
+
+
+@dataclass
 class DepthMetadata:
     """Depth generation metadata."""
 
@@ -118,8 +132,12 @@ class DepthMetadata:
     depth_path: str  # Relative path: "depth/{stem}_depth.png"
     dtype: str  # "uint16"
     shape: List[int]  # [H, W]
-    scaling: Dict[str, float]  # {"method": "p1p99", "p1": ..., "p99": ...}
+    scaling: Dict[str, Any]  # Legacy dict or DepthScalingMetadata
     runtime_ms: float
+    # NEW FIELDS for enhanced provenance
+    representation: str = "depth"  # "depth" vs "inverse_depth" vs "disparity"
+    convention: str = "higher_is_farther"  # vs "higher_is_nearer"
+    unit: str = "relative"  # "relative" vs "metric_meters"
 
 
 @dataclass
@@ -144,6 +162,18 @@ class TimingMetadata:
 
 
 @dataclass
+class EnvironmentMetadata:
+    """Toolchain and hardware environment for reproducibility."""
+
+    python: str
+    torch: Optional[str] = None
+    cuda_runtime: Optional[str] = None
+    gpu_name: Optional[str] = None
+    driver: Optional[str] = None
+    os_platform: Optional[str] = None
+
+
+@dataclass
 class ReproMetadata:
     """Reproducibility metadata."""
 
@@ -163,7 +193,8 @@ class CombinedManifest:
     v2: Optional[V2Metadata] = None
     timing: Optional[TimingMetadata] = None
     repro: Optional[ReproMetadata] = None
-    config_fingerprint: Optional[str] = None  # NEW: SHA256 of config
+    config_fingerprint: Optional[str] = None  # SHA256 of config
+    environment: Optional[EnvironmentMetadata] = None  # NEW: Toolchain environment
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -202,6 +233,10 @@ class CombinedManifest:
         if repro_data:
             repro_data = ReproMetadata(**repro_data)
 
+        environment_data = data.get("environment")
+        if environment_data:
+            environment_data = EnvironmentMetadata(**environment_data)
+
         return cls(
             schema=data.get("schema", MANIFEST_SCHEMA_VERSION),
             input=input_data,
@@ -209,6 +244,8 @@ class CombinedManifest:
             v2=v2_data,
             timing=timing_data,
             repro=repro_data,
+            config_fingerprint=data.get("config_fingerprint"),
+            environment=environment_data,
         )
 
     @classmethod
@@ -325,3 +362,50 @@ def atomic_write_json(path: Path, data: Dict[str, Any], indent: int = 2) -> None
             except Exception as cleanup_error:
                 logger.warning(f"Could not clean up {tmp_path}: {cleanup_error}")
         raise IOError(f"Failed to write JSON to {path}: {e}") from e
+
+
+def capture_environment() -> EnvironmentMetadata:
+    """Capture current toolchain and hardware environment for reproducibility.
+
+    Returns:
+        EnvironmentMetadata with Python version, torch, CUDA, GPU info
+
+    Notes:
+        - Best-effort capture: missing dependencies return None
+        - GPU info only captured if torch with CUDA is available
+    """
+    import platform
+
+    env = EnvironmentMetadata(
+        python=sys.version.split()[0],
+        os_platform=platform.system(),
+    )
+
+    try:
+        import torch
+
+        env.torch = torch.__version__
+
+        if torch.cuda.is_available():
+            env.cuda_runtime = torch.version.cuda
+            try:
+                env.gpu_name = torch.cuda.get_device_name(0)
+            except Exception:
+                pass  # GPU name not critical
+
+            try:
+                # Get driver version if available
+                result = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                )
+                if result.returncode == 0:
+                    env.driver = result.stdout.strip()
+            except Exception:
+                pass  # Driver version not critical
+    except ImportError:
+        pass  # torch not available
+
+    return env
