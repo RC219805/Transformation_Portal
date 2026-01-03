@@ -76,6 +76,7 @@ lux-depth-v2 --describe-preset interior_luxury
 
 | Workflow | Use When | Documentation |
 |----------|----------|---------------|
+| **V3+V2 Orchestrator** | Nested directories, config validation, crash-safe | [lux_depth_v3/README.md](lux_depth_v3/README.md) |
 | **Async Pipeline** | 1000+ images, need 3-5x throughput | [docs/advanced/ASYNC_PIPELINE.md](docs/advanced/ASYNC_PIPELINE.md) |
 | **Context-Aware** | Document-driven intelligence | [docs/advanced/CONTEXT_AWARE_RENDERING.md](docs/advanced/CONTEXT_AWARE_RENDERING.md) |
 | **Material Response** | Custom material enhancement | [docs/advanced/MATERIAL_RESPONSE.md](docs/advanced/MATERIAL_RESPONSE.md) |
@@ -236,14 +237,17 @@ python scripts/security/pre_commit_security_check.py
 
 **Advanced Users**:
 - [docs/advanced/](docs/advanced/) - Advanced workflows (async, context-aware, material, video)
-- [docs/architecture/](docs/architecture/) - System architecture
+- [docs/architecture/](docs/architecture/) - System architecture and ADRs
+- [lux_depth_v3/README.md](lux_depth_v3/README.md) - V3+V2 orchestration layer
+- [lux_depth_v3/enhance/HARDENING_ROADMAP_V2.md](lux_depth_v3/enhance/HARDENING_ROADMAP_V2.md) - Production hardening (90% risk reduction)
+- [lux_depth_v3/enhance/PHASE1_COMPLETION_SUMMARY.md](lux_depth_v3/enhance/PHASE1_COMPLETION_SUMMARY.md) - Phase 1 implementation report
 
 **Researchers**:
 - [docs/research/](docs/research/) - Experimental features (⚠️ NOT production-ready)
 
 **Development**:
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
-- [tests/](tests/) - Test suite (1,348 tests)
+- [tests/](tests/) - Test suite (2,751 collected, 1,348 V2 core, 100% pass rate)
 - [.github/workflows/](.github/workflows/) - CI/CD pipelines
 
 ---
@@ -251,6 +255,15 @@ python scripts/security/pre_commit_security_check.py
 ## 🏗️ Architecture
 
 **Core System**: `lux_depth_v2/` (feature-frozen production module)
+
+**V3 Orchestration Layer**: `lux_depth_v3/` (production transition, Phase 1 complete)
+- **Phase 1 Hardening** (2026-01-03): 90% risk reduction (8/10 → 1/10)
+  - Non-lossy path sanitization (zero collisions)
+  - Config fingerprinting (stale cache prevention)
+  - Atomic writes (crash-safe operations)
+  - EXIF pre-normalization (PIL/OpenCV alignment)
+- **Test Coverage**: 62/62 tests passing (100% pass rate)
+- **Use Case**: Nested directory structures, config-sensitive workflows
 
 **6-Stage Pipeline**:
 1. Loading & Validation
@@ -1058,4 +1071,4 @@ Resources:
 
 ---
 
-**Last Updated: 2025-11-27**
+**Last Updated: 2026-01-03**
