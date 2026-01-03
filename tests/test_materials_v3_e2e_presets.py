@@ -20,9 +20,12 @@ from pathlib import Path
 from PIL import Image
 import tempfile
 import os
+import importlib.util
 
 # Import PyTorch availability from canonical source
 from lux_depth_v2.torch_ops import TORCH_AVAILABLE
+
+HAS_TRANSFORMERS = importlib.util.find_spec("transformers") is not None
 
 # Skip all tests in CI unless explicitly allowed (network-dependent model downloads)
 IN_CI = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
@@ -41,6 +44,7 @@ else:
 # Module-level skip - skip in CI unless explicitly allowed
 pytestmark = [
     pytest.mark.skipif(not TORCH_AVAILABLE, reason="MaterialsV3 E2E tests require PyTorch"),
+    pytest.mark.skipif(not HAS_TRANSFORMERS, reason="MaterialsV3 E2E tests require transformers"),
     pytest.mark.skipif(
         SKIP_IN_CI,
         reason="Requires HuggingFace model downloads (SegFormer image processor/model) which are blocked in CI. "
