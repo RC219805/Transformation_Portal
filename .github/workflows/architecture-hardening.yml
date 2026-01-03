@@ -45,10 +45,9 @@ jobs:
         run: |
           bandit -q -r lux_depth_v2/hardening scripts/hardening -ll
 
-      - name: pip-audit (env, fail on any vuln)
+      - name: pip-audit (requirements file only)
         run: |
-          # Environment is installed strictly from lux_depth_v2/requirements-repo.txt
-          # (SAFE baseline per SECURITY/validation docs), so auditing the current
-          # environment is equivalent. This version of pip-audit does not support
-          # --severity, so we fail on any reported vulnerability.
-          pip-audit
+          # Audit only our managed dependencies from requirements-repo.txt
+          # Excludes system packages (certifi, cryptography, etc.) that are
+          # pre-installed in the GitHub Actions Ubuntu image.
+          pip-audit -r lux_depth_v2/requirements-repo.txt
