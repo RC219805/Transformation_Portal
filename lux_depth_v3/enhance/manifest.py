@@ -14,6 +14,7 @@ import hashlib
 import subprocess
 import sys
 import logging
+import os
 
 from .security import validate_git_repository
 
@@ -102,6 +103,8 @@ class InputMetadata:
 
     image_path: str
     image_sha256: str
+    exif_normalized: bool = False  # True if EXIF orientation was normalized
+    normalized_path: Optional[str] = None  # Path to normalized file if applicable
 
 
 @dataclass
@@ -171,11 +174,8 @@ class CombinedManifest:
         return json.dumps(self.to_dict(), indent=indent)
 
     def write(self, path: Path) -> None:
-        """Write manifest to JSON file."""
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            f.write(self.to_json())
+        """Write manifest to JSON file atomically."""
+        atomic_write_json(path, self.to_dict())
         logger.info(f"Wrote manifest to {path}")
 
     @classmethod
@@ -283,3 +283,45 @@ def get_git_revision(repo_path: Path) -> Optional[str]:
         # Best-effort: failure to resolve git revision is non-fatal; return None.
         logger.debug("Unable to determine git revision for %s: %s", repo_path, exc)
     return None
+
+
+def atomic_write_json(path: Path, data: Dict[str, Any], indent: int = 2) -> None:
+    """Write JSON with atomic rename to prevent partial files on crash.
+
+    Args:
+        path: Final output path
+        data: Dictionary to serialize
+        indent: JSON indentation level
+
+    Raises:
+        IOError: If write fails
+
+    Notes:
+        - Temp file is written in same directory (same filesystem)
+        - os.replace() provides atomic rename on POSIX systems
+        - Cleanup is guaranteed via finally block
+    """
+    path = Path(path)
+
+    # Ensure parent directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    tmp_path = path.with_suffix(".tmp.json")
+
+    try:
+        # Write to temp file
+        tmp_path.write_text(json.dumps(data, indent=indent))
+
+        # Atomic rename
+        os.replace(str(tmp_path), str(path))
+
+        logger.debug(f"Atomically wrote JSON to {path}")
+    except Exception as e:
+        # Clean up partial write
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+                logger.debug(f"Cleaned up partial write: {tmp_path}")
+            except Exception as cleanup_error:
+                logger.warning(f"Could not clean up {tmp_path}: {cleanup_error}")
+        raise IOError(f"Failed to write JSON to {path}: {e}") from e

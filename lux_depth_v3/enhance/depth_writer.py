@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Tuple
 import logging
+import os
 
 import numpy as np
 from PIL import Image
@@ -143,3 +144,77 @@ def read_depth_u16_png(path: Path) -> np.ndarray:
         raise ValueError(f"Expected uint16 depth, got {depth.dtype}")
 
     return depth
+
+
+def atomic_write_depth_u16_png(
+    path: Path,
+    depth: np.ndarray,
+    method: str = "p1p99",
+    debug_verify: bool = False,
+) -> Tuple[float, float]:
+    """Write depth with atomic rename to prevent partial files on crash.
+
+    This ensures that if the process crashes during write, the output
+    directory will not contain corrupt/partial files. Uses write-to-temp
+    then atomic rename pattern.
+
+    Args:
+        path: Final output path
+        depth: Depth array to write (float32 or uint16)
+        method: Quantization method ("p1p99", "p0.5p99.5", "minmax")
+        debug_verify: Enable read-back verification (slower)
+
+    Returns:
+        Tuple of (p1, p99) percentile values used for quantization
+
+    Raises:
+        ValueError: If depth is invalid
+        IOError: If write fails
+
+    Notes:
+        - Temp file is written in same directory (same filesystem)
+        - os.replace() provides atomic rename on POSIX systems
+        - Cleanup is guaranteed via finally block
+    """
+    path = Path(path)
+
+    # Ensure parent directory exists BEFORE temp file write
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write to temporary file in SAME directory (ensures same filesystem)
+    tmp_path = path.with_suffix(".tmp.png")
+
+    try:
+        # Write depth to temp file
+        p1, p99 = write_depth_u16_png(
+            tmp_path,
+            depth,
+            method=method,
+            debug_verify=False,  # Don't verify temp file
+        )
+
+        # Atomic rename (POSIX guarantees atomicity on same filesystem)
+        # Using os.replace() for cross-platform compatibility
+        os.replace(str(tmp_path), str(path))
+
+        # Optional verification on final file
+        if debug_verify:
+            verify_depth = np.array(Image.open(path))
+            assert verify_depth.shape == depth.shape[:2], (
+                f"Shape mismatch: expected {depth.shape[:2]}, got {verify_depth.shape}"
+            )
+            assert verify_depth.dtype == np.uint16, f"Dtype mismatch: expected uint16, got {verify_depth.dtype}"
+            logger.debug(f"Verified depth write: {path}")
+
+        logger.debug(f"Atomically wrote depth to {path}")
+        return p1, p99
+
+    except Exception as e:
+        # Clean up partial write
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+                logger.debug(f"Cleaned up partial write: {tmp_path}")
+            except Exception as cleanup_error:
+                logger.warning(f"Could not clean up {tmp_path}: {cleanup_error}")
+        raise IOError(f"Failed to write depth to {path}: {e}") from e

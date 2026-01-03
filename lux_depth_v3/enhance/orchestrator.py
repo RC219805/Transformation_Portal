@@ -16,7 +16,7 @@ import logging
 from lux_depth_v3.config import DA3Config, ModelVariant, Preset
 from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.input_manager import ImageInput
-from .depth_writer import write_depth_u16_png
+from .depth_writer import write_depth_u16_png, atomic_write_depth_u16_png, read_depth_u16_png
 from .v2_runner import V2Runner, find_v2_report
 from .security import (
     sanitize_file_stem,
@@ -111,6 +111,9 @@ class EnhanceConfig:
     depth_fallback: str = "fail"  # "fail", "skip", "v2-auto"
     force_depth: bool = False
     force_v2: bool = False
+
+    # Verification
+    verify_depth_writes: bool = False  # Set True for paranoid mode, False for production speed
 
     # License
     non_commercial_ok: bool = False
@@ -358,7 +361,7 @@ class EnhanceOrchestrator:
         image_input: ImageInput,
         input_root: Optional[Path] = None,
     ) -> Dict[str, Any]:
-        """Process single image through V3 + V2 pipeline.
+        """Process single image through V3 + V2 pipeline with EXIF pre-normalization.
 
         Args:
             image_input: Input image metadata
@@ -391,10 +394,22 @@ class EnhanceOrchestrator:
         combined_manifest_path.parent.mkdir(parents=True, exist_ok=True)
         v2_log_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Pre-normalize EXIF orientation for PIL/OpenCV alignment
+        from .preprocessing import normalize_exif_orientation
+
+        tmp_inputs_dir = self.output_root / "tmp_inputs"
+        tmp_inputs_dir.mkdir(parents=True, exist_ok=True)
+        normalized_path = tmp_inputs_dir / f"{output_key.name}_normalized.png"
+
+        exif_was_normalized = normalize_exif_orientation(image_input.path, normalized_path)
+
+        # Use normalized file for both DA3 and V2
+        normalized_input = ImageInput(path=normalized_path)
+
         # Check depth resume with config fingerprint validation
         skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, combined_manifest_path, image_input)
 
-        # Stage A: Generate depth
+        # Stage A: Generate depth (using normalized input)
         depth_result = None
         depth_runtime_s = 0.0
         depth_metadata = None
@@ -404,15 +419,16 @@ class EnhanceOrchestrator:
             start_time = time.time()
 
             try:
-                depth_result = self.inference_engine.predict(image_input)
+                # Use normalized input for depth estimation
+                depth_result = self.inference_engine.predict(normalized_input)
                 depth_runtime_s = time.time() - start_time
 
-                # Write depth
-                p1, p99 = write_depth_u16_png(
+                # Write depth atomically
+                p1, p99 = atomic_write_depth_u16_png(
                     depth_path,
                     depth_result.depth,
                     method=self.config.depth_quantization,
-                    debug_verify=True,
+                    debug_verify=self.config.verify_depth_writes,
                 )
 
                 # Create depth metadata
@@ -490,8 +506,9 @@ class EnhanceOrchestrator:
             v2_result = {"status": "ok"}
             v2_report_path = v2_report_path_existing
         else:
+            # Use normalized input for V2 processing
             v2_result = self.v2_runner.run(
-                input_path=image_input.path,
+                input_path=normalized_path,  # Use normalized file
                 depth_dir=self.depth_dir if depth_path else None,
                 output_dir=self.v2_dir,
                 preset=self.config.v2_preset,
@@ -525,6 +542,8 @@ class EnhanceOrchestrator:
             input=InputMetadata(
                 image_path=str(image_input.path),
                 image_sha256=input_sha256,
+                exif_normalized=exif_was_normalized,
+                normalized_path=str(normalized_path) if exif_was_normalized else None,
             ),
             depth=depth_metadata,
             v2=v2_metadata,
