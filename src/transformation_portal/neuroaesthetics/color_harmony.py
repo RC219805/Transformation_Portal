@@ -502,8 +502,8 @@ class ColorHarmonyAnalyzer:
 
         # Check for muddy colors (low saturation + mid lightness)
         muddy_count = sum(
-            (s < 20 and 30 < l < 70)
-            for s, l in zip(palette.saturations, palette.lightnesses)
+            (s < 20 and 30 < lightness < 70)
+            for s, lightness in zip(palette.saturations, palette.lightnesses)
         )
         if muddy_count > len(palette.colors_rgb) // 2:
             issues.append("Many muddy/dull colors detected")
