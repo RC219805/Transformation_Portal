@@ -352,5 +352,5 @@ Before merging a new OpenAI workflow:
 ---
 
 **Maintainer:** DevOps / CI/CD Team
-**Last Updated:** 2025-01-02
+**Last Updated:** 2026-01-02
 **Version:** 1.0
