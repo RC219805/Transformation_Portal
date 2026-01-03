@@ -88,8 +88,8 @@ class BatchJob:
         # Ensure directory exists
         self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write atomically (write to temp file, then rename)
-        temp_path = self.checkpoint_path.with_suffix(".tmp")
+        # Write atomically (write to unique temp file, then rename)
+        temp_path = self.checkpoint_path.with_suffix(f".{uuid.uuid4().hex}.tmp")
 
         try:
             with open(temp_path, "w") as f:
