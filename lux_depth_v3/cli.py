@@ -534,7 +534,7 @@ def backend_start(
 
     if not check_da3_cli_available():
         print("ERROR: DA3 CLI not found. Install from:")
-        print("  https://github.com/DepthAnything/Depth-Anything-V3")
+        print("  https://github.com/ByteDance-Seed/Depth-Anything-3")
         sys.exit(1)
 
     backend = DA3Backend(

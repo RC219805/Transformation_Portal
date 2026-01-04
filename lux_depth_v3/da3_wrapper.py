@@ -397,7 +397,7 @@ class DepthAnything3Wrapper:
             logger.warning(
                 "Official DA3 API not available. The 'depth_anything_3' module cannot be imported.\n"
                 "Install the official Depth Anything V3 API from GitHub:\n"
-                "  pip install git+https://github.com/DepthAnything/Depth-Anything-V3.git\n"
+                "  pip install git+https://github.com/ByteDance-Seed/Depth-Anything-3.git\n"
                 "\n"
                 "Note: The PyPI package 'depth-anything-3' (v0.0.0) is a placeholder and does NOT provide "
                 "the required 'depth_anything_3' module."
@@ -423,7 +423,7 @@ class DepthAnything3Wrapper:
             raise RuntimeError(
                 "DA3 API not available. The 'depth_anything_3' module cannot be imported.\n"
                 "Install the official Depth Anything V3 API from GitHub:\n"
-                "  pip install git+https://github.com/DepthAnything/Depth-Anything-V3.git\n"
+                "  pip install git+https://github.com/ByteDance-Seed/Depth-Anything-3.git\n"
                 "\n"
                 "Note: The PyPI package 'depth-anything-3' (v0.0.0) is a placeholder and does NOT provide "
                 "the required 'depth_anything_3' module."

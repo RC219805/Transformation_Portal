@@ -514,7 +514,7 @@ lux-depth-v3 benchmark \
 
 ```bash
 # Install DA3 CLI (one-time setup)
-pip install git+https://github.com/DepthAnything/Depth-Anything-V3.git
+pip install git+https://github.com/ByteDance-Seed/Depth-Anything-3.git
 
 # Use CLI mode
 lux-depth-v3 process \

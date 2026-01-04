@@ -207,7 +207,7 @@ Successfully enhanced the `lux_depth_v3/` module to integrate with the official 
 ### CLI Mode
 ```bash
 # Install DA3 CLI (one-time)
-pip install git+https://github.com/DepthAnything/Depth-Anything-V3.git
+pip install git+https://github.com/ByteDance-Seed/Depth-Anything-3.git
 
 # Use CLI mode
 lux-depth-v3 process --use-cli -i renders/ -o output/

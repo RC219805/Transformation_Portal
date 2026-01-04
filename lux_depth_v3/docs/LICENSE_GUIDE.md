@@ -303,7 +303,7 @@ Both licenses require attribution:
 ```
 Depth estimation powered by Depth Anything 3
 Model: DA3METRIC-LARGE (Apache-2.0)
-https://github.com/DepthAnything/Depth-Anything-V3
+https://github.com/ByteDance-Seed/Depth-Anything-3
 ```
 
 ## FAQ

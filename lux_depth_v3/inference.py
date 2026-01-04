@@ -479,6 +479,20 @@ class DA3InferenceEngine:
 
         return results[0] if single_input else results
 
+    def predict(
+        self,
+        inputs: Union[ImageInput, List[ImageInput]],
+    ) -> Union[DepthResult, List[DepthResult]]:
+        """Alias for inference() method for backward compatibility.
+
+        Args:
+            inputs: Single image or list of images
+
+        Returns:
+            Depth estimation result(s)
+        """
+        return self.inference(inputs)
+
     def _inference_cli(
         self,
         inputs: List[ImageInput],
@@ -835,6 +849,11 @@ class DepthResult:
     original_image: np.ndarray  # Original RGB image
     point_cloud: Optional[np.ndarray] = None  # (N, 3) point cloud (for multi-view)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def depth(self) -> np.ndarray:
+        """Alias for depth_map for backward compatibility."""
+        return self.depth_map
 
     def get_depth_range(self) -> Tuple[float, float]:
         """Get depth value range."""

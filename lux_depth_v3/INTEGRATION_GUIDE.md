@@ -80,7 +80,7 @@ For production use with the official DA3 CLI:
 
 ```bash
 # Install official DA3 repository
-git clone https://github.com/DepthAnything/Depth-Anything-V3.git
+git clone https://github.com/ByteDance-Seed/Depth-Anything-3.git
 cd Depth-Anything-V3
 pip install -e .
 
