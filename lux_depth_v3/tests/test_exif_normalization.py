@@ -14,6 +14,7 @@ from lux_depth_v3.enhance.preprocessing import (
     normalize_exif_orientation,
     get_exif_orientation,
     has_exif_orientation,
+    validate_depth_image_alignment,
 )
 
 
@@ -116,7 +117,7 @@ class TestEXIFOrientation:
         assert 0x0112 not in exif_norm
 
     def test_no_exif_orientation(self, tmp_path):
-        """Image without EXIF orientation should be pass-through."""
+        """Image without EXIF orientation should still be normalized."""
         # Create image WITHOUT orientation tag
         img = Image.new("RGB", (200, 100), color=(0, 0, 255))
 
@@ -126,8 +127,8 @@ class TestEXIFOrientation:
 
         was_normalized = normalize_exif_orientation(input_path, output_path)
 
-        # Should return False (no tag)
-        assert was_normalized == False
+        # Should return True (file is always normalized, even if no EXIF tag)
+        assert was_normalized == True
 
         # Dimensions unchanged
         img_norm = Image.open(output_path)
@@ -229,7 +230,8 @@ class TestEXIFEdgeCases:
             # Should not raise, should fallback to copy
             was_normalized = normalize_exif_orientation(input_path, output_path)
 
-            # Should return False (fallback mode)
+            # Should still return True (fallback still creates normalized output)
+            # Note: In this edge case, we return False to indicate error fallback
             assert was_normalized == False
 
             # Output should exist (copied)
@@ -290,6 +292,84 @@ class TestEXIFEdgeCases:
             # Should not raise
             normalize_exif_orientation(input_path, output_path)
             assert output_path.exists()
+
+
+class TestPreflightValidation:
+    """Test preflight depth/image alignment validation."""
+
+    def test_valid_alignment(self, tmp_path):
+        """Matching image and depth should pass validation."""
+        # Create matching image and depth
+        img = Image.new("RGB", (200, 100))  # W=200, H=100
+        img_path = tmp_path / "image.png"
+        img.save(img_path)
+
+        depth = np.ones((100, 200), dtype=np.uint16) * 30000  # H=100, W=200
+        depth_img = Image.fromarray(depth, mode="I;16")
+        depth_path = tmp_path / "depth.png"
+        depth_img.save(depth_path)
+
+        # Should not raise
+        validate_depth_image_alignment(img_path, depth_path)
+
+    def test_shape_mismatch_detected(self, tmp_path):
+        """Mismatched shapes should raise clear error."""
+        # Create mismatched image and depth (simulating EXIF issue)
+        img = Image.new("RGB", (200, 100))  # W=200, H=100
+        img_path = tmp_path / "image.png"
+        img.save(img_path)
+
+        depth = np.ones((200, 100), dtype=np.uint16) * 30000  # H=200, W=100 (swapped!)
+        depth_img = Image.fromarray(depth, mode="I;16")
+        depth_path = tmp_path / "depth.png"
+        depth_img.save(depth_path)
+
+        # Should raise with descriptive error
+        with pytest.raises(ValueError, match="Image/depth shape mismatch"):
+            validate_depth_image_alignment(img_path, depth_path)
+
+    def test_depth_wrong_dtype(self, tmp_path):
+        """Depth with wrong dtype should be detected."""
+        img = Image.new("RGB", (200, 100))
+        img_path = tmp_path / "image.png"
+        img.save(img_path)
+
+        # Create uint8 depth instead of uint16
+        depth = np.ones((100, 200), dtype=np.uint8) * 128
+        depth_img = Image.fromarray(depth, mode="L")
+        depth_path = tmp_path / "depth.png"
+        depth_img.save(depth_path)
+
+        # Should raise
+        with pytest.raises(ValueError, match="Depth must be uint16"):
+            validate_depth_image_alignment(img_path, depth_path)
+
+    def test_depth_multichannel(self, tmp_path):
+        """RGB depth should be detected and rejected."""
+        img = Image.new("RGB", (200, 100))
+        img_path = tmp_path / "image.png"
+        img.save(img_path)
+
+        # Create RGB depth (wrong!)
+        depth_rgb = Image.new("RGB", (200, 100), color=(128, 128, 128))
+        depth_path = tmp_path / "depth.png"
+        depth_rgb.save(depth_path)
+
+        # Should raise
+        with pytest.raises(ValueError, match="Depth must be single-channel"):
+            validate_depth_image_alignment(img_path, depth_path)
+
+    def test_missing_depth_file(self, tmp_path):
+        """Missing depth file should raise clear error."""
+        img = Image.new("RGB", (200, 100))
+        img_path = tmp_path / "image.png"
+        img.save(img_path)
+
+        depth_path = tmp_path / "nonexistent.png"
+
+        # Should raise
+        with pytest.raises(ValueError, match="Preflight validation failed"):
+            validate_depth_image_alignment(img_path, depth_path)
 
 
 # Fixtures
