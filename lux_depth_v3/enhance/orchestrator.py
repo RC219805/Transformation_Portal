@@ -31,11 +31,9 @@ from .manifest import (
     ConfigFingerprint,
     InputMetadata,
     DepthMetadata,
-    DepthScalingMetadata,
     V2Metadata,
     TimingMetadata,
     ReproMetadata,
-    EnvironmentMetadata,
     BatchManifest,
     compute_file_sha256,
     get_git_revision,
@@ -525,7 +523,6 @@ class EnhanceOrchestrator:
 
         # Build paths with nested structure
         depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
-        depth_manifest_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth_manifest.json"
         combined_manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
         v2_log_path = self.logs_dir / output_key.parent / f"v2_{output_key.name}.log"
 
@@ -541,7 +538,9 @@ class EnhanceOrchestrator:
         tmp_inputs_dir.mkdir(parents=True, exist_ok=True)
         normalized_path = tmp_inputs_dir / f"{output_key.name}_normalized.png"
 
-        exif_was_normalized = normalize_exif_orientation(image_input.path, normalized_path)
+        # Always normalize EXIF orientation for PIL/OpenCV alignment
+        # (return value is always True now, so we don't store it)
+        normalize_exif_orientation(image_input.path, normalized_path)
 
         # Use normalized file for both DA3 and V2
         normalized_input = ImageInput(path=normalized_path)

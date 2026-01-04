@@ -155,7 +155,7 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> bool:
 
         try:
             shutil.copy2(input_path, output_path)
-            logger.info(f"Fallback: copied original file without EXIF normalization")
+            logger.info("Fallback: copied original file without EXIF normalization")
             return False
         except Exception as copy_error:
             logger.error(f"Failed to copy file as fallback: {copy_error}")
@@ -280,4 +280,3 @@ def validate_depth_image_alignment(
         raise ValueError(f"Preflight validation failed: {e}") from e
     except Exception as e:
         raise ValueError(f"Preflight validation failed: {e}") from e
-
