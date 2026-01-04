@@ -76,6 +76,16 @@ class ModelInfo:
 
         return hash((self.name, self.params, self.license, self.huggingface_id, self.version, caps_hash))
 
+    def __reduce_ex__(self, protocol):
+        """Custom reduce for pickle/deepcopy with mappingproxy support."""
+        # Convert MappingProxyType to regular dict for serialization
+        caps = dict(self._capabilities) if self._capabilities is not None else None
+        # Return a tuple: (callable, args) for reconstruction
+        return (
+            self.__class__,
+            (self.name, self.params, self.license, self.huggingface_id, self.version, caps),
+        )
+
 
 class ModelVariant(Enum):
     """Available DA3 model variants with metadata."""
