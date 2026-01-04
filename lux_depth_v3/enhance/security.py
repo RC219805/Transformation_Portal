@@ -9,9 +9,30 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Set, Optional, List
+from enum import Enum
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class HashMode(str, Enum):
+    """Control when input file hashes are computed for manifest integrity.
+
+    Modes:
+        ALWAYS: Always compute hashes (maximum security, higher overhead)
+        IF_MANIFEST_EXISTS: Only compute if manifest exists (smart resume)
+        NEVER: Skip hash computation (performance mode, no integrity verification)
+
+    Security implications:
+        - NEVER mode provides no protection against input tampering
+        - IF_MANIFEST_EXISTS provides resume verification but not initial verification
+        - ALWAYS provides full integrity protection with performance cost
+    """
+
+    ALWAYS = "always"
+    IF_MANIFEST_EXISTS = "if-manifest-exists"
+    NEVER = "never"
+
 
 # Allowed extra arguments for V2 subprocess (whitelist)
 ALLOWED_V2_EXTRA_ARGS: Set[str] = {

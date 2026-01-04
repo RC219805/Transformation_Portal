@@ -1019,6 +1019,28 @@ def enhance(
         "--force-v2",
         help="Force V2 re-enhancement even if outputs exist",
     ),
+    # NEW: Filtering options
+    include: Optional[str] = typer.Option(
+        None,
+        "--include",
+        help="Comma-separated glob patterns to include (e.g., '*.jpg,*.png')",
+    ),
+    exclude: Optional[str] = typer.Option(
+        None,
+        "--exclude",
+        help="Comma-separated glob patterns to exclude (e.g., '*_mask.png,*_depth.png')",
+    ),
+    max_images: Optional[int] = typer.Option(
+        None,
+        "--max-images",
+        help="Maximum number of images to process (useful for testing)",
+    ),
+    # NEW: Execution modes
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print processing plan without executing (shows what would be processed)",
+    ),
     # License
     non_commercial_ok: bool = typer.Option(
         False,
@@ -1123,9 +1145,129 @@ def enhance(
     typer.echo("Initializing orchestrator...")
     orchestrator = EnhanceOrchestrator(config, output_dir)
 
-    # Process batch
+    # Collect images with filtering
+    from fnmatch import fnmatch
+
+    image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
+    all_images = []
+    for ext in image_extensions:
+        all_images.extend(input_dir.rglob(f"*{ext}"))
+        all_images.extend(input_dir.rglob(f"*{ext.upper()}"))
+
+    # Apply include/exclude filters
+    filtered_images = []
+    include_patterns = include.split(",") if include else None
+    exclude_patterns = exclude.split(",") if exclude else None
+
+    for img_path in sorted(all_images):
+        relative_path = str(img_path.relative_to(input_dir))
+
+        # Apply include filter (if specified, must match at least one pattern)
+        if include_patterns:
+            if not any(fnmatch(relative_path, pattern.strip()) for pattern in include_patterns):
+                continue
+
+        # Apply exclude filter (if specified, must not match any pattern)
+        if exclude_patterns:
+            if any(fnmatch(relative_path, pattern.strip()) for pattern in exclude_patterns):
+                continue
+
+        filtered_images.append(img_path)
+
+    # Apply max_images limit
+    if max_images is not None and len(filtered_images) > max_images:
+        filtered_images = filtered_images[:max_images]
+        typer.echo(f"⚠️  Limited to first {max_images} images (--max-images)")
+
+    typer.echo(f"Found {len(all_images)} images total")
+    if include or exclude or max_images:
+        typer.echo(f"Filtered to {len(filtered_images)} images")
+
+    # Dry run mode: print plan and exit
+    if dry_run:
+        typer.echo("\n🔍 DRY RUN MODE - Processing plan:")
+        typer.echo("=" * 70)
+        typer.echo(f"Would process {len(filtered_images)} images:")
+        for img_path in filtered_images[:20]:  # Show first 20
+            typer.echo(f"  - {img_path.relative_to(input_dir)}")
+        if len(filtered_images) > 20:
+            typer.echo(f"  ... and {len(filtered_images) - 20} more")
+        typer.echo("=" * 70)
+        typer.echo("\n✓ Dry run complete (no files were processed)")
+        return
+
+    # Process batch (custom image list if filtered)
     typer.echo("Processing images...")
-    results = orchestrator.enhance_batch(input_dir)
+    if include or exclude or max_images:
+        # Process filtered images individually
+        from lux_depth_v3.input_manager import ImageInput
+        from lux_depth_v3.enhance.batch_stats import compute_batch_runtime_stats
+        from lux_depth_v3.enhance.manifest import BatchManifest
+        import datetime
+
+        batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        start_time = datetime.datetime.now().isoformat()
+
+        results = []
+        for img_path in tqdm(filtered_images, desc="Processing"):
+            image_input = ImageInput(path=img_path)
+            try:
+                result = orchestrator.enhance_image(image_input, input_root=input_dir)
+                results.append(result)
+            except Exception as e:
+                logging.error(f"Failed to process {img_path}: {e}")
+                results.append({"status": "error", "image": str(img_path), "error": str(e)})
+
+        # Generate batch manifest for filtered runs
+        end_time = datetime.datetime.now().isoformat()
+        succeeded = sum(1 for r in results if r.get("status") == "ok")
+        failed = sum(1 for r in results if r.get("status") == "error")
+        skipped = sum(1 for r in results if r.get("status") == "skipped")
+        runtime_stats = compute_batch_runtime_stats(results)
+
+        batch_manifest = BatchManifest(
+            batch_id=batch_id,
+            start_time=start_time,
+            end_time=end_time,
+            config={
+                "model_variant": model.value,
+                "preset": preset.value if preset else None,
+                "depth_quantization": depth_quantization,
+                "v2_preset": v2_preset,
+                "v2_upscaler_backend": v2_upscaler,
+                "execution_mode": execution_mode,
+                "depth_fallback": depth_fallback,
+                "filtered": True,
+                "include": include,
+                "exclude": exclude,
+                "max_images": max_images,
+            },
+            images=[
+                {
+                    "stem": Path(r["image"]).stem,
+                    "status": r.get("status", "unknown"),
+                    "manifest": str(r.get("manifest", "")) if r.get("status") == "ok" else None,
+                    "runtime_s": r.get("runtime_s", 0.0) if r.get("status") == "ok" else None,
+                    "error": r.get("error") if r.get("status") == "error" else None,
+                }
+                for r in results
+            ],
+            summary={
+                "total": len(results),
+                "ok": succeeded,
+                "error": failed,
+                "skipped": skipped,
+                **runtime_stats,
+            },
+        )
+
+        # Write batch manifest
+        batch_manifest_path = output_dir / "manifests" / f"batch_{batch_id}.json"
+        batch_manifest.write(batch_manifest_path)
+        typer.echo(f"Batch manifest written to {batch_manifest_path}")
+    else:
+        # Use default batch processing
+        results = orchestrator.enhance_batch(input_dir)
 
     # Summary
     typer.echo("\n📊 Processing Summary")
