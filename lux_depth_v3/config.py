@@ -481,8 +481,8 @@ class DA3APIConfig:
     pose estimation, Gaussian Splatting, and multi-format export.
     """
 
-    # Model selection
-    model_name: str = "da3-large"
+    # Model selection (switched to Giant v1.1 for best quality - 2024-01-04)
+    model_name: str = "da3-nested-giant-large-v1.1"
 
     # Pose alignment
     align_to_input_ext_scale: bool = True
@@ -727,7 +727,7 @@ class DA3Config:
         """Create configuration from preset."""
         configs = {
             Preset.PHOTO_REALISTIC: cls(
-                model_variant=ModelVariant.DA3_MONO_LARGE,
+                model_variant=ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1,  # Upgraded from MONO_LARGE for best quality
                 inference_mode=InferenceMode.MONOCULAR,
                 postprocessing=PostprocessingConfig(
                     apply_bilateral_filter=True,
@@ -735,10 +735,10 @@ class DA3Config:
                 ),
             ),
             Preset.INTERIOR_LUXURY: cls(
-                model_variant=ModelVariant.DA3_METRIC_LARGE,
+                model_variant=ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1,  # Upgraded from METRIC_LARGE for luxury rendering
                 inference_mode=InferenceMode.METRIC,
                 preprocessing=PreprocessingConfig(
-                    resize_mode="bicubic",
+                    resize_mode="bilinear",  # Changed from bicubic for MPS compatibility
                     target_size=(1024, 1024),
                 ),
                 postprocessing=PostprocessingConfig(
@@ -747,7 +747,7 @@ class DA3Config:
                 ),
             ),
             Preset.EXTERIOR_SHOWCASE: cls(
-                model_variant=ModelVariant.DA3_LARGE_V1_1,
+                model_variant=ModelVariant.DA3_GIANT_V1_1,  # Upgraded from LARGE for showcase quality
                 inference_mode=InferenceMode.MONOCULAR,
                 preprocessing=PreprocessingConfig(
                     target_size=(1024, 1024),

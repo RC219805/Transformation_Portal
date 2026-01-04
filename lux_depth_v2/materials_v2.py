@@ -995,7 +995,7 @@ class CLIPMaterialClassifier:
         _, _, h, w = rgb.shape
         scale = target_size / min(h, w)
         new_h, new_w = int(h * scale), int(w * scale)
-        rgb_resized = torch.nn.functional.interpolate(rgb, size=(new_h, new_w), mode="bicubic", align_corners=False)
+        rgb_resized = torch.nn.functional.interpolate(rgb, size=(new_h, new_w), mode="bilinear", align_corners=False)
 
         # Center crop
         crop_h = (new_h - target_size) // 2
@@ -1061,7 +1061,7 @@ class CLIPMaterialClassifier:
 
             # Preprocess image for CLIP
             target_size = 224 if "ViT-B" in self.model_name else 336
-            rgb_resized = F.interpolate(rgb, size=(target_size, target_size), mode="bicubic")
+            rgb_resized = F.interpolate(rgb, size=(target_size, target_size), mode="bilinear")
 
             # Normalize
             mean = torch.tensor([0.48145466, 0.4578275, 0.40821073], device=self.device).view(1, 3, 1, 1)

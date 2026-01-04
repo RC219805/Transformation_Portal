@@ -914,9 +914,9 @@ class LuxPipelineV2:
 
         # Upscaling path
         with self._stage(report, "upscale/base"):
-            # Base upsample: GPU bicubic
+            # Base upsample: GPU bilinear (MPS compatible)
             with torch_ops.maybe_autocast(self.autocast, self.device):
-                base_up = torch_ops.resize(master_t, (H * cfg.upscale, W * cfg.upscale), mode="bicubic", autocast=True).clamp(
+                base_up = torch_ops.resize(master_t, (H * cfg.upscale, W * cfg.upscale), mode="bilinear", autocast=True).clamp(
                     0.0, 1.0
                 )
 
