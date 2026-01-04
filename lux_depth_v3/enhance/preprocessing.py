@@ -19,6 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 import logging
 from PIL import Image, ImageOps
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -62,16 +63,60 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> bool:
         False  # No orientation tag found
     """
     try:
-        img = Image.open(input_path)
+        # For TIFF files, try tifffile first (handles 32-bit floating point TIFFs)
+        if input_path.suffix.lower() in [".tif", ".tiff"]:
+            try:
+                import tifffile
 
-        # Check if EXIF orientation exists
-        has_exif_orientation = False
-        if hasattr(img, "getexif"):
-            exif = img.getexif()
-            if exif and 0x0112 in exif:  # 0x0112 = Orientation tag
-                has_exif_orientation = True
-                original_orientation = exif[0x0112]
-                logger.debug(f"Found EXIF orientation {original_orientation} in {input_path}")
+                # Read with tifffile (handles 32-bit float TIFFs that Pillow can't)
+                img_array = tifffile.imread(input_path)
+
+                # Convert to 8-bit for preprocessing
+                # Normalize to [0, 1] range and convert to uint8
+                if img_array.dtype == np.float32 or img_array.dtype == np.float64:
+                    # Clip to [0, 1] range for HDR images
+                    img_array = np.clip(img_array, 0, 1)
+                    img_array = (img_array * 255).astype(np.uint8)
+                elif img_array.dtype == np.uint16:
+                    # Convert 16-bit to 8-bit
+                    img_array = (img_array / 257).astype(np.uint8)
+
+                # Convert to PIL Image
+                if len(img_array.shape) == 2:
+                    # Grayscale
+                    img = Image.fromarray(img_array, mode="L")
+                else:
+                    # RGB
+                    img = Image.fromarray(img_array, mode="RGB")
+
+                logger.info(f"Loaded 32-bit TIFF with tifffile: {input_path}")
+                has_exif_orientation = False  # tifffile doesn't preserve EXIF
+
+            except Exception as tiff_error:
+                logger.debug(f"tifffile failed, trying PIL: {tiff_error}")
+                # Fall back to PIL
+                img = Image.open(input_path)
+
+                # Check if EXIF orientation exists
+                has_exif_orientation = False
+                if hasattr(img, "getexif"):
+                    exif = img.getexif()
+                    if exif and 0x0112 in exif:  # 0x0112 = Orientation tag
+                        has_exif_orientation = True
+                        original_orientation = exif[0x0112]
+                        logger.debug(f"Found EXIF orientation {original_orientation} in {input_path}")
+        else:
+            # Non-TIFF files: use PIL directly
+            img = Image.open(input_path)
+
+            # Check if EXIF orientation exists
+            has_exif_orientation = False
+            if hasattr(img, "getexif"):
+                exif = img.getexif()
+                if exif and 0x0112 in exif:  # 0x0112 = Orientation tag
+                    has_exif_orientation = True
+                    original_orientation = exif[0x0112]
+                    logger.debug(f"Found EXIF orientation {original_orientation} in {input_path}")
 
         # Apply orientation transformation
         # ImageOps.exif_transpose() handles all 8 orientations correctly

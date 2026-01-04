@@ -21,7 +21,7 @@ Install the official DA3 repository:
 
 ```bash
 # Clone and install DA3
-git clone https://github.com/DepthAnything/Depth-Anything-V3.git
+git clone https://github.com/ByteDance-Seed/Depth-Anything-3.git
 cd Depth-Anything-V3
 pip install -e .
 
@@ -264,7 +264,7 @@ cli_config = DA3CLIConfig(
 which da3
 
 # If not found, install DA3
-git clone https://github.com/DepthAnything/Depth-Anything-V3.git
+git clone https://github.com/ByteDance-Seed/Depth-Anything-3.git
 cd Depth-Anything-V3
 pip install -e .
 ```
@@ -323,7 +323,7 @@ lux-depth-v3 process -i renders/ -o output/
 **After**:
 ```bash
 # 1. Install DA3 CLI (one-time)
-pip install git+https://github.com/DepthAnything/Depth-Anything-V3.git
+pip install git+https://github.com/ByteDance-Seed/Depth-Anything-3.git
 
 # 2. Add --use-cli flag
 lux-depth-v3 process -i renders/ -o output/ --use-cli
@@ -388,7 +388,7 @@ da3 colmap \
 
 ## Additional Resources
 
-- [DA3 Official Repository](https://github.com/DepthAnything/Depth-Anything-V3)
+- [DA3 Official Repository](https://github.com/ByteDance-Seed/Depth-Anything-3)
 - [Lux Depth V3 README](../README.md)
 - [Integration Guide](INTEGRATION_GUIDE.md)
 - [Security Guidelines](../SECURITY.md)

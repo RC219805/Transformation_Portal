@@ -133,7 +133,7 @@ def example_real_workflow():
     # Check if CLI is available
     if not engine.use_cli:
         print("WARNING: DA3 CLI not available, using native mode")
-        print("Install with: pip install git+https://github.com/DepthAnything/Depth-Anything-V3.git")
+        print("Install with: pip install git+https://github.com/ByteDance-Seed/Depth-Anything-3.git")
     else:
         print("DA3 CLI available, using backend mode")
 

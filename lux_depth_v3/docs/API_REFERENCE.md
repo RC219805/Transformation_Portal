@@ -930,5 +930,5 @@ wrapper = DepthAnything3Wrapper(model_name="da3nested-giant-large")
 ---
 
 **For additional support:**
-- GitHub Issues: https://github.com/DepthAnything/Depth-Anything-V3/issues
+- GitHub Issues: https://github.com/ByteDance-Seed/Depth-Anything-3/issues
 - Lux Depth V3 Issues: https://github.com/RC219805/Transformation_Portal/issues
