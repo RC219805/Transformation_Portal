@@ -226,7 +226,7 @@ class EnhanceOrchestrator:
             ConfigFingerprint object with all output-determining parameters
         """
         return ConfigFingerprint(
-            model_variant=self.config.model_variant.value,
+            model_variant=self.config.model_variant.value.name,  # Use name string, not ModelInfo
             depth_quantization=self.config.depth_quantization,
             depth_device=self.config.depth_device,
             preset=self.config.preset.value if self.config.preset else None,
@@ -551,7 +551,7 @@ class EnhanceOrchestrator:
                 # Create enhanced depth metadata with detailed scaling stats
                 depth_metadata = DepthMetadata(
                     backend="da3",
-                    model=self.config.model_variant.value,
+                    model=self.config.model_variant.value.name,  # Use name string, not ModelInfo
                     license="CC-BY-NC",
                     non_commercial_ok=self.config.non_commercial_ok,
                     depth_path=f"depth/{output_key.parent / output_key.name}_depth.png".replace("\\", "/"),
@@ -769,7 +769,7 @@ class EnhanceOrchestrator:
             start_time=start_time,
             end_time=end_time,
             config={
-                "model_variant": self.config.model_variant.value,
+                "model_variant": self.config.model_variant.value.to_dict(),  # Convert ModelInfo to dict
                 "preset": self.config.preset.value if self.config.preset else None,
                 "depth_quantization": self.config.depth_quantization,
                 "v2_preset": self.config.v2_preset,
