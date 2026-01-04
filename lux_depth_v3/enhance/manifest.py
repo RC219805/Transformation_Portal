@@ -406,7 +406,7 @@ def capture_environment() -> EnvironmentMetadata:
     try:
         import torch
 
-        env.torch = torch.__version__
+        env.torch = getattr(torch, "__version__", "unknown")
 
         if torch.cuda.is_available():
             env.cuda_runtime = torch.version.cuda
