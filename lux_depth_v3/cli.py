@@ -1049,11 +1049,11 @@ def enhance(
         help="Root output directory (will create depth/, v2/, manifests/, logs/ subdirs)",
     ),
     # Model configuration
-    model: str = typer.Option(
-        "metric-large",
+    model: Optional[str] = typer.Option(
+        None,
         "--model",
         "-m",
-        help="DA3 model variant (metric-large, large-v1.1, giant-v1.1, base, small, etc.)",
+        help="DA3 model variant (metric-large, large-v1.1, giant-v1.1, base, small, etc.). If not specified with --preset, uses preset's model choice.",
     ),
     preset: Optional[Preset] = typer.Option(
         None,
@@ -1195,8 +1195,8 @@ def enhance(
         typer.echo("For commercial use, contact Depth Anything team for licensing.")
         raise typer.Exit(1)
 
-    # Map model string to ModelVariant enum (use parse_model_variant for better errors)
-    model_variant = parse_model_variant(model)
+    # Map model string to ModelVariant enum (None means "use preset's choice or default")
+    model_variant = parse_model_variant(model) if model is not None else None
 
     # Display configuration
     if verbose:
@@ -1208,10 +1208,15 @@ def enhance(
         if preset is not None:
             typer.echo(f"  Preset: {preset.value}")
             # Check if model override is happening
-            if model != DEFAULT_MODEL_NAME:
+            if model_variant is not None:
                 typer.echo(f"  Model override: {model_variant.value.display_name}")
+            else:
+                typer.echo(f"  Model: (using preset's choice)")
         else:
-            typer.echo(f"  Model: {model_variant.value.display_name}")
+            if model_variant is not None:
+                typer.echo(f"  Model: {model_variant.value.display_name}")
+            else:
+                typer.echo(f"  Model: metric-large (default)")
         typer.echo(f"  Device: {depth_device}")
         typer.echo(f"  Quantization: {depth_quantization}")
         typer.echo(f"\nStage B (V2 Enhancement):")

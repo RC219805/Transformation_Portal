@@ -97,10 +97,17 @@ def make_output_key(
 
 @dataclass
 class EnhanceConfig:
-    """Configuration for enhance orchestrator."""
+    """Configuration for enhance orchestrator.
+
+    Note on model_variant vs preset interaction:
+    - If preset is specified and model_variant is None: use preset's model choice
+    - If preset is specified and model_variant is set: override preset's model
+    - If preset is None and model_variant is None: use METRIC_LARGE as default
+    - If preset is None and model_variant is set: use specified model
+    """
 
     # Model config
-    model_variant: ModelVariant = ModelVariant.METRIC_LARGE
+    model_variant: Optional[ModelVariant] = None  # None means "use preset's choice or default"
     preset: Optional[Preset] = None
 
     # V2 config
@@ -177,23 +184,28 @@ class EnhanceOrchestrator:
             # Start from preset configuration
             da3_config = DA3Config.from_preset(config.preset)
 
-            # Override model_variant ONLY if user explicitly provided one
-            # (not just the default from EnhanceConfig)
-            # Note: This assumes CLI has already validated the override is intentional.
-            # For now, we always respect the user's model_variant if it differs from preset.
-            preset_model = da3_config.model_variant
-            if config.model_variant != ModelVariant.METRIC_LARGE:  # METRIC_LARGE is EnhanceConfig default
+            # Override model_variant ONLY if user explicitly provided one (not None)
+            if config.model_variant is not None:
+                preset_model = da3_config.model_variant
                 logger.info(
                     f"Overriding preset '{config.preset.value}' model "
                     f"({preset_model.value.display_name}) with user choice "
                     f"({config.model_variant.value.display_name})"
                 )
                 da3_config.model_variant = config.model_variant
+            else:
+                # Use preset's model choice
+                logger.info(f"Using preset '{config.preset.value}' model: {da3_config.model_variant.value.display_name}")
+                # Update config to reflect actual model being used
+                config.model_variant = da3_config.model_variant
         else:
-            # No preset: use explicit model_variant
+            # No preset: use explicit model_variant or default to METRIC_LARGE
+            model = config.model_variant if config.model_variant is not None else ModelVariant.METRIC_LARGE
             da3_config = DA3Config(
-                model_variant=config.model_variant,
+                model_variant=model,
             )
+            # Update config to reflect actual model being used
+            config.model_variant = model
 
         # Apply device override (always respect CLI device choice)
         da3_config.device.device = config.depth_device
@@ -208,8 +220,16 @@ class EnhanceOrchestrator:
         self.v2_runner = V2Runner()
 
         # Track git revisions for reproducibility
-        self.v3_git = get_git_revision(Path(__file__).parent.parent)
-        self.v2_git = get_git_revision(self.output_root.parent / "lux_depth_v2")
+        # Both V2 and V3 are in the same monorepo, so find the repo root
+        # The .git directory is at Transformation_Portal-main/
+        repo_root = Path(__file__).parent.parent.parent  # Transformation_Portal-main
+
+        # Get git revision from repo root (works for monorepo structure)
+        git_revision = get_git_revision(repo_root)
+
+        # Use same revision for both V2 and V3 (they're in the same repo)
+        self.v3_git = git_revision
+        self.v2_git = git_revision
 
         # Capture environment once at initialization (cached)
         self.environment = capture_environment()
@@ -240,7 +260,7 @@ class EnhanceOrchestrator:
 
         Args:
             image_path: Path to input image
-            manifest_path: Optional path to existing manifest
+            manifest_path: Optional path to existing manifest (for IF_MANIFEST_EXISTS mode)
 
         Returns:
             SHA256 hash string if computed, None if skipped
@@ -250,7 +270,7 @@ class EnhanceOrchestrator:
 
         Security notes:
             - NEVER mode skips hashing entirely (no integrity verification)
-            - IF_MANIFEST_EXISTS only computes if manifest exists (smart resume)
+            - IF_MANIFEST_EXISTS computes hash on first run AND when manifest exists
             - ALWAYS mode computes unconditionally (maximum security)
             - Failure to compute hash when required raises exception (fail-fast)
         """
@@ -260,7 +280,10 @@ class EnhanceOrchestrator:
         if self.config.hash_mode == HashMode.ALWAYS:
             should_compute = True
         elif self.config.hash_mode == HashMode.IF_MANIFEST_EXISTS:
-            should_compute = manifest_path is not None and manifest_path.exists()
+            # FIX Issue #5: Compute hash on FIRST run (manifest doesn't exist yet)
+            # and on subsequent runs (manifest exists). This ensures manifests
+            # always have hashes for integrity verification.
+            should_compute = True
         elif self.config.hash_mode == HashMode.NEVER:
             should_compute = False
         else:
