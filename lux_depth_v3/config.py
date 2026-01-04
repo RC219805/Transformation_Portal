@@ -86,6 +86,21 @@ class ModelInfo:
             (self.name, self.params, self.license, self.huggingface_id, self.version, caps),
         )
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to JSON-serializable dictionary.
+
+        Returns:
+            Dictionary with all fields, converting MappingProxyType and Enum to primitives
+        """
+        return {
+            "name": self.name,
+            "params": self.params,
+            "license": self.license.value,  # Convert enum to string
+            "huggingface_id": self.huggingface_id,
+            "version": self.version,
+            "capabilities": dict(self._capabilities) if self._capabilities is not None else None,
+        }
+
 
 class ModelVariant(Enum):
     """Available DA3 model variants with metadata."""

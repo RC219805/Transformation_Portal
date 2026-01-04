@@ -122,14 +122,26 @@ class V2Runner:
         # Run subprocess with logging
         start_time = time.time()
         try:
+            # Determine working directory for subprocess
+            # Use repository root (parent of lux_depth_v2) to ensure module imports work
+            if self.v2_module_path is not None:
+                cwd = self.v2_module_path.parent
+            else:
+                # If v2_module_path not set, use current working directory
+                cwd = None
+
             # On Unix/POSIX systems, use start_new_session for better process group management
             # This ensures child processes are properly terminated on timeout
             subprocess_kwargs = {
                 "capture_output": True,
                 "text": True,
                 "timeout": timeout,
-                "cwd": self.v2_module_path,
             }
+
+            # Only set cwd if we have a specific path
+            if cwd is not None:
+                subprocess_kwargs["cwd"] = cwd
+
             # Use POSIX check for better Unix-like system detection
             if os.name == "posix":
                 subprocess_kwargs["start_new_session"] = True
