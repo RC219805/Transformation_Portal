@@ -122,10 +122,18 @@ class V2Runner:
         # Run subprocess with logging
         start_time = time.time()
         try:
-            # Determine working directory for subprocess
+            # Determine working directory and PYTHONPATH for subprocess
             # Use repository root (parent of lux_depth_v2) to ensure module imports work
+            env = os.environ.copy()
             if self.v2_module_path is not None:
                 cwd = self.v2_module_path.parent
+                # Add repo root to PYTHONPATH for editable installs
+                pythonpath = str(cwd)
+                if "PYTHONPATH" in env:
+                    env["PYTHONPATH"] = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
+                else:
+                    env["PYTHONPATH"] = pythonpath
+                logger.debug(f"Using cwd={cwd}, PYTHONPATH={env.get('PYTHONPATH')}")
             else:
                 # If v2_module_path not set, use current working directory
                 cwd = None
@@ -136,6 +144,7 @@ class V2Runner:
                 "capture_output": True,
                 "text": True,
                 "timeout": timeout,
+                "env": env,  # Pass modified environment with PYTHONPATH
             }
 
             # Only set cwd if we have a specific path
