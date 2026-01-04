@@ -19,6 +19,7 @@ from lux_depth_v3.input_manager import ImageInput
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .v2_runner import V2Runner, find_v2_report
 from .security import (
+    HashMode,
     sanitize_file_stem,
     sanitize_path_component_nonlossy,
     validate_device_spec,
@@ -119,6 +120,7 @@ class EnhanceConfig:
 
     # Verification
     verify_depth_writes: bool = False  # Set True for paranoid mode, False for production speed
+    hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS  # Control hash computation timing
 
     # License
     non_commercial_ok: bool = False
@@ -151,6 +153,14 @@ class EnhanceOrchestrator:
         """
         self.config = config
         self.output_root = Path(output_root)
+
+        # FIX 4: Warn about security implications of "never" hash mode
+        if config.hash_mode == HashMode.NEVER:
+            logger.warning(
+                "Hash mode set to 'never' - manifests will not include input file hashes. "
+                "This provides no protection against input tampering and prevents cache validation. "
+                "Use only in trusted environments where performance is critical."
+            )
 
         # Create output directories
         self.depth_dir = self.output_root / "depth"
@@ -205,6 +215,57 @@ class EnhanceOrchestrator:
             v2_upscaler_backend=self.config.v2_upscaler_backend,
         )
 
+    def _compute_or_skip_hash(self, image_path: Path, manifest_path: Optional[Path] = None) -> Optional[str]:
+        """Compute file hash according to hash_mode policy (FIX 5).
+
+        Args:
+            image_path: Path to input image
+            manifest_path: Optional path to existing manifest
+
+        Returns:
+            SHA256 hash string if computed, None if skipped
+
+        Raises:
+            IOError: If hash computation is required but fails (FIX 2)
+
+        Security notes:
+            - NEVER mode skips hashing entirely (no integrity verification)
+            - IF_MANIFEST_EXISTS only computes if manifest exists (smart resume)
+            - ALWAYS mode computes unconditionally (maximum security)
+            - Failure to compute hash when required raises exception (fail-fast)
+        """
+        # Determine if hash computation is needed
+        should_compute = False
+
+        if self.config.hash_mode == HashMode.ALWAYS:
+            should_compute = True
+        elif self.config.hash_mode == HashMode.IF_MANIFEST_EXISTS:
+            should_compute = manifest_path is not None and manifest_path.exists()
+        elif self.config.hash_mode == HashMode.NEVER:
+            should_compute = False
+        else:
+            # Should never reach here due to enum validation, but be defensive
+            logger.error(f"Unknown hash_mode: {self.config.hash_mode}")
+            should_compute = True  # Default to safe behavior
+
+        if not should_compute:
+            logger.debug(f"Skipping hash computation (mode={self.config.hash_mode.value})")
+            return None
+
+        # FIX 2: Fail-fast if hash is required but computation fails
+        try:
+            hash_value = compute_file_sha256(image_path)
+            logger.debug(f"Computed hash for {image_path.name}: {hash_value[:16]}...")
+            return hash_value
+        except Exception as e:
+            # Hash was required but failed - this is a critical error
+            error_msg = (
+                f"Hash computation failed for {image_path} (mode={self.config.hash_mode.value}). "
+                f"Cannot create verifiable manifest. Error: {e}"
+            )
+            logger.error(error_msg)
+            raise IOError(error_msg) from e
+
     def should_skip_depth(
         self,
         depth_path: Path,
@@ -239,11 +300,23 @@ class EnhanceOrchestrator:
         try:
             manifest = CombinedManifest.load(manifest_path)
 
-            # Check input hash
-            current_hash = compute_file_sha256(image_input.path)
-            if not manifest.input or manifest.input.image_sha256 != current_hash:
-                logger.info(f"Input image changed - regenerating depth: {image_input.path}")
-                return False
+            # Check input hash if available in manifest
+            # Note: If manifest has hash but current hash_mode=NEVER, we skip validation
+            # This allows graceful degradation when switching modes
+            if manifest.input and manifest.input.image_sha256:
+                # Manifest has hash - validate if hash_mode allows
+                if self.config.hash_mode != HashMode.NEVER:
+                    current_hash = self._compute_or_skip_hash(image_input.path, manifest_path=manifest_path)
+                    if current_hash and current_hash != manifest.input.image_sha256:
+                        logger.info(f"Input image changed - regenerating depth: {image_input.path}")
+                        return False
+                else:
+                    logger.debug("Skipping hash validation (hash_mode=NEVER)")
+            else:
+                # Old manifest lacks hash - cannot validate input integrity
+                if self.config.hash_mode == HashMode.ALWAYS:
+                    logger.info("Old manifest lacks hash and hash_mode=ALWAYS - regenerating for security")
+                    return False
 
             # Check config fingerprint (depth portion)
             if not manifest.config_fingerprint:
@@ -326,11 +399,22 @@ class EnhanceOrchestrator:
         try:
             manifest = CombinedManifest.load(manifest_path)
 
-            # Check input hash
-            current_hash = compute_file_sha256(image_input.path)
-            if not manifest.input or manifest.input.image_sha256 != current_hash:
-                logger.info("Input changed - rerunning V2")
-                return False
+            # Check input hash if available in manifest
+            # Same logic as should_skip_depth for consistency
+            if manifest.input and manifest.input.image_sha256:
+                # Manifest has hash - validate if hash_mode allows
+                if self.config.hash_mode != HashMode.NEVER:
+                    current_hash = self._compute_or_skip_hash(image_input.path, manifest_path=manifest_path)
+                    if current_hash and current_hash != manifest.input.image_sha256:
+                        logger.info("Input changed - rerunning V2")
+                        return False
+                else:
+                    logger.debug("Skipping hash validation (hash_mode=NEVER)")
+            else:
+                # Old manifest lacks hash - cannot validate input integrity
+                if self.config.hash_mode == HashMode.ALWAYS:
+                    logger.info("Old manifest lacks hash and hash_mode=ALWAYS - rerunning for security")
+                    return False
 
             # Check config fingerprint (V2 portion)
             if not manifest.config_fingerprint:
@@ -552,8 +636,9 @@ class EnhanceOrchestrator:
             error_message=v2_result.get("error"),
         )
 
-        # Compute input hash
-        input_sha256 = compute_file_sha256(image_input.path)
+        # Compute input hash using policy-aware helper (FIX 2 & FIX 5)
+        # This may return None if hash_mode=NEVER, or raise if hash required but fails
+        input_sha256 = self._compute_or_skip_hash(image_input.path, manifest_path=combined_manifest_path)
 
         # Compute config fingerprint
         config_fp = self.compute_config_fingerprint()

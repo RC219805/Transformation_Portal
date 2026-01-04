@@ -102,7 +102,7 @@ class InputMetadata:
     """Input image metadata."""
 
     image_path: str
-    image_sha256: str
+    image_sha256: Optional[str] = None  # None if hash_mode=NEVER, otherwise SHA256
     exif_normalized: bool = False  # True if EXIF orientation was normalized
     normalized_path: Optional[str] = None  # Path to normalized file if applicable
 
@@ -330,7 +330,7 @@ def get_git_revision(repo_path: Path) -> Optional[str]:
         )
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            cwd=repo_path,
+            cwd=validated_repo,  # Security fix: use validated path, not original parameter
             capture_output=True,
             text=True,
             timeout=5,

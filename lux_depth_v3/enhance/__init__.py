@@ -14,6 +14,7 @@ __all__ = [
     "InputMetadata",
     "EnhanceOrchestrator",
     "EnhanceConfig",
+    "HashMode",
     "write_depth_u16_png",
     "sanitize_file_stem",
     "validate_extra_args",
@@ -37,6 +38,10 @@ def __getattr__(name):
         from lux_depth_v3.enhance.orchestrator import EnhanceOrchestrator, EnhanceConfig  # noqa: F401
 
         return locals()[name]
+    elif name == "HashMode":
+        from lux_depth_v3.enhance.security import HashMode
+
+        return HashMode
     elif name == "write_depth_u16_png":
         from lux_depth_v3.enhance.depth_writer import write_depth_u16_png
 
