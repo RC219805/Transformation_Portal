@@ -16,9 +16,10 @@ import logging
 from lux_depth_v3.config import DA3Config, ModelVariant, Preset
 from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.input_manager import ImageInput
-from .depth_writer import write_depth_u16_png, atomic_write_depth_u16_png, read_depth_u16_png
+from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .v2_runner import V2Runner, find_v2_report
 from .security import (
+    HashMode,
     sanitize_file_stem,
     sanitize_path_component_nonlossy,
     validate_device_spec,
@@ -30,12 +31,17 @@ from .manifest import (
     ConfigFingerprint,
     InputMetadata,
     DepthMetadata,
+    DepthScalingMetadata,
     V2Metadata,
     TimingMetadata,
     ReproMetadata,
+    EnvironmentMetadata,
+    BatchManifest,
     compute_file_sha256,
     get_git_revision,
+    capture_environment,
 )
+from .batch_stats import compute_batch_runtime_stats
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +120,7 @@ class EnhanceConfig:
 
     # Verification
     verify_depth_writes: bool = False  # Set True for paranoid mode, False for production speed
+    hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS  # Control hash computation timing
 
     # License
     non_commercial_ok: bool = False
@@ -147,6 +154,14 @@ class EnhanceOrchestrator:
         self.config = config
         self.output_root = Path(output_root)
 
+        # FIX 4: Warn about security implications of "never" hash mode
+        if config.hash_mode == HashMode.NEVER:
+            logger.warning(
+                "Hash mode set to 'never' - manifests will not include input file hashes. "
+                "This provides no protection against input tampering and prevents cache validation. "
+                "Use only in trusted environments where performance is critical."
+            )
+
         # Create output directories
         self.depth_dir = self.output_root / "depth"
         self.v2_dir = self.output_root / "v2"
@@ -176,6 +191,14 @@ class EnhanceOrchestrator:
         self.v3_git = get_git_revision(Path(__file__).parent.parent)
         self.v2_git = get_git_revision(self.output_root.parent / "lux_depth_v2")
 
+        # Capture environment once at initialization (cached)
+        self.environment = capture_environment()
+        logger.info(
+            f"Environment: Python {self.environment.python}, "
+            f"Torch {self.environment.torch or 'N/A'}, "
+            f"OS {self.environment.os_platform or 'N/A'}"
+        )
+
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         """Compute fingerprint of current configuration.
 
@@ -191,6 +214,57 @@ class EnhanceOrchestrator:
             v2_device=self.config.v2_device,
             v2_upscaler_backend=self.config.v2_upscaler_backend,
         )
+
+    def _compute_or_skip_hash(self, image_path: Path, manifest_path: Optional[Path] = None) -> Optional[str]:
+        """Compute file hash according to hash_mode policy (FIX 5).
+
+        Args:
+            image_path: Path to input image
+            manifest_path: Optional path to existing manifest
+
+        Returns:
+            SHA256 hash string if computed, None if skipped
+
+        Raises:
+            IOError: If hash computation is required but fails (FIX 2)
+
+        Security notes:
+            - NEVER mode skips hashing entirely (no integrity verification)
+            - IF_MANIFEST_EXISTS only computes if manifest exists (smart resume)
+            - ALWAYS mode computes unconditionally (maximum security)
+            - Failure to compute hash when required raises exception (fail-fast)
+        """
+        # Determine if hash computation is needed
+        should_compute = False
+
+        if self.config.hash_mode == HashMode.ALWAYS:
+            should_compute = True
+        elif self.config.hash_mode == HashMode.IF_MANIFEST_EXISTS:
+            should_compute = manifest_path is not None and manifest_path.exists()
+        elif self.config.hash_mode == HashMode.NEVER:
+            should_compute = False
+        else:
+            # Should never reach here due to enum validation, but be defensive
+            logger.error(f"Unknown hash_mode: {self.config.hash_mode}")
+            should_compute = True  # Default to safe behavior
+
+        if not should_compute:
+            logger.debug(f"Skipping hash computation (mode={self.config.hash_mode.value})")
+            return None
+
+        # FIX 2: Fail-fast if hash is required but computation fails
+        try:
+            hash_value = compute_file_sha256(image_path)
+            logger.debug(f"Computed hash for {image_path.name}: {hash_value[:16]}...")
+            return hash_value
+        except Exception as e:
+            # Hash was required but failed - this is a critical error
+            error_msg = (
+                f"Hash computation failed for {image_path} (mode={self.config.hash_mode.value}). "
+                f"Cannot create verifiable manifest. Error: {e}"
+            )
+            logger.error(error_msg)
+            raise IOError(error_msg) from e
 
     def should_skip_depth(
         self,
@@ -226,11 +300,23 @@ class EnhanceOrchestrator:
         try:
             manifest = CombinedManifest.load(manifest_path)
 
-            # Check input hash
-            current_hash = compute_file_sha256(image_input.path)
-            if not manifest.input or manifest.input.image_sha256 != current_hash:
-                logger.info(f"Input image changed - regenerating depth: {image_input.path}")
-                return False
+            # Check input hash if available in manifest
+            # Note: If manifest has hash but current hash_mode=NEVER, we skip validation
+            # This allows graceful degradation when switching modes
+            if manifest.input and manifest.input.image_sha256:
+                # Manifest has hash - validate if hash_mode allows
+                if self.config.hash_mode != HashMode.NEVER:
+                    current_hash = self._compute_or_skip_hash(image_input.path, manifest_path=manifest_path)
+                    if current_hash and current_hash != manifest.input.image_sha256:
+                        logger.info(f"Input image changed - regenerating depth: {image_input.path}")
+                        return False
+                else:
+                    logger.debug("Skipping hash validation (hash_mode=NEVER)")
+            else:
+                # Old manifest lacks hash - cannot validate input integrity
+                if self.config.hash_mode == HashMode.ALWAYS:
+                    logger.info("Old manifest lacks hash and hash_mode=ALWAYS - regenerating for security")
+                    return False
 
             # Check config fingerprint (depth portion)
             if not manifest.config_fingerprint:
@@ -313,11 +399,22 @@ class EnhanceOrchestrator:
         try:
             manifest = CombinedManifest.load(manifest_path)
 
-            # Check input hash
-            current_hash = compute_file_sha256(image_input.path)
-            if not manifest.input or manifest.input.image_sha256 != current_hash:
-                logger.info("Input changed - rerunning V2")
-                return False
+            # Check input hash if available in manifest
+            # Same logic as should_skip_depth for consistency
+            if manifest.input and manifest.input.image_sha256:
+                # Manifest has hash - validate if hash_mode allows
+                if self.config.hash_mode != HashMode.NEVER:
+                    current_hash = self._compute_or_skip_hash(image_input.path, manifest_path=manifest_path)
+                    if current_hash and current_hash != manifest.input.image_sha256:
+                        logger.info("Input changed - rerunning V2")
+                        return False
+                else:
+                    logger.debug("Skipping hash validation (hash_mode=NEVER)")
+            else:
+                # Old manifest lacks hash - cannot validate input integrity
+                if self.config.hash_mode == HashMode.ALWAYS:
+                    logger.info("Old manifest lacks hash and hash_mode=ALWAYS - rerunning for security")
+                    return False
 
             # Check config fingerprint (V2 portion)
             if not manifest.config_fingerprint:
@@ -423,15 +520,15 @@ class EnhanceOrchestrator:
                 depth_result = self.inference_engine.predict(normalized_input)
                 depth_runtime_s = time.time() - start_time
 
-                # Write depth atomically
-                p1, p99 = atomic_write_depth_u16_png(
+                # Write depth atomically with detailed statistics
+                p1, p99, depth_stats = atomic_write_depth_u16_png_with_stats(
                     depth_path,
                     depth_result.depth,
                     method=self.config.depth_quantization,
                     debug_verify=self.config.verify_depth_writes,
                 )
 
-                # Create depth metadata
+                # Create enhanced depth metadata with detailed scaling stats
                 depth_metadata = DepthMetadata(
                     backend="da3",
                     model=self.config.model_variant.value,
@@ -441,11 +538,19 @@ class EnhanceOrchestrator:
                     dtype="uint16",
                     shape=list(depth_result.depth.shape[:2]),
                     scaling={
-                        "method": self.config.depth_quantization,
-                        "p1": p1,
-                        "p99": p99,
+                        "method": depth_stats.method,
+                        "p_low_percentile": depth_stats.p_low_percentile,
+                        "p_high_percentile": depth_stats.p_high_percentile,
+                        "v_low_value": depth_stats.v_low_value,
+                        "v_high_value": depth_stats.v_high_value,
+                        "clipped_low_frac": depth_stats.clipped_low_frac,
+                        "clipped_high_frac": depth_stats.clipped_high_frac,
+                        "invalid_frac": depth_stats.invalid_frac,
                     },
                     runtime_ms=depth_runtime_s * 1000,
+                    representation="depth",  # DA3 outputs depth, not inverse depth
+                    convention="higher_is_farther",  # DA3 convention
+                    unit="relative",  # DA3 outputs relative depth
                 )
 
                 logger.info(f"Depth generated in {depth_runtime_s:.2f}s")
@@ -531,8 +636,9 @@ class EnhanceOrchestrator:
             error_message=v2_result.get("error"),
         )
 
-        # Compute input hash
-        input_sha256 = compute_file_sha256(image_input.path)
+        # Compute input hash using policy-aware helper (FIX 2 & FIX 5)
+        # This may return None if hash_mode=NEVER, or raise if hash required but fails
+        input_sha256 = self._compute_or_skip_hash(image_input.path, manifest_path=combined_manifest_path)
 
         # Compute config fingerprint
         config_fp = self.compute_config_fingerprint()
@@ -557,7 +663,8 @@ class EnhanceOrchestrator:
                 v2_git=self.v2_git,
                 device=self.config.depth_device,
             ),
-            config_fingerprint=config_fp.to_sha256(),  # NEW: Add config fingerprint
+            config_fingerprint=config_fp.to_sha256(),  # Config fingerprint for cache validation
+            environment=self.environment,  # NEW: Toolchain environment for reproducibility
         )
 
         # Write manifest
@@ -588,8 +695,14 @@ class EnhanceOrchestrator:
         Returns:
             List of results for each image
         """
+        import datetime
+
         if image_extensions is None:
             image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
+
+        # Generate batch ID
+        batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        start_time = datetime.datetime.now().isoformat()
 
         # Collect images (including nested directories)
         images = []
@@ -598,6 +711,7 @@ class EnhanceOrchestrator:
             images.extend(input_dir.rglob(f"*{ext.upper()}"))
 
         logger.info(f"Found {len(images)} images in {input_dir} (including subdirectories)")
+        logger.info(f"Batch ID: {batch_id}")
 
         # Process images with explicit input_root (stateless)
         results = []
@@ -617,11 +731,54 @@ class EnhanceOrchestrator:
                     }
                 )
 
-        # Summary
-        succeeded = sum(1 for r in results if r["status"] == "ok")
-        failed = sum(1 for r in results if r["status"] == "error")
-        skipped = sum(1 for r in results if r["status"] == "skipped")
+        # Compute end time and summary
+        end_time = datetime.datetime.now().isoformat()
+
+        succeeded = sum(1 for r in results if r.get("status") == "ok")
+        failed = sum(1 for r in results if r.get("status") == "error")
+        skipped = sum(1 for r in results if r.get("status") == "skipped")
+
+        # Compute runtime stats using shared utility
+        runtime_stats = compute_batch_runtime_stats(results)
 
         logger.info(f"Batch complete: {succeeded} succeeded, {failed} failed, {skipped} skipped")
+
+        # Build batch manifest
+        batch_manifest = BatchManifest(
+            batch_id=batch_id,
+            start_time=start_time,
+            end_time=end_time,
+            config={
+                "model_variant": self.config.model_variant.value,
+                "preset": self.config.preset.value if self.config.preset else None,
+                "depth_quantization": self.config.depth_quantization,
+                "v2_preset": self.config.v2_preset,
+                "v2_upscaler_backend": self.config.v2_upscaler_backend,
+                "execution_mode": self.config.execution_mode,
+                "depth_fallback": self.config.depth_fallback,
+            },
+            images=[
+                {
+                    "stem": Path(r["image"]).stem,
+                    "status": r.get("status", "unknown"),
+                    "manifest": str(r.get("manifest", "")) if r.get("status") == "ok" else None,
+                    "runtime_s": r.get("runtime_s", 0.0) if r.get("status") == "ok" else None,
+                    "error": r.get("error") if r.get("status") == "error" else None,
+                }
+                for r in results
+            ],
+            summary={
+                "total": len(results),
+                "ok": succeeded,
+                "error": failed,
+                "skipped": skipped,
+                **runtime_stats,
+            },
+        )
+
+        # Write batch manifest
+        batch_manifest_path = self.manifests_dir / f"batch_{batch_id}.json"
+        batch_manifest.write(batch_manifest_path)
+        logger.info(f"Batch summary written to {batch_manifest_path}")
 
         return results
