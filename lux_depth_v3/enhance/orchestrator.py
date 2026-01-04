@@ -172,10 +172,16 @@ class EnhanceOrchestrator:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize V3 inference engine
-        da3_config = DA3Config(
-            model_variant=config.model_variant,
-            preset=config.preset,
-        )
+        # DA3Config does not accept a `preset=` kwarg.
+        # If a preset is provided and a factory exists, build via factory.
+        # Otherwise construct directly from model_variant.
+        if config.preset is not None and hasattr(DA3Config, "from_preset"):
+            da3_config = DA3Config.from_preset(config.preset)
+            # Ensure explicit model selection wins if provided via EnhanceConfig
+            da3_config.model_variant = config.model_variant
+        else:
+            da3_config = DA3Config(model_variant=config.model_variant)
+
         da3_config.device.device = config.depth_device
 
         self.inference_engine = DA3InferenceEngine(
