@@ -28,6 +28,23 @@ from lux_depth_v3.validation import DepthValidator, ValidationReport
 from lux_depth_v3.export import Exporter
 from lux_depth_v3.edge_refinement import create_refinement_preset
 
+# Model variant string mapping for CLI (avoids unhashable ModelInfo in Typer)
+MODEL_VARIANT_CHOICES = {
+    # Recommended v1.1 models
+    "nested-giant-large-v1.1": ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1,
+    "giant-v1.1": ModelVariant.DA3_GIANT_V1_1,
+    "large-v1.1": ModelVariant.DA3_LARGE_V1_1,
+    # Apache 2.0 licensed (commercial-friendly)
+    "metric-large": ModelVariant.DA3_METRIC_LARGE,
+    "mono-large": ModelVariant.DA3_MONO_LARGE,
+    "base": ModelVariant.DA3_BASE,
+    "small": ModelVariant.DA3_SMALL,
+    # Legacy v1.0 models (deprecated)
+    "nested-giant-large": ModelVariant.DA3_NESTED_GIANT_LARGE,
+    "giant": ModelVariant.DA3_GIANT,
+    "large": ModelVariant.DA3_LARGE,
+}
+
 app = typer.Typer(
     name="lux-depth-v3",
     help="Depth Anything 3 (DA3) integration for Transformation Portal",
@@ -959,11 +976,11 @@ def enhance(
         help="Root output directory (will create depth/, v2/, manifests/, logs/ subdirs)",
     ),
     # Model configuration
-    model: ModelVariant = typer.Option(
-        ModelVariant.METRIC_LARGE,
+    model: str = typer.Option(
+        "metric-large",
         "--model",
         "-m",
-        help="DA3 model variant for depth estimation",
+        help="DA3 model variant (metric-large, large-v1.1, giant-v1.1, base, small, etc.)",
     ),
     preset: Optional[Preset] = typer.Option(
         None,
@@ -1105,6 +1122,13 @@ def enhance(
         typer.echo("For commercial use, contact Depth Anything team for licensing.")
         raise typer.Exit(1)
 
+    # Map model string to ModelVariant enum
+    model_variant = MODEL_VARIANT_CHOICES.get(model)
+    if model_variant is None:
+        typer.echo(f"ERROR: Unknown model variant: {model}")
+        typer.echo(f"Available models: {', '.join(sorted(MODEL_VARIANT_CHOICES.keys()))}")
+        raise typer.Exit(1)
+
     # Display configuration
     if verbose:
         typer.echo("\n🚀 V3 + V2 Enhancement Pipeline")
@@ -1112,7 +1136,7 @@ def enhance(
         typer.echo(f"Input: {input_dir}")
         typer.echo(f"Output: {output_dir}")
         typer.echo(f"\nStage A (V3 Depth):")
-        typer.echo(f"  Model: {model.value}")
+        typer.echo(f"  Model: {model_variant.value.display_name}")
         typer.echo(f"  Device: {depth_device}")
         typer.echo(f"  Quantization: {depth_quantization}")
         typer.echo(f"\nStage B (V2 Enhancement):")
@@ -1126,7 +1150,7 @@ def enhance(
 
     # Create configuration
     config = EnhanceConfig(
-        model_variant=model,
+        model_variant=model_variant,
         preset=preset,
         v2_preset=v2_preset,
         v2_device=v2_device,
@@ -1230,7 +1254,7 @@ def enhance(
             start_time=start_time,
             end_time=end_time,
             config={
-                "model_variant": model.value,
+                "model_variant": model_variant.value.display_name,
                 "preset": preset.value if preset else None,
                 "depth_quantization": depth_quantization,
                 "v2_preset": v2_preset,

@@ -9,7 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional, Tuple, List, Any, Literal
+from typing import Dict, Optional, Tuple, List, Any, Literal, Mapping
+from types import MappingProxyType
 
 import numpy as np
 import torch
@@ -28,16 +29,31 @@ class ModelLicense(Enum):
     CC_BY_NC_4_0 = "CC-BY-NC-4.0"
 
 
-@dataclass
+@dataclass(frozen=True)
 class ModelInfo:
-    """Model metadata and capabilities."""
+    """Model metadata and capabilities.
+
+    Note: frozen=True makes instances hashable, required for Typer/Click enum support.
+    The capabilities dict is converted to MappingProxyType (immutable) for hashability.
+    """
 
     name: str
     params: str
     license: ModelLicense
     huggingface_id: str
     version: Optional[str] = None
-    capabilities: Optional[Dict[str, bool]] = None
+    _capabilities: Optional[Mapping[str, bool]] = None
+
+    def __post_init__(self):
+        """Convert capabilities dict to immutable MappingProxyType for hashability."""
+        # Can't directly assign to frozen dataclass fields, use object.__setattr__
+        if self._capabilities is not None and not isinstance(self._capabilities, MappingProxyType):
+            object.__setattr__(self, "_capabilities", MappingProxyType(self._capabilities))
+
+    @property
+    def capabilities(self) -> Optional[Mapping[str, bool]]:
+        """Get immutable capabilities mapping."""
+        return self._capabilities
 
     @property
     def is_commercial(self) -> bool:
@@ -51,6 +67,15 @@ class ModelInfo:
             return f"{self.name}-{self.version}"
         return self.name
 
+    def __hash__(self):
+        """Custom hash that handles immutable capabilities mapping."""
+        # Hash the capabilities as a frozenset of items if present
+        caps_hash = 0
+        if self._capabilities is not None:
+            caps_hash = hash(frozenset(self._capabilities.items()))
+
+        return hash((self.name, self.params, self.license, self.huggingface_id, self.version, caps_hash))
+
 
 class ModelVariant(Enum):
     """Available DA3 model variants with metadata."""
@@ -62,7 +87,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         version="1.1",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -79,7 +104,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3NESTED-GIANT-LARGE",
         version="1.0",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -96,7 +121,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3-GIANT-1.1",
         version="1.1",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -112,7 +137,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3-LARGE-1.1",
         version="1.1",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -129,7 +154,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3-GIANT",
         version="1.0",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -145,7 +170,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3-LARGE",
         version="1.0",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -161,7 +186,7 @@ class ModelVariant(Enum):
         params="0.12B",
         license=ModelLicense.APACHE_2_0,
         huggingface_id="depth-anything/DA3-BASE",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -176,7 +201,7 @@ class ModelVariant(Enum):
         params="0.08B",
         license=ModelLicense.APACHE_2_0,
         huggingface_id="depth-anything/DA3-SMALL",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": False,
             "pose_conditioning": False,
@@ -192,7 +217,7 @@ class ModelVariant(Enum):
         params="0.35B",
         license=ModelLicense.APACHE_2_0,
         huggingface_id="depth-anything/DA3METRIC-LARGE",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "metric_depth": True,
             "sky_segmentation": True,
@@ -207,7 +232,7 @@ class ModelVariant(Enum):
         params="0.35B",
         license=ModelLicense.APACHE_2_0,
         huggingface_id="depth-anything/DA3MONO-LARGE",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "metric_depth": False,
             "sky_segmentation": False,
@@ -224,7 +249,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3NESTED-GIANT-LARGE",
         version="1.0",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -240,7 +265,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3-GIANT",
         version="1.0",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -256,7 +281,7 @@ class ModelVariant(Enum):
         license=ModelLicense.CC_BY_NC_4_0,
         huggingface_id="depth-anything/DA3-LARGE",
         version="1.0",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -271,7 +296,7 @@ class ModelVariant(Enum):
         params="0.12B",
         license=ModelLicense.APACHE_2_0,
         huggingface_id="depth-anything/DA3-BASE",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": True,
             "pose_conditioning": True,
@@ -286,7 +311,7 @@ class ModelVariant(Enum):
         params="0.08B",
         license=ModelLicense.APACHE_2_0,
         huggingface_id="depth-anything/DA3-SMALL",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "pose_estimation": False,
             "pose_conditioning": False,
@@ -301,7 +326,7 @@ class ModelVariant(Enum):
         params="0.35B",
         license=ModelLicense.APACHE_2_0,
         huggingface_id="depth-anything/DA3METRIC-LARGE",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "metric_depth": True,
             "sky_segmentation": True,
@@ -316,7 +341,7 @@ class ModelVariant(Enum):
         params="0.35B",
         license=ModelLicense.APACHE_2_0,
         huggingface_id="depth-anything/DA3MONO-LARGE",
-        capabilities={
+        _capabilities={
             "relative_depth": True,
             "metric_depth": False,
             "sky_segmentation": False,
