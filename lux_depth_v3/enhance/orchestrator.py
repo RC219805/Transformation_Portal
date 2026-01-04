@@ -100,7 +100,10 @@ class EnhanceConfig:
     """Configuration for enhance orchestrator."""
 
     # Model config
-    model_variant: ModelVariant = ModelVariant.METRIC_LARGE
+    # Note: model_variant is Optional to distinguish between:
+    # - None: use preset's default model selection
+    # - ModelVariant: explicit override of preset's model selection
+    model_variant: Optional[ModelVariant] = None
     preset: Optional[Preset] = None
 
     # V2 config
@@ -173,14 +176,18 @@ class EnhanceOrchestrator:
 
         # Initialize V3 inference engine
         # DA3Config does not accept a `preset=` kwarg.
-        # If a preset is provided and a factory exists, build via factory.
+        # If a preset is provided, build via factory.
         # Otherwise construct directly from model_variant.
-        if config.preset is not None and hasattr(DA3Config, "from_preset"):
+        if config.preset is not None:
             da3_config = DA3Config.from_preset(config.preset)
-            # Ensure explicit model selection wins if provided via EnhanceConfig
-            da3_config.model_variant = config.model_variant
+            # Only override preset's model selection if user explicitly provided a model variant
+            if config.model_variant is not None:
+                da3_config.model_variant = config.model_variant
         else:
-            da3_config = DA3Config(model_variant=config.model_variant)
+            # No preset: use explicit model_variant or fall back to default
+            da3_config = DA3Config(
+                model_variant=config.model_variant or ModelVariant.METRIC_LARGE
+            )
 
         da3_config.device.device = config.depth_device
 

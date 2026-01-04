@@ -35,6 +35,82 @@ app = typer.Typer(
 )
 
 
+# Model variant string mapping for CLI
+# Maps user-friendly string names to ModelVariant enum members
+MODEL_VARIANT_MAP = {
+    # Nested models (v1.1 - recommended)
+    "nested-giant-large-v1.1": ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1,
+    "da3-nested-giant-large-v1.1": ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1,
+    # Nested models (v1.0 - deprecated)
+    "nested-giant-large": ModelVariant.DA3_NESTED_GIANT_LARGE,
+    "da3-nested-giant-large": ModelVariant.DA3_NESTED_GIANT_LARGE,
+    # Any-view models (v1.1)
+    "giant-v1.1": ModelVariant.DA3_GIANT_V1_1,
+    "da3-giant-v1.1": ModelVariant.DA3_GIANT_V1_1,
+    "large-v1.1": ModelVariant.DA3_LARGE_V1_1,
+    "da3-large-v1.1": ModelVariant.DA3_LARGE_V1_1,
+    # Any-view models (v1.0 - deprecated)
+    "giant": ModelVariant.DA3_GIANT,
+    "da3-giant": ModelVariant.DA3_GIANT,
+    "large": ModelVariant.DA3_LARGE,
+    "da3-large": ModelVariant.DA3_LARGE,
+    # Base/Small (Apache 2.0)
+    "base": ModelVariant.DA3_BASE,
+    "da3-base": ModelVariant.DA3_BASE,
+    "small": ModelVariant.DA3_SMALL,
+    "da3-small": ModelVariant.DA3_SMALL,
+    # Metric/Mono models (Apache 2.0)
+    "metric-large": ModelVariant.DA3_METRIC_LARGE,
+    "da3-metric-large": ModelVariant.DA3_METRIC_LARGE,
+    "mono-large": ModelVariant.DA3_MONO_LARGE,
+    "da3-mono-large": ModelVariant.DA3_MONO_LARGE,
+    # Legacy uppercase variants
+    "NESTED_GIANT_LARGE": ModelVariant.NESTED_GIANT_LARGE,
+    "GIANT": ModelVariant.GIANT,
+    "LARGE": ModelVariant.LARGE,
+    "BASE": ModelVariant.BASE,
+    "SMALL": ModelVariant.SMALL,
+    "METRIC_LARGE": ModelVariant.METRIC_LARGE,
+    "MONO_LARGE": ModelVariant.MONO_LARGE,
+}
+
+
+def parse_model_variant(model_str: str) -> ModelVariant:
+    """Convert model string to ModelVariant enum.
+    
+    Args:
+        model_str: Model name string (case-insensitive)
+        
+    Returns:
+        ModelVariant enum member
+        
+    Raises:
+        typer.BadParameter: If model name is not recognized
+    """
+    model_lower = model_str.lower()
+    if model_lower in MODEL_VARIANT_MAP:
+        return MODEL_VARIANT_MAP[model_lower]
+    
+    # Also try uppercase for backward compatibility
+    if model_str in MODEL_VARIANT_MAP:
+        return MODEL_VARIANT_MAP[model_str]
+    
+    # Provide helpful error message
+    valid_names = sorted(set(MODEL_VARIANT_MAP.keys()))
+    typer.echo(f"ERROR: Unknown model variant: {model_str}")
+    typer.echo(f"\nValid options:")
+    typer.echo("  Commercial (Apache 2.0):")
+    typer.echo("    - metric-large (recommended for interior scenes)")
+    typer.echo("    - mono-large")
+    typer.echo("    - base")
+    typer.echo("    - small")
+    typer.echo("  Non-commercial (CC-BY-NC-4.0, requires --non-commercial-ok):")
+    typer.echo("    - nested-giant-large-v1.1 (recommended, best quality)")
+    typer.echo("    - giant-v1.1")
+    typer.echo("    - large-v1.1")
+    raise typer.Exit(1)
+
+
 @app.command()
 def process(
     # Input/Output
@@ -54,11 +130,11 @@ def process(
         help="Output directory for results",
     ),
     # Model configuration
-    model: ModelVariant = typer.Option(
-        ModelVariant.METRIC_LARGE,
+    model: str = typer.Option(
+        "metric-large",
         "--model",
         "-m",
-        help="DA3 model variant to use",
+        help="DA3 model variant to use (e.g., 'metric-large', 'nested-giant-large-v1.1')",
     ),
     preset: Optional[Preset] = typer.Option(
         None,
@@ -219,11 +295,15 @@ def process(
         sys.exit(1)
 
     # Create configuration
+    model_variant = parse_model_variant(model)
     if preset is not None:
         config = DA3Config.from_preset(preset)
+        # Override model if explicitly provided (only when different from default)
+        if model != "metric-large":  # Only override if user specified non-default
+            config.model_variant = model_variant
     else:
         config = DA3Config(
-            model_variant=model,
+            model_variant=model_variant,
             inference_mode=InferenceMode.MULTI_VIEW if multi_view else InferenceMode.MONOCULAR,
         )
 
@@ -959,11 +1039,11 @@ def enhance(
         help="Root output directory (will create depth/, v2/, manifests/, logs/ subdirs)",
     ),
     # Model configuration
-    model: ModelVariant = typer.Option(
-        ModelVariant.METRIC_LARGE,
+    model: str = typer.Option(
+        "metric-large",
         "--model",
         "-m",
-        help="DA3 model variant for depth estimation",
+        help="DA3 model variant for depth estimation (e.g., 'metric-large', 'nested-giant-large-v1.1')",
     ),
     preset: Optional[Preset] = typer.Option(
         None,
@@ -1106,13 +1186,22 @@ def enhance(
         raise typer.Exit(1)
 
     # Display configuration
+    # Only parse model variant if user provided it (non-default value)
+    model_variant = parse_model_variant(model) if model != "metric-large" or preset is None else None
+    
     if verbose:
         typer.echo("\n🚀 V3 + V2 Enhancement Pipeline")
         typer.echo("=" * 70)
         typer.echo(f"Input: {input_dir}")
         typer.echo(f"Output: {output_dir}")
         typer.echo(f"\nStage A (V3 Depth):")
-        typer.echo(f"  Model: {model.value}")
+        if preset is not None:
+            typer.echo(f"  Preset: {preset.value}")
+            if model_variant is not None:
+                typer.echo(f"  Model override: {model_variant.value.display_name}")
+        else:
+            display_variant = model_variant or parse_model_variant("metric-large")
+            typer.echo(f"  Model: {display_variant.value.display_name}")
         typer.echo(f"  Device: {depth_device}")
         typer.echo(f"  Quantization: {depth_quantization}")
         typer.echo(f"\nStage B (V2 Enhancement):")
@@ -1126,7 +1215,7 @@ def enhance(
 
     # Create configuration
     config = EnhanceConfig(
-        model_variant=model,
+        model_variant=model_variant,
         preset=preset,
         v2_preset=v2_preset,
         v2_device=v2_device,

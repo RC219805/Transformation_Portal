@@ -91,6 +91,10 @@ transform-analyze = "transformation_portal.cli:analyze_cli"
 lux-depth-v2 = "lux_depth_v2.cli:main"
 lux-depth-v2-service = "lux_depth_v2.service:main"
 
+# Lux Depth V3 Pipeline CLI (Depth Anything 3 integration)
+# Note: lux_depth_v3 is a root-level package (not in src/)
+lux-depth-v3 = "lux_depth_v3.cli:main"
+
 # Legacy compatibility (can be removed in future versions)
 luxury_video_grader = "transformation_portal.processors.luxury_video_master_grader:main"
 lux_render = "transformation_portal.pipelines.lux_render_pipeline:main"
@@ -99,10 +103,11 @@ luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
 [tool.setuptools.package-dir]
 "" = "src"
 "lux_depth_v2" = "lux_depth_v2"
+"lux_depth_v3" = "lux_depth_v3"
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
-include = ["transformation_portal*", "luxury_tiff_batch_processor*", "lux_depth_v2*"]
+include = ["transformation_portal*", "luxury_tiff_batch_processor*", "lux_depth_v2*", "lux_depth_v3*"]
 exclude = ["tests*", "docs*", "examples*", "*.tests", "*.tests.*"]
 
 [tool.pylint.main]
