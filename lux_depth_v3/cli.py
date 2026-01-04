@@ -28,22 +28,87 @@ from lux_depth_v3.validation import DepthValidator, ValidationReport
 from lux_depth_v3.export import Exporter
 from lux_depth_v3.edge_refinement import create_refinement_preset
 
+# Default model variant for CLI
+DEFAULT_MODEL_NAME = "metric-large"
+
 # Model variant string mapping for CLI (avoids unhashable ModelInfo in Typer)
+# Maps user-friendly string names to ModelVariant enum members
 MODEL_VARIANT_CHOICES = {
-    # Recommended v1.1 models
+    # Nested models (v1.1 - recommended)
     "nested-giant-large-v1.1": ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1,
-    "giant-v1.1": ModelVariant.DA3_GIANT_V1_1,
-    "large-v1.1": ModelVariant.DA3_LARGE_V1_1,
-    # Apache 2.0 licensed (commercial-friendly)
-    "metric-large": ModelVariant.DA3_METRIC_LARGE,
-    "mono-large": ModelVariant.DA3_MONO_LARGE,
-    "base": ModelVariant.DA3_BASE,
-    "small": ModelVariant.DA3_SMALL,
-    # Legacy v1.0 models (deprecated)
+    "da3-nested-giant-large-v1.1": ModelVariant.DA3_NESTED_GIANT_LARGE_V1_1,
+    # Nested models (v1.0 - deprecated)
     "nested-giant-large": ModelVariant.DA3_NESTED_GIANT_LARGE,
+    "da3-nested-giant-large": ModelVariant.DA3_NESTED_GIANT_LARGE,
+    # Any-view models (v1.1)
+    "giant-v1.1": ModelVariant.DA3_GIANT_V1_1,
+    "da3-giant-v1.1": ModelVariant.DA3_GIANT_V1_1,
+    "large-v1.1": ModelVariant.DA3_LARGE_V1_1,
+    "da3-large-v1.1": ModelVariant.DA3_LARGE_V1_1,
+    # Any-view models (v1.0 - deprecated)
     "giant": ModelVariant.DA3_GIANT,
+    "da3-giant": ModelVariant.DA3_GIANT,
     "large": ModelVariant.DA3_LARGE,
+    "da3-large": ModelVariant.DA3_LARGE,
+    # Base/Small (Apache 2.0)
+    "base": ModelVariant.DA3_BASE,
+    "da3-base": ModelVariant.DA3_BASE,
+    "small": ModelVariant.DA3_SMALL,
+    "da3-small": ModelVariant.DA3_SMALL,
+    # Metric/Mono models (Apache 2.0)
+    "metric-large": ModelVariant.DA3_METRIC_LARGE,
+    "da3-metric-large": ModelVariant.DA3_METRIC_LARGE,
+    "mono-large": ModelVariant.DA3_MONO_LARGE,
+    "da3-mono-large": ModelVariant.DA3_MONO_LARGE,
 }
+
+
+def parse_model_variant(model_str: str) -> ModelVariant:
+    """Convert model string to ModelVariant enum.
+
+    Args:
+        model_str: Model name string (case-insensitive)
+
+    Returns:
+        ModelVariant enum member
+
+    Raises:
+        typer.Exit: If model name is not recognized
+    """
+    model_lower = model_str.lower()
+    if model_lower in MODEL_VARIANT_CHOICES:
+        return MODEL_VARIANT_CHOICES[model_lower]
+
+    # Generate helpful error message grouped by license
+    commercial_models = []
+    non_commercial_models = []
+
+    seen = set()
+    for name, variant in MODEL_VARIANT_CHOICES.items():
+        # Skip da3-* prefix duplicates for cleaner error message
+        if name.startswith("da3-"):
+            continue
+        # Skip duplicates
+        if variant in seen:
+            continue
+        seen.add(variant)
+
+        if variant.value.is_commercial:
+            commercial_models.append(name)
+        else:
+            non_commercial_models.append(name)
+
+    typer.echo(f"ERROR: Unknown model variant: {model_str}")
+    typer.echo("\nValid options:")
+    typer.echo("  Commercial (Apache 2.0):")
+    for name in sorted(commercial_models):
+        typer.echo(f"    - {name}")
+    typer.echo("  Non-commercial (CC-BY-NC-4.0, requires --non-commercial-ok):")
+    for name in sorted(non_commercial_models):
+        typer.echo(f"    - {name}")
+    typer.echo("\nTip: Add 'da3-' prefix for any model name (e.g., 'da3-metric-large')")
+    raise typer.Exit(1)
+
 
 app = typer.Typer(
     name="lux-depth-v3",
@@ -71,11 +136,11 @@ def process(
         help="Output directory for results",
     ),
     # Model configuration
-    model: ModelVariant = typer.Option(
-        ModelVariant.METRIC_LARGE,
+    model: str = typer.Option(
+        DEFAULT_MODEL_NAME,
         "--model",
         "-m",
-        help="DA3 model variant to use",
+        help="DA3 model variant (e.g., 'metric-large', 'nested-giant-large-v1.1')",
     ),
     preset: Optional[Preset] = typer.Option(
         None,
@@ -236,11 +301,15 @@ def process(
         sys.exit(1)
 
     # Create configuration
+    model_variant = parse_model_variant(model)
     if preset is not None:
         config = DA3Config.from_preset(preset)
+        # Override model if explicitly provided (only when different from default)
+        if model != DEFAULT_MODEL_NAME:
+            config.model_variant = model_variant
     else:
         config = DA3Config(
-            model_variant=model,
+            model_variant=model_variant,
             inference_mode=InferenceMode.MULTI_VIEW if multi_view else InferenceMode.MONOCULAR,
         )
 
@@ -366,10 +435,10 @@ def process(
 
 @app.command()
 def benchmark(
-    model: ModelVariant = typer.Option(
-        ModelVariant.METRIC_LARGE,
+    model: str = typer.Option(
+        DEFAULT_MODEL_NAME,
         "--model",
-        help="Model variant to benchmark",
+        help="Model variant to benchmark (e.g., 'metric-large', 'large-v1.1')",
     ),
     device: str = typer.Option(
         "auto",
@@ -391,13 +460,14 @@ def benchmark(
     import time
     import numpy as np
 
-    print(f"Benchmarking {model.value} on {device}")
+    model_variant = parse_model_variant(model)
+    print(f"Benchmarking {model_variant.value.display_name} on {device}")
 
     # Create dummy input
     dummy_image = np.random.randint(0, 255, (1024, 1024, 3), dtype=np.uint8)
 
     # Initialize engine
-    config = DA3Config(model_variant=model)
+    config = DA3Config(model_variant=model_variant)
     config.device.device = device
     engine = DA3InferenceEngine(config)
     engine.load_model()
@@ -588,7 +658,7 @@ def benchmark(
     )
 
     # Initialize evaluator
-    evaluator = DA3BenchmarkEvaluator(model_variant=model, config=config, use_cli=use_cli)
+    evaluator = DA3BenchmarkEvaluator(model_variant=model_variant, config=config, use_cli=use_cli)
 
     if print_only:
         typer.echo("Loading saved results...")
@@ -1122,12 +1192,8 @@ def enhance(
         typer.echo("For commercial use, contact Depth Anything team for licensing.")
         raise typer.Exit(1)
 
-    # Map model string to ModelVariant enum
-    model_variant = MODEL_VARIANT_CHOICES.get(model)
-    if model_variant is None:
-        typer.echo(f"ERROR: Unknown model variant: {model}")
-        typer.echo(f"Available models: {', '.join(sorted(MODEL_VARIANT_CHOICES.keys()))}")
-        raise typer.Exit(1)
+    # Map model string to ModelVariant enum (use parse_model_variant for better errors)
+    model_variant = parse_model_variant(model)
 
     # Display configuration
     if verbose:
@@ -1136,7 +1202,13 @@ def enhance(
         typer.echo(f"Input: {input_dir}")
         typer.echo(f"Output: {output_dir}")
         typer.echo(f"\nStage A (V3 Depth):")
-        typer.echo(f"  Model: {model_variant.value.display_name}")
+        if preset is not None:
+            typer.echo(f"  Preset: {preset.value}")
+            # Check if model override is happening
+            if model != DEFAULT_MODEL_NAME:
+                typer.echo(f"  Model override: {model_variant.value.display_name}")
+        else:
+            typer.echo(f"  Model: {model_variant.value.display_name}")
         typer.echo(f"  Device: {depth_device}")
         typer.echo(f"  Quantization: {depth_quantization}")
         typer.echo(f"\nStage B (V2 Enhancement):")
