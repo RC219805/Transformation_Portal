@@ -35,6 +35,10 @@ app = typer.Typer(
 )
 
 
+# Default model variant for CLI
+DEFAULT_MODEL_NAME = "metric-large"
+
+
 # Model variant string mapping for CLI
 # Maps user-friendly string names to ModelVariant enum members
 MODEL_VARIANT_MAP = {
@@ -95,19 +99,34 @@ def parse_model_variant(model_str: str) -> ModelVariant:
     if model_str in MODEL_VARIANT_MAP:
         return MODEL_VARIANT_MAP[model_str]
     
-    # Provide helpful error message
-    valid_names = sorted(set(MODEL_VARIANT_MAP.keys()))
+    # Generate helpful error message dynamically from MODEL_VARIANT_MAP
+    # Group models by license for better readability
+    commercial_models = []
+    non_commercial_models = []
+    
+    seen = set()
+    for name, variant in MODEL_VARIANT_MAP.items():
+        # Skip uppercase legacy variants (duplicates)
+        if name.isupper():
+            continue
+        # Skip duplicates
+        if variant in seen:
+            continue
+        seen.add(variant)
+        
+        if variant.value.is_commercial:
+            commercial_models.append(name)
+        else:
+            non_commercial_models.append(name)
+    
     typer.echo(f"ERROR: Unknown model variant: {model_str}")
     typer.echo(f"\nValid options:")
     typer.echo("  Commercial (Apache 2.0):")
-    typer.echo("    - metric-large (recommended for interior scenes)")
-    typer.echo("    - mono-large")
-    typer.echo("    - base")
-    typer.echo("    - small")
+    for name in sorted(commercial_models):
+        typer.echo(f"    - {name}")
     typer.echo("  Non-commercial (CC-BY-NC-4.0, requires --non-commercial-ok):")
-    typer.echo("    - nested-giant-large-v1.1 (recommended, best quality)")
-    typer.echo("    - giant-v1.1")
-    typer.echo("    - large-v1.1")
+    for name in sorted(non_commercial_models):
+        typer.echo(f"    - {name}")
     raise typer.Exit(1)
 
 
@@ -131,7 +150,7 @@ def process(
     ),
     # Model configuration
     model: str = typer.Option(
-        "metric-large",
+        DEFAULT_MODEL_NAME,
         "--model",
         "-m",
         help="DA3 model variant to use (e.g., 'metric-large', 'nested-giant-large-v1.1')",
@@ -299,7 +318,7 @@ def process(
     if preset is not None:
         config = DA3Config.from_preset(preset)
         # Override model if explicitly provided (only when different from default)
-        if model != "metric-large":  # Only override if user specified non-default
+        if model != DEFAULT_MODEL_NAME:
             config.model_variant = model_variant
     else:
         config = DA3Config(
@@ -1040,7 +1059,7 @@ def enhance(
     ),
     # Model configuration
     model: str = typer.Option(
-        "metric-large",
+        DEFAULT_MODEL_NAME,
         "--model",
         "-m",
         help="DA3 model variant for depth estimation (e.g., 'metric-large', 'nested-giant-large-v1.1')",
@@ -1186,8 +1205,12 @@ def enhance(
         raise typer.Exit(1)
 
     # Display configuration
-    # Only parse model variant if user provided it (non-default value)
-    model_variant = parse_model_variant(model) if model != "metric-large" or preset is None else None
+    # Only parse and use model variant if user explicitly provided it (non-default value)
+    # OR if no preset is being used (then model is the only source of model selection)
+    if preset is None or model != DEFAULT_MODEL_NAME:
+        model_variant = parse_model_variant(model)
+    else:
+        model_variant = None  # Let preset choose the model
     
     if verbose:
         typer.echo("\n🚀 V3 + V2 Enhancement Pipeline")
@@ -1200,7 +1223,7 @@ def enhance(
             if model_variant is not None:
                 typer.echo(f"  Model override: {model_variant.value.display_name}")
         else:
-            display_variant = model_variant or parse_model_variant("metric-large")
+            display_variant = model_variant or parse_model_variant(DEFAULT_MODEL_NAME)
             typer.echo(f"  Model: {display_variant.value.display_name}")
         typer.echo(f"  Device: {depth_device}")
         typer.echo(f"  Quantization: {depth_quantization}")
