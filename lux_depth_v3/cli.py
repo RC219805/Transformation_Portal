@@ -350,7 +350,10 @@ def process(
             print(f"  Refinement: {refinement_preset} ({', '.join(config.postprocessing.refinement.stages)})")
 
     # Initialize pipeline components
-    input_manager = InputManager(inference_mode=config.inference_mode)
+    input_manager = InputManager(
+        inference_mode=config.inference_mode,
+        max_file_size_mb=3000.0,  # Increased for large production TIFFs
+    )
     inference_engine = DA3InferenceEngine(config)
     postprocessor = Postprocessor(config.postprocessing)
     exporter = Exporter(config.export)

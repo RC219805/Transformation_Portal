@@ -77,6 +77,42 @@ class ImageInput:
         if self.path is None:
             raise ValueError("No path or array available")
 
+        # Try tifffile first for TIFF files (handles 32-bit)
+        if self.path.suffix.lower() in {".tif", ".tiff"}:
+            try:
+                import tifffile
+
+                array = tifffile.imread(self.path)
+
+                # Normalize to uint8 RGB for consistency
+                if array.dtype == np.float32 or array.dtype == np.float64:
+                    # Normalize float to 0-255 uint8
+                    array = np.clip(array * 255, 0, 255).astype(np.uint8)
+                elif array.dtype == np.uint16:
+                    # Scale uint16 to uint8
+                    array = (array / 256).astype(np.uint8)
+
+                # Ensure RGB format
+                if array.ndim == 2:
+                    array = np.stack([array] * 3, axis=-1)
+                elif array.shape[-1] == 4:
+                    array = array[..., :3]  # Drop alpha
+
+                # Store metadata
+                self.metadata.update(
+                    {
+                        "original_size": (array.shape[1], array.shape[0]),
+                        "format": "TIFF",
+                        "mode": "RGB",
+                    }
+                )
+
+                self.array = array
+                return array
+
+            except ImportError:
+                pass  # Fall back to Pillow
+
         # Load image using Pillow
         with Image.open(self.path) as img:
             # Convert to RGB if needed
