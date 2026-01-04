@@ -13,7 +13,15 @@ from typing import Dict, Optional, Tuple, List, Any, Literal, Mapping
 from types import MappingProxyType
 
 import numpy as np
-import torch
+
+# Optional torch import for CI environments without ML dependencies
+try:
+    import torch
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None  # type: ignore
+    TORCH_AVAILABLE = False
 
 # Import RefViewStrategy for type hints (avoid circular import at runtime)
 from typing import TYPE_CHECKING
@@ -536,8 +544,15 @@ class DeviceConfig:
     precision: str = "fp16"  # "fp32", "fp16", "bf16"
     use_compile: bool = False  # torch.compile optimization (PyTorch 2.0+)
 
-    def resolve_device(self) -> torch.device:
-        """Resolve device string to torch.device."""
+    def resolve_device(self):
+        """Resolve device string to torch.device.
+
+        Returns:
+            torch.device if torch available, otherwise string
+        """
+        if not TORCH_AVAILABLE:
+            return self.device if self.device != "auto" else "cpu"
+
         if self.device == "auto":
             if torch.cuda.is_available():
                 return torch.device("cuda")
@@ -547,8 +562,15 @@ class DeviceConfig:
                 return torch.device("cpu")
         return torch.device(self.device)
 
-    def get_dtype(self) -> torch.dtype:
-        """Get torch dtype from precision string."""
+    def get_dtype(self):
+        """Get torch dtype from precision string.
+
+        Returns:
+            torch.dtype if torch available, otherwise string
+        """
+        if not TORCH_AVAILABLE:
+            return self.precision
+
         dtype_map = {
             "fp32": torch.float32,
             "fp16": torch.float16,
