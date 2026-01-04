@@ -172,10 +172,30 @@ class EnhanceOrchestrator:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize V3 inference engine
-        da3_config = DA3Config(
-            model_variant=config.model_variant,
-            preset=config.preset,
-        )
+        # Handle preset vs explicit model_variant override logic
+        if config.preset is not None:
+            # Start from preset configuration
+            da3_config = DA3Config.from_preset(config.preset)
+
+            # Override model_variant ONLY if user explicitly provided one
+            # (not just the default from EnhanceConfig)
+            # Note: This assumes CLI has already validated the override is intentional.
+            # For now, we always respect the user's model_variant if it differs from preset.
+            preset_model = da3_config.model_variant
+            if config.model_variant != ModelVariant.METRIC_LARGE:  # METRIC_LARGE is EnhanceConfig default
+                logger.info(
+                    f"Overriding preset '{config.preset.value}' model "
+                    f"({preset_model.value.display_name}) with user choice "
+                    f"({config.model_variant.value.display_name})"
+                )
+                da3_config.model_variant = config.model_variant
+        else:
+            # No preset: use explicit model_variant
+            da3_config = DA3Config(
+                model_variant=config.model_variant,
+            )
+
+        # Apply device override (always respect CLI device choice)
         da3_config.device.device = config.depth_device
 
         self.inference_engine = DA3InferenceEngine(

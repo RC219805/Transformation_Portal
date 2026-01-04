@@ -394,7 +394,14 @@ class DepthAnything3Wrapper:
         except ImportError:
             self.DepthAnything3 = None
             self.available = False
-            logger.warning("Official DA3 API not available. Install with: pip install depth-anything-3")
+            logger.warning(
+                "Official DA3 API not available. The 'depth_anything_3' module cannot be imported.\n"
+                "Install the official Depth Anything V3 API from GitHub:\n"
+                "  pip install git+https://github.com/DepthAnything/Depth-Anything-V3.git\n"
+                "\n"
+                "Note: The PyPI package 'depth-anything-3' (v0.0.0) is a placeholder and does NOT provide "
+                "the required 'depth_anything_3' module."
+            )
 
         # Lazily loaded to avoid triggering large downloads at import/init time.
         self.model = None
@@ -413,7 +420,14 @@ class DepthAnything3Wrapper:
         offline behavior.
         """
         if not self.available or self.DepthAnything3 is None:
-            raise RuntimeError("DA3 API not available. Install with: pip install depth-anything-3")
+            raise RuntimeError(
+                "DA3 API not available. The 'depth_anything_3' module cannot be imported.\n"
+                "Install the official Depth Anything V3 API from GitHub:\n"
+                "  pip install git+https://github.com/DepthAnything/Depth-Anything-V3.git\n"
+                "\n"
+                "Note: The PyPI package 'depth-anything-3' (v0.0.0) is a placeholder and does NOT provide "
+                "the required 'depth_anything_3' module."
+            )
 
         if self.model is not None and not force_reload:
             return self.model
