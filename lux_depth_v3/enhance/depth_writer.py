@@ -238,7 +238,7 @@ def write_depth_u16_png_with_stats(
         # Clip and map to [0, 65535]
         depth_normalized = np.clip((depth_f32 - p1) / (p99 - p1), 0.0, 1.0)
         depth_u16 = (depth_normalized * 65535.0 + 0.5).astype(np.uint16)
-        
+
         # Compute clipping fractions from quantized output
         # Values at 0 were clipped at low end, values at 65535 were clipped at high end
         if depth_u16.size > 0:
