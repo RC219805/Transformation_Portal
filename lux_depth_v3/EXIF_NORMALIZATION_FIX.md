@@ -37,12 +37,12 @@ New function `validate_depth_image_alignment()` catches errors before V2 runs:
 ```python
 def validate_depth_image_alignment(image_path: Path, depth_path: Path) -> None:
     """Validate that depth and image have matching dimensions.
-    
+
     Checks:
     - Image and depth shapes match (H, W)
     - Depth is uint16 (not uint8 or float)
     - Depth is single-channel (not RGB)
-    
+
     Raises clear error messages for EXIF orientation mismatches.
     """
 ```

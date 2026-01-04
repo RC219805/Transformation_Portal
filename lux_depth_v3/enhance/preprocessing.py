@@ -247,8 +247,7 @@ def validate_depth_image_alignment(
 
         if depth.dtype != np.uint16:
             raise ValueError(
-                f"Depth must be uint16, got {depth.dtype}. "
-                f"This indicates a quantization error in depth generation."
+                f"Depth must be uint16, got {depth.dtype}. This indicates a quantization error in depth generation."
             )
 
         depth_shape = depth.shape  # (H, W)
