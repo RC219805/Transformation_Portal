@@ -15,7 +15,7 @@ autopep8==2.3.2
     # via
     #   -c all.txt
     #   -r dev.in
-backports-asyncio-runner==1.2.0
+backports-asyncio-runner==1.2.0 ; python_version < "3.11"
     # via
     #   -c all.txt
     #   pytest-asyncio

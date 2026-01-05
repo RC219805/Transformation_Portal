@@ -23,7 +23,7 @@ authlib==1.6.6
     # via safety
 autopep8==2.3.2
     # via -r dev.in
-backports-asyncio-runner==1.2.0
+backports-asyncio-runner==1.2.0 ; python_version < "3.11"
     # via pytest-asyncio
 backports-datetime-fromisoformat==2.0.3
     # via marshmallow
