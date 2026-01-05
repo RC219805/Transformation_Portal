@@ -100,6 +100,12 @@ jobs:
           # Run pre-commit on all files that changed
           pre-commit run --all-files || echo "Pre-commit warnings detected (non-blocking)"
 
+      - name: Test Python 3.10 compatibility
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+          cache: 'pip'
+
       - name: Validate dependency installation (Python 3.10)
         run: |
           echo "Testing installation with Python 3.10..."
@@ -129,9 +135,12 @@ jobs:
           # Test load/round-trip with sample config
           test_data = {'pipeline': {'name': 'test', 'version': '1.0'}}
           import io
+          # Dump to string
           stream = io.StringIO()
           yaml.dump(test_data, stream)
-          loaded = yaml.load(stream.getvalue())
+          # Load from string (using getvalue() to get full content)
+          yaml_str = stream.getvalue()
+          loaded = yaml.load(yaml_str)
           assert loaded == test_data, 'YAML round-trip failed'
           print('✅ ruamel-yaml smoke test passed')
           "
