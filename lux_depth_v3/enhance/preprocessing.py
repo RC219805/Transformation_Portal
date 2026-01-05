@@ -36,7 +36,8 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> bool:
         output_path: Path to write normalized image (EXIF orientation applied, tag removed)
 
     Returns:
-        True if normalization was applied (EXIF orientation tag existed), False otherwise
+        True if normalization succeeded (always, unless error fallback occurs)
+        False only on error fallback (file copied without normalization)
 
     Side effects:
         - Writes normalized image to output_path
@@ -56,11 +57,11 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> bool:
     Examples:
         >>> # Image with orientation 6 (90° CW rotation)
         >>> normalize_exif_orientation("portrait.jpg", "normalized.png")
-        True  # Orientation was applied
+        True  # Normalization succeeded
         >>>
         >>> # Image without EXIF orientation
         >>> normalize_exif_orientation("landscape.jpg", "normalized.png")
-        False  # No orientation tag found
+        True  # Normalization succeeded (no-op transformation)
     """
     try:
         # For TIFF files, try tifffile first (handles 32-bit floating point TIFFs)
@@ -141,7 +142,10 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> bool:
         else:
             logger.debug(f"No EXIF orientation found, passthrough: {input_path} → {output_path}")
 
-        return has_exif_orientation
+        # Always return True because we always create a normalized file
+        # This ensures the manifest correctly shows exif_normalized=true
+        # even when no EXIF tag was present (file is still normalized via ImageOps.exif_transpose)
+        return True
 
     except Exception as e:
         logger.warning(f"EXIF normalization failed for {input_path}: {e}")
@@ -151,7 +155,7 @@ def normalize_exif_orientation(input_path: Path, output_path: Path) -> bool:
 
         try:
             shutil.copy2(input_path, output_path)
-            logger.info(f"Fallback: copied original file without EXIF normalization")
+            logger.info("Fallback: copied original file without EXIF normalization")
             return False
         except Exception as copy_error:
             logger.error(f"Failed to copy file as fallback: {copy_error}")
@@ -203,3 +207,75 @@ def has_exif_orientation(path: Path) -> bool:
         logger.debug(f"Could not check EXIF orientation for {path}: {e}")
 
     return False
+
+
+def validate_depth_image_alignment(
+    image_path: Path,
+    depth_path: Path,
+) -> None:
+    """Validate that depth and image have matching dimensions.
+
+    This preflight check catches EXIF orientation mismatches before V2 runs,
+    providing early, deterministic failure instead of cryptic V2 crashes.
+
+    Args:
+        image_path: Path to normalized input image
+        depth_path: Path to depth PNG
+
+    Raises:
+        ValueError: If shapes don't match (EXIF mismatch, invalid depth, etc.)
+
+    Example errors caught:
+        - Image: (6000, 3600), Depth: (3600, 6000) → EXIF orientation mismatch
+        - Depth has 3 channels instead of 1 → Invalid depth PNG
+        - Depth is not uint16 → Quantization error
+    """
+    try:
+        # Load normalized image
+        img = Image.open(image_path)
+        img_shape = (img.height, img.width)  # (H, W)
+
+        # Load depth PNG
+        depth = np.array(Image.open(depth_path))
+
+        # Validate depth format
+        if depth.ndim != 2:
+            raise ValueError(
+                f"Depth must be single-channel (H, W), got shape {depth.shape}. "
+                f"This likely means the depth PNG has RGB channels instead of grayscale."
+            )
+
+        if depth.dtype != np.uint16:
+            raise ValueError(
+                f"Depth must be uint16, got {depth.dtype}. This indicates a quantization error in depth generation."
+            )
+
+        depth_shape = depth.shape  # (H, W)
+
+        # Check shape match
+        if img_shape != depth_shape:
+            raise ValueError(
+                f"Image/depth shape mismatch (likely EXIF orientation issue):\n"
+                f"  Image (normalized): {img_shape} (H, W)\n"
+                f"  Depth:              {depth_shape} (H, W)\n"
+                f"\n"
+                f"This usually means:\n"
+                f"  1. EXIF normalization was not applied to the input image, OR\n"
+                f"  2. Depth was generated from a different version of the input, OR\n"
+                f"  3. The normalized file path was not used consistently.\n"
+                f"\n"
+                f"Expected behavior: Both should match because depth is generated\n"
+                f"from the same normalized file that V2 will process."
+            )
+
+        logger.debug(
+            f"Preflight validation passed: "
+            f"image {img_shape} matches depth {depth_shape}, "
+            f"dtype {depth.dtype}, "
+            f"range [{depth.min()}, {depth.max()}]"
+        )
+
+    except FileNotFoundError as e:
+        raise ValueError(f"Preflight validation failed: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Preflight validation failed: {e}") from e

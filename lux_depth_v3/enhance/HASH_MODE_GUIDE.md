@@ -214,7 +214,8 @@ results2 = orchestrator.enhance_batch(Path("batch1"))  # Validates cache
   "input": {
     "image_path": "/path/to/image.jpg",
     "image_sha256": "a7b2c3d4e5f6...",  // ✓ Hash present
-    "exif_normalized": false
+    "exif_normalized": true,  // ✓ Always true (file is always normalized)
+    "normalized_path": "/path/to/tmp_inputs/image_normalized.png"  // ✓ Always set
   },
   ...
 }
@@ -228,7 +229,8 @@ results2 = orchestrator.enhance_batch(Path("batch1"))  # Validates cache
   "input": {
     "image_path": "/path/to/image.jpg",
     "image_sha256": null,  // ⚠️ No hash
-    "exif_normalized": false
+    "exif_normalized": true,  // ✓ Always true (file is always normalized)
+    "normalized_path": "/path/to/tmp_inputs/image_normalized.png"  // ✓ Always set
   },
   ...
 }

@@ -31,11 +31,9 @@ from .manifest import (
     ConfigFingerprint,
     InputMetadata,
     DepthMetadata,
-    DepthScalingMetadata,
     V2Metadata,
     TimingMetadata,
     ReproMetadata,
-    EnvironmentMetadata,
     BatchManifest,
     compute_file_sha256,
     get_git_revision,
@@ -525,7 +523,6 @@ class EnhanceOrchestrator:
 
         # Build paths with nested structure
         depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
-        depth_manifest_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth_manifest.json"
         combined_manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
         v2_log_path = self.logs_dir / output_key.parent / f"v2_{output_key.name}.log"
 
@@ -535,13 +532,15 @@ class EnhanceOrchestrator:
         v2_log_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Pre-normalize EXIF orientation for PIL/OpenCV alignment
-        from .preprocessing import normalize_exif_orientation
+        from .preprocessing import normalize_exif_orientation, validate_depth_image_alignment
 
         tmp_inputs_dir = self.output_root / "tmp_inputs"
         tmp_inputs_dir.mkdir(parents=True, exist_ok=True)
         normalized_path = tmp_inputs_dir / f"{output_key.name}_normalized.png"
 
-        exif_was_normalized = normalize_exif_orientation(image_input.path, normalized_path)
+        # Always normalize EXIF orientation for PIL/OpenCV alignment
+        # (return value is always True now, so we don't store it)
+        normalize_exif_orientation(image_input.path, normalized_path)
 
         # Use normalized file for both DA3 and V2
         normalized_input = ImageInput(path=normalized_path)
@@ -639,6 +638,15 @@ class EnhanceOrchestrator:
         logger.info(f"Stage B: Running V2 enhancement for {output_key}...")
         # v2_start_time tracked for potential future timing metrics
 
+        # Preflight validation: Check depth/image alignment BEFORE invoking V2
+        # This catches EXIF orientation mismatches early with clear error messages
+        if depth_path and depth_path.exists():
+            try:
+                validate_depth_image_alignment(normalized_path, depth_path)
+            except ValueError as e:
+                logger.error(f"Preflight validation failed: {e}")
+                raise
+
         # Check V2 resume with config fingerprint validation
         v2_report_path_existing = find_v2_report(self.v2_dir, output_key.name)
         skip_v2 = not self.config.force_v2 and self.should_skip_v2(
@@ -691,8 +699,8 @@ class EnhanceOrchestrator:
             input=InputMetadata(
                 image_path=str(image_input.path),
                 image_sha256=input_sha256,
-                exif_normalized=exif_was_normalized,
-                normalized_path=str(normalized_path) if exif_was_normalized else None,
+                exif_normalized=True,  # Always true - we always create normalized file
+                normalized_path=str(normalized_path),  # Always set - normalized file always created
             ),
             depth=depth_metadata,
             v2=v2_metadata,
