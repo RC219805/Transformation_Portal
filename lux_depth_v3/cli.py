@@ -394,7 +394,7 @@ def process(
     print("Processing images...")
     inputs = input_manager.get_images()
 
-    for img_input in tqdm(inputs, desc="Depth estimation"):
+    for idx, img_input in enumerate(tqdm(inputs, desc="Depth estimation")):
         # Run inference
         result = inference_engine.inference(img_input)
 
@@ -413,7 +413,7 @@ def process(
         if img_input.path is not None:
             filename_base = img_input.path.stem
         else:
-            filename_base = f"depth_{len(inputs)}"
+            filename_base = f"depth_{idx:04d}"
 
         exported = exporter.export(result, filename_base)
 
@@ -436,8 +436,8 @@ def process(
     print(f"\nProcessing complete! Results saved to: {output_dir}")
 
 
-@app.command()
-def benchmark(
+@app.command("benchmark-inference")
+def benchmark_inference(
     model: str = typer.Option(
         DEFAULT_MODEL_NAME,
         "--model",
@@ -455,10 +455,10 @@ def benchmark(
         help="Number of iterations",
     ),
 ):
-    """Benchmark DA3 model performance.
+    """Benchmark DA3 model inference speed.
 
     Example:
-      lux-depth-v3 benchmark --model metric-large --device cuda -n 100
+      lux-depth-v3 benchmark-inference --model metric-large --device cuda -n 100
     """
     import time
     import numpy as np
@@ -616,8 +616,8 @@ def backend_status(
         print(f"✗ Backend is not running at {backend.get_url()}")
 
 
-@app.command()
-def benchmark(
+@app.command("benchmark-quality")
+def benchmark_quality(
     datasets: List[str] = typer.Option(
         ["eth3d", "7scenes", "scannetpp", "hiroom", "dtu", "dtu64"], "--dataset", "-d", help="Datasets to evaluate"
     ),
@@ -632,7 +632,7 @@ def benchmark(
     use_cli: bool = typer.Option(False, help="Use DA3 CLI for inference"),
     model_variant: str = typer.Option("da3-giant", help="Model variant (da3-giant, da3-metric-large, da3-base)"),
 ):
-    """Run DA3 benchmark evaluation."""
+    """Run DA3 benchmark quality evaluation against standard datasets."""
     from lux_depth_v3.benchmark import (
         DA3BenchmarkEvaluator,
         BenchmarkConfig,
