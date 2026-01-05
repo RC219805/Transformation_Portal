@@ -34,12 +34,13 @@ The Transformation Portal repository contains **three primary depth estimation s
 **Location**: `lux_depth_v2/`
 
 **Key Features**:
-- ✅ Production-validated (1,348 tests passing)
-- ✅ Security-hardened (CVE-2024-27763 mitigated)
-- ✅ 127-400 images/hour throughput
+- ✅ Production-validated (44 dedicated test suites covering inference, tiling, edge snapping, and I/O)
+- ✅ Security-hardened ([CVE-2024-27763 mitigated](../../SECURITY.md#cve-2024-27763-basicsr-command-injection-vulnerability))
 - ✅ 16-bit precision end-to-end
 - ✅ Docker deployment ready
 - ✅ FastAPI service mode with rate limiting
+- ✅ Tiled inference with scale reconciliation
+- ✅ Production refinement pipeline (CLAHE + guided filter + edge snap)
 
 **Depth Inference Implementation** (`lux_depth_v2/depth_inference.py`):
 - **Tiled inference** at native model resolution (1024-1536px tiles)
@@ -80,25 +81,28 @@ depth_map = estimator.estimate_depth(rgb_image)
 **Key Features**:
 - ✅ Depth Anything 3 (DA3) support
 - ✅ Multi-view depth estimation with pose estimation
-- ✅ Metric depth output (absolute scale in meters)
+- ✅ Metric-scale depth output (relative scale; absolute with calibration)
 - ✅ Gaussian Splatting (3DGS) support
 - ✅ Camera pose estimation
 - ✅ License validation (Apache 2.0 vs CC-BY-NC-4.0)
 
 **DA3 Model Variants** (`lux_depth_v3/config.py`):
 ```
-DA3NESTED-GIANT-LARGE-1.1  (1.40B params, CC-BY-NC-4.0) - RECOMMENDED
-DA3-GIANT-1.1              (1.15B params, CC-BY-NC-4.0)
-DA3-LARGE-1.1              (0.35B params, CC-BY-NC-4.0)
-DA3METRIC-LARGE            (0.35B params, Apache 2.0)    - COMMERCIAL USE
-DA3-BASE                   (0.12B params, Apache 2.0)    - COMMERCIAL USE
-DA3-SMALL                  (0.08B params, Apache 2.0)    - FAST/TESTING
+Non-Commercial Models (CC-BY-NC-4.0)
+  DA3NESTED-GIANT-LARGE-1.1  (1.40B params) - RECOMMENDED for research/non-commercial use
+  DA3-GIANT-1.1              (1.15B params) - Non-commercial use only
+  DA3-LARGE-1.1              (0.35B params) - Non-commercial use only
+
+Commercial-Friendly Models (Apache 2.0)
+  DA3METRIC-LARGE            (0.35B params) - Commercial-friendly, metric-consistent output
+  DA3-BASE                   (0.12B params) - Commercial-friendly
+  DA3-SMALL                  (0.08B params) - Commercial-friendly, fast/testing
 ```
 
 **Inference Modes**:
-1. **Monocular** - Single image depth estimation
+1. **Monocular** - Single image depth estimation (affine-invariant)
 2. **Multi-view** - Multiple views with pose estimation
-3. **Metric** - Depth in absolute meters (using DA3METRIC-LARGE)
+3. **Metric** - Metric-consistent depth using DA3METRIC-LARGE (requires scale calibration for absolute values)
 
 **Recommended Usage**:
 ```python
@@ -143,9 +147,76 @@ depth = estimator.estimate_depth(image, use_global_anchor=True)
 
 ---
 
-## 2. Optimal Configuration for Maximum Quality
+## 2. Output Artifact Contract
 
-### 2.1 Interior Scenes (APEX Quality)
+All depth estimation systems in this repository produce **affine-invariant depth maps** unless explicitly calibrated. Understanding the output format is critical for downstream integration.
+
+### 2.1 Depth Map Format Specification
+
+| Property | lux_depth_v2 | lux_depth_v3 | high_fidelity_depth |
+|----------|--------------|--------------|---------------------|
+| **Output Type** | Numpy array (H×W) | Numpy array (H×W) | Numpy array (H×W) |
+| **Data Type** | `float32` or `uint16` | `float32` | `float32` |
+| **Value Range** | [0.0, 1.0] (normalized) or [0, 65535] (16-bit) | [0.0, ∞) (unnormalized) | [0.0, 1.0] (normalized) |
+| **Depth Encoding** | Inverse depth (disparity-like) | Metric-consistent (relative) | Inverse depth (disparity-like) |
+| **Scale** | Affine-invariant¹ | Affine-invariant² | Affine-invariant¹ |
+| **Coordinate System** | Camera-relative, Z-forward | Camera-relative, Z-forward | Camera-relative, Z-forward |
+
+**¹Affine-Invariant**: Output preserves depth *ordering* but not absolute scale. Values are monotonically related to scene depth but require calibration for metric accuracy.
+
+**²Metric-Consistent**: DA3METRIC models produce depth in consistent units across scenes but still require scale calibration for absolute metric values (e.g., meters).
+
+### 2.2 Export Formats
+
+**lux_depth_v2** (`lux_depth_v2/depth_exporter.py`):
+```python
+# Available export formats
+- PNG (16-bit grayscale): Lossless, normalized to [0, 65535]
+- EXR (32-bit float): Full precision, preserves raw values
+- NPY (Numpy binary): For Python pipelines
+```
+
+**lux_depth_v3** (`lux_depth_v3/exporter.py`):
+```python
+# Export configuration
+export_formats = ["png", "npy", "pfm"]  # PFM for metric depth
+color_map = "inferno"  # Visualization colormap
+depth_range = "auto"   # Auto-scale or fixed [min, max]
+```
+
+### 2.3 Metadata Guarantees
+
+**lux_depth_v2** outputs include:
+- `depth_metadata.json`: Model name, tile size, overlap, fusion mode, timestamp
+- `validation_report.json`: (if `--validate` flag) RMSE, δ₁, MAE against ground truth
+
+**lux_depth_v3** outputs include:
+- `depth_metadata.json`: Model variant, inference mode, camera pose (if multi-view)
+- `camera_poses.json`: (if multi-view) 4×4 transformation matrices
+- `point_cloud.ply`: (optional) 3D reconstruction
+
+### 2.4 Calibration Requirements
+
+⚠️ **Critical**: All models output relative depth. For absolute metric scale:
+
+1. **Single Image**: Require known ground truth distance (e.g., "floor to ceiling = 3.2m")
+2. **Multi-view**: Triangulation provides metric scale if camera baseline is known
+3. **DA3METRIC**: Provides *consistent* scale across scenes but still requires one calibration point
+
+**Calibration Example**:
+```python
+# User provides: "The wall is 4 meters wide"
+wall_pixels = 800  # pixels in image
+depth_at_wall = depth_map[wall_region].mean()
+scale_factor = 4.0 / depth_at_wall  # meters per depth unit
+metric_depth = depth_map * scale_factor
+```
+
+---
+
+## 3. Optimal Configuration for Maximum Quality
+
+### 3.1 Interior Scenes (APEX Quality)
 
 **Preset**: `interior_luxury_apex_quality`
 
@@ -196,7 +267,7 @@ config = TiledInferenceConfig(
 )
 ```
 
-### 2.2 Exterior/Pool Scenes (APEX Quality)
+### 3.2 Exterior/Pool Scenes (APEX Quality)
 
 **Preset**: `exterior_pool_apex_quality`
 
@@ -221,7 +292,7 @@ materials_v2.confidence.material_thresholds = {
 }
 ```
 
-### 2.3 Aerial/Texture-Heavy Scenes
+### 3.3 Aerial/Texture-Heavy Scenes
 
 **Key Adjustments** (`high_fidelity_depth/depth_estimator.py`):
 ```python
@@ -239,18 +310,18 @@ config = DepthConfig(
 
 ---
 
-## 3. Quality Comparison: DA2 vs DA3
+## 4. Quality Comparison: DA2 vs DA3
 
-### 3.1 When to Use Depth Anything V2 (lux_depth_v2)
+### 4.1 When to Use Depth Anything V2 (lux_depth_v2)
 
 ✅ **Recommended for**:
 - Production architectural rendering workflows
 - Single-image depth estimation
 - Security-critical deployments (CVE mitigated)
 - Docker/containerized deployments
-- High-throughput batch processing (400+ images/hour)
+- Batch processing workflows with GPU acceleration
 
-### 3.2 When to Use Depth Anything 3 (lux_depth_v3)
+### 4.2 When to Use Depth Anything 3 (lux_depth_v3)
 
 ✅ **Recommended for**:
 - Multi-view depth estimation with pose
@@ -259,7 +330,7 @@ config = DepthConfig(
 - Camera pose estimation needs
 - Research/experimental workflows
 
-### 3.3 Performance Benchmarks
+### 4.3 Performance Benchmarks
 
 | Model | Device | Resolution | Time/Image | Notes |
 |-------|--------|------------|------------|-------|
@@ -272,9 +343,9 @@ config = DepthConfig(
 
 ---
 
-## 4. Critical Configuration Parameters
+## 5. Critical Configuration Parameters
 
-### 4.1 Tile Size and Overlap (Most Important)
+### 5.1 Tile Size and Overlap (Most Important)
 
 ```python
 # PRODUCTION RECOMMENDATION
@@ -285,7 +356,7 @@ overlap: 128-192     # 128 for most scenes, 192 for texture-heavy
 # Smaller tiles = more seam artifacts
 ```
 
-### 4.2 Scale Reconciliation (Critical for Quality)
+### 5.2 Scale Reconciliation (Critical for Quality)
 
 ```python
 # ALWAYS ENABLE for production
@@ -299,7 +370,7 @@ reconcile_method: "robust"  # Theil-Sen regression (outlier-resistant)
 # 4. Spatial smoothing with σ=1.5 Gaussian
 ```
 
-### 4.3 Edge Snapping and Refinement
+### 5.3 Edge Snapping and Refinement
 
 ```python
 # PRODUCTION REFINEMENT CHAIN
@@ -313,7 +384,7 @@ refinement_use_edge_snap: True    # RGB-aligned depth boundaries
 # standalone use_edge_snapping is automatically disabled
 ```
 
-### 4.4 Model Selection
+### 5.4 Model Selection
 
 ```python
 # PRODUCTION (Quality Priority)
@@ -331,9 +402,9 @@ model_variant: ModelVariant.DA3_METRIC_LARGE  # Apache 2.0
 
 ---
 
-## 5. Common Quality Issues and Fixes
+## 6. Common Quality Issues and Fixes
 
-### 5.1 Tile Seam Artifacts
+### 6.1 Tile Seam Artifacts
 
 **Symptoms**: Visible grid patterns, depth discontinuities at tile boundaries
 
@@ -352,7 +423,7 @@ overlap: 192  # Up from 128
 # (Automatic in high_fidelity_depth, manual in lux_depth_v2)
 ```
 
-### 5.2 Soft/Blurry Depth Edges
+### 6.2 Soft/Blurry Depth Edges
 
 **Symptoms**: Depth boundaries don't align with RGB edges
 
@@ -368,7 +439,7 @@ use_edge_snapping: True
 edge_snap_config: EdgeSnappingConfig()
 ```
 
-### 5.3 Sliver Tiles (Small Edge Tiles)
+### 6.3 Sliver Tiles (Small Edge Tiles)
 
 **Symptoms**: Quality degradation at image edges, inconsistent tile sizes
 
@@ -383,7 +454,7 @@ edge_snap_config: EdgeSnappingConfig()
 # No tiles smaller than min(256, tile_size)
 ```
 
-### 5.4 Calibration Drift in Low-Variance Regions
+### 6.4 Calibration Drift in Low-Variance Regions
 
 **Symptoms**: Scale mismatches in sky, blank walls, uniform surfaces
 
@@ -402,9 +473,9 @@ if tile_variance < 1e-4 or ref_variance < 1e-4:
 
 ---
 
-## 6. Quality Validation Metrics
+## 7. Quality Validation Metrics
 
-### 6.1 Edge Alignment Score
+### 7.1 Edge Alignment Score
 
 ```python
 # Correlation between RGB edges and depth edges
@@ -417,7 +488,7 @@ def compute_edge_alignment(rgb, depth):
     return correlation
 ```
 
-### 6.2 Seam Energy Ratio
+### 7.2 Seam Energy Ratio
 
 ```python
 # Gradient energy at tile boundaries vs interior
@@ -430,7 +501,7 @@ def validate_seam_energy(depth, tile_boundaries):
     assert ratio < 1.2, "Seam artifacts detected"
 ```
 
-### 6.3 Depth Quality Metrics (DA3)
+### 7.3 Depth Quality Metrics (DA3)
 
 ```python
 from lux_depth_v3.validation import DepthQualityMetrics
@@ -445,9 +516,9 @@ metrics = DepthQualityMetrics.compute(predicted_depth, ground_truth_depth)
 
 ---
 
-## 7. Recommended Configuration Summary
+## 8. Recommended Configuration Summary
 
-### 7.1 Production Workflow (Interior)
+### 8.1 Production Workflow (Interior)
 
 ```bash
 lux-depth-v2 \
@@ -456,7 +527,7 @@ lux-depth-v2 \
     --preset interior_luxury_apex_quality
 ```
 
-### 7.2 Production Workflow (Exterior)
+### 8.2 Production Workflow (Exterior)
 
 ```bash
 lux-depth-v2 \
@@ -465,7 +536,7 @@ lux-depth-v2 \
     --preset exterior_pool_apex_quality
 ```
 
-### 7.3 Maximum Quality (Python API)
+### 8.3 Maximum Quality (Python API)
 
 ```python
 from lux_depth_v2.depth_inference import TiledInferenceConfig, TiledDepthEstimator
@@ -503,7 +574,7 @@ alignment = estimator.compute_edge_alignment(rgb_image, depth)
 print(f"Edge alignment: {alignment:.3f}")  # Should be > 0.5
 ```
 
-### 7.4 Multi-View / Metric Depth (DA3)
+### 8.4 Multi-View / Metric Depth (DA3)
 
 ```python
 from lux_depth_v3 import DA3InferenceEngine, DA3Config, ModelVariant
@@ -528,7 +599,7 @@ print(f"Metric depth range: {result.metric_depth.min():.2f}m - {result.metric_de
 
 ---
 
-## 8. File Reference
+## 9. File Reference
 
 | File | Purpose |
 |------|---------|
