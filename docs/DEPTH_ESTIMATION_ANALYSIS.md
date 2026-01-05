@@ -1,8 +1,8 @@
 # Depth Estimation Capabilities Analysis & Optimal Configuration Guide
 
-**Author**: Transformation Portal Codebase Review  
-**Date**: 2025-01-05  
-**Status**: Complete Analysis  
+**Author**: Transformation Portal Codebase Review
+**Date**: 2025-01-05
+**Status**: Complete Analysis
 **Purpose**: Comprehensive review of depth estimation capabilities with optimal configuration recommendations for quality
 
 ---
@@ -51,7 +51,7 @@ The Transformation Portal repository contains **three primary depth estimation s
 **Models Supported**:
 ```
 depth-anything/Depth-Anything-V2-Large-hf  (671MB, CC-BY-NC-4.0)
-depth-anything/Depth-Anything-V2-Base-hf   (195MB, CC-BY-NC-4.0)  
+depth-anything/Depth-Anything-V2-Base-hf   (195MB, CC-BY-NC-4.0)
 depth-anything/Depth-Anything-V2-Small-hf  (49.8MB, Apache 2.0)
 ```
 
@@ -158,13 +158,13 @@ Preset.INTERIOR_LUXURY_APEX_QUALITY:
     tile_pad: 32                # Extra padding for edge quality
     post_tile: 2048             # Post-processing tile size
     post_overlap: 128           # 100% more overlap for seamless blending
-    
+
     # Segmentation (SegFormer-B5)
     segmentation.backend: "segformer"
     segmentation.segformer_model: "nvidia/segformer-b5-finetuned-ade-640-640"
     segmentation.input_long_side: 2048  # 60% higher than default
     segmentation.min_confidence: 0.15
-    
+
     # Depth Zones (Interior-optimized)
     depth_zones.mode: "auto"
     depth_zones.scene_type: "interior"
@@ -215,7 +215,7 @@ depth_zones.infinity_m: 5000.0       # Mountains/sky
 # Material Thresholds (Exterior-specific)
 materials_v2.confidence.material_thresholds = {
     "water": 0.30,       # Critical for pool
-    "vegetation": 0.35,  # Critical for landscaping  
+    "vegetation": 0.35,  # Critical for landscaping
     "sky": 0.25,         # Critical for twilight gradient
     "stone": 0.48,       # Pool deck/columns
 }
@@ -559,6 +559,6 @@ For **multi-view or metric depth**, use `lux_depth_v3` with DA3-Nested-Giant-Lar
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-01-05  
+**Document Version**: 1.0
+**Last Updated**: 2025-01-05
 **Maintained by**: Transformation Portal Team
