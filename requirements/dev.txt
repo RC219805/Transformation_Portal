@@ -7,7 +7,7 @@
 --index-url https://download.pytorch.org/whl/cpu
 --extra-index-url https://pypi.org/simple
 
-astroid==4.0.2
+astroid==4.0.3
     # via
     #   -c all.txt
     #   pylint
@@ -44,7 +44,7 @@ flake8==7.3.0
     # via
     #   -c all.txt
     #   -r dev.in
-hypothesis==6.148.8
+hypothesis==6.149.0
     # via
     #   -c all.txt
     #   -r dev.in
@@ -61,7 +61,7 @@ libcst==1.8.6
     # via
     #   -c all.txt
     #   -r dev.in
-librt==0.7.5
+librt==0.7.7
     # via
     #   -c all.txt
     #   mypy
