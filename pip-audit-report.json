@@ -1,5 +1,0 @@
-ERROR:pip_audit._virtual_env:internal pip failure: ERROR: Ignored the following versions that require a different python version: 1.0.0 Requires-Python >=3.8,<3.12; 1.0.1 Requires-Python >=3.8,<3.11; 1.0.2 Requires-Python >=3.8,<3.11; 1.1.0 Requires-Python >=3.8,<3.11; 1.2.0 Requires-Python >=3.8,<3.11
-ERROR: Could not find a version that satisfies the requirement backports-asyncio-runner==1.2.0 (from versions: none)
-ERROR: No matching distribution found for backports-asyncio-runner==1.2.0
-
-ERROR:pip_audit._cli:Failed to install packages: ['/tmp/tmpaf23v8jh/bin/python3', '-m', 'pip', 'install', '--no-input', '--keyring-provider=subprocess', '--dry-run', '--report', '/tmp/tmp7j4iflvt/tmpoalz_3a3', '-r', 'requirements/all.txt']
