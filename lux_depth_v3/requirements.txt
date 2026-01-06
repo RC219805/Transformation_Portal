@@ -6,7 +6,7 @@
 # Last reviewed: 2025-12-19
 
 # Core dependencies
-numpy>=1.24,<2.3.0  # Constrained for opencv-python compatibility
+numpy>=1.24,<2.5.0  # Constrained for opencv-python compatibility
 Pillow>=10.0.0,<12
 scipy>=1.15,<1.16  # scipy 1.16+ requires Python 3.11+
 

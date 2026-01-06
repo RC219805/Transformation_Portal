@@ -3,7 +3,7 @@
 # Does NOT include heavy ML dependencies (torch, transformers, diffusers, realesrgan, etc.)
 
 # Core dependencies that are actually imported in linted files
-numpy>=1.24,<2.3.0
+numpy>=1.24,<2.5.0
 Pillow>=10,<12
 PyYAML>=6.0,<7
 tqdm>=4.66,<5
