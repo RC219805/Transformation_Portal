@@ -21,6 +21,15 @@ except ImportError:
     DeviceType = None
     PrecisionType = None
 
+# Export configuration for Slice 3 optimizations
+try:
+    from transformation_portal.core.storage.export_manager import ExportConfig
+
+    EXPORT_CONFIG_AVAILABLE = True
+except ImportError:
+    EXPORT_CONFIG_AVAILABLE = False
+    ExportConfig = None
+
 if TYPE_CHECKING:
     from lux_depth_v2.materials_v2 import MaterialsV2Config
     from lux_depth_v2.materials_v3 import MaterialsV3Config
@@ -549,6 +558,11 @@ class PipelineConfig:
 
     # Depth Contract (Hardening Sprint Week 1)
     depth: DepthConfig = field(default_factory=DepthConfig)
+
+    # Export Configuration (Phase 2 Slice 3)
+    # Enables export optimizations (tiled TIFF, atomic writes, async flush)
+    # Default: None (uses legacy export behavior)
+    export_config: Optional["ExportConfig"] = None
 
     def __post_init__(self) -> None:
         """
