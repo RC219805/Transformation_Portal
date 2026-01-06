@@ -41,11 +41,20 @@
   - `docs/architecture/PR_MERGE_EXECUTION_SUMMARY_2026-01-05.md`
 - Established dependency governance framework in `docs/DEPENDENCY_UPDATES.md`
 
+### Architectural Decision Records
+- **ADR-005**: Python 3.11 Migration Strategy
+  - Proposed phased migration: Preparation (Q1 2026) → Migration (Q2 2026) → Validation
+  - Target: Python 3.11 minimum version by May 2026 (5 months before Python 3.10 EOL)
+  - Benefits: 10-25% performance improvement, unlock scipy 1.16+/Pillow 12+ updates
+  - Migration guide planned for Phase 1 (Feb-March 2026)
+  - See: `docs/architecture/adrs/ADR-005-PYTHON-311-MIGRATION.md`
+
 ### Current Status
 - **Python Compatibility**: 3.10-3.12 ✅
 - **CI Status**: All checks passing ✅
 - **Open PRs**: 0 (all resolved)
 - **Test Suite**: 1,348+ tests passing
+- **Planned Migration**: Python 3.11+ (Q2 2026, pending approval)
 
 ---
 
