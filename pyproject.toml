@@ -21,8 +21,8 @@ dependencies = [
     "pydantic>=2.0,<3",  # Required by Platform Core (config schemas)
     "typer>=0.10.0,<1",
     "tqdm>=4.66,<5",
-    "tifffile>=2023.7.18,<2025",
     "imagecodecs>=2023.9.18,<2027",
+    "tifffile>=2023.7.18,<2026",
     "requests>=2.31.0,<3",  # HTTP client for lux_depth_v3
 ]
 classifiers = [
