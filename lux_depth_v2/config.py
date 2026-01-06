@@ -580,7 +580,7 @@ class PipelineConfig:
                 stacklevel=2
             )
             self.export_config = None
-        
+
         self.apply_preset()
 
     def _ensure_phase2(self) -> Phase2Config:
