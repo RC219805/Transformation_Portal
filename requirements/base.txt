@@ -11,7 +11,7 @@ annotated-types==0.7.0
     # via
     #   -c all.txt
     #   pydantic
-certifi==2025.11.12
+certifi==2026.1.4
     # via
     #   -c all.txt
     #   requests
