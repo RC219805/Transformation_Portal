@@ -296,6 +296,11 @@ class MaterialsV3Config:
     water_edge_refinement_min_confidence: float = 0.5  # Only refine high-confidence candidates
     water_edge_refinement_min_boundary_px: int = 100  # Avoid BF1 failures on tiny boundaries
 
+    # P0 Task 3: Auto-preset context (intent and quality tier)
+    # Used by response plan generation to determine refinement strategies
+    intent: str = "client"  # preview|client|hero (from PresetSelector or CLI)
+    quality_tier: str = "max"  # standard|max|apex (from PipelineConfig or PresetSelector)
+
 
 class MaterialsV3Engine:
     """Materials V3 processing engine (scaffolding only).
@@ -1116,8 +1121,8 @@ class MaterialsV3Engine:
             canonical_materials=canonical_materials,
             config=response_plan_config,
             strategy=self.config.refine_edges.value,
-            intent="client",  # TODO: get from auto-preset context
-            quality_tier="max",  # TODO: get from pipeline config
+            intent=self.config.intent,  # P0 Task 3: from config (preset selector or CLI)
+            quality_tier=self.config.quality_tier,  # P0 Task 3: from pipeline config
             rgb_image=image,  # PR-4C: for edge signal computation
         )
 
