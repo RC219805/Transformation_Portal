@@ -483,12 +483,6 @@ class UpscalingEngine:
 
         start_time = time.time()
 
-        # P0 Task 1: Track memory baseline
-        memory_baseline_mb = 0.0
-        if MEMORY_TRACKING_AVAILABLE:
-            process = psutil.Process(os.getpid())
-            memory_baseline_mb = process.memory_info().rss / (1024 * 1024)
-
         # Load image
         if isinstance(image, (str, Path)):
             image = self._load_image_16bit(Path(image))
@@ -547,9 +541,12 @@ class UpscalingEngine:
 
                 # Use peak from rusage if available (more accurate)
                 rusage = resource.getrusage(resource.RUSAGE_SELF)
-                peak_from_rusage_mb = rusage.ru_maxrss / 1024  # macOS reports in bytes
-                if platform.system() != "Darwin":
-                    peak_from_rusage_mb /= 1024  # Linux reports in KB
+                if platform.system() == "Darwin":
+                    # macOS reports ru_maxrss in bytes; convert bytes → MB
+                    peak_from_rusage_mb = rusage.ru_maxrss / (1024 * 1024)
+                else:
+                    # Linux and most Unix-like systems report ru_maxrss in KB; convert KB → MB
+                    peak_from_rusage_mb = rusage.ru_maxrss / 1024
 
                 # Take the maximum of current RSS and rusage peak
                 memory_peak_mb = max(current_rss_mb, peak_from_rusage_mb)

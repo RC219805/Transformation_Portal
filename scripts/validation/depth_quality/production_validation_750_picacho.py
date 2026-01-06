@@ -361,12 +361,6 @@ def process_single_image(
     try:
         start_time = time.time()
 
-        # P0 Task 1: Track memory baseline
-        memory_baseline_mb = 0.0
-        if MEMORY_TRACKING_AVAILABLE:
-            process = psutil.Process(os.getpid())
-            memory_baseline_mb = process.memory_info().rss / (1024 * 1024)
-
         # Load RGB
         rgb_pil = Image.open(rgb_path)
         if rgb_pil.mode != "RGB":
@@ -417,10 +411,14 @@ def process_single_image(
                 current_rss_mb = process.memory_info().rss / (1024 * 1024)
 
                 # Use peak from rusage if available (more accurate)
+                # ru_maxrss units are platform-specific:
+                # - macOS (Darwin): bytes
+                # - Linux/most Unix: kilobytes
                 rusage = resource.getrusage(resource.RUSAGE_SELF)
-                peak_from_rusage_mb = rusage.ru_maxrss / 1024  # macOS reports in bytes
-                if platform.system() != "Darwin":
-                    peak_from_rusage_mb /= 1024  # Linux reports in KB
+                if platform.system() == "Darwin":
+                    peak_from_rusage_mb = rusage.ru_maxrss / (1024 * 1024)  # bytes -> MB
+                else:
+                    peak_from_rusage_mb = rusage.ru_maxrss / 1024  # KB -> MB
 
                 # Take the maximum of current RSS and rusage peak
                 peak_memory_mb = max(current_rss_mb, peak_from_rusage_mb)

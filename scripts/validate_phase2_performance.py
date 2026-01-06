@@ -101,12 +101,6 @@ class Phase2Validator:
             str(output_dir),
         ] + cli_args
 
-        # P0 Task 1: Track memory baseline
-        memory_baseline_mb = 0.0
-        if MEMORY_TRACKING_AVAILABLE:
-            process = psutil.Process(os.getpid())
-            memory_baseline_mb = process.memory_info().rss / (1024 * 1024)
-
         # Run benchmark
         start_time = time.time()
 
@@ -147,9 +141,12 @@ class Phase2Validator:
 
                     # Use peak from rusage if available (more accurate)
                     rusage = resource.getrusage(resource.RUSAGE_SELF)
-                    peak_from_rusage_mb = rusage.ru_maxrss / 1024  # macOS reports in bytes
-                    if platform.system() != "Darwin":
-                        peak_from_rusage_mb /= 1024  # Linux reports in KB
+                    if platform.system() == "Darwin":
+                        # macOS: ru_maxrss is in bytes, convert to MB
+                        peak_from_rusage_mb = rusage.ru_maxrss / (1024 * 1024)
+                    else:
+                        # Linux and most other Unix-like systems: ru_maxrss is in KB, convert to MB
+                        peak_from_rusage_mb = rusage.ru_maxrss / 1024
 
                     # Take the maximum of current RSS and rusage peak
                     peak_memory_mb = max(current_rss_mb, peak_from_rusage_mb)
