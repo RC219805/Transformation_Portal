@@ -15,7 +15,7 @@ torch>=2.0.0,<3
 torchvision>=0.15.0,<1
 
 # Image processing
-tifffile>=2023.7.18,<2025  # 32-bit float TIFF support
+tifffile>=2023.7.18,<2026  # 32-bit float TIFF support
 imagecodecs>=2023.9.18,<2025  # Compression codecs
 
 # CLI
