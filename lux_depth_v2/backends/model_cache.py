@@ -41,12 +41,12 @@ DEFAULT_MODELS = {
     },
     "efficientsam_ti_vit_s": {
         "url": "https://huggingface.co/yunyangx/efficientvit-sam/resolve/main/efficientsam_ti_s_encoder.onnx",
-        "sha256": None,  # TODO: add verified SHA256 after first download
+        "sha256": None,  # Computed on first download - see compute_model_sha256.py
         "size_mb": 40,
     },
     "efficientsam_ti_vit_b": {
         "url": "https://huggingface.co/yunyangx/efficientvit-sam/resolve/main/efficientsam_ti_b_encoder.onnx",
-        "sha256": None,
+        "sha256": None,  # Computed on first download - see compute_model_sha256.py
         "size_mb": 140,
     },
 }
@@ -110,12 +110,22 @@ def download_file(
         if verify_sha256:
             actual = compute_sha256(temp_path)
             if actual != verify_sha256:
-                raise ModelDownloadError(f"SHA256 mismatch for {dest.name}: expected {verify_sha256}, got {actual}")
+                raise ModelDownloadError(
+                    f"SHA256 mismatch for {dest.name}:\n"
+                    f"  Expected: {verify_sha256}\n"
+                    f"  Got:      {actual}\n"
+                    f"  File may be corrupted or URL points to wrong version."
+                )
             log.info("SHA256 verified: %s", verify_sha256[:16])
         else:
             actual = compute_sha256(temp_path)
             log.warning(
-                "SHA256 verification disabled. Computed hash: %s (store this for future use)",
+                "SHA256 verification disabled for %s.\n"
+                "  Computed hash: %s\n"
+                "  To enable verification, run:\n"
+                "    python scripts/utilities/compute_model_sha256.py <path-to-model> --generate-registry\n"
+                "  Then update DEFAULT_MODELS in lux_depth_v2/backends/model_cache.py",
+                dest.name,
                 actual,
             )
 

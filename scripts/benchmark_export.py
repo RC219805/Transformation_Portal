@@ -126,12 +126,11 @@ def benchmark_single_run(
     # Build config
     export_config = get_mode_config(mode, output_dir, scratch_dir)
 
-    # TODO: Wire ExportConfig into PipelineConfig
-    # For now, use default PipelineConfig and note that export optimizations
-    # will need to be wired through the pipeline
+    # Wire ExportConfig into PipelineConfig (P0 Task 4)
     pipeline_config = PipelineConfig(
         output_dir=str(output_dir),
         write_outputs=True,
+        export_config=export_config,
     )
 
     # Create pipeline
@@ -300,9 +299,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True, help="Output directory")
     parser.add_argument(
         "--mode",
+        "--export-strategy",  # P0 Task 4: Add export strategy alias
         choices=["baseline", "tiled", "tiled_atomic", "full_optimized"],
         required=True,
-        help="Benchmark mode",
+        help="Export strategy (baseline=no opts, tiled=tiled TIFF+compression, tiled_atomic=+atomic writes, full_optimized=+tiered storage)",
+        dest="mode",
     )
     parser.add_argument("--runs", type=int, default=3, help="Number of runs for averaging")
     parser.add_argument("--scratch", type=Path, help="Scratch directory (for full_optimized mode)")
