@@ -121,7 +121,7 @@ def create_github_release(repo: str, tag: str, title: str, description: str) -> 
             description,
         ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=60)
         print(f"✓ Created release: {tag}")
         return True
     except subprocess.CalledProcessError as e:
@@ -151,7 +151,7 @@ def upload_file_to_release(repo: str, tag: str, file_path: Path) -> Optional[str
             "--clobber",  # Overwrite if exists
         ]
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=300)
 
         # Construct download URL
         url = f"https://github.com/{repo}/releases/download/{tag}/{file_path.name}"

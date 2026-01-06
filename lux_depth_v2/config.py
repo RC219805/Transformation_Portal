@@ -569,6 +569,18 @@ class PipelineConfig:
         Called automatically after dataclass __init__.
         Applies the preset configuration to populate all derived settings.
         """
+        # Validate export_config availability
+        if self.export_config is not None and not EXPORT_CONFIG_AVAILABLE:
+            import warnings
+            warnings.warn(
+                "export_config is set but ExportConfig module is not available. "
+                "The export_config setting will be ignored. "
+                "Install transformation_portal.core.storage to use export configuration.",
+                UserWarning,
+                stacklevel=2
+            )
+            self.export_config = None
+        
         self.apply_preset()
 
     def _ensure_phase2(self) -> Phase2Config:

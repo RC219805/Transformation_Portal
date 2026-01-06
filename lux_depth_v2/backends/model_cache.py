@@ -120,14 +120,11 @@ def download_file(
         else:
             actual = compute_sha256(temp_path)
             log.warning(
-                "SHA256 verification disabled for %s.\n"
-                "  Computed hash: %s\n"
+                f"SHA256 verification disabled for {dest.name}.\n"
+                f"  Computed hash: {actual}\n"
                 "  To enable verification, run:\n"
-                "    python scripts/utilities/compute_model_sha256.py %s --generate-registry\n"
+                f"    python scripts/utilities/compute_model_sha256.py {dest} --generate-registry\n"
                 "  Then update DEFAULT_MODELS in lux_depth_v2/backends/model_cache.py",
-                dest.name,
-                actual,
-                dest,
             )
 
         # Atomic rename
