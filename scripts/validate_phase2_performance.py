@@ -15,6 +15,8 @@ Usage:
 
 import argparse
 import json
+import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -22,6 +24,15 @@ import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+
+# P0 Task 1: Memory tracking
+try:
+    import psutil
+    import resource
+
+    MEMORY_TRACKING_AVAILABLE = True
+except ImportError:
+    MEMORY_TRACKING_AVAILABLE = False
 
 
 @dataclass
@@ -90,6 +101,12 @@ class Phase2Validator:
             str(output_dir),
         ] + cli_args
 
+        # P0 Task 1: Track memory baseline
+        memory_baseline_mb = 0.0
+        if MEMORY_TRACKING_AVAILABLE:
+            process = psutil.Process(os.getpid())
+            memory_baseline_mb = process.memory_info().rss / (1024 * 1024)
+
         # Run benchmark
         start_time = time.time()
 
@@ -121,6 +138,26 @@ class Phase2Validator:
             avg_time = elapsed / max(1, images_processed)
             throughput = (images_processed / elapsed) * 3600 if elapsed > 0 else 0
 
+            # P0 Task 1: Calculate peak memory
+            peak_memory_gb = 0.0
+            if MEMORY_TRACKING_AVAILABLE:
+                try:
+                    process = psutil.Process(os.getpid())
+                    current_rss_mb = process.memory_info().rss / (1024 * 1024)
+
+                    # Use peak from rusage if available (more accurate)
+                    rusage = resource.getrusage(resource.RUSAGE_SELF)
+                    peak_from_rusage_mb = rusage.ru_maxrss / 1024  # macOS reports in bytes
+                    if platform.system() != "Darwin":
+                        peak_from_rusage_mb /= 1024  # Linux reports in KB
+
+                    # Take the maximum of current RSS and rusage peak
+                    peak_memory_mb = max(current_rss_mb, peak_from_rusage_mb)
+                    peak_memory_gb = peak_memory_mb / 1024.0
+                except Exception as e:
+                    print(f"Warning: Memory tracking failed: {e}")
+                    peak_memory_gb = 0.0
+
             benchmark_result = BenchmarkResult(
                 test_name=test_name,
                 images_processed=images_processed,
@@ -129,7 +166,7 @@ class Phase2Validator:
                 throughput_img_per_hour=throughput,
                 success_count=success_count,
                 failure_count=failure_count,
-                peak_memory_gb=0.0,  # TODO: Extract from logs
+                peak_memory_gb=peak_memory_gb,  # P0 Task 1: Real memory tracking
                 configuration=config,
                 individual_timings=individual_timings,
             )

@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import platform
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -33,6 +35,15 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image
+
+# Memory tracking (P0 Task 1)
+try:
+    import psutil
+    import resource
+
+    MEMORY_TRACKING_AVAILABLE = True
+except ImportError:
+    MEMORY_TRACKING_AVAILABLE = False
 
 try:
     import torch
@@ -472,6 +483,12 @@ class UpscalingEngine:
 
         start_time = time.time()
 
+        # P0 Task 1: Track memory baseline
+        memory_baseline_mb = 0.0
+        if MEMORY_TRACKING_AVAILABLE:
+            process = psutil.Process(os.getpid())
+            memory_baseline_mb = process.memory_info().rss / (1024 * 1024)
+
         # Load image
         if isinstance(image, (str, Path)):
             image = self._load_image_16bit(Path(image))
@@ -521,6 +538,25 @@ class UpscalingEngine:
 
         processing_time = time.time() - start_time
 
+        # P0 Task 1: Calculate peak memory
+        memory_peak_mb = 0.0
+        if MEMORY_TRACKING_AVAILABLE:
+            try:
+                process = psutil.Process(os.getpid())
+                current_rss_mb = process.memory_info().rss / (1024 * 1024)
+
+                # Use peak from rusage if available (more accurate)
+                rusage = resource.getrusage(resource.RUSAGE_SELF)
+                peak_from_rusage_mb = rusage.ru_maxrss / 1024  # macOS reports in bytes
+                if platform.system() != "Darwin":
+                    peak_from_rusage_mb /= 1024  # Linux reports in KB
+
+                # Take the maximum of current RSS and rusage peak
+                memory_peak_mb = max(current_rss_mb, peak_from_rusage_mb)
+            except Exception as e:
+                logger.debug(f"Memory tracking failed: {e}")
+                memory_peak_mb = 0.0
+
         # Save if requested
         if output_path:
             self._save_image_16bit(upscaled, output_path)
@@ -532,7 +568,7 @@ class UpscalingEngine:
             output_size=(w * scale, h * scale),
             processing_time=processing_time,
             tiles_processed=len(tiles),
-            memory_peak_mb=0.0,  # TODO: Track memory
+            memory_peak_mb=memory_peak_mb,  # P0 Task 1: Real memory tracking
             color_deviation=color_deviation,
         )
 

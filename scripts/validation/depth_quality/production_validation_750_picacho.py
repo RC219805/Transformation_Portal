@@ -23,6 +23,8 @@ Critical Success Criteria:
 import argparse
 import json
 import logging
+import os
+import platform
 import sys
 import time
 import traceback
@@ -34,6 +36,15 @@ import cv2
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
+
+# P0 Task 1: Memory tracking
+try:
+    import psutil
+    import resource
+
+    MEMORY_TRACKING_AVAILABLE = True
+except ImportError:
+    MEMORY_TRACKING_AVAILABLE = False
 
 # Add high_fidelity_depth to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -350,6 +361,12 @@ def process_single_image(
     try:
         start_time = time.time()
 
+        # P0 Task 1: Track memory baseline
+        memory_baseline_mb = 0.0
+        if MEMORY_TRACKING_AVAILABLE:
+            process = psutil.Process(os.getpid())
+            memory_baseline_mb = process.memory_info().rss / (1024 * 1024)
+
         # Load RGB
         rgb_pil = Image.open(rgb_path)
         if rgb_pil.mode != "RGB":
@@ -392,6 +409,25 @@ def process_single_image(
 
         runtime = time.time() - start_time
 
+        # P0 Task 1: Calculate peak memory
+        peak_memory_mb = 0.0
+        if MEMORY_TRACKING_AVAILABLE:
+            try:
+                process = psutil.Process(os.getpid())
+                current_rss_mb = process.memory_info().rss / (1024 * 1024)
+
+                # Use peak from rusage if available (more accurate)
+                rusage = resource.getrusage(resource.RUSAGE_SELF)
+                peak_from_rusage_mb = rusage.ru_maxrss / 1024  # macOS reports in bytes
+                if platform.system() != "Darwin":
+                    peak_from_rusage_mb /= 1024  # Linux reports in KB
+
+                # Take the maximum of current RSS and rusage peak
+                peak_memory_mb = max(current_rss_mb, peak_from_rusage_mb)
+            except Exception as e:
+                logger.debug(f"Memory tracking failed: {e}")
+                peak_memory_mb = 0.0
+
         # Compute enhanced metrics
 
         # 1. Edge detection
@@ -433,7 +469,7 @@ def process_single_image(
             detail_benefit=detail_benefit,
             hf_energy_ratio=hf_energy_ratio,
             runtime_seconds=runtime,
-            peak_memory_mb=0.0,  # TODO: Implement if needed
+            peak_memory_mb=peak_memory_mb,  # P0 Task 1: Real memory tracking
             rgb_edge_count=base_metrics.rgb_edge_count,
             depth_edge_count=base_metrics.depth_edge_count,
         )
