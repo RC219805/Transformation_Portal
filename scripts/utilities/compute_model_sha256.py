@@ -87,26 +87,34 @@ def find_model_files(path: Path) -> List[Path]:
         return []
 
 
-def generate_registry_snippet(model_name: str, sha256: str, size_mb: float) -> str:
+def generate_registry_snippet(model_name: str, sha256: str, size_mb: float, filename: str) -> str:
     """
     Generate Python code snippet for registry update.
 
     Parameters
     ----------
     model_name : str
-        Model name (without .onnx extension).
+        Model name (without .onnx extension) - used as registry key.
     sha256 : str
         SHA256 hash.
     size_mb : float
         File size in MB.
+    filename : str
+        Actual filename (with .onnx extension).
 
     Returns
     -------
     str
         Python code snippet.
+
+    Notes
+    -----
+    This function generates only the sha256 and size_mb fields.
+    The URL should be preserved from the existing registry or set manually,
+    as the registry key (model_name) often differs from the filename.
     """
     return f'''    "{model_name}": {{
-        "url": "https://huggingface.co/yunyangx/efficientvit-sam/resolve/main/{model_name}.onnx",
+        # URL: Preserve existing URL or set manually - filename is {filename}
         "sha256": "{sha256}",
         "size_mb": {size_mb:.1f},
     }},'''
@@ -188,7 +196,7 @@ def main():
         print("=" * 70 + "\n")
 
         for model_name, info in results.items():
-            print(generate_registry_snippet(model_name, info["sha256"], info["size_mb"]))
+            print(generate_registry_snippet(model_name, info["sha256"], info["size_mb"], info["path"].name))
 
         print("\n" + "=" * 70)
 
