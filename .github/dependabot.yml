@@ -9,6 +9,16 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Ignore updates that break Python 3.10 compatibility
+    # Python 3.10 EOL: October 2026
+    # See: ADR-005-PYTHON-311-MIGRATION.md (planned)
+    ignore:
+      - dependency-name: "scipy"
+        versions: [">=1.16"]  # scipy 1.16+ requires Python 3.11+
+      - dependency-name: "pillow"
+        versions: [">=12.0"]  # Pillow 12+ requires Python 3.11+
+      - dependency-name: "Pillow"
+        versions: [">=12.0"]  # Case-sensitive variant
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

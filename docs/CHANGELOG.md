@@ -1,5 +1,54 @@
 # Changelog
 
+## Dependency Updates & Python 3.10 Compatibility Maintenance — 2026-01-05/06
+
+### Dependency Security & Compatibility Updates
+- **PR #658**: Enhanced dependency update workflow with validation gates and artifact uploads
+  - Added comprehensive CI validation for automated dependency updates
+  - Created `docs/DEPENDENCY_UPDATES.md` with governance guidelines
+  - Supersedes PR #656 with improved automation
+- **PR #662**: Bump imagecodecs from 2024.12.30 to 2026.1.1
+  - New codecs: HTJ2K, MESHOPT, UltraHDR support
+  - Updated Cython 3.2 compatibility
+  - Bug fixes for TIFF/WebP processing
+- **PR #659**: Bump tifffile from 2024.12.12 to 2025.12.20
+  - Performance optimizations for large TIFF processing
+  - Python 3.10+ compatible, no breaking API changes
+- **PR #663**: Bump scikit-learn from 1.7.2 to 1.8.0
+  - Constraint updated: `scikit-learn<1.9` (maintains Python 3.10 compatibility)
+  - Compatible with existing depth estimation workflows
+
+### Python 3.10 Compatibility Preservation
+- **Closed PR #660** (scipy 1.16.3): Requires Python 3.11+, blocks Python 3.10 users
+- **Closed PR #661** (Pillow 12.1.0): Requires Python 3.11+, blocks Python 3.10 users
+- **Dependabot Configuration**: Added ignore rules for Python 3.11+ dependencies
+  - `scipy>=1.16` blocked until Python 3.11 migration
+  - `Pillow>=12.0` blocked until Python 3.11 migration
+  - Python 3.10 EOL: October 2026 (migration planning in progress)
+
+### Depth Estimation Documentation & Quality Improvements
+- **PR #655**: Comprehensive depth estimation capabilities analysis
+  - Added `docs/DEPTH_ESTIMATION_ANALYSIS.md` with optimal configuration guide
+  - Documented output artifact contracts (PNG/EXR/NPY/PFM formats)
+  - Added quality validation metrics and troubleshooting guide
+  - Fixed CLI command collisions in `lux_depth_v3/cli.py`
+  - Removed unverifiable performance claims, added provable test coverage
+  - Created architectural review documentation in `docs/architecture/PR_655_*`
+
+### Infrastructure & Process Improvements
+- Created comprehensive PR merge strategy documentation
+  - `docs/architecture/PR_MERGE_STRATEGY_2026-01-05.md`
+  - `docs/architecture/PR_MERGE_EXECUTION_SUMMARY_2026-01-05.md`
+- Established dependency governance framework in `docs/DEPENDENCY_UPDATES.md`
+
+### Current Status
+- **Python Compatibility**: 3.10-3.12 ✅
+- **CI Status**: All checks passing ✅
+- **Open PRs**: 0 (all resolved)
+- **Test Suite**: 1,348+ tests passing
+
+---
+
 ## Comprehensive Codebase Review — 2025-12-04
 
 ### Documentation & Status Update
