@@ -53,8 +53,12 @@ class DepthRequest(BaseModel):
 class DepthResponse(BaseModel):
     """Depth estimation response."""
 
-    depth_range: tuple[float, float] = Field(..., description="Min and max depth values")
-    processing_time_ms: float = Field(..., description="Processing time in milliseconds")
+    depth_range: tuple[float, float] = Field(
+        ..., description="Min and max depth values"
+    )
+    processing_time_ms: float = Field(
+        ..., description="Processing time in milliseconds"
+    )
     model_variant: str = Field(..., description="Model variant used")
     export_paths: dict[str, str] = Field(..., description="Exported file paths")
 
@@ -276,7 +280,10 @@ async def estimate_depth(
     img_input = ImageInput(array=image_array)
 
     # Update config if needed
-    if model_variant is not None and model_variant != inference_engine.config.model_variant:
+    if (
+        model_variant is not None
+        and model_variant != inference_engine.config.model_variant
+    ):
         # Reload model with new variant
         inference_engine.config.model_variant = model_variant
         inference_engine.load_model(force_reload=True)
