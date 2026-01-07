@@ -106,7 +106,7 @@ def sanitize_and_validate_filepath(filename: str, base_dir: Path) -> Path:
         CWE-22 Path Traversal Prevention
         OWASP A01:2021 Broken Access Control
 
-        The strict allowlist ensures no path separators (/, \) can appear in filename,
+        The strict allowlist ensures no path separators (/, \\) can appear in filename,
         making it impossible for base_dir / filename to escape base_dir.
         This sanitization barrier is explicit for static analysis tools.
     """
