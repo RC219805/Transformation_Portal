@@ -156,9 +156,7 @@ def sanitize_path_component_nonlossy(component: str, max_length: int = 200) -> s
     # Encode invalid characters (non-lossy)
     # Allow: alphanumeric, underscore, hyphen, single dots
     # Encode: everything else using percent-encoding
-    safe_chars = set(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-."
-    )
+    safe_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.")
 
     encoded_chars = []
     for char in component:
@@ -271,9 +269,7 @@ def validate_depth_fallback(fallback: str) -> str:
         ValueError: If fallback policy is invalid
     """
     if fallback not in ALLOWED_DEPTH_FALLBACKS:
-        raise ValueError(
-            f"Invalid depth fallback policy: '{fallback}'. Allowed: {', '.join(sorted(ALLOWED_DEPTH_FALLBACKS))}"
-        )
+        raise ValueError(f"Invalid depth fallback policy: '{fallback}'. Allowed: {', '.join(sorted(ALLOWED_DEPTH_FALLBACKS))}")
     return fallback
 
 
