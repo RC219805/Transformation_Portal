@@ -250,6 +250,11 @@ python scripts/security/pre_commit_security_check.py
 - [tests/](tests/) - Test suite (2,751 collected, 1,348 V2 core, 100% pass rate)
 - [.github/workflows/](.github/workflows/) - CI/CD pipelines
 
+**Workflow Automation**:
+- [docs/RUN_CARD_AUTOMATION_PHASE1.md](docs/RUN_CARD_AUTOMATION_PHASE1.md) - Run card automation (Phase 1)
+- [docs/ROADMAP_NEXT_THREE.md](docs/ROADMAP_NEXT_THREE.md) - Workflow improvements roadmap
+- [scripts/utilities/generate_run_card.py](scripts/utilities/generate_run_card.py) - Automated run card generation
+
 ---
 
 ## 🏗️ Architecture

@@ -1,0 +1,29 @@
+image_id: 750Picacho_Kitchen
+image_path: input_images/750Picacho_Kitchen.jpg
+project: 750_picacho_lane
+scene_type: interior_kitchen
+scene_features:
+  - TODO: Review and add specific features
+source_baseline_score: 58.3
+processed_score: 54.1
+delta_score: -4.2
+targets_met: TODO: Review quality report and specify
+recipe: signature_estate_gentle
+recipe_path: config/recipes/signature_estate_gentle.yaml
+recipe_settings:
+  clarity: 0.15
+  glow: 0.08
+  saturation: 1.02
+processing_time_seconds: 45.3
+date: 2026-01-09
+generated_by: generate_run_card.py
+
+# HUMAN REVIEW REQUIRED: Complete the following fields after visual review
+human_rating: TODO: [clearly_better|acceptable_but_unnecessary|worse_than_source|significantly_worse]
+decision: TODO: [recipe_recommended|recipe_acceptable|recipe_avoid]
+notes:
+  - TODO: Add observations about quality, artifacts, strengths, weaknesses
+lessons:
+  - TODO: Add learnings for future processing
+tags:
+  - TODO: Add tags for retrieval (e.g., high_contrast, warm_tones, sharp_details)
