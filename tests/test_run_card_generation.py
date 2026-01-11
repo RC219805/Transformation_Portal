@@ -14,7 +14,7 @@ from src.transformation_portal.scene_types import (
     validate_scene_type,
     get_scene_type_description,
     list_scene_types,
-    get_all_aliases
+    get_all_aliases,
 )
 
 
@@ -141,7 +141,7 @@ class TestRunCardGeneration:
             processed_score=54.1,
             recipe_name="signature_estate",
             project_name="test_project",
-            output_dir=temp_output_dir
+            output_dir=temp_output_dir,
         )
 
         # Check file was created
@@ -153,7 +153,7 @@ class TestRunCardGeneration:
             run_card = yaml.safe_load(f)
 
         assert run_card["image_id"] == "kitchen"
-        assert run_card["baseline_score"] == 58.3
+        assert run_card["source_baseline_score"] == 58.3
         assert run_card["processed_score"] == 54.1
         assert run_card["delta_score"] == -4.2
         assert run_card["recipe"] == "signature_estate"
@@ -174,7 +174,7 @@ class TestRunCardGeneration:
             project_name="villa_project",
             recipe_settings=recipe_settings,
             processing_time=45.3,
-            output_dir=temp_output_dir
+            output_dir=temp_output_dir,
         )
 
         # Load and validate
@@ -196,7 +196,7 @@ class TestRunCardGeneration:
             recipe_name="test_recipe",
             project_name="test_project",
             scene_type_override="interior_great_room",
-            output_dir=temp_output_dir
+            output_dir=temp_output_dir,
         )
 
         with open(output_path) as f:
@@ -214,7 +214,7 @@ class TestRunCardGeneration:
             processed_score=60.0,
             recipe_name="test",
             project_name="750_picacho",
-            output_dir=temp_output_dir
+            output_dir=temp_output_dir,
         )
 
         # Check project subdirectory was created
