@@ -153,7 +153,7 @@ class TestRunCardGeneration:
             run_card = yaml.safe_load(f)
 
         assert run_card["image_id"] == "kitchen"
-        assert run_card["baseline_score"] == 58.3
+        assert run_card["source_baseline_score"] == 58.3
         assert run_card["processed_score"] == 54.1
         assert run_card["delta_score"] == -4.2
         assert run_card["recipe"] == "signature_estate"

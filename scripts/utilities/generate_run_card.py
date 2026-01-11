@@ -69,7 +69,7 @@ def infer_scene_type(image_path: str) -> str:
     # Interior detection
     if any(x in path_lower for x in ["bedroom", "bed", "master", "suite"]):
         return "interior_bedroom"
-    elif any(x in path_lower for x in ["kitchen", "kit"]):
+    elif any(x in path_lower for x in ["kitchen", "kit", "pantry"]):
         return "interior_kitchen"
     elif any(x in path_lower for x in ["bathroom", "bath", "powder"]):
         return "interior_bathroom"
