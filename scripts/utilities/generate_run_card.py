@@ -118,7 +118,7 @@ def generate_run_card(
     recipe_settings: Optional[Dict[str, Any]] = None,
     processing_time: Optional[float] = None,
     output_dir: str = "docs/runs",
-    scene_type_override: Optional[str] = None
+    scene_type_override: Optional[str] = None,
 ) -> Path:
     """
     Generate draft run card from pipeline output.
@@ -167,26 +167,22 @@ def generate_run_card(
         "project": project_name,
         "scene_type": scene_type,
         "scene_features": ["TODO: Review and add specific features"],
-
         "source_baseline_score": round(baseline_score, 2),
         "processed_score": round(processed_score, 2),
         "delta_score": delta_score,
         "targets_met": "TODO: Review quality report and specify",
-
         "recipe": recipe_name,
         "recipe_path": f"config/recipes/{recipe_name}.yaml",
         "recipe_settings": recipe_settings or {},
-
         "processing_time_seconds": processing_time if processing_time else "TODO: From pipeline log",
         "date": datetime.now().strftime("%Y-%m-%d"),
         "generated_by": "generate_run_card.py",
-
         "# HUMAN REVIEW REQUIRED": "Complete the following fields after visual review",
         "human_rating": "TODO: [clearly_better|acceptable_but_unnecessary|worse_than_source|significantly_worse]",
         "decision": "TODO: [recipe_recommended|recipe_acceptable|recipe_avoid]",
         "notes": ["TODO: Add observations about quality, artifacts, strengths, weaknesses"],
         "lessons": ["TODO: Add learnings for future processing"],
-        "tags": ["TODO: Add tags for retrieval (e.g., high_contrast, warm_tones, sharp_details)"]
+        "tags": ["TODO: Add tags for retrieval (e.g., high_contrast, warm_tones, sharp_details)"],
     }
 
     # Write to project subdirectory
@@ -194,7 +190,7 @@ def generate_run_card(
     project_dir.mkdir(parents=True, exist_ok=True)
 
     output_file = project_dir / f"{image_id}_{recipe_name}.yaml"
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         yaml.dump(run_card, f, default_flow_style=False, sort_keys=False)
 
     print(f"✅ Draft run card created: {output_file}")
@@ -226,26 +222,18 @@ Examples:
   %(prog)s pool.jpg --baseline-score 55.0 --processed-score 58.0 \\
     --recipe pool_estate --project villa_project \\
     --scene-type exterior_pool
-        """
+        """,
     )
 
     parser.add_argument("image_path", help="Path to source image")
-    parser.add_argument("--baseline-score", "-b", type=float, required=True,
-                        help="Quality score of baseline image")
-    parser.add_argument("--processed-score", "-p", type=float, required=True,
-                        help="Quality score after processing")
-    parser.add_argument("--recipe", "-r", required=True,
-                        help="Recipe name used for processing")
-    parser.add_argument("--project", required=True,
-                        help="Project name/identifier")
-    parser.add_argument("--recipe-settings", "-s",
-                        help="Recipe settings as JSON string")
-    parser.add_argument("--processing-time", "-t", type=float,
-                        help="Processing time in seconds")
-    parser.add_argument("--output-dir", "-o", default="docs/runs",
-                        help="Output directory for run cards (default: docs/runs)")
-    parser.add_argument("--scene-type",
-                        help="Override inferred scene type")
+    parser.add_argument("--baseline-score", "-b", type=float, required=True, help="Quality score of baseline image")
+    parser.add_argument("--processed-score", "-p", type=float, required=True, help="Quality score after processing")
+    parser.add_argument("--recipe", "-r", required=True, help="Recipe name used for processing")
+    parser.add_argument("--project", required=True, help="Project name/identifier")
+    parser.add_argument("--recipe-settings", "-s", help="Recipe settings as JSON string")
+    parser.add_argument("--processing-time", "-t", type=float, help="Processing time in seconds")
+    parser.add_argument("--output-dir", "-o", default="docs/runs", help="Output directory for run cards (default: docs/runs)")
+    parser.add_argument("--scene-type", help="Override inferred scene type")
 
     args = parser.parse_args()
 
@@ -269,13 +257,14 @@ Examples:
             recipe_settings=recipe_settings,
             processing_time=args.processing_time,
             output_dir=args.output_dir,
-            scene_type_override=args.scene_type
+            scene_type_override=args.scene_type,
         )
         print(f"\n✅ Success! Edit {output_path} to complete human review.")
         return 0
     except Exception as e:
         print(f"❌ Error generating run card: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
