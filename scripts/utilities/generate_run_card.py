@@ -167,7 +167,7 @@ def generate_run_card(
         "project": project_name,
         "scene_type": scene_type,
         "scene_features": ["TODO: Review and add specific features"],
-        "baseline_score": round(baseline_score, 2),
+        "source_baseline_score": round(baseline_score, 2),
         "processed_score": round(processed_score, 2),
         "delta_score": delta_score,
         "targets_met": "TODO: Review quality report and specify",
