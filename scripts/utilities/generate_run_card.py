@@ -69,7 +69,7 @@ def infer_scene_type(image_path: str) -> str:
     # Interior detection
     if any(x in path_lower for x in ["bedroom", "bed", "master", "suite"]):
         return "interior_bedroom"
-    elif any(x in path_lower for x in ["kitchen", "kit", "pantry"]):
+    elif any(x in path_lower for x in ["kitchen", "kit", "pantry", "butler"]):
         return "interior_kitchen"
     elif any(x in path_lower for x in ["bathroom", "bath", "powder"]):
         return "interior_bathroom"
@@ -167,7 +167,7 @@ def generate_run_card(
         "project": project_name,
         "scene_type": scene_type,
         "scene_features": ["TODO: Review and add specific features"],
-        "source_baseline_score": round(baseline_score, 2),
+        "baseline_score": round(baseline_score, 2),
         "processed_score": round(processed_score, 2),
         "delta_score": delta_score,
         "targets_met": "TODO: Review quality report and specify",
