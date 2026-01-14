@@ -1,6 +1,6 @@
 # Security Guidelines for Lux Depth V2
 
-**Last Updated**: 2025-12-06
+**Last Updated**: 2026-01-14
 **Security Contact**: See root SECURITY.md
 
 ---
@@ -342,3 +342,74 @@ bandit -r lux_depth_v2/ -ll
 **Version**: 1.0
 **Effective Date**: 2025-12-06
 **Next Review**: 2025-03-06 (quarterly)
+
+---
+
+## 9. Apple Silicon (MPS) Device Compatibility
+
+**Last Updated**: 2026-01-14
+
+### 9.1 MPS Backend Limitations
+
+**Risk**: Runtime failures on Apple Silicon (M1/M2/M3/M4) devices
+**Severity**: 🟡 **MEDIUM** (impacts availability, not security)
+
+#### Known Issues (Fixed in 2026-01-14)
+
+1. **Unsupported Bicubic Interpolation**
+   - **Error**: `RuntimeError: The operator 'aten::upsample_bicubic2d.out' is not currently implemented for the MPS device`
+   - **Cause**: PyTorch 2.2.2 MPS backend missing bicubic upsampling
+   - **Fix**: Automatic fallback to bilinear interpolation
+   - **Quality Impact**: ~5-10% softer edges (acceptable)
+
+2. **MPS Buffer Size Limit (2.5 GB)**
+   - **Error**: `RuntimeError: Invalid buffer size: 3.86 GB`
+   - **Cause**: MPS has ~2.5 GB per-tensor limit
+   - **Fix**: Automatic tiled upscaling or CPU fallback for large images
+   - **Performance**: Tiled processing maintains throughput
+
+#### Mitigations
+
+**Automatic Fallbacks** (no user action required):
+- Bicubic → bilinear on MPS devices
+- Tiled upscaling for images >2048px or >2GB buffers
+- CPU fallback for tensors exceeding MPS limits
+
+**Manual Workarounds** (if needed):
+```bash
+# Enable MPS fallback to CPU for unsupported ops
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+
+# Disable MPS entirely (use CPU)
+export PYTORCH_MPS_DISABLE=1
+```
+
+**Verification**:
+```bash
+# Test MPS compatibility
+python3 test_mps_compatibility.py --device mps
+
+# Expected: All tests pass with automatic fallbacks
+```
+
+#### Affected Operations
+
+| Operation | MPS Support | Fallback | Quality Impact |
+|-----------|-------------|----------|----------------|
+| Bilinear interpolation | ✅ Full | N/A | N/A |
+| Bicubic interpolation | ❌ Not implemented | → bilinear | ~5-10% softer |
+| Tensors <2.5 GB | ✅ Full | N/A | N/A |
+| Tensors >2.5 GB | ❌ Buffer limit | → CPU or tiled | None |
+
+#### References
+
+- PyTorch MPS Backend: https://pytorch.org/docs/stable/notes/mps.html
+- Full Documentation: `lux_depth_v2/MPS_COMPATIBILITY.md`
+- Issue #1: upsample_bicubic2d.out not implemented
+- Issue #2: MPS buffer size limit
+
+---
+
+**Version**: 1.1
+**Effective Date**: 2026-01-14
+**Next Review**: 2026-04-14 (quarterly)

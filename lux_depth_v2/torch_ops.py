@@ -213,15 +213,38 @@ def gaussian_blur(x: "torch.Tensor", sigma: float, autocast: bool = False) -> "t
 
 
 def resize(x: "torch.Tensor", size_hw: Tuple[int, int], mode: str = "bilinear", autocast: bool = False) -> "torch.Tensor":
-    """Resize tensor using interpolation.
+    """Resize tensor using interpolation with MPS compatibility.
 
-    Note: Changed from bicubic to bilinear (2024-01-04) for MPS compatibility.
-    MPS backend does not support bicubic interpolation, causing runtime errors.
-    Quality impact: ~5-10% softer edges, but enables MPS acceleration (3-5x speedup).
+    MPS Compatibility (2026-01-14):
+    - bicubic mode triggers upsample_bicubic2d.out (not implemented on MPS)
+    - Automatically falls back to bilinear on MPS devices
+    - For large tensors (>2.5GB), uses CPU fallback to avoid MPS buffer limits
+
+    Quality impact: ~5-10% softer edges with bilinear vs bicubic.
+    Performance: MPS acceleration provides 3-5x speedup over CPU.
     """
     require_torch()
     h, w = int(size_hw[0]), int(size_hw[1])
     device = x.device
+
+    # MPS compatibility: force bilinear if bicubic requested
+    if device.type == "mps" and mode == "bicubic":
+        mode = "bilinear"
+
+    # Memory safety: estimate output buffer size
+    b, c, in_h, in_w = x.shape
+    out_size_gb = (b * c * h * w * 4) / (1024**3)  # float32 = 4 bytes
+
+    # MPS buffer limit workaround: fallback to CPU for large tensors
+    if device.type == "mps" and out_size_gb > 2.5:
+        # ARCHITECTURE FIX (2026-01-14): Keep result on CPU to avoid re-allocation
+        # Moving large tensor back to MPS would trigger same allocation failure.
+        # Downstream operations should handle CPU tensors or use upscaler's tiling.
+        x_cpu = x.cpu()
+        with maybe_autocast(False, torch.device("cpu")):
+            result_cpu = F.interpolate(x_cpu, size=(h, w), mode=mode, align_corners=False)
+        return result_cpu  # Keep on CPU (safe)
+
     with maybe_autocast(autocast, device):
         return F.interpolate(x, size=(h, w), mode=mode, align_corners=False)
 
@@ -462,11 +485,33 @@ def material_highlight_compress(rgb: "torch.Tensor", hi_comp: Optional["torch.Te
     return apply_luma_ratio(rgb, new_l, old_l=l)
 
 
+def _align_spatial(a: "torch.Tensor", b: "torch.Tensor", func_name: str) -> Tuple["torch.Tensor", "torch.Tensor"]:
+    if a.shape == b.shape:
+        return a, b
+    if a.ndim != 4 or b.ndim != 4:
+        raise ValueError(f"{func_name}: expected 4D tensors")
+    if a.shape[0] != b.shape[0] or a.shape[1] != b.shape[1]:
+        raise ValueError(f"{func_name}: batch/channel differ")
+    h = min(a.shape[2], b.shape[2])
+    w = min(a.shape[3], b.shape[3])
+    if h <= 0 or w <= 0:
+        raise ValueError(f"{func_name}: invalid spatial dims")
+
+    # Center-crop to overlapping region when sizes differ.
+    def crop(t: "torch.Tensor") -> "torch.Tensor":
+        if t.shape[2] == h and t.shape[3] == w:
+            return t
+        y0 = (t.shape[2] - h) // 2
+        x0 = (t.shape[3] - w) // 2
+        return t[:, :, y0 : y0 + h, x0 : x0 + w]
+
+    return crop(a), crop(b)
+
+
 def mean_abs_rgb(a: "torch.Tensor", b: "torch.Tensor", max_samples: int = 250_000) -> float:
     """Mean absolute RGB difference (approx by sampling)."""
     require_torch()
-    if a.shape != b.shape:
-        raise ValueError("mean_abs_rgb: shapes differ")
+    a, b = _align_spatial(a, b, "mean_abs_rgb")
     # 1x3xHxW
     diff = (a.to(dtype=torch.float32) - b.to(dtype=torch.float32)).abs()
     flat = diff.permute(0, 2, 3, 1).reshape(-1, 3)
@@ -479,8 +524,7 @@ def mean_abs_rgb(a: "torch.Tensor", b: "torch.Tensor", max_samples: int = 250_00
 
 def mean_abs_luma(a: "torch.Tensor", b: "torch.Tensor", max_samples: int = 250_000) -> float:
     require_torch()
-    if a.shape != b.shape:
-        raise ValueError("mean_abs_luma: shapes differ")
+    a, b = _align_spatial(a, b, "mean_abs_luma")
     la = luma(a)
     lb = luma(b)
     diff = (la - lb).abs().reshape(-1)

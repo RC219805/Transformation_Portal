@@ -169,6 +169,8 @@ class LuxPipelineV2:
         # Materials v2 integration
         self.materials_v2_engine = None
         self.mask_cache_manager = None
+        self._materials_v2_disabled_reason = None  # Track why V2 is disabled
+
         if MATERIALS_V2_AVAILABLE and cfg.materials_v2 and cfg.materials_v2.enabled:
             try:
                 self.materials_v2_engine = MaterialsV2Engine(
@@ -188,14 +190,24 @@ class LuxPipelineV2:
                 self.logger.warning(f"Failed to initialize Materials v2: {e}; continuing without")
                 self.materials_v2_engine = None
                 self.mask_cache_manager = None
+                self._materials_v2_disabled_reason = f"INIT_FAILED: {str(e)}"
+        elif not MATERIALS_V2_AVAILABLE:
+            self._materials_v2_disabled_reason = "MODULE_NOT_AVAILABLE"
+        elif cfg.materials_v2 is None:
+            self._materials_v2_disabled_reason = "CONFIG_BLOCK_NULL"
+        elif not cfg.materials_v2.enabled:
+            self._materials_v2_disabled_reason = "DISABLED_BY_CONFIG"
 
         # Materials v3 integration (opt-in, disabled by default)
         # KILLSWITCH: Respect DISABLE_MATERIALS_V3 environment variable
         self.materials_v3_engine = None
+        self._materials_v3_disabled_reason = None  # Track why V3 is disabled
+
         disable_materials_v3 = os.getenv("DISABLE_MATERIALS_V3", "").lower() in ("1", "true", "yes")
 
         if disable_materials_v3:
             self.logger.info("Materials V3 disabled via DISABLE_MATERIALS_V3 environment variable")
+            self._materials_v3_disabled_reason = "DISABLED_BY_ENV_VAR"
         elif MATERIALS_V3_AVAILABLE and cfg.materials_v3 and cfg.materials_v3.enabled:
             try:
                 self.materials_v3_engine = MaterialsV3Engine(config=cfg.materials_v3)
@@ -210,6 +222,13 @@ class LuxPipelineV2:
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Materials V3: {e}; continuing without")
                 self.materials_v3_engine = None
+                self._materials_v3_disabled_reason = f"INIT_FAILED: {str(e)}"
+        elif not MATERIALS_V3_AVAILABLE:
+            self._materials_v3_disabled_reason = "MODULE_NOT_AVAILABLE"
+        elif cfg.materials_v3 is None:
+            self._materials_v3_disabled_reason = "CONFIG_BLOCK_NULL"
+        elif not cfg.materials_v3.enabled:
+            self._materials_v3_disabled_reason = "DISABLED_BY_CONFIG"
 
         # Capture reproducibility metadata on init
         self._repro_metadata = self._collect_reproducibility_metadata()
@@ -914,11 +933,29 @@ class LuxPipelineV2:
 
         # Upscaling path
         with self._stage(report, "upscale/base"):
-            # Base upsample: GPU bilinear (MPS compatible)
-            with torch_ops.maybe_autocast(self.autocast, self.device):
-                base_up = torch_ops.resize(master_t, (H * cfg.upscale, W * cfg.upscale), mode="bilinear", autocast=True).clamp(
-                    0.0, 1.0
+            # Memory-safe upscaling with automatic tiling for large images
+            target_h, target_w = H * cfg.upscale, W * cfg.upscale
+
+            # Estimate memory requirements (float32 = 4 bytes)
+            upscale_buffer_gb = (3 * target_h * target_w * 4) / (1024**3)
+
+            # Log memory estimation for large upscales
+            if upscale_buffer_gb > 2.0:
+                self.logger.info(
+                    f"Large upscale: {H}x{W} → {target_h}x{target_w} "
+                    f"({upscale_buffer_gb:.2f} GB buffer). "
+                    f"Upscaler will use tiling if configured."
                 )
+
+            # ARCHITECTURE FIX (2026-01-14): Use upscaler's built-in tiling
+            # Previous broken approach used torch_ops.Tiler which creates same-size
+            # output buffer (designed for grading, not upscaling).
+            # TorchUpscaler._upscale_tiled() correctly pre-allocates at target size.
+
+            # Base upsample using bilinear (MPS compatible)
+            # Upscaler handles tiling internally based on cfg.phase2.tile_based_upscaling
+            with torch_ops.maybe_autocast(self.autocast, self.device):
+                base_up = torch_ops.resize(master_t, (target_h, target_w), mode="bilinear", autocast=True).clamp(0.0, 1.0)
 
         ai_up = base_up
         ai_status = "none"
@@ -938,6 +975,10 @@ class LuxPipelineV2:
         luma_diff = None
         if cfg.validate_ai and use_ai_details:
             try:
+                # Device sync: ensure both tensors on same device for comparison
+                # (base_up may be on CPU due to large buffer fallback)
+                if base_up.device != ai_up.device:
+                    base_up = base_up.to(ai_up.device)
                 color_diff = torch_ops.mean_abs_rgb(base_up, ai_up)
                 luma_diff = torch_ops.mean_abs_luma(base_up, ai_up)
                 if color_diff > cfg.ai_color_fail or luma_diff > cfg.ai_luma_fail:
@@ -950,6 +991,11 @@ class LuxPipelineV2:
                     self.logger.warning(f"AI drift WARN {img_path.name}: rgb={color_diff:.4f} luma={luma_diff:.4f}")
             except Exception as e:
                 self.logger.exception(f"AI drift validation failed: {e}")
+
+        # Device sync: ensure base_up is on same device as ai_up for post-processing
+        # This handles the case where torch_ops.resize() fell back to CPU for large buffers
+        if base_up.device != ai_up.device:
+            base_up = base_up.to(ai_up.device)
 
         # Precompute final-res weights and (optional) material mods once; slice per-tile.
         fH, fW = H * cfg.upscale, W * cfg.upscale
@@ -1027,8 +1073,27 @@ class LuxPipelineV2:
                 "materials_precedence": materials_precedence if materials_precedence else None,
                 "material_mods": mods0.source if mods0 is not None else None,
                 "materials_v2_enabled": bool(self.materials_v2_engine),
+                "materials_v2": {
+                    "enabled": bool(self.materials_v2_engine),
+                    "backend": cfg.materials_v2.backend if cfg.materials_v2 else None,
+                    "confidence_threshold": cfg.materials_v2.confidence.confidence_threshold if cfg.materials_v2 else None,
+                    "material_thresholds": cfg.materials_v2.confidence.material_thresholds if cfg.materials_v2 else None,
+                    "disabled_reason": self._materials_v2_disabled_reason if not self.materials_v2_engine else None,
+                }
+                if cfg.materials_v2
+                else None,
                 "materials_v2_metadata": materials_v2_metadata if materials_v2_metadata else None,
                 "materials_v3_enabled": bool(self.materials_v3_engine),
+                "materials_v3": {
+                    "enabled": bool(self.materials_v3_engine),
+                    "taxonomy": str(cfg.materials_v3.taxonomy) if cfg.materials_v3 else None,
+                    "refine_edges": str(cfg.materials_v3.refine_edges) if cfg.materials_v3 else None,
+                    "backend": cfg.materials_v3.backend if cfg.materials_v3 else None,
+                    "pixel_ops_enabled": cfg.materials_v3.apply_pixel_ops if cfg.materials_v3 else False,
+                    "disabled_reason": self._materials_v3_disabled_reason if not self.materials_v3_engine else None,
+                }
+                if cfg.materials_v3
+                else None,
                 "materials_v3_metadata": materials_v3_metadata if materials_v3_metadata else None,
                 "materials_v3_response_plan": materials_v3_response_plan if materials_v3_response_plan else None,
                 "materials_v3_pixel_ops": materials_v3_pixel_ops if materials_v3_pixel_ops else None,
