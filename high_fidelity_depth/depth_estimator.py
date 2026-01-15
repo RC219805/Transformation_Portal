@@ -878,6 +878,9 @@ class HighFidelityDepthEstimator:
         Compute low-res global depth map for scale reconciliation.
 
         This provides a global reference that all tiles are matched to.
+
+        MPS Compatibility: Uses OpenCV instead of PIL BICUBIC to avoid
+        upsample_bicubic2d.out operator (not implemented on MPS).
         """
         from PIL import Image
 
@@ -902,10 +905,9 @@ class HighFidelityDepthEstimator:
         # Infer depth at low-res
         global_depth_lowres = self._infer_tile_depth(image_resized)
 
-        # Upsample to full resolution
-        global_depth_pil = Image.fromarray(global_depth_lowres)
-        global_depth = global_depth_pil.resize((w, h), Image.BICUBIC)
-        global_depth = np.array(global_depth).astype(np.float32)
+        # Upsample to full resolution using OpenCV (MPS-safe)
+        # OpenCV INTER_CUBIC is equivalent to PIL BICUBIC but doesn't use torch ops
+        global_depth = cv2.resize(global_depth_lowres, (w, h), interpolation=cv2.INTER_CUBIC).astype(np.float32)
 
         logger.info(f"✓ Global anchor computed: {global_depth.shape}")
 

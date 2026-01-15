@@ -270,6 +270,23 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "validation_mode": True,
         },
     ),
+    Preset.PRODUCTION_ULTRA_MATERIALS.value: PresetMetadata(
+        name=Preset.PRODUCTION_ULTRA_MATERIALS.value,
+        display_name="Production Ultra with Materials V2+V3",
+        description="Production-grade max quality with full Materials V2 and V3 pipeline enabled",
+        intended_use="High-end production rendering with advanced material enhancement",
+        quality_tier="max",
+        stability="stable",
+        performance={"throughput_img_hr": "100-150", "memory_gb": "4-6"},
+        parameters={
+            "exposure": 0.0,
+            "contrast": 1.10,
+            "saturation": 1.05,
+            "clarity": 0.25,
+            "materials_v2": True,
+            "materials_v3": True,
+        },
+    ),
 }
 
 

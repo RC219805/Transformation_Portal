@@ -46,7 +46,9 @@ def get_runtime_info() -> Dict[str, Any]:
             "version": getattr(torch, "__version__", "unknown"),
             "cuda_available": bool(torch.cuda.is_available()),
             "cuda_version": getattr(torch.version, "cuda", None),
-            "mps_available": bool(getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()),
+            "mps_available": bool(
+                hasattr(torch, "backends") and getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()
+            ),
         }
     except Exception:
         info["torch"] = {"version": "not_installed"}
