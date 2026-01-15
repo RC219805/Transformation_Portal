@@ -96,7 +96,12 @@ class ResourceMonitor:
 
             self.torch = torch
             self.torch_available = True
-            self.mps_available = self.is_apple_silicon and hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+            self.mps_available = (
+                self.is_apple_silicon
+                and hasattr(torch, "backends")
+                and hasattr(torch.backends, "mps")
+                and torch.backends.mps.is_available()
+            )
         except ImportError:
             self.mps_available = False
 
