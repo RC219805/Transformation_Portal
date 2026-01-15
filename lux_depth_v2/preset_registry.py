@@ -175,6 +175,24 @@ PRESET_REGISTRY: Dict[str, PresetMetadata] = {
             "detail": 0.18,
         },
     ),
+    Preset.PRODUCTION_ULTRA_MATERIALS.value: PresetMetadata(
+        name=Preset.PRODUCTION_ULTRA_MATERIALS.value,
+        display_name="Production Ultra + Materials V2/V3",
+        description="Production Ultra with Materials V2 + V3 engines fully enabled",
+        intended_use="Flagship portfolio work, archival outputs, print materials",
+        quality_tier="apex",
+        stability="stable",
+        performance={"throughput_img_hr": "75-100", "memory_gb": "6-10"},
+        parameters={
+            "materials_v2": True,
+            "materials_v3": True,
+            "exposure": 0.0,
+            "contrast": 1.08,
+            "saturation": 1.03,
+            "clarity": 0.20,
+            "detail": 0.18,
+        },
+    ),
     # Canary/Experimental presets (marked as such)
     Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM.value: PresetMetadata(
         name=Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM.value,

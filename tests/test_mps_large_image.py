@@ -27,12 +27,14 @@ try:
     import torch
 
     TORCH_AVAILABLE = True
+    MPS_AVAILABLE = hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
 except ImportError:
     TORCH_AVAILABLE = False
+    MPS_AVAILABLE = False
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch required")
-@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+@pytest.mark.skipif(not MPS_AVAILABLE, reason="MPS not available")
 def test_mps_large_image_4x_upscale():
     """
     Regression test for MPS 3.86 GB buffer overflow fix.
