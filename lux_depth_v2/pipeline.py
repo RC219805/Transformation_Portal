@@ -313,7 +313,7 @@ class LuxPipelineV2:
             if torch.cuda.is_available() and self.device.type == "cuda":
                 metadata["gpu_name"] = torch.cuda.get_device_name(self.device)
                 metadata["cuda_version"] = torch.version.cuda
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            elif hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 metadata["gpu_name"] = "Apple Silicon (MPS)"
         except Exception:
             metadata["device"] = str(getattr(self, "device", "unknown"))
@@ -353,8 +353,14 @@ class LuxPipelineV2:
             d = str(getattr(self, "device", "")).lower()
             if "cuda" in d and torch.cuda.is_available():
                 torch.cuda.synchronize()
-            elif d.startswith("mps") and hasattr(torch, "mps") and torch.backends.mps.is_available():
-                torch.mps.synchronize()
+            elif (
+                d.startswith("mps")
+                and hasattr(torch, "backends")
+                and hasattr(torch.backends, "mps")
+                and torch.backends.mps.is_available()
+            ):
+                if hasattr(torch, "mps"):
+                    torch.mps.synchronize()
         except Exception:
             # never let timing sync crash the pipeline
             return

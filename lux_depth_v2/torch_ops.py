@@ -78,7 +78,7 @@ def pick_device(device: str = "auto", memory_fraction: float = 0.85) -> "torch.d
     if d == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
-        elif torch.backends.mps.is_available():
+        elif hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return torch.device("mps")
         else:
             return torch.device("cpu")
@@ -115,7 +115,8 @@ def get_device_info() -> Optional["DeviceInfo"]:
 def configure_torch(cudnn_benchmark: bool = True) -> None:
     require_torch()
     if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = bool(cudnn_benchmark)
+        if hasattr(torch, "backends") and hasattr(torch.backends, "cudnn"):
+            torch.backends.cudnn.benchmark = bool(cudnn_benchmark)
 
 
 @contextmanager
