@@ -246,6 +246,15 @@ DEFAULT_MATERIAL_METADATA: Dict[str, MaterialMetadata] = {
         specular_sensitive=True,
         response_strength=1.05,
     ),
+    "still_water": MaterialMetadata(
+        canonical_key="still_water",
+        confidence_threshold=0.35,
+        edge_threshold=0.20,
+        refinement_priority=9,
+        benefits_from_effsam=True,
+        specular_sensitive=True,
+        response_strength=1.0,
+    ),
     "foliage": MaterialMetadata(
         canonical_key="foliage",
         confidence_threshold=0.45,

@@ -10,6 +10,31 @@ import numpy as np
 from . import torch_ops
 
 
+# Water detection color science thresholds (derived from empirical pool/ocean analysis)
+# Pool water: Vibrant cyan/blue with high saturation, medium brightness
+POOL_BLUE_DOMINANCE_R = 0.18  # Blue channel must exceed red by this amount
+POOL_BLUE_DOMINANCE_G = 0.10  # Blue channel must exceed green by this amount
+POOL_SATURATION_MIN = 0.35  # High saturation distinguishes from desaturated sky
+POOL_LUMA_MIN = 0.22  # Not too dark
+POOL_LUMA_MAX = 0.58  # Not too bright (sky is typically >0.50)
+
+# Ocean water: Blue or blue-green with moderate saturation, darker than pools
+OCEAN_BLUE_DOMINANCE_R = 0.12  # Blue channel minimum dominance over red
+OCEAN_BLUE_DOMINANCE_G = 0.03  # Blue or blue-green tones
+OCEAN_GREEN_DOMINANCE_R = 0.08  # For blue-green ocean variants
+OCEAN_GREEN_TOLERANCE = -0.02  # Blue can be slightly less than green for teal water
+OCEAN_SATURATION_MIN = 0.30  # Moderate saturation
+OCEAN_SATURATION_MAX = 0.65  # Excludes very desaturated regions
+OCEAN_LUMA_MIN = 0.15  # Can be darker than pools
+OCEAN_LUMA_MAX = 0.50  # Darker than pools and sky
+
+# Sky: Desaturated bright blue (for differentiation from water)
+SKY_BLUE_DOMINANCE_R = 0.12
+SKY_BLUE_DOMINANCE_G = 0.08
+SKY_LUMA_MIN = 0.50  # Very bright distinguishes from water
+SKY_SATURATION_MAX = 0.38  # Low saturation distinguishes from vibrant pool water
+
+
 class MaterialSegmenter:
     """Interface for material mask prediction."""
 
@@ -60,24 +85,34 @@ class HeuristicMaterialSegmenter(MaterialSegmenter):
 
         masks: Dict[str, torch_ops.torch.Tensor] = {}
 
-        # pool water: cyan/blue-dominant, HIGH saturation (>0.35), medium brightness
+        # pool water: cyan/blue-dominant, HIGH saturation, medium brightness
         # Pools have vibrant color with strong blue and some cyan
-        pool = ((b > r + 0.18) & (b > g + 0.10) & (sat > 0.35) & (l > 0.22) & (l < 0.58)).to(torch_ops.torch.float32)
+        pool = (
+            (b > r + POOL_BLUE_DOMINANCE_R)
+            & (b > g + POOL_BLUE_DOMINANCE_G)
+            & (sat > POOL_SATURATION_MIN)
+            & (l > POOL_LUMA_MIN)
+            & (l < POOL_LUMA_MAX)
+        ).to(torch_ops.torch.float32)
         pool = pool * (sat.clamp(0, 1) ** 0.6)
         masks["pool"] = pool.clamp(0, 1)
 
-        # ocean water: blue or blue-green, MEDIUM-HIGH saturation (0.30-0.65), varied brightness
+        # ocean water: blue or blue-green, MEDIUM-HIGH saturation, varied brightness
         # Oceans can have strong color but are distinguished from pools by being darker or more green-tinged
-        ocean_color = ((b > r + 0.12) & (sat > 0.30) & (sat < 0.65)).to(torch_ops.torch.float32)
+        ocean_color = ((b > r + OCEAN_BLUE_DOMINANCE_R) & (sat > OCEAN_SATURATION_MIN) & (sat < OCEAN_SATURATION_MAX)).to(
+            torch_ops.torch.float32
+        )
         # Accept blue-green (green between red and blue) or pure blue
-        ocean_tone = ((g > r + 0.05) | (b > g + 0.05)).to(torch_ops.torch.float32)
-        ocean = ocean_color * ocean_tone * ((l > 0.15) & (l < 0.50)).to(torch_ops.torch.float32)
+        ocean_tone = ((g > r + OCEAN_GREEN_DOMINANCE_R) | (b > g + OCEAN_BLUE_DOMINANCE_G)).to(torch_ops.torch.float32)
+        ocean = ocean_color * ocean_tone * ((l > OCEAN_LUMA_MIN) & (l < OCEAN_LUMA_MAX)).to(torch_ops.torch.float32)
         ocean = ocean * (sat.clamp(0, 1) ** 0.4) * (1.0 - masks["pool"])
         masks["ocean"] = ocean.clamp(0, 1)
 
-        # sky: blue-dominant, bright (>0.50), LOW saturation (<0.38)
+        # sky: blue-dominant, bright, LOW saturation
         # Sky is typically desaturated and very bright
-        sky = ((b > r + 0.12) & (b > g + 0.08) & (l > 0.50) & (sat < 0.38)).to(torch_ops.torch.float32)
+        sky = (
+            (b > r + SKY_BLUE_DOMINANCE_R) & (b > g + SKY_BLUE_DOMINANCE_G) & (l > SKY_LUMA_MIN) & (sat < SKY_SATURATION_MAX)
+        ).to(torch_ops.torch.float32)
         sky = sky * (sat.clamp(0, 1) ** 0.3) * (1.0 - masks["pool"]) * (1.0 - masks["ocean"])
         masks["sky"] = sky.clamp(0, 1)
 
