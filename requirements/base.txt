@@ -4,6 +4,9 @@
 #
 #    pip-compile --constraint=all.txt --constraint=constraints.txt --output-file=base.txt base.in
 #
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+
 annotated-types==0.7.0
     # via
     #   -c all.txt

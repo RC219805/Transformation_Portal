@@ -5,7 +5,6 @@ validation for missing dependencies and model weights.
 """
 
 import pytest
-from pathlib import Path
 
 from lux_depth_v2.config import PipelineConfig, Preset
 

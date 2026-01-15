@@ -229,7 +229,7 @@ class PreFlightValidator:
                     info["device_name"] = torch.cuda.get_device_name(0)
 
             if device in ["auto", "mps"]:
-                if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                     info["available"] = True
                     info["type"] = "mps"
 

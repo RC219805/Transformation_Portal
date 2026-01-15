@@ -313,7 +313,7 @@ class LuxPipelineV2:
             if torch.cuda.is_available() and self.device.type == "cuda":
                 metadata["gpu_name"] = torch.cuda.get_device_name(self.device)
                 metadata["cuda_version"] = torch.version.cuda
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            elif hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 metadata["gpu_name"] = "Apple Silicon (MPS)"
         except Exception:
             metadata["device"] = str(getattr(self, "device", "unknown"))
@@ -353,8 +353,14 @@ class LuxPipelineV2:
             d = str(getattr(self, "device", "")).lower()
             if "cuda" in d and torch.cuda.is_available():
                 torch.cuda.synchronize()
-            elif d.startswith("mps") and hasattr(torch, "mps") and torch.backends.mps.is_available():
-                torch.mps.synchronize()
+            elif (
+                d.startswith("mps")
+                and hasattr(torch, "backends")
+                and hasattr(torch.backends, "mps")
+                and torch.backends.mps.is_available()
+            ):
+                if hasattr(torch, "mps"):
+                    torch.mps.synchronize()
         except Exception:
             # never let timing sync crash the pipeline
             return
@@ -977,10 +983,10 @@ class LuxPipelineV2:
             try:
                 # Device sync: ensure both tensors on same device for comparison
                 # (base_up may be on CPU due to large buffer fallback)
-                if base_up.device != ai_up.device:
-                    base_up = base_up.to(ai_up.device)
-                color_diff = torch_ops.mean_abs_rgb(base_up, ai_up)
-                luma_diff = torch_ops.mean_abs_luma(base_up, ai_up)
+                # Temporarily move base_up to ai_up device for validation only
+                base_up_for_validation = base_up.to(ai_up.device) if base_up.device != ai_up.device else base_up
+                color_diff = torch_ops.mean_abs_rgb(base_up_for_validation, ai_up)
+                luma_diff = torch_ops.mean_abs_luma(base_up_for_validation, ai_up)
                 if color_diff > cfg.ai_color_fail or luma_diff > cfg.ai_luma_fail:
                     self.logger.warning(
                         f"AI drift FAIL {img_path.name}: rgb={color_diff:.4f} "
@@ -992,10 +998,19 @@ class LuxPipelineV2:
             except Exception as e:
                 self.logger.exception(f"AI drift validation failed: {e}")
 
-        # Device sync: ensure base_up is on same device as ai_up for post-processing
-        # This handles the case where torch_ops.resize() fell back to CPU for large buffers
+        # MPS COMPATIBILITY FIX (2026-01-14): Respect CPU fallback for large tensors
+        # When torch_ops.resize() falls back to CPU for large buffers (>2.5GB MPS limit),
+        # we must keep post-processing on CPU to avoid re-triggering allocation failures.
+        # Move ai_up to CPU instead of moving base_up back to MPS.
         if base_up.device != ai_up.device:
-            base_up = base_up.to(ai_up.device)
+            if base_up.device.type == "cpu":
+                # base_up was kept on CPU by torch_ops.resize() due to MPS buffer limit
+                # Move ai_up to CPU for post-processing to avoid MPS allocation failure
+                ai_up = ai_up.cpu()
+                self.logger.info(f"CPU fallback active for {img_path.name}: post-processing on CPU to avoid MPS buffer limit")
+            else:
+                # ai_up is on CPU, move base_up to accelerator device
+                base_up = base_up.to(ai_up.device)
 
         # Precompute final-res weights and (optional) material mods once; slice per-tile.
         fH, fW = H * cfg.upscale, W * cfg.upscale

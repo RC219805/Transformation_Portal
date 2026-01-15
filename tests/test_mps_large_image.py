@@ -27,12 +27,18 @@ try:
     import torch
 
     TORCH_AVAILABLE = True
+    try:
+        MPS_AVAILABLE = hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    except (AttributeError, RuntimeError):
+        # torch.backends or torch.backends.mps might not exist in some torch builds
+        MPS_AVAILABLE = False
 except ImportError:
     TORCH_AVAILABLE = False
+    MPS_AVAILABLE = False
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch required")
-@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+@pytest.mark.skipif(not MPS_AVAILABLE, reason="MPS not available")
 def test_mps_large_image_4x_upscale():
     """
     Regression test for MPS 3.86 GB buffer overflow fix.
@@ -117,7 +123,7 @@ def test_mps_large_image_4x_upscale():
 
 
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch required")
-@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+@pytest.mark.skipif(not MPS_AVAILABLE, reason="MPS not available")
 def test_mps_bicubic_fallback():
     """Verify bicubic → bilinear fallback on MPS."""
     from lux_depth_v2 import torch_ops
@@ -138,9 +144,16 @@ def test_mps_bicubic_fallback():
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch required")
 def test_torch_upscaler_tiled_method():
     """Verify TorchUpscaler._upscale_tiled() creates correct output buffer size."""
+    if not TORCH_AVAILABLE or not hasattr(torch, "device"):
+        pytest.skip("Full PyTorch installation required")
+
     from lux_depth_v2.upscaling import TorchUpscaler
 
-    device = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
+    # Safe device selection with proper MPS detection
+    if MPS_AVAILABLE:
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
 
     # Minimal config with tiling enabled
     class MinimalConfig:
@@ -180,7 +193,7 @@ if __name__ == "__main__":
         print("⚠️  PyTorch not available, skipping tests")
         sys.exit(0)
 
-    if not torch.backends.mps.is_available():
+    if not MPS_AVAILABLE:
         print("⚠️  MPS not available, skipping MPS-specific tests")
         sys.exit(0)
 
