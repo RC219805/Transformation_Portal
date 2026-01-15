@@ -4,9 +4,6 @@
 #
 #    pip-compile --constraint=all.txt --constraint=constraints.txt --output-file=base.txt base.in
 #
---index-url https://download.pytorch.org/whl/cpu
---extra-index-url https://pypi.org/simple
-
 annotated-types==0.7.0
     # via
     #   -c all.txt
@@ -27,7 +24,7 @@ idna==3.11
     # via
     #   -c all.txt
     #   requests
-imagecodecs==2024.12.30
+imagecodecs==2025.3.30
     # via
     #   -c all.txt
     #   -r base.in
@@ -128,7 +125,7 @@ threadpoolctl==3.6.0
     # via
     #   -c all.txt
     #   scikit-learn
-tifffile==2024.12.12
+tifffile==2025.5.10
     # via
     #   -c all.txt
     #   -r base.in
@@ -137,7 +134,7 @@ tqdm==4.67.1
     # via
     #   -c all.txt
     #   -r base.in
-typer==0.21.0
+typer==0.21.1
     # via
     #   -c all.txt
     #   -r base.in
@@ -152,7 +149,8 @@ typing-inspection==0.4.2
     # via
     #   -c all.txt
     #   pydantic
-urllib3==2.6.2
+urllib3==2.6.3
     # via
     #   -c all.txt
+    #   -c constraints.txt
     #   requests
