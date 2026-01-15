@@ -27,7 +27,11 @@ try:
     import torch
 
     TORCH_AVAILABLE = True
-    MPS_AVAILABLE = hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    try:
+        MPS_AVAILABLE = hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    except (AttributeError, RuntimeError):
+        # torch.backends or torch.backends.mps might not exist in some torch builds
+        MPS_AVAILABLE = False
 except ImportError:
     TORCH_AVAILABLE = False
     MPS_AVAILABLE = False
