@@ -146,7 +146,11 @@ def test_torch_upscaler_tiled_method():
     """Verify TorchUpscaler._upscale_tiled() creates correct output buffer size."""
     from lux_depth_v2.upscaling import TorchUpscaler
 
-    device = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
+    # Safe device selection with proper MPS detection
+    if MPS_AVAILABLE:
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
 
     # Minimal config with tiling enabled
     class MinimalConfig:
@@ -186,7 +190,7 @@ if __name__ == "__main__":
         print("⚠️  PyTorch not available, skipping tests")
         sys.exit(0)
 
-    if not torch.backends.mps.is_available():
+    if not MPS_AVAILABLE:
         print("⚠️  MPS not available, skipping MPS-specific tests")
         sys.exit(0)
 
