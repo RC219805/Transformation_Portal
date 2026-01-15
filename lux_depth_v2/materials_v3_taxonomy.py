@@ -67,16 +67,16 @@ CANONICAL_MATERIALS = {
 # ---------------------------------------------------------------------------
 
 SEMANTIC_TO_CANONICAL: Dict[str, str] = {
-    # Water variants
+    # Water variants - keep pool and ocean distinct
     "water": "water",
-    "pool_water": "water",
-    "pool": "water",
-    "ocean": "water",
-    "ocean_water": "water",
-    "sea": "water",
+    "pool_water": "pool_water",
+    "pool": "pool_water",
+    "ocean": "ocean_water",
+    "ocean_water": "ocean_water",
+    "sea": "ocean_water",
     "lake": "water",
     "pond": "water",
-    "still_water": "water",
+    "still_water": "still_water",
     "water_surface": "water",
     # Foliage variants
     "foliage": "foliage",
@@ -227,6 +227,24 @@ DEFAULT_MATERIAL_METADATA: Dict[str, MaterialMetadata] = {
         refinement_priority=9,
         benefits_from_effsam=True,
         specular_sensitive=True,
+    ),
+    "pool_water": MaterialMetadata(
+        canonical_key="pool_water",
+        confidence_threshold=0.30,
+        edge_threshold=0.18,
+        refinement_priority=10,
+        benefits_from_effsam=True,
+        specular_sensitive=True,
+        response_strength=1.1,
+    ),
+    "ocean_water": MaterialMetadata(
+        canonical_key="ocean_water",
+        confidence_threshold=0.35,
+        edge_threshold=0.22,
+        refinement_priority=9,
+        benefits_from_effsam=True,
+        specular_sensitive=True,
+        response_strength=1.05,
     ),
     "foliage": MaterialMetadata(
         canonical_key="foliage",

@@ -60,8 +60,25 @@ class HeuristicMaterialSegmenter(MaterialSegmenter):
 
         masks: Dict[str, torch_ops.torch.Tensor] = {}
 
-        # sky: blue-dominant, reasonably bright, moderate saturation
-        sky = ((b > r + 0.08) & (b > g + 0.05) & (l > 0.25)).to(torch_ops.torch.float32) * (sat.clamp(0, 1) ** 0.5)
+        # pool water: cyan/blue-dominant, HIGH saturation (>0.35), medium brightness
+        # Pools have vibrant color with strong blue and some cyan
+        pool = ((b > r + 0.18) & (b > g + 0.10) & (sat > 0.35) & (l > 0.22) & (l < 0.58)).to(torch_ops.torch.float32)
+        pool = pool * (sat.clamp(0, 1) ** 0.6)
+        masks["pool"] = pool.clamp(0, 1)
+
+        # ocean water: blue or blue-green, MEDIUM-HIGH saturation (0.30-0.65), varied brightness
+        # Oceans can have strong color but are distinguished from pools by being darker or more green-tinged
+        ocean_color = ((b > r + 0.12) & (sat > 0.30) & (sat < 0.65)).to(torch_ops.torch.float32)
+        # Accept blue-green (green between red and blue) or pure blue
+        ocean_tone = ((g > r + 0.05) | (b > g + 0.05)).to(torch_ops.torch.float32)
+        ocean = ocean_color * ocean_tone * ((l > 0.15) & (l < 0.50)).to(torch_ops.torch.float32)
+        ocean = ocean * (sat.clamp(0, 1) ** 0.4) * (1.0 - masks["pool"])
+        masks["ocean"] = ocean.clamp(0, 1)
+
+        # sky: blue-dominant, bright (>0.50), LOW saturation (<0.38)
+        # Sky is typically desaturated and very bright
+        sky = ((b > r + 0.12) & (b > g + 0.08) & (l > 0.50) & (sat < 0.38)).to(torch_ops.torch.float32)
+        sky = sky * (sat.clamp(0, 1) ** 0.3) * (1.0 - masks["pool"]) * (1.0 - masks["ocean"])
         masks["sky"] = sky.clamp(0, 1)
 
         # foliage: green-dominant with some saturation
