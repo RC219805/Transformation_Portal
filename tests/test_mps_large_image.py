@@ -144,6 +144,9 @@ def test_mps_bicubic_fallback():
 @pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch required")
 def test_torch_upscaler_tiled_method():
     """Verify TorchUpscaler._upscale_tiled() creates correct output buffer size."""
+    if not TORCH_AVAILABLE or not hasattr(torch, "device"):
+        pytest.skip("Full PyTorch installation required")
+
     from lux_depth_v2.upscaling import TorchUpscaler
 
     # Safe device selection with proper MPS detection
