@@ -30,9 +30,9 @@ warnings.filterwarnings("ignore")
 REPO_ROOT = Path(__file__).parent.parent.parent
 PICACHO_PROJECT = REPO_ROOT / "projects" / "750_picacho_lane"
 ULTRAQUALITY_DIR = PICACHO_PROJECT / "Final_Production_UltraQuality"
-BIM_IMAGES_DIR = REPO_ROOT / "extracted_context" / "24098.00_750 PICACHO LANE_images"
-CONTEXT_JSON = REPO_ROOT / "extracted_context" / "24098.00_750 PICACHO LANE_context.json"
-MBAR_CONTEXT_JSON = REPO_ROOT / "extracted_context" / "mbar_submittal.json"
+BIM_IMAGES_DIR = REPO_ROOT / "data" / "extracted_context" / "24098.00_750 PICACHO LANE_images"
+CONTEXT_JSON = REPO_ROOT / "data" / "extracted_context" / "24098.00_750 PICACHO LANE_context.json"
+MBAR_CONTEXT_JSON = REPO_ROOT / "data" / "extracted_context" / "mbar_submittal.json"
 
 
 class Picacho750DataPreparation:
@@ -341,8 +341,10 @@ def main():
     preparer = Picacho750DataPreparation(args.output_dir)
 
     # Check what data is available
-    has_ultraquality = ULTRAQUALITY_DIR.exists() and list(ULTRAQUALITY_DIR.glob("*.tif"))
-    has_bim = BIM_IMAGES_DIR.exists() and list(BIM_IMAGES_DIR.glob("*.jpeg"))
+    has_ultraquality = ULTRAQUALITY_DIR.exists() and (
+        any(ULTRAQUALITY_DIR.glob("*.tif")) or any(ULTRAQUALITY_DIR.glob("*.tiff"))
+    )
+    has_bim = BIM_IMAGES_DIR.exists() and any(BIM_IMAGES_DIR.glob("*.jpeg"))
 
     if not has_ultraquality and not has_bim:
         print("\n❌ No 750 Picacho data found!")
