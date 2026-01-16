@@ -342,9 +342,9 @@ def main():
 
     # Check what data is available
     has_ultraquality = ULTRAQUALITY_DIR.exists() and (
-        list(ULTRAQUALITY_DIR.glob("*.tif")) or list(ULTRAQUALITY_DIR.glob("*.tiff"))
+        any(ULTRAQUALITY_DIR.glob("*.tif")) or any(ULTRAQUALITY_DIR.glob("*.tiff"))
     )
-    has_bim = BIM_IMAGES_DIR.exists() and list(BIM_IMAGES_DIR.glob("*.jpeg"))
+    has_bim = BIM_IMAGES_DIR.exists() and any(BIM_IMAGES_DIR.glob("*.jpeg"))
 
     if not has_ultraquality and not has_bim:
         print("\n❌ No 750 Picacho data found!")
