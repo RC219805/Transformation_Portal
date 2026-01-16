@@ -334,10 +334,11 @@ class PerformanceProfiler:
             elif self.device == "mps":
                 import torch
 
-                if torch.backends.mps.is_available():
-                    memory_mb = torch.mps.current_allocated_memory() / 1024 / 1024
-                    self._global_peak_gpu_memory_mb = max(self._global_peak_gpu_memory_mb, memory_mb)
-                    return memory_mb
+                if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    if hasattr(torch, "mps"):
+                        memory_mb = torch.mps.current_allocated_memory() / 1024 / 1024
+                        self._global_peak_gpu_memory_mb = max(self._global_peak_gpu_memory_mb, memory_mb)
+                        return memory_mb
         except Exception:
             pass
 

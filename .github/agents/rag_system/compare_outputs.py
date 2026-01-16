@@ -1,6 +1,6 @@
 """
-750 Picacho Lane - Quick Visual Comparison Tool
-Generates side-by-side comparisons and quality metrics
+750 Picacho Lane - Automated Visual Quality Analysis Tool
+Generates quality metrics and analysis reports for renders
 
 Usage:
     python compare_outputs.py --scene Aerial [--show]

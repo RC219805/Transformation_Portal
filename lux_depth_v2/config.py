@@ -1307,7 +1307,8 @@ class PipelineConfig:
             # V2 segmentation quality
             self.materials_v2.segmentation.max_segmentation_side = 2048
             self.materials_v2.segmentation.min_segmentation_side = 512
-            self.materials_v2.segmentation.upsample_mode = "bicubic"
+            # MPS COMPATIBILITY: Use bilinear instead of bicubic to avoid aten::upsample_bicubic2d.out error
+            self.materials_v2.segmentation.upsample_mode = "bilinear"
             self.materials_v2.segmentation.edge_feather_radius = 3
             self.materials_v2.segmentation.edge_feather_sigma = 1.0
             self.materials_v2.segmentation.require_high_quality = True

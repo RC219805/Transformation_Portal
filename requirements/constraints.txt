@@ -42,3 +42,20 @@ marshmallow>=4.1.2
 # BasicSR <= 1.4.2 has a command injection vulnerability via SLURM_NODELIST.
 # This constraint uses an impossible version specifier to exclude basicsr from being resolved.
 basicsr>=999.0.0
+
+# Security Advisory: Dependabot Alerts (January 2026)
+# urllib3 <2.6.3 - Decompression-bomb safeguards bypassed (High)
+# Require >=2.6.3 to mitigate decompression-bomb vulnerability when following HTTP redirects
+urllib3>=2.6.3
+
+# filelock <3.20.3 - TOCTOU Symlink Vulnerability (Moderate)
+# Require >=3.20.3 to mitigate time-of-check-time-of-use symlink vulnerability
+filelock>=3.20.3
+
+# virtualenv <20.36.0 - TOCTOU Directory Creation Vulnerability (Moderate)
+# Require >=20.36.0 to mitigate time-of-check-time-of-use directory creation vulnerability
+virtualenv>=20.36.0
+
+# pypdf <6.6.0 - DoS vulnerabilities with malformed PDFs (Low)
+# Require >=6.6.0 to mitigate DoS vulnerability from malformed startxref and missing /Root object
+pypdf>=6.6.0

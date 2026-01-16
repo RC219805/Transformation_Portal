@@ -58,6 +58,8 @@ class ResponsePlanConfig:
         default_factory=lambda: {
             "glass": 0.90,  # Subtle on glass
             "water": 0.95,  # Subtle on water
+            "pool_water": 1.00,  # Full response on pool water
+            "ocean_water": 0.98,  # Near-full response on ocean water
             "foliage": 0.85,  # Conservative (avoid neon)
             "metal": 1.05,  # Slight boost
             "wood": 1.00,  # Neutral
@@ -69,6 +71,8 @@ class ResponsePlanConfig:
         default_factory=lambda: {
             "glass": 0.70,  # Very conservative
             "water": 0.75,  # Conservative
+            "pool_water": 0.80,  # Moderate on pool edges
+            "ocean_water": 0.78,  # Conservative on ocean edges
             "foliage": 0.65,  # Very conservative (halo risk)
             "metal": 0.85,  # Moderate
             "wood": 0.80,  # Conservative

@@ -29,21 +29,23 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pytest
 
+# Skip module early if torch is not available
+# This must happen BEFORE any imports that might trigger torch-dependent code
+from lux_depth_v2 import torch_ops
+
+if not torch_ops.TORCH_AVAILABLE:
+    pytest.skip("PyTorch not installed; skipping V2 throughput performance tests.", allow_module_level=True)
+
 # Skip module if Pillow not available
 PIL = pytest.importorskip("PIL", reason="Pillow not installed")
 from PIL import Image  # noqa: E402
 
-# Skip module if torch not available (required by lux_depth_v2 pipeline)
-torch = pytest.importorskip("torch", reason="PyTorch not installed")
+# Now safe to import torch-dependent code
+import torch  # noqa: E402
+from lux_depth_v2.config import PipelineConfig, Preset, DepthMode  # noqa: E402
+from lux_depth_v2.pipeline import LuxPipelineV2  # noqa: E402
 
-# Conditionally import lux_depth_v2 (may not be available in all test environments)
-try:
-    from lux_depth_v2.config import PipelineConfig, Preset, DepthMode
-    from lux_depth_v2.pipeline import LuxPipelineV2
-
-    LUX_DEPTH_AVAILABLE = True
-except ImportError:
-    LUX_DEPTH_AVAILABLE = False
+LUX_DEPTH_AVAILABLE = True
 
 
 @pytest.fixture
@@ -214,8 +216,15 @@ def measure_batch_throughput(
     return metrics
 
 
+pytestmark = pytest.mark.requires_torch  # Mark entire module as requiring torch
+
+
 class TestThroughputPerformance:
-    """Throughput benchmark tests for production validation."""
+    """Throughput benchmark tests for production validation.
+
+    These tests require PyTorch and the full Lux Depth V2 pipeline.
+    They are skipped in environments where torch is not available.
+    """
 
     @pytest.mark.ml
     @pytest.mark.performance
