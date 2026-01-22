@@ -1123,6 +1123,11 @@ def enhance(
         "--depth-quantization",
         help="Depth quantization method (p1p99, p0.5p99.5, minmax)",
     ),
+    depth_zones: str = typer.Option(
+        "off",
+        "--depth-zones",
+        help="Depth zones diagnostics (off|preview). Preview writes zone masks/stats under output/zones/; does not affect V2.",
+    ),
     # Execution control
     execution_mode: str = typer.Option(
         "sequential",
@@ -1272,6 +1277,7 @@ def enhance(
         v2_upscaler_backend=v2_upscaler,
         depth_device=depth_device,
         depth_quantization=depth_quantization,
+        depth_zones=depth_zones,
         execution_mode=execution_mode,
         depth_fallback=depth_fallback,
         force_depth=force_depth,
