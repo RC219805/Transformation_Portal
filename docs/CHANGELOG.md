@@ -1,5 +1,36 @@
 # Changelog
 
+## Depth Zones Feature & Dependency Updates — 2026-01-22
+
+### New Features
+- **PR #680**: Depth Zones Port - Advanced depth-based zoning system
+  - Added `lux_depth_v3/enhance/depth_zones.py` with foreground/midground/background segmentation
+  - New CLI tool: `scripts/da3_depth_zones.py` for Depth Anything V3 integration
+  - Zone-based processing enables depth-aware effects and selective enhancements
+  - Diagnostic outputs: zone masks, preview composites, and depth statistics
+  - Supports sky heuristics for far-field saturation handling
+
+### Dependency Updates
+- **PR #679**: Bump transformers from 4.57.5 to 4.57.6
+- **PR #678**: Bump opencv-python from 4.12.0.88 to 4.13.0.90
+- **PR #676**: Bump opencv-python-headless from 4.12.0.88 to 4.13.0.90
+- **PR #675**: Bump bandit from 1.9.2 to 1.9.3 (security linting)
+- **PR #674**: Bump component-detection-action from 0.1.0 to 0.1.1
+
+### Code Quality Improvements
+- **PR #677**: Bump black from 25.12.0 to 26.1.0
+  - Applied black 26.1.0 2026 stable style across entire codebase
+  - Reformatted 832 files for consistent code formatting
+  - Enhanced pre-commit hooks with ruff-format integration
+
+### Status
+- **Python Compatibility**: 3.10-3.12 ✅
+- **CI Status**: All critical checks passing ✅
+- **Test Suite**: 1,348+ tests passing
+- **New Capabilities**: Depth zoning for architectural visualization
+
+---
+
 ## Dependency Updates & Python 3.10 Compatibility Maintenance — 2026-01-05/06
 
 ### Dependency Security & Compatibility Updates

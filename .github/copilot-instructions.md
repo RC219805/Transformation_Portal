@@ -46,7 +46,7 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
 │   │   └── ...                 # Indexer, retriever, semantic search, etc.
 │   ├── transformation-portal-specialist.md  # Custom agent definition
 │   └── [RAG and agent guides]  # Documentation and integration guides
-├── lux_depth_v2/               # ✨ NEW: Production-oriented depth processing pipeline
+├── lux_depth_v2/               # ✨ Production-oriented depth processing pipeline
 │   ├── pipeline.py            # GPU-accelerated post-processing
 │   ├── config.py              # Pipeline configuration with presets
 │   ├── cli.py                 # Command-line interface
@@ -55,6 +55,10 @@ lux-depth-v2 --input-dir renders/ --output-dir output/ --preset interior_luxury
 │   ├── material_segmentation.py # Advanced material detection
 │   ├── SECURITY.md            # Security guidelines (CVE-2024-27763 mitigation)
 │   └── requirements-repo.txt  # Safe dependencies (no vulnerable packages)
+├── lux_depth_v3/               # ✨ NEW: Advanced depth zoning system (Jan 2026)
+│   ├── enhance/
+│   │   └── depth_zones.py     # Depth-based zoning for foreground/midground/background
+│   └── ...                     # Depth Anything V3 integration
 ├── src/transformation_portal/ # Installable package (WIP)
 ├── tests/                      # pytest test suite (70+ tests)
 ├── config/                     # YAML configuration presets
